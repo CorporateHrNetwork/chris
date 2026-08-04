@@ -1,0 +1,204 @@
+.login-container {
+    display: flex;
+    height: 100vh;
+    background: var(--background);
+}
+
+/* LEFT PANEL */
+
+.login-left {
+    flex: 1;
+    background: linear-gradient(135deg, var(--primary), #084c2f);
+    color: var(--white);
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    padding: 60px;
+}
+
+.login-left h1 {
+
+    font-size: 72px;
+
+    letter-spacing: 8px;
+
+    margin-bottom: 20px;
+
+}
+
+.gold-line{
+
+    width:220px;
+
+    height:4px;
+
+    background:var(--gold);
+
+    margin-bottom:35px;
+
+    border-radius:20px;
+
+}
+
+.login-left h2{
+
+    font-size:42px;
+
+    margin-bottom:10px;
+
+}
+
+.login-left h2 span{
+
+    color:white;
+
+    font-weight:400;
+
+}
+
+.login-left h2 strong{
+
+    color:var(--gold);
+
+}
+
+.login-left p{
+
+    font-size:24px;
+
+    margin-bottom:40px;
+
+}
+
+.login-left small{
+
+    font-size:18px;
+
+    letter-spacing:2px;
+
+    color:#f5f5f5;
+
+}
+
+/* RIGHT PANEL */
+
+.login-right{
+
+    flex:1;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:white;
+
+}
+
+.login-card{
+
+    width:430px;
+
+    background:white;
+
+    padding:45px;
+
+    border-radius:20px;
+
+    box-shadow:var(--shadow-lg);
+
+}
+
+.login-card h2{
+
+    color:var(--primary);
+
+    margin-bottom:8px;
+
+}
+
+.login-card p{
+
+    color:var(--text-light);
+
+    margin-bottom:30px;
+
+}
+
+.login-card input{
+
+    width:100%;
+
+    padding:15px;
+
+    margin-bottom:18px;
+
+    border:1px solid var(--border);
+
+    border-radius:12px;
+
+    font-size:15px;
+
+}
+
+.login-card input:focus{
+
+    outline:none;
+
+    border-color:var(--primary);
+
+}
+
+.login-options{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:25px;
+
+    font-size:14px;
+
+}
+
+.login-options a{
+
+    color:var(--primary);
+
+    font-weight:600;
+
+}
+
+.login-card button{
+
+    width:100%;
+
+    padding:16px;
+
+    background:var(--primary);
+
+    color:white;
+
+    border:none;
+
+    border-radius:12px;
+
+    font-size:17px;
+
+    font-weight:600;
+
+    transition:.3s;
+
+}
+
+.login-card button:hover{
+
+    background:var(--primary-hover);
+
+}
