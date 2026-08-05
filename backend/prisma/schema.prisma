@@ -11,3 +11,28 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Organization {
+  id        String  @id @default(uuid())
+  name      String
+  slug      String  @unique
+  legalName String?
+  email     String?
+  phone     String?
+  country   String?
+  timezone  String  @default("Africa/Lagos")
+  currency  String  @default("NGN")
+
+  status OrganizationStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
