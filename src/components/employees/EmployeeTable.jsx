@@ -1,12 +1,70 @@
-import { useMemo, useState } from "react";
-import employees from "../../data/employees";
+import { useEffect, useMemo, useState } from "react";
 import EmployeeProfile from "./EmployeeProfile";
 
 function EmployeeTable() {
+  const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [status, setStatus] = useState("All");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch("http://localhost:5000/api/employees");
+
+        if (!response.ok) {
+          throw new Error("Unable to load employees.");
+        }
+
+        const result = await response.json();
+
+        const normalizedEmployees = result.data.map((employee) => ({
+          databaseId: employee.id,
+          id: employee.employeeNumber,
+          name: [
+            employee.firstName,
+            employee.middleName,
+            employee.lastName,
+          ]
+            .filter(Boolean)
+            .join(" "),
+          department: employee.department?.name || "-",
+          designation: employee.designation?.name || "-",
+          email: employee.email || "",
+          phone: employee.phone || "",
+          status: formatStatus(employee.status),
+
+          organizationId: employee.organizationId,
+          departmentId: employee.departmentId,
+          designationId: employee.designationId,
+          firstName: employee.firstName,
+          middleName: employee.middleName,
+          lastName: employee.lastName,
+          hireDate: employee.hireDate,
+          confirmationDate: employee.confirmationDate,
+          exitDate: employee.exitDate,
+        }));
+
+        setEmployees(normalizedEmployees);
+      } catch (err) {
+        console.error("Employee API error:", err);
+        setError(
+          "CHRIS could not load employee records. Please confirm the backend is running."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEmployees();
+  }, []);
 
   const departments = [
     "All",
@@ -25,7 +83,8 @@ function EmployeeTable() {
       const searchMatch =
         employee.name.toLowerCase().includes(searchTerm) ||
         employee.id.toLowerCase().includes(searchTerm) ||
-        employee.department.toLowerCase().includes(searchTerm);
+        employee.department.toLowerCase().includes(searchTerm) ||
+        employee.designation.toLowerCase().includes(searchTerm);
 
       const departmentMatch =
         department === "All" ||
@@ -37,12 +96,8 @@ function EmployeeTable() {
 
       return searchMatch && departmentMatch && statusMatch;
     });
-  }, [search, department, status]);
+  }, [employees, search, department, status]);
 
-  /* 
-     When an employee is selected, show the employee profile
-     instead of the directory.
-  */
   if (selectedEmployee) {
     return (
       <EmployeeProfile
@@ -135,11 +190,31 @@ function EmployeeTable() {
                 fontSize: "13px",
               }}
             >
-              {filteredEmployees.length} employee
-              {filteredEmployees.length !== 1 ? "s" : ""}
+              {loading
+                ? "Loading employees..."
+                : `${filteredEmployees.length} employee${
+                    filteredEmployees.length !== 1 ? "s" : ""
+                  }`}
             </p>
           </div>
         </div>
+
+        {error && (
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "14px 16px",
+              background: "#FEF2F2",
+              border: "1px solid #FECACA",
+              borderRadius: "10px",
+              color: "#B91C1C",
+              fontSize: "14px",
+              fontWeight: "600",
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         <div
           style={{
@@ -170,9 +245,22 @@ function EmployeeTable() {
             </thead>
 
             <tbody>
-              {filteredEmployees.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan="6"
+                    style={{
+                      padding: "40px",
+                      textAlign: "center",
+                      color: "#64748B",
+                    }}
+                  >
+                    Loading employee records...
+                  </td>
+                </tr>
+              ) : filteredEmployees.length > 0 ? (
                 filteredEmployees.map((employee) => (
-                  <tr key={employee.id}>
+                  <tr key={employee.databaseId}>
                     <td style={td}>{employee.id}</td>
 
                     <td
@@ -235,6 +323,21 @@ function EmployeeTable() {
   );
 }
 
+function formatStatus(status) {
+  const labels = {
+    ACTIVE: "Active",
+    PROBATION: "Probation",
+    LEAVE: "Leave",
+    SUSPENDED: "Suspended",
+    TERMINATED: "Terminated",
+    RESIGNED: "Resigned",
+    RETIRED: "Retired",
+    INACTIVE: "Inactive",
+  };
+
+  return labels[status] || status;
+}
+
 /* STATUS BADGE */
 
 function StatusBadge({ status }) {
@@ -254,6 +357,21 @@ function StatusBadge({ status }) {
   if (status === "Probation") {
     background = "#F0E9FF";
     color = "#6D28D9";
+  }
+
+  if (status === "Suspended") {
+    background = "#FEF2F2";
+    color = "#B91C1C";
+  }
+
+  if (
+    status === "Terminated" ||
+    status === "Resigned" ||
+    status === "Retired" ||
+    status === "Inactive"
+  ) {
+    background = "#F1F5F9";
+    color = "#475569";
   }
 
   return (
