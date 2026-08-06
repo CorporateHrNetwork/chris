@@ -4,6 +4,7 @@ import MainLayout from "./layouts/MainLayout";
 
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
+import EmployeeProfile from "./components/employees/EmployeeProfile";
 import Recruitment from "./pages/Recruitment";
 import Attendance from "./pages/Attendance";
 import Leave from "./pages/Leave";
@@ -20,7 +21,14 @@ function App() {
       <MainLayout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+
           <Route path="/employees" element={<Employees />} />
+
+          <Route
+            path="/employees/:employeeNumber"
+            element={<EmployeeProfile />}
+          />
+
           <Route path="/recruitment" element={<Recruitment />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/leave" element={<Leave />} />

@@ -1,9 +1,147 @@
-﻿function EmployeeProfile({ employee, onBack }) {
-  if (!employee) {
-    return null;
+﻿import { useEffect, useState } from "react";
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+function EmployeeProfile() {
+  const { employeeNumber } = useParams();
+  const navigate = useNavigate();
+
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(
+          `http://localhost:5000/api/employees/${encodeURIComponent(
+            employeeNumber
+          )}`
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+              "Unable to load employee profile."
+          );
+        }
+
+        const employee = result.data;
+
+        setProfile({
+          databaseId: employee.id,
+
+          id: employee.employeeNumber,
+
+          name: [
+            employee.firstName,
+            employee.middleName,
+            employee.lastName,
+          ]
+            .filter(Boolean)
+            .join(" "),
+
+          department:
+            employee.department?.name || "-",
+
+          designation:
+            employee.designation?.name || "-",
+
+          email: employee.email || "",
+          phone: employee.phone || "",
+
+          status: formatStatus(
+            employee.status
+          ),
+
+          firstName: employee.firstName,
+          middleName: employee.middleName,
+          lastName: employee.lastName,
+
+          hireDate: employee.hireDate,
+
+          confirmationDate:
+            employee.confirmationDate,
+
+          exitDate: employee.exitDate,
+        });
+      } catch (err) {
+        console.error(
+          "Employee profile error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not load the employee profile."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [employeeNumber]);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          padding: "40px",
+          textAlign: "center",
+          color: "#64748B",
+          fontSize: "14px",
+        }}
+      >
+        Loading employee profile...
+      </div>
+    );
   }
 
-  const initials = employee.name
+  if (error || !profile) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "1200px",
+          margin: "0 auto",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            navigate("/employees")
+          }
+          style={backButtonStyle}
+        >
+          &lt; Back to Employees
+        </button>
+
+        <div
+          style={{
+            padding: "18px",
+            background: "#FEF2F2",
+            border: "1px solid #FECACA",
+            borderRadius: "12px",
+            color: "#B91C1C",
+            fontWeight: "600",
+          }}
+        >
+          {error ||
+            "Unable to load employee profile."}
+        </div>
+      </div>
+    );
+  }
+
+  const initials = profile.name
     .split(" ")
     .map((name) => name.charAt(0))
     .join("")
@@ -20,21 +158,15 @@
     >
       <button
         type="button"
-        onClick={onBack}
-        style={{
-          border: "none",
-          background: "transparent",
-          color: "#0B5E3B",
-          fontSize: "14px",
-          fontWeight: "700",
-          cursor: "pointer",
-          padding: 0,
-          marginBottom: "22px",
-        }}
+        onClick={() =>
+          navigate("/employees")
+        }
+        style={backButtonStyle}
       >
         &lt; Back to Employees
       </button>
 
+      {/* PROFILE HEADER */}
       <div
         style={{
           background: "#FFFFFF",
@@ -42,7 +174,8 @@
           borderRadius: "18px",
           padding: "26px",
           marginBottom: "22px",
-          boxShadow: "0 6px 24px rgba(15, 23, 42, 0.05)",
+          boxShadow:
+            "0 6px 24px rgba(15, 23, 42, 0.05)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -95,7 +228,7 @@
                 fontWeight: "800",
               }}
             >
-              {employee.name}
+              {profile.name}
             </h1>
 
             <p
@@ -105,68 +238,109 @@
                 fontSize: "14px",
               }}
             >
-              {employee.designation} - {employee.department}
+              {profile.designation} -{" "}
+              {profile.department}
             </p>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "8px 14px",
-            borderRadius: "999px",
-            background:
-              employee.status === "Active"
-                ? "#E8F8F0"
-                : employee.status === "Leave"
-                ? "#FFF4E5"
-                : "#F0E9FF",
-            color:
-              employee.status === "Active"
-                ? "#087443"
-                : employee.status === "Leave"
-                ? "#B45309"
-                : "#6D28D9",
-            fontSize: "13px",
-            fontWeight: "700",
-          }}
-        >
-          {employee.status}
-        </div>
+        <StatusBadge
+          status={profile.status}
+        />
       </div>
 
+      {/* PROFILE CARDS */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(320px, 1fr))",
           gap: "22px",
         }}
       >
         <InformationCard title="Employee Information">
-          <InfoRow label="Full Name" value={employee.name} />
-          <InfoRow label="Employee ID" value={employee.id} />
-          <InfoRow label="Department" value={employee.department} />
-          <InfoRow label="Designation" value={employee.designation} />
-          <InfoRow label="Employment Status" value={employee.status} />
+          <InfoRow
+            label="Full Name"
+            value={profile.name}
+          />
+
+          <InfoRow
+            label="Employee ID"
+            value={profile.id}
+          />
+
+          <InfoRow
+            label="Department"
+            value={profile.department}
+          />
+
+          <InfoRow
+            label="Designation"
+            value={profile.designation}
+          />
+
+          <InfoRow
+            label="Employment Status"
+            value={profile.status}
+          />
         </InformationCard>
 
         <InformationCard title="Contact Information">
-          <InfoRow label="Email" value={employee.email} />
-          <InfoRow label="Phone" value={employee.phone} />
+          <InfoRow
+            label="Email"
+            value={profile.email}
+          />
+
+          <InfoRow
+            label="Phone"
+            value={profile.phone}
+          />
         </InformationCard>
 
         <InformationCard title="Employment">
-          <InfoRow label="Department" value={employee.department} />
-          <InfoRow label="Designation" value={employee.designation} />
-          <InfoRow label="Status" value={employee.status} />
+          <InfoRow
+            label="Department"
+            value={profile.department}
+          />
+
+          <InfoRow
+            label="Designation"
+            value={profile.designation}
+          />
+
+          <InfoRow
+            label="Status"
+            value={profile.status}
+          />
+
+          <InfoRow
+            label="Hire Date"
+            value={formatDate(
+              profile.hireDate
+            )}
+          />
+
+          <InfoRow
+            label="Confirmation Date"
+            value={formatDate(
+              profile.confirmationDate
+            )}
+          />
+
+          <InfoRow
+            label="Exit Date"
+            value={formatDate(
+              profile.exitDate
+            )}
+          />
         </InformationCard>
 
         <InformationCard title="Quick Actions">
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
+              gridTemplateColumns:
+                "repeat(2, 1fr)",
               gap: "12px",
             }}
           >
@@ -181,7 +355,77 @@
   );
 }
 
-function InformationCard({ title, children }) {
+function formatStatus(status) {
+  const labels = {
+    ACTIVE: "Active",
+    PROBATION: "Probation",
+    LEAVE: "Leave",
+    SUSPENDED: "Suspended",
+    TERMINATED: "Terminated",
+    RESIGNED: "Resigned",
+    RETIRED: "Retired",
+    INACTIVE: "Inactive",
+  };
+
+  return labels[status] || status;
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(
+    value
+  ).toLocaleDateString();
+}
+
+function StatusBadge({ status }) {
+  let background = "#F1F5F9";
+  let color = "#475569";
+
+  if (status === "Active") {
+    background = "#E8F8F0";
+    color = "#087443";
+  }
+
+  if (status === "Leave") {
+    background = "#FFF4E5";
+    color = "#B45309";
+  }
+
+  if (status === "Probation") {
+    background = "#F0E9FF";
+    color = "#6D28D9";
+  }
+
+  if (status === "Suspended") {
+    background = "#FEF2F2";
+    color = "#B91C1C";
+  }
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "8px 14px",
+        borderRadius: "999px",
+        background,
+        color,
+        fontSize: "13px",
+        fontWeight: "700",
+      }}
+    >
+      {status}
+    </div>
+  );
+}
+
+function InformationCard({
+  title,
+  children,
+}) {
   return (
     <div
       style={{
@@ -189,7 +433,8 @@ function InformationCard({ title, children }) {
         border: "1px solid #E5E7EB",
         borderRadius: "18px",
         padding: "24px",
-        boxShadow: "0 6px 24px rgba(15, 23, 42, 0.05)",
+        boxShadow:
+          "0 6px 24px rgba(15, 23, 42, 0.05)",
       }}
     >
       <h2
@@ -208,7 +453,10 @@ function InformationCard({ title, children }) {
   );
 }
 
-function InfoRow({ label, value }) {
+function InfoRow({
+  label,
+  value,
+}) {
   return (
     <div
       style={{
@@ -217,7 +465,8 @@ function InfoRow({ label, value }) {
         alignItems: "flex-start",
         gap: "20px",
         padding: "13px 0",
-        borderBottom: "1px solid #EEF2F1",
+        borderBottom:
+          "1px solid #EEF2F1",
       }}
     >
       <span
@@ -258,15 +507,28 @@ function ActionButton({ text }) {
         cursor: "pointer",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#E8F5EF";
+        e.currentTarget.style.background =
+          "#E8F5EF";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "#F8FCFA";
+        e.currentTarget.style.background =
+          "#F8FCFA";
       }}
     >
       {text}
     </button>
   );
 }
+
+const backButtonStyle = {
+  border: "none",
+  background: "transparent",
+  color: "#0B5E3B",
+  fontSize: "14px",
+  fontWeight: "700",
+  cursor: "pointer",
+  padding: 0,
+  marginBottom: "22px",
+};
 
 export default EmployeeProfile;
