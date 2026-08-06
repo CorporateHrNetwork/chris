@@ -23,8 +23,11 @@ model Organization {
 
   status OrganizationStatus @default(ACTIVE)
 
-  users User[]
-  roles Role[]
+  users        User[]
+  roles        Role[]
+  departments  Department[]
+  designations Designation[]
+  employees    Employee[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -117,8 +120,94 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+model Department {
+  id             String  @id @default(uuid())
+  organizationId String
+  name           String
+  code           String?
+  description    String?
+  isActive       Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("departments")
+}
+
+model Designation {
+  id             String  @id @default(uuid())
+  organizationId String
+  name           String
+  code           String?
+  description    String?
+  isActive       Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("designations")
+}
+
+model Employee {
+  id             String  @id @default(uuid())
+  organizationId String
+  departmentId   String?
+  designationId  String?
+
+  employeeNumber String
+  firstName      String
+  middleName     String?
+  lastName       String
+
+  email String?
+  phone String?
+
+  status EmployeeStatus @default(ACTIVE)
+
+  hireDate         DateTime?
+  confirmationDate DateTime?
+  exitDate         DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation  Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, employeeNumber])
+  @@index([organizationId])
+  @@index([departmentId])
+  @@index([designationId])
+  @@index([status])
+  @@map("employees")
+}
+
 enum OrganizationStatus {
   ACTIVE
   SUSPENDED
+  INACTIVE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  PROBATION
+  LEAVE
+  SUSPENDED
+  TERMINATED
+  RESIGNED
+  RETIRED
   INACTIVE
 }
