@@ -11,6 +11,7 @@ function AddEmployee({ onBack, onSave }) {
   });
 
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -23,7 +24,7 @@ function AddEmployee({ onBack, onSave }) {
     setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (
@@ -33,13 +34,46 @@ function AddEmployee({ onBack, onSave }) {
       !formData.email.trim() ||
       !formData.phone.trim()
     ) {
-      setError("Please complete all required fields before saving the employee.");
+      setError(
+        "Please complete all required fields before saving the employee."
+      );
       return;
     }
 
-    setError("");
+    try {
+      setSaving(true);
+      setError("");
 
-    onSave(formData);
+      const response = await fetch(
+        "http://localhost:5000/api/employees",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Unable to save employee."
+        );
+      }
+
+      onSave(result.data);
+    } catch (err) {
+      console.error("Add employee error:", err);
+
+      setError(
+        err.message ||
+          "CHRIS could not save the employee. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -50,7 +84,6 @@ function AddEmployee({ onBack, onSave }) {
         margin: "0 auto",
       }}
     >
-      {/* BACK BUTTON */}
       <button
         type="button"
         onClick={onBack}
@@ -68,7 +101,6 @@ function AddEmployee({ onBack, onSave }) {
         &lt; Back to Employees
       </button>
 
-      {/* PAGE HEADER */}
       <div
         style={{
           marginBottom: "25px",
@@ -107,7 +139,6 @@ function AddEmployee({ onBack, onSave }) {
         </p>
       </div>
 
-      {/* FORM */}
       <form onSubmit={handleSubmit}>
         <div
           style={{
@@ -129,7 +160,6 @@ function AddEmployee({ onBack, onSave }) {
             Employee Information
           </h2>
 
-          {/* INLINE ERROR MESSAGE */}
           {error && (
             <div
               style={{
@@ -211,6 +241,7 @@ function AddEmployee({ onBack, onSave }) {
                 value={formData.status}
                 onChange={handleChange}
                 style={fieldStyle}
+                disabled={saving}
               >
                 <option value="Active">Active</option>
                 <option value="Probation">Probation</option>
@@ -219,7 +250,6 @@ function AddEmployee({ onBack, onSave }) {
             </div>
           </div>
 
-          {/* ACTIONS */}
           <div
             style={{
               display: "flex",
@@ -233,6 +263,7 @@ function AddEmployee({ onBack, onSave }) {
             <button
               type="button"
               onClick={onBack}
+              disabled={saving}
               style={{
                 background: "#FFFFFF",
                 color: "#475569",
@@ -241,7 +272,8 @@ function AddEmployee({ onBack, onSave }) {
                 padding: "12px 20px",
                 fontSize: "14px",
                 fontWeight: "700",
-                cursor: "pointer",
+                cursor: saving ? "not-allowed" : "pointer",
+                opacity: saving ? 0.6 : 1,
               }}
             >
               Cancel
@@ -249,6 +281,7 @@ function AddEmployee({ onBack, onSave }) {
 
             <button
               type="submit"
+              disabled={saving}
               style={{
                 background: "#0B5E3B",
                 color: "#FFFFFF",
@@ -257,12 +290,13 @@ function AddEmployee({ onBack, onSave }) {
                 padding: "12px 22px",
                 fontSize: "14px",
                 fontWeight: "700",
-                cursor: "pointer",
+                cursor: saving ? "not-allowed" : "pointer",
                 boxShadow:
                   "0 6px 15px rgba(11,94,59,0.18)",
+                opacity: saving ? 0.7 : 1,
               }}
             >
-              Save Employee
+              {saving ? "Saving Employee..." : "Save Employee"}
             </button>
           </div>
         </div>
@@ -270,8 +304,6 @@ function AddEmployee({ onBack, onSave }) {
     </div>
   );
 }
-
-/* FORM FIELD */
 
 function FormField({
   label,
