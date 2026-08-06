@@ -42,7 +42,7 @@ router.get("/", async (req, res) => {
       },
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       status: "success",
       results: employees.length,
       data: employees,
@@ -50,9 +50,61 @@ router.get("/", async (req, res) => {
   } catch (error) {
     console.error("Employee fetch error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       status: "error",
       message: "Unable to fetch employees.",
+    });
+  }
+});
+
+/*
+  GET ONE EMPLOYEE PROFILE BY EMPLOYEE NUMBER
+*/
+router.get("/:employeeNumber", async (req, res) => {
+  try {
+    const { employeeNumber } = req.params;
+
+    const organization = await prisma.organization.findUnique({
+      where: {
+        slug: DEV_ORGANIZATION_SLUG,
+      },
+    });
+
+    if (!organization) {
+      return res.status(404).json({
+        status: "error",
+        message: "Development organization not found.",
+      });
+    }
+
+    const employee = await prisma.employee.findFirst({
+      where: {
+        organizationId: organization.id,
+        employeeNumber,
+      },
+      include: {
+        department: true,
+        designation: true,
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        status: "error",
+        message: "Employee not found.",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      data: employee,
+    });
+  } catch (error) {
+    console.error("Employee profile fetch error:", error);
+
+    return res.status(500).json({
+      status: "error",
+      message: "Unable to fetch employee profile.",
     });
   }
 });
@@ -221,7 +273,7 @@ router.post("/", async (req, res) => {
       },
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       status: "success",
       message: "Employee created successfully.",
       data: employee,
@@ -237,7 +289,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       status: "error",
       message: "Unable to create employee.",
     });
