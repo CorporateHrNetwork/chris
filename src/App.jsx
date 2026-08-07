@@ -9,6 +9,8 @@ import MainLayout from "./layouts/MainLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
+
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
@@ -36,11 +38,18 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* PUBLIC AUTHENTICATION ROUTES */}
         <Route
           path="/login"
           element={<Login />}
         />
 
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
+
+        {/* PROTECTED CHRIS ROUTES */}
         <Route
           path="/"
           element={
@@ -149,6 +158,7 @@ function App() {
           }
         />
 
+        {/* UNKNOWN ROUTES */}
         <Route
           path="*"
           element={

@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+
 import Logo from "../Logo/Logo";
 
 import {
@@ -15,6 +16,10 @@ import {
   FaCog,
   FaSignOutAlt,
 } from "react-icons/fa";
+
+import {
+  clearAuthSession,
+} from "../../../services/api";
 
 function Sidebar() {
   const menuItems = [
@@ -70,6 +75,21 @@ function Sidebar() {
     },
   ];
 
+  /*
+    LOGOUT
+
+    1. Remove all CHRIS authentication data.
+    2. Replace the current browser history entry
+       with the Login page.
+    3. ProtectedRoute prevents access to old
+       authenticated routes without a token.
+  */
+  const handleLogout = () => {
+    clearAuthSession();
+
+    window.location.replace("/login");
+  };
+
   const menuStyle = {
     display: "flex",
     alignItems: "center",
@@ -97,7 +117,8 @@ function Sidebar() {
         display: "flex",
         flexDirection: "column",
         flexShrink: 0,
-        boxShadow: "4px 0 15px rgba(0,0,0,.12)",
+        boxShadow:
+          "4px 0 15px rgba(0,0,0,.12)",
         overflow: "hidden",
         boxSizing: "border-box",
       }}
@@ -128,19 +149,39 @@ function Sidebar() {
             to={item.path}
             style={({ isActive }) => ({
               ...menuStyle,
-              background: isActive ? "#14824F" : "transparent",
-              color: isActive ? "#FFFFFF" : "#D9E6DF",
-            })}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#14824F";
-              e.currentTarget.style.color = "#FFFFFF";
-            }}
-            onMouseLeave={(e) => {
-              const currentPath = window.location.pathname;
 
-              if (currentPath !== item.path) {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#D9E6DF";
+              background: isActive
+                ? "#14824F"
+                : "transparent",
+
+              color: isActive
+                ? "#FFFFFF"
+                : "#D9E6DF",
+            })}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background =
+                "#14824F";
+
+              event.currentTarget.style.color =
+                "#FFFFFF";
+            }}
+            onMouseLeave={(event) => {
+              const currentPath =
+                window.location.pathname;
+
+              const isCurrentPage =
+                item.path === "/"
+                  ? currentPath === "/"
+                  : currentPath.startsWith(
+                      item.path
+                    );
+
+              if (!isCurrentPage) {
+                event.currentTarget.style.background =
+                  "transparent";
+
+                event.currentTarget.style.color =
+                  "#D9E6DF";
               }
             }}
           >
@@ -165,7 +206,8 @@ function Sidebar() {
       <div
         style={{
           flexShrink: 0,
-          borderTop: "1px solid rgba(255,255,255,.10)",
+          borderTop:
+            "1px solid rgba(255,255,255,.10)",
           padding: "10px 0 14px",
           background: "#0B5E3B",
         }}
@@ -175,17 +217,32 @@ function Sidebar() {
           to="/settings"
           style={({ isActive }) => ({
             ...menuStyle,
-            background: isActive ? "#14824F" : "transparent",
-            color: isActive ? "#FFFFFF" : "#D9E6DF",
+
+            background: isActive
+              ? "#14824F"
+              : "transparent",
+
+            color: isActive
+              ? "#FFFFFF"
+              : "#D9E6DF",
           })}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#14824F";
-            e.currentTarget.style.color = "#FFFFFF";
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background =
+              "#14824F";
+
+            event.currentTarget.style.color =
+              "#FFFFFF";
           }}
-          onMouseLeave={(e) => {
-            if (window.location.pathname !== "/settings") {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = "#D9E6DF";
+          onMouseLeave={(event) => {
+            if (
+              window.location.pathname !==
+              "/settings"
+            ) {
+              event.currentTarget.style.background =
+                "transparent";
+
+              event.currentTarget.style.color =
+                "#D9E6DF";
             }
           }}
         >
@@ -205,19 +262,39 @@ function Sidebar() {
         </NavLink>
 
         {/* LOGOUT */}
-        <div
+        <button
+          type="button"
+          onClick={handleLogout}
           style={{
             ...menuStyle,
-            color: "#D9E6DF",
+
+            width:
+              "calc(100% - 20px)",
+
+            border: "none",
+
+            background:
+              "transparent",
+
+            textAlign: "left",
+
             cursor: "pointer",
+
+            fontFamily: "inherit",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#A93226";
-            e.currentTarget.style.color = "#FFFFFF";
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background =
+              "#A93226";
+
+            event.currentTarget.style.color =
+              "#FFFFFF";
           }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "#D9E6DF";
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background =
+              "transparent";
+
+            event.currentTarget.style.color =
+              "#D9E6DF";
           }}
         >
           <span
@@ -233,7 +310,7 @@ function Sidebar() {
           </span>
 
           <span>Logout</span>
-        </div>
+        </button>
       </div>
     </aside>
   );

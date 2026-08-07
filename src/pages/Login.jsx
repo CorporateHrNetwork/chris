@@ -47,6 +47,11 @@ function Login() {
   const [loading, setLoading] =
     useState(false);
 
+  const [
+    recoveryLoading,
+    setRecoveryLoading,
+  ] = useState(false);
+
   const [error, setError] =
     useState("");
 
@@ -54,13 +59,12 @@ function Login() {
     useState("");
 
   /*
-    Force the visible credential fields to
-    start empty whenever the login page opens.
+    Keep login fields empty whenever the
+    Login page is opened.
 
-    We clear both React state and the actual
-    input elements because some browsers can
-    restore saved credentials directly into
-    the DOM.
+    Some browsers restore credentials directly
+    into form fields, so we clear both React
+    state and the actual DOM inputs.
   */
   useEffect(() => {
     const clearCredentialFields = () => {
@@ -185,8 +189,12 @@ function Login() {
       clearExistingSession();
 
       /*
-        Remember Me affects session duration,
-        not whether credentials are displayed.
+        Remember Me checked:
+        localStorage survives browser restart.
+
+        Remember Me unchecked:
+        sessionStorage lasts for the current
+        browser session.
       */
       const storage =
         rememberMe
@@ -212,11 +220,6 @@ function Login() {
         )
       );
 
-      /*
-        Do not clear state here before routing.
-        First complete authentication and leave
-        the Login page successfully.
-      */
       navigate("/", {
         replace: true,
       });
@@ -235,26 +238,116 @@ function Login() {
     }
   };
 
-  const handleForgotPassword = (
-    event
-  ) => {
-    event.preventDefault();
+  /*
+    FORGOT PASSWORD
 
-    setError("");
-    setNotice("");
+    Calls the real CHRIS backend.
 
-    if (!email.trim()) {
-      setError(
-        "Enter the email address linked to your CHRIS account."
-      );
+    During development, the backend returns
+    the reset token directly.
 
-      return;
-    }
+    Later, when email delivery is implemented,
+    this token will instead be delivered through
+    a secure reset link.
+  */
+  const handleForgotPassword =
+    async (event) => {
+      event.preventDefault();
 
-    setNotice(
-      "Password recovery is being prepared. No reset email has been sent yet."
-    );
-  };
+      try {
+        setRecoveryLoading(true);
+        setError("");
+        setNotice("");
+
+        const normalizedEmail =
+          email.trim().toLowerCase();
+
+        if (!normalizedEmail) {
+          throw new Error(
+            "Enter the email address linked to your CHRIS account."
+          );
+        }
+
+        const response = await fetch(
+          "http://localhost:5000/api/auth/forgot-password",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              email: normalizedEmail,
+
+              organizationSlug:
+                "corporatehr-network",
+            }),
+          }
+        );
+
+        const result =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+              "Unable to prepare password reset."
+          );
+        }
+
+        /*
+          DEVELOPMENT RESET FLOW
+
+          A valid development account receives
+          resetToken in result.data.
+
+          Invalid/non-existent accounts still receive
+          the same generic success message from the
+          backend, protecting account privacy.
+        */
+        const resetToken =
+          result.data?.resetToken;
+
+        if (!resetToken) {
+          setNotice(
+            result.message ||
+              "If an active CHRIS account exists for this email, password reset instructions have been prepared."
+          );
+
+          return;
+        }
+
+        /*
+          Pass the development reset token directly
+          to the Reset Password page without placing
+          it in the visible URL.
+        */
+        navigate(
+          "/reset-password",
+          {
+            state: {
+              resetToken,
+              email:
+                normalizedEmail,
+            },
+          }
+        );
+      } catch (err) {
+        console.error(
+          "CHRIS forgot password error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not prepare password recovery."
+        );
+      } finally {
+        setRecoveryLoading(false);
+      }
+    };
 
   return (
     <div
@@ -342,13 +435,7 @@ function Login() {
               onSubmit={handleSubmit}
               autoComplete="off"
             >
-              {/*
-                Decoy autofill inputs.
-
-                These help prevent Chrome from
-                inserting saved credentials into
-                the real CHRIS login fields.
-              */}
+              {/* Browser autofill decoys */}
               <input
                 type="text"
                 name="username"
@@ -577,10 +664,9 @@ function Login() {
                       "forgot"
                     );
 
+                    setEmail("");
                     setPassword("");
-
                     setError("");
-
                     setNotice("");
                   }}
 
@@ -626,6 +712,7 @@ function Login() {
           </>
         ) : (
           <>
+            {/* FORGOT PASSWORD */}
             <button
               type="button"
 
@@ -673,7 +760,7 @@ function Login() {
                     "800",
                 }}
               >
-                Reset Password
+                Forgot Password?
               </h1>
 
               <p
@@ -760,11 +847,32 @@ function Login() {
               <button
                 type="submit"
 
-                style={
-                  signInButtonStyle
+                disabled={
+                  recoveryLoading
                 }
+
+                style={{
+                  ...signInButtonStyle,
+
+                  background:
+                    recoveryLoading
+                      ? "#688B79"
+                      : "#0B5E3B",
+
+                  cursor:
+                    recoveryLoading
+                      ? "not-allowed"
+                      : "pointer",
+
+                  opacity:
+                    recoveryLoading
+                      ? 0.8
+                      : 1,
+                }}
               >
-                Continue
+                {recoveryLoading
+                  ? "Preparing Reset..."
+                  : "Continue"}
               </button>
             </form>
 
@@ -906,8 +1014,8 @@ function MessageBox({
 
         background:
           notice
-            ? "rgba(240,253,244,0.92)"
-            : "rgba(254,242,242,0.92)",
+            ? "rgba(240,253,244,0.94)"
+            : "rgba(254,242,242,0.94)",
 
         border:
           notice
@@ -1053,7 +1161,8 @@ const linkButtonStyle = {
 
   border: "none",
 
-  background: "transparent",
+  background:
+    "transparent",
 
   color: "#0B5E3B",
 
