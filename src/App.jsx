@@ -1,7 +1,14 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
@@ -15,31 +22,143 @@ import Training from "./pages/Training";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 
+function ProtectedLayout({ children }) {
+  return (
+    <ProtectedRoute>
+      <MainLayout>
+        {children}
+      </MainLayout>
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <MainLayout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
+      <Routes>
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-          <Route path="/employees" element={<Employees />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedLayout>
+              <Dashboard />
+            </ProtectedLayout>
+          }
+        />
 
-          <Route
-            path="/employees/:employeeNumber"
-            element={<EmployeeProfile />}
-          />
+        <Route
+          path="/employees"
+          element={
+            <ProtectedLayout>
+              <Employees />
+            </ProtectedLayout>
+          }
+        />
 
-          <Route path="/recruitment" element={<Recruitment />} />
-          <Route path="/attendance" element={<Attendance />} />
-          <Route path="/leave" element={<Leave />} />
-          <Route path="/payroll" element={<Payroll />} />
-          <Route path="/loans" element={<Loans />} />
-          <Route path="/performance" element={<Performance />} />
-          <Route path="/training" element={<Training />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </MainLayout>
+        <Route
+          path="/employees/:employeeNumber"
+          element={
+            <ProtectedLayout>
+              <EmployeeProfile />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/recruitment"
+          element={
+            <ProtectedLayout>
+              <Recruitment />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/attendance"
+          element={
+            <ProtectedLayout>
+              <Attendance />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/leave"
+          element={
+            <ProtectedLayout>
+              <Leave />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/payroll"
+          element={
+            <ProtectedLayout>
+              <Payroll />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/loans"
+          element={
+            <ProtectedLayout>
+              <Loans />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/performance"
+          element={
+            <ProtectedLayout>
+              <Performance />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/training"
+          element={
+            <ProtectedLayout>
+              <Training />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/reports"
+          element={
+            <ProtectedLayout>
+              <Reports />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <ProtectedLayout>
+              <Settings />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }

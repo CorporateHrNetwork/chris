@@ -1,4 +1,4 @@
-import chrisLogo from "../../../assets/logos/chris-logo.png";
+import chrisLogo from "../../../assets/images/chris-logo.png";
 
 function Logo() {
   return (

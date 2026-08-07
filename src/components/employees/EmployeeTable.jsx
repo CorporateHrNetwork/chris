@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { apiRequest } from "../../services/api";
+
 function EmployeeTable() {
   const navigate = useNavigate();
 
   const [employees, setEmployees] = useState([]);
+
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [status, setStatus] = useState("All");
@@ -18,56 +21,76 @@ function EmployeeTable() {
         setLoading(true);
         setError("");
 
-        const response = await fetch(
-          "http://localhost:5000/api/employees"
+        const result = await apiRequest(
+          "/api/employees"
         );
 
-        const result = await response.json();
+        const normalizedEmployees = result.data.map(
+          (employee) => ({
+            databaseId: employee.id,
 
-        if (!response.ok) {
-          throw new Error(
-            result.message || "Unable to load employees."
-          );
-        }
+            id: employee.employeeNumber,
 
-        const normalizedEmployees = result.data.map((employee) => ({
-          databaseId: employee.id,
-          id: employee.employeeNumber,
+            name: [
+              employee.firstName,
+              employee.middleName,
+              employee.lastName,
+            ]
+              .filter(Boolean)
+              .join(" "),
 
-          name: [
-            employee.firstName,
-            employee.middleName,
-            employee.lastName,
-          ]
-            .filter(Boolean)
-            .join(" "),
+            department:
+              employee.department?.name || "-",
 
-          department: employee.department?.name || "-",
-          designation: employee.designation?.name || "-",
-          email: employee.email || "",
-          phone: employee.phone || "",
-          status: formatStatus(employee.status),
+            designation:
+              employee.designation?.name || "-",
 
-          organizationId: employee.organizationId,
-          departmentId: employee.departmentId,
-          designationId: employee.designationId,
+            email: employee.email || "",
+            phone: employee.phone || "",
 
-          firstName: employee.firstName,
-          middleName: employee.middleName,
-          lastName: employee.lastName,
+            status: formatStatus(
+              employee.status
+            ),
 
-          hireDate: employee.hireDate,
-          confirmationDate: employee.confirmationDate,
-          exitDate: employee.exitDate,
-        }));
+            organizationId:
+              employee.organizationId,
+
+            departmentId:
+              employee.departmentId,
+
+            designationId:
+              employee.designationId,
+
+            firstName:
+              employee.firstName,
+
+            middleName:
+              employee.middleName,
+
+            lastName:
+              employee.lastName,
+
+            hireDate:
+              employee.hireDate,
+
+            confirmationDate:
+              employee.confirmationDate,
+
+            exitDate:
+              employee.exitDate,
+          })
+        );
 
         setEmployees(normalizedEmployees);
       } catch (err) {
-        console.error("Employee API error:", err);
+        console.error(
+          "Employee API error:",
+          err
+        );
 
         setError(
           err.message ||
-            "CHRIS could not load employee records. Please confirm the backend is running."
+            "CHRIS could not load employee records."
         );
       } finally {
         setLoading(false);
@@ -80,26 +103,40 @@ function EmployeeTable() {
   const departments = [
     "All",
     ...new Set(
-      employees.map((employee) => employee.department)
+      employees.map(
+        (employee) => employee.department
+      )
     ),
   ];
 
   const statuses = [
     "All",
     ...new Set(
-      employees.map((employee) => employee.status)
+      employees.map(
+        (employee) => employee.status
+      )
     ),
   ];
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
-      const searchTerm = search.toLowerCase().trim();
+      const searchTerm = search
+        .toLowerCase()
+        .trim();
 
       const searchMatch =
-        employee.name.toLowerCase().includes(searchTerm) ||
-        employee.id.toLowerCase().includes(searchTerm) ||
-        employee.department.toLowerCase().includes(searchTerm) ||
-        employee.designation.toLowerCase().includes(searchTerm);
+        employee.name
+          .toLowerCase()
+          .includes(searchTerm) ||
+        employee.id
+          .toLowerCase()
+          .includes(searchTerm) ||
+        employee.department
+          .toLowerCase()
+          .includes(searchTerm) ||
+        employee.designation
+          .toLowerCase()
+          .includes(searchTerm);
 
       const departmentMatch =
         department === "All" ||
@@ -109,13 +146,21 @@ function EmployeeTable() {
         status === "All" ||
         employee.status === status;
 
-      return searchMatch && departmentMatch && statusMatch;
+      return (
+        searchMatch &&
+        departmentMatch &&
+        statusMatch
+      );
     });
-  }, [employees, search, department, status]);
+  }, [
+    employees,
+    search,
+    department,
+    status,
+  ]);
 
   return (
     <div>
-      {/* FILTERS */}
       <div
         style={{
           display: "flex",
@@ -128,7 +173,9 @@ function EmployeeTable() {
           type="text"
           placeholder="Search employees..."
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) =>
+            setSearch(event.target.value)
+          }
           style={inputStyle}
         />
 
@@ -140,7 +187,10 @@ function EmployeeTable() {
           style={inputStyle}
         >
           {departments.map((dept) => (
-            <option key={dept} value={dept}>
+            <option
+              key={dept}
+              value={dept}
+            >
               {dept}
             </option>
           ))}
@@ -154,21 +204,25 @@ function EmployeeTable() {
           style={inputStyle}
         >
           {statuses.map((item) => (
-            <option key={item} value={item}>
+            <option
+              key={item}
+              value={item}
+            >
               {item}
             </option>
           ))}
         </select>
       </div>
 
-      {/* EMPLOYEE DIRECTORY */}
       <div
         style={{
           background: "#FFFFFF",
           borderRadius: "18px",
           padding: "25px",
-          boxShadow: "0 8px 25px rgba(0, 0, 0, 0.05)",
-          border: "1px solid #E5E7EB",
+          boxShadow:
+            "0 8px 25px rgba(0, 0, 0, 0.05)",
+          border:
+            "1px solid #E5E7EB",
         }}
       >
         <div
@@ -203,7 +257,9 @@ function EmployeeTable() {
               {loading
                 ? "Loading employees..."
                 : `${filteredEmployees.length} employee${
-                    filteredEmployees.length !== 1 ? "s" : ""
+                    filteredEmployees.length !== 1
+                      ? "s"
+                      : ""
                   }`}
             </p>
           </div>
@@ -215,7 +271,8 @@ function EmployeeTable() {
               marginBottom: "20px",
               padding: "14px 16px",
               background: "#FEF2F2",
-              border: "1px solid #FECACA",
+              border:
+                "1px solid #FECACA",
               borderRadius: "10px",
               color: "#B91C1C",
               fontSize: "14px",
@@ -245,12 +302,29 @@ function EmployeeTable() {
                   background: "#F3F6F4",
                 }}
               >
-                <th style={th}>Employee ID</th>
-                <th style={th}>Name</th>
-                <th style={th}>Department</th>
-                <th style={th}>Designation</th>
-                <th style={th}>Status</th>
-                <th style={th}>Action</th>
+                <th style={th}>
+                  Employee ID
+                </th>
+
+                <th style={th}>
+                  Name
+                </th>
+
+                <th style={th}>
+                  Department
+                </th>
+
+                <th style={th}>
+                  Designation
+                </th>
+
+                <th style={th}>
+                  Status
+                </th>
+
+                <th style={th}>
+                  Action
+                </th>
               </tr>
             </thead>
 
@@ -269,56 +343,78 @@ function EmployeeTable() {
                   </td>
                 </tr>
               ) : filteredEmployees.length > 0 ? (
-                filteredEmployees.map((employee) => (
-                  <tr key={employee.databaseId}>
-                    <td style={td}>{employee.id}</td>
-
-                    <td
-                      style={{
-                        ...td,
-                        fontWeight: "700",
-                        color: "#0F172A",
-                      }}
+                filteredEmployees.map(
+                  (employee) => (
+                    <tr
+                      key={
+                        employee.databaseId
+                      }
                     >
-                      {employee.name}
-                    </td>
+                      <td style={td}>
+                        {employee.id}
+                      </td>
 
-                    <td style={td}>
-                      {employee.department}
-                    </td>
-
-                    <td style={td}>
-                      {employee.designation}
-                    </td>
-
-                    <td style={td}>
-                      <StatusBadge status={employee.status} />
-                    </td>
-
-                    <td style={td}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/employees/${employee.id}`
-                          )
-                        }
+                      <td
                         style={{
-                          background: "#0B5E3B",
-                          color: "#FFFFFF",
-                          border: "none",
-                          padding: "9px 16px",
-                          borderRadius: "8px",
-                          cursor: "pointer",
-                          fontWeight: "700",
-                          fontSize: "13px",
+                          ...td,
+                          fontWeight:
+                            "700",
+                          color:
+                            "#0F172A",
                         }}
                       >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                        {employee.name}
+                      </td>
+
+                      <td style={td}>
+                        {employee.department}
+                      </td>
+
+                      <td style={td}>
+                        {employee.designation}
+                      </td>
+
+                      <td style={td}>
+                        <StatusBadge
+                          status={
+                            employee.status
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/employees/${employee.id}`
+                            )
+                          }
+                          style={{
+                            background:
+                              "#0B5E3B",
+                            color:
+                              "#FFFFFF",
+                            border:
+                              "none",
+                            padding:
+                              "9px 16px",
+                            borderRadius:
+                              "8px",
+                            cursor:
+                              "pointer",
+                            fontWeight:
+                              "700",
+                            fontSize:
+                              "13px",
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                )
               ) : (
                 <tr>
                   <td
@@ -329,8 +425,7 @@ function EmployeeTable() {
                       color: "#64748B",
                     }}
                   >
-                    No employees found matching your search or
-                    filters.
+                    No employees found matching your search or filters.
                   </td>
                 </tr>
               )}
@@ -412,7 +507,8 @@ function StatusBadge({ status }) {
 const inputStyle = {
   padding: "12px 14px",
   borderRadius: "10px",
-  border: "1px solid #D1D5DB",
+  border:
+    "1px solid #D1D5DB",
   minWidth: "220px",
   background: "#FFFFFF",
   color: "#0F172A",
@@ -428,12 +524,14 @@ const th = {
   fontWeight: "800",
   textTransform: "uppercase",
   letterSpacing: "0.03em",
-  borderBottom: "1px solid #E5E7EB",
+  borderBottom:
+    "1px solid #E5E7EB",
 };
 
 const td = {
   padding: "15px 14px",
-  borderBottom: "1px solid #EEF2F1",
+  borderBottom:
+    "1px solid #EEF2F1",
   color: "#475569",
   fontSize: "14px",
 };

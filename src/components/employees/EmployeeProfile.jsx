@@ -1,45 +1,60 @@
 ﻿import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
+import {
+  apiRequest,
+} from "../../services/api";
 
 function EmployeeProfile() {
   const { employeeNumber } = useParams();
+
   const navigate = useNavigate();
 
-  const [profile, setProfile] = useState(null);
-  const [formData, setFormData] = useState(null);
+  const [profile, setProfile] =
+    useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] =
+    useState(null);
 
-  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [saving, setSaving] =
+    useState(false);
+
+  const [editing, setEditing] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
 
   const loadProfile = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        `http://localhost:5000/api/employees/${encodeURIComponent(
-          employeeNumber
-        )}`
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Unable to load employee profile."
+      const result =
+        await apiRequest(
+          `/api/employees/${encodeURIComponent(
+            employeeNumber
+          )}`
         );
-      }
 
-      const employee = result.data;
+      const employee =
+        result.data;
 
       const normalizedProfile = {
-        databaseId: employee.id,
-        id: employee.employeeNumber,
+        databaseId:
+          employee.id,
+
+        id:
+          employee.employeeNumber,
 
         name: [
           employee.firstName,
@@ -49,42 +64,82 @@ function EmployeeProfile() {
           .filter(Boolean)
           .join(" "),
 
-        department: employee.department?.name || "",
-        designation: employee.designation?.name || "",
+        department:
+          employee.department
+            ?.name || "",
 
-        email: employee.email || "",
-        phone: employee.phone || "",
+        designation:
+          employee.designation
+            ?.name || "",
 
-        status: formatStatus(employee.status),
+        email:
+          employee.email || "",
 
-        hireDate: employee.hireDate,
-        confirmationDate: employee.confirmationDate,
-        exitDate: employee.exitDate,
+        phone:
+          employee.phone || "",
+
+        status:
+          formatStatus(
+            employee.status
+          ),
+
+        hireDate:
+          employee.hireDate,
+
+        confirmationDate:
+          employee.confirmationDate,
+
+        exitDate:
+          employee.exitDate,
       };
 
-      setProfile(normalizedProfile);
+      setProfile(
+        normalizedProfile
+      );
 
       setFormData({
-        name: normalizedProfile.name,
-        department: normalizedProfile.department,
-        designation: normalizedProfile.designation,
-        email: normalizedProfile.email,
-        phone: normalizedProfile.phone,
-        status: normalizedProfile.status,
+        name:
+          normalizedProfile.name,
 
-        hireDate: toDateInput(normalizedProfile.hireDate),
+        department:
+          normalizedProfile.department,
 
-        confirmationDate: toDateInput(
-          normalizedProfile.confirmationDate
-        ),
+        designation:
+          normalizedProfile.designation,
 
-        exitDate: toDateInput(normalizedProfile.exitDate),
+        email:
+          normalizedProfile.email,
+
+        phone:
+          normalizedProfile.phone,
+
+        status:
+          normalizedProfile.status,
+
+        hireDate:
+          toDateInput(
+            normalizedProfile.hireDate
+          ),
+
+        confirmationDate:
+          toDateInput(
+            normalizedProfile.confirmationDate
+          ),
+
+        exitDate:
+          toDateInput(
+            normalizedProfile.exitDate
+          ),
       });
     } catch (err) {
-      console.error("Employee profile error:", err);
+      console.error(
+        "Employee profile error:",
+        err
+      );
 
       setError(
-        err.message || "CHRIS could not load the employee profile."
+        err.message ||
+          "CHRIS could not load the employee profile."
       );
     } finally {
       setLoading(false);
@@ -95,16 +150,25 @@ function EmployeeProfile() {
     loadProfile();
   }, [employeeNumber]);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
+  const handleChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+    } = event.target;
 
-    setFormData((current) => ({
-      ...current,
-      [name]: value,
-    }));
+    setFormData(
+      (current) => ({
+        ...current,
+        [name]: value,
+      })
+    );
   };
 
-  const handleSave = async (event) => {
+  const handleSave = async (
+    event
+  ) => {
     event.preventDefault();
 
     try {
@@ -112,41 +176,38 @@ function EmployeeProfile() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(
-        `http://localhost:5000/api/employees/${encodeURIComponent(
+      await apiRequest(
+        `/api/employees/${encodeURIComponent(
           employeeNumber
         )}`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(
+            formData
+          ),
         }
       );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message || "Unable to update employee."
-        );
-      }
 
       await loadProfile();
 
       setEditing(false);
 
-      setSuccess("Employee updated successfully.");
+      setSuccess(
+        "Employee updated successfully."
+      );
 
       setTimeout(() => {
         setSuccess("");
       }, 4000);
     } catch (err) {
-      console.error("Employee update error:", err);
+      console.error(
+        "Employee update error:",
+        err
+      );
 
       setError(
-        err.message || "CHRIS could not update this employee."
+        err.message ||
+          "CHRIS could not update this employee."
       );
     } finally {
       setSaving(false);
@@ -155,138 +216,262 @@ function EmployeeProfile() {
 
   const handleCancel = () => {
     setEditing(false);
+
     setError("");
     setSuccess("");
 
     setFormData({
-      name: profile.name,
-      department: profile.department,
-      designation: profile.designation,
-      email: profile.email,
-      phone: profile.phone,
-      status: profile.status,
+      name:
+        profile.name,
 
-      hireDate: toDateInput(profile.hireDate),
+      department:
+        profile.department,
 
-      confirmationDate: toDateInput(
-        profile.confirmationDate
-      ),
+      designation:
+        profile.designation,
 
-      exitDate: toDateInput(profile.exitDate),
+      email:
+        profile.email,
+
+      phone:
+        profile.phone,
+
+      status:
+        profile.status,
+
+      hireDate:
+        toDateInput(
+          profile.hireDate
+        ),
+
+      confirmationDate:
+        toDateInput(
+          profile.confirmationDate
+        ),
+
+      exitDate:
+        toDateInput(
+          profile.exitDate
+        ),
     });
   };
 
   if (loading) {
     return (
-      <div style={loadingStyle}>
+      <div
+        style={
+          loadingStyle
+        }
+      >
         Loading employee profile...
       </div>
     );
   }
 
-  if (error && !profile) {
+  if (
+    error &&
+    !profile
+  ) {
     return (
-      <div style={pageStyle}>
+      <div
+        style={pageStyle}
+      >
         <button
           type="button"
-          onClick={() => navigate("/employees")}
-          style={backButtonStyle}
+          onClick={() =>
+            navigate(
+              "/employees"
+            )
+          }
+          style={
+            backButtonStyle
+          }
         >
           &lt; Back to Employees
         </button>
 
-        <ErrorMessage message={error} />
+        <ErrorMessage
+          message={
+            error
+          }
+        />
       </div>
     );
   }
 
-  const initials = profile.name
-    .split(" ")
-    .map((name) => name.charAt(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials =
+    profile.name
+      .split(" ")
+      .map((name) =>
+        name.charAt(0)
+      )
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
 
   return (
-    <div style={pageStyle}>
+    <div
+      style={
+        pageStyle
+      }
+    >
       <button
         type="button"
-        onClick={() => navigate("/employees")}
-        style={backButtonStyle}
+        onClick={() =>
+          navigate(
+            "/employees"
+          )
+        }
+        style={
+          backButtonStyle
+        }
       >
         &lt; Back to Employees
       </button>
 
       {success && (
-        <div style={successStyle}>
+        <div
+          style={
+            successStyle
+          }
+        >
           {success}
         </div>
       )}
 
       {error && (
-        <ErrorMessage message={error} />
+        <ErrorMessage
+          message={
+            error
+          }
+        />
       )}
 
-      <div style={headerCardStyle}>
-        <div style={profileIdentityStyle}>
-          <div style={avatarStyle}>
+      <div
+        style={
+          headerCardStyle
+        }
+      >
+        <div
+          style={
+            profileIdentityStyle
+          }
+        >
+          <div
+            style={
+              avatarStyle
+            }
+          >
             {initials}
           </div>
 
           <div>
-            <p style={eyebrowStyle}>
+            <p
+              style={
+                eyebrowStyle
+              }
+            >
               Employee Profile
             </p>
 
-            <h1 style={nameStyle}>
+            <h1
+              style={
+                nameStyle
+              }
+            >
               {profile.name}
             </h1>
 
-            <p style={subtitleStyle}>
-              {profile.designation} - {profile.department}
+            <p
+              style={
+                subtitleStyle
+              }
+            >
+              {profile.designation}
+              {" - "}
+              {profile.department}
             </p>
 
-            <p style={employeeNumberStyle}>
+            <p
+              style={
+                employeeNumberStyle
+              }
+            >
               {profile.id}
             </p>
           </div>
         </div>
 
-        <StatusBadge status={profile.status} />
+        <StatusBadge
+          status={
+            profile.status
+          }
+        />
       </div>
 
       {editing ? (
         <form
-          onSubmit={handleSave}
-          style={editCardStyle}
+          onSubmit={
+            handleSave
+          }
+          style={
+            editCardStyle
+          }
         >
-          <div style={editHeaderStyle}>
+          <div
+            style={
+              editHeaderStyle
+            }
+          >
             <div>
-              <h2 style={editTitleStyle}>
+              <h2
+                style={
+                  editTitleStyle
+                }
+              >
                 Edit Employee
               </h2>
 
-              <p style={editSubtitleStyle}>
+              <p
+                style={
+                  editSubtitleStyle
+                }
+              >
                 Update the employee record and save changes to CHRIS.
               </p>
             </div>
 
-            <div style={buttonGroupStyle}>
+            <div
+              style={
+                buttonGroupStyle
+              }
+            >
               <button
                 type="button"
-                onClick={handleCancel}
-                disabled={saving}
-                style={cancelButtonStyle}
+                onClick={
+                  handleCancel
+                }
+                disabled={
+                  saving
+                }
+                style={
+                  cancelButtonStyle
+                }
               >
                 Cancel
               </button>
 
               <button
                 type="submit"
-                disabled={saving}
+                disabled={
+                  saving
+                }
                 style={{
                   ...saveButtonStyle,
-                  opacity: saving ? 0.7 : 1,
+                  opacity:
+                    saving
+                      ? 0.7
+                      : 1,
                 }}
               >
                 {saving
@@ -296,67 +481,142 @@ function EmployeeProfile() {
             </div>
           </div>
 
-          <div style={formGridStyle}>
+          <div
+            style={
+              formGridStyle
+            }
+          >
             <FormField
               label="Full Name"
               name="name"
-              value={formData.name}
-              onChange={handleChange}
+              value={
+                formData.name
+              }
+              onChange={
+                handleChange
+              }
               required
+              disabled={
+                saving
+              }
             />
 
             <FormField
               label="Email Address"
               name="email"
               type="email"
-              value={formData.email}
-              onChange={handleChange}
+              value={
+                formData.email
+              }
+              onChange={
+                handleChange
+              }
               required
+              disabled={
+                saving
+              }
             />
 
             <FormField
               label="Phone Number"
               name="phone"
-              value={formData.phone}
-              onChange={handleChange}
+              value={
+                formData.phone
+              }
+              onChange={
+                handleChange
+              }
               required
+              disabled={
+                saving
+              }
             />
 
             <FormField
               label="Department"
               name="department"
-              value={formData.department}
-              onChange={handleChange}
+              value={
+                formData.department
+              }
+              onChange={
+                handleChange
+              }
               required
+              disabled={
+                saving
+              }
             />
 
             <FormField
               label="Designation"
               name="designation"
-              value={formData.designation}
-              onChange={handleChange}
+              value={
+                formData.designation
+              }
+              onChange={
+                handleChange
+              }
               required
+              disabled={
+                saving
+              }
             />
 
             <div>
-              <label style={labelStyle}>
+              <label
+                style={
+                  labelStyle
+                }
+              >
                 Employment Status
               </label>
 
               <select
                 name="status"
-                value={formData.status}
-                onChange={handleChange}
-                style={fieldStyle}
+                value={
+                  formData.status
+                }
+                onChange={
+                  handleChange
+                }
+                style={
+                  fieldStyle
+                }
+                disabled={
+                  saving
+                }
               >
-                <option value="Active">Active</option>
-                <option value="Probation">Probation</option>
-                <option value="Leave">Leave</option>
-                <option value="Suspended">Suspended</option>
-                <option value="Resigned">Resigned</option>
-                <option value="Terminated">Terminated</option>
-                <option value="Retired">Retired</option>
-                <option value="Inactive">Inactive</option>
+                <option value="Active">
+                  Active
+                </option>
+
+                <option value="Probation">
+                  Probation
+                </option>
+
+                <option value="Leave">
+                  Leave
+                </option>
+
+                <option value="Suspended">
+                  Suspended
+                </option>
+
+                <option value="Resigned">
+                  Resigned
+                </option>
+
+                <option value="Terminated">
+                  Terminated
+                </option>
+
+                <option value="Retired">
+                  Retired
+                </option>
+
+                <option value="Inactive">
+                  Inactive
+                </option>
               </select>
             </div>
 
@@ -364,89 +624,150 @@ function EmployeeProfile() {
               label="Hire Date"
               name="hireDate"
               type="date"
-              value={formData.hireDate}
-              onChange={handleChange}
+              value={
+                formData.hireDate
+              }
+              onChange={
+                handleChange
+              }
+              disabled={
+                saving
+              }
             />
 
             <FormField
               label="Confirmation Date"
               name="confirmationDate"
               type="date"
-              value={formData.confirmationDate}
-              onChange={handleChange}
+              value={
+                formData.confirmationDate
+              }
+              onChange={
+                handleChange
+              }
+              disabled={
+                saving
+              }
             />
 
             <FormField
               label="Exit Date"
               name="exitDate"
               type="date"
-              value={formData.exitDate}
-              onChange={handleChange}
+              value={
+                formData.exitDate
+              }
+              onChange={
+                handleChange
+              }
+              disabled={
+                saving
+              }
             />
           </div>
         </form>
       ) : (
-        <div style={cardsGridStyle}>
-          <InformationCard title="Employee Information">
+        <div
+          style={
+            cardsGridStyle
+          }
+        >
+          <InformationCard
+            title="Employee Information"
+          >
             <InfoRow
               label="Full Name"
-              value={profile.name}
+              value={
+                profile.name
+              }
             />
 
             <InfoRow
               label="Employee ID"
-              value={profile.id}
+              value={
+                profile.id
+              }
             />
 
             <InfoRow
               label="Department"
-              value={profile.department}
+              value={
+                profile.department
+              }
             />
 
             <InfoRow
               label="Designation"
-              value={profile.designation}
+              value={
+                profile.designation
+              }
             />
 
             <InfoRow
               label="Employment Status"
-              value={profile.status}
+              value={
+                profile.status
+              }
             />
           </InformationCard>
 
-          <InformationCard title="Contact Information">
+          <InformationCard
+            title="Contact Information"
+          >
             <InfoRow
               label="Email"
-              value={profile.email}
+              value={
+                profile.email
+              }
             />
 
             <InfoRow
               label="Phone"
-              value={profile.phone}
+              value={
+                profile.phone
+              }
             />
           </InformationCard>
 
-          <InformationCard title="Employment">
+          <InformationCard
+            title="Employment"
+          >
             <InfoRow
               label="Hire Date"
-              value={formatDate(profile.hireDate)}
+              value={
+                formatDate(
+                  profile.hireDate
+                )
+              }
             />
 
             <InfoRow
               label="Confirmation Date"
-              value={formatDate(
-                profile.confirmationDate
-              )}
+              value={
+                formatDate(
+                  profile.confirmationDate
+                )
+              }
             />
 
             <InfoRow
               label="Exit Date"
-              value={formatDate(profile.exitDate)}
+              value={
+                formatDate(
+                  profile.exitDate
+                )
+              }
             />
           </InformationCard>
 
-          <InformationCard title="Quick Actions">
-            <div style={actionsGridStyle}>
+          <InformationCard
+            title="Quick Actions"
+          >
+            <div
+              style={
+                actionsGridStyle
+              }
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -454,14 +775,24 @@ function EmployeeProfile() {
                   setError("");
                   setEditing(true);
                 }}
-                style={actionButtonStyle}
+                style={
+                  actionButtonStyle
+                }
               >
                 Edit Employee
               </button>
 
-              <ActionButton text="Leave" />
-              <ActionButton text="Payroll" />
-              <ActionButton text="Documents" />
+              <ActionButton
+                text="Leave"
+              />
+
+              <ActionButton
+                text="Payroll"
+              />
+
+              <ActionButton
+                text="Documents"
+              />
             </div>
           </InformationCard>
         </div>
@@ -477,102 +808,171 @@ function FormField({
   onChange,
   type = "text",
   required = false,
+  disabled = false,
 }) {
   return (
     <div>
-      <label style={labelStyle}>
+      <label
+        style={
+          labelStyle
+        }
+      >
         {label}
-        {required ? " *" : ""}
+        {required
+          ? " *"
+          : ""}
       </label>
 
       <input
         name={name}
         type={type}
-        value={value || ""}
-        onChange={onChange}
-        required={required}
-        style={fieldStyle}
+        value={
+          value || ""
+        }
+        onChange={
+          onChange
+        }
+        required={
+          required
+        }
+        disabled={
+          disabled
+        }
+        style={
+          fieldStyle
+        }
       />
     </div>
   );
 }
 
-function ErrorMessage({ message }) {
+function ErrorMessage({
+  message,
+}) {
   return (
-    <div style={errorStyle}>
+    <div
+      style={
+        errorStyle
+      }
+    >
       {message}
     </div>
   );
 }
 
-function formatStatus(status) {
+function formatStatus(
+  status
+) {
   const labels = {
     ACTIVE: "Active",
     PROBATION: "Probation",
     LEAVE: "Leave",
     SUSPENDED: "Suspended",
-    TERMINATED: "Terminated",
+    TERMINATED:
+      "Terminated",
     RESIGNED: "Resigned",
     RETIRED: "Retired",
     INACTIVE: "Inactive",
   };
 
-  return labels[status] || status;
+  return (
+    labels[status] ||
+    status
+  );
 }
 
-function formatDate(value) {
+function formatDate(
+  value
+) {
   if (!value) {
     return "-";
   }
 
-  return new Date(value).toLocaleDateString();
+  return new Date(
+    value
+  ).toLocaleDateString();
 }
 
-function toDateInput(value) {
+function toDateInput(
+  value
+) {
   if (!value) {
     return "";
   }
 
-  return new Date(value)
+  return new Date(
+    value
+  )
     .toISOString()
     .slice(0, 10);
 }
 
-function StatusBadge({ status }) {
-  let background = "#F1F5F9";
-  let color = "#475569";
+function StatusBadge({
+  status,
+}) {
+  let background =
+    "#F1F5F9";
 
-  if (status === "Active") {
-    background = "#E8F8F0";
-    color = "#087443";
+  let color =
+    "#475569";
+
+  if (
+    status === "Active"
+  ) {
+    background =
+      "#E8F8F0";
+
+    color =
+      "#087443";
   }
 
-  if (status === "Leave") {
-    background = "#FFF4E5";
-    color = "#B45309";
+  if (
+    status === "Leave"
+  ) {
+    background =
+      "#FFF4E5";
+
+    color =
+      "#B45309";
   }
 
-  if (status === "Probation") {
-    background = "#F0E9FF";
-    color = "#6D28D9";
+  if (
+    status === "Probation"
+  ) {
+    background =
+      "#F0E9FF";
+
+    color =
+      "#6D28D9";
   }
 
-  if (status === "Suspended") {
-    background = "#FEF2F2";
-    color = "#B91C1C";
+  if (
+    status === "Suspended"
+  ) {
+    background =
+      "#FEF2F2";
+
+    color =
+      "#B91C1C";
   }
 
   return (
     <div
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "8px 14px",
-        borderRadius: "999px",
+        display:
+          "inline-flex",
+        alignItems:
+          "center",
+        padding:
+          "8px 14px",
+        borderRadius:
+          "999px",
         background,
         color,
-        fontSize: "13px",
-        fontWeight: "700",
+        fontSize:
+          "13px",
+        fontWeight:
+          "700",
       }}
     >
       {status}
@@ -585,8 +985,16 @@ function InformationCard({
   children,
 }) {
   return (
-    <div style={informationCardStyle}>
-      <h2 style={informationTitleStyle}>
+    <div
+      style={
+        informationCardStyle
+      }
+    >
+      <h2
+        style={
+          informationTitleStyle
+        }
+      >
         {title}
       </h2>
 
@@ -600,23 +1008,39 @@ function InfoRow({
   value,
 }) {
   return (
-    <div style={infoRowStyle}>
-      <span style={infoLabelStyle}>
+    <div
+      style={
+        infoRowStyle
+      }
+    >
+      <span
+        style={
+          infoLabelStyle
+        }
+      >
         {label}
       </span>
 
-      <span style={infoValueStyle}>
+      <span
+        style={
+          infoValueStyle
+        }
+      >
         {value || "-"}
       </span>
     </div>
   );
 }
 
-function ActionButton({ text }) {
+function ActionButton({
+  text,
+}) {
   return (
     <button
       type="button"
-      style={actionButtonStyle}
+      style={
+        actionButtonStyle
+      }
     >
       {text}
     </button>
@@ -638,7 +1062,8 @@ const loadingStyle = {
 
 const backButtonStyle = {
   border: "none",
-  background: "transparent",
+  background:
+    "transparent",
   color: "#0B5E3B",
   fontSize: "14px",
   fontWeight: "700",
@@ -649,7 +1074,8 @@ const backButtonStyle = {
 
 const headerCardStyle = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
+  border:
+    "1px solid #E5E7EB",
   borderRadius: "18px",
   padding: "26px",
   marginBottom: "22px",
@@ -657,7 +1083,8 @@ const headerCardStyle = {
     "0 6px 24px rgba(15, 23, 42, 0.05)",
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
+  justifyContent:
+    "space-between",
   gap: "20px",
   flexWrap: "wrap",
 };
@@ -718,7 +1145,8 @@ const cardsGridStyle = {
 
 const informationCardStyle = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
+  border:
+    "1px solid #E5E7EB",
   borderRadius: "18px",
   padding: "24px",
   boxShadow:
@@ -734,11 +1162,14 @@ const informationTitleStyle = {
 
 const infoRowStyle = {
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
+  justifyContent:
+    "space-between",
+  alignItems:
+    "flex-start",
   gap: "20px",
   padding: "13px 0",
-  borderBottom: "1px solid #EEF2F1",
+  borderBottom:
+    "1px solid #EEF2F1",
 };
 
 const infoLabelStyle = {
@@ -761,7 +1192,8 @@ const actionsGridStyle = {
 };
 
 const actionButtonStyle = {
-  border: "1px solid #D1E5DB",
+  border:
+    "1px solid #D1E5DB",
   background: "#F8FCFA",
   color: "#0B5E3B",
   borderRadius: "10px",
@@ -773,7 +1205,8 @@ const actionButtonStyle = {
 
 const editCardStyle = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
+  border:
+    "1px solid #E5E7EB",
   borderRadius: "18px",
   padding: "26px",
   boxShadow:
@@ -782,8 +1215,10 @@ const editCardStyle = {
 
 const editHeaderStyle = {
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
+  justifyContent:
+    "space-between",
+  alignItems:
+    "flex-start",
   gap: "20px",
   flexWrap: "wrap",
   marginBottom: "25px",
@@ -819,10 +1254,12 @@ const labelStyle = {
 
 const fieldStyle = {
   width: "100%",
-  boxSizing: "border-box",
+  boxSizing:
+    "border-box",
   padding: "12px 13px",
   borderRadius: "10px",
-  border: "1px solid #CBD5E1",
+  border:
+    "1px solid #CBD5E1",
   background: "#FFFFFF",
   color: "#0F172A",
   fontSize: "14px",
@@ -846,7 +1283,8 @@ const saveButtonStyle = {
 };
 
 const cancelButtonStyle = {
-  border: "1px solid #CBD5E1",
+  border:
+    "1px solid #CBD5E1",
   background: "#FFFFFF",
   color: "#475569",
   borderRadius: "9px",
@@ -860,7 +1298,8 @@ const successStyle = {
   padding: "14px 16px",
   marginBottom: "18px",
   background: "#ECFDF5",
-  border: "1px solid #A7F3D0",
+  border:
+    "1px solid #A7F3D0",
   color: "#047857",
   borderRadius: "10px",
   fontSize: "14px",
@@ -871,7 +1310,8 @@ const errorStyle = {
   padding: "14px 16px",
   marginBottom: "18px",
   background: "#FEF2F2",
-  border: "1px solid #FECACA",
+  border:
+    "1px solid #FECACA",
   color: "#B91C1C",
   borderRadius: "10px",
   fontSize: "14px",

@@ -1,38 +1,30 @@
 const express = require("express");
 const prisma = require("../config/prisma");
+const {
+  requireAuth,
+} = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-const DEV_ORGANIZATION_SLUG = "corporatehr-network";
-
 /*
-  GET DEVELOPMENT ORGANIZATION
+  All employee routes require authentication.
+
+  Tenant resolution:
+  The organization is obtained from the authenticated
+  CHRIS user instead of a hard-coded development tenant.
 */
-async function getDevelopmentOrganization() {
-  return prisma.organization.findUnique({
-    where: {
-      slug: DEV_ORGANIZATION_SLUG,
-    },
-  });
-}
+router.use(requireAuth);
 
 /*
   GET ALL EMPLOYEES
 */
 router.get("/", async (req, res) => {
   try {
-    const organization = await getDevelopmentOrganization();
-
-    if (!organization) {
-      return res.status(404).json({
-        status: "error",
-        message: "Development organization not found.",
-      });
-    }
+    const organizationId = req.auth.organizationId;
 
     const employees = await prisma.employee.findMany({
       where: {
-        organizationId: organization.id,
+        organizationId,
       },
       include: {
         department: true,
@@ -63,20 +55,12 @@ router.get("/", async (req, res) => {
 */
 router.get("/:employeeNumber", async (req, res) => {
   try {
+    const organizationId = req.auth.organizationId;
     const { employeeNumber } = req.params;
-
-    const organization = await getDevelopmentOrganization();
-
-    if (!organization) {
-      return res.status(404).json({
-        status: "error",
-        message: "Development organization not found.",
-      });
-    }
 
     const employee = await prisma.employee.findFirst({
       where: {
-        organizationId: organization.id,
+        organizationId,
         employeeNumber,
       },
       include: {
@@ -97,7 +81,10 @@ router.get("/:employeeNumber", async (req, res) => {
       data: employee,
     });
   } catch (error) {
-    console.error("Employee profile fetch error:", error);
+    console.error(
+      "Employee profile fetch error:",
+      error
+    );
 
     return res.status(500).json({
       status: "error",
@@ -111,6 +98,7 @@ router.get("/:employeeNumber", async (req, res) => {
 */
 router.put("/:employeeNumber", async (req, res) => {
   try {
+    const organizationId = req.auth.organizationId;
     const { employeeNumber } = req.params;
 
     const {
@@ -134,25 +122,18 @@ router.put("/:employeeNumber", async (req, res) => {
     ) {
       return res.status(400).json({
         status: "error",
-        message: "Please complete all required employee fields.",
+        message:
+          "Please complete all required employee fields.",
       });
     }
 
-    const organization = await getDevelopmentOrganization();
-
-    if (!organization) {
-      return res.status(404).json({
-        status: "error",
-        message: "Development organization not found.",
+    const existingEmployee =
+      await prisma.employee.findFirst({
+        where: {
+          organizationId,
+          employeeNumber,
+        },
       });
-    }
-
-    const existingEmployee = await prisma.employee.findFirst({
-      where: {
-        organizationId: organization.id,
-        employeeNumber,
-      },
-    });
 
     if (!existingEmployee) {
       return res.status(404).json({
@@ -161,22 +142,25 @@ router.put("/:employeeNumber", async (req, res) => {
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail =
+      email.trim().toLowerCase();
 
-    const duplicateEmail = await prisma.employee.findFirst({
-      where: {
-        organizationId: organization.id,
-        email: normalizedEmail,
-        NOT: {
-          id: existingEmployee.id,
+    const duplicateEmail =
+      await prisma.employee.findFirst({
+        where: {
+          organizationId,
+          email: normalizedEmail,
+          NOT: {
+            id: existingEmployee.id,
+          },
         },
-      },
-    });
+      });
 
     if (duplicateEmail) {
       return res.status(409).json({
         status: "error",
-        message: "Another employee already uses this email address.",
+        message:
+          "Another employee already uses this email address.",
       });
     }
 
@@ -185,45 +169,49 @@ router.put("/:employeeNumber", async (req, res) => {
     if (nameParts.length < 2) {
       return res.status(400).json({
         status: "error",
-        message: "Please enter at least a first and last name.",
+        message:
+          "Please enter at least a first and last name.",
       });
     }
 
     const firstName = nameParts[0];
-    const lastName = nameParts[nameParts.length - 1];
+    const lastName =
+      nameParts[nameParts.length - 1];
 
     const middleName =
       nameParts.length > 2
         ? nameParts.slice(1, -1).join(" ")
         : null;
 
-    const departmentRecord = await prisma.department.upsert({
-      where: {
-        organizationId_name: {
-          organizationId: organization.id,
+    const departmentRecord =
+      await prisma.department.upsert({
+        where: {
+          organizationId_name: {
+            organizationId,
+            name: department.trim(),
+          },
+        },
+        update: {},
+        create: {
+          organizationId,
           name: department.trim(),
         },
-      },
-      update: {},
-      create: {
-        organizationId: organization.id,
-        name: department.trim(),
-      },
-    });
+      });
 
-    const designationRecord = await prisma.designation.upsert({
-      where: {
-        organizationId_name: {
-          organizationId: organization.id,
+    const designationRecord =
+      await prisma.designation.upsert({
+        where: {
+          organizationId_name: {
+            organizationId,
+            name: designation.trim(),
+          },
+        },
+        update: {},
+        create: {
+          organizationId,
           name: designation.trim(),
         },
-      },
-      update: {},
-      create: {
-        organizationId: organization.id,
-        name: designation.trim(),
-      },
-    });
+      });
 
     const statusMap = {
       Active: "ACTIVE",
@@ -251,15 +239,21 @@ router.put("/:employeeNumber", async (req, res) => {
         email: normalizedEmail,
         phone: phone.trim(),
 
-        status: statusMap[status] || existingEmployee.status,
+        status:
+          statusMap[status] ||
+          existingEmployee.status,
 
-        hireDate: hireDate ? new Date(hireDate) : null,
+        hireDate: hireDate
+          ? new Date(hireDate)
+          : null,
 
         confirmationDate: confirmationDate
           ? new Date(confirmationDate)
           : null,
 
-        exitDate: exitDate ? new Date(exitDate) : null,
+        exitDate: exitDate
+          ? new Date(exitDate)
+          : null,
       },
       include: {
         department: true,
@@ -287,6 +281,8 @@ router.put("/:employeeNumber", async (req, res) => {
 */
 router.post("/", async (req, res) => {
   try {
+    const organizationId = req.auth.organizationId;
+
     const {
       name,
       department,
@@ -305,32 +301,27 @@ router.post("/", async (req, res) => {
     ) {
       return res.status(400).json({
         status: "error",
-        message: "Please complete all required employee fields.",
+        message:
+          "Please complete all required employee fields.",
       });
     }
 
-    const organization = await getDevelopmentOrganization();
+    const normalizedEmail =
+      email.trim().toLowerCase();
 
-    if (!organization) {
-      return res.status(404).json({
-        status: "error",
-        message: "Development organization not found.",
+    const duplicateEmail =
+      await prisma.employee.findFirst({
+        where: {
+          organizationId,
+          email: normalizedEmail,
+        },
       });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const duplicateEmail = await prisma.employee.findFirst({
-      where: {
-        organizationId: organization.id,
-        email: normalizedEmail,
-      },
-    });
 
     if (duplicateEmail) {
       return res.status(409).json({
         status: "error",
-        message: "An employee with this email address already exists.",
+        message:
+          "An employee with this email address already exists.",
       });
     }
 
@@ -339,66 +330,74 @@ router.post("/", async (req, res) => {
     if (nameParts.length < 2) {
       return res.status(400).json({
         status: "error",
-        message: "Please enter at least the employee's first and last name.",
+        message:
+          "Please enter at least the employee's first and last name.",
       });
     }
 
     const firstName = nameParts[0];
-    const lastName = nameParts[nameParts.length - 1];
+    const lastName =
+      nameParts[nameParts.length - 1];
 
     const middleName =
       nameParts.length > 2
         ? nameParts.slice(1, -1).join(" ")
         : null;
 
-    const departmentRecord = await prisma.department.upsert({
-      where: {
-        organizationId_name: {
-          organizationId: organization.id,
+    const departmentRecord =
+      await prisma.department.upsert({
+        where: {
+          organizationId_name: {
+            organizationId,
+            name: department.trim(),
+          },
+        },
+        update: {},
+        create: {
+          organizationId,
           name: department.trim(),
         },
-      },
-      update: {},
-      create: {
-        organizationId: organization.id,
-        name: department.trim(),
-      },
-    });
+      });
 
-    const designationRecord = await prisma.designation.upsert({
-      where: {
-        organizationId_name: {
-          organizationId: organization.id,
+    const designationRecord =
+      await prisma.designation.upsert({
+        where: {
+          organizationId_name: {
+            organizationId,
+            name: designation.trim(),
+          },
+        },
+        update: {},
+        create: {
+          organizationId,
           name: designation.trim(),
         },
-      },
-      update: {},
-      create: {
-        organizationId: organization.id,
-        name: designation.trim(),
-      },
-    });
+      });
 
-    const latestEmployee = await prisma.employee.findFirst({
-      where: {
-        organizationId: organization.id,
-        employeeNumber: {
-          startsWith: "CHR",
+    const latestEmployee =
+      await prisma.employee.findFirst({
+        where: {
+          organizationId,
+          employeeNumber: {
+            startsWith: "CHR",
+          },
         },
-      },
-      orderBy: {
-        employeeNumber: "desc",
-      },
-      select: {
-        employeeNumber: true,
-      },
-    });
+        orderBy: {
+          employeeNumber: "desc",
+        },
+        select: {
+          employeeNumber: true,
+        },
+      });
 
     let nextNumber = 1;
 
     if (latestEmployee?.employeeNumber) {
       const numericPart = Number(
-        latestEmployee.employeeNumber.replace(/\D/g, "")
+        latestEmployee.employeeNumber.replace(
+          /\D/g,
+          ""
+        )
       );
 
       if (Number.isFinite(numericPart)) {
@@ -406,7 +405,8 @@ router.post("/", async (req, res) => {
       }
     }
 
-    const employeeNumber = `CHR${String(nextNumber).padStart(6, "0")}`;
+    const employeeNumber =
+      `CHR${String(nextNumber).padStart(6, "0")}`;
 
     const statusMap = {
       Active: "ACTIVE",
@@ -421,7 +421,7 @@ router.post("/", async (req, res) => {
 
     const employee = await prisma.employee.create({
       data: {
-        organizationId: organization.id,
+        organizationId,
         departmentId: departmentRecord.id,
         designationId: designationRecord.id,
 
@@ -448,7 +448,10 @@ router.post("/", async (req, res) => {
       data: employee,
     });
   } catch (error) {
-    console.error("Employee creation error:", error);
+    console.error(
+      "Employee creation error:",
+      error
+    );
 
     if (error.code === "P2002") {
       return res.status(409).json({
