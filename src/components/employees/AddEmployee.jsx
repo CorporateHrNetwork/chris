@@ -64,6 +64,7 @@ function AddEmployee({
           "/api/employees",
           {
             method: "POST",
+
             body: JSON.stringify(
               formData
             ),
@@ -94,14 +95,6 @@ function AddEmployee({
         margin: "0 auto",
       }}
     >
-      <button
-        type="button"
-        onClick={onBack}
-        style={backButtonStyle}
-      >
-        &lt; Back to Employees
-      </button>
-
       <div
         style={{
           marginBottom: "25px",
@@ -136,24 +129,26 @@ function AddEmployee({
             fontSize: "15px",
           }}
         >
-          Create a new employee record and add the employee to CHRIS.
+          Create a new employee
+          record and add the employee
+          to CHRIS.
         </p>
       </div>
 
       <form
-        onSubmit={
-          handleSubmit
-        }
+        onSubmit={handleSubmit}
       >
         <div
           style={{
-            background:
-              "#FFFFFF",
+            background: "#FFFFFF",
+
             border:
               "1px solid #E5E7EB",
-            borderRadius:
-              "18px",
+
+            borderRadius: "18px",
+
             padding: "28px",
+
             boxShadow:
               "0 6px 24px rgba(15, 23, 42, 0.05)",
           }}
@@ -162,12 +157,12 @@ function AddEmployee({
             style={{
               margin:
                 "0 0 24px",
-              color:
-                "#0B5E3B",
-              fontSize:
-                "19px",
-              fontWeight:
-                "800",
+
+              color: "#0B5E3B",
+
+              fontSize: "19px",
+
+              fontWeight: "800",
             }}
           >
             Employee Information
@@ -175,9 +170,7 @@ function AddEmployee({
 
           {error && (
             <div
-              style={
-                errorStyle
-              }
+              style={errorStyle}
             >
               {error}
             </div>
@@ -185,22 +178,19 @@ function AddEmployee({
 
           <div
             style={{
-              display:
-                "grid",
+              display: "grid",
+
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(280px, 1fr))",
+
               gap: "22px",
             }}
           >
             <FormField
               label="Full Name"
               name="name"
-              value={
-                formData.name
-              }
-              onChange={
-                handleChange
-              }
+              value={formData.name}
+              onChange={handleChange}
               placeholder="Enter employee full name"
               required
               disabled={saving}
@@ -238,12 +228,8 @@ function AddEmployee({
               label="Email Address"
               name="email"
               type="email"
-              value={
-                formData.email
-              }
-              onChange={
-                handleChange
-              }
+              value={formData.email}
+              onChange={handleChange}
               placeholder="employee@company.com"
               required
               disabled={saving}
@@ -252,12 +238,8 @@ function AddEmployee({
             <FormField
               label="Phone Number"
               name="phone"
-              value={
-                formData.phone
-              }
-              onChange={
-                handleChange
-              }
+              value={formData.phone}
+              onChange={handleChange}
               placeholder="08012345678"
               required
               disabled={saving}
@@ -265,27 +247,25 @@ function AddEmployee({
 
             <div>
               <label
-                style={
-                  labelStyle
-                }
+                style={labelStyle}
               >
                 Employment Status
               </label>
 
               <select
                 name="status"
+
                 value={
                   formData.status
                 }
+
                 onChange={
                   handleChange
                 }
-                style={
-                  fieldStyle
-                }
-                disabled={
-                  saving
-                }
+
+                style={fieldStyle}
+
+                disabled={saving}
               >
                 <option value="Active">
                   Active
@@ -324,37 +304,38 @@ function AddEmployee({
 
           <div
             style={{
-              display:
-                "flex",
+              display: "flex",
+
               justifyContent:
                 "flex-end",
+
               gap: "12px",
-              marginTop:
-                "30px",
-              paddingTop:
-                "22px",
+
+              marginTop: "30px",
+
+              paddingTop: "22px",
+
               borderTop:
                 "1px solid #E5E7EB",
             }}
           >
             <button
               type="button"
-              onClick={
-                onBack
-              }
-              disabled={
-                saving
-              }
+
+              onClick={onBack}
+
+              disabled={saving}
+
               style={{
                 ...cancelButtonStyle,
-                cursor:
-                  saving
-                    ? "not-allowed"
-                    : "pointer",
-                opacity:
-                  saving
-                    ? 0.6
-                    : 1,
+
+                cursor: saving
+                  ? "not-allowed"
+                  : "pointer",
+
+                opacity: saving
+                  ? 0.6
+                  : 1,
               }}
             >
               Cancel
@@ -362,19 +343,19 @@ function AddEmployee({
 
             <button
               type="submit"
-              disabled={
-                saving
-              }
+
+              disabled={saving}
+
               style={{
                 ...saveButtonStyle,
-                cursor:
-                  saving
-                    ? "not-allowed"
-                    : "pointer",
-                opacity:
-                  saving
-                    ? 0.7
-                    : 1,
+
+                cursor: saving
+                  ? "not-allowed"
+                  : "pointer",
+
+                opacity: saving
+                  ? 0.7
+                  : 1,
               }}
             >
               {saving
@@ -408,8 +389,7 @@ function FormField({
         {required && (
           <span
             style={{
-              color:
-                "#DC2626",
+              color: "#DC2626",
             }}
           >
             {" "}
@@ -422,90 +402,100 @@ function FormField({
         type={type}
         name={name}
         value={value}
-        onChange={
-          onChange
-        }
-        placeholder={
-          placeholder
-        }
-        required={
-          required
-        }
-        disabled={
-          disabled
-        }
-        style={
-          fieldStyle
-        }
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        disabled={disabled}
+        style={fieldStyle}
       />
     </div>
   );
 }
 
-const backButtonStyle = {
-  border: "none",
-  background: "transparent",
-  color: "#0B5E3B",
-  fontSize: "14px",
-  fontWeight: "700",
-  cursor: "pointer",
-  padding: 0,
-  marginBottom: "22px",
-};
-
 const labelStyle = {
   display: "block",
+
   marginBottom: "8px",
+
   color: "#334155",
+
   fontSize: "14px",
+
   fontWeight: "700",
 };
 
 const fieldStyle = {
   width: "100%",
+
   padding: "12px 14px",
+
   border:
     "1px solid #CBD5E1",
+
   borderRadius: "10px",
+
   background: "#FFFFFF",
+
   color: "#0F172A",
+
   fontSize: "14px",
+
   outline: "none",
-  boxSizing:
-    "border-box",
+
+  boxSizing: "border-box",
 };
 
 const errorStyle = {
   marginBottom: "22px",
+
   padding: "13px 16px",
+
   background: "#FEF2F2",
+
   border:
     "1px solid #FECACA",
+
   borderRadius: "10px",
+
   color: "#B91C1C",
+
   fontSize: "14px",
+
   fontWeight: "600",
 };
 
 const cancelButtonStyle = {
   background: "#FFFFFF",
+
   color: "#475569",
+
   border:
     "1px solid #CBD5E1",
+
   borderRadius: "10px",
+
   padding: "12px 20px",
+
   fontSize: "14px",
+
   fontWeight: "700",
 };
 
 const saveButtonStyle = {
   background: "#0B5E3B",
+
   color: "#FFFFFF",
+
   border: "none",
+
   borderRadius: "10px",
+
   padding: "12px 22px",
+
   fontSize: "14px",
+
   fontWeight: "700",
+
   boxShadow:
     "0 6px 15px rgba(11, 94, 59, 0.18)",
 };
