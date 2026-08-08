@@ -3,12 +3,19 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
+const userRoutes = require("./routes/userRoutes");
+const roleRoutes = require("./routes/roleRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+/*
+============================================================
+HEALTH CHECK
+============================================================
+*/
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "success",
@@ -17,7 +24,30 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/employees", employeeRoutes);
+/*
+============================================================
+CHRIS API ROUTES
+============================================================
+*/
+
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+app.use(
+  "/api/employees",
+  employeeRoutes
+);
+
+app.use(
+  "/api/users",
+  userRoutes
+);
+
+app.use(
+  "/api/roles",
+  roleRoutes
+);
 
 module.exports = app;

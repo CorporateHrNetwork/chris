@@ -1,9 +1,8 @@
+import UsersRolesSettings from "../components/settings/UsersRolesSettings";
+
 function Settings() {
   return (
-    <>
-      <h1>System Settings</h1>
-      <p>Coming soon...</p>
-    </>
+    <UsersRolesSettings />
   );
 }
 

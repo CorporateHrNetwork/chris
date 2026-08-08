@@ -176,15 +176,6 @@ router.post("/login", async (req, res) => {
 ============================================================
 FORGOT PASSWORD
 ============================================================
-
-Development behavior:
-Creates a one-time reset token.
-
-Email delivery will be added later.
-
-For local development only, the raw reset token is returned
-in the API response so the complete reset workflow can be
-tested from the CHRIS interface.
 */
 router.post(
   "/forgot-password",
@@ -215,9 +206,6 @@ router.post(
           },
         });
 
-      /*
-        Generic response prevents account enumeration.
-      */
       const genericResponse = {
         status: "success",
 
@@ -255,10 +243,6 @@ router.post(
           .json(genericResponse);
       }
 
-      /*
-        Invalidate previous unused reset tokens
-        for this user.
-      */
       await prisma.passwordResetToken.deleteMany(
         {
           where: {
@@ -300,9 +284,6 @@ router.post(
 
         /*
           DEVELOPMENT ONLY.
-
-          Remove this before production email
-          delivery is enabled.
         */
         data: {
           resetToken: rawToken,
@@ -346,7 +327,6 @@ router.post(
       ) {
         return res.status(400).json({
           status: "error",
-
           message:
             "Reset token and both password fields are required.",
         });
@@ -401,7 +381,6 @@ router.post(
       ) {
         return res.status(400).json({
           status: "error",
-
           message:
             "This password reset link is invalid or has expired.",
         });
@@ -462,56 +441,87 @@ router.post(
 ============================================================
 CURRENT AUTHENTICATED USER
 ============================================================
-
-requireAuth now supplies:
-
-req.auth.userId
-req.auth.organizationId
-req.auth.email
-req.auth.organization
-req.auth.roles
-req.auth.permissions
 */
 router.get(
   "/me",
   requireAuth,
   async (req, res) => {
-    return res.status(200).json({
-      status: "success",
+    try {
+      const user =
+        await prisma.user.findFirst({
+          where: {
+            id: req.auth.userId,
+            organizationId:
+              req.auth.organizationId,
+            isActive: true,
+          },
 
-      data: {
-        userId:
-          req.auth.userId,
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            isActive: true,
+          },
+        });
 
-        email:
-          req.auth.email,
+      if (!user) {
+        return res.status(404).json({
+          status: "error",
+          message:
+            "Authenticated user could not be found.",
+        });
+      }
 
-        roles:
-          req.auth.roles,
+      return res.status(200).json({
+        status: "success",
 
-        permissions:
-          req.auth.permissions,
+        data: {
+          userId: user.id,
+          email: user.email,
 
-        organization: {
-          id:
-            req.auth.organization.id,
+          firstName:
+            user.firstName,
 
-          name:
-            req.auth.organization.name,
+          lastName:
+            user.lastName,
 
-          slug:
-            req.auth.organization.slug,
+          roles:
+            req.auth.roles,
 
-          timezone:
-            req.auth.organization
-              .timezone,
+          permissions:
+            req.auth.permissions || [],
 
-          currency:
-            req.auth.organization
-              .currency,
+          organization: {
+            id:
+              req.auth.organization.id,
+
+            name:
+              req.auth.organization.name,
+
+            slug:
+              req.auth.organization.slug,
+
+            timezone:
+              req.auth.organization.timezone,
+
+            currency:
+              req.auth.organization.currency,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      console.error(
+        "Current user error:",
+        error
+      );
+
+      return res.status(500).json({
+        status: "error",
+        message:
+          "Unable to load current user.",
+      });
+    }
   }
 );
 

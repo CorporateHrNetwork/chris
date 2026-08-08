@@ -13,6 +13,7 @@ import QuickActions from "../components/dashboard/QuickActions";
 import PayrollSummary from "../components/dashboard/PayrollSummary";
 
 import { apiRequest } from "../services/api";
+import useAuthorization from "../hooks/useAuthorization";
 
 function Dashboard() {
   const [
@@ -29,6 +30,15 @@ function Dashboard() {
     employeeLoading,
     setEmployeeLoading,
   ] = useState(true);
+
+  const {
+    hasPermission,
+    loading: authorizationLoading,
+  } = useAuthorization();
+
+  const canViewPayroll =
+    !authorizationLoading &&
+    hasPermission("payroll.view");
 
   useEffect(() => {
     const loadEmployeeSummary =
@@ -90,14 +100,18 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
+
           gridTemplateColumns:
             "repeat(auto-fit, minmax(240px, 1fr))",
+
           gap: "24px",
+
           marginTop: "30px",
         }}
       >
         <KpiCard
           title="Employees"
+
           value={
             employeeLoading
               ? "..."
@@ -105,12 +119,15 @@ function Dashboard() {
                   employeeSummary.total
                 )
           }
+
           subtitle={
             employeeLoading
               ? "Loading employee data"
               : `${employeeSummary.active} Active • ${employeeSummary.probation} Probation`
           }
+
           icon="👥"
+
           color="#0B5E3B"
         />
 
@@ -130,27 +147,33 @@ function Dashboard() {
           color="#F59E0B"
         />
 
-        <KpiCard
-          title="Payroll"
-          value="₦15.2M"
-          subtitle="Completed"
-          icon="💰"
-          color="#8B5CF6"
-        />
+        {canViewPayroll && (
+          <KpiCard
+            title="Payroll"
+            value="₦15.2M"
+            subtitle="Completed"
+            icon="💰"
+            color="#8B5CF6"
+          />
+        )}
       </div>
 
       {/* EMPLOYEE STATUS SUMMARY */}
       <div
         style={{
           display: "grid",
+
           gridTemplateColumns:
             "repeat(auto-fit, minmax(180px, 1fr))",
+
           gap: "16px",
+
           marginTop: "24px",
         }}
       >
         <MiniStat
           title="Active Employees"
+
           value={
             employeeLoading
               ? "..."
@@ -160,6 +183,7 @@ function Dashboard() {
 
         <MiniStat
           title="On Leave"
+
           value={
             employeeLoading
               ? "..."
@@ -169,6 +193,7 @@ function Dashboard() {
 
         <MiniStat
           title="Probation"
+
           value={
             employeeLoading
               ? "..."
@@ -178,6 +203,7 @@ function Dashboard() {
 
         <MiniStat
           title="Total Employees"
+
           value={
             employeeLoading
               ? "..."
@@ -190,9 +216,12 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
+
           gridTemplateColumns:
             "repeat(auto-fit, minmax(360px, 1fr))",
+
           gap: "20px",
+
           marginTop: "35px",
         }}
       >
@@ -203,9 +232,12 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
+
           gridTemplateColumns:
             "repeat(auto-fit, minmax(360px, 1fr))",
+
           gap: "20px",
+
           marginTop: "20px",
         }}
       >
@@ -216,14 +248,22 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
+
           gridTemplateColumns:
-            "repeat(auto-fit, minmax(360px, 1fr))",
+            canViewPayroll
+              ? "repeat(auto-fit, minmax(360px, 1fr))"
+              : "1fr",
+
           gap: "20px",
+
           marginTop: "20px",
         }}
       >
         <QuickActions />
-        <PayrollSummary />
+
+        {canViewPayroll && (
+          <PayrollSummary />
+        )}
       </div>
     </>
   );
@@ -237,10 +277,14 @@ function MiniStat({
     <div
       style={{
         background: "#FFFFFF",
+
         border:
           "1px solid #E5E7EB",
+
         borderRadius: "14px",
+
         padding: "18px",
+
         boxShadow:
           "0 5px 18px rgba(15,23,42,0.04)",
       }}
@@ -248,10 +292,14 @@ function MiniStat({
       <div
         style={{
           color: "#64748B",
+
           fontSize: "12px",
+
           fontWeight: "700",
+
           textTransform:
             "uppercase",
+
           letterSpacing:
             "0.03em",
         }}
@@ -262,8 +310,11 @@ function MiniStat({
       <div
         style={{
           marginTop: "8px",
+
           color: "#0B5E3B",
+
           fontSize: "26px",
+
           fontWeight: "800",
         }}
       >
