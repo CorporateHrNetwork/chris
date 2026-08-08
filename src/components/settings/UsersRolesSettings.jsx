@@ -10,11 +10,16 @@ import {
   FaCheckCircle,
   FaBan,
   FaUserPlus,
+  FaEdit,
+  FaToggleOn,
+  FaToggleOff,
 } from "react-icons/fa";
 
 import { apiRequest } from "../../services/api";
 import useAuthorization from "../../hooks/useAuthorization";
+
 import CreateUserForm from "./CreateUserForm";
+import EditUserForm from "./EditUserForm";
 
 function UsersRolesSettings() {
   const [activeTab, setActiveTab] =
@@ -22,6 +27,9 @@ function UsersRolesSettings() {
 
   const [showCreateUser, setShowCreateUser] =
     useState(false);
+
+  const [editingUser, setEditingUser] =
+    useState(null);
 
   const [users, setUsers] =
     useState([]);
@@ -41,9 +49,22 @@ function UsersRolesSettings() {
   const [rolesError, setRolesError] =
     useState("");
 
+  const [actionMessage, setActionMessage] =
+    useState("");
+
+  const [actionError, setActionError] =
+    useState("");
+
+  const [statusUpdatingUserId, setStatusUpdatingUserId] =
+    useState(null);
+
   const {
     hasPermission,
+    profile,
   } = useAuthorization();
+
+  const currentUserId =
+    profile?.userId || null;
 
   const canViewUsers =
     hasPermission("users.view");
@@ -57,6 +78,11 @@ function UsersRolesSettings() {
   const canManageRoles =
     hasPermission("roles.manage");
 
+  /*
+  ============================================================
+  LOAD USERS
+  ============================================================
+  */
   const loadUsers =
     useCallback(async () => {
       if (!canViewUsers) {
@@ -91,6 +117,11 @@ function UsersRolesSettings() {
       }
     }, [canViewUsers]);
 
+  /*
+  ============================================================
+  LOAD ROLES
+  ============================================================
+  */
   const loadRoles =
     useCallback(async () => {
       if (!canViewRoles) {
@@ -133,23 +164,158 @@ function UsersRolesSettings() {
     loadRoles();
   }, [loadRoles]);
 
+  /*
+  ============================================================
+  USER CREATED
+  ============================================================
+  */
   const handleUserCreated =
     async () => {
-      /*
-        Close the form immediately
-        after successful creation.
-      */
       setShowCreateUser(false);
 
-      /*
-        Refresh both because:
-        - Users table changes
-        - Assigned Role user count changes
-      */
+      setActionError("");
+      setActionMessage(
+        "CHRIS user created successfully."
+      );
+
       await Promise.all([
         loadUsers(),
         loadRoles(),
       ]);
+    };
+
+  /*
+  ============================================================
+  USER UPDATED
+  ============================================================
+  */
+  const handleUserUpdated =
+    async () => {
+      setEditingUser(null);
+
+      setActionError("");
+      setActionMessage(
+        "CHRIS user updated successfully."
+      );
+
+      await Promise.all([
+        loadUsers(),
+        loadRoles(),
+      ]);
+    };
+
+  /*
+  ============================================================
+  OPEN CREATE USER
+  ============================================================
+  */
+  const handleOpenCreateUser = () => {
+    setEditingUser(null);
+
+    setActionMessage("");
+    setActionError("");
+
+    setShowCreateUser(true);
+  };
+
+  /*
+  ============================================================
+  OPEN EDIT USER
+  ============================================================
+  */
+  const handleEditUser = (user) => {
+    setShowCreateUser(false);
+
+    setActionMessage("");
+    setActionError("");
+
+    setEditingUser(user);
+  };
+
+  /*
+  ============================================================
+  ACTIVATE / DEACTIVATE USER
+  ============================================================
+  */
+  const handleStatusChange =
+    async (user) => {
+      if (!canManageUsers) {
+        return;
+      }
+
+      if (
+        user.id === currentUserId &&
+        user.isActive
+      ) {
+        setActionMessage("");
+
+        setActionError(
+          "You cannot deactivate your own CHRIS account."
+        );
+
+        return;
+      }
+
+      const nextStatus =
+        !user.isActive;
+
+      if (!nextStatus) {
+        const confirmed =
+          window.confirm(
+            `Deactivate ${getUserName(
+              user
+            )}? This user will no longer be able to sign in to CHRIS.`
+          );
+
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      try {
+        setStatusUpdatingUserId(
+          user.id
+        );
+
+        setActionMessage("");
+        setActionError("");
+
+        const result =
+          await apiRequest(
+            `/api/users/${user.id}/status`,
+            {
+              method: "PATCH",
+
+              body: JSON.stringify({
+                isActive:
+                  nextStatus,
+              }),
+            }
+          );
+
+        setActionMessage(
+          result.message ||
+            (nextStatus
+              ? "CHRIS user activated successfully."
+              : "CHRIS user deactivated successfully.")
+        );
+
+        await loadUsers();
+      } catch (error) {
+        console.error(
+          "CHRIS user status error:",
+          error
+        );
+
+        setActionError(
+          error.message ||
+            "Unable to update CHRIS user status."
+        );
+      } finally {
+        setStatusUpdatingUserId(
+          null
+        );
+      }
     };
 
   const activeUsers =
@@ -263,6 +429,20 @@ function UsersRolesSettings() {
         />
       </div>
 
+      {/* SUCCESS MESSAGE */}
+      {actionMessage && (
+        <div style={successStyle}>
+          {actionMessage}
+        </div>
+      )}
+
+      {/* ACTION ERROR */}
+      {actionError && (
+        <div style={errorStyle}>
+          {actionError}
+        </div>
+      )}
+
       {/* TABS */}
       <div
         style={{
@@ -292,7 +472,12 @@ function UsersRolesSettings() {
           }
           onClick={() => {
             setActiveTab("roles");
+
             setShowCreateUser(false);
+            setEditingUser(null);
+
+            setActionMessage("");
+            setActionError("");
           }}
         >
           Roles & Permissions
@@ -314,21 +499,60 @@ function UsersRolesSettings() {
           />
         )}
 
+      {/* EDIT USER FORM */}
+      {activeTab === "users" &&
+        editingUser &&
+        canManageUsers && (
+          <EditUserForm
+            user={editingUser}
+            roles={roles}
+            onCancel={() =>
+              setEditingUser(null)
+            }
+            onUpdated={
+              handleUserUpdated
+            }
+          />
+        )}
+
       {/* USERS TAB */}
       {activeTab === "users" && (
         <UsersTab
           users={users}
           loading={usersLoading}
           error={usersError}
+
           canView={canViewUsers}
           canManage={
             canManageUsers
           }
+
+          currentUserId={
+            currentUserId
+          }
+
           showCreateUser={
             showCreateUser
           }
-          onCreateUser={() =>
-            setShowCreateUser(true)
+
+          editingUser={
+            editingUser
+          }
+
+          statusUpdatingUserId={
+            statusUpdatingUserId
+          }
+
+          onCreateUser={
+            handleOpenCreateUser
+          }
+
+          onEditUser={
+            handleEditUser
+          }
+
+          onStatusChange={
+            handleStatusChange
           }
         />
       )}
@@ -339,7 +563,11 @@ function UsersRolesSettings() {
           roles={roles}
           loading={rolesLoading}
           error={rolesError}
-          canView={canViewRoles}
+
+          canView={
+            canViewRoles
+          }
+
           canManage={
             canManageRoles
           }
@@ -355,8 +583,13 @@ function UsersTab({
   error,
   canView,
   canManage,
+  currentUserId,
   showCreateUser,
+  editingUser,
+  statusUpdatingUserId,
   onCreateUser,
+  onEditUser,
+  onStatusChange,
 }) {
   if (!canView) {
     return (
@@ -365,6 +598,10 @@ function UsersTab({
       />
     );
   }
+
+  const managementFormOpen =
+    showCreateUser ||
+    Boolean(editingUser);
 
   return (
     <div>
@@ -409,7 +646,7 @@ function UsersTab({
         </div>
 
         {canManage &&
-          !showCreateUser && (
+          !managementFormOpen && (
             <button
               type="button"
               onClick={
@@ -475,102 +712,242 @@ function UsersTab({
                   <TableHeader>
                     Created
                   </TableHeader>
+
+                  {canManage && (
+                    <TableHeader>
+                      Actions
+                    </TableHeader>
+                  )}
                 </tr>
               </thead>
 
               <tbody>
                 {users.map(
-                  (user) => (
-                    <tr
-                      key={
-                        user.id
-                      }
-                      style={{
-                        borderTop:
-                          "1px solid #E5E7EB",
-                      }}
-                    >
-                      <TableCell>
-                        <div
-                          style={{
-                            fontWeight:
-                              "700",
+                  (user) => {
+                    const isCurrentUser =
+                      user.id ===
+                      currentUserId;
 
-                            color:
-                              "#0F172A",
-                          }}
-                        >
-                          {getUserName(
-                            user
-                          )}
-                        </div>
-                      </TableCell>
+                    const statusUpdating =
+                      statusUpdatingUserId ===
+                      user.id;
 
-                      <TableCell>
-                        {user.email}
-                      </TableCell>
+                    return (
+                      <tr
+                        key={
+                          user.id
+                        }
+                        style={{
+                          borderTop:
+                            "1px solid #E5E7EB",
+                        }}
+                      >
+                        <TableCell>
+                          <div
+                            style={{
+                              fontWeight:
+                                "700",
 
-                      <TableCell>
-                        <div
-                          style={{
-                            display:
-                              "flex",
+                              color:
+                                "#0F172A",
+                            }}
+                          >
+                            {getUserName(
+                              user
+                            )}
 
-                            gap: "6px",
+                            {isCurrentUser && (
+                              <span
+                                style={
+                                  youBadgeStyle
+                                }
+                              >
+                                You
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
 
-                            flexWrap:
-                              "wrap",
-                          }}
-                        >
-                          {user.roles
-                            ?.length >
-                          0 ? (
-                            user.roles.map(
-                              (
-                                role
-                              ) => (
-                                <span
-                                  key={
-                                    role.id
-                                  }
-                                  style={
-                                    roleBadgeStyle
-                                  }
-                                >
-                                  {
-                                    role.name
-                                  }
-                                </span>
+                        <TableCell>
+                          {user.email}
+                        </TableCell>
+
+                        <TableCell>
+                          <div
+                            style={{
+                              display:
+                                "flex",
+
+                              gap: "6px",
+
+                              flexWrap:
+                                "wrap",
+                            }}
+                          >
+                            {user.roles
+                              ?.length >
+                            0 ? (
+                              user.roles.map(
+                                (
+                                  role
+                                ) => (
+                                  <span
+                                    key={
+                                      role.id
+                                    }
+                                    style={
+                                      roleBadgeStyle
+                                    }
+                                  >
+                                    {
+                                      role.name
+                                    }
+                                  </span>
+                                )
                               )
-                            )
-                          ) : (
-                            <span
+                            ) : (
+                              <span
+                                style={{
+                                  color:
+                                    "#94A3B8",
+                                }}
+                              >
+                                No role
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        <TableCell>
+                          <StatusBadge
+                            active={
+                              user.isActive
+                            }
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          {formatDate(
+                            user.createdAt
+                          )}
+                        </TableCell>
+
+                        {canManage && (
+                          <TableCell>
+                            <div
                               style={{
-                                color:
-                                  "#94A3B8",
+                                display:
+                                  "flex",
+
+                                alignItems:
+                                  "center",
+
+                                gap: "7px",
+
+                                flexWrap:
+                                  "wrap",
                               }}
                             >
-                              No role
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
+                              <button
+                                type="button"
 
-                      <TableCell>
-                        <StatusBadge
-                          active={
-                            user.isActive
-                          }
-                        />
-                      </TableCell>
+                                onClick={() =>
+                                  onEditUser(
+                                    user
+                                  )
+                                }
 
-                      <TableCell>
-                        {formatDate(
-                          user.createdAt
+                                disabled={
+                                  isCurrentUser
+                                }
+
+                                title={
+                                  isCurrentUser
+                                    ? "Your own roles cannot be changed here."
+                                    : "Edit user"
+                                }
+
+                                style={{
+                                  ...editButtonStyle,
+
+                                  opacity:
+                                    isCurrentUser
+                                      ? 0.45
+                                      : 1,
+
+                                  cursor:
+                                    isCurrentUser
+                                      ? "not-allowed"
+                                      : "pointer",
+                                }}
+                              >
+                                <FaEdit />
+
+                                Edit
+                              </button>
+
+                              <button
+                                type="button"
+
+                                onClick={() =>
+                                  onStatusChange(
+                                    user
+                                  )
+                                }
+
+                                disabled={
+                                  statusUpdating ||
+                                  (isCurrentUser &&
+                                    user.isActive)
+                                }
+
+                                title={
+                                  isCurrentUser &&
+                                  user.isActive
+                                    ? "You cannot deactivate your own account."
+                                    : user.isActive
+                                      ? "Deactivate user"
+                                      : "Activate user"
+                                }
+
+                                style={{
+                                  ...(user.isActive
+                                    ? deactivateButtonStyle
+                                    : activateButtonStyle),
+
+                                  opacity:
+                                    statusUpdating ||
+                                    (isCurrentUser &&
+                                      user.isActive)
+                                      ? 0.45
+                                      : 1,
+
+                                  cursor:
+                                    statusUpdating ||
+                                    (isCurrentUser &&
+                                      user.isActive)
+                                      ? "not-allowed"
+                                      : "pointer",
+                                }}
+                              >
+                                {user.isActive ? (
+                                  <FaToggleOff />
+                                ) : (
+                                  <FaToggleOn />
+                                )}
+
+                                {statusUpdating
+                                  ? "Updating..."
+                                  : user.isActive
+                                    ? "Deactivate"
+                                    : "Activate"}
+                              </button>
+                            </div>
+                          </TableCell>
                         )}
-                      </TableCell>
-                    </tr>
-                  )
+                      </tr>
+                    );
+                  }
                 )}
               </tbody>
             </table>
@@ -618,9 +995,15 @@ function RolesTab({
           <h2
             style={{
               margin: 0,
-              color: "#0F172A",
-              fontSize: "20px",
-              fontWeight: "800",
+
+              color:
+                "#0F172A",
+
+              fontSize:
+                "20px",
+
+              fontWeight:
+                "800",
             }}
           >
             Roles & Permissions
@@ -628,9 +1011,14 @@ function RolesTab({
 
           <p
             style={{
-              margin: "5px 0 0",
-              color: "#64748B",
-              fontSize: "13px",
+              margin:
+                "5px 0 0",
+
+              color:
+                "#64748B",
+
+              fontSize:
+                "13px",
             }}
           >
             Organization roles and
@@ -763,7 +1151,8 @@ function RolesTab({
                     gridTemplateColumns:
                       "1fr 1fr",
 
-                    gap: "12px",
+                    gap:
+                      "12px",
                   }}
                 >
                   <RoleMetric
@@ -800,14 +1189,17 @@ function SummaryCard({
   return (
     <div
       style={{
-        background: "#FFFFFF",
+        background:
+          "#FFFFFF",
 
         border:
           "1px solid #E5E7EB",
 
-        borderRadius: "16px",
+        borderRadius:
+          "16px",
 
-        padding: "20px",
+        padding:
+          "20px",
 
         boxShadow:
           "0 6px 20px rgba(15,23,42,0.05)",
@@ -817,18 +1209,23 @@ function SummaryCard({
         style={{
           display: "flex",
 
-          alignItems: "center",
+          alignItems:
+            "center",
 
           justifyContent:
             "space-between",
 
-          marginBottom: "14px",
+          marginBottom:
+            "14px",
         }}
       >
         <span
           style={{
-            color: "#0B5E3B",
-            fontSize: "20px",
+            color:
+              "#0B5E3B",
+
+            fontSize:
+              "20px",
           }}
         >
           {icon}
@@ -836,9 +1233,15 @@ function SummaryCard({
 
         <span
           style={{
-            color: "#94A3B8",
-            fontSize: "11px",
-            fontWeight: "800",
+            color:
+              "#94A3B8",
+
+            fontSize:
+              "11px",
+
+            fontWeight:
+              "800",
+
             textTransform:
               "uppercase",
           }}
@@ -849,9 +1252,14 @@ function SummaryCard({
 
       <div
         style={{
-          color: "#0B5E3B",
-          fontSize: "30px",
-          fontWeight: "800",
+          color:
+            "#0B5E3B",
+
+          fontSize:
+            "30px",
+
+          fontWeight:
+            "800",
         }}
       >
         {value}
@@ -859,9 +1267,14 @@ function SummaryCard({
 
       <div
         style={{
-          marginTop: "6px",
-          color: "#94A3B8",
-          fontSize: "12px",
+          marginTop:
+            "6px",
+
+          color:
+            "#94A3B8",
+
+          fontSize:
+            "12px",
         }}
       >
         {subtitle}
@@ -879,25 +1292,34 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
+
       style={{
         border: "none",
 
-        borderBottom: active
-          ? "3px solid #0B5E3B"
-          : "3px solid transparent",
+        borderBottom:
+          active
+            ? "3px solid #0B5E3B"
+            : "3px solid transparent",
 
-        background: "transparent",
+        background:
+          "transparent",
 
-        padding: "12px 16px",
+        padding:
+          "12px 16px",
 
-        color: active
-          ? "#0B5E3B"
-          : "#64748B",
+        color:
+          active
+            ? "#0B5E3B"
+            : "#64748B",
 
-        fontSize: "14px",
-        fontWeight: "800",
+        fontSize:
+          "14px",
 
-        cursor: "pointer",
+        fontWeight:
+          "800",
+
+        cursor:
+          "pointer",
       }}
     >
       {children}
@@ -911,23 +1333,30 @@ function StatusBadge({
   return (
     <span
       style={{
-        display: "inline-block",
+        display:
+          "inline-block",
 
-        padding: "5px 9px",
+        padding:
+          "5px 9px",
 
-        borderRadius: "20px",
+        borderRadius:
+          "20px",
 
-        background: active
-          ? "#ECFDF5"
-          : "#FEF2F2",
+        background:
+          active
+            ? "#ECFDF5"
+            : "#FEF2F2",
 
-        color: active
-          ? "#047857"
-          : "#B91C1C",
+        color:
+          active
+            ? "#047857"
+            : "#B91C1C",
 
-        fontSize: "11px",
+        fontSize:
+          "11px",
 
-        fontWeight: "800",
+        fontWeight:
+          "800",
       }}
     >
       {active
@@ -944,11 +1373,14 @@ function RoleMetric({
   return (
     <div
       style={{
-        padding: "12px",
+        padding:
+          "12px",
 
-        background: "#F8FAFC",
+        background:
+          "#F8FAFC",
 
-        borderRadius: "10px",
+        borderRadius:
+          "10px",
 
         border:
           "1px solid #E2E8F0",
@@ -956,9 +1388,14 @@ function RoleMetric({
     >
       <div
         style={{
-          color: "#0B5E3B",
-          fontSize: "20px",
-          fontWeight: "800",
+          color:
+            "#0B5E3B",
+
+          fontSize:
+            "20px",
+
+          fontWeight:
+            "800",
         }}
       >
         {value}
@@ -966,13 +1403,17 @@ function RoleMetric({
 
       <div
         style={{
-          marginTop: "4px",
+          marginTop:
+            "4px",
 
-          color: "#64748B",
+          color:
+            "#64748B",
 
-          fontSize: "11px",
+          fontSize:
+            "11px",
 
-          fontWeight: "700",
+          fontWeight:
+            "700",
         }}
       >
         {label}
@@ -987,17 +1428,23 @@ function TableHeader({
   return (
     <th
       style={{
-        textAlign: "left",
+        textAlign:
+          "left",
 
-        padding: "14px 16px",
+        padding:
+          "14px 16px",
 
-        background: "#F8FAFC",
+        background:
+          "#F8FAFC",
 
-        color: "#475569",
+        color:
+          "#475569",
 
-        fontSize: "12px",
+        fontSize:
+          "12px",
 
-        fontWeight: "800",
+        fontWeight:
+          "800",
 
         textTransform:
           "uppercase",
@@ -1005,7 +1452,8 @@ function TableHeader({
         letterSpacing:
           "0.03em",
 
-        whiteSpace: "nowrap",
+        whiteSpace:
+          "nowrap",
       }}
     >
       {children}
@@ -1019,11 +1467,14 @@ function TableCell({
   return (
     <td
       style={{
-        padding: "15px 16px",
+        padding:
+          "15px 16px",
 
-        color: "#475569",
+        color:
+          "#475569",
 
-        fontSize: "13px",
+        fontSize:
+          "13px",
 
         verticalAlign:
           "middle",
@@ -1038,7 +1489,11 @@ function ErrorBox({
   message,
 }) {
   return (
-    <div style={errorStyle}>
+    <div
+      style={
+        errorStyle
+      }
+    >
       {message}
     </div>
   );
@@ -1048,7 +1503,11 @@ function LoadingMessage({
   message,
 }) {
   return (
-    <div style={messageStyle}>
+    <div
+      style={
+        messageStyle
+      }
+    >
       {message}
     </div>
   );
@@ -1058,7 +1517,11 @@ function EmptyMessage({
   message,
 }) {
   return (
-    <div style={messageStyle}>
+    <div
+      style={
+        messageStyle
+      }
+    >
       {message}
     </div>
   );
@@ -1070,20 +1533,26 @@ function AccessNotice({
   return (
     <div
       style={{
-        padding: "20px",
+        padding:
+          "20px",
 
-        background: "#FEF2F2",
+        background:
+          "#FEF2F2",
 
         border:
           "1px solid #FECACA",
 
-        borderRadius: "12px",
+        borderRadius:
+          "12px",
 
-        color: "#991B1B",
+        color:
+          "#991B1B",
 
-        fontSize: "14px",
+        fontSize:
+          "14px",
 
-        fontWeight: "600",
+        fontWeight:
+          "600",
       }}
     >
       {message}
@@ -1116,151 +1585,354 @@ function formatDate(value) {
   ).toLocaleDateString();
 }
 
+/*
+============================================================
+STYLES
+============================================================
+*/
+
 const createButtonStyle = {
   display: "flex",
 
-  alignItems: "center",
+  alignItems:
+    "center",
 
   gap: "8px",
 
-  padding: "11px 16px",
+  padding:
+    "11px 16px",
 
-  background: "#0B5E3B",
+  background:
+    "#0B5E3B",
 
-  color: "#FFFFFF",
+  color:
+    "#FFFFFF",
 
-  border: "none",
+  border:
+    "none",
 
-  borderRadius: "9px",
+  borderRadius:
+    "9px",
 
-  fontSize: "13px",
+  fontSize:
+    "13px",
 
-  fontWeight: "800",
+  fontWeight:
+    "800",
 
-  cursor: "pointer",
+  cursor:
+    "pointer",
 
   boxShadow:
     "0 5px 14px rgba(11,94,59,0.18)",
 };
 
+const editButtonStyle = {
+  display: "flex",
+
+  alignItems:
+    "center",
+
+  gap: "5px",
+
+  padding:
+    "7px 10px",
+
+  background:
+    "#EFF6FF",
+
+  border:
+    "1px solid #BFDBFE",
+
+  borderRadius:
+    "7px",
+
+  color:
+    "#1D4ED8",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "800",
+};
+
+const deactivateButtonStyle = {
+  display: "flex",
+
+  alignItems:
+    "center",
+
+  gap: "5px",
+
+  padding:
+    "7px 10px",
+
+  background:
+    "#FEF2F2",
+
+  border:
+    "1px solid #FECACA",
+
+  borderRadius:
+    "7px",
+
+  color:
+    "#B91C1C",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "800",
+};
+
+const activateButtonStyle = {
+  display: "flex",
+
+  alignItems:
+    "center",
+
+  gap: "5px",
+
+  padding:
+    "7px 10px",
+
+  background:
+    "#ECFDF5",
+
+  border:
+    "1px solid #A7F3D0",
+
+  borderRadius:
+    "7px",
+
+  color:
+    "#047857",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "800",
+};
+
+const youBadgeStyle = {
+  display:
+    "inline-block",
+
+  marginLeft:
+    "7px",
+
+  padding:
+    "2px 6px",
+
+  background:
+    "#FFF7ED",
+
+  border:
+    "1px solid #FED7AA",
+
+  borderRadius:
+    "10px",
+
+  color:
+    "#C2410C",
+
+  fontSize:
+    "9px",
+
+  fontWeight:
+    "800",
+
+  verticalAlign:
+    "middle",
+};
+
 const tableContainerStyle = {
-  background: "#FFFFFF",
+  background:
+    "#FFFFFF",
 
   border:
     "1px solid #E5E7EB",
 
-  borderRadius: "14px",
+  borderRadius:
+    "14px",
 
-  overflow: "hidden",
+  overflow:
+    "hidden",
 
   boxShadow:
     "0 6px 20px rgba(15,23,42,0.04)",
 };
 
 const tableStyle = {
-  width: "100%",
+  width:
+    "100%",
 
   borderCollapse:
     "collapse",
 };
 
 const roleBadgeStyle = {
-  display: "inline-block",
+  display:
+    "inline-block",
 
-  padding: "4px 8px",
+  padding:
+    "4px 8px",
 
-  background: "#EFF6FF",
+  background:
+    "#EFF6FF",
 
-  color: "#1D4ED8",
+  color:
+    "#1D4ED8",
 
-  borderRadius: "20px",
+  borderRadius:
+    "20px",
 
-  fontSize: "10px",
+  fontSize:
+    "10px",
 
-  fontWeight: "800",
+  fontWeight:
+    "800",
 };
 
 const manageBadgeStyle = {
-  display: "inline-block",
+  display:
+    "inline-block",
 
-  padding: "6px 10px",
+  padding:
+    "6px 10px",
 
-  background: "#ECFDF5",
+  background:
+    "#ECFDF5",
 
   border:
     "1px solid #A7F3D0",
 
-  borderRadius: "20px",
+  borderRadius:
+    "20px",
 
-  color: "#047857",
+  color:
+    "#047857",
 
-  fontSize: "11px",
+  fontSize:
+    "11px",
 
-  fontWeight: "800",
+  fontWeight:
+    "800",
 };
 
 const systemRoleBadgeStyle = {
-  display: "inline-block",
+  display:
+    "inline-block",
 
-  marginTop: "7px",
+  marginTop:
+    "7px",
 
-  padding: "4px 8px",
+  padding:
+    "4px 8px",
 
-  background: "#ECFDF5",
+  background:
+    "#ECFDF5",
 
-  color: "#047857",
+  color:
+    "#047857",
 
   border:
     "1px solid #A7F3D0",
 
-  borderRadius: "20px",
+  borderRadius:
+    "20px",
 
-  fontSize: "10px",
+  fontSize:
+    "10px",
 
-  fontWeight: "800",
+  fontWeight:
+    "800",
 };
 
 const roleCardStyle = {
-  background: "#FFFFFF",
+  background:
+    "#FFFFFF",
 
   border:
     "1px solid #E5E7EB",
 
-  borderRadius: "14px",
+  borderRadius:
+    "14px",
 
-  padding: "20px",
+  padding:
+    "20px",
 
   boxShadow:
     "0 6px 20px rgba(15,23,42,0.04)",
 };
 
 const errorStyle = {
-  marginBottom: "18px",
+  marginBottom:
+    "18px",
 
-  padding: "14px 16px",
+  padding:
+    "14px 16px",
 
-  background: "#FEF2F2",
+  background:
+    "#FEF2F2",
 
   border:
     "1px solid #FECACA",
 
-  borderRadius: "10px",
+  borderRadius:
+    "10px",
 
-  color: "#B91C1C",
+  color:
+    "#B91C1C",
 
-  fontSize: "13px",
+  fontSize:
+    "13px",
 
-  fontWeight: "600",
+  fontWeight:
+    "600",
+};
+
+const successStyle = {
+  marginBottom:
+    "18px",
+
+  padding:
+    "14px 16px",
+
+  background:
+    "#ECFDF5",
+
+  border:
+    "1px solid #A7F3D0",
+
+  borderRadius:
+    "10px",
+
+  color:
+    "#047857",
+
+  fontSize:
+    "13px",
+
+  fontWeight:
+    "700",
 };
 
 const messageStyle = {
-  padding: "28px",
+  padding:
+    "28px",
 
-  textAlign: "center",
+  textAlign:
+    "center",
 
-  color: "#64748B",
+  color:
+    "#64748B",
 
-  fontSize: "14px",
+  fontSize:
+    "14px",
 };
 
 export default UsersRolesSettings;
