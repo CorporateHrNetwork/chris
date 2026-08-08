@@ -8,6 +8,7 @@ import EmployeeTable from "../components/employees/EmployeeTable";
 import AddEmployee from "../components/employees/AddEmployee";
 
 import { apiRequest } from "../services/api";
+import useAuthorization from "../hooks/useAuthorization";
 
 function Employees() {
   const [showAddEmployee, setShowAddEmployee] =
@@ -25,6 +26,14 @@ function Employees() {
 
   const [summaryError, setSummaryError] =
     useState("");
+
+  const {
+    hasPermission,
+    loading: authorizationLoading,
+  } = useAuthorization();
+
+  const canCreateEmployee =
+    hasPermission("employees.create");
 
   const loadEmployeeSummary = useCallback(
     async () => {
@@ -83,7 +92,65 @@ function Employees() {
     await loadEmployeeSummary();
   };
 
-  if (showAddEmployee) {
+  /*
+  ============================================================
+  PROTECT ADD EMPLOYEE VIEW
+  ============================================================
+
+  The backend remains the real security boundary.
+
+  This frontend check prevents users without
+  employees.create from opening the Add Employee UI.
+  */
+  if (
+    showAddEmployee &&
+    !authorizationLoading &&
+    !canCreateEmployee
+  ) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() =>
+            setShowAddEmployee(false)
+          }
+          style={backButtonStyle}
+        >
+          ← Back to Employee Directory
+        </button>
+
+        <div style={accessDeniedStyle}>
+          <h2
+            style={{
+              margin: "0 0 8px",
+              color: "#991B1B",
+              fontSize: "20px",
+              fontWeight: "800",
+            }}
+          >
+            Access Restricted
+          </h2>
+
+          <p
+            style={{
+              margin: 0,
+              color: "#7F1D1D",
+              fontSize: "14px",
+              lineHeight: 1.6,
+            }}
+          >
+            You do not have permission to add
+            employee records.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    showAddEmployee &&
+    canCreateEmployee
+  ) {
     return (
       <div>
         <button
@@ -154,15 +221,18 @@ function Employees() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            setShowAddEmployee(true)
-          }
-          style={addButtonStyle}
-        >
-          + Add Employee
-        </button>
+        {!authorizationLoading &&
+          canCreateEmployee && (
+            <button
+              type="button"
+              onClick={() =>
+                setShowAddEmployee(true)
+              }
+              style={addButtonStyle}
+            >
+              + Add Employee
+            </button>
+          )}
       </div>
 
       {summaryError && (
@@ -241,8 +311,10 @@ function SummaryCard({
         borderRadius: "16px",
         padding: "22px",
         minHeight: "125px",
+
         boxShadow:
           "0 6px 20px rgba(15,23,42,0.05)",
+
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
@@ -253,7 +325,9 @@ function SummaryCard({
           color: "#64748B",
           fontSize: "13px",
           fontWeight: "700",
+
           textTransform: "uppercase",
+
           letterSpacing: "0.03em",
         }}
       >
@@ -288,12 +362,17 @@ function SummaryCard({
 const addButtonStyle = {
   background: "#0B5E3B",
   color: "#FFFFFF",
+
   border: "none",
   borderRadius: "10px",
+
   padding: "14px 22px",
+
   fontSize: "14px",
   fontWeight: "700",
+
   cursor: "pointer",
+
   boxShadow:
     "0 6px 15px rgba(11,94,59,0.18)",
 };
@@ -301,23 +380,47 @@ const addButtonStyle = {
 const backButtonStyle = {
   border: "none",
   background: "transparent",
+
   color: "#0B5E3B",
+
   fontSize: "14px",
   fontWeight: "800",
+
   cursor: "pointer",
+
   padding: 0,
   marginBottom: "18px",
 };
 
 const errorStyle = {
   marginBottom: "20px",
+
   padding: "14px 16px",
+
   background: "#FEF2F2",
-  border: "1px solid #FECACA",
+
+  border:
+    "1px solid #FECACA",
+
   borderRadius: "10px",
+
   color: "#B91C1C",
+
   fontSize: "14px",
   fontWeight: "600",
+};
+
+const accessDeniedStyle = {
+  background: "#FEF2F2",
+
+  border:
+    "1px solid #FECACA",
+
+  borderRadius: "14px",
+
+  padding: "24px",
+
+  maxWidth: "600px",
 };
 
 export default Employees;

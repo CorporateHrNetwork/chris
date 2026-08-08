@@ -6,7 +6,9 @@ import {
 } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
+
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PermissionRoute from "./components/auth/PermissionRoute";
 
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -24,13 +26,30 @@ import Training from "./pages/Training";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 
-function ProtectedLayout({ children }) {
+function ProtectedLayout({
+  children,
+}) {
   return (
     <ProtectedRoute>
       <MainLayout>
         {children}
       </MainLayout>
     </ProtectedRoute>
+  );
+}
+
+function PermissionLayout({
+  permission,
+  children,
+}) {
+  return (
+    <ProtectedLayout>
+      <PermissionRoute
+        permission={permission}
+      >
+        {children}
+      </PermissionRoute>
+    </ProtectedLayout>
   );
 }
 
@@ -46,115 +65,151 @@ function App() {
 
         <Route
           path="/reset-password"
-          element={<ResetPassword />}
-        />
-
-        {/* PROTECTED CHRIS ROUTES */}
-        <Route
-          path="/"
           element={
-            <ProtectedLayout>
-              <Dashboard />
-            </ProtectedLayout>
+            <ResetPassword />
           }
         />
 
+        {/* DASHBOARD */}
+        <Route
+          path="/"
+          element={
+            <PermissionLayout
+              permission="dashboard.view"
+            >
+              <Dashboard />
+            </PermissionLayout>
+          }
+        />
+
+        {/* EMPLOYEES */}
         <Route
           path="/employees"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="employees.view"
+            >
               <Employees />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
         <Route
           path="/employees/:employeeNumber"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="employees.view"
+            >
               <EmployeeProfile />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* RECRUITMENT */}
         <Route
           path="/recruitment"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="recruitment.view"
+            >
               <Recruitment />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* ATTENDANCE */}
         <Route
           path="/attendance"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="attendance.view"
+            >
               <Attendance />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* LEAVE */}
         <Route
           path="/leave"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="leave.view"
+            >
               <Leave />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* PAYROLL */}
         <Route
           path="/payroll"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="payroll.view"
+            >
               <Payroll />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* LOANS */}
         <Route
           path="/loans"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="loans.view"
+            >
               <Loans />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* PERFORMANCE */}
         <Route
           path="/performance"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="performance.view"
+            >
               <Performance />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* TRAINING */}
         <Route
           path="/training"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="training.view"
+            >
               <Training />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* REPORTS */}
         <Route
           path="/reports"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="reports.view"
+            >
               <Reports />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
+        {/* SETTINGS */}
         <Route
           path="/settings"
           element={
-            <ProtectedLayout>
+            <PermissionLayout
+              permission="settings.view"
+            >
               <Settings />
-            </ProtectedLayout>
+            </PermissionLayout>
           }
         />
 
