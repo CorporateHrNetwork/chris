@@ -1,20 +1,40 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   FaUserPlus,
   FaTimes,
 } from "react-icons/fa";
 
-import { apiRequest } from "../../services/api";
+import {
+  apiRequest,
+} from "../../services/api";
 
 function CreateUserForm({
   roles,
   onCancel,
   onCreated,
 }) {
+  const [
+    employees,
+    setEmployees,
+  ] = useState([]);
+
+  const [
+    employeesLoading,
+    setEmployeesLoading,
+  ] = useState(true);
+
+  const [
+    employeesError,
+    setEmployeesError,
+  ] = useState("");
+
   const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
+    employeeId: "",
     temporaryPassword: "",
     roleIds: [],
   });
@@ -25,8 +45,84 @@ function CreateUserForm({
   const [error, setError] =
     useState("");
 
-  const [success, setSuccess] =
-    useState("");
+  /*
+  ============================================================
+  LOAD EMPLOYEES ELIGIBLE FOR CHRIS ACCESS
+  ============================================================
+
+  Backend already filters this list so it contains only
+  employees who:
+
+  - belong to the current organization
+  - have an email address
+  - do not already have a CHRIS User account
+  - are not terminated/resigned/retired/inactive
+  */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadEligibleEmployees =
+      async () => {
+        try {
+          setEmployeesLoading(true);
+          setEmployeesError("");
+
+          const result =
+            await apiRequest(
+              "/api/users/eligible-employees"
+            );
+
+          if (!cancelled) {
+            setEmployees(
+              result.data || []
+            );
+          }
+        } catch (requestError) {
+          console.error(
+            "Eligible employee load error:",
+            requestError
+          );
+
+          if (!cancelled) {
+            setEmployeesError(
+              requestError.message ||
+                "Unable to load employees eligible for CHRIS access."
+            );
+          }
+        } finally {
+          if (!cancelled) {
+            setEmployeesLoading(
+              false
+            );
+          }
+        }
+      };
+
+    loadEligibleEmployees();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /*
+  ============================================================
+  SELECTED EMPLOYEE
+  ============================================================
+  */
+  const selectedEmployee =
+    useMemo(
+      () =>
+        employees.find(
+          (employee) =>
+            employee.id ===
+            form.employeeId
+        ) || null,
+      [
+        employees,
+        form.employeeId,
+      ]
+    );
 
   const handleChange = (event) => {
     const {
@@ -38,6 +134,8 @@ function CreateUserForm({
       ...current,
       [name]: value,
     }));
+
+    setError("");
   };
 
   const handleRoleChange = (
@@ -63,24 +161,35 @@ function CreateUserForm({
             ],
       };
     });
+
+    setError("");
   };
 
+  /*
+  ============================================================
+  CREATE USER
+  ============================================================
+  */
   const handleSubmit = async (
     event
   ) => {
     event.preventDefault();
 
     setError("");
-    setSuccess("");
+
+    if (!form.employeeId) {
+      setError(
+        "Select an employee before creating CHRIS access."
+      );
+
+      return;
+    }
 
     if (
-      !form.firstName.trim() ||
-      !form.lastName.trim() ||
-      !form.email.trim() ||
       !form.temporaryPassword
     ) {
       setError(
-        "Complete all required fields."
+        "Enter a temporary password."
       );
 
       return;
@@ -117,16 +226,8 @@ function CreateUserForm({
             method: "POST",
 
             body: JSON.stringify({
-              firstName:
-                form.firstName.trim(),
-
-              lastName:
-                form.lastName.trim(),
-
-              email:
-                form.email
-                  .trim()
-                  .toLowerCase(),
+              employeeId:
+                form.employeeId,
 
               temporaryPassword:
                 form.temporaryPassword,
@@ -137,15 +238,22 @@ function CreateUserForm({
           }
         );
 
-      setSuccess(
-        result.message ||
-          "CHRIS user created successfully."
+      /*
+      Remove the newly linked employee immediately from the
+      local eligible list. The parent component will also
+      refresh the Users table through onCreated().
+      */
+      setEmployees(
+        (current) =>
+          current.filter(
+            (employee) =>
+              employee.id !==
+              form.employeeId
+          )
       );
 
       setForm({
-        firstName: "",
-        lastName: "",
-        email: "",
+        employeeId: "",
         temporaryPassword: "",
         roleIds: [],
       });
@@ -191,12 +299,9 @@ function CreateUserForm({
           justifyContent:
             "space-between",
           gap: "16px",
-
           padding: "20px 22px",
-
           borderBottom:
             "1px solid #E5E7EB",
-
           background: "#F8FAFC",
         }}
       >
@@ -211,18 +316,13 @@ function CreateUserForm({
             style={{
               width: "40px",
               height: "40px",
-
               borderRadius: "10px",
-
               background: "#ECFDF5",
-
               color: "#0B5E3B",
-
               display: "flex",
               alignItems: "center",
               justifyContent:
                 "center",
-
               fontSize: "17px",
             }}
           >
@@ -245,14 +345,13 @@ function CreateUserForm({
               style={{
                 margin:
                   "4px 0 0",
-
                 color: "#64748B",
-
                 fontSize: "12px",
               }}
             >
-              Create a login account
-              and assign access roles.
+              Select an existing
+              employee and assign
+              CHRIS system access.
             </p>
           </div>
         </div>
@@ -261,12 +360,15 @@ function CreateUserForm({
           type="button"
           onClick={onCancel}
           title="Close"
+          disabled={saving}
           style={{
             border: "none",
             background:
               "transparent",
             color: "#64748B",
-            cursor: "pointer",
+            cursor: saving
+              ? "not-allowed"
+              : "pointer",
             fontSize: "18px",
             padding: "8px",
           }}
@@ -282,85 +384,257 @@ function CreateUserForm({
         }}
       >
         {error && (
-          <div
-            style={errorStyle}
-          >
+          <div style={errorStyle}>
             {error}
           </div>
         )}
 
-        {success && (
-          <div
-            style={successStyle}
-          >
-            {success}
+        {employeesError && (
+          <div style={errorStyle}>
+            {employeesError}
           </div>
         )}
 
-        {/* NAME */}
-        <div
-          style={twoColumnStyle}
+        {/* EMPLOYEE SELECTION */}
+        <FormField
+          label="Employee"
+          required
+          hint="Employee master record"
         >
-          <FormField
-            label="First Name"
-            required
+          <select
+            name="employeeId"
+            value={
+              form.employeeId
+            }
+            onChange={
+              handleChange
+            }
+            disabled={
+              saving ||
+              employeesLoading
+            }
+            style={inputStyle}
           >
-            <input
-              type="text"
-              name="firstName"
-              value={
-                form.firstName
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Enter first name"
-              style={inputStyle}
-              disabled={saving}
-            />
-          </FormField>
+            <option value="">
+              {employeesLoading
+                ? "Loading eligible employees..."
+                : employees.length ===
+                    0
+                  ? "No eligible employees available"
+                  : "Select an employee"}
+            </option>
 
-          <FormField
-            label="Last Name"
-            required
+            {employees.map(
+              (employee) => {
+                const fullName = [
+                  employee.firstName,
+                  employee.middleName,
+                  employee.lastName,
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+
+                return (
+                  <option
+                    key={
+                      employee.id
+                    }
+                    value={
+                      employee.id
+                    }
+                  >
+                    {
+                      employee.employeeNumber
+                    }{" "}
+                    — {fullName}
+                  </option>
+                );
+              }
+            )}
+          </select>
+        </FormField>
+
+        {/*
+        ========================================================
+        SELECTED EMPLOYEE DETAILS
+
+        Read-only. These values originate from Employee and
+        cannot be edited from User Management.
+        ========================================================
+        */}
+        {selectedEmployee && (
+          <div
+            style={
+              employeeCardStyle
+            }
           >
-            <input
-              type="text"
-              name="lastName"
-              value={
-                form.lastName
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Enter last name"
-              style={inputStyle}
-              disabled={saving}
-            />
-          </FormField>
-        </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent:
+                  "space-between",
+                alignItems:
+                  "flex-start",
+                gap: "16px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color:
+                      "#64748B",
+                    fontSize:
+                      "10px",
+                    fontWeight:
+                      "800",
+                    textTransform:
+                      "uppercase",
+                    letterSpacing:
+                      "0.05em",
+                  }}
+                >
+                  Selected Employee
+                </div>
 
-        {/* EMAIL + PASSWORD */}
+                <div
+                  style={{
+                    marginTop:
+                      "5px",
+                    color:
+                      "#0F172A",
+                    fontSize:
+                      "17px",
+                    fontWeight:
+                      "800",
+                  }}
+                >
+                  {[
+                    selectedEmployee.firstName,
+                    selectedEmployee.middleName,
+                    selectedEmployee.lastName,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                </div>
+
+                <div
+                  style={{
+                    marginTop:
+                      "4px",
+                    color:
+                      "#64748B",
+                    fontSize:
+                      "12px",
+                  }}
+                >
+                  {
+                    selectedEmployee.employeeNumber
+                  }
+                </div>
+              </div>
+
+              <span
+                style={{
+                  padding:
+                    "6px 10px",
+                  borderRadius:
+                    "999px",
+                  background:
+                    "#ECFDF5",
+                  color:
+                    "#047857",
+                  fontSize:
+                    "10px",
+                  fontWeight:
+                    "800",
+                }}
+              >
+                {
+                  selectedEmployee.status
+                }
+              </span>
+            </div>
+
+            <div
+              style={
+                employeeDetailsGridStyle
+              }
+            >
+              <EmployeeDetail
+                label="Email"
+                value={
+                  selectedEmployee.email
+                }
+              />
+
+              <EmployeeDetail
+                label="Department"
+                value={
+                  selectedEmployee
+                    .department
+                    ?.name ||
+                  "Not assigned"
+                }
+              />
+
+              <EmployeeDetail
+                label="Designation"
+                value={
+                  selectedEmployee
+                    .designation
+                    ?.name ||
+                  "Not assigned"
+                }
+              />
+
+              <EmployeeDetail
+                label="Phone"
+                value={
+                  selectedEmployee.phone ||
+                  "Not provided"
+                }
+              />
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "14px",
+                padding:
+                  "10px 12px",
+                borderRadius:
+                  "8px",
+                background:
+                  "#F8FAFC",
+                color:
+                  "#64748B",
+                fontSize:
+                  "11px",
+                lineHeight: 1.5,
+              }}
+            >
+              Name and email are
+              controlled by the
+              Employee master record.
+              To change them, update
+              the employee record
+              rather than the CHRIS
+              User account.
+            </div>
+          </div>
+        )}
+
+        {/*
+        ========================================================
+        PASSWORD
+        ========================================================
+        */}
         <div
-          style={twoColumnStyle}
+          style={{
+            marginTop: "18px",
+          }}
         >
-          <FormField
-            label="Email Address"
-            required
-          >
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={
-                handleChange
-              }
-              placeholder="user@example.com"
-              style={inputStyle}
-              disabled={saving}
-            />
-          </FormField>
-
           <FormField
             label="Temporary Password"
             required
@@ -386,7 +660,7 @@ function CreateUserForm({
         {/* ROLE ASSIGNMENT */}
         <div
           style={{
-            marginTop: "4px",
+            marginTop: "20px",
           }}
         >
           <div
@@ -421,17 +695,15 @@ function CreateUserForm({
             >
               Select one or more
               authorization roles for
-              this user.
+              this employee.
             </div>
           </div>
 
           <div
             style={{
               display: "grid",
-
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(220px, 1fr))",
-
               gap: "10px",
             }}
           >
@@ -448,28 +720,21 @@ function CreateUserForm({
                     style={{
                       display:
                         "flex",
-
                       alignItems:
                         "flex-start",
-
                       gap: "10px",
-
                       padding:
                         "13px",
-
                       border:
                         selected
                           ? "2px solid #0B5E3B"
                           : "1px solid #E2E8F0",
-
                       borderRadius:
                         "10px",
-
                       background:
                         selected
                           ? "#F0FDF4"
                           : "#FFFFFF",
-
                       cursor:
                         saving
                           ? "not-allowed"
@@ -500,13 +765,10 @@ function CreateUserForm({
                         style={{
                           display:
                             "block",
-
                           color:
                             "#0F172A",
-
                           fontSize:
                             "13px",
-
                           fontWeight:
                             "800",
                         }}
@@ -518,16 +780,12 @@ function CreateUserForm({
                         style={{
                           display:
                             "block",
-
                           marginTop:
                             "3px",
-
                           color:
                             "#64748B",
-
                           fontSize:
                             "10px",
-
                           lineHeight:
                             1.4,
                         }}
@@ -546,21 +804,14 @@ function CreateUserForm({
             <div
               style={{
                 padding: "14px",
-
                 background:
                   "#FFFBEB",
-
                 border:
                   "1px solid #FDE68A",
-
                 borderRadius:
                   "10px",
-
-                color:
-                  "#92400E",
-
-                fontSize:
-                  "12px",
+                color: "#92400E",
+                fontSize: "12px",
               }}
             >
               No roles are currently
@@ -576,10 +827,8 @@ function CreateUserForm({
             justifyContent:
               "flex-end",
             gap: "10px",
-
             marginTop: "24px",
             paddingTop: "18px",
-
             borderTop:
               "1px solid #E5E7EB",
           }}
@@ -588,7 +837,9 @@ function CreateUserForm({
             type="button"
             onClick={onCancel}
             disabled={saving}
-            style={cancelButtonStyle}
+            style={
+              cancelButtonStyle
+            }
           >
             Cancel
           </button>
@@ -597,6 +848,8 @@ function CreateUserForm({
             type="submit"
             disabled={
               saving ||
+              employeesLoading ||
+              !form.employeeId ||
               roles.length === 0
             }
             style={{
@@ -604,13 +857,19 @@ function CreateUserForm({
 
               opacity:
                 saving ||
-                roles.length === 0
+                employeesLoading ||
+                !form.employeeId ||
+                roles.length ===
+                  0
                   ? 0.65
                   : 1,
 
               cursor:
                 saving ||
-                roles.length === 0
+                employeesLoading ||
+                !form.employeeId ||
+                roles.length ===
+                  0
                   ? "not-allowed"
                   : "pointer",
             }}
@@ -623,6 +882,42 @@ function CreateUserForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function EmployeeDetail({
+  label,
+  value,
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          color: "#94A3B8",
+          fontSize: "9px",
+          fontWeight: "800",
+          textTransform:
+            "uppercase",
+          letterSpacing:
+            "0.04em",
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          marginTop: "4px",
+          color: "#334155",
+          fontSize: "12px",
+          fontWeight: "700",
+          overflowWrap:
+            "anywhere",
+        }}
+      >
+        {value || "—"}
+      </div>
     </div>
   );
 }
@@ -686,58 +981,50 @@ function FormField({
   );
 }
 
-const twoColumnStyle = {
-  display: "grid",
-
-  gridTemplateColumns:
-    "repeat(auto-fit, minmax(240px, 1fr))",
-
-  gap: "16px",
-
-  marginBottom: "18px",
-};
-
 const inputStyle = {
   width: "100%",
-
   boxSizing: "border-box",
-
   padding: "12px 13px",
-
   border:
     "1px solid #CBD5E1",
-
   borderRadius: "9px",
-
   outline: "none",
-
   color: "#0F172A",
-
   background: "#FFFFFF",
-
   fontSize: "13px",
-
   fontFamily: "inherit",
+};
+
+const employeeCardStyle = {
+  marginTop: "14px",
+  padding: "18px",
+  border:
+    "1px solid #D1FAE5",
+  borderRadius: "12px",
+  background: "#FAFFFC",
+};
+
+const employeeDetailsGridStyle = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "14px",
+  marginTop: "18px",
+  paddingTop: "16px",
+  borderTop:
+    "1px solid #E2E8F0",
 };
 
 const cancelButtonStyle = {
   padding: "11px 16px",
-
   border:
     "1px solid #CBD5E1",
-
   borderRadius: "9px",
-
   background: "#FFFFFF",
-
   color: "#475569",
-
   fontSize: "13px",
-
   fontWeight: "800",
-
   cursor: "pointer",
-
   fontFamily: "inherit",
 };
 
@@ -745,60 +1032,26 @@ const saveButtonStyle = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
-
   padding: "11px 17px",
-
   border: "none",
-
   borderRadius: "9px",
-
   background: "#0B5E3B",
-
   color: "#FFFFFF",
-
   fontSize: "13px",
-
   fontWeight: "800",
-
   fontFamily: "inherit",
 };
 
 const errorStyle = {
   marginBottom: "18px",
-
   padding: "12px 14px",
-
   background: "#FEF2F2",
-
   border:
     "1px solid #FECACA",
-
   borderRadius: "9px",
-
   color: "#B91C1C",
-
   fontSize: "12px",
-
   fontWeight: "600",
-};
-
-const successStyle = {
-  marginBottom: "18px",
-
-  padding: "12px 14px",
-
-  background: "#ECFDF5",
-
-  border:
-    "1px solid #A7F3D0",
-
-  borderRadius: "9px",
-
-  color: "#047857",
-
-  fontSize: "12px",
-
-  fontWeight: "700",
 };
 
 export default CreateUserForm;

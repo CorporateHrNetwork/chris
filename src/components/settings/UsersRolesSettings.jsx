@@ -55,8 +55,10 @@ function UsersRolesSettings() {
   const [actionError, setActionError] =
     useState("");
 
-  const [statusUpdatingUserId, setStatusUpdatingUserId] =
-    useState(null);
+  const [
+    statusUpdatingUserId,
+    setStatusUpdatingUserId,
+  ] = useState(null);
 
   const {
     hasPermission,
@@ -171,17 +173,32 @@ function UsersRolesSettings() {
   */
   const handleUserCreated =
     async () => {
+      /*
+        Close Create User form immediately.
+      */
       setShowCreateUser(false);
 
       setActionError("");
+
       setActionMessage(
         "CHRIS user created successfully."
       );
 
+      /*
+        Refresh Users and Roles.
+      */
       await Promise.all([
         loadUsers(),
         loadRoles(),
       ]);
+
+      /*
+        Remove success message
+        automatically after 4 seconds.
+      */
+      setTimeout(() => {
+        setActionMessage("");
+      }, 4000);
     };
 
   /*
@@ -194,6 +211,7 @@ function UsersRolesSettings() {
       setEditingUser(null);
 
       setActionError("");
+
       setActionMessage(
         "CHRIS user updated successfully."
       );
@@ -202,6 +220,10 @@ function UsersRolesSettings() {
         loadUsers(),
         loadRoles(),
       ]);
+
+      setTimeout(() => {
+        setActionMessage("");
+      }, 4000);
     };
 
   /*
@@ -301,6 +323,10 @@ function UsersRolesSettings() {
         );
 
         await loadUsers();
+
+        setTimeout(() => {
+          setActionMessage("");
+        }, 4000);
       } catch (error) {
         console.error(
           "CHRIS user status error:",
