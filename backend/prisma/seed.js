@@ -1,18 +1,29 @@
 require("dotenv").config();
 
-const { PrismaClient } = require("@prisma/client");
-const { PrismaPg } = require("@prisma/adapter-pg");
+const {
+  PrismaClient,
+} = require("@prisma/client");
+
+const {
+  PrismaPg,
+} = require("@prisma/adapter-pg");
 
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
+  connectionString:
+    process.env.DATABASE_URL,
 });
 
-const prisma = new PrismaClient({
-  adapter,
-});
+const prisma =
+  new PrismaClient({
+    adapter,
+  });
 
 async function main() {
-  console.log("Starting CHRIS development seed...");
+  console.log("");
+  console.log(
+    "Starting CHRIS development seed..."
+  );
+  console.log("");
 
   /*
   ============================================================
@@ -20,21 +31,53 @@ async function main() {
   ============================================================
   */
 
-  const organization = await prisma.organization.upsert({
-    where: {
-      slug: "corporatehr-network",
-    },
-    update: {},
-    create: {
-      name: "CorporateHr Network",
-      slug: "corporatehr-network",
-      legalName: "Corporate Resources Network",
-      country: "Nigeria",
-      timezone: "Africa/Lagos",
-      currency: "NGN",
-      status: "ACTIVE",
-    },
-  });
+  const organization =
+    await prisma.organization.upsert({
+      where: {
+        slug:
+          "corporatehr-network",
+      },
+
+      update: {
+        name:
+          "CorporateHr Network",
+
+        legalName:
+          "Corporate Resources Network",
+
+        country:
+          "Nigeria",
+
+        timezone:
+          "Africa/Lagos",
+
+        currency:
+          "NGN",
+      },
+
+      create: {
+        name:
+          "CorporateHr Network",
+
+        slug:
+          "corporatehr-network",
+
+        legalName:
+          "Corporate Resources Network",
+
+        country:
+          "Nigeria",
+
+        timezone:
+          "Africa/Lagos",
+
+        currency:
+          "NGN",
+
+        status:
+          "ACTIVE",
+      },
+    });
 
   /*
   ============================================================
@@ -42,65 +85,109 @@ async function main() {
   ============================================================
   */
 
-  const financeDepartment = await prisma.department.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Finance",
-      },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Finance",
-      code: "FIN",
-    },
-  });
+  const financeDepartment =
+    await prisma.department.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
 
-  const hrDepartment = await prisma.department.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Human Resources",
+          name:
+            "Finance",
+        },
       },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Human Resources",
-      code: "HR",
-    },
-  });
 
-  const operationsDepartment = await prisma.department.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Operations",
-      },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Operations",
-      code: "OPS",
-    },
-  });
+      update: {},
 
-  const payrollDepartment = await prisma.department.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Payroll",
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Finance",
+
+        code:
+          "FIN",
       },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Payroll",
-      code: "PAY",
-    },
-  });
+    });
+
+  const hrDepartment =
+    await prisma.department.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
+
+          name:
+            "Human Resources",
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Human Resources",
+
+        code:
+          "HR",
+      },
+    });
+
+  const operationsDepartment =
+    await prisma.department.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
+
+          name:
+            "Operations",
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Operations",
+
+        code:
+          "OPS",
+      },
+    });
+
+  const payrollDepartment =
+    await prisma.department.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
+
+          name:
+            "Payroll",
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Payroll",
+
+        code:
+          "PAY",
+      },
+    });
 
   /*
   ============================================================
@@ -108,65 +195,109 @@ async function main() {
   ============================================================
   */
 
-  const financeManager = await prisma.designation.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Finance Manager",
-      },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Finance Manager",
-      code: "FIN-MGR",
-    },
-  });
+  const financeManager =
+    await prisma.designation.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
 
-  const hrOfficer = await prisma.designation.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "HR Officer",
+          name:
+            "Finance Manager",
+        },
       },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "HR Officer",
-      code: "HR-OFF",
-    },
-  });
 
-  const supervisor = await prisma.designation.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Supervisor",
-      },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Supervisor",
-      code: "OPS-SUP",
-    },
-  });
+      update: {},
 
-  const payrollOfficer = await prisma.designation.upsert({
-    where: {
-      organizationId_name: {
-        organizationId: organization.id,
-        name: "Payroll Officer",
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Finance Manager",
+
+        code:
+          "FIN-MGR",
       },
-    },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      name: "Payroll Officer",
-      code: "PAY-OFF",
-    },
-  });
+    });
+
+  const hrOfficer =
+    await prisma.designation.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
+
+          name:
+            "HR Officer",
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "HR Officer",
+
+        code:
+          "HR-OFF",
+      },
+    });
+
+  const supervisor =
+    await prisma.designation.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
+
+          name:
+            "Supervisor",
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Supervisor",
+
+        code:
+          "OPS-SUP",
+      },
+    });
+
+  const payrollOfficer =
+    await prisma.designation.upsert({
+      where: {
+        organizationId_name: {
+          organizationId:
+            organization.id,
+
+          name:
+            "Payroll Officer",
+        },
+      },
+
+      update: {},
+
+      create: {
+        organizationId:
+          organization.id,
+
+        name:
+          "Payroll Officer",
+
+        code:
+          "PAY-OFF",
+      },
+    });
 
   /*
   ============================================================
@@ -176,58 +307,136 @@ async function main() {
 
   const employees = [
     {
-      employeeNumber: "CHR000001",
-      firstName: "John",
-      lastName: "Musa",
-      email: "john@corporatehr.ng",
-      phone: "08031234567",
-      status: "ACTIVE",
-      departmentId: financeDepartment.id,
-      designationId: financeManager.id,
+      employeeNumber:
+        "CHR000001",
+
+      firstName:
+        "John",
+
+      lastName:
+        "Musa",
+
+      email:
+        "john@corporatehr.ng",
+
+      phone:
+        "08031234567",
+
+      status:
+        "ACTIVE",
+
+      departmentId:
+        financeDepartment.id,
+
+      designationId:
+        financeManager.id,
     },
+
     {
-      employeeNumber: "CHR000002",
-      firstName: "Grace",
-      lastName: "James",
-      email: "grace@corporatehr.ng",
-      phone: "08041234567",
-      status: "ACTIVE",
-      departmentId: hrDepartment.id,
-      designationId: hrOfficer.id,
+      employeeNumber:
+        "CHR000002",
+
+      firstName:
+        "Grace",
+
+      lastName:
+        "James",
+
+      email:
+        "grace@corporatehr.ng",
+
+      phone:
+        "08041234567",
+
+      status:
+        "ACTIVE",
+
+      departmentId:
+        hrDepartment.id,
+
+      designationId:
+        hrOfficer.id,
     },
+
     {
-      employeeNumber: "CHR000003",
-      firstName: "Samuel",
-      lastName: "Bello",
-      email: "samuel@corporatehr.ng",
-      phone: "08051234567",
-      status: "LEAVE",
-      departmentId: operationsDepartment.id,
-      designationId: supervisor.id,
+      employeeNumber:
+        "CHR000003",
+
+      firstName:
+        "Samuel",
+
+      lastName:
+        "Bello",
+
+      email:
+        "samuel@corporatehr.ng",
+
+      phone:
+        "08051234567",
+
+      status:
+        "LEAVE",
+
+      departmentId:
+        operationsDepartment.id,
+
+      designationId:
+        supervisor.id,
     },
+
     {
-      employeeNumber: "CHR000004",
-      firstName: "Ruth",
-      lastName: "Okafor",
-      email: "ruth@corporatehr.ng",
-      phone: "08061234567",
-      status: "PROBATION",
-      departmentId: payrollDepartment.id,
-      designationId: payrollOfficer.id,
+      employeeNumber:
+        "CHR000004",
+
+      firstName:
+        "Ruth",
+
+      lastName:
+        "Okafor",
+
+      email:
+        "ruth@corporatehr.ng",
+
+      phone:
+        "08061234567",
+
+      status:
+        "PROBATION",
+
+      departmentId:
+        payrollDepartment.id,
+
+      designationId:
+        payrollOfficer.id,
     },
   ];
 
-  for (const employee of employees) {
+  for (
+    const employee of
+    employees
+  ) {
     await prisma.employee.upsert({
       where: {
-        organizationId_employeeNumber: {
-          organizationId: organization.id,
-          employeeNumber: employee.employeeNumber,
-        },
+        organizationId_employeeNumber:
+          {
+            organizationId:
+              organization.id,
+
+            employeeNumber:
+              employee.employeeNumber,
+          },
       },
+
+      /*
+      Development seed must not overwrite
+      HR changes already made through CHRIS.
+      */
       update: {},
+
       create: {
-        organizationId: organization.id,
+        organizationId:
+          organization.id,
+
         ...employee,
       },
     });
@@ -235,220 +444,509 @@ async function main() {
 
   /*
   ============================================================
-  CHRIS PERMISSIONS
+  CHRIS PERMISSION CATALOGUE
+
+  Permission convention:
+      module.action
+
+  The Permission catalogue is global.
+
+  Upserting catalogue metadata is safe because it does not
+  alter which roles currently possess the permission.
   ============================================================
-
-  Permission format:
-
-  module.action
-
-  This allows CHRIS to grow without hard-coding
-  access rules around individual role names.
   */
 
   const permissions = [
-    // Dashboard
+    /*
+    ----------------------------------------------------------
+    DASHBOARD
+    ----------------------------------------------------------
+    */
     {
-      key: "dashboard.view",
-      name: "View Dashboard",
-      description: "View the CHRIS dashboard.",
+      key:
+        "dashboard.view",
+
+      name:
+        "View Dashboard",
+
+      description:
+        "View the CHRIS dashboard.",
     },
 
-    // Employees
+    /*
+    ----------------------------------------------------------
+    EMPLOYEES
+    ----------------------------------------------------------
+    */
     {
-      key: "employees.view",
-      name: "View Employees",
-      description: "View employee records and profiles.",
-    },
-    {
-      key: "employees.create",
-      name: "Create Employees",
-      description: "Create new employee records.",
-    },
-    {
-      key: "employees.update",
-      name: "Update Employees",
-      description: "Update existing employee records.",
-    },
-    {
-      key: "employees.delete",
-      name: "Delete Employees",
-      description: "Delete employee records.",
+      key:
+        "employees.view",
+
+      name:
+        "View Employees",
+
+      description:
+        "View employee records and profiles.",
     },
 
-    // Recruitment
     {
-      key: "recruitment.view",
-      name: "View Recruitment",
-      description: "View recruitment information.",
-    },
-    {
-      key: "recruitment.manage",
-      name: "Manage Recruitment",
-      description: "Create and manage recruitment activities.",
+      key:
+        "employees.create",
+
+      name:
+        "Create Employees",
+
+      description:
+        "Create new employee records.",
     },
 
-    // Attendance
     {
-      key: "attendance.view",
-      name: "View Attendance",
-      description: "View attendance records.",
-    },
-    {
-      key: "attendance.manage",
-      name: "Manage Attendance",
-      description: "Create and manage attendance records.",
+      key:
+        "employees.update",
+
+      name:
+        "Update Employees",
+
+      description:
+        "Update existing employee records.",
     },
 
-    // Leave
     {
-      key: "leave.view",
-      name: "View Leave",
-      description: "View leave records.",
-    },
-    {
-      key: "leave.request",
-      name: "Request Leave",
-      description: "Submit leave requests.",
-    },
-    {
-      key: "leave.approve",
-      name: "Approve Leave",
-      description: "Approve or reject leave requests.",
-    },
-    {
-      key: "leave.manage",
-      name: "Manage Leave",
-      description: "Administer leave records and settings.",
+      key:
+        "employees.delete",
+
+      name:
+        "Delete Employees",
+
+      description:
+        "Delete employee records.",
     },
 
-    // Payroll
+    /*
+    ----------------------------------------------------------
+    RECRUITMENT
+    ----------------------------------------------------------
+    */
     {
-      key: "payroll.view",
-      name: "View Payroll",
-      description: "View payroll information.",
-    },
-    {
-      key: "payroll.process",
-      name: "Process Payroll",
-      description: "Prepare and execute payroll.",
-    },
-    {
-      key: "payroll.manage",
-      name: "Manage Payroll",
-      description: "Manage payroll configuration and records.",
+      key:
+        "recruitment.view",
+
+      name:
+        "View Recruitment",
+
+      description:
+        "View recruitment information.",
     },
 
-    // Loans
     {
-      key: "loans.view",
-      name: "View Loans",
-      description: "View employee loan records.",
-    },
-    {
-      key: "loans.request",
-      name: "Request Loan",
-      description: "Submit employee loan requests.",
-    },
-    {
-      key: "loans.approve",
-      name: "Approve Loans",
-      description: "Approve or reject loan requests.",
-    },
-    {
-      key: "loans.manage",
-      name: "Manage Loans",
-      description: "Administer employee loans.",
+      key:
+        "recruitment.manage",
+
+      name:
+        "Manage Recruitment",
+
+      description:
+        "Create and manage recruitment activities.",
     },
 
-    // Performance
+    /*
+    ----------------------------------------------------------
+    ATTENDANCE
+    ----------------------------------------------------------
+    */
     {
-      key: "performance.view",
-      name: "View Performance",
-      description: "View performance records.",
-    },
-    {
-      key: "performance.manage",
-      name: "Manage Performance",
-      description: "Create and manage performance records.",
+      key:
+        "attendance.view",
+
+      name:
+        "View Attendance",
+
+      description:
+        "View attendance records.",
     },
 
-    // Training
     {
-      key: "training.view",
-      name: "View Training",
-      description: "View training information.",
-    },
-    {
-      key: "training.manage",
-      name: "Manage Training",
-      description: "Create and manage training activities.",
+      key:
+        "attendance.manage",
+
+      name:
+        "Manage Attendance",
+
+      description:
+        "Create and manage attendance records.",
     },
 
-    // Reports
+    /*
+    ----------------------------------------------------------
+    LEAVE
+    ----------------------------------------------------------
+    */
     {
-      key: "reports.view",
-      name: "View Reports",
-      description: "View CHRIS reports.",
-    },
-    {
-      key: "reports.export",
-      name: "Export Reports",
-      description: "Export CHRIS reports and data.",
+      key:
+        "leave.view",
+
+      name:
+        "View Leave",
+
+      description:
+        "View leave records.",
     },
 
-    // Users
     {
-      key: "users.view",
-      name: "View Users",
-      description: "View CHRIS user accounts.",
-    },
-    {
-      key: "users.manage",
-      name: "Manage Users",
-      description: "Create, update, activate and deactivate users.",
+      key:
+        "leave.request",
+
+      name:
+        "Request Leave",
+
+      description:
+        "Submit leave requests.",
     },
 
-    // Roles
     {
-      key: "roles.view",
-      name: "View Roles",
-      description: "View roles and permission assignments.",
-    },
-    {
-      key: "roles.manage",
-      name: "Manage Roles",
-      description: "Create and manage roles and permissions.",
+      key:
+        "leave.approve",
+
+      name:
+        "Approve Leave",
+
+      description:
+        "Approve or reject leave requests.",
     },
 
-    // Settings
     {
-      key: "settings.view",
-      name: "View Settings",
-      description: "View organization settings.",
+      key:
+        "leave.manage",
+
+      name:
+        "Manage Leave",
+
+      description:
+        "Administer leave records and settings.",
     },
+
+    /*
+    ----------------------------------------------------------
+    PAYROLL
+    ----------------------------------------------------------
+    */
     {
-      key: "settings.manage",
-      name: "Manage Settings",
-      description: "Manage organization and system settings.",
+      key:
+        "payroll.view",
+
+      name:
+        "View Payroll",
+
+      description:
+        "View payroll information.",
+    },
+
+    {
+      key:
+        "payroll.process",
+
+      name:
+        "Process Payroll",
+
+      description:
+        "Prepare and execute payroll.",
+    },
+
+    {
+      key:
+        "payroll.manage",
+
+      name:
+        "Manage Payroll",
+
+      description:
+        "Manage payroll configuration and records.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    PAYSLIPS
+
+    Payslip permissions are intentionally separated from
+    Payroll permissions.
+
+    An Employee may view/download their own payslip without
+    receiving access to organization-wide payroll data.
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "payslips.view",
+
+      name:
+        "View Payslips",
+
+      description:
+        "View payslips available to the user.",
+    },
+
+    {
+      key:
+        "payslips.download",
+
+      name:
+        "Download Payslips",
+
+      description:
+        "Download available payslips.",
+    },
+
+    {
+      key:
+        "payslips.manage",
+
+      name:
+        "Manage Payslips",
+
+      description:
+        "Generate, publish and administer employee payslips.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    LOANS
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "loans.view",
+
+      name:
+        "View Loans",
+
+      description:
+        "View employee loan records.",
+    },
+
+    {
+      key:
+        "loans.request",
+
+      name:
+        "Request Loan",
+
+      description:
+        "Submit employee loan requests.",
+    },
+
+    {
+      key:
+        "loans.approve",
+
+      name:
+        "Approve Loans",
+
+      description:
+        "Approve or reject loan requests.",
+    },
+
+    {
+      key:
+        "loans.manage",
+
+      name:
+        "Manage Loans",
+
+      description:
+        "Administer employee loans.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    PERFORMANCE
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "performance.view",
+
+      name:
+        "View Performance",
+
+      description:
+        "View performance records.",
+    },
+
+    {
+      key:
+        "performance.manage",
+
+      name:
+        "Manage Performance",
+
+      description:
+        "Create and manage performance records.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    TRAINING
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "training.view",
+
+      name:
+        "View Training",
+
+      description:
+        "View training information.",
+    },
+
+    {
+      key:
+        "training.manage",
+
+      name:
+        "Manage Training",
+
+      description:
+        "Create and manage training activities.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    REPORTS
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "reports.view",
+
+      name:
+        "View Reports",
+
+      description:
+        "View CHRIS reports.",
+    },
+
+    {
+      key:
+        "reports.export",
+
+      name:
+        "Export Reports",
+
+      description:
+        "Export CHRIS reports and data.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    USERS
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "users.view",
+
+      name:
+        "View Users",
+
+      description:
+        "View CHRIS user accounts.",
+    },
+
+    {
+      key:
+        "users.manage",
+
+      name:
+        "Manage Users",
+
+      description:
+        "Create, update, activate and deactivate users.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    ROLES
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "roles.view",
+
+      name:
+        "View Roles",
+
+      description:
+        "View roles and permission assignments.",
+    },
+
+    {
+      key:
+        "roles.manage",
+
+      name:
+        "Manage Roles",
+
+      description:
+        "Create and manage roles and permissions.",
+    },
+
+    /*
+    ----------------------------------------------------------
+    SETTINGS
+    ----------------------------------------------------------
+    */
+    {
+      key:
+        "settings.view",
+
+      name:
+        "View Settings",
+
+      description:
+        "View organization settings.",
+    },
+
+    {
+      key:
+        "settings.manage",
+
+      name:
+        "Manage Settings",
+
+      description:
+        "Manage organization and system settings.",
     },
   ];
 
   const permissionRecords = {};
 
-  for (const permission of permissions) {
-    const record = await prisma.permission.upsert({
-      where: {
-        key: permission.key,
-      },
-      update: {
-        name: permission.name,
-        description: permission.description,
-      },
-      create: permission,
-    });
+  for (
+    const permission of
+    permissions
+  ) {
+    const record =
+      await prisma.permission.upsert({
+        where: {
+          key:
+            permission.key,
+        },
 
-    permissionRecords[permission.key] = record;
+        update: {
+          name:
+            permission.name,
+
+          description:
+            permission.description,
+        },
+
+        create:
+          permission,
+      });
+
+    permissionRecords[
+      permission.key
+    ] = record;
   }
 
   /*
@@ -457,33 +955,51 @@ async function main() {
   ============================================================
   */
 
-  const roles = [
+  const systemRoles = [
     {
-      name: "Administrator",
-      description: "Full administrative access to CHRIS.",
+      name:
+        "Administrator",
+
+      description:
+        "Full administrative access to CHRIS.",
     },
+
     {
-      name: "HR Manager",
+      name:
+        "HR Manager",
+
       description:
         "Manages core HR operations, employees, recruitment, leave, performance and training.",
     },
+
     {
-      name: "HR Officer",
+      name:
+        "HR Officer",
+
       description:
         "Supports employee administration and day-to-day HR operations.",
     },
+
     {
-      name: "Payroll Officer",
+      name:
+        "Payroll Officer",
+
       description:
         "Manages payroll and payroll-related employee information.",
     },
+
     {
-      name: "Line Manager",
+      name:
+        "Line Manager",
+
       description:
         "Manages team attendance, leave and performance responsibilities.",
     },
+
     {
-      name: "Employee",
+      name:
+        "Employee",
+
       description:
         "Standard employee self-service access.",
     },
@@ -491,41 +1007,126 @@ async function main() {
 
   const roleRecords = {};
 
-  for (const role of roles) {
-    const record = await prisma.role.upsert({
-      where: {
-        organizationId_name: {
-          organizationId: organization.id,
-          name: role.name,
-        },
-      },
-      update: {
-        description: role.description,
-        isSystemRole: true,
-      },
-      create: {
-        organizationId: organization.id,
-        name: role.name,
-        description: role.description,
-        isSystemRole: true,
-      },
-    });
+  /*
+  Track whether a role existed BEFORE this seed execution.
 
-    roleRecords[role.name] = record;
+  Default permission templates must only initialize roles
+  that do not yet have configured permissions.
+
+  Once an Administrator configures permissions through CHRIS,
+  the database becomes the authority.
+  */
+  const roleNeedsDefaults = {};
+
+  for (
+    const roleDefinition of
+    systemRoles
+  ) {
+    const existingRole =
+      await prisma.role.findFirst({
+        where: {
+          organizationId:
+            organization.id,
+
+          name:
+            roleDefinition.name,
+        },
+
+        select: {
+          id: true,
+
+          _count: {
+            select: {
+              rolePermissions:
+                true,
+            },
+          },
+        },
+      });
+
+    const role =
+      await prisma.role.upsert({
+        where: {
+          organizationId_name:
+            {
+              organizationId:
+                organization.id,
+
+              name:
+                roleDefinition.name,
+            },
+        },
+
+        update: {
+          description:
+            roleDefinition.description,
+
+          isSystemRole:
+            true,
+        },
+
+        create: {
+          organizationId:
+            organization.id,
+
+          name:
+            roleDefinition.name,
+
+          description:
+            roleDefinition.description,
+
+          isSystemRole:
+            true,
+        },
+      });
+
+    roleRecords[
+      roleDefinition.name
+    ] = role;
+
+    /*
+    Only initialize default permissions when:
+
+    1. this role is brand new, OR
+    2. an existing role has never had any permission assigned.
+
+    Existing configured roles are NEVER reset.
+    */
+    roleNeedsDefaults[
+      roleDefinition.name
+    ] =
+      !existingRole ||
+      existingRole._count
+        .rolePermissions === 0;
   }
 
   /*
   ============================================================
-  ROLE → PERMISSION MATRIX
+  DEFAULT ROLE PERMISSION TEMPLATES
+
+  IMPORTANT:
+
+  These are INITIAL DEFAULTS only.
+
+  They are NOT synchronization rules.
+
+  After initial setup, Administrators manage role permissions
+  through the CHRIS Roles & Permissions interface.
+
+  Running this seed later must never remove or overwrite
+  organization-specific permission configuration.
   ============================================================
   */
 
-  const allPermissionKeys = permissions.map(
-    (permission) => permission.key
-  );
+  const allPermissionKeys =
+    permissions.map(
+      (permission) =>
+        permission.key
+    );
 
-  const rolePermissions = {
-    Administrator: allPermissionKeys,
+  const defaultRolePermissions = {
+    Administrator:
+      allPermissionKeys,
 
     "HR Manager": [
       "dashboard.view",
@@ -585,6 +1186,10 @@ async function main() {
       "payroll.process",
       "payroll.manage",
 
+      "payslips.view",
+      "payslips.download",
+      "payslips.manage",
+
       "loans.view",
       "loans.manage",
 
@@ -621,6 +1226,9 @@ async function main() {
       "leave.view",
       "leave.request",
 
+      "payslips.view",
+      "payslips.download",
+
       "loans.view",
       "loans.request",
 
@@ -631,73 +1239,134 @@ async function main() {
   };
 
   /*
-  Synchronize each system role with its configured
-  permissions.
+  ============================================================
+  NON-DESTRUCTIVE ROLE INITIALIZATION
+  ============================================================
 
-  This makes the seed repeatable. Running it again
-  will not create duplicate assignments.
+  We DO NOT use deleteMany() here.
+
+  We DO NOT synchronize existing roles back to this file.
+
+  If a role already has configured permissions, it is left
+  completely untouched.
+  ============================================================
   */
 
-  for (const [
-    roleName,
-    permissionKeys,
-  ] of Object.entries(rolePermissions)) {
-    const role = roleRecords[roleName];
+  for (
+    const [
+      roleName,
+      permissionKeys,
+    ] of Object.entries(
+      defaultRolePermissions
+    )
+  ) {
+    const role =
+      roleRecords[
+        roleName
+      ];
 
-    const permissionIds =
-      permissionKeys.map(
-        (key) => permissionRecords[key].id
+    if (!role) {
+      continue;
+    }
+
+    if (
+      !roleNeedsDefaults[
+        roleName
+      ]
+    ) {
+      console.log(
+        `Preserving configured permissions: ${roleName}`
       );
 
-    /*
-      Remove system-role assignments that are no
-      longer present in this seed definition.
-    */
-    await prisma.rolePermission.deleteMany({
-      where: {
-        roleId: role.id,
-        permissionId: {
-          notIn: permissionIds,
-        },
-      },
-    });
+      continue;
+    }
 
-    /*
-      Add all required assignments.
-    */
-    for (const permissionKey of permissionKeys) {
+    console.log(
+      `Initializing default permissions: ${roleName}`
+    );
+
+    for (
+      const permissionKey of
+      permissionKeys
+    ) {
       const permission =
-        permissionRecords[permissionKey];
+        permissionRecords[
+          permissionKey
+        ];
+
+      if (!permission) {
+        throw new Error(
+          `Permission not found during seed: ${permissionKey}`
+        );
+      }
 
       await prisma.rolePermission.upsert({
         where: {
-          roleId_permissionId: {
-            roleId: role.id,
-            permissionId: permission.id,
-          },
+          roleId_permissionId:
+            {
+              roleId:
+                role.id,
+
+              permissionId:
+                permission.id,
+            },
         },
+
         update: {},
+
         create: {
-          roleId: role.id,
-          permissionId: permission.id,
+          roleId:
+            role.id,
+
+          permissionId:
+            permission.id,
         },
       });
     }
   }
 
+  /*
+  ============================================================
+  COMPLETE
+  ============================================================
+  */
+
   console.log("");
-  console.log("CHRIS development seed completed successfully.");
-  console.log(`Organization: ${organization.name}`);
-  console.log(`Permissions: ${permissions.length}`);
-  console.log(`System roles: ${roles.length}`);
+  console.log(
+    "CHRIS development seed completed successfully."
+  );
+
+  console.log(
+    `Organization: ${organization.name}`
+  );
+
+  console.log(
+    `Permissions in catalogue: ${permissions.length}`
+  );
+
+  console.log(
+    `System roles: ${systemRoles.length}`
+  );
+
+  console.log("");
+  console.log(
+    "Existing role permission configurations were preserved."
+  );
+
   console.log("");
 }
 
 main()
   .catch((error) => {
-    console.error("Seed failed:", error);
+    console.error(
+      "Seed failed:",
+      error
+    );
+
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(
+    async () => {
+      await prisma.$disconnect();
+    }
+  );

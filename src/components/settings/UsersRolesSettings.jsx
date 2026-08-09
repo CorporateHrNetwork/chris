@@ -15,45 +15,76 @@ import {
   FaToggleOff,
 } from "react-icons/fa";
 
-import { apiRequest } from "../../services/api";
+import {
+  apiRequest,
+} from "../../services/api";
+
 import useAuthorization from "../../hooks/useAuthorization";
 
 import CreateUserForm from "./CreateUserForm";
 import EditUserForm from "./EditUserForm";
+import RolePermissionsEditor from "./RolePermissionsEditor";
 
 function UsersRolesSettings() {
-  const [activeTab, setActiveTab] =
-    useState("users");
+  const [
+    activeTab,
+    setActiveTab,
+  ] = useState("users");
 
-  const [showCreateUser, setShowCreateUser] =
-    useState(false);
+  const [
+    showCreateUser,
+    setShowCreateUser,
+  ] = useState(false);
 
-  const [editingUser, setEditingUser] =
-    useState(null);
+  const [
+    editingUser,
+    setEditingUser,
+  ] = useState(null);
 
-  const [users, setUsers] =
-    useState([]);
+  const [
+    selectedRole,
+    setSelectedRole,
+  ] = useState(null);
 
-  const [roles, setRoles] =
-    useState([]);
+  const [
+    users,
+    setUsers,
+  ] = useState([]);
 
-  const [usersLoading, setUsersLoading] =
-    useState(true);
+  const [
+    roles,
+    setRoles,
+  ] = useState([]);
 
-  const [rolesLoading, setRolesLoading] =
-    useState(true);
+  const [
+    usersLoading,
+    setUsersLoading,
+  ] = useState(true);
 
-  const [usersError, setUsersError] =
-    useState("");
+  const [
+    rolesLoading,
+    setRolesLoading,
+  ] = useState(true);
 
-  const [rolesError, setRolesError] =
-    useState("");
+  const [
+    usersError,
+    setUsersError,
+  ] = useState("");
 
-  const [actionMessage, setActionMessage] =
-    useState("");
+  const [
+    rolesError,
+    setRolesError,
+  ] = useState("");
 
-  const [actionError, setActionError] =
-    useState("");
+  const [
+    actionMessage,
+    setActionMessage,
+  ] = useState("");
+
+  const [
+    actionError,
+    setActionError,
+  ] = useState("");
 
   const [
     statusUpdatingUserId,
@@ -69,16 +100,24 @@ function UsersRolesSettings() {
     profile?.userId || null;
 
   const canViewUsers =
-    hasPermission("users.view");
+    hasPermission(
+      "users.view"
+    );
 
   const canManageUsers =
-    hasPermission("users.manage");
+    hasPermission(
+      "users.manage"
+    );
 
   const canViewRoles =
-    hasPermission("roles.view");
+    hasPermission(
+      "roles.view"
+    );
 
   const canManageRoles =
-    hasPermission("roles.manage");
+    hasPermission(
+      "roles.manage"
+    );
 
   /*
   ============================================================
@@ -86,38 +125,41 @@ function UsersRolesSettings() {
   ============================================================
   */
   const loadUsers =
-    useCallback(async () => {
-      if (!canViewUsers) {
-        setUsersLoading(false);
-        return;
-      }
+    useCallback(
+      async () => {
+        if (!canViewUsers) {
+          setUsersLoading(false);
+          return;
+        }
 
-      try {
-        setUsersLoading(true);
-        setUsersError("");
+        try {
+          setUsersLoading(true);
+          setUsersError("");
 
-        const result =
-          await apiRequest(
-            "/api/users"
+          const result =
+            await apiRequest(
+              "/api/users"
+            );
+
+          setUsers(
+            result.data || []
+          );
+        } catch (error) {
+          console.error(
+            "CHRIS users settings error:",
+            error
           );
 
-        setUsers(
-          result.data || []
-        );
-      } catch (error) {
-        console.error(
-          "CHRIS users settings error:",
-          error
-        );
-
-        setUsersError(
-          error.message ||
-            "Unable to load CHRIS users."
-        );
-      } finally {
-        setUsersLoading(false);
-      }
-    }, [canViewUsers]);
+          setUsersError(
+            error.message ||
+              "Unable to load CHRIS users."
+          );
+        } finally {
+          setUsersLoading(false);
+        }
+      },
+      [canViewUsers]
+    );
 
   /*
   ============================================================
@@ -125,38 +167,41 @@ function UsersRolesSettings() {
   ============================================================
   */
   const loadRoles =
-    useCallback(async () => {
-      if (!canViewRoles) {
-        setRolesLoading(false);
-        return;
-      }
+    useCallback(
+      async () => {
+        if (!canViewRoles) {
+          setRolesLoading(false);
+          return;
+        }
 
-      try {
-        setRolesLoading(true);
-        setRolesError("");
+        try {
+          setRolesLoading(true);
+          setRolesError("");
 
-        const result =
-          await apiRequest(
-            "/api/roles"
+          const result =
+            await apiRequest(
+              "/api/roles"
+            );
+
+          setRoles(
+            result.data || []
+          );
+        } catch (error) {
+          console.error(
+            "CHRIS roles settings error:",
+            error
           );
 
-        setRoles(
-          result.data || []
-        );
-      } catch (error) {
-        console.error(
-          "CHRIS roles settings error:",
-          error
-        );
-
-        setRolesError(
-          error.message ||
-            "Unable to load CHRIS roles."
-        );
-      } finally {
-        setRolesLoading(false);
-      }
-    }, [canViewRoles]);
+          setRolesError(
+            error.message ||
+              "Unable to load CHRIS roles."
+          );
+        } finally {
+          setRolesLoading(false);
+        }
+      },
+      [canViewRoles]
+    );
 
   useEffect(() => {
     loadUsers();
@@ -173,10 +218,9 @@ function UsersRolesSettings() {
   */
   const handleUserCreated =
     async () => {
-      /*
-        Close Create User form immediately.
-      */
-      setShowCreateUser(false);
+      setShowCreateUser(
+        false
+      );
 
       setActionError("");
 
@@ -184,18 +228,11 @@ function UsersRolesSettings() {
         "CHRIS user created successfully."
       );
 
-      /*
-        Refresh Users and Roles.
-      */
       await Promise.all([
         loadUsers(),
         loadRoles(),
       ]);
 
-      /*
-        Remove success message
-        automatically after 4 seconds.
-      */
       setTimeout(() => {
         setActionMessage("");
       }, 4000);
@@ -228,31 +265,65 @@ function UsersRolesSettings() {
 
   /*
   ============================================================
+  ROLE PERMISSIONS SAVED
+  ============================================================
+  */
+  const handleRolePermissionsSaved =
+    async (updatedRole) => {
+      await loadRoles();
+
+      setSelectedRole(
+        (current) => {
+          if (!current) {
+            return null;
+          }
+
+          return {
+            ...current,
+
+            permissionCount:
+              updatedRole
+                ?.permissions
+                ?.length ??
+              current.permissionCount,
+          };
+        }
+      );
+    };
+
+  /*
+  ============================================================
   OPEN CREATE USER
   ============================================================
   */
-  const handleOpenCreateUser = () => {
-    setEditingUser(null);
+  const handleOpenCreateUser =
+    () => {
+      setEditingUser(null);
 
-    setActionMessage("");
-    setActionError("");
+      setActionMessage("");
+      setActionError("");
 
-    setShowCreateUser(true);
-  };
+      setShowCreateUser(
+        true
+      );
+    };
 
   /*
   ============================================================
   OPEN EDIT USER
   ============================================================
   */
-  const handleEditUser = (user) => {
-    setShowCreateUser(false);
+  const handleEditUser =
+    (user) => {
+      setShowCreateUser(
+        false
+      );
 
-    setActionMessage("");
-    setActionError("");
+      setActionMessage("");
+      setActionError("");
 
-    setEditingUser(user);
-  };
+      setEditingUser(user);
+    };
 
   /*
   ============================================================
@@ -266,7 +337,8 @@ function UsersRolesSettings() {
       }
 
       if (
-        user.id === currentUserId &&
+        user.id ===
+          currentUserId &&
         user.isActive
       ) {
         setActionMessage("");
@@ -306,12 +378,16 @@ function UsersRolesSettings() {
           await apiRequest(
             `/api/users/${user.id}/status`,
             {
-              method: "PATCH",
+              method:
+                "PATCH",
 
-              body: JSON.stringify({
-                isActive:
-                  nextStatus,
-              }),
+              body:
+                JSON.stringify(
+                  {
+                    isActive:
+                      nextStatus,
+                  }
+                ),
             }
           );
 
@@ -325,7 +401,9 @@ function UsersRolesSettings() {
         await loadUsers();
 
         setTimeout(() => {
-          setActionMessage("");
+          setActionMessage(
+            ""
+          );
         }, 4000);
       } catch (error) {
         console.error(
@@ -346,28 +424,38 @@ function UsersRolesSettings() {
 
   const activeUsers =
     users.filter(
-      (user) => user.isActive
+      (user) =>
+        user.isActive
     ).length;
 
   const inactiveUsers =
     users.filter(
-      (user) => !user.isActive
+      (user) =>
+        !user.isActive
     ).length;
 
   return (
     <div>
-      {/* PAGE HEADER */}
+      {/* HEADER */}
       <div
         style={{
-          marginBottom: "28px",
+          marginBottom:
+            "28px",
         }}
       >
         <p
           style={{
-            margin: "0 0 6px",
-            color: "#64748B",
-            fontSize: "14px",
-            fontWeight: "600",
+            margin:
+              "0 0 6px",
+
+            color:
+              "#64748B",
+
+            fontSize:
+              "14px",
+
+            fontWeight:
+              "600",
           }}
         >
           Administration
@@ -376,9 +464,15 @@ function UsersRolesSettings() {
         <h1
           style={{
             margin: 0,
-            color: "#0B5E3B",
-            fontSize: "32px",
-            fontWeight: "800",
+
+            color:
+              "#0B5E3B",
+
+            fontSize:
+              "32px",
+
+            fontWeight:
+              "800",
           }}
         >
           Users & Roles
@@ -386,19 +480,27 @@ function UsersRolesSettings() {
 
         <p
           style={{
-            margin: "8px 0 0",
-            color: "#64748B",
-            fontSize: "15px",
-            lineHeight: 1.6,
+            margin:
+              "8px 0 0",
+
+            color:
+              "#64748B",
+
+            fontSize:
+              "15px",
+
+            lineHeight:
+              1.6,
           }}
         >
-          Manage CHRIS user access,
-          system roles and authorization
+          Manage CHRIS user
+          access, system roles
+          and authorization
           assignments.
         </p>
       </div>
 
-      {/* SUMMARY CARDS */}
+      {/* SUMMARY */}
       <div
         style={{
           display: "grid",
@@ -407,11 +509,15 @@ function UsersRolesSettings() {
             "repeat(auto-fit, minmax(190px, 1fr))",
 
           gap: "18px",
-          marginBottom: "28px",
+
+          marginBottom:
+            "28px",
         }}
       >
         <SummaryCard
-          icon={<FaUsers />}
+          icon={
+            <FaUsers />
+          }
           title="Total Users"
           value={
             usersLoading
@@ -422,7 +528,9 @@ function UsersRolesSettings() {
         />
 
         <SummaryCard
-          icon={<FaCheckCircle />}
+          icon={
+            <FaCheckCircle />
+          }
           title="Active Users"
           value={
             usersLoading
@@ -444,7 +552,9 @@ function UsersRolesSettings() {
         />
 
         <SummaryCard
-          icon={<FaUserShield />}
+          icon={
+            <FaUserShield />
+          }
           title="System Roles"
           value={
             rolesLoading
@@ -455,16 +565,22 @@ function UsersRolesSettings() {
         />
       </div>
 
-      {/* SUCCESS MESSAGE */}
       {actionMessage && (
-        <div style={successStyle}>
+        <div
+          style={
+            successStyle
+          }
+        >
           {actionMessage}
         </div>
       )}
 
-      {/* ACTION ERROR */}
       {actionError && (
-        <div style={errorStyle}>
+        <div
+          style={
+            errorStyle
+          }
+        >
           {actionError}
         </div>
       )}
@@ -473,9 +589,11 @@ function UsersRolesSettings() {
       <div
         style={{
           display: "flex",
+
           gap: "8px",
 
-          marginBottom: "20px",
+          marginBottom:
+            "20px",
 
           borderBottom:
             "1px solid #E5E7EB",
@@ -483,10 +601,17 @@ function UsersRolesSettings() {
       >
         <TabButton
           active={
-            activeTab === "users"
+            activeTab ===
+            "users"
           }
           onClick={() => {
-            setActiveTab("users");
+            setActiveTab(
+              "users"
+            );
+
+            setSelectedRole(
+              null
+            );
           }}
         >
           Users
@@ -494,47 +619,79 @@ function UsersRolesSettings() {
 
         <TabButton
           active={
-            activeTab === "roles"
+            activeTab ===
+            "roles"
           }
           onClick={() => {
-            setActiveTab("roles");
+            setActiveTab(
+              "roles"
+            );
 
-            setShowCreateUser(false);
-            setEditingUser(null);
+            setShowCreateUser(
+              false
+            );
 
-            setActionMessage("");
-            setActionError("");
+            setEditingUser(
+              null
+            );
+
+            setSelectedRole(
+              null
+            );
+
+            setActionMessage(
+              ""
+            );
+
+            setActionError(
+              ""
+            );
           }}
         >
           Roles & Permissions
         </TabButton>
       </div>
 
-      {/* CREATE USER FORM */}
-      {activeTab === "users" &&
+      {/* CREATE USER */}
+      {activeTab ===
+        "users" &&
         showCreateUser &&
         canManageUsers && (
           <CreateUserForm
             roles={roles}
+
             onCancel={() =>
-              setShowCreateUser(false)
+              setShowCreateUser(
+                false
+              )
             }
+
             onCreated={
               handleUserCreated
             }
           />
         )}
 
-      {/* EDIT USER FORM */}
-      {activeTab === "users" &&
+      {/* EDIT USER */}
+      {activeTab ===
+        "users" &&
         editingUser &&
         canManageUsers && (
           <EditUserForm
-            user={editingUser}
-            roles={roles}
-            onCancel={() =>
-              setEditingUser(null)
+            user={
+              editingUser
             }
+
+            roles={
+              roles
+            }
+
+            onCancel={() =>
+              setEditingUser(
+                null
+              )
+            }
+
             onUpdated={
               handleUserUpdated
             }
@@ -542,67 +699,111 @@ function UsersRolesSettings() {
         )}
 
       {/* USERS TAB */}
-      {activeTab === "users" && (
-        <UsersTab
-          users={users}
-          loading={usersLoading}
-          error={usersError}
+      {activeTab ===
+        "users" && (
+          <UsersTab
+            users={
+              users
+            }
 
-          canView={canViewUsers}
-          canManage={
-            canManageUsers
-          }
+            loading={
+              usersLoading
+            }
 
-          currentUserId={
-            currentUserId
-          }
+            error={
+              usersError
+            }
 
-          showCreateUser={
-            showCreateUser
-          }
+            canView={
+              canViewUsers
+            }
 
-          editingUser={
-            editingUser
-          }
+            canManage={
+              canManageUsers
+            }
 
-          statusUpdatingUserId={
-            statusUpdatingUserId
-          }
+            currentUserId={
+              currentUserId
+            }
 
-          onCreateUser={
-            handleOpenCreateUser
-          }
+            showCreateUser={
+              showCreateUser
+            }
 
-          onEditUser={
-            handleEditUser
-          }
+            editingUser={
+              editingUser
+            }
 
-          onStatusChange={
-            handleStatusChange
-          }
-        />
-      )}
+            statusUpdatingUserId={
+              statusUpdatingUserId
+            }
+
+            onCreateUser={
+              handleOpenCreateUser
+            }
+
+            onEditUser={
+              handleEditUser
+            }
+
+            onStatusChange={
+              handleStatusChange
+            }
+          />
+        )}
 
       {/* ROLES TAB */}
-      {activeTab === "roles" && (
-        <RolesTab
-          roles={roles}
-          loading={rolesLoading}
-          error={rolesError}
+      {activeTab ===
+        "roles" && (
+          <RolesTab
+            roles={
+              roles
+            }
 
-          canView={
-            canViewRoles
-          }
+            loading={
+              rolesLoading
+            }
 
-          canManage={
-            canManageRoles
-          }
-        />
-      )}
+            error={
+              rolesError
+            }
+
+            canView={
+              canViewRoles
+            }
+
+            canManage={
+              canManageRoles
+            }
+
+            selectedRole={
+              selectedRole
+            }
+
+            onSelectRole={
+              setSelectedRole
+            }
+
+            onCloseRole={() =>
+              setSelectedRole(
+                null
+              )
+            }
+
+            onSaved={
+              handleRolePermissionsSaved
+            }
+          />
+        )}
     </div>
   );
 }
 
+/*
+============================================================
+USERS TAB
+============================================================
+*/
 function UsersTab({
   users,
   loading,
@@ -627,7 +828,9 @@ function UsersTab({
 
   const managementFormOpen =
     showCreateUser ||
-    Boolean(editingUser);
+    Boolean(
+      editingUser
+    );
 
   return (
     <div>
@@ -638,22 +841,31 @@ function UsersTab({
           justifyContent:
             "space-between",
 
-          alignItems: "center",
+          alignItems:
+            "center",
 
           gap: "16px",
 
-          marginBottom: "18px",
+          marginBottom:
+            "18px",
 
-          flexWrap: "wrap",
+          flexWrap:
+            "wrap",
         }}
       >
         <div>
           <h2
             style={{
               margin: 0,
-              color: "#0F172A",
-              fontSize: "20px",
-              fontWeight: "800",
+
+              color:
+                "#0F172A",
+
+              fontSize:
+                "20px",
+
+              fontWeight:
+                "800",
             }}
           >
             User Accounts
@@ -661,13 +873,19 @@ function UsersTab({
 
           <p
             style={{
-              margin: "5px 0 0",
-              color: "#64748B",
-              fontSize: "13px",
+              margin:
+                "5px 0 0",
+
+              color:
+                "#64748B",
+
+              fontSize:
+                "13px",
             }}
           >
-            Users registered within
-            this CHRIS organization.
+            Users registered
+            within this CHRIS
+            organization.
           </p>
         </div>
 
@@ -675,9 +893,11 @@ function UsersTab({
           !managementFormOpen && (
             <button
               type="button"
+
               onClick={
                 onCreateUser
               }
+
               style={
                 createButtonStyle
               }
@@ -691,7 +911,9 @@ function UsersTab({
 
       {error && (
         <ErrorBox
-          message={error}
+          message={
+            error
+          }
         />
       )}
 
@@ -704,18 +926,22 @@ function UsersTab({
           <LoadingMessage
             message="Loading CHRIS users..."
           />
-        ) : users.length === 0 ? (
+        ) : users.length ===
+          0 ? (
           <EmptyMessage
             message="No CHRIS users found."
           />
         ) : (
           <div
             style={{
-              overflowX: "auto",
+              overflowX:
+                "auto",
             }}
           >
             <table
-              style={tableStyle}
+              style={
+                tableStyle
+              }
             >
               <thead>
                 <tr>
@@ -763,6 +989,7 @@ function UsersTab({
                         key={
                           user.id
                         }
+
                         style={{
                           borderTop:
                             "1px solid #E5E7EB",
@@ -792,10 +1019,37 @@ function UsersTab({
                               </span>
                             )}
                           </div>
+
+                          {user.employee
+                            ?.employeeNumber && (
+                            <div
+                              style={{
+                                marginTop:
+                                  "4px",
+
+                                color:
+                                  "#94A3B8",
+
+                                fontSize:
+                                  "10px",
+
+                                fontWeight:
+                                  "700",
+                              }}
+                            >
+                              {
+                                user
+                                  .employee
+                                  .employeeNumber
+                              }
+                            </div>
+                          )}
                         </TableCell>
 
                         <TableCell>
-                          {user.email}
+                          {
+                            user.email
+                          }
                         </TableCell>
 
                         <TableCell>
@@ -804,7 +1058,8 @@ function UsersTab({
                               display:
                                 "flex",
 
-                              gap: "6px",
+                              gap:
+                                "6px",
 
                               flexWrap:
                                 "wrap",
@@ -821,6 +1076,7 @@ function UsersTab({
                                     key={
                                       role.id
                                     }
+
                                     style={
                                       roleBadgeStyle
                                     }
@@ -868,7 +1124,8 @@ function UsersTab({
                                 alignItems:
                                   "center",
 
-                                gap: "7px",
+                                gap:
+                                  "7px",
 
                                 flexWrap:
                                   "wrap",
@@ -927,15 +1184,6 @@ function UsersTab({
                                     user.isActive)
                                 }
 
-                                title={
-                                  isCurrentUser &&
-                                  user.isActive
-                                    ? "You cannot deactivate your own account."
-                                    : user.isActive
-                                      ? "Deactivate user"
-                                      : "Activate user"
-                                }
-
                                 style={{
                                   ...(user.isActive
                                     ? deactivateButtonStyle
@@ -984,18 +1232,65 @@ function UsersTab({
   );
 }
 
+/*
+============================================================
+ROLES TAB
+============================================================
+*/
 function RolesTab({
   roles,
   loading,
   error,
   canView,
   canManage,
+  selectedRole,
+  onSelectRole,
+  onCloseRole,
+  onSaved,
 }) {
   if (!canView) {
     return (
       <AccessNotice
         message="You do not have permission to view CHRIS roles."
       />
+    );
+  }
+
+  if (selectedRole) {
+    return (
+      <div>
+        <button
+          type="button"
+
+          onClick={
+            onCloseRole
+          }
+
+          style={
+            backButtonStyle
+          }
+        >
+          ← Back to Roles
+        </button>
+
+        <RolePermissionsEditor
+          role={
+            selectedRole
+          }
+
+          canManage={
+            canManage
+          }
+
+          onCancel={
+            onCloseRole
+          }
+
+          onSaved={
+            onSaved
+          }
+        />
+      </div>
     );
   }
 
@@ -1008,13 +1303,16 @@ function RolesTab({
           justifyContent:
             "space-between",
 
-          alignItems: "center",
+          alignItems:
+            "center",
 
           gap: "16px",
 
-          marginBottom: "18px",
+          marginBottom:
+            "18px",
 
-          flexWrap: "wrap",
+          flexWrap:
+            "wrap",
         }}
       >
         <div>
@@ -1047,12 +1345,13 @@ function RolesTab({
                 "13px",
             }}
           >
-            Organization roles and
-            their authorization scope.
+            Organization roles
+            and their
+            authorization scope.
           </p>
         </div>
 
-        {canManage && (
+        {canManage ? (
           <span
             style={
               manageBadgeStyle
@@ -1060,12 +1359,22 @@ function RolesTab({
           >
             Role Management Enabled
           </span>
+        ) : (
+          <span
+            style={
+              viewOnlyBadgeStyle
+            }
+          >
+            View Only
+          </span>
         )}
       </div>
 
       {error && (
         <ErrorBox
-          message={error}
+          message={
+            error
+          }
         />
       )}
 
@@ -1073,7 +1382,8 @@ function RolesTab({
         <LoadingMessage
           message="Loading CHRIS roles..."
         />
-      ) : roles.length === 0 ? (
+      ) : roles.length ===
+        0 ? (
         <EmptyMessage
           message="No CHRIS roles found."
         />
@@ -1089,122 +1399,204 @@ function RolesTab({
           }}
         >
           {roles.map(
-            (role) => (
-              <div
-                key={role.id}
-                style={
-                  roleCardStyle
-                }
-              >
+            (role) => {
+              const administrator =
+                role.name ===
+                "Administrator";
+
+              const buttonLabel =
+                administrator ||
+                !canManage
+                  ? "View Permissions"
+                  : "Manage Permissions";
+
+              return (
                 <div
-                  style={{
-                    display:
-                      "flex",
+                  key={
+                    role.id
+                  }
 
-                    justifyContent:
-                      "space-between",
-
-                    gap: "12px",
-
-                    alignItems:
-                      "flex-start",
-                  }}
+                  style={
+                    roleCardStyle
+                  }
                 >
-                  <div>
-                    <h3
-                      style={{
-                        margin: 0,
+                  <div
+                    style={{
+                      display:
+                        "flex",
 
+                      justifyContent:
+                        "space-between",
+
+                      gap:
+                        "12px",
+
+                      alignItems:
+                        "flex-start",
+                    }}
+                  >
+                    <div>
+                      <h3
+                        style={{
+                          margin:
+                            0,
+
+                          color:
+                            "#0B5E3B",
+
+                          fontSize:
+                            "17px",
+
+                          fontWeight:
+                            "800",
+                        }}
+                      >
+                        {
+                          role.name
+                        }
+                      </h3>
+
+                      <div
+                        style={{
+                          display:
+                            "flex",
+
+                          gap:
+                            "6px",
+
+                          flexWrap:
+                            "wrap",
+                        }}
+                      >
+                        {role.isSystemRole && (
+                          <span
+                            style={
+                              systemRoleBadgeStyle
+                            }
+                          >
+                            SYSTEM ROLE
+                          </span>
+                        )}
+
+                        {administrator && (
+                          <span
+                            style={
+                              protectedRoleBadgeStyle
+                            }
+                          >
+                            PROTECTED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <FaUserShield
+                      style={{
                         color:
-                          "#0B5E3B",
+                          "#D4AF37",
 
                         fontSize:
-                          "17px",
-
-                        fontWeight:
-                          "800",
+                          "22px",
                       }}
-                    >
-                      {role.name}
-                    </h3>
-
-                    {role.isSystemRole && (
-                      <span
-                        style={
-                          systemRoleBadgeStyle
-                        }
-                      >
-                        SYSTEM ROLE
-                      </span>
-                    )}
+                    />
                   </div>
 
-                  <FaUserShield
+                  <p
                     style={{
+                      margin:
+                        "14px 0 18px",
+
                       color:
-                        "#D4AF37",
+                        "#64748B",
 
                       fontSize:
-                        "22px",
+                        "13px",
+
+                      lineHeight:
+                        1.6,
                     }}
-                  />
-                </div>
+                  >
+                    {role.description ||
+                      "No role description available."}
+                  </p>
 
-                <p
-                  style={{
-                    margin:
-                      "14px 0 18px",
+                  <div
+                    style={{
+                      display:
+                        "grid",
 
-                    color:
-                      "#64748B",
+                      gridTemplateColumns:
+                        "1fr 1fr",
 
-                    fontSize:
-                      "13px",
+                      gap:
+                        "12px",
+                    }}
+                  >
+                    <RoleMetric
+                      label="Users"
+                      value={
+                        role.userCount ??
+                        0
+                      }
+                    />
 
-                    lineHeight:
-                      1.6,
-                  }}
-                >
-                  {role.description ||
-                    "No role description available."}
-                </p>
+                    <RoleMetric
+                      label="Permissions"
+                      value={
+                        role.permissionCount ??
+                        0
+                      }
+                    />
+                  </div>
 
-                <div
-                  style={{
-                    display:
-                      "grid",
+                  <button
+                    type="button"
 
-                    gridTemplateColumns:
-                      "1fr 1fr",
-
-                    gap:
-                      "12px",
-                  }}
-                >
-                  <RoleMetric
-                    label="Users"
-                    value={
-                      role.userCount ??
-                      0
+                    onClick={() =>
+                      onSelectRole(
+                        role
+                      )
                     }
-                  />
 
-                  <RoleMetric
-                    label="Permissions"
-                    value={
-                      role.permissionCount ??
-                      0
-                    }
-                  />
+                    style={{
+                      ...roleActionButtonStyle,
+
+                      background:
+                        administrator ||
+                        !canManage
+                          ? "#FFFFFF"
+                          : "#0B5E3B",
+
+                      color:
+                        administrator ||
+                        !canManage
+                          ? "#475569"
+                          : "#FFFFFF",
+
+                      border:
+                        administrator ||
+                        !canManage
+                          ? "1px solid #CBD5E1"
+                          : "1px solid #0B5E3B",
+                    }}
+                  >
+                    {buttonLabel}
+                  </button>
                 </div>
-              </div>
-            )
+              );
+            }
           )}
         </div>
       )}
     </div>
   );
 }
+
+/*
+============================================================
+SHARED COMPONENTS
+============================================================
+*/
 
 function SummaryCard({
   icon,
@@ -1317,10 +1709,14 @@ function TabButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+
+      onClick={
+        onClick
+      }
 
       style={{
-        border: "none",
+        border:
+          "none",
 
         borderBottom:
           active
@@ -1586,7 +1982,9 @@ function AccessNotice({
   );
 }
 
-function getUserName(user) {
+function getUserName(
+  user
+) {
   const fullName = [
     user.firstName,
     user.lastName,
@@ -1601,7 +1999,9 @@ function getUserName(user) {
   );
 }
 
-function formatDate(value) {
+function formatDate(
+  value
+) {
   if (!value) {
     return "—";
   }
@@ -1618,12 +2018,14 @@ STYLES
 */
 
 const createButtonStyle = {
-  display: "flex",
+  display:
+    "flex",
 
   alignItems:
     "center",
 
-  gap: "8px",
+  gap:
+    "8px",
 
   padding:
     "11px 16px",
@@ -1654,12 +2056,14 @@ const createButtonStyle = {
 };
 
 const editButtonStyle = {
-  display: "flex",
+  display:
+    "flex",
 
   alignItems:
     "center",
 
-  gap: "5px",
+  gap:
+    "5px",
 
   padding:
     "7px 10px",
@@ -1684,12 +2088,14 @@ const editButtonStyle = {
 };
 
 const deactivateButtonStyle = {
-  display: "flex",
+  display:
+    "flex",
 
   alignItems:
     "center",
 
-  gap: "5px",
+  gap:
+    "5px",
 
   padding:
     "7px 10px",
@@ -1714,12 +2120,14 @@ const deactivateButtonStyle = {
 };
 
 const activateButtonStyle = {
-  display: "flex",
+  display:
+    "flex",
 
   alignItems:
     "center",
 
-  gap: "5px",
+  gap:
+    "5px",
 
   padding:
     "7px 10px",
@@ -1849,6 +2257,32 @@ const manageBadgeStyle = {
     "800",
 };
 
+const viewOnlyBadgeStyle = {
+  display:
+    "inline-block",
+
+  padding:
+    "6px 10px",
+
+  background:
+    "#EFF6FF",
+
+  border:
+    "1px solid #BFDBFE",
+
+  borderRadius:
+    "20px",
+
+  color:
+    "#1D4ED8",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "800",
+};
+
 const systemRoleBadgeStyle = {
   display:
     "inline-block",
@@ -1878,6 +2312,35 @@ const systemRoleBadgeStyle = {
     "800",
 };
 
+const protectedRoleBadgeStyle = {
+  display:
+    "inline-block",
+
+  marginTop:
+    "7px",
+
+  padding:
+    "4px 8px",
+
+  background:
+    "#FFF7ED",
+
+  color:
+    "#C2410C",
+
+  border:
+    "1px solid #FED7AA",
+
+  borderRadius:
+    "20px",
+
+  fontSize:
+    "10px",
+
+  fontWeight:
+    "800",
+};
+
 const roleCardStyle = {
   background:
     "#FFFFFF",
@@ -1893,6 +2356,58 @@ const roleCardStyle = {
 
   boxShadow:
     "0 6px 20px rgba(15,23,42,0.04)",
+};
+
+const roleActionButtonStyle = {
+  width:
+    "100%",
+
+  marginTop:
+    "16px",
+
+  padding:
+    "10px 12px",
+
+  borderRadius:
+    "9px",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "800",
+
+  cursor:
+    "pointer",
+};
+
+const backButtonStyle = {
+  marginBottom:
+    "16px",
+
+  padding:
+    "8px 12px",
+
+  border:
+    "1px solid #CBD5E1",
+
+  borderRadius:
+    "8px",
+
+  background:
+    "#FFFFFF",
+
+  color:
+    "#475569",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "800",
+
+  cursor:
+    "pointer",
 };
 
 const errorStyle = {
