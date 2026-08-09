@@ -27,11 +27,49 @@ model Organization {
   departments  Department[]
   designations Designation[]
   employees    Employee[]
+  locations    OrganizationLocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("organizations")
+}
+
+model OrganizationLocation {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name String
+  code String?
+
+  type LocationType @default(BRANCH)
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  country      String?
+
+  phone String?
+  email String?
+
+  isActive Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  employees     Employee[]
+  userLocations UserLocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([type])
+  @@index([isActive])
+  @@map("organization_locations")
 }
 
 model User {
@@ -44,17 +82,55 @@ model User {
   lastName       String?
   isActive       Boolean @default(true)
 
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  employee            Employee?            @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  /**
+   * WHAT the user may do is controlled by Roles/Permissions.
+   * WHERE the user may do it is controlled here.
+   * ALL_LOCATIONS:
+   * Organization-wide access.
+   * ASSIGNED_LOCATIONS:
+   * Access only to locations linked through UserLocation.
+   */
+  locationScope UserLocationScope @default(ALL_LOCATIONS)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
   userRoles           UserRole[]
   passwordResetTokens PasswordResetToken[]
+  userLocations       UserLocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, email])
+  @@unique([organizationId, id])
   @@index([organizationId])
+  @@index([locationScope])
   @@map("users")
+}
+
+model UserLocation {
+  id String @id @default(uuid())
+
+  organizationId String
+  userId         String
+  locationId     String
+
+  /**
+   * Composite relationships provide database-level tenant safety.
+   * The user and assigned location must carry the same
+   * organizationId.
+   */
+  user     User                 @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
+  location OrganizationLocation @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, locationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([locationId])
+  @@map("user_locations")
 }
 
 model Role {
@@ -64,7 +140,8 @@ model Role {
   description    String?
   isSystemRole   Boolean @default(false)
 
-  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   userRoles       UserRole[]
   rolePermissions RolePermission[]
 
@@ -131,7 +208,8 @@ model Department {
   isActive       Boolean @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  employees    Employee[]
+
+  employees Employee[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -151,7 +229,8 @@ model Designation {
   isActive       Boolean @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  employees    Employee[]
+
+  employees Employee[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,6 +246,7 @@ model Employee {
   organizationId String
   departmentId   String?
   designationId  String?
+  locationId     String?
 
   employeeNumber String
   firstName      String
@@ -186,6 +266,15 @@ model Employee {
   department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   designation  Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
 
+  /**
+   * Tenant-safe composite relationship.
+   * organizationId on Employee must match organizationId on
+   * OrganizationLocation.
+   * Location records with historical employees should be
+   * deactivated rather than deleted.
+   */
+  location OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+
   user User?
 
   createdAt DateTime @default(now())
@@ -195,6 +284,7 @@ model Employee {
   @@index([organizationId])
   @@index([departmentId])
   @@index([designationId])
+  @@index([locationId])
   @@index([status])
   @@map("employees")
 }
@@ -230,4 +320,16 @@ enum EmployeeStatus {
   RESIGNED
   RETIRED
   INACTIVE
+}
+
+enum LocationType {
+  HEAD_OFFICE
+  BRANCH
+  OFFICE
+  SITE
+}
+
+enum UserLocationScope {
+  ALL_LOCATIONS
+  ASSIGNED_LOCATIONS
 }

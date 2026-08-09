@@ -5,6 +5,7 @@ const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
+const locationRoutes = require("./routes/locationRoutes");
 
 const app = express();
 
@@ -16,13 +17,21 @@ app.use(express.json());
 HEALTH CHECK
 ============================================================
 */
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "success",
-    message: "CHRIS API is running",
-    service: "CHRIS Backend",
-  });
-});
+
+app.get(
+  "/health",
+  (req, res) => {
+    res.status(200).json({
+      status: "success",
+
+      message:
+        "CHRIS API is running",
+
+      service:
+        "CHRIS Backend",
+    });
+  }
+);
 
 /*
 ============================================================
@@ -48,6 +57,11 @@ app.use(
 app.use(
   "/api/roles",
   roleRoutes
+);
+
+app.use(
+  "/api/locations",
+  locationRoutes
 );
 
 module.exports = app;
