@@ -45,7 +45,9 @@ function PermissionLayout({
   return (
     <ProtectedLayout>
       <PermissionRoute
-        permission={permission}
+        permission={
+          permission
+        }
       >
         {children}
       </PermissionRoute>
@@ -57,10 +59,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC AUTHENTICATION ROUTES */}
+        {/* PUBLIC */}
+
         <Route
           path="/login"
-          element={<Login />}
+          element={
+            <Login />
+          }
         />
 
         <Route
@@ -71,6 +76,7 @@ function App() {
         />
 
         {/* DASHBOARD */}
+
         <Route
           path="/"
           element={
@@ -83,6 +89,7 @@ function App() {
         />
 
         {/* EMPLOYEES */}
+
         <Route
           path="/employees"
           element={
@@ -106,6 +113,7 @@ function App() {
         />
 
         {/* RECRUITMENT */}
+
         <Route
           path="/recruitment"
           element={
@@ -117,7 +125,8 @@ function App() {
           }
         />
 
-        {/* ATTENDANCE */}
+        {/* TIME & ATTENDANCE */}
+
         <Route
           path="/attendance"
           element={
@@ -130,6 +139,7 @@ function App() {
         />
 
         {/* LEAVE */}
+
         <Route
           path="/leave"
           element={
@@ -142,6 +152,7 @@ function App() {
         />
 
         {/* PAYROLL */}
+
         <Route
           path="/payroll"
           element={
@@ -154,6 +165,7 @@ function App() {
         />
 
         {/* LOANS */}
+
         <Route
           path="/loans"
           element={
@@ -166,6 +178,7 @@ function App() {
         />
 
         {/* PERFORMANCE */}
+
         <Route
           path="/performance"
           element={
@@ -178,6 +191,7 @@ function App() {
         />
 
         {/* TRAINING */}
+
         <Route
           path="/training"
           element={
@@ -190,6 +204,7 @@ function App() {
         />
 
         {/* REPORTS */}
+
         <Route
           path="/reports"
           element={
@@ -202,6 +217,7 @@ function App() {
         />
 
         {/* SETTINGS */}
+
         <Route
           path="/settings"
           element={
@@ -213,7 +229,8 @@ function App() {
           }
         />
 
-        {/* UNKNOWN ROUTES */}
+        {/* UNKNOWN */}
+
         <Route
           path="*"
           element={

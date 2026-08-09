@@ -1,4 +1,14 @@
-import { NavLink } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  NavLink,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 
 import Logo from "../Logo/Logo";
 
@@ -9,12 +19,26 @@ import {
   FaClock,
   FaCalendarAlt,
   FaMoneyCheckAlt,
-  FaHandHoldingUsd,
   FaChartLine,
   FaGraduationCap,
   FaFileAlt,
   FaCog,
   FaSignOutAlt,
+  FaChevronDown,
+  FaChevronRight,
+  FaBuilding,
+  FaGift,
+  FaHeartbeat,
+  FaFolderOpen,
+  FaLaptop,
+  FaProjectDiagram,
+  FaClipboardCheck,
+  FaUserTie,
+  FaMoneyBillWave,
+  FaShieldAlt,
+  FaBriefcase,
+  FaFileInvoiceDollar,
+  FaSitemap,
 } from "react-icons/fa";
 
 import {
@@ -24,350 +48,1562 @@ import {
 import useAuthorization from "../../../hooks/useAuthorization";
 
 function Sidebar() {
+  const location =
+    useLocation();
+
+  const navigate =
+    useNavigate();
+
   const {
     hasPermission,
-    loading: authorizationLoading,
+    loading:
+      authorizationLoading,
   } = useAuthorization();
+
+  const [
+    openGroups,
+    setOpenGroups,
+  ] = useState({});
 
   /*
   ============================================================
-  PERMISSION-AWARE NAVIGATION
+  MENU BLUEPRINT
   ============================================================
 
-  Each CHRIS module appears only when the authenticated user
-  has permission to view that module.
+  Existing working pages use real routes.
 
-  Backend permissions remain the real security boundary.
+  Future submodules are shown as planned navigation items
+  but are not clickable yet.
+
+  This allows CHRIS to adopt the complete product structure
+  without breaking unfinished modules.
+  ============================================================
   */
 
-  const menuItems = [
-    {
-      icon: <FaTachometerAlt />,
-      text: "Dashboard",
-      path: "/",
-      permission: "dashboard.view",
-    },
-    {
-      icon: <FaUsers />,
-      text: "Employees",
-      path: "/employees",
-      permission: "employees.view",
-    },
-    {
-      icon: <FaUserPlus />,
-      text: "Recruitment",
-      path: "/recruitment",
-      permission: "recruitment.view",
-    },
-    {
-      icon: <FaClock />,
-      text: "Attendance",
-      path: "/attendance",
-      permission: "attendance.view",
-    },
-    {
-      icon: <FaCalendarAlt />,
-      text: "Leave",
-      path: "/leave",
-      permission: "leave.view",
-    },
-    {
-      icon: <FaMoneyCheckAlt />,
-      text: "Payroll",
-      path: "/payroll",
-      permission: "payroll.view",
-    },
-    {
-      icon: <FaHandHoldingUsd />,
-      text: "Loans",
-      path: "/loans",
-      permission: "loans.view",
-    },
-    {
-      icon: <FaChartLine />,
-      text: "Performance",
-      path: "/performance",
-      permission: "performance.view",
-    },
-    {
-      icon: <FaGraduationCap />,
-      text: "Training",
-      path: "/training",
-      permission: "training.view",
-    },
-    {
-      icon: <FaFileAlt />,
-      text: "Reports",
-      path: "/reports",
-      permission: "reports.view",
-    },
-  ];
+  const menuGroups =
+    useMemo(
+      () => [
+        {
+          id: "dashboard",
+          label: "Dashboard",
+          icon:
+            <FaTachometerAlt />,
+          permission:
+            "dashboard.view",
+          path: "/",
+          exact: true,
+        },
 
-  const visibleMenuItems =
-    authorizationLoading
-      ? []
-      : menuItems.filter((item) =>
-          hasPermission(item.permission)
-        );
+        {
+          id: "employees",
+          label: "Employees",
+          icon:
+            <FaUsers />,
+          permission:
+            "employees.view",
+
+          children: [
+            {
+              label:
+                "Employee Directory",
+              path:
+                "/employees",
+            },
+            {
+              label:
+                "Employee Profiles",
+              planned: true,
+            },
+            {
+              label:
+                "Onboarding",
+              planned: true,
+            },
+            {
+              label:
+                "Employee Analytics",
+              planned: true,
+            },
+            {
+              label:
+                "Transfers",
+              planned: true,
+            },
+            {
+              label:
+                "Promotions",
+              planned: true,
+            },
+            {
+              label:
+                "Exits",
+              planned: true,
+            },
+            {
+              label:
+                "Line Managers",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "recruitment",
+          label:
+            "Recruitment",
+          icon:
+            <FaUserPlus />,
+          permission:
+            "recruitment.view",
+
+          children: [
+            {
+              label:
+                "Recruitment Dashboard",
+              path:
+                "/recruitment",
+            },
+            {
+              label:
+                "Job Requisitions",
+              planned: true,
+            },
+            {
+              label:
+                "Vacancies",
+              planned: true,
+            },
+            {
+              label:
+                "Candidates",
+              planned: true,
+            },
+            {
+              label:
+                "Interviews",
+              planned: true,
+            },
+            {
+              label:
+                "Offers",
+              planned: true,
+            },
+            {
+              label:
+                "Applicant Tracking System",
+              planned: true,
+            },
+            {
+              label:
+                "Talent Pool",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "time-attendance",
+
+          label:
+            "Time & Attendance",
+
+          icon:
+            <FaClock />,
+
+          permission:
+            "attendance.view",
+
+          children: [
+            {
+              label:
+                "Attendance Dashboard",
+              path:
+                "/attendance",
+            },
+            {
+              label:
+                "Attendance Register",
+              planned: true,
+            },
+            {
+              label:
+                "Shifts",
+              planned: true,
+            },
+            {
+              label:
+                "Shift Schedule",
+              planned: true,
+            },
+            {
+              label:
+                "Worked Hours",
+              planned: true,
+            },
+            {
+              label:
+                "Worked Days",
+              planned: true,
+            },
+            {
+              label:
+                "Off Days",
+              planned: true,
+            },
+            {
+              label:
+                "Overtime",
+              planned: true,
+            },
+            {
+              label:
+                "Public Holidays",
+              planned: true,
+            },
+            {
+              label:
+                "Lateness & Absence",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "leave",
+          label: "Leave",
+          icon:
+            <FaCalendarAlt />,
+          permission:
+            "leave.view",
+
+          children: [
+            {
+              label:
+                "Leave Overview",
+              path:
+                "/leave",
+            },
+            {
+              label:
+                "Leave Requests",
+              planned: true,
+            },
+            {
+              label:
+                "Leave Calendar",
+              planned: true,
+            },
+            {
+              label:
+                "Leave Entitlements",
+              planned: true,
+            },
+            {
+              label:
+                "Leave Balances",
+              planned: true,
+            },
+            {
+              label:
+                "Leave Policies",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "payroll",
+          label: "Payroll",
+          icon:
+            <FaMoneyCheckAlt />,
+          permission:
+            "payroll.view",
+
+          children: [
+            {
+              label:
+                "Payroll Dashboard",
+              path:
+                "/payroll",
+            },
+            {
+              label:
+                "Execute Payroll",
+              planned: true,
+            },
+            {
+              label:
+                "Payroll Periods",
+              planned: true,
+            },
+            {
+              label:
+                "Salary Rates",
+              planned: true,
+            },
+            {
+              label:
+                "Allowances",
+              planned: true,
+            },
+            {
+              label:
+                "Deductions",
+              planned: true,
+            },
+            {
+              label:
+                "Payslips",
+              planned: true,
+            },
+            {
+              label:
+                "Loans",
+              path:
+                "/loans",
+            },
+            {
+              label:
+                "Salary Advances",
+              planned: true,
+            },
+            {
+              label:
+                "Paid Leave",
+              planned: true,
+            },
+            {
+              label:
+                "Payroll Approvals",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "compensation",
+
+          label:
+            "Compensation & Rewards",
+
+          icon:
+            <FaMoneyBillWave />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Compensation Dashboard",
+              planned: true,
+            },
+            {
+              label:
+                "Salary Structure",
+              planned: true,
+            },
+            {
+              label:
+                "Grades & Levels",
+              planned: true,
+            },
+            {
+              label:
+                "Salary Bands",
+              planned: true,
+            },
+            {
+              label:
+                "Compensation Reviews",
+              planned: true,
+            },
+            {
+              label:
+                "Salary Adjustments",
+              planned: true,
+            },
+            {
+              label:
+                "Promotions",
+              planned: true,
+            },
+            {
+              label:
+                "Bonuses & Incentives",
+              planned: true,
+            },
+            {
+              label:
+                "Total Rewards",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "benefits",
+          label:
+            "Benefits",
+          icon:
+            <FaGift />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Benefits Overview",
+              planned: true,
+            },
+            {
+              label:
+                "Pension",
+              planned: true,
+            },
+            {
+              label:
+                "Gratuity",
+              planned: true,
+            },
+            {
+              label:
+                "Health Insurance",
+              planned: true,
+            },
+            {
+              label:
+                "Life Insurance",
+              planned: true,
+            },
+            {
+              label:
+                "Medical Benefits",
+              planned: true,
+            },
+            {
+              label:
+                "Housing / Rent",
+              planned: true,
+            },
+            {
+              label:
+                "Transport Benefits",
+              planned: true,
+            },
+            {
+              label:
+                "Meal Benefits",
+              planned: true,
+            },
+            {
+              label:
+                "Other Benefits",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "statutories",
+
+          label:
+            "Statutories",
+
+          icon:
+            <FaShieldAlt />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Statutory Dashboard",
+              planned: true,
+            },
+            {
+              label:
+                "PAYE / Tax",
+              planned: true,
+            },
+            {
+              label:
+                "Pension Compliance",
+              planned: true,
+            },
+            {
+              label:
+                "NHIA",
+              planned: true,
+            },
+            {
+              label:
+                "NSITF",
+              planned: true,
+            },
+            {
+              label:
+                "ITF",
+              planned: true,
+            },
+            {
+              label:
+                "Remittances",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "performance",
+
+          label:
+            "Performance",
+
+          icon:
+            <FaChartLine />,
+
+          permission:
+            "performance.view",
+
+          children: [
+            {
+              label:
+                "Performance Dashboard",
+              path:
+                "/performance",
+            },
+            {
+              label:
+                "Goals / KPIs",
+              planned: true,
+            },
+            {
+              label:
+                "Performance Cycles",
+              planned: true,
+            },
+            {
+              label:
+                "Reviews",
+              planned: true,
+            },
+            {
+              label:
+                "Appraisals",
+              planned: true,
+            },
+            {
+              label:
+                "Improvement Plans",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "training",
+          label:
+            "Training & Development",
+          icon:
+            <FaGraduationCap />,
+          permission:
+            "training.view",
+
+          children: [
+            {
+              label:
+                "Training Dashboard",
+              path:
+                "/training",
+            },
+            {
+              label:
+                "Training Programs",
+              planned: true,
+            },
+            {
+              label:
+                "Training Calendar",
+              planned: true,
+            },
+            {
+              label:
+                "Employee Training",
+              planned: true,
+            },
+            {
+              label:
+                "Assessments",
+              planned: true,
+            },
+            {
+              label:
+                "Certifications",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "assets",
+          label: "Assets",
+          icon:
+            <FaLaptop />,
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Asset Register",
+              planned: true,
+            },
+            {
+              label:
+                "Asset Categories",
+              planned: true,
+            },
+            {
+              label:
+                "Asset Assignment",
+              planned: true,
+            },
+            {
+              label:
+                "Asset Transfers",
+              planned: true,
+            },
+            {
+              label:
+                "Asset Returns",
+              planned: true,
+            },
+            {
+              label:
+                "Maintenance",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "documents",
+
+          label:
+            "Documents",
+
+          icon:
+            <FaFolderOpen />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Employee Documents",
+              planned: true,
+            },
+            {
+              label:
+                "HR Documents",
+              planned: true,
+            },
+            {
+              label:
+                "Company Policies",
+              planned: true,
+            },
+            {
+              label:
+                "Templates",
+              planned: true,
+            },
+            {
+              label:
+                "Document Categories",
+              planned: true,
+            },
+            {
+              label:
+                "Expiry Tracking",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id: "reports",
+          label:
+            "Reports & Analytics",
+          icon:
+            <FaFileAlt />,
+          permission:
+            "reports.view",
+
+          children: [
+            {
+              label:
+                "Reports Dashboard",
+              path:
+                "/reports",
+            },
+            {
+              label:
+                "Workforce Analytics",
+              planned: true,
+            },
+            {
+              label:
+                "Employee Reports",
+              planned: true,
+            },
+            {
+              label:
+                "Headcount Reports",
+              planned: true,
+            },
+            {
+              label:
+                "Branch Reports",
+              planned: true,
+            },
+            {
+              label:
+                "Payroll Reports",
+              planned: true,
+            },
+            {
+              label:
+                "Attendance Reports",
+              planned: true,
+            },
+            {
+              label:
+                "Custom Reports",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "organization",
+
+          label:
+            "Organization",
+
+          icon:
+            <FaSitemap />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Organization Profile",
+              planned: true,
+            },
+            {
+              label:
+                "Head Office & Branches",
+              path:
+                "/settings",
+            },
+            {
+              label:
+                "Departments",
+              planned: true,
+            },
+            {
+              label:
+                "Designations",
+              planned: true,
+            },
+            {
+              label:
+                "Organization Chart",
+              planned: true,
+            },
+            {
+              label:
+                "Reporting Lines",
+              planned: true,
+            },
+            {
+              label:
+                "Cost Centres",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "workflows",
+
+          label:
+            "Workflows & Approvals",
+
+          icon:
+            <FaClipboardCheck />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Approval Inbox",
+              planned: true,
+            },
+            {
+              label:
+                "My Requests",
+              planned: true,
+            },
+            {
+              label:
+                "Workflow Templates",
+              planned: true,
+            },
+            {
+              label:
+                "Approval Chains",
+              planned: true,
+            },
+            {
+              label:
+                "Delegations",
+              planned: true,
+            },
+            {
+              label:
+                "Workflow History",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "employment-types",
+
+          label:
+            "Employment Types",
+
+          icon:
+            <FaBriefcase />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Type Management",
+              planned: true,
+            },
+            {
+              label:
+                "Permanent",
+              planned: true,
+            },
+            {
+              label:
+                "Contract",
+              planned: true,
+            },
+            {
+              label:
+                "Temporary",
+              planned: true,
+            },
+            {
+              label:
+                "Probation",
+              planned: true,
+            },
+            {
+              label:
+                "Intern / Trainee",
+              planned: true,
+            },
+            {
+              label:
+                "Expatriate",
+              planned: true,
+            },
+            {
+              label:
+                "Custom Types",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "settings",
+
+          label:
+            "Settings",
+
+          icon:
+            <FaCog />,
+
+          permission:
+            "settings.view",
+
+          children: [
+            {
+              label:
+                "Users & Roles",
+              path:
+                "/settings",
+            },
+            {
+              label:
+                "Roles & Permissions",
+              path:
+                "/settings",
+            },
+            {
+              label:
+                "Location Access",
+              path:
+                "/settings",
+            },
+            {
+              label:
+                "Employee Settings",
+              planned: true,
+            },
+            {
+              label:
+                "Payroll Settings",
+              planned: true,
+            },
+            {
+              label:
+                "Attendance Settings",
+              planned: true,
+            },
+            {
+              label:
+                "Leave Settings",
+              planned: true,
+            },
+            {
+              label:
+                "Benefits Settings",
+              planned: true,
+            },
+            {
+              label:
+                "Security",
+              planned: true,
+            },
+            {
+              label:
+                "System Settings",
+              planned: true,
+            },
+          ],
+        },
+
+        {
+          id:
+            "billing",
+
+          label:
+            "Billing & Subscription",
+
+          icon:
+            <FaFileInvoiceDollar />,
+
+          adminOnly: true,
+
+          children: [
+            {
+              label:
+                "Current Plan",
+              planned: true,
+            },
+            {
+              label:
+                "Subscription",
+              planned: true,
+            },
+            {
+              label:
+                "Usage",
+              planned: true,
+            },
+            {
+              label:
+                "Billing Details",
+              planned: true,
+            },
+            {
+              label:
+                "Billing History",
+              planned: true,
+            },
+            {
+              label:
+                "Invoices",
+              planned: true,
+            },
+          ],
+        },
+      ],
+      []
+    );
+
+  /*
+  ============================================================
+  ACCESS RULES
+  ============================================================
+  */
 
   const canViewSettings =
     !authorizationLoading &&
-    hasPermission("settings.view");
+    hasPermission(
+      "settings.view"
+    );
+
+  const visibleGroups =
+    authorizationLoading
+      ? []
+      : menuGroups.filter(
+          (group) => {
+            if (
+              group.adminOnly
+            ) {
+              return canViewSettings;
+            }
+
+            if (
+              group.permission
+            ) {
+              return hasPermission(
+                group.permission
+              );
+            }
+
+            return false;
+          }
+        );
+
+  /*
+  ============================================================
+  AUTO-OPEN ACTIVE GROUP
+  ============================================================
+  */
+
+  useEffect(() => {
+    const currentPath =
+      location.pathname;
+
+    const activeGroup =
+      visibleGroups.find(
+        (group) =>
+          group.children?.some(
+            (child) =>
+              child.path &&
+              (
+                child.path === "/"
+                  ? currentPath ===
+                    "/"
+                  : currentPath ===
+                      child.path ||
+                    currentPath.startsWith(
+                      `${child.path}/`
+                    )
+              )
+          )
+      );
+
+    if (activeGroup) {
+      setOpenGroups(
+        (current) => ({
+          ...current,
+
+          [activeGroup.id]:
+            true,
+        })
+      );
+    }
+  }, [
+    location.pathname,
+    visibleGroups,
+  ]);
+
+  /*
+  ============================================================
+  GROUP TOGGLE
+  ============================================================
+  */
+
+  const toggleGroup =
+    (groupId) => {
+      setOpenGroups(
+        (current) => ({
+          ...current,
+
+          [groupId]:
+            !current[groupId],
+        })
+      );
+    };
 
   /*
   ============================================================
   LOGOUT
   ============================================================
-
-  1. Remove all CHRIS authentication data.
-  2. Replace the current browser history entry
-     with the Login page.
-  3. ProtectedRoute prevents access to old
-     authenticated routes without a token.
   */
 
-  const handleLogout = () => {
-    clearAuthSession();
+  const handleLogout =
+    () => {
+      clearAuthSession();
 
-    window.location.replace("/login");
-  };
+      window.location.replace(
+        "/login"
+      );
+    };
 
-  const menuStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "14px",
-    padding: "13px 18px",
-    margin: "3px 10px",
-    color: "#D9E6DF",
-    textDecoration: "none",
-    fontSize: "15px",
-    fontWeight: "500",
-    borderRadius: "10px",
-    transition: "all .2s ease",
-    minHeight: "48px",
-    boxSizing: "border-box",
-  };
+  /*
+  ============================================================
+  PLANNED MODULE MESSAGE
+  ============================================================
+  */
+
+  const handlePlannedItem =
+    (label) => {
+      window.alert(
+        `${label} is part of the approved CHRIS architecture and will be activated during its implementation stage.`
+      );
+    };
 
   return (
     <aside
       style={{
-        width: "270px",
+        width: "276px",
+        minWidth: "276px",
         height: "100vh",
-        minHeight: "100vh",
-        background: "#0B5E3B",
-        color: "#FFFFFF",
 
         display: "flex",
-        flexDirection: "column",
-        flexShrink: 0,
+        flexDirection:
+          "column",
+
+        background:
+          "#0B5E3B",
+
+        color:
+          "#FFFFFF",
 
         boxShadow:
-          "4px 0 15px rgba(0,0,0,.12)",
+          "4px 0 16px rgba(15,23,42,0.15)",
 
-        overflow: "hidden",
-        boxSizing: "border-box",
+        overflow:
+          "hidden",
+
+        boxSizing:
+          "border-box",
+
+        position:
+          "relative",
+
+        zIndex: 30,
       }}
     >
-      {/* LOGO AREA */}
+      {/* LOGO */}
+
       <div
         style={{
           flexShrink: 0,
+
+          borderBottom:
+            "1px solid rgba(255,255,255,0.10)",
         }}
       >
         <Logo />
       </div>
 
-      {/* MAIN NAVIGATION */}
+      {/* MODULE NAVIGATION */}
+
       <nav
         style={{
           flex: 1,
+          minHeight: 0,
 
-          overflowY: "auto",
-          overflowX: "hidden",
+          overflowY:
+            "auto",
 
-          paddingTop: "14px",
-          paddingBottom: "10px",
+          overflowX:
+            "hidden",
 
-          scrollbarWidth: "thin",
+          padding:
+            "12px 8px 22px",
+
+          scrollbarWidth:
+            "thin",
+
+          scrollbarColor:
+            "rgba(255,255,255,.30) transparent",
         }}
       >
-        {visibleMenuItems.map((item) => (
-          <NavLink
-            key={item.text}
-            to={item.path}
-            style={({ isActive }) => ({
-              ...menuStyle,
+        <div
+          style={{
+            padding:
+              "5px 12px 9px",
 
-              background: isActive
-                ? "#14824F"
-                : "transparent",
+            color:
+              "#91B7A4",
 
-              color: isActive
-                ? "#FFFFFF"
-                : "#D9E6DF",
-            })}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background =
-                "#14824F";
+            fontSize:
+              "9px",
 
-              event.currentTarget.style.color =
-                "#FFFFFF";
-            }}
-            onMouseLeave={(event) => {
-              const currentPath =
-                window.location.pathname;
+            fontWeight:
+              "900",
 
-              const isCurrentPage =
-                item.path === "/"
-                  ? currentPath === "/"
-                  : currentPath.startsWith(
-                      item.path
-                    );
+            textTransform:
+              "uppercase",
 
-              if (!isCurrentPage) {
-                event.currentTarget.style.background =
-                  "transparent";
+            letterSpacing:
+              "0.12em",
+          }}
+        >
+          Main Menu
+        </div>
 
-                event.currentTarget.style.color =
-                  "#D9E6DF";
-              }
-            }}
-          >
-            <span
-              style={{
-                width: "22px",
-                minWidth: "22px",
+        {visibleGroups.map(
+          (group) => {
+            if (!group.children) {
+              return (
+                <NavLink
+                  key={
+                    group.id
+                  }
 
-                display: "flex",
-                justifyContent: "center",
+                  to={
+                    group.path
+                  }
 
-                fontSize: "17px",
-              }}
-            >
-              {item.icon}
-            </span>
+                  end={
+                    group.exact
+                  }
 
-            <span>
-              {item.text}
-            </span>
-          </NavLink>
-        ))}
+                  style={({
+                    isActive,
+                  }) => ({
+                    ...mainItemStyle,
+
+                    background:
+                      isActive
+                        ? "#14824F"
+                        : "transparent",
+
+                    color:
+                      isActive
+                        ? "#FFFFFF"
+                        : "#D7E8DF",
+
+                    borderLeft:
+                      isActive
+                        ? "3px solid #D4AF37"
+                        : "3px solid transparent",
+                  })}
+                >
+                  <span
+                    style={
+                      iconStyle
+                    }
+                  >
+                    {group.icon}
+                  </span>
+
+                  <span
+                    style={{
+                      flex: 1,
+                    }}
+                  >
+                    {group.label}
+                  </span>
+                </NavLink>
+              );
+            }
+
+            const isOpen =
+              Boolean(
+                openGroups[
+                  group.id
+                ]
+              );
+
+            const groupActive =
+              group.children.some(
+                (child) =>
+                  child.path &&
+                  (
+                    location.pathname ===
+                      child.path ||
+                    (
+                      child.path !==
+                        "/" &&
+                      location.pathname.startsWith(
+                        `${child.path}/`
+                      )
+                    )
+                  )
+              );
+
+            return (
+              <div
+                key={
+                  group.id
+                }
+                style={{
+                  marginBottom:
+                    "2px",
+                }}
+              >
+                <button
+                  type="button"
+
+                  onClick={() =>
+                    toggleGroup(
+                      group.id
+                    )
+                  }
+
+                  style={{
+                    ...groupButtonStyle,
+
+                    background:
+                      groupActive
+                        ? "rgba(20,130,79,0.72)"
+                        : "transparent",
+
+                    color:
+                      groupActive
+                        ? "#FFFFFF"
+                        : "#D7E8DF",
+
+                    borderLeft:
+                      groupActive
+                        ? "3px solid #D4AF37"
+                        : "3px solid transparent",
+                  }}
+                >
+                  <span
+                    style={
+                      iconStyle
+                    }
+                  >
+                    {group.icon}
+                  </span>
+
+                  <span
+                    style={{
+                      flex: 1,
+
+                      textAlign:
+                        "left",
+                    }}
+                  >
+                    {group.label}
+                  </span>
+
+                  <span
+                    style={{
+                      fontSize:
+                        "10px",
+
+                      opacity:
+                        0.9,
+                    }}
+                  >
+                    {isOpen
+                      ? <FaChevronDown />
+                      : <FaChevronRight />}
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div
+                    style={{
+                      margin:
+                        "2px 0 5px 39px",
+
+                      paddingLeft:
+                        "8px",
+
+                      borderLeft:
+                        "1px solid rgba(255,255,255,0.14)",
+                    }}
+                  >
+                    {group.children.map(
+                      (
+                        child,
+                        index
+                      ) => {
+                        if (
+                          child.planned
+                        ) {
+                          return (
+                            <button
+                              key={`${group.id}-${index}`}
+
+                              type="button"
+
+                              onClick={() =>
+                                handlePlannedItem(
+                                  child.label
+                                )
+                              }
+
+                              style={
+                                plannedChildStyle
+                              }
+                            >
+                              <span
+                                style={
+                                  childDotStyle
+                                }
+                              />
+
+                              <span
+                                style={{
+                                  flex: 1,
+
+                                  textAlign:
+                                    "left",
+                                }}
+                              >
+                                {child.label}
+                              </span>
+
+                              <span
+                                style={{
+                                  color:
+                                    "#91B7A4",
+
+                                  fontSize:
+                                    "8px",
+
+                                  fontWeight:
+                                    "800",
+
+                                  textTransform:
+                                    "uppercase",
+                                }}
+                              >
+                                planned
+                              </span>
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <NavLink
+                            key={`${group.id}-${index}`}
+
+                            to={
+                              child.path
+                            }
+
+                            end={
+                              child.path ===
+                              "/"
+                            }
+
+                            style={({
+                              isActive,
+                            }) => ({
+                              ...childLinkStyle,
+
+                              background:
+                                isActive
+                                  ? "rgba(255,255,255,0.10)"
+                                  : "transparent",
+
+                              color:
+                                isActive
+                                  ? "#FFFFFF"
+                                  : "#BFD5CA",
+
+                              fontWeight:
+                                isActive
+                                  ? "800"
+                                  : "500",
+                            })}
+                          >
+                            {({
+                              isActive,
+                            }) => (
+                              <>
+                                <span
+                                  style={{
+                                    ...childDotStyle,
+
+                                    background:
+                                      isActive
+                                        ? "#D4AF37"
+                                        : "rgba(255,255,255,0.35)",
+                                  }}
+                                />
+
+                                <span>
+                                  {child.label}
+                                </span>
+                              </>
+                            )}
+                          </NavLink>
+                        );
+                      }
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          }
+        )}
       </nav>
 
-      {/* BOTTOM ACTIONS */}
+      {/* BOTTOM */}
+
       <div
         style={{
           flexShrink: 0,
 
           borderTop:
-            "1px solid rgba(255,255,255,.10)",
+            "1px solid rgba(255,255,255,0.10)",
 
-          padding: "10px 0 14px",
+          padding:
+            "9px 8px 12px",
 
-          background: "#0B5E3B",
+          background:
+            "#094F33",
         }}
       >
-        {/* SETTINGS */}
-        {canViewSettings && (
-          <NavLink
-            to="/settings"
-            style={({ isActive }) => ({
-              ...menuStyle,
-
-              background: isActive
-                ? "#14824F"
-                : "transparent",
-
-              color: isActive
-                ? "#FFFFFF"
-                : "#D9E6DF",
-            })}
-            onMouseEnter={(event) => {
-              event.currentTarget.style.background =
-                "#14824F";
-
-              event.currentTarget.style.color =
-                "#FFFFFF";
-            }}
-            onMouseLeave={(event) => {
-              if (
-                window.location.pathname !==
-                "/settings"
-              ) {
-                event.currentTarget.style.background =
-                  "transparent";
-
-                event.currentTarget.style.color =
-                  "#D9E6DF";
-              }
-            }}
-          >
-            <span
-              style={{
-                width: "22px",
-                minWidth: "22px",
-
-                display: "flex",
-                justifyContent: "center",
-
-                fontSize: "17px",
-              }}
-            >
-              <FaCog />
-            </span>
-
-            <span>
-              Settings
-            </span>
-          </NavLink>
-        )}
-
-        {/* LOGOUT */}
         <button
           type="button"
-          onClick={handleLogout}
-          style={{
-            ...menuStyle,
 
-            width:
-              "calc(100% - 20px)",
+          onClick={
+            handleLogout
+          }
 
-            border: "none",
-
-            background:
-              "transparent",
-
-            textAlign: "left",
-
-            cursor: "pointer",
-
-            fontFamily: "inherit",
-          }}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.background =
-              "#A93226";
-
-            event.currentTarget.style.color =
-              "#FFFFFF";
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.background =
-              "transparent";
-
-            event.currentTarget.style.color =
-              "#D9E6DF";
-          }}
+          style={
+            logoutButtonStyle
+          }
         >
           <span
-            style={{
-              width: "22px",
-              minWidth: "22px",
-
-              display: "flex",
-              justifyContent: "center",
-
-              fontSize: "17px",
-            }}
+            style={
+              iconStyle
+            }
           >
             <FaSignOutAlt />
           </span>
@@ -380,5 +1616,205 @@ function Sidebar() {
     </aside>
   );
 }
+
+const mainItemStyle = {
+  minHeight: "44px",
+
+  display: "flex",
+  alignItems: "center",
+
+  gap: "11px",
+
+  margin: "2px 0",
+
+  padding:
+    "9px 11px",
+
+  borderRadius:
+    "7px",
+
+  textDecoration:
+    "none",
+
+  fontSize: "12px",
+
+  fontWeight:
+    "700",
+
+  boxSizing:
+    "border-box",
+};
+
+const groupButtonStyle = {
+  width: "100%",
+
+  minHeight: "44px",
+
+  display: "flex",
+  alignItems: "center",
+
+  gap: "11px",
+
+  margin: "2px 0",
+
+  padding:
+    "9px 11px",
+
+  border:
+    "none",
+
+  borderRadius:
+    "7px",
+
+  fontFamily:
+    "inherit",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "700",
+
+  cursor:
+    "pointer",
+
+  boxSizing:
+    "border-box",
+};
+
+const childLinkStyle = {
+  minHeight:
+    "34px",
+
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  gap:
+    "8px",
+
+  padding:
+    "6px 9px",
+
+  borderRadius:
+    "6px",
+
+  textDecoration:
+    "none",
+
+  fontSize:
+    "11px",
+
+  boxSizing:
+    "border-box",
+};
+
+const plannedChildStyle = {
+  width: "100%",
+
+  minHeight:
+    "34px",
+
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  gap:
+    "8px",
+
+  padding:
+    "6px 9px",
+
+  border:
+    "none",
+
+  borderRadius:
+    "6px",
+
+  background:
+    "transparent",
+
+  color:
+    "#A9C6B7",
+
+  fontFamily:
+    "inherit",
+
+  fontSize:
+    "11px",
+
+  cursor:
+    "pointer",
+
+  boxSizing:
+    "border-box",
+};
+
+const childDotStyle = {
+  width: "5px",
+  height: "5px",
+
+  minWidth: "5px",
+
+  borderRadius:
+    "50%",
+
+  background:
+    "rgba(255,255,255,0.35)",
+};
+
+const iconStyle = {
+  width: "20px",
+  minWidth: "20px",
+
+  display: "flex",
+
+  justifyContent:
+    "center",
+
+  fontSize: "14px",
+};
+
+const logoutButtonStyle = {
+  width: "100%",
+
+  minHeight: "42px",
+
+  display: "flex",
+
+  alignItems:
+    "center",
+
+  gap: "11px",
+
+  padding:
+    "9px 11px",
+
+  border: "none",
+
+  borderRadius:
+    "7px",
+
+  background:
+    "transparent",
+
+  color: "#F5D8D5",
+
+  fontFamily:
+    "inherit",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "700",
+
+  cursor:
+    "pointer",
+};
 
 export default Sidebar;

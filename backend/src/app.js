@@ -9,8 +9,52 @@ const locationRoutes = require("./routes/locationRoutes");
 
 const app = express();
 
+/*
+============================================================
+CORE MIDDLEWARE
+============================================================
+*/
+
 app.use(cors());
+
 app.use(express.json());
+
+/*
+============================================================
+SECURITY / CACHE POLICY
+============================================================
+
+CHRIS contains sensitive HR information.
+
+Authenticated API responses must not be stored in browser,
+proxy or intermediary HTTP caches.
+
+This does not replace authentication or authorization.
+It complements them.
+============================================================
+*/
+
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/api/")
+  ) {
+    res.set({
+      "Cache-Control":
+        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+
+      Pragma:
+        "no-cache",
+
+      Expires:
+        "0",
+
+      "Surrogate-Control":
+        "no-store",
+    });
+  }
+
+  next();
+});
 
 /*
 ============================================================
@@ -22,7 +66,8 @@ app.get(
   "/health",
   (req, res) => {
     res.status(200).json({
-      status: "success",
+      status:
+        "success",
 
       message:
         "CHRIS API is running",
