@@ -22,3 +22,32 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ============================================================
+# CHRIS LOCAL DEVELOPMENT ARTIFACTS
+# ============================================================
+
+# Local installer / helper scripts
+/install-*.ps1
+/complete-*.ps1
+/backend/prisma/install-*.ps1
+
+# Local source backups
+*.before-*.jsx
+*.before-*.js
+*.before-*.prisma
+
+# Temporary source snapshots
+*-LATEST.txt
+*-current.txt
+
+# Local exported source snapshots
+EmployeeProfile-*.txt
+EmployeeTable-*.txt
+employeeRoutes-*.txt
+schema-*.txt
+App-*.txt
+Sidebar-*.txt
+Settings-*.txt
+Designations-*.txt
+
