@@ -120,7 +120,7 @@ function Designations() {
     careerTrack: "",
     careerLevel: "",
     reportsToDesignationId: "",
-    isActive: true,
+
   });
 
 
@@ -339,22 +339,25 @@ function Designations() {
     );
 
 
+  /*
+  ============================================================
+  DEPARTMENT-LOCKED CHRIS TEMPLATE
+  ============================================================
+
+  The professional CHRIS template for a department must always
+  match that department.
+
+  Example:
+  Finance -> Finance template
+  Audit -> Audit template
+
+  Administrators can still customize the resulting positions,
+  but cannot accidentally apply another department's template.
+  ============================================================
+  */
+
   const activeTemplate =
-    useMemo(
-      () =>
-        careerTemplates.find(
-          (template) =>
-            template.key ===
-            selectedTemplateKey
-        ) ||
-        recommendedTemplate ||
-        null,
-      [
-        careerTemplates,
-        selectedTemplateKey,
-        recommendedTemplate,
-      ]
-    );
+    recommendedTemplate;
 
   const recommendedDepartmentTemplates =
     useMemo(
@@ -1169,11 +1172,7 @@ Existing compatible designations will be reused and the recommended career level
         reportsToDesignationId:
           designation.reportsToDesignationId ||
           "",
-
-        isActive:
-          designation.isActive !==
-          false,
-      });
+});
     };
 
 
@@ -1185,7 +1184,7 @@ Existing compatible designations will be reused and the recommended career level
         careerTrack: "",
         careerLevel: "",
         reportsToDesignationId: "",
-        isActive: true,
+
       });
     };
 
@@ -1258,10 +1257,7 @@ Existing compatible designations will be reused and the recommended career level
                   reportsToDesignationId:
                     careerForm.reportsToDesignationId ||
                     null,
-
-                  isActive:
-                    careerForm.isActive,
-                }),
+}),
             }
           );
 
@@ -1837,10 +1833,10 @@ Unmapping will be blocked if current employees or reporting positions still depe
 
               <select
                 value={
-                  selectedTemplateKey ||
                   recommendedTemplate?.key ||
                   ""
                 }
+                disabled
                 onChange={(
                   event
                 ) =>
@@ -2757,41 +2753,12 @@ Unmapping will be blocked if current employees or reporting positions still depe
                                 cellStyle
                               }
                             >
-                              {isEditing ? (
-                                <label
-                                  style={
-                                    checkboxStyle
-                                  }
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={
-                                      careerForm.isActive
+                              {
+                                      designation.isActive !==
+                                      false
+                                        ? "Active"
+                                        : "Inactive"
                                     }
-                                    onChange={(
-                                      event
-                                    ) =>
-                                      setCareerForm(
-                                        (
-                                          current
-                                        ) => ({
-                                          ...current,
-
-                                          isActive:
-                                            event.target.checked,
-                                        })
-                                      )
-                                    }
-                                  />
-
-                                  Active
-                                </label>
-                              ) : (
-                                designation.isActive !==
-                                false
-                                  ? "Active"
-                                  : "Inactive"
-                              )}
                             </td>
 
                             <td

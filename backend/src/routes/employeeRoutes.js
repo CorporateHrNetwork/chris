@@ -3166,7 +3166,79 @@ router.post(
       }
 
 
-      /*
+            /*
+      ==========================================================
+      TEMPLATE / DEPARTMENT INTEGRITY GUARD
+      ==========================================================
+
+      A CHRIS professional career template may only be applied
+      to its matching organizational department.
+
+      This prevents accidental combinations such as:
+      Finance template -> Audit department.
+
+      Client customization remains possible after the matching
+      template has been applied.
+      ==========================================================
+      */
+
+      const normalizeStructureIdentifier =
+        (value) =>
+          String(
+            value || ""
+          )
+            .trim()
+            .toLowerCase();
+
+
+      const templateDepartmentIdentifiers =
+        [
+          template.name,
+          template.code,
+          ...(template.aliases || []),
+        ]
+          .filter(Boolean)
+          .map(
+            normalizeStructureIdentifier
+          );
+
+
+      const selectedDepartmentIdentifiers =
+        [
+          department.name,
+          department.code,
+        ]
+          .filter(Boolean)
+          .map(
+            normalizeStructureIdentifier
+          );
+
+
+      const templateMatchesDepartment =
+        selectedDepartmentIdentifiers.some(
+          (identifier) =>
+            templateDepartmentIdentifiers.includes(
+              identifier
+            )
+        );
+
+
+      if (
+        !templateMatchesDepartment
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "CHRIS_TEMPLATE_DEPARTMENT_MISMATCH",
+
+          message:
+            `The ${template.name} career structure cannot be applied to ${department.name}. Select the CHRIS template recommended for this department.`,
+        });
+      }
+
+/*
       ==========================================================
       LOAD ORGANIZATION DESIGNATIONS
       ==========================================================
@@ -3652,7 +3724,43 @@ router.patch(
       } = req.body || {};
 
 
-      /*
+            /*
+      ==========================================================
+      DESIGNATION STATUS PROTECTION
+      ==========================================================
+
+      Active / Inactive is a designation lifecycle state.
+
+      It must not be changed while editing:
+      - career track
+      - career level
+      - reporting position
+      - department career configuration
+
+      A dedicated Activate / Deactivate workflow will control
+      lifecycle status separately.
+      ==========================================================
+      */
+
+      if (
+        Object.prototype.hasOwnProperty.call(
+          req.body || {},
+          "isActive"
+        )
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_STATUS_REQUIRES_LIFECYCLE_ACTION",
+
+          message:
+            "Designation Active / Inactive status cannot be changed from career configuration.",
+        });
+      }
+
+/*
       ----------------------------------------------------------
       VALIDATE TRACK
       ----------------------------------------------------------
@@ -4315,7 +4423,7 @@ router.get(
 
 /*
 ============================================================
-PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â CAREER PROGRESSION
+PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â CAREER PROGRESSION
 Permission: employees.update
 ============================================================
 
