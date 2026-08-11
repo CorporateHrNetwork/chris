@@ -6,6 +6,7 @@ const employeeRoutes = require("./routes/employeeRoutes");
 const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
 const locationRoutes = require("./routes/locationRoutes");
+const locationCatalogRoutes = require("./routes/locationCatalogRoutes");
 
 const app = express();
 
@@ -22,15 +23,6 @@ app.use(express.json());
 /*
 ============================================================
 SECURITY / CACHE POLICY
-============================================================
-
-CHRIS contains sensitive HR information.
-
-Authenticated API responses must not be stored in browser,
-proxy or intermediary HTTP caches.
-
-This does not replace authentication or authorization.
-It complements them.
 ============================================================
 */
 
@@ -104,9 +96,25 @@ app.use(
   roleRoutes
 );
 
+/*
+Administrative organization-location management.
+*/
+
 app.use(
   "/api/locations",
   locationRoutes
+);
+
+/*
+Read-only operational location catalogue.
+
+Used by Employee Directory, Transfers, Attendance,
+Leave, Payroll, Reports and other operational modules.
+*/
+
+app.use(
+  "/api/location-catalog",
+  locationCatalogRoutes
 );
 
 module.exports = app;

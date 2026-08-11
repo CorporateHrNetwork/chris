@@ -1,4 +1,4 @@
-import {
+﻿import {
   useCallback,
   useEffect,
   useMemo,
@@ -15,6 +15,7 @@ import {
   FaUserSlash,
   FaSignOutAlt,
   FaUndo,
+  FaMapMarkerAlt,
 } from "react-icons/fa";
 
 import {
@@ -42,6 +43,11 @@ function EmployeeTable() {
   ] = useState([]);
 
   const [
+    organizationLocations,
+    setOrganizationLocations,
+  ] = useState([]);
+
+  const [
     search,
     setSearch,
   ] = useState("");
@@ -49,6 +55,11 @@ function EmployeeTable() {
   const [
     department,
     setDepartment,
+  ] = useState("All");
+
+  const [
+    locationFilter,
+    setLocationFilter,
   ] = useState("All");
 
   const [
@@ -97,6 +108,41 @@ function EmployeeTable() {
 
   /*
   ============================================================
+  REINSTATE FORM STATE
+  ============================================================
+  */
+
+  const [
+    reinstateEmployee,
+    setReinstateEmployee,
+  ] = useState(null);
+
+  const [
+    reinstateStatus,
+    setReinstateStatus,
+  ] = useState("ACTIVE");
+
+  const [
+    reinstateEffectiveDate,
+    setReinstateEffectiveDate,
+  ] = useState(
+    new Date()
+      .toISOString()
+      .slice(0, 10)
+  );
+
+  const [
+    reinstateReason,
+    setReinstateReason,
+  ] = useState("");
+
+  const [
+    reinstateNotes,
+    setReinstateNotes,
+  ] = useState("");
+
+  /*
+  ============================================================
   LOAD EMPLOYEES
   ============================================================
   */
@@ -142,6 +188,11 @@ function EmployeeTable() {
                     ?.name ||
                   "-",
 
+                locationId:
+                  employee.location
+                    ?.id ||
+                  null,
+
                 location:
                   employee.location
                     ?.name ||
@@ -150,6 +201,11 @@ function EmployeeTable() {
                 locationCode:
                   employee.location
                     ?.code ||
+                  "",
+
+                locationType:
+                  employee.location
+                    ?.type ||
                   "",
 
                 email:
@@ -209,29 +265,121 @@ function EmployeeTable() {
 
   /*
   ============================================================
-  FILTERS
+  LOAD ORGANIZATION LOCATION CATALOGUE
   ============================================================
   */
 
-  const departments = [
-    "All",
-    ...new Set(
-      employees.map(
-        (employee) =>
-          employee.department
-      )
-    ),
-  ];
+  const fetchOrganizationLocations =
+    useCallback(
+      async () => {
+        try {
+          const result =
+            await apiRequest(
+              "/api/location-catalog"
+            );
 
-  const statuses = [
-    "All",
-    ...new Set(
-      employees.map(
-        (employee) =>
-          employee.status
-      )
-    ),
-  ];
+          setOrganizationLocations(
+            result.data || []
+          );
+        } catch (err) {
+          console.error(
+            "CHRIS location catalogue error:",
+            err
+          );
+
+          setError(
+            err.message ||
+              "CHRIS could not load organization locations."
+          );
+        }
+      },
+      []
+    );
+
+  useEffect(() => {
+    fetchOrganizationLocations();
+  }, [fetchOrganizationLocations]);
+
+  /*
+  ============================================================
+  FILTER OPTIONS
+  ============================================================
+  */
+
+  const departments =
+    useMemo(
+      () => [
+        "All",
+        ...Array.from(
+          new Set(
+            employees
+              .map(
+                (employee) =>
+                  employee.department
+              )
+              .filter(Boolean)
+          )
+        ).sort(),
+      ],
+      [employees]
+    );
+
+  const locations =
+    useMemo(
+      () => [
+        {
+          id: "All",
+          name: "All Locations",
+          code: "",
+          employeeCount:
+            employees.length,
+        },
+
+        ...organizationLocations.map(
+          (location) => ({
+            id:
+              location.id,
+
+            name:
+              location.name,
+
+            code:
+              location.code,
+
+            employeeCount:
+              location.employeeCount || 0,
+          })
+        ),
+      ],
+      [
+        organizationLocations,
+        employees.length,
+      ]
+    );
+
+  const statuses =
+    useMemo(
+      () => [
+        "All",
+        ...Array.from(
+          new Set(
+            employees
+              .map(
+                (employee) =>
+                  employee.status
+              )
+              .filter(Boolean)
+          )
+        ).sort(),
+      ],
+      [employees]
+    );
+
+  /*
+  ============================================================
+  FILTERED EMPLOYEES
+  ============================================================
+  */
 
   const filteredEmployees =
     useMemo(() => {
@@ -243,6 +391,7 @@ function EmployeeTable() {
               .trim();
 
           const searchMatch =
+            !searchTerm ||
             employee.name
               .toLowerCase()
               .includes(
@@ -267,6 +416,11 @@ function EmployeeTable() {
               .toLowerCase()
               .includes(
                 searchTerm
+              ) ||
+            employee.email
+              .toLowerCase()
+              .includes(
+                searchTerm
               );
 
           const departmentMatch =
@@ -274,6 +428,12 @@ function EmployeeTable() {
               "All" ||
             employee.department ===
               department;
+
+          const locationMatch =
+            locationFilter ===
+              "All" ||
+            employee.locationId ===
+              locationFilter;
 
           const statusMatch =
             status ===
@@ -284,6 +444,7 @@ function EmployeeTable() {
           return (
             searchMatch &&
             departmentMatch &&
+            locationMatch &&
             statusMatch
           );
         }
@@ -292,8 +453,32 @@ function EmployeeTable() {
       employees,
       search,
       department,
+      locationFilter,
       status,
     ]);
+
+  /*
+  ============================================================
+  LOCATION COUNTS
+  ============================================================
+  */
+
+  const selectedLocation =
+    locations.find(
+      (location) =>
+        location.id ===
+        locationFilter
+    );
+
+  const currentLocationCount =
+    locationFilter ===
+    "All"
+      ? employees.length
+      : employees.filter(
+          (employee) =>
+            employee.locationId ===
+            locationFilter
+        ).length;
 
   /*
   ============================================================
@@ -562,117 +747,503 @@ function EmployeeTable() {
       }
     };
 
+  /*
+  ============================================================
+  OPEN REINSTATE FORM
+  ============================================================
+  */
+
+  const openReinstateForm =
+    (employee) => {
+      /*
+      Exit and Reinstate forms should not be open
+      simultaneously.
+      */
+
+      setExitEmployee(
+        null
+      );
+
+      setReinstateEmployee(
+        employee
+      );
+
+      setReinstateStatus(
+        "ACTIVE"
+      );
+
+      setReinstateEffectiveDate(
+        new Date()
+          .toISOString()
+          .slice(0, 10)
+      );
+
+      setReinstateReason(
+        ""
+      );
+
+      setReinstateNotes(
+        ""
+      );
+
+      setError("");
+      setSuccess("");
+    };
+
+  /*
+  ============================================================
+  PROCESS REINSTATEMENT
+  ============================================================
+  */
+
+  const handleReinstate =
+    async (event) => {
+      event.preventDefault();
+
+      if (
+        !reinstateEmployee
+      ) {
+        return;
+      }
+
+      if (
+        !reinstateEffectiveDate
+      ) {
+        setError(
+          "Reinstatement effective date is required."
+        );
+
+        return;
+      }
+
+      try {
+        setActionEmployeeNumber(
+          reinstateEmployee.id
+        );
+
+        setError("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/${reinstateEmployee.id}/reinstate`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  status:
+                    reinstateStatus,
+
+                  effectiveDate:
+                    reinstateEffectiveDate,
+
+                  reason:
+                    reinstateReason
+                      .trim(),
+
+                  notes:
+                    reinstateNotes
+                      .trim(),
+                }),
+            }
+          );
+
+        setReinstateEmployee(
+          null
+        );
+
+        setReinstateReason(
+          ""
+        );
+
+        setReinstateNotes(
+          ""
+        );
+
+        showSuccess(
+          result.message
+        );
+
+        await fetchEmployees();
+      } catch (
+        requestError
+      ) {
+        setError(
+          requestError.message ||
+            "Unable to reinstate employee."
+        );
+      } finally {
+        setActionEmployeeNumber(
+          null
+        );
+      }
+    };
+
   return (
     <div>
       {/* FILTERS */}
 
       <div
-        style={{
-          display:
-            "flex",
-
-          gap:
-            "15px",
-
-          marginBottom:
-            "25px",
-
-          flexWrap:
-            "wrap",
-        }}
+        style={
+          filtersPanelStyle
+        }
       >
-        <input
-          type="text"
+        <div
+          style={{
+            flex:
+              "1 1 280px",
+          }}
+        >
+          <FilterLabel>
+            Search
+          </FilterLabel>
 
-          placeholder="Search employees, locations..."
+          <input
+            type="text"
 
-          value={
-            search
-          }
+            placeholder="Search employee, ID, branch, department..."
 
-          onChange={(
-            event
-          ) =>
-            setSearch(
-              event.target
-                .value
-            )
-          }
+            value={
+              search
+            }
 
+            onChange={(
+              event
+            ) =>
+              setSearch(
+                event.target
+                  .value
+              )
+            }
+
+            style={{
+              ...inputStyle,
+
+              width:
+                "100%",
+
+              boxSizing:
+                "border-box",
+            }}
+          />
+        </div>
+
+        <div
           style={
-            inputStyle
-          }
-        />
-
-        <select
-          value={
-            department
-          }
-
-          onChange={(
-            event
-          ) =>
-            setDepartment(
-              event.target
-                .value
-            )
-          }
-
-          style={
-            inputStyle
+            filterFieldStyle
           }
         >
-          {departments.map(
-            (dept) => (
-              <option
-                key={
-                  dept
-                }
+          <FilterLabel>
+            Location / Branch
+          </FilterLabel>
 
-                value={
-                  dept
-                }
-              >
-                {dept}
-              </option>
-            )
-          )}
-        </select>
+          <div
+            style={{
+              position:
+                "relative",
+            }}
+          >
+            <FaMapMarkerAlt
+              style={{
+                position:
+                  "absolute",
 
-        <select
-          value={
-            status
-          }
+                left:
+                  "12px",
 
-          onChange={(
-            event
-          ) =>
-            setStatus(
-              event.target
-                .value
-            )
-          }
+                top:
+                  "50%",
 
+                transform:
+                  "translateY(-50%)",
+
+                color:
+                  "#0B5E3B",
+
+                pointerEvents:
+                  "none",
+              }}
+            />
+
+            <select
+              value={
+                locationFilter
+              }
+
+              onChange={(
+                event
+              ) =>
+                setLocationFilter(
+                  event.target
+                    .value
+                )
+              }
+
+              style={{
+                ...inputStyle,
+
+                width:
+                  "100%",
+
+                paddingLeft:
+                  "34px",
+
+                boxSizing:
+                  "border-box",
+
+                fontWeight:
+                  "700",
+
+                color:
+                  "#0B5E3B",
+              }}
+            >
+              {locations.map(
+                (location) => (
+                  <option
+                    key={
+                      location.id
+                    }
+
+                    value={
+                      location.id
+                    }
+                  >
+                    {location.name}
+                    {location.id !==
+                    "All"
+                      ? ` (${location.employeeCount})`
+                      : ""}
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+        </div>
+
+        <div
           style={
-            inputStyle
+            filterFieldStyle
           }
         >
-          {statuses.map(
-            (item) => (
-              <option
-                key={
-                  item
-                }
+          <FilterLabel>
+            Department
+          </FilterLabel>
 
-                value={
-                  item
-                }
-              >
-                {item}
-              </option>
-            )
-          )}
-        </select>
+          <select
+            value={
+              department
+            }
+
+            onChange={(
+              event
+            ) =>
+              setDepartment(
+                event.target
+                  .value
+              )
+            }
+
+            style={{
+              ...inputStyle,
+
+              width:
+                "100%",
+
+              boxSizing:
+                "border-box",
+            }}
+          >
+            {departments.map(
+              (dept) => (
+                <option
+                  key={
+                    dept
+                  }
+
+                  value={
+                    dept
+                  }
+                >
+                  {dept ===
+                  "All"
+                    ? "All Departments"
+                    : dept}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+
+        <div
+          style={
+            filterFieldStyle
+          }
+        >
+          <FilterLabel>
+            Status
+          </FilterLabel>
+
+          <select
+            value={
+              status
+            }
+
+            onChange={(
+              event
+            ) =>
+              setStatus(
+                event.target
+                  .value
+              )
+            }
+
+            style={{
+              ...inputStyle,
+
+              width:
+                "100%",
+
+              boxSizing:
+                "border-box",
+            }}
+          >
+            {statuses.map(
+              (item) => (
+                <option
+                  key={
+                    item
+                  }
+
+                  value={
+                    item
+                  }
+                >
+                  {item ===
+                  "All"
+                    ? "All Statuses"
+                    : item}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+      </div>
+
+      {/* CURRENT LOCATION SUMMARY */}
+
+      <div
+        style={
+          locationSummaryStyle
+        }
+      >
+        <div
+          style={{
+            display:
+              "flex",
+
+            alignItems:
+              "center",
+
+            gap:
+              "9px",
+          }}
+        >
+          <div
+            style={
+              locationIconStyle
+            }
+          >
+            <FaMapMarkerAlt />
+          </div>
+
+          <div>
+            <div
+              style={{
+                color:
+                  "#64748B",
+
+                fontSize:
+                  "10px",
+
+                fontWeight:
+                  "800",
+
+                textTransform:
+                  "uppercase",
+
+                letterSpacing:
+                  "0.04em",
+              }}
+            >
+              Viewing Location
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "2px",
+
+                color:
+                  "#0B5E3B",
+
+                fontSize:
+                  "15px",
+
+                fontWeight:
+                  "800",
+              }}
+            >
+              {selectedLocation
+                ?.name ||
+                "All Locations"}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            textAlign:
+              "right",
+          }}
+        >
+          <div
+            style={{
+              color:
+                "#0B5E3B",
+
+              fontSize:
+                "22px",
+
+              fontWeight:
+                "800",
+            }}
+          >
+            {
+              currentLocationCount
+            }
+          </div>
+
+          <div
+            style={{
+              color:
+                "#64748B",
+
+              fontSize:
+                "10px",
+
+              fontWeight:
+                "700",
+            }}
+          >
+            employee
+            {currentLocationCount ===
+            1
+              ? ""
+              : "s"}
+          </div>
+        </div>
       </div>
 
       {/* SUCCESS */}
@@ -683,7 +1254,7 @@ function EmployeeTable() {
             successStyle
           }
         >
-          ✓ {success}
+          âœ“ {success}
         </div>
       )}
 
@@ -736,7 +1307,7 @@ function EmployeeTable() {
                   "13px",
               }}
             >
-              {exitEmployee.name} ·{" "}
+              {exitEmployee.name} Â·{" "}
               {exitEmployee.id}
             </div>
           </div>
@@ -747,9 +1318,9 @@ function EmployeeTable() {
             }
           >
             <label>
-              <FieldLabel>
+              <FilterLabel>
                 Exit Type
-              </FieldLabel>
+              </FilterLabel>
 
               <select
                 value={
@@ -784,9 +1355,9 @@ function EmployeeTable() {
             </label>
 
             <label>
-              <FieldLabel>
+              <FilterLabel>
                 Exit Date
-              </FieldLabel>
+              </FilterLabel>
 
               <input
                 type="date"
@@ -850,6 +1421,270 @@ function EmployeeTable() {
               }
             >
               Confirm Exit
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* REINSTATE FORM */}
+
+      {reinstateEmployee && (
+        <form
+          onSubmit={
+            handleReinstate
+          }
+
+          style={
+            reinstateFormStyle
+          }
+        >
+          <div>
+            <h3
+              style={{
+                margin:
+                  "0 0 5px",
+
+                color:
+                  "#047857",
+
+                fontSize:
+                  "18px",
+              }}
+            >
+              Reinstate Employee
+            </h3>
+
+            <div
+              style={{
+                color:
+                  "#64748B",
+
+                fontSize:
+                  "13px",
+              }}
+            >
+              {reinstateEmployee.name} Â·{" "}
+              {reinstateEmployee.id}
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "7px",
+
+                color:
+                  "#64748B",
+
+                fontSize:
+                  "12px",
+
+                lineHeight:
+                  "1.5",
+              }}
+            >
+              Current status:{" "}
+              <strong>
+                {reinstateEmployee.status}
+              </strong>
+              . Reinstatement clears the employee's exit date
+              and restores the same employment relationship.
+            </div>
+          </div>
+
+          <div
+            style={
+              reinstateGridStyle
+            }
+          >
+            <label>
+              <FilterLabel>
+                Restored Status
+              </FilterLabel>
+
+              <select
+                value={
+                  reinstateStatus
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setReinstateStatus(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              >
+                <option value="ACTIVE">
+                  Active
+                </option>
+
+                <option value="PROBATION">
+                  Probation
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <FilterLabel>
+                Effective Date
+              </FilterLabel>
+
+              <input
+                type="date"
+
+                value={
+                  reinstateEffectiveDate
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setReinstateEffectiveDate(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              />
+            </label>
+
+            <label>
+              <FilterLabel>
+                Reason
+              </FilterLabel>
+
+              <input
+                type="text"
+
+                placeholder="e.g. Exit entered in error"
+
+                value={
+                  reinstateReason
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setReinstateReason(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              />
+            </label>
+          </div>
+
+          <div
+            style={{
+              marginTop:
+                "15px",
+            }}
+          >
+            <FilterLabel>
+              Notes
+            </FilterLabel>
+
+            <textarea
+              value={
+                reinstateNotes
+              }
+
+              onChange={(
+                event
+              ) =>
+                setReinstateNotes(
+                  event.target
+                    .value
+                )
+              }
+
+              placeholder="Optional HR notes concerning the reinstatement..."
+
+              rows={3}
+
+              style={
+                reinstateTextareaStyle
+              }
+            />
+          </div>
+
+          <div
+            style={{
+              display:
+                "flex",
+
+              justifyContent:
+                "flex-end",
+
+              gap:
+                "10px",
+
+              marginTop:
+                "16px",
+            }}
+          >
+            <button
+              type="button"
+
+              onClick={() =>
+                setReinstateEmployee(
+                  null
+                )
+              }
+
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+
+              disabled={
+                actionEmployeeNumber ===
+                reinstateEmployee.id
+              }
+
+              style={
+                confirmReinstateButtonStyle
+              }
+            >
+              {actionEmployeeNumber ===
+              reinstateEmployee.id
+                ? "Reinstating..."
+                : "Confirm Reinstate"}
             </button>
           </div>
         </form>
@@ -933,7 +1768,7 @@ function EmployeeTable() {
                     1
                       ? "s"
                       : ""
-                  }`}
+                  } matching current filters`}
             </p>
           </div>
         </div>
@@ -1068,6 +1903,15 @@ function EmployeeTable() {
                         <td style={td}>
                           <div
                             style={{
+                              display:
+                                "flex",
+
+                              alignItems:
+                                "center",
+
+                              gap:
+                                "6px",
+
                               fontWeight:
                                 "700",
 
@@ -1075,7 +1919,14 @@ function EmployeeTable() {
                                 "#334155",
                             }}
                           >
-                            {employee.location}
+                            <FaMapMarkerAlt
+                              size={11}
+                              color="#0B5E3B"
+                            />
+
+                            {
+                              employee.location
+                            }
                           </div>
 
                           {employee.locationCode && (
@@ -1084,6 +1935,9 @@ function EmployeeTable() {
                                 marginTop:
                                   "3px",
 
+                                marginLeft:
+                                  "17px",
+
                                 fontSize:
                                   "10px",
 
@@ -1091,7 +1945,9 @@ function EmployeeTable() {
                                   "#94A3B8",
                               }}
                             >
-                              {employee.locationCode}
+                              {
+                                employee.locationCode
+                              }
                             </div>
                           )}
                         </td>
@@ -1221,6 +2077,30 @@ function EmployeeTable() {
                                   Reactivate
                                 </button>
                               )}
+
+                            {canUpdateEmployees &&
+                              exited && (
+                                <button
+                                  type="button"
+
+                                  disabled={
+                                    updating
+                                  }
+
+                                  onClick={() =>
+                                    openReinstateForm(
+                                      employee
+                                    )
+                                  }
+
+                                  style={
+                                    reinstateButtonStyle
+                                  }
+                                >
+                                  <FaUndo />
+                                  Reinstate
+                                </button>
+                              )}
                           </div>
                         </td>
                       </tr>
@@ -1236,7 +2116,7 @@ function EmployeeTable() {
                       emptyCellStyle
                     }
                   >
-                    No employees found matching your search or filters.
+                    No employees found for the selected location or filters.
                   </td>
                 </tr>
               )}
@@ -1248,7 +2128,7 @@ function EmployeeTable() {
   );
 }
 
-function FieldLabel({
+function FilterLabel({
   children,
 }) {
   return (
@@ -1258,13 +2138,19 @@ function FieldLabel({
           "6px",
 
         color:
-          "#334155",
+          "#475569",
 
         fontSize:
-          "12px",
+          "10px",
 
         fontWeight:
           "800",
+
+        textTransform:
+          "uppercase",
+
+        letterSpacing:
+          "0.04em",
       }}
     >
       {children}
@@ -1360,6 +2246,23 @@ function StatusBadge({
       "#B91C1C";
   }
 
+  if (
+    [
+      "Terminated",
+      "Resigned",
+      "Retired",
+      "Inactive",
+    ].includes(
+      status
+    )
+  ) {
+    background =
+      "#F1F5F9";
+
+    color =
+      "#475569";
+  }
+
   return (
     <span
       style={{
@@ -1391,18 +2294,58 @@ function StatusBadge({
   );
 }
 
-const inputStyle = {
-  padding:
-    "12px 14px",
+const filtersPanelStyle = {
+  display:
+    "flex",
 
-  borderRadius:
-    "10px",
+  alignItems:
+    "flex-end",
+
+  gap:
+    "14px",
+
+  flexWrap:
+    "wrap",
+
+  marginBottom:
+    "14px",
+
+  padding:
+    "16px",
+
+  background:
+    "#FFFFFF",
 
   border:
-    "1px solid #D1D5DB",
+    "1px solid #E5E7EB",
+
+  borderRadius:
+    "14px",
+
+  boxShadow:
+    "0 5px 18px rgba(15,23,42,0.04)",
+};
+
+const filterFieldStyle = {
+  flex:
+    "1 1 190px",
 
   minWidth:
-    "220px",
+    "180px",
+};
+
+const inputStyle = {
+  padding:
+    "11px 13px",
+
+  borderRadius:
+    "9px",
+
+  border:
+    "1px solid #CBD5E1",
+
+  minWidth:
+    "180px",
 
   background:
     "#FFFFFF",
@@ -1411,10 +2354,68 @@ const inputStyle = {
     "#0F172A",
 
   fontSize:
-    "14px",
+    "13px",
 
   outline:
     "none",
+};
+
+const locationSummaryStyle = {
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  justifyContent:
+    "space-between",
+
+  gap:
+    "15px",
+
+  marginBottom:
+    "18px",
+
+  padding:
+    "13px 16px",
+
+  background:
+    "#F0FDF4",
+
+  border:
+    "1px solid #BBF7D0",
+
+  borderRadius:
+    "12px",
+};
+
+const locationIconStyle = {
+  width:
+    "34px",
+
+  height:
+    "34px",
+
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  justifyContent:
+    "center",
+
+  borderRadius:
+    "9px",
+
+  background:
+    "#FFFFFF",
+
+  color:
+    "#0B5E3B",
+
+  border:
+    "1px solid #D1FAE5",
 };
 
 const th = {
@@ -1563,6 +2564,114 @@ const reactivateButtonStyle = {
 
   color:
     "#047857",
+};
+
+const reinstateButtonStyle = {
+  ...baseActionButton,
+
+  border:
+    "1px solid #86EFAC",
+
+  background:
+    "#F0FDF4",
+
+  color:
+    "#047857",
+};
+
+const reinstateFormStyle = {
+  marginBottom:
+    "22px",
+
+  padding:
+    "20px",
+
+  background:
+    "#FFFFFF",
+
+  border:
+    "1px solid #A7F3D0",
+
+  borderRadius:
+    "14px",
+
+  boxShadow:
+    "0 7px 22px rgba(15,23,42,0.05)",
+};
+
+const reinstateGridStyle = {
+  display:
+    "grid",
+
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(220px, 1fr))",
+
+  gap:
+    "15px",
+
+  marginTop:
+    "16px",
+};
+
+const reinstateTextareaStyle = {
+  width:
+    "100%",
+
+  boxSizing:
+    "border-box",
+
+  resize:
+    "vertical",
+
+  minHeight:
+    "82px",
+
+  padding:
+    "11px 13px",
+
+  border:
+    "1px solid #CBD5E1",
+
+  borderRadius:
+    "9px",
+
+  background:
+    "#FFFFFF",
+
+  color:
+    "#0F172A",
+
+  fontFamily:
+    "inherit",
+
+  fontSize:
+    "13px",
+
+  outline:
+    "none",
+};
+
+const confirmReinstateButtonStyle = {
+  padding:
+    "10px 14px",
+
+  border:
+    "none",
+
+  borderRadius:
+    "8px",
+
+  background:
+    "#047857",
+
+  color:
+    "#FFFFFF",
+
+  fontWeight:
+    "800",
+
+  cursor:
+    "pointer",
 };
 
 const exitFormStyle = {

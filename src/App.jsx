@@ -45,9 +45,7 @@ function PermissionLayout({
   return (
     <ProtectedLayout>
       <PermissionRoute
-        permission={
-          permission
-        }
+        permission={permission}
       >
         {children}
       </PermissionRoute>
@@ -59,7 +57,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC */}
+        {/* PUBLIC AUTHENTICATION */}
 
         <Route
           path="/login"
@@ -229,7 +227,7 @@ function App() {
           }
         />
 
-        {/* UNKNOWN */}
+        {/* UNKNOWN ROUTES */}
 
         <Route
           path="*"

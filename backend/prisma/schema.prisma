@@ -22,12 +22,13 @@ model Organization {
 
   status OrganizationStatus @default(ACTIVE)
 
-  users        User[]
-  roles        Role[]
-  departments  Department[]
-  designations Designation[]
-  employees    Employee[]
-  locations    OrganizationLocation[]
+  users                   User[]
+  roles                   Role[]
+  departments             Department[]
+  designations            Designation[]
+  employees               Employee[]
+  locations               OrganizationLocation[]
+  employeeLifecycleEvents EmployeeLifecycleEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -60,6 +61,9 @@ model OrganizationLocation {
   employees     Employee[]
   userLocations UserLocation[]
 
+  lifecycleEventsFrom EmployeeLifecycleEvent[] @relation("LifecycleFromLocation")
+  lifecycleEventsTo   EmployeeLifecycleEvent[] @relation("LifecycleToLocation")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -82,14 +86,15 @@ model User {
   lastName       String?
   isActive       Boolean @default(true)
 
-  /**
-   * WHAT the user may do is controlled by Roles/Permissions.
-   * WHERE the user may do it is controlled here.
-   * ALL_LOCATIONS:
-   * Organization-wide access.
-   * ASSIGNED_LOCATIONS:
-   * Access only to locations linked through UserLocation.
-   */
+  // WHAT the user may do is controlled by Roles/Permissions.
+  // WHERE the user may do it is controlled here.
+  //
+  // ALL_LOCATIONS:
+  // Organization-wide access.
+  //
+  // ASSIGNED_LOCATIONS:
+  // Access only to locations linked through UserLocation.
+
   locationScope UserLocationScope @default(ALL_LOCATIONS)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -98,6 +103,8 @@ model User {
   userRoles           UserRole[]
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
+
+  performedLifecycleEvents EmployeeLifecycleEvent[] @relation("LifecyclePerformedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -116,11 +123,12 @@ model UserLocation {
   userId         String
   locationId     String
 
-  /**
-   * Composite relationships provide database-level tenant safety.
-   * The user and assigned location must carry the same
-   * organizationId.
-   */
+  // Composite relationships provide database-level
+  // tenant safety.
+  //
+  // User and assigned location must belong to the
+  // same organization.
+
   user     User                 @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
   location OrganizationLocation @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
 
@@ -211,11 +219,15 @@ model Department {
 
   employees Employee[]
 
+  previousDepartmentEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDepartment")
+  newDepartmentEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDepartment")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, name])
   @@unique([organizationId, code])
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@map("departments")
 }
@@ -228,16 +240,48 @@ model Designation {
   description    String?
   isActive       Boolean @default(true)
 
+  // Career hierarchy configuration.
+  //
+  // careerTrack groups related jobs into a progression path,
+  // for example: HUMAN_RESOURCES, FINANCE, OPERATIONS.
+  //
+  // careerLevel is an ascending numeric level. A designation
+  // with a higher number is above one with a lower number.
+  // Null means the designation has not yet been mapped into
+  // a formal career hierarchy.
+
+  careerTrack String?
+  careerLevel Int?
+
+  // Optional immediate next / supervisory designation in the
+  // career structure. CHRIS will not rely on this field alone
+  // for promotion eligibility; careerLevel remains the primary
+  // ordering mechanism.
+
+  reportsToDesignationId String?
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   employees Employee[]
+
+  reportsToDesignation Designation? @relation("DesignationCareerHierarchy", fields: [organizationId, reportsToDesignationId], references: [organizationId, id], onDelete: Restrict)
+
+  subordinateDesignations Designation[] @relation("DesignationCareerHierarchy")
+
+  previousDesignationEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDesignation")
+  newDesignationEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDesignation")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, name])
   @@unique([organizationId, code])
+  @@unique([organizationId, id])
   @@index([organizationId])
+  @@index([careerTrack])
+  @@index([careerLevel])
+  @@index([reportsToDesignationId])
+  @@index([organizationId, careerTrack, careerLevel])
   @@map("designations")
 }
 
@@ -266,27 +310,121 @@ model Employee {
   department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   designation  Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
 
-  /**
-   * Tenant-safe composite relationship.
-   * organizationId on Employee must match organizationId on
-   * OrganizationLocation.
-   * Location records with historical employees should be
-   * deactivated rather than deleted.
-   */
+  // Tenant-safe composite relationship.
+  //
+  // organizationId on Employee must match organizationId
+  // on OrganizationLocation.
+  //
+  // Locations with historical employee records should
+  // normally be deactivated rather than deleted.
+
   location OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
 
   user User?
+
+  lifecycleEvents EmployeeLifecycleEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, employeeNumber])
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([departmentId])
   @@index([designationId])
   @@index([locationId])
   @@index([status])
   @@map("employees")
+}
+
+model EmployeeLifecycleEvent {
+  id String @id @default(uuid())
+
+  organizationId String
+  employeeId     String
+
+  eventType EmployeeLifecycleEventType
+
+  // Effective date of the HR event.
+  //
+  // This may differ from createdAt.
+  // createdAt records when the transaction was entered
+  // into CHRIS.
+
+  effectiveDate DateTime
+
+  // Status change information.
+
+  previousStatus EmployeeStatus?
+  newStatus      EmployeeStatus?
+
+  // Location movement information.
+  //
+  // These fields allow the same history table to record
+  // Head Office → Lagos → Port Harcourt transfers.
+
+  fromLocationId String?
+  toLocationId   String?
+
+  // Department / job movement information.
+  //
+  // These fields preserve structured department changes for
+  // promotions and future job-movement transactions.
+
+  previousDepartmentId String?
+  newDepartmentId      String?
+
+  // Designation / job-title movement information.
+
+  previousDesignationId String?
+  newDesignationId      String?
+
+  // HR explanation / supporting information.
+
+  reason String?
+  notes  String?
+
+  // User who performed the transaction.
+  //
+  // User.id is globally unique, therefore this relation
+  // does not need to include organizationId in the foreign
+  // key. The lifecycle event itself remains organization-
+  // scoped through organizationId.
+
+  performedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  employee Employee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+
+  fromLocation OrganizationLocation? @relation("LifecycleFromLocation", fields: [organizationId, fromLocationId], references: [organizationId, id], onDelete: Restrict)
+
+  toLocation OrganizationLocation? @relation("LifecycleToLocation", fields: [organizationId, toLocationId], references: [organizationId, id], onDelete: Restrict)
+
+  previousDepartment Department? @relation("LifecyclePreviousDepartment", fields: [organizationId, previousDepartmentId], references: [organizationId, id], onDelete: Restrict)
+
+  newDepartment Department? @relation("LifecycleNewDepartment", fields: [organizationId, newDepartmentId], references: [organizationId, id], onDelete: Restrict)
+
+  previousDesignation Designation? @relation("LifecyclePreviousDesignation", fields: [organizationId, previousDesignationId], references: [organizationId, id], onDelete: Restrict)
+
+  newDesignation Designation? @relation("LifecycleNewDesignation", fields: [organizationId, newDesignationId], references: [organizationId, id], onDelete: Restrict)
+
+  performedBy User? @relation("LifecyclePerformedBy", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([eventType])
+  @@index([effectiveDate])
+  @@index([fromLocationId])
+  @@index([toLocationId])
+  @@index([previousDepartmentId])
+  @@index([newDepartmentId])
+  @@index([previousDesignationId])
+  @@index([newDesignationId])
+  @@index([performedByUserId])
+  @@map("employee_lifecycle_events")
 }
 
 model PasswordResetToken {
@@ -320,6 +458,19 @@ enum EmployeeStatus {
   RESIGNED
   RETIRED
   INACTIVE
+}
+
+enum EmployeeLifecycleEventType {
+  JOINED
+  CONFIRMED
+  TRANSFERRED
+  PROMOTED
+  SUSPENDED
+  REACTIVATED
+  DEACTIVATED
+  EXITED
+  REINSTATED
+  REHIRED
 }
 
 enum LocationType {

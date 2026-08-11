@@ -7,7 +7,6 @@ import {
 import {
   NavLink,
   useLocation,
-  useNavigate,
 } from "react-router-dom";
 
 import Logo from "../Logo/Logo";
@@ -26,14 +25,10 @@ import {
   FaSignOutAlt,
   FaChevronDown,
   FaChevronRight,
-  FaBuilding,
   FaGift,
-  FaHeartbeat,
   FaFolderOpen,
   FaLaptop,
-  FaProjectDiagram,
   FaClipboardCheck,
-  FaUserTie,
   FaMoneyBillWave,
   FaShieldAlt,
   FaBriefcase,
@@ -51,9 +46,6 @@ function Sidebar() {
   const location =
     useLocation();
 
-  const navigate =
-    useNavigate();
-
   const {
     hasPermission,
     loading:
@@ -67,38 +59,63 @@ function Sidebar() {
 
   /*
   ============================================================
-  MENU BLUEPRINT
+  CHRIS NAVIGATION BLUEPRINT
   ============================================================
 
-  Existing working pages use real routes.
+  Existing implemented modules have active routes.
 
-  Future submodules are shown as planned navigation items
-  but are not clickable yet.
+  Future modules remain visible as planned items but do not
+  navigate to non-existent routes.
 
-  This allows CHRIS to adopt the complete product structure
-  without breaking unfinished modules.
+  Backend permissions remain the real security boundary.
   ============================================================
   */
 
   const menuGroups =
     useMemo(
       () => [
-        {
-          id: "dashboard",
-          label: "Dashboard",
-          icon:
-            <FaTachometerAlt />,
-          permission:
-            "dashboard.view",
-          path: "/",
-          exact: true,
-        },
+        /*
+        ========================================================
+        DASHBOARD
+        ========================================================
+        */
 
         {
-          id: "employees",
-          label: "Employees",
+          id:
+            "dashboard",
+
+          label:
+            "Dashboard",
+
+          icon:
+            <FaTachometerAlt />,
+
+          permission:
+            "dashboard.view",
+
+          path:
+            "/",
+
+          exact:
+            true,
+        },
+
+        /*
+        ========================================================
+        EMPLOYEES
+        ========================================================
+        */
+
+        {
+          id:
+            "employees",
+
+          label:
+            "Employees",
+
           icon:
             <FaUsers />,
+
           permission:
             "employees.view",
 
@@ -106,53 +123,85 @@ function Sidebar() {
             {
               label:
                 "Employee Directory",
+
               path:
                 "/employees",
             },
+
             {
               label:
                 "Employee Profiles",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Onboarding",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Employee Analytics",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Transfers",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Promotions",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Exits",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Line Managers",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        RECRUITMENT
+        ========================================================
+        */
+
         {
-          id: "recruitment",
+          id:
+            "recruitment",
+
           label:
             "Recruitment",
+
           icon:
             <FaUserPlus />,
+
           permission:
             "recruitment.view",
 
@@ -160,46 +209,74 @@ function Sidebar() {
             {
               label:
                 "Recruitment Dashboard",
+
               path:
                 "/recruitment",
             },
+
             {
               label:
                 "Job Requisitions",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Vacancies",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Candidates",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Interviews",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Offers",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Applicant Tracking System",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Talent Pool",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        TIME & ATTENDANCE
+        ========================================================
+        */
 
         {
           id:
@@ -218,62 +295,101 @@ function Sidebar() {
             {
               label:
                 "Attendance Dashboard",
+
               path:
                 "/attendance",
             },
+
             {
               label:
                 "Attendance Register",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Shifts",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Shift Schedule",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Worked Hours",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Worked Days",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Off Days",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Overtime",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Public Holidays",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Lateness & Absence",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        LEAVE
+        ========================================================
+        */
+
         {
-          id: "leave",
-          label: "Leave",
+          id:
+            "leave",
+
+          label:
+            "Leave",
+
           icon:
             <FaCalendarAlt />,
+
           permission:
             "leave.view",
 
@@ -281,42 +397,69 @@ function Sidebar() {
             {
               label:
                 "Leave Overview",
+
               path:
                 "/leave",
             },
+
             {
               label:
                 "Leave Requests",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Leave Calendar",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Leave Entitlements",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Leave Balances",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Leave Policies",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        PAYROLL
+        ========================================================
+        */
+
         {
-          id: "payroll",
-          label: "Payroll",
+          id:
+            "payroll",
+
+          label:
+            "Payroll",
+
           icon:
             <FaMoneyCheckAlt />,
+
           permission:
             "payroll.view",
 
@@ -324,62 +467,98 @@ function Sidebar() {
             {
               label:
                 "Payroll Dashboard",
+
               path:
                 "/payroll",
             },
+
             {
               label:
                 "Execute Payroll",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Payroll Periods",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Salary Rates",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Allowances",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Deductions",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Payslips",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Loans",
+
               path:
                 "/loans",
             },
+
             {
               label:
                 "Salary Advances",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Paid Leave",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Payroll Approvals",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        COMPENSATION & REWARDS
+        ========================================================
+        */
 
         {
           id:
@@ -391,119 +570,199 @@ function Sidebar() {
           icon:
             <FaMoneyBillWave />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Compensation Dashboard",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Salary Structure",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Grades & Levels",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Salary Bands",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Compensation Reviews",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Salary Adjustments",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Promotions",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Bonuses & Incentives",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Total Rewards",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        BENEFITS
+        ========================================================
+        */
+
         {
-          id: "benefits",
+          id:
+            "benefits",
+
           label:
             "Benefits",
+
           icon:
             <FaGift />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Benefits Overview",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Pension",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Gratuity",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Health Insurance",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Life Insurance",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Medical Benefits",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Housing / Rent",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Transport Benefits",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Meal Benefits",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Other Benefits",
-              planned: true,
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Benefit Enrolments",
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        STATUTORIES
+        ========================================================
+        */
 
         {
           id:
@@ -515,46 +774,81 @@ function Sidebar() {
           icon:
             <FaShieldAlt />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Statutory Dashboard",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "PAYE / Tax",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Pension Compliance",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "NHIA",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "NSITF",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "ITF",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Remittances",
-              planned: true,
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Statutory Reports",
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        PERFORMANCE
+        ========================================================
+        */
 
         {
           id:
@@ -573,43 +867,77 @@ function Sidebar() {
             {
               label:
                 "Performance Dashboard",
+
               path:
                 "/performance",
             },
+
             {
               label:
                 "Goals / KPIs",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Performance Cycles",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Reviews",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Appraisals",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Improvement Plans",
-              planned: true,
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Performance Reports",
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        TRAINING & DEVELOPMENT
+        ========================================================
+        */
+
         {
-          id: "training",
+          id:
+            "training",
+
           label:
             "Training & Development",
+
           icon:
             <FaGraduationCap />,
+
           permission:
             "training.view",
 
@@ -617,77 +945,152 @@ function Sidebar() {
             {
               label:
                 "Training Dashboard",
+
               path:
                 "/training",
             },
+
             {
               label:
                 "Training Programs",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Training Calendar",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Employee Training",
-              planned: true,
+
+              planned:
+                true,
             },
+
+            {
+              label:
+                "Learning Records",
+
+              planned:
+                true,
+            },
+
             {
               label:
                 "Assessments",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Certifications",
-              planned: true,
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Training Reports",
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        ASSETS
+        ========================================================
+        */
+
         {
-          id: "assets",
-          label: "Assets",
+          id:
+            "assets",
+
+          label:
+            "Assets",
+
           icon:
             <FaLaptop />,
-          adminOnly: true,
+
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Asset Register",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Asset Categories",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Asset Assignment",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Asset Transfers",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Asset Returns",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Maintenance",
-              planned: true,
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Asset Reports",
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        DOCUMENTS
+        ========================================================
+        */
 
         {
           id:
@@ -699,48 +1102,84 @@ function Sidebar() {
           icon:
             <FaFolderOpen />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Employee Documents",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "HR Documents",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Company Policies",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Templates",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Document Categories",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Expiry Tracking",
-              planned: true,
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Document Requests",
+
+              planned:
+                true,
             },
           ],
         },
 
+        /*
+        ========================================================
+        REPORTS & ANALYTICS
+        ========================================================
+        */
+
         {
-          id: "reports",
+          id:
+            "reports",
+
           label:
             "Reports & Analytics",
+
           icon:
             <FaFileAlt />,
+
           permission:
             "reports.view",
 
@@ -748,46 +1187,106 @@ function Sidebar() {
             {
               label:
                 "Reports Dashboard",
+
               path:
                 "/reports",
             },
+
             {
               label:
                 "Workforce Analytics",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Employee Reports",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Headcount Reports",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Branch Reports",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
-                "Payroll Reports",
-              planned: true,
+                "Recruitment Reports",
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Attendance Reports",
-              planned: true,
+
+              planned:
+                true,
             },
+
+            {
+              label:
+                "Leave Reports",
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Payroll Reports",
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Compensation Reports",
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Benefits Reports",
+
+              planned:
+                true,
+            },
+
             {
               label:
                 "Custom Reports",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        ORGANIZATION
+        ========================================================
+        */
 
         {
           id:
@@ -799,47 +1298,73 @@ function Sidebar() {
           icon:
             <FaSitemap />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Organization Profile",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Head Office & Branches",
+
               path:
                 "/settings",
             },
+
             {
               label:
                 "Departments",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Designations",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Organization Chart",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Reporting Lines",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Cost Centres",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        WORKFLOWS & APPROVALS
+        ========================================================
+        */
 
         {
           id:
@@ -851,41 +1376,65 @@ function Sidebar() {
           icon:
             <FaClipboardCheck />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Approval Inbox",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "My Requests",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Workflow Templates",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Approval Chains",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Delegations",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Workflow History",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        EMPLOYMENT TYPES
+        ========================================================
+        */
 
         {
           id:
@@ -897,51 +1446,81 @@ function Sidebar() {
           icon:
             <FaBriefcase />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Type Management",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Permanent",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Contract",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Temporary",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Probation",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Intern / Trainee",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Expatriate",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Custom Types",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        SETTINGS
+        ========================================================
+        */
 
         {
           id:
@@ -960,58 +1539,106 @@ function Sidebar() {
             {
               label:
                 "Users & Roles",
+
               path:
                 "/settings",
             },
+
             {
               label:
                 "Roles & Permissions",
+
               path:
                 "/settings",
             },
+
             {
               label:
                 "Location Access",
+
               path:
                 "/settings",
             },
+
             {
               label:
                 "Employee Settings",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Payroll Settings",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Attendance Settings",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Leave Settings",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Benefits Settings",
-              planned: true,
+
+              planned:
+                true,
             },
+
+            {
+              label:
+                "Recruitment Settings",
+
+              planned:
+                true,
+            },
+
+            {
+              label:
+                "Notifications",
+
+              planned:
+                true,
+            },
+
             {
               label:
                 "Security",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "System Settings",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
+
+        /*
+        ========================================================
+        BILLING & SUBSCRIPTION
+        ========================================================
+        */
 
         {
           id:
@@ -1023,38 +1650,56 @@ function Sidebar() {
           icon:
             <FaFileInvoiceDollar />,
 
-          adminOnly: true,
+          adminOnly:
+            true,
 
           children: [
             {
               label:
                 "Current Plan",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Subscription",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Usage",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Billing Details",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Billing History",
-              planned: true,
+
+              planned:
+                true,
             },
+
             {
               label:
                 "Invoices",
-              planned: true,
+
+              planned:
+                true,
             },
           ],
         },
@@ -1074,10 +1719,24 @@ function Sidebar() {
       "settings.view"
     );
 
+  /*
+  Keep the list memoized.
+
+  This is important because Sidebar contains effects that
+  respond to route changes. A stable array prevents needless
+  render churn.
+  */
+
   const visibleGroups =
-    authorizationLoading
-      ? []
-      : menuGroups.filter(
+    useMemo(
+      () => {
+        if (
+          authorizationLoading
+        ) {
+          return [];
+        }
+
+        return menuGroups.filter(
           (group) => {
             if (
               group.adminOnly
@@ -1096,10 +1755,31 @@ function Sidebar() {
             return false;
           }
         );
+      },
+      [
+        authorizationLoading,
+        canViewSettings,
+        hasPermission,
+        menuGroups,
+      ]
+    );
 
   /*
   ============================================================
   AUTO-OPEN ACTIVE GROUP
+  ============================================================
+
+  IMPORTANT FIX:
+
+  Previously the Sidebar updated openGroups on repeated
+  renders, causing:
+
+  "Maximum update depth exceeded"
+
+  Now:
+  - the effect is driven only by pathname
+  - we return the SAME state when the group is already open
+  - no unnecessary state update occurs
   ============================================================
   */
 
@@ -1111,34 +1791,68 @@ function Sidebar() {
       visibleGroups.find(
         (group) =>
           group.children?.some(
-            (child) =>
-              child.path &&
-              (
-                child.path === "/"
-                  ? currentPath ===
-                    "/"
-                  : currentPath ===
-                      child.path ||
-                    currentPath.startsWith(
-                      `${child.path}/`
-                    )
-              )
+            (child) => {
+              if (
+                !child.path
+              ) {
+                return false;
+              }
+
+              if (
+                child.path ===
+                "/"
+              ) {
+                return (
+                  currentPath ===
+                  "/"
+                );
+              }
+
+              return (
+                currentPath ===
+                  child.path ||
+                currentPath.startsWith(
+                  `${child.path}/`
+                )
+              );
+            }
           )
       );
 
-    if (activeGroup) {
-      setOpenGroups(
-        (current) => ({
+    if (
+      !activeGroup
+    ) {
+      return;
+    }
+
+    setOpenGroups(
+      (current) => {
+        /*
+        Already open.
+
+        Return the SAME object.
+        React therefore performs no
+        additional state update.
+        */
+
+        if (
+          current[
+            activeGroup.id
+          ]
+        ) {
+          return current;
+        }
+
+        return {
           ...current,
 
           [activeGroup.id]:
             true,
-        })
-      );
-    }
+        };
+      }
+    );
   }, [
     location.pathname,
-    visibleGroups,
   ]);
 
   /*
@@ -1154,7 +1868,9 @@ function Sidebar() {
           ...current,
 
           [groupId]:
-            !current[groupId],
+            !current[
+              groupId
+            ],
         })
       );
     };
@@ -1187,14 +1903,27 @@ function Sidebar() {
       );
     };
 
+  /*
+  ============================================================
+  RENDER
+  ============================================================
+  */
+
   return (
     <aside
       style={{
-        width: "276px",
-        minWidth: "276px",
-        height: "100vh",
+        width:
+          "276px",
 
-        display: "flex",
+        minWidth:
+          "276px",
+
+        height:
+          "100vh",
+
+        display:
+          "flex",
+
         flexDirection:
           "column",
 
@@ -1216,14 +1945,16 @@ function Sidebar() {
         position:
           "relative",
 
-        zIndex: 30,
+        zIndex:
+          30,
       }}
     >
       {/* LOGO */}
 
       <div
         style={{
-          flexShrink: 0,
+          flexShrink:
+            0,
 
           borderBottom:
             "1px solid rgba(255,255,255,0.10)",
@@ -1232,12 +1963,15 @@ function Sidebar() {
         <Logo />
       </div>
 
-      {/* MODULE NAVIGATION */}
+      {/* NAVIGATION */}
 
       <nav
         style={{
-          flex: 1,
-          minHeight: 0,
+          flex:
+            1,
+
+          minHeight:
+            0,
 
           overflowY:
             "auto",
@@ -1281,7 +2015,15 @@ function Sidebar() {
 
         {visibleGroups.map(
           (group) => {
-            if (!group.children) {
+            /*
+            ====================================================
+            SIMPLE LINK
+            ====================================================
+            */
+
+            if (
+              !group.children
+            ) {
               return (
                 <NavLink
                   key={
@@ -1322,19 +2064,30 @@ function Sidebar() {
                       iconStyle
                     }
                   >
-                    {group.icon}
+                    {
+                      group.icon
+                    }
                   </span>
 
                   <span
                     style={{
-                      flex: 1,
+                      flex:
+                        1,
                     }}
                   >
-                    {group.label}
+                    {
+                      group.label
+                    }
                   </span>
                 </NavLink>
               );
             }
+
+            /*
+            ====================================================
+            EXPANDABLE GROUP
+            ====================================================
+            */
 
             const isOpen =
               Boolean(
@@ -1345,19 +2098,37 @@ function Sidebar() {
 
             const groupActive =
               group.children.some(
-                (child) =>
-                  child.path &&
-                  (
+                (child) => {
+                  if (
+                    !child.path
+                  ) {
+                    return false;
+                  }
+
+                  if (
+                    child.path ===
+                      "/" &&
+                    location.pathname ===
+                      "/"
+                  ) {
+                    return true;
+                  }
+
+                  if (
+                    child.path ===
+                    "/"
+                  ) {
+                    return false;
+                  }
+
+                  return (
                     location.pathname ===
                       child.path ||
-                    (
-                      child.path !==
-                        "/" &&
-                      location.pathname.startsWith(
-                        `${child.path}/`
-                      )
+                    location.pathname.startsWith(
+                      `${child.path}/`
                     )
-                  )
+                  );
+                }
               );
 
             return (
@@ -1365,6 +2136,7 @@ function Sidebar() {
                 key={
                   group.id
                 }
+
                 style={{
                   marginBottom:
                     "2px",
@@ -1403,18 +2175,23 @@ function Sidebar() {
                       iconStyle
                     }
                   >
-                    {group.icon}
+                    {
+                      group.icon
+                    }
                   </span>
 
                   <span
                     style={{
-                      flex: 1,
+                      flex:
+                        1,
 
                       textAlign:
                         "left",
                     }}
                   >
-                    {group.label}
+                    {
+                      group.label
+                    }
                   </span>
 
                   <span
@@ -1426,9 +2203,11 @@ function Sidebar() {
                         0.9,
                     }}
                   >
-                    {isOpen
-                      ? <FaChevronDown />
-                      : <FaChevronRight />}
+                    {isOpen ? (
+                      <FaChevronDown />
+                    ) : (
+                      <FaChevronRight />
+                    )}
                   </span>
                 </button>
 
@@ -1450,6 +2229,12 @@ function Sidebar() {
                         child,
                         index
                       ) => {
+                        /*
+                        ==========================================
+                        PLANNED MODULE
+                        ==========================================
+                        */
+
                         if (
                           child.planned
                         ) {
@@ -1477,13 +2262,16 @@ function Sidebar() {
 
                               <span
                                 style={{
-                                  flex: 1,
+                                  flex:
+                                    1,
 
                                   textAlign:
                                     "left",
                                 }}
                               >
-                                {child.label}
+                                {
+                                  child.label
+                                }
                               </span>
 
                               <span
@@ -1506,6 +2294,12 @@ function Sidebar() {
                             </button>
                           );
                         }
+
+                        /*
+                        ==========================================
+                        ACTIVE ROUTE
+                        ==========================================
+                        */
 
                         return (
                           <NavLink
@@ -1557,7 +2351,9 @@ function Sidebar() {
                                 />
 
                                 <span>
-                                  {child.label}
+                                  {
+                                    child.label
+                                  }
                                 </span>
                               </>
                             )}
@@ -1573,11 +2369,12 @@ function Sidebar() {
         )}
       </nav>
 
-      {/* BOTTOM */}
+      {/* LOGOUT */}
 
       <div
         style={{
-          flexShrink: 0,
+          flexShrink:
+            0,
 
           borderTop:
             "1px solid rgba(255,255,255,0.10)",
@@ -1617,15 +2414,27 @@ function Sidebar() {
   );
 }
 
+/*
+============================================================
+STYLES
+============================================================
+*/
+
 const mainItemStyle = {
-  minHeight: "44px",
+  minHeight:
+    "44px",
 
-  display: "flex",
-  alignItems: "center",
+  display:
+    "flex",
 
-  gap: "11px",
+  alignItems:
+    "center",
 
-  margin: "2px 0",
+  gap:
+    "11px",
+
+  margin:
+    "2px 0",
 
   padding:
     "9px 11px",
@@ -1636,26 +2445,37 @@ const mainItemStyle = {
   textDecoration:
     "none",
 
-  fontSize: "12px",
+  fontSize:
+    "12px",
 
   fontWeight:
     "700",
 
   boxSizing:
     "border-box",
+
+  transition:
+    "background 0.15s ease, color 0.15s ease",
 };
 
 const groupButtonStyle = {
-  width: "100%",
+  width:
+    "100%",
 
-  minHeight: "44px",
+  minHeight:
+    "44px",
 
-  display: "flex",
-  alignItems: "center",
+  display:
+    "flex",
 
-  gap: "11px",
+  alignItems:
+    "center",
 
-  margin: "2px 0",
+  gap:
+    "11px",
+
+  margin:
+    "2px 0",
 
   padding:
     "9px 11px",
@@ -1665,6 +2485,9 @@ const groupButtonStyle = {
 
   borderRadius:
     "7px",
+
+  background:
+    "transparent",
 
   fontFamily:
     "inherit",
@@ -1680,6 +2503,9 @@ const groupButtonStyle = {
 
   boxSizing:
     "border-box",
+
+  transition:
+    "background 0.15s ease, color 0.15s ease",
 };
 
 const childLinkStyle = {
@@ -1709,10 +2535,14 @@ const childLinkStyle = {
 
   boxSizing:
     "border-box",
+
+  transition:
+    "background 0.15s ease, color 0.15s ease",
 };
 
 const plannedChildStyle = {
-  width: "100%",
+  width:
+    "100%",
 
   minHeight:
     "34px",
@@ -1752,13 +2582,20 @@ const plannedChildStyle = {
 
   boxSizing:
     "border-box",
+
+  transition:
+    "background 0.15s ease",
 };
 
 const childDotStyle = {
-  width: "5px",
-  height: "5px",
+  width:
+    "5px",
 
-  minWidth: "5px",
+  height:
+    "5px",
+
+  minWidth:
+    "5px",
 
   borderRadius:
     "50%",
@@ -1768,33 +2605,46 @@ const childDotStyle = {
 };
 
 const iconStyle = {
-  width: "20px",
-  minWidth: "20px",
+  width:
+    "20px",
 
-  display: "flex",
+  minWidth:
+    "20px",
 
-  justifyContent:
-    "center",
-
-  fontSize: "14px",
-};
-
-const logoutButtonStyle = {
-  width: "100%",
-
-  minHeight: "42px",
-
-  display: "flex",
+  display:
+    "flex",
 
   alignItems:
     "center",
 
-  gap: "11px",
+  justifyContent:
+    "center",
+
+  fontSize:
+    "14px",
+};
+
+const logoutButtonStyle = {
+  width:
+    "100%",
+
+  minHeight:
+    "42px",
+
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  gap:
+    "11px",
 
   padding:
     "9px 11px",
 
-  border: "none",
+  border:
+    "none",
 
   borderRadius:
     "7px",
@@ -1802,7 +2652,8 @@ const logoutButtonStyle = {
   background:
     "transparent",
 
-  color: "#F5D8D5",
+  color:
+    "#F5D8D5",
 
   fontFamily:
     "inherit",
