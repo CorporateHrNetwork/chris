@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useState,
@@ -1330,8 +1330,8 @@ function Sidebar() {
               label:
                 "Designations",
 
-              planned:
-                true,
+              path:
+                "/designations",
             },
 
             {

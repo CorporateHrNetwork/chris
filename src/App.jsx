@@ -1,4 +1,4 @@
-import {
+﻿import {
   BrowserRouter,
   Routes,
   Route,
@@ -25,6 +25,7 @@ import Performance from "./pages/Performance";
 import Training from "./pages/Training";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Designations from "./pages/Designations";
 
 function ProtectedLayout({
   children,
@@ -227,6 +228,18 @@ function App() {
           }
         />
 
+        {/* DESIGNATIONS & CAREER STRUCTURE */}
+
+        <Route
+          path="/designations"
+          element={
+            <PermissionLayout
+              permission="settings.view"
+            >
+              <Designations />
+            </PermissionLayout>
+          }
+        />
         {/* UNKNOWN ROUTES */}
 
         <Route

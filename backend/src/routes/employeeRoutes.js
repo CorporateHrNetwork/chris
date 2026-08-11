@@ -1,4 +1,8 @@
-﻿const express = require("express");
+const {
+  CAREER_STRUCTURE_TEMPLATES,
+  getCareerStructureTemplate,
+} = require("../config/careerStructureTemplates");
+const express = require("express");
 const prisma = require("../config/prisma");
 
 const {
@@ -1649,6 +1653,1848 @@ Rules:
 
 /*
 ============================================================
+ORGANIZATION DEPARTMENT CATALOG
+Permission: employees.view
+============================================================
+
+Tenant scoped through req.auth.organizationId.
+
+GET /api/employees/career/departments
+============================================================
+*/
+
+router.get(
+  "/career/departments",
+  requirePermission(
+    "employees.view"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const departments =
+        await prisma.department.findMany({
+          where: {
+            organizationId,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            isActive: true,
+
+            _count: {
+              select: {
+                designations:
+                  true,
+
+                employees:
+                  true,
+              },
+            },
+          },
+
+          orderBy: [
+            {
+              isActive:
+                "desc",
+            },
+            {
+              name:
+                "asc",
+            },
+          ],
+        });
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        results:
+          departments.length,
+
+        data:
+          departments,
+      });
+    } catch (error) {
+      console.error(
+        "Department catalog fetch error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to load the organization department catalog.",
+      });
+    }
+  }
+);
+
+
+/*
+============================================================
+CREATE ORGANIZATION DEPARTMENT
+Permission: employees.update
+
+POST /api/employees/career/departments
+============================================================
+*/
+
+router.post(
+  "/career/departments",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        name,
+        code,
+        description,
+      } = req.body || {};
+
+      const normalizedName =
+        String(
+          name || ""
+        ).trim();
+
+      const normalizedCode =
+        String(
+          code || ""
+        ).trim() ||
+        null;
+
+      const normalizedDescription =
+        String(
+          description || ""
+        ).trim() ||
+        null;
+
+
+      if (
+        !normalizedName
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Department name is required.",
+        });
+      }
+
+
+      const existingDepartment =
+        await prisma.department.findFirst({
+          where: {
+            organizationId,
+
+            OR: [
+              {
+                name: {
+                  equals:
+                    normalizedName,
+
+                  mode:
+                    "insensitive",
+                },
+              },
+
+              ...(normalizedCode
+                ? [
+                    {
+                      code: {
+                        equals:
+                          normalizedCode,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          },
+        });
+
+
+      if (
+        existingDepartment
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            "A department with the same name or code already exists.",
+        });
+      }
+
+
+      const department =
+        await prisma.department.create({
+          data: {
+            organizationId,
+
+            name:
+              normalizedName,
+
+            code:
+              normalizedCode,
+
+            description:
+              normalizedDescription,
+
+            isActive:
+              true,
+          },
+        });
+
+
+      return res.status(201).json({
+        status:
+          "success",
+
+        message:
+          "Department created successfully.",
+
+        data:
+          department,
+      });
+    } catch (error) {
+      console.error(
+        "Department creation error:",
+        error
+      );
+
+      if (
+        error.code ===
+        "P2002"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            "The department name or code is already in use.",
+        });
+      }
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to create department.",
+      });
+    }
+  }
+);
+
+
+/*
+============================================================
+UPDATE ORGANIZATION DEPARTMENT
+Permission: employees.update
+
+PATCH /api/employees/career/departments/:departmentId
+============================================================
+*/
+
+router.patch(
+  "/career/departments/:departmentId",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        departmentId,
+      } = req.params;
+
+      const {
+        name,
+        code,
+        description,
+        isActive,
+      } = req.body || {};
+
+
+      const existing =
+        await prisma.department.findFirst({
+          where: {
+            id:
+              departmentId,
+
+            organizationId,
+          },
+        });
+
+
+      if (
+        !existing
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "Department not found.",
+        });
+      }
+
+
+      const normalizedName =
+        name !== undefined
+          ? String(
+              name || ""
+            ).trim()
+          : existing.name;
+
+
+      if (
+        !normalizedName
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Department name is required.",
+        });
+      }
+
+
+      const normalizedCode =
+        code !== undefined
+          ? String(
+              code || ""
+            ).trim() ||
+            null
+          : existing.code;
+
+
+      const normalizedDescription =
+        description !== undefined
+          ? String(
+              description || ""
+            ).trim() ||
+            null
+          : existing.description;
+
+
+      const duplicate =
+        await prisma.department.findFirst({
+          where: {
+            organizationId,
+
+            NOT: {
+              id:
+                existing.id,
+            },
+
+            OR: [
+              {
+                name: {
+                  equals:
+                    normalizedName,
+
+                  mode:
+                    "insensitive",
+                },
+              },
+
+              ...(normalizedCode
+                ? [
+                    {
+                      code: {
+                        equals:
+                          normalizedCode,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          },
+        });
+
+
+      if (
+        duplicate
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            "Another department already uses the submitted name or code.",
+        });
+      }
+
+
+      const department =
+        await prisma.department.update({
+          where: {
+            id:
+              existing.id,
+          },
+
+          data: {
+            name:
+              normalizedName,
+
+            code:
+              normalizedCode,
+
+            description:
+              normalizedDescription,
+
+            isActive:
+              typeof isActive ===
+              "boolean"
+                ? isActive
+                : existing.isActive,
+          },
+        });
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          "Department updated successfully.",
+
+        data:
+          department,
+      });
+    } catch (error) {
+      console.error(
+        "Department update error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to update department.",
+      });
+    }
+  }
+);
+
+
+/*
+============================================================
+CREATE DEPARTMENT DESIGNATION
+Permission: employees.update
+
+POST /api/employees/career/designations
+
+A designation is created inside the authenticated
+organization and linked to one of that organization's
+departments.
+============================================================
+*/
+
+router.post(
+  "/career/designations",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        departmentId,
+        name,
+        code,
+        description,
+      } = req.body || {};
+
+
+      const normalizedDepartmentId =
+        String(
+          departmentId || ""
+        ).trim();
+
+      const normalizedName =
+        String(
+          name || ""
+        ).trim();
+
+      const normalizedCode =
+        String(
+          code || ""
+        ).trim() ||
+        null;
+
+      const normalizedDescription =
+        String(
+          description || ""
+        ).trim() ||
+        null;
+
+
+      if (
+        !normalizedDepartmentId
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Select a department.",
+        });
+      }
+
+
+      if (
+        !normalizedName
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Designation name is required.",
+        });
+      }
+
+
+      const department =
+        await prisma.department.findFirst({
+          where: {
+            id:
+              normalizedDepartmentId,
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+        });
+
+
+      if (
+        !department
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "The selected department is unavailable.",
+        });
+      }
+
+
+      /*
+      Current Prisma schema still has organization-wide
+      designation-name/code uniqueness.
+
+      We intentionally respect it until Employee Create/Edit
+      is converted from free-text upsert to controlled
+      Department -> Designation selection.
+      */
+
+      const duplicate =
+        await prisma.designation.findFirst({
+          where: {
+            organizationId,
+
+            OR: [
+              {
+                name: {
+                  equals:
+                    normalizedName,
+
+                  mode:
+                    "insensitive",
+                },
+              },
+
+              ...(normalizedCode
+                ? [
+                    {
+                      code: {
+                        equals:
+                          normalizedCode,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          },
+        });
+
+
+      if (
+        duplicate
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            "A designation with this name or code already exists in the organization.",
+        });
+      }
+
+
+      const designation =
+        await prisma.designation.create({
+          data: {
+            organizationId,
+
+            departmentId:
+              department.id,
+
+            name:
+              normalizedName,
+
+            code:
+              normalizedCode,
+
+            description:
+              normalizedDescription,
+
+            isActive:
+              true,
+          },
+
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+        });
+
+
+      return res.status(201).json({
+        status:
+          "success",
+
+        message:
+          "Designation created successfully.",
+
+        data:
+          designation,
+      });
+    } catch (error) {
+      console.error(
+        "Designation creation error:",
+        error
+      );
+
+      if (
+        error.code ===
+        "P2002"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            "The designation name or code is already in use.",
+        });
+      }
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to create designation.",
+      });
+    }
+  }
+);
+
+/*
+============================================================
+MAP EXISTING DESIGNATIONS TO DEPARTMENT
+Permission: employees.update
+
+PATCH /api/employees/career/designations/map-department
+
+Expected body:
+
+{
+  "departmentId": "department-id",
+  "designationIds": [
+    "designation-id-1",
+    "designation-id-2"
+  ]
+}
+
+This migration/configuration action:
+
+- remains organization scoped
+- preserves careerTrack
+- preserves careerLevel
+- preserves reportsToDesignationId
+- preserves lifecycle history
+- does not recreate designation records
+============================================================
+*/
+
+router.patch(
+  "/career/designations/map-department",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        departmentId,
+        designationIds,
+      } = req.body || {};
+
+
+      /*
+      ----------------------------------------------------------
+      NORMALIZE INPUT
+      ----------------------------------------------------------
+      */
+
+      const normalizedDepartmentId =
+        String(
+          departmentId || ""
+        ).trim();
+
+
+      const normalizedDesignationIds =
+        Array.from(
+          new Set(
+            (
+              Array.isArray(
+                designationIds
+              )
+                ? designationIds
+                : []
+            )
+              .map(
+                (id) =>
+                  String(
+                    id || ""
+                  ).trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
+
+      if (
+        !normalizedDepartmentId
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Select the department that should own these designations.",
+        });
+      }
+
+
+      if (
+        normalizedDesignationIds.length ===
+        0
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Select at least one existing designation to map.",
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      VALIDATE DEPARTMENT
+      ----------------------------------------------------------
+      */
+
+      const department =
+        await prisma.department.findFirst({
+          where: {
+            id:
+              normalizedDepartmentId,
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        });
+
+
+      if (
+        !department
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "The selected department was not found or is inactive.",
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      LOAD DESIGNATIONS
+      ----------------------------------------------------------
+      */
+
+      const designations =
+        await prisma.designation.findMany({
+          where: {
+            organizationId,
+
+            id: {
+              in:
+                normalizedDesignationIds,
+            },
+          },
+
+          select: {
+            id: true,
+            name: true,
+            departmentId: true,
+            careerTrack: true,
+            careerLevel: true,
+            reportsToDesignationId:
+              true,
+          },
+        });
+
+
+      if (
+        designations.length !==
+        normalizedDesignationIds.length
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "One or more selected designations were not found in this organization.",
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      PROTECT EXISTING DEPARTMENT OWNERSHIP
+      ----------------------------------------------------------
+
+      This mapper is designed primarily for unmapped legacy
+      designations.
+
+      A designation already belonging to ANOTHER department
+      must not silently move through this migration action.
+      ----------------------------------------------------------
+      */
+
+      const conflictingDesignations =
+        designations.filter(
+          (designation) =>
+            designation.departmentId &&
+            designation.departmentId !==
+              department.id
+        );
+
+
+      if (
+        conflictingDesignations.length >
+        0
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            `The following designation(s) already belong to another department: ${conflictingDesignations
+              .map(
+                (designation) =>
+                  designation.name
+              )
+              .join(", ")}.`,
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      MAP TRANSACTIONALLY
+      ----------------------------------------------------------
+      */
+
+      await prisma.$transaction(
+        normalizedDesignationIds.map(
+          (designationId) =>
+            prisma.designation.update({
+              where: {
+                id:
+                  designationId,
+              },
+
+              data: {
+                departmentId:
+                  department.id,
+              },
+            })
+        )
+      );
+
+
+      /*
+      ----------------------------------------------------------
+      RETURN UPDATED RECORDS
+      ----------------------------------------------------------
+      */
+
+      const updatedDesignations =
+        await prisma.designation.findMany({
+          where: {
+            organizationId,
+
+            id: {
+              in:
+                normalizedDesignationIds,
+            },
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            isActive: true,
+            departmentId: true,
+            careerTrack: true,
+            careerLevel: true,
+            reportsToDesignationId:
+              true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
+            reportsToDesignation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                careerTrack: true,
+                careerLevel: true,
+              },
+            },
+          },
+
+          orderBy: [
+            {
+              careerLevel:
+                "asc",
+            },
+
+            {
+              name:
+                "asc",
+            },
+          ],
+        });
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          `${updatedDesignations.length} designation(s) mapped to ${department.name} successfully.`,
+
+        results:
+          updatedDesignations.length,
+
+        department,
+
+        data:
+          updatedDesignations,
+      });
+    } catch (error) {
+      console.error(
+        "Designation department mapping error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to map the selected designations to the department.",
+      });
+    }
+  }
+);
+
+/*
+============================================================
+CONTROLLED DESIGNATION DEPARTMENT UNMAP
+Permission: employees.update
+
+PATCH
+/api/employees/career/designations/:designationId/unmap
+
+Purpose:
+- Remove a designation from its current department.
+- Do NOT delete the designation.
+- Do NOT deactivate the designation.
+- Preserve code, career track, career level and history.
+- Preserve designation ID.
+- Prevent unsafe unmapping while current employees or
+  dependent reporting positions still rely on the designation.
+============================================================
+*/
+
+router.patch(
+  "/career/designations/:designationId/unmap",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        designationId,
+      } = req.params;
+
+
+      /*
+      ----------------------------------------------------------
+      LOAD TENANT-SCOPED DESIGNATION
+      ----------------------------------------------------------
+      */
+
+      const designation =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              designationId,
+
+            organizationId,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            departmentId: true,
+            careerTrack: true,
+            careerLevel: true,
+            reportsToDesignationId:
+              true,
+            isActive: true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+        });
+
+
+      if (
+        !designation
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "Designation not found.",
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      IDEMPOTENT BEHAVIOUR
+      ----------------------------------------------------------
+      */
+
+      if (
+        !designation.departmentId
+      ) {
+        return res.status(200).json({
+          status:
+            "success",
+
+          message:
+            `${designation.name} is already unmapped.`,
+
+          data:
+            designation,
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      CHECK CURRENT EMPLOYEE DEPENDENCIES
+      ----------------------------------------------------------
+
+      EXIT_STATUSES already represents employees who are no
+      longer in active employment for CHRIS lifecycle rules.
+
+      Suspended/current employees still remain organisationally
+      assigned and therefore prevent unmapping.
+      ----------------------------------------------------------
+      */
+
+      const assignedEmployeeCount =
+        await prisma.employee.count({
+          where: {
+            organizationId,
+
+            designationId:
+              designation.id,
+
+            status: {
+              notIn:
+                EXIT_STATUSES,
+            },
+          },
+        });
+
+
+      if (
+        assignedEmployeeCount >
+        0
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_HAS_CURRENT_EMPLOYEES",
+
+          message:
+            `${designation.name} cannot be unmapped because ${assignedEmployeeCount} current employee(s) are assigned to it. Transfer or reassign those employees first.`,
+
+          dependencies: {
+            employees:
+              assignedEmployeeCount,
+          },
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      CHECK REPORTING-HIERARCHY DEPENDENCIES
+      ----------------------------------------------------------
+
+      A position cannot be removed from its department while
+      other designation(s) still report directly to it.
+      ----------------------------------------------------------
+      */
+
+      const dependentDesignations =
+        await prisma.designation.findMany({
+          where: {
+            organizationId,
+
+            reportsToDesignationId:
+              designation.id,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            departmentId: true,
+            careerTrack: true,
+            careerLevel: true,
+          },
+
+          orderBy: {
+            name:
+              "asc",
+          },
+        });
+
+
+      if (
+        dependentDesignations.length >
+        0
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_HAS_REPORTING_DEPENDENCIES",
+
+          message:
+            `${designation.name} cannot be unmapped because ${dependentDesignations.length} designation(s) currently report to it. Update the reporting hierarchy first.`,
+
+          dependencies: {
+            designations:
+              dependentDesignations,
+          },
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      UNMAP ONLY
+      ----------------------------------------------------------
+
+      Intentionally preserved:
+      - designation ID
+      - name
+      - code
+      - isActive
+      - careerTrack
+      - careerLevel
+      - reportsToDesignationId
+      - employee lifecycle history
+
+      Only department ownership is removed.
+      ----------------------------------------------------------
+      */
+
+      const previousDepartment =
+        designation.department;
+
+
+      const updatedDesignation =
+        await prisma.designation.update({
+          where: {
+            id:
+              designation.id,
+          },
+
+          data: {
+            departmentId:
+              null,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            description: true,
+            departmentId: true,
+            careerTrack: true,
+            careerLevel: true,
+            reportsToDesignationId:
+              true,
+            isActive: true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
+            reportsToDesignation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                careerTrack: true,
+                careerLevel: true,
+              },
+            },
+          },
+        });
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          `${designation.name} was unmapped from ${previousDepartment?.name || "its department"} successfully.`,
+
+        previousDepartment,
+
+        data:
+          updatedDesignation,
+      });
+    } catch (error) {
+      console.error(
+        "Designation unmap error:",
+        error
+      );
+
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to unmap the designation.",
+      });
+    }
+  }
+);
+
+/*
+============================================================
+CHRIS CAREER STRUCTURE TEMPLATE LIBRARY
+Permission: employees.view
+
+GET /api/employees/career/templates
+============================================================
+*/
+
+router.get(
+  "/career/templates",
+  requirePermission(
+    "employees.view"
+  ),
+  async (req, res) => {
+    const data =
+      CAREER_STRUCTURE_TEMPLATES.map(
+        (template) => ({
+          key:
+            template.key,
+
+          name:
+            template.name,
+
+          code:
+            template.code,
+
+          aliases:
+            template.aliases,
+
+          careerTrack:
+            template.careerTrack,
+
+          description:
+            template.description,
+
+          positions:
+            template.positions.map(
+              (
+                position,
+                index
+              ) => ({
+                ...position,
+
+                reportsTo:
+                  template.positions[
+                    index + 1
+                  ]?.name ||
+                  null,
+              })
+            ),
+        })
+      );
+
+
+    return res.status(200).json({
+      status:
+        "success",
+
+      results:
+        data.length,
+
+      data,
+    });
+  }
+);
+
+
+/*
+============================================================
+APPLY CHRIS RECOMMENDED CAREER STRUCTURE
+Permission: employees.update
+
+POST /api/employees/career/templates/:templateKey/apply
+
+Body:
+{
+  "departmentId": "department-id"
+}
+
+Important:
+- Template data is copied into the authenticated organization.
+- The template itself is never modified.
+- Existing compatible designations are reused.
+- Existing lifecycle history is preserved.
+============================================================
+*/
+
+router.post(
+  "/career/templates/:templateKey/apply",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        templateKey,
+      } = req.params;
+
+      const {
+        departmentId,
+      } = req.body || {};
+
+
+      const template =
+        getCareerStructureTemplate(
+          templateKey
+        );
+
+
+      if (
+        !template
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "The selected CHRIS career template does not exist.",
+        });
+      }
+
+
+      const normalizedDepartmentId =
+        String(
+          departmentId || ""
+        ).trim();
+
+
+      if (
+        !normalizedDepartmentId
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Select the department that should receive this structure.",
+        });
+      }
+
+
+      const department =
+        await prisma.department.findFirst({
+          where: {
+            id:
+              normalizedDepartmentId,
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+        });
+
+
+      if (
+        !department
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "The selected department was not found or is inactive.",
+        });
+      }
+
+
+      /*
+      ==========================================================
+      LOAD ORGANIZATION DESIGNATIONS
+      ==========================================================
+      */
+
+      const organizationDesignations =
+        await prisma.designation.findMany({
+          where: {
+            organizationId,
+          },
+        });
+
+
+      /*
+      ==========================================================
+      RESOLVE / CREATE POSITIONS
+
+      Existing positions with the same name OR recommended code
+      are reused when they are either:
+      - unmapped, or
+      - already mapped to this department.
+
+      Positions already owned by another department are protected.
+      ==========================================================
+      */
+
+      const resolvedPositions =
+        [];
+
+
+      for (
+        const position of
+        template.positions
+      ) {
+        const normalizedPositionName =
+          position.name.toLowerCase();
+
+        const normalizedPositionCode =
+          String(
+            position.code || ""
+          ).toLowerCase();
+
+
+        const existing =
+          organizationDesignations.find(
+            (designation) => {
+              const sameName =
+                String(
+                  designation.name ||
+                    ""
+                )
+                  .trim()
+                  .toLowerCase() ===
+                normalizedPositionName;
+
+              const sameCode =
+                normalizedPositionCode &&
+                String(
+                  designation.code ||
+                    ""
+                )
+                  .trim()
+                  .toLowerCase() ===
+                  normalizedPositionCode;
+
+              return (
+                sameName ||
+                sameCode
+              );
+            }
+          );
+
+
+        if (
+          existing &&
+          existing.departmentId &&
+          existing.departmentId !==
+            department.id
+        ) {
+          return res.status(409).json({
+            status:
+              "error",
+
+            message:
+              `${existing.name} already belongs to another department and cannot be reassigned automatically.`,
+          });
+        }
+
+
+        if (
+          existing
+        ) {
+          const updated =
+            await prisma.designation.update({
+              where: {
+                id:
+                  existing.id,
+              },
+
+              data: {
+                departmentId:
+                  department.id,
+
+                /*
+                Applying the CHRIS Recommended Structure is an
+                explicit standardization action.
+
+                Existing compatible designation records are reused,
+                but their recommended structural metadata is brought
+                into alignment with the selected CHRIS template.
+
+                The existing designation ID remains unchanged, so
+                employee references and lifecycle history remain intact.
+                */
+
+                code:
+                  position.code,
+
+                careerTrack:
+                  template.careerTrack,
+
+                careerLevel:
+                  position.level,
+
+                isActive:
+                  true,
+              },
+            });
+
+
+          resolvedPositions.push(
+            updated
+          );
+
+          continue;
+        }
+
+
+        const created =
+          await prisma.designation.create({
+            data: {
+              organizationId,
+
+              departmentId:
+                department.id,
+
+              name:
+                position.name,
+
+              code:
+                position.code,
+
+              careerTrack:
+                template.careerTrack,
+
+              careerLevel:
+                position.level,
+
+              isActive:
+                true,
+            },
+          });
+
+
+        resolvedPositions.push(
+          created
+        );
+      }
+
+
+      /*
+      ==========================================================
+      BUILD REPORTING CHAIN
+
+      Each level reports to the next higher level.
+      Top level has no reporting designation.
+      ==========================================================
+      */
+
+      for (
+        let index = 0;
+        index <
+        resolvedPositions.length;
+        index++
+      ) {
+        const current =
+          resolvedPositions[
+            index
+          ];
+
+        const next =
+          resolvedPositions[
+            index + 1
+          ] ||
+          null;
+
+
+        await prisma.designation.update({
+          where: {
+            id:
+              current.id,
+          },
+
+          data: {
+            reportsToDesignationId:
+              next?.id ||
+              null,
+          },
+        });
+      }
+
+
+      const finalDesignations =
+        await prisma.designation.findMany({
+          where: {
+            organizationId,
+
+            departmentId:
+              department.id,
+
+            careerTrack:
+              template.careerTrack,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            departmentId: true,
+            careerTrack: true,
+            careerLevel: true,
+            reportsToDesignationId:
+              true,
+            isActive: true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
+            reportsToDesignation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                careerLevel: true,
+              },
+            },
+          },
+
+          orderBy: {
+            careerLevel:
+              "asc",
+          },
+        });
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          `CHRIS recommended ${template.name} career structure applied successfully.`,
+
+        template: {
+          key:
+            template.key,
+
+          name:
+            template.name,
+
+          careerTrack:
+            template.careerTrack,
+        },
+
+        department: {
+          id:
+            department.id,
+
+          name:
+            department.name,
+
+          code:
+            department.code,
+        },
+
+        results:
+          finalDesignations.length,
+
+        data:
+          finalDesignations,
+      });
+    } catch (error) {
+      console.error(
+        "Career template application error:",
+        error
+      );
+
+      if (
+        error.code ===
+        "P2002"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          message:
+            "A recommended designation name or code conflicts with an existing organization record.",
+        });
+      }
+
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to apply the CHRIS recommended career structure.",
+      });
+    }
+  }
+);
+
+/*
+============================================================
 DESIGNATION CAREER CATALOG
 Permission: employees.view
 ============================================================
@@ -1678,9 +3524,6 @@ router.get(
         await prisma.designation.findMany({
           where: {
             organizationId,
-
-            isActive:
-              true,
           },
 
           select: {
@@ -1688,6 +3531,20 @@ router.get(
             name: true,
             code: true,
             description: true,
+            isActive: true,
+
+            departmentId:
+              true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                isActive: true,
+              },
+            },
+
             careerTrack: true,
             careerLevel: true,
             reportsToDesignationId:
@@ -1787,9 +3644,11 @@ router.patch(
       } = req.params;
 
       const {
+        departmentId,
         careerTrack,
         careerLevel,
         reportsToDesignationId,
+        isActive,
       } = req.body || {};
 
 
@@ -1870,6 +3729,59 @@ router.patch(
         });
       }
 
+      /*
+      ----------------------------------------------------------
+      VALIDATE DEPARTMENT
+      ----------------------------------------------------------
+      */
+
+      const normalizedDepartmentId =
+        String(
+          departmentId ||
+            designation.departmentId ||
+            ""
+        ).trim();
+
+
+      if (
+        !normalizedDepartmentId
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          message:
+            "Select the department that owns this designation.",
+        });
+      }
+
+
+      const department =
+        await prisma.department.findFirst({
+          where: {
+            id:
+              normalizedDepartmentId,
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+        });
+
+
+      if (
+        !department
+      ) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "The selected department was not found or is inactive.",
+        });
+      }
+
 
       /*
       ----------------------------------------------------------
@@ -1926,6 +3838,20 @@ router.patch(
           });
         }
 
+        if (
+          reportingDesignation.departmentId &&
+          reportingDesignation.departmentId !==
+            normalizedDepartmentId
+        ) {
+          return res.status(400).json({
+            status:
+              "error",
+
+            message:
+              "The reporting designation must belong to the same department.",
+          });
+        }
+
         /*
         Reporting position should normally sit above the current
         position in the same career track when already configured.
@@ -1979,6 +3905,9 @@ router.patch(
           where: {
             organizationId,
 
+            departmentId:
+              normalizedDepartmentId,
+
             careerTrack:
               normalizedCareerTrack,
 
@@ -2022,6 +3951,9 @@ router.patch(
           },
 
           data: {
+            departmentId:
+              normalizedDepartmentId,
+
             careerTrack:
               normalizedCareerTrack,
 
@@ -2030,6 +3962,11 @@ router.patch(
 
             reportsToDesignationId:
               normalizedReportsToId,
+
+            isActive:
+              typeof isActive === "boolean"
+                ? isActive
+                : designation.isActive,
           },
 
           select: {
@@ -2037,6 +3974,18 @@ router.patch(
             name: true,
             code: true,
             isActive: true,
+
+            departmentId:
+              true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
             careerTrack: true,
             careerLevel: true,
             reportsToDesignationId:
@@ -2366,7 +4315,7 @@ router.get(
 
 /*
 ============================================================
-PROMOTE EMPLOYEE â€” CAREER PROGRESSION
+PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â CAREER PROGRESSION
 Permission: employees.update
 ============================================================
 
@@ -3350,6 +5299,7 @@ router.post(
 );
 
 module.exports = router;
+
 
 
 

@@ -217,7 +217,8 @@ model Department {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  employees Employee[]
+  employees    Employee[]
+  designations Designation[]
 
   previousDepartmentEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDepartment")
   newDepartmentEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDepartment")
@@ -235,6 +236,7 @@ model Department {
 model Designation {
   id             String  @id @default(uuid())
   organizationId String
+  departmentId   String?
   name           String
   code           String?
   description    String?
@@ -262,6 +264,16 @@ model Designation {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  // Department ownership of this designation.
+  //
+  // departmentId is nullable during the transition so existing
+  // designation records can be mapped by the organization admin.
+  //
+  // organizationId + departmentId guarantees that a designation
+  // cannot be linked to another tenant's department.
+
+  department Department? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+
   employees Employee[]
 
   reportsToDesignation Designation? @relation("DesignationCareerHierarchy", fields: [organizationId, reportsToDesignationId], references: [organizationId, id], onDelete: Restrict)
@@ -278,6 +290,8 @@ model Designation {
   @@unique([organizationId, code])
   @@unique([organizationId, id])
   @@index([organizationId])
+  @@index([departmentId])
+  @@index([organizationId, departmentId])
   @@index([careerTrack])
   @@index([careerLevel])
   @@index([reportsToDesignationId])
@@ -361,7 +375,7 @@ model EmployeeLifecycleEvent {
   // Location movement information.
   //
   // These fields allow the same history table to record
-  // Head Office → Lagos → Port Harcourt transfers.
+  // Head Office â†’ Lagos â†’ Port Harcourt transfers.
 
   fromLocationId String?
   toLocationId   String?
