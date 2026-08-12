@@ -74,6 +74,55 @@ function Designations() {
     unmappingId,
     setUnmappingId,
   ] = useState("");
+  
+    /*
+  ============================================================
+  CHRIS_DESIGNATION_LIFECYCLE_UI
+  DESIGNATION LIFECYCLE STATE
+  ============================================================
+  */
+  const [
+    lifecycleDesignation,
+    setLifecycleDesignation,
+  ] = useState(null);
+
+  const [
+    lifecycleMode,
+    setLifecycleMode,
+  ] = useState("");
+
+  const [
+    lifecycleReason,
+    setLifecycleReason,
+  ] = useState("");
+  const [
+    lifecycleNotes,
+    setLifecycleNotes,
+  ] = useState("");
+
+  const [
+    lifecycleEffectiveDate,
+    setLifecycleEffectiveDate,
+  ] = useState("");
+
+  const [
+    lifecycleSaving,
+    setLifecycleSaving,
+  ] = useState(false);
+  const [
+    lifecycleActionError,
+    setLifecycleActionError,
+  ] = useState("");
+
+  const [
+    lifecycleHistory,
+    setLifecycleHistory,
+  ] = useState([]);
+
+  const [
+    lifecycleHistoryLoading,
+    setLifecycleHistoryLoading,
+  ] = useState(false);
 
   const [
     error,
@@ -1376,6 +1425,341 @@ Unmapping will be blocked if current employees or reporting positions still depe
           ""
         );
       }
+    };
+
+  /*
+  ============================================================
+  CONTROLLED DESIGNATION LIFECYCLE
+  ============================================================
+  */
+
+  const localDateValue =
+    () => {
+      const now =
+        new Date();
+
+      const local =
+        new Date(
+          now.getTime() -
+            now.getTimezoneOffset() *
+              60000
+        );
+
+      return local
+        .toISOString()
+        .slice(0, 10);
+    };
+
+
+  const resetLifecyclePanel =
+    () => {
+      setLifecycleDesignation(
+        null
+      );
+
+      setLifecycleMode("");
+
+      setLifecycleReason("");
+
+      setLifecycleNotes("");
+
+      setLifecycleEffectiveDate(
+        ""
+      );
+
+      setLifecycleHistory(
+        []
+      );
+
+      setLifecycleActionError(
+        ""
+      );
+    };
+
+
+  const openLifecycleAction =
+    (
+      designation,
+      mode
+    ) => {
+      if (
+        !designation?.id
+      ) {
+        return;
+      }
+
+      setLifecycleDesignation(
+        designation
+      );
+
+      setLifecycleMode(
+        mode
+      );
+
+      setLifecycleReason("");
+
+      setLifecycleNotes("");
+
+      setLifecycleEffectiveDate(
+        localDateValue()
+      );
+
+      setLifecycleHistory(
+        []
+      );
+
+      setError("");
+
+      setSuccess("");
+
+      setLifecycleActionError(
+        ""
+      );
+    };
+
+
+  const loadLifecycleHistory =
+    async (
+      designation
+    ) => {
+      if (
+        !designation?.id
+      ) {
+        return;
+      }
+
+      try {
+        setLifecycleDesignation(
+          designation
+        );
+
+        setLifecycleMode(
+          "history"
+        );
+
+        setLifecycleHistoryLoading(
+          true
+        );
+
+        setLifecycleHistory(
+          []
+        );
+
+        setError("");
+
+        setSuccess("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/career/designations/${encodeURIComponent(
+              designation.id
+            )}/lifecycle`
+          );
+
+        setLifecycleHistory(
+          result.data?.history ||
+            []
+        );
+      } catch (err) {
+        console.error(
+          "Designation lifecycle history error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "Unable to load designation lifecycle history."
+        );
+      } finally {
+        setLifecycleHistoryLoading(
+          false
+        );
+      }
+    };
+
+
+  const submitLifecycleAction =
+    async (
+      event
+    ) => {
+      event.preventDefault();
+
+      if (
+        !lifecycleDesignation?.id
+      ) {
+        return;
+      }
+
+      if (
+        lifecycleMode !==
+          "deactivate" &&
+        lifecycleMode !==
+          "reactivate"
+      ) {
+        return;
+      }
+
+
+      const normalizedReason =
+        lifecycleReason.trim();
+
+
+      if (
+        !normalizedReason
+      ) {
+        setError(
+          "A reason is required."
+        );
+
+        return;
+      }
+
+
+      if (
+        !lifecycleEffectiveDate
+      ) {
+        setError(
+          "Effective date is required."
+        );
+
+        return;
+      }
+
+
+      try {
+        setLifecycleSaving(
+          true
+        );
+
+        setError("");
+
+        setSuccess("");
+
+        setLifecycleActionError(
+          ""
+        );
+
+
+        const action =
+          lifecycleMode ===
+          "deactivate"
+            ? "deactivate"
+            : "reactivate";
+
+
+        const result =
+          await apiRequest(
+            `/api/employees/career/designations/${encodeURIComponent(
+              lifecycleDesignation.id
+            )}/${action}`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  reason:
+                    normalizedReason,
+
+                  notes:
+                    lifecycleNotes.trim() ||
+                    null,
+
+                  effectiveDate:
+                    lifecycleEffectiveDate,
+                }),
+            }
+          );
+
+
+        setSuccess(
+          result.message ||
+            (
+              lifecycleMode ===
+              "deactivate"
+                ? "Designation deactivated successfully."
+                : "Designation reactivated successfully."
+            )
+        );
+
+
+        resetLifecyclePanel();
+
+        await loadData();
+      } catch (err) {
+        console.error(
+          "Designation lifecycle action error:",
+          err
+        );
+
+        const lifecycleMessage =
+          err.message ||
+          (
+            lifecycleMode ===
+            "deactivate"
+              ? "Unable to deactivate the designation."
+              : "Unable to reactivate the designation."
+          );
+
+        setLifecycleActionError(
+          lifecycleMessage
+        );
+
+        setError(
+          lifecycleMessage
+        );
+      } finally {
+        setLifecycleSaving(
+          false
+        );
+      }
+    };
+
+
+  const lifecyclePersonName =
+    (event) => {
+      const name =
+        [
+          event?.performedBy
+            ?.firstName,
+
+          event?.performedBy
+            ?.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+      return (
+        name ||
+        event?.performedBy
+          ?.email ||
+        "-"
+      );
+    };
+
+
+  const lifecycleDateLabel =
+    (value) => {
+      if (!value) {
+        return "-";
+      }
+
+      const date =
+        new Date(
+          value
+        );
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return value;
+      }
+
+      return date
+        .toLocaleDateString();
     };
 
   /*
@@ -2831,6 +3215,63 @@ Unmapping will be blocked if current employees or reporting positions still depe
                                   >
                                     Configure
                                   </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              loadLifecycleHistory(
+                                designation
+                              )
+                            }
+                            disabled={
+                              lifecycleSaving ||
+                              lifecycleHistoryLoading
+                            }
+                            style={
+                              historyButtonStyle
+                            }
+                          >
+                            History
+                          </button>
+
+                          {designation.isActive !==
+                          false ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openLifecycleAction(
+                                  designation,
+                                  "deactivate"
+                                )
+                              }
+                              disabled={
+                                lifecycleSaving
+                              }
+                              style={
+                                deactivateButtonStyle
+                              }
+                            >
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openLifecycleAction(
+                                  designation,
+                                  "reactivate"
+                                )
+                              }
+                              disabled={
+                                lifecycleSaving
+                              }
+                              style={
+                                reactivateButtonStyle
+                              }
+                            >
+                              Reactivate
+                            </button>
+                          )}
+
 
                                   <button
                                     type="button"
@@ -2872,6 +3313,498 @@ Unmapping will be blocked if current employees or reporting positions still depe
           </section>
         </>
       )}
+      {lifecycleDesignation && (
+        <div
+          style={
+            lifecycleOverlayStyle
+          }
+        >
+          <div
+            style={
+              lifecyclePanelStyle
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-label="Designation lifecycle"
+          >
+            <div
+              style={
+                lifecyclePanelHeaderStyle
+              }
+            >
+              <div>
+                <div
+                  style={
+                    lifecycleEyebrowStyle
+                  }
+                >
+                  Designation Lifecycle
+                </div>
+
+                <h2
+                  style={
+                    lifecycleTitleStyle
+                  }
+                >
+                  {
+                    lifecycleDesignation
+                      .name
+                  }
+                </h2>
+
+                <p
+                  style={
+                    lifecycleSubtitleStyle
+                  }
+                >
+                  {
+                    lifecycleDesignation
+                      .code ||
+                    "No designation code"
+                  }
+                  {" | "}
+                  {
+                    lifecycleDesignation
+                      .department
+                      ?.name ||
+                    "Unmapped"
+                  }
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  resetLifecyclePanel
+                }
+                disabled={
+                  lifecycleSaving
+                }
+                style={
+                  lifecycleCloseButtonStyle
+                }
+              >
+                X
+              </button>
+            </div>
+
+
+            {lifecycleMode ===
+              "history" && (
+              <div>
+                <div
+                  style={
+                    lifecycleStatusSummaryStyle
+                  }
+                >
+                  <span>
+                    Current Status
+                  </span>
+
+                  <strong
+                    style={
+                      lifecycleDesignation
+                        .isActive !==
+                      false
+                        ? lifecycleActiveTextStyle
+                        : lifecycleInactiveTextStyle
+                    }
+                  >
+                    {
+                      lifecycleDesignation
+                        .isActive !==
+                      false
+                        ? "Active"
+                        : "Inactive"
+                    }
+                  </strong>
+                </div>
+
+
+                {lifecycleHistoryLoading ? (
+                  <div
+                    style={
+                      lifecycleEmptyStyle
+                    }
+                  >
+                    Loading lifecycle history...
+                  </div>
+                ) : lifecycleHistory.length ===
+                  0 ? (
+                  <div
+                    style={
+                      lifecycleEmptyStyle
+                    }
+                  >
+                    No designation lifecycle events have been recorded yet.
+                  </div>
+                ) : (
+                  <div
+                    style={
+                      lifecycleHistoryListStyle
+                    }
+                  >
+                    {lifecycleHistory.map(
+                      (
+                        event
+                      ) => (
+                        <div
+                          key={
+                            event.id
+                          }
+                          style={
+                            lifecycleHistoryItemStyle
+                          }
+                        >
+                          <div
+                            style={
+                              lifecycleHistoryTopStyle
+                            }
+                          >
+                            <strong
+                              style={
+                                event.eventType ===
+                                "ACTIVATED"
+                                  ? lifecycleActiveTextStyle
+                                  : lifecycleInactiveTextStyle
+                              }
+                            >
+                              {
+                                event.eventType ===
+                                "ACTIVATED"
+                                  ? "Activated"
+                                  : "Deactivated"
+                              }
+                            </strong>
+
+                            <span
+                              style={
+                                lifecycleHistoryDateStyle
+                              }
+                            >
+                              {
+                                lifecycleDateLabel(
+                                  event.effectiveDate
+                                )
+                              }
+                            </span>
+                          </div>
+
+                          <div
+                            style={
+                              lifecycleTransitionStyle
+                            }
+                          >
+                            {
+                              event.previousIsActive
+                                ? "Active"
+                                : "Inactive"
+                            }
+                            {" -> "}
+                            {
+                              event.newIsActive
+                                ? "Active"
+                                : "Inactive"
+                            }
+                          </div>
+
+                          <div
+                            style={
+                              lifecycleReasonStyle
+                            }
+                          >
+                            <strong>
+                              Reason:
+                            </strong>
+                            {" "}
+                            {
+                              event.reason ||
+                              "-"
+                            }
+                          </div>
+
+                          {event.notes && (
+                            <div
+                              style={
+                                lifecycleNotesStyle
+                              }
+                            >
+                              <strong>
+                                Notes:
+                              </strong>
+                              {" "}
+                              {
+                                event.notes
+                              }
+                            </div>
+                          )}
+
+                          <div
+                            style={
+                              lifecycleActorStyle
+                            }
+                          >
+                            Performed by{" "}
+                            <strong>
+                              {
+                                lifecyclePersonName(
+                                  event
+                                )
+                              }
+                            </strong>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+
+            {(lifecycleMode ===
+              "deactivate" ||
+              lifecycleMode ===
+                "reactivate") && (
+              <form
+                onSubmit={
+                  submitLifecycleAction
+                }
+              >
+                {lifecycleActionError && (
+                  <div
+                    style={
+                      lifecycleErrorStyle
+                    }
+                    role="alert"
+                  >
+                    <strong>
+                      Action blocked
+                    </strong>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "5px",
+                      }}
+                    >
+                      {
+                        lifecycleActionError
+                      }
+                    </div>
+                  </div>
+                )}
+                <div
+                  style={
+                    lifecycleActionNoticeStyle
+                  }
+                >
+                  <strong>
+                    {
+                      lifecycleMode ===
+                      "deactivate"
+                        ? "Deactivate designation"
+                        : "Reactivate designation"
+                    }
+                  </strong>
+
+                  <p
+                    style={{
+                      margin:
+                        "6px 0 0",
+                    }}
+                  >
+                    {
+                      lifecycleMode ===
+                      "deactivate"
+                        ? "CHRIS will block this action if current employees or active reporting positions still depend on this designation."
+                        : "The designation record, code and lifecycle history will be preserved."
+                    }
+                  </p>
+                </div>
+
+
+                <div
+                  style={
+                    lifecycleFormGridStyle
+                  }
+                >
+                  <label
+                    style={
+                      lifecycleFieldStyle
+                    }
+                  >
+                    <span
+                      style={
+                        lifecycleLabelStyle
+                      }
+                    >
+                      Effective Date
+                    </span>
+
+                    <input
+                      type="date"
+                      value={
+                        lifecycleEffectiveDate
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setLifecycleEffectiveDate(
+                          event.target
+                            .value
+                        )
+                      }
+                      required
+                      style={
+                        inputStyle
+                      }
+                    />
+                  </label>
+
+
+                  <label
+                    style={
+                      lifecycleFieldStyle
+                    }
+                  >
+                    <span
+                      style={
+                        lifecycleLabelStyle
+                      }
+                    >
+                      Reason
+                    </span>
+
+                    <textarea
+                      value={
+                        lifecycleReason
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setLifecycleReason(
+                          event.target
+                            .value
+                        )
+                      }
+                      required
+                      rows="3"
+                      placeholder={
+                        lifecycleMode ===
+                        "deactivate"
+                          ? "Why is this designation being deactivated?"
+                          : "Why is this designation being reactivated?"
+                      }
+                      style={{
+                        ...inputStyle,
+
+                        resize:
+                          "vertical",
+
+                        minHeight:
+                          "88px",
+                      }}
+                    />
+                  </label>
+
+
+                  <label
+                    style={
+                      lifecycleFieldStyle
+                    }
+                  >
+                    <span
+                      style={
+                        lifecycleLabelStyle
+                      }
+                    >
+                      Notes{" "}
+                      <span
+                        style={
+                          lifecycleOptionalStyle
+                        }
+                      >
+                        (Optional)
+                      </span>
+                    </span>
+
+                    <textarea
+                      value={
+                        lifecycleNotes
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setLifecycleNotes(
+                          event.target
+                            .value
+                        )
+                      }
+                      rows="3"
+                      placeholder="Additional supporting information"
+                      style={{
+                        ...inputStyle,
+
+                        resize:
+                          "vertical",
+
+                        minHeight:
+                          "88px",
+                      }}
+                    />
+                  </label>
+                </div>
+
+
+                <div
+                  style={
+                    lifecycleFooterStyle
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={
+                      resetLifecyclePanel
+                    }
+                    disabled={
+                      lifecycleSaving
+                    }
+                    style={
+                      secondaryButtonStyle
+                    }
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={
+                      lifecycleSaving
+                    }
+                    style={
+                      lifecycleMode ===
+                      "deactivate"
+                        ? deactivatePrimaryButtonStyle
+                        : reactivatePrimaryButtonStyle
+                    }
+                  >
+                    {
+                      lifecycleSaving
+                        ? "Processing..."
+                        : lifecycleMode ===
+                          "deactivate"
+                          ? "Confirm Deactivation"
+                          : "Confirm Reactivation"
+                    }
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -3901,6 +4834,272 @@ const designationActionStyle = {
 
   flexWrap:
     "wrap",
+};
+
+const historyButtonStyle = {
+  padding: "8px 12px",
+  border: "1px solid #CBD5E1",
+  borderRadius: "7px",
+  background: "#FFFFFF",
+  color: "#334155",
+  fontFamily: "inherit",
+  fontSize: "11px",
+  fontWeight: "800",
+  cursor: "pointer",
+};
+
+const deactivateButtonStyle = {
+  padding: "8px 12px",
+  border: "1px solid #F59E0B",
+  borderRadius: "7px",
+  background: "#FFFBEB",
+  color: "#92400E",
+  fontFamily: "inherit",
+  fontSize: "11px",
+  fontWeight: "800",
+  cursor: "pointer",
+};
+
+const reactivateButtonStyle = {
+  padding: "8px 12px",
+  border: "1px solid #86EFAC",
+  borderRadius: "7px",
+  background: "#F0FDF4",
+  color: "#166534",
+  fontFamily: "inherit",
+  fontSize: "11px",
+  fontWeight: "800",
+  cursor: "pointer",
+};
+
+const lifecycleOverlayStyle = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9999,
+  background: "rgba(15, 23, 42, 0.52)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+};
+
+const lifecyclePanelStyle = {
+  width: "min(720px, 100%)",
+  maxHeight: "90vh",
+  overflowY: "auto",
+  background: "#FFFFFF",
+  borderRadius: "16px",
+  border: "1px solid #E2E8F0",
+  boxShadow: "0 24px 70px rgba(15, 23, 42, 0.22)",
+  padding: "24px",
+};
+
+const lifecyclePanelHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "20px",
+  paddingBottom: "18px",
+  marginBottom: "20px",
+  borderBottom: "1px solid #E2E8F0",
+};
+
+const lifecycleEyebrowStyle = {
+  color: "#0B5E3B",
+  fontSize: "10px",
+  fontWeight: "900",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  marginBottom: "5px",
+};
+
+const lifecycleTitleStyle = {
+  margin: 0,
+  color: "#0F172A",
+  fontSize: "22px",
+  fontWeight: "900",
+};
+
+const lifecycleSubtitleStyle = {
+  margin: "5px 0 0",
+  color: "#64748B",
+  fontSize: "12px",
+  fontWeight: "600",
+};
+
+const lifecycleCloseButtonStyle = {
+  width: "34px",
+  height: "34px",
+  border: "1px solid #CBD5E1",
+  borderRadius: "8px",
+  background: "#FFFFFF",
+  color: "#475569",
+  cursor: "pointer",
+  fontWeight: "900",
+};
+
+const lifecycleStatusSummaryStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "12px 14px",
+  marginBottom: "16px",
+  border: "1px solid #E2E8F0",
+  borderRadius: "10px",
+  background: "#F8FAFC",
+  fontSize: "12px",
+};
+
+const lifecycleActiveTextStyle = {
+  color: "#15803D",
+  fontWeight: "900",
+};
+
+const lifecycleInactiveTextStyle = {
+  color: "#B91C1C",
+  fontWeight: "900",
+};
+
+const lifecycleEmptyStyle = {
+  padding: "24px",
+  textAlign: "center",
+  border: "1px dashed #CBD5E1",
+  borderRadius: "10px",
+  color: "#64748B",
+  fontSize: "12px",
+};
+
+const lifecycleHistoryListStyle = {
+  display: "grid",
+  gap: "12px",
+};
+
+const lifecycleHistoryItemStyle = {
+  padding: "15px",
+  border: "1px solid #E2E8F0",
+  borderRadius: "10px",
+  background: "#FFFFFF",
+};
+
+const lifecycleHistoryTopStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  marginBottom: "8px",
+};
+
+const lifecycleHistoryDateStyle = {
+  color: "#64748B",
+  fontSize: "11px",
+  fontWeight: "700",
+};
+
+const lifecycleTransitionStyle = {
+  color: "#334155",
+  fontSize: "12px",
+  fontWeight: "800",
+  marginBottom: "8px",
+};
+
+const lifecycleReasonStyle = {
+  color: "#334155",
+  fontSize: "12px",
+  lineHeight: "1.6",
+};
+
+const lifecycleNotesStyle = {
+  color: "#475569",
+  fontSize: "12px",
+  lineHeight: "1.6",
+  marginTop: "4px",
+};
+
+const lifecycleActorStyle = {
+  color: "#64748B",
+  fontSize: "11px",
+  marginTop: "10px",
+  paddingTop: "10px",
+  borderTop: "1px solid #F1F5F9",
+};
+
+const lifecycleErrorStyle = {
+  padding: "13px 14px",
+  marginBottom: "16px",
+  border: "1px solid #FCA5A5",
+  borderRadius: "10px",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+  fontSize: "12px",
+  fontWeight: "700",
+  lineHeight: "1.55",
+};
+
+const lifecycleActionNoticeStyle = {
+  padding: "14px",
+  marginBottom: "18px",
+  border: "1px solid #E2E8F0",
+  borderRadius: "10px",
+  background: "#F8FAFC",
+  color: "#475569",
+  fontSize: "12px",
+  lineHeight: "1.55",
+};
+
+const lifecycleFormGridStyle = {
+  display: "grid",
+  gap: "16px",
+};
+
+const lifecycleFieldStyle = {
+  display: "grid",
+  gap: "7px",
+};
+
+const lifecycleLabelStyle = {
+  color: "#334155",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const lifecycleOptionalStyle = {
+  color: "#94A3B8",
+  fontWeight: "700",
+};
+
+const lifecycleFooterStyle = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: "10px",
+  flexWrap: "wrap",
+  marginTop: "22px",
+  paddingTop: "18px",
+  borderTop: "1px solid #E2E8F0",
+};
+
+const deactivatePrimaryButtonStyle = {
+  padding: "10px 14px",
+  border: "1px solid #B91C1C",
+  borderRadius: "8px",
+  background: "#B91C1C",
+  color: "#FFFFFF",
+  fontFamily: "inherit",
+  fontSize: "11px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const reactivatePrimaryButtonStyle = {
+  padding: "10px 14px",
+  border: "1px solid #0B5E3B",
+  borderRadius: "8px",
+  background: "#0B5E3B",
+  color: "#FFFFFF",
+  fontFamily: "inherit",
+  fontSize: "11px",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 const unmapButtonStyle = {

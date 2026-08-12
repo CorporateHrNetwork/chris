@@ -22,13 +22,14 @@ model Organization {
 
   status OrganizationStatus @default(ACTIVE)
 
-  users                   User[]
-  roles                   Role[]
-  departments             Department[]
-  designations            Designation[]
-  employees               Employee[]
-  locations               OrganizationLocation[]
-  employeeLifecycleEvents EmployeeLifecycleEvent[]
+  users                      User[]
+  roles                      Role[]
+  departments                Department[]
+  designations               Designation[]
+  employees                  Employee[]
+  locations                  OrganizationLocation[]
+  employeeLifecycleEvents    EmployeeLifecycleEvent[]
+  designationLifecycleEvents DesignationLifecycleEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -104,7 +105,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
 
-  performedLifecycleEvents EmployeeLifecycleEvent[] @relation("LifecyclePerformedBy")
+  performedLifecycleEvents            EmployeeLifecycleEvent[]    @relation("LifecyclePerformedBy")
+  performedDesignationLifecycleEvents DesignationLifecycleEvent[] @relation("DesignationLifecyclePerformedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -283,6 +285,8 @@ model Designation {
   previousDesignationEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDesignation")
   newDesignationEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDesignation")
 
+  lifecycleEvents DesignationLifecycleEvent[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -375,7 +379,7 @@ model EmployeeLifecycleEvent {
   // Location movement information.
   //
   // These fields allow the same history table to record
-  // Head Office â†’ Lagos â†’ Port Harcourt transfers.
+  // Head Office Ã¢â€ â€™ Lagos Ã¢â€ â€™ Port Harcourt transfers.
 
   fromLocationId String?
   toLocationId   String?
@@ -497,4 +501,42 @@ enum LocationType {
 enum UserLocationScope {
   ALL_LOCATIONS
   ASSIGNED_LOCATIONS
+}
+
+model DesignationLifecycleEvent {
+  id String @id @default(uuid())
+
+  organizationId String
+  designationId  String
+  eventType      DesignationLifecycleEventType
+
+  previousIsActive Boolean
+  newIsActive      Boolean
+
+  effectiveDate DateTime
+
+  reason String
+  notes  String?
+
+  performedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  designation Designation @relation(fields: [organizationId, designationId], references: [organizationId, id], onDelete: Restrict)
+
+  performedBy User? @relation("DesignationLifecyclePerformedBy", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([designationId])
+  @@index([eventType])
+  @@index([effectiveDate])
+  @@index([performedByUserId])
+  @@map("designation_lifecycle_events")
+}
+
+enum DesignationLifecycleEventType {
+  ACTIVATED
+  DEACTIVATED
 }

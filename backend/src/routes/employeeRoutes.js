@@ -4423,7 +4423,7 @@ router.get(
 
 /*
 ============================================================
-PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â CAREER PROGRESSION
+PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â CAREER PROGRESSION
 Permission: employees.update
 ============================================================
 
@@ -5401,6 +5401,859 @@ router.post(
 
         message:
           "Unable to create employee.",
+      });
+    }
+  }
+);
+
+
+/*
+============================================================
+DESIGNATION_LIFECYCLE_API
+CONTROLLED DESIGNATION ACTIVATION / DEACTIVATION
+============================================================
+
+Routes:
+
+PATCH
+/api/employees/career/designations/:designationId/deactivate
+
+PATCH
+/api/employees/career/designations/:designationId/reactivate
+
+GET
+/api/employees/career/designations/:designationId/lifecycle
+
+Rules:
+
+- Tenant scoped.
+- Designation IDs are preserved.
+- Deactivation requires a reason and effective date.
+- Current employees prevent deactivation.
+- Active dependent reporting designations prevent deactivation.
+- Reactivation does not recreate the designation.
+- Every state change creates a DesignationLifecycleEvent.
+============================================================
+*/
+
+
+/*
+============================================================
+DEACTIVATE DESIGNATION
+============================================================
+*/
+
+router.patch(
+  "/career/designations/:designationId/deactivate",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const performedByUserId =
+        req.auth.userId || null;
+
+      const {
+        designationId,
+      } = req.params;
+
+      const {
+        reason,
+        notes,
+        effectiveDate,
+      } = req.body || {};
+
+
+      /*
+      ----------------------------------------------------------
+      VALIDATE INPUT
+      ----------------------------------------------------------
+      */
+
+      const normalizedReason =
+        String(
+          reason || ""
+        ).trim();
+
+      if (!normalizedReason) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_LIFECYCLE_REASON_REQUIRED",
+
+          message:
+            "A reason is required to deactivate a designation.",
+        });
+      }
+
+
+      const normalizedEffectiveDate =
+        effectiveDate
+          ? new Date(
+              effectiveDate
+            )
+          : new Date();
+
+
+      if (
+        Number.isNaN(
+          normalizedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_EFFECTIVE_DATE",
+
+          message:
+            "Provide a valid effective date.",
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      LOAD TENANT DESIGNATION
+      ----------------------------------------------------------
+      */
+
+      const designation =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              designationId,
+
+            organizationId,
+          },
+
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
+            reportsToDesignation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+        });
+
+
+      if (!designation) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_NOT_FOUND",
+
+          message:
+            "Designation not found.",
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      IDEMPOTENT BEHAVIOUR
+      ----------------------------------------------------------
+      */
+
+      if (
+        designation.isActive ===
+        false
+      ) {
+        return res.status(200).json({
+          status:
+            "success",
+
+          message:
+            `${designation.name} is already inactive.`,
+
+          data:
+            designation,
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      CHECK CURRENT EMPLOYEES
+      ----------------------------------------------------------
+
+      These statuses still represent an employee currently
+      occupying an organizational position:
+
+      ACTIVE
+      PROBATION
+      LEAVE
+      SUSPENDED
+
+      Exit / non-current statuses do not block designation
+      deactivation.
+      ----------------------------------------------------------
+      */
+
+      const currentEmployeeStatuses =
+        [
+          "ACTIVE",
+          "PROBATION",
+          "LEAVE",
+          "SUSPENDED",
+        ];
+
+
+      const assignedEmployees =
+        await prisma.employee.findMany({
+          where: {
+            organizationId,
+
+            designationId:
+              designation.id,
+
+            status: {
+              in:
+                currentEmployeeStatuses,
+            },
+          },
+
+          select: {
+            id: true,
+            employeeNumber: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            status: true,
+          },
+
+          orderBy: [
+            {
+              lastName:
+                "asc",
+            },
+            {
+              firstName:
+                "asc",
+            },
+          ],
+        });
+
+
+      if (
+        assignedEmployees.length >
+        0
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_HAS_CURRENT_EMPLOYEES",
+
+          message:
+            `${designation.name} cannot be deactivated because ${assignedEmployees.length} current employee(s) are assigned to it. Transfer, promote, exit, or reassign those employees first.`,
+
+          dependencies: {
+            employees:
+              assignedEmployees,
+          },
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      CHECK ACTIVE REPORTING DEPENDENCIES
+      ----------------------------------------------------------
+
+      A designation cannot be deactivated while active
+      subordinate designations still report directly to it.
+
+      The reporting hierarchy must first be updated.
+      ----------------------------------------------------------
+      */
+
+      const dependentDesignations =
+        await prisma.designation.findMany({
+          where: {
+            organizationId,
+
+            reportsToDesignationId:
+              designation.id,
+
+            isActive:
+              true,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            careerTrack: true,
+            careerLevel: true,
+            departmentId: true,
+          },
+
+          orderBy: {
+            name:
+              "asc",
+          },
+        });
+
+
+      if (
+        dependentDesignations.length >
+        0
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_HAS_ACTIVE_REPORTING_DEPENDENCIES",
+
+          message:
+            `${designation.name} cannot be deactivated because ${dependentDesignations.length} active designation(s) currently report to it. Update or deactivate those reporting positions first.`,
+
+          dependencies: {
+            designations:
+              dependentDesignations,
+          },
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      TRANSACTION
+      ----------------------------------------------------------
+      */
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            const updatedDesignation =
+              await tx.designation.update({
+                where: {
+                  id:
+                    designation.id,
+                },
+
+                data: {
+                  isActive:
+                    false,
+                },
+
+                include: {
+                  department: {
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                    },
+                  },
+
+                  reportsToDesignation: {
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                    },
+                  },
+                },
+              });
+
+
+            const lifecycleEvent =
+              await tx.designationLifecycleEvent.create({
+                data: {
+                  organizationId,
+
+                  designationId:
+                    designation.id,
+
+                  eventType:
+                    "DEACTIVATED",
+
+                  previousIsActive:
+                    true,
+
+                  newIsActive:
+                    false,
+
+                  effectiveDate:
+                    normalizedEffectiveDate,
+
+                  reason:
+                    normalizedReason,
+
+                  notes:
+                    notes
+                      ? String(
+                          notes
+                        ).trim() ||
+                        null
+                      : null,
+
+                  performedByUserId,
+                },
+
+                include: {
+                  performedBy: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                },
+              });
+
+
+            return {
+              designation:
+                updatedDesignation,
+
+              lifecycleEvent,
+            };
+          }
+        );
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          `${designation.name} was deactivated successfully.`,
+
+        data:
+          result,
+      });
+    } catch (error) {
+      console.error(
+        "Designation deactivation error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to deactivate the designation.",
+      });
+    }
+  }
+);
+
+
+/*
+============================================================
+REACTIVATE DESIGNATION
+============================================================
+*/
+
+router.patch(
+  "/career/designations/:designationId/reactivate",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const performedByUserId =
+        req.auth.userId || null;
+
+      const {
+        designationId,
+      } = req.params;
+
+      const {
+        reason,
+        notes,
+        effectiveDate,
+      } = req.body || {};
+
+
+      const normalizedReason =
+        String(
+          reason || ""
+        ).trim();
+
+
+      if (!normalizedReason) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_LIFECYCLE_REASON_REQUIRED",
+
+          message:
+            "A reason is required to reactivate a designation.",
+        });
+      }
+
+
+      const normalizedEffectiveDate =
+        effectiveDate
+          ? new Date(
+              effectiveDate
+            )
+          : new Date();
+
+
+      if (
+        Number.isNaN(
+          normalizedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_EFFECTIVE_DATE",
+
+          message:
+            "Provide a valid effective date.",
+        });
+      }
+
+
+      const designation =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              designationId,
+
+            organizationId,
+          },
+
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                isActive: true,
+              },
+            },
+          },
+        });
+
+
+      if (!designation) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_NOT_FOUND",
+
+          message:
+            "Designation not found.",
+        });
+      }
+
+
+      if (
+        designation.isActive ===
+        true
+      ) {
+        return res.status(200).json({
+          status:
+            "success",
+
+          message:
+            `${designation.name} is already active.`,
+
+          data:
+            designation,
+        });
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      DEPARTMENT PROTECTION
+      ----------------------------------------------------------
+
+      If the designation is still mapped, its owning department
+      must itself remain active.
+      ----------------------------------------------------------
+      */
+
+      if (
+        designation.department &&
+        designation.department.isActive ===
+          false
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_DEPARTMENT_INACTIVE",
+
+          message:
+            `${designation.name} cannot be reactivated because its department is inactive.`,
+        });
+      }
+
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            const updatedDesignation =
+              await tx.designation.update({
+                where: {
+                  id:
+                    designation.id,
+                },
+
+                data: {
+                  isActive:
+                    true,
+                },
+
+                include: {
+                  department: {
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                    },
+                  },
+
+                  reportsToDesignation: {
+                    select: {
+                      id: true,
+                      name: true,
+                      code: true,
+                    },
+                  },
+                },
+              });
+
+
+            const lifecycleEvent =
+              await tx.designationLifecycleEvent.create({
+                data: {
+                  organizationId,
+
+                  designationId:
+                    designation.id,
+
+                  eventType:
+                    "ACTIVATED",
+
+                  previousIsActive:
+                    false,
+
+                  newIsActive:
+                    true,
+
+                  effectiveDate:
+                    normalizedEffectiveDate,
+
+                  reason:
+                    normalizedReason,
+
+                  notes:
+                    notes
+                      ? String(
+                          notes
+                        ).trim() ||
+                        null
+                      : null,
+
+                  performedByUserId,
+                },
+
+                include: {
+                  performedBy: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                },
+              });
+
+
+            return {
+              designation:
+                updatedDesignation,
+
+              lifecycleEvent,
+            };
+          }
+        );
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          `${designation.name} was reactivated successfully.`,
+
+        data:
+          result,
+      });
+    } catch (error) {
+      console.error(
+        "Designation reactivation error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to reactivate the designation.",
+      });
+    }
+  }
+);
+
+
+/*
+============================================================
+DESIGNATION LIFECYCLE HISTORY
+============================================================
+*/
+
+router.get(
+  "/career/designations/:designationId/lifecycle",
+  requirePermission(
+    "employees.view"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        designationId,
+      } = req.params;
+
+
+      const designation =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              designationId,
+
+            organizationId,
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isActive: true,
+            careerTrack: true,
+            careerLevel: true,
+
+            department: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+        });
+
+
+      if (!designation) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "Designation not found.",
+        });
+      }
+
+
+      const history =
+        await prisma.designationLifecycleEvent.findMany({
+          where: {
+            organizationId,
+
+            designationId:
+              designation.id,
+          },
+
+          include: {
+            performedBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+
+          orderBy: [
+            {
+              effectiveDate:
+                "desc",
+            },
+            {
+              createdAt:
+                "desc",
+            },
+          ],
+        });
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        data: {
+          designation,
+          history,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Designation lifecycle history error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to load designation lifecycle history.",
       });
     }
   }
