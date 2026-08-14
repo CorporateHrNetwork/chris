@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useNavigate,
   useParams,
@@ -33,6 +33,97 @@ function EmployeeProfile() {
 
   const [success, setSuccess] =
     useState("");
+  /*
+  ============================================================
+  EMPLOYMENT CONFIRMATION STATE
+  ============================================================
+  */
+
+  const [
+    confirmationOpen,
+    setConfirmationOpen,
+  ] = useState(false);
+
+  const [
+    confirmationSaving,
+    setConfirmationSaving,
+  ] = useState(false);
+
+  const [
+    confirmationForm,
+    setConfirmationForm,
+  ] = useState({
+    effectiveDate:
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+
+    reason:
+      "Employment confirmed",
+
+    notes: "",
+  });
+  /*
+  ============================================================
+  EMPLOYEE SUSPENSION STATE
+  ============================================================
+  */
+
+  const [
+    suspensionOpen,
+    setSuspensionOpen,
+  ] = useState(false);
+
+  const [
+    suspensionSaving,
+    setSuspensionSaving,
+  ] = useState(false);
+
+  const [
+    suspensionForm,
+    setSuspensionForm,
+  ] = useState({
+    effectiveDate:
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+
+    suspensionEndDate: "",
+
+    reason: "",
+
+    notes: "",
+  });
+  /*
+  ============================================================
+  EMPLOYEE REACTIVATION STATE
+  ============================================================
+  */
+
+  const [
+    reactivationOpen,
+    setReactivationOpen,
+  ] = useState(false);
+
+  const [
+    reactivationSaving,
+    setReactivationSaving,
+  ] = useState(false);
+
+  const [
+    reactivationForm,
+    setReactivationForm,
+  ] = useState({
+    effectiveDate:
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+
+    reason: "",
+
+    notes: "",
+  });
+
   /*
   ============================================================
   EMPLOYMENT HISTORY STATE
@@ -79,14 +170,16 @@ function EmployeeProfile() {
     setTransferForm,
   ] = useState({
     locationId: "",
+
     effectiveDate:
       new Date()
         .toISOString()
         .slice(0, 10),
+
     reason: "",
+
     notes: "",
   });
-
 
   /*
   ============================================================
@@ -132,6 +225,59 @@ function EmployeeProfile() {
 
     reason: "",
 
+    notes: "",
+  });
+
+  /*
+  ============================================================
+  EMPLOYEE JOB CHANGE / REASSIGNMENT STATE
+  ============================================================
+
+  Job Change is separate from:
+  - Promotion
+  - Location Transfer
+  - Employee master-data editing
+
+  It supports:
+  - lateral movement
+  - department reassignment
+  - role reclassification
+  - designation correction
+  - organizational restructuring
+  ============================================================
+  */
+
+  const [
+    jobChangeOpen,
+    setJobChangeOpen,
+  ] = useState(false);
+
+  const [
+    jobChangeSaving,
+    setJobChangeSaving,
+  ] = useState(false);
+
+  const [
+    jobChangeCatalogLoading,
+    setJobChangeCatalogLoading,
+  ] = useState(false);
+
+  const [
+    jobChangeCatalog,
+    setJobChangeCatalog,
+  ] = useState([]);
+
+  const [
+    jobChangeForm,
+    setJobChangeForm,
+  ] = useState({
+    departmentId: "",
+    designationId: "",
+    effectiveDate:
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+    reason: "",
     notes: "",
   });
 
@@ -192,6 +338,10 @@ function EmployeeProfile() {
 
         exitDate:
           employee.exitDate,
+
+        suspensionEndDate:
+          employee.suspensionEndDate,
+
         locationId:
           employee.locationId ||
           "",
@@ -422,6 +572,26 @@ const handleChange = (
         setError("");
         setSuccess("");
 
+        setConfirmationOpen(
+          false
+        );
+
+        setSuspensionOpen(
+          false
+        );
+
+        setReactivationOpen(
+          false
+        );
+
+        setJobChangeOpen(
+          false
+        );
+
+        setPromotionOpen(
+          false
+        );
+
         setEditing(false);
 
         const result =
@@ -644,7 +814,423 @@ const handleChange = (
     };
 
 
+    /*
+  ============================================================
+  OPEN EMPLOYEE JOB CHANGE FORM
+  ============================================================
+  */
+
+  const openJobChangeForm =
+    async () => {
+      try {
+        setError("");
+        setSuccess("");
+
+        /*
+        Only one controlled HR transaction should be
+        open at a time.
+        */
+
+        setEditing(false);
+
+        setConfirmationOpen(
+          false
+        );
+
+        setSuspensionOpen(
+          false
+        );
+
+        setReactivationOpen(
+          false
+        );
+
+        setTransferOpen(
+          false
+        );
+
+        setPromotionOpen(
+          false
+        );
+
+        setJobChangeOpen(
+          true
+        );
+
+        setJobChangeCatalogLoading(
+          true
+        );
+
+        setJobChangeCatalog(
+          []
+        );
+
+        setJobChangeForm({
+          departmentId: "",
+          designationId: "",
+          effectiveDate:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+          reason: "",
+          notes: "",
+        });
+
+        /*
+        Load the organization's current designation catalogue.
+
+        Target departments are derived from active,
+        department-mapped designations.
+        */
+
+        const result =
+          await apiRequest(
+            "/api/employees/career/catalog"
+          );
+
+        const catalog =
+          (result.data || [])
+            .filter(
+              (designation) =>
+                designation.isActive !==
+                  false &&
+                designation.department?.id
+            );
+
+        setJobChangeCatalog(
+          catalog
+        );
+
+        /*
+        Default the target department to the employee's
+        current department where possible.
+
+        The designation remains blank so HR must explicitly
+        select the intended target role.
+        */
+
+        const currentDesignation =
+          catalog.find(
+            (designation) =>
+              designation.name ===
+                profile.designation &&
+              designation.department
+                ?.name ===
+                profile.department
+          );
+
+        const currentDepartmentId =
+          currentDesignation
+            ?.department?.id ||
+          catalog.find(
+            (designation) =>
+              designation.department
+                ?.name ===
+                profile.department
+          )?.department?.id ||
+          "";
+
+        setJobChangeForm(
+          (current) => ({
+            ...current,
+            departmentId:
+              currentDepartmentId,
+          })
+        );
+      } catch (err) {
+        console.error(
+          "Job Change catalogue load error:",
+          err
+        );
+
+        setJobChangeCatalog(
+          []
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not load valid job-change positions."
+        );
+      } finally {
+        setJobChangeCatalogLoading(
+          false
+        );
+      }
+    };
+
+
   /*
+  ============================================================
+  JOB CHANGE FORM CHANGE
+  ============================================================
+  */
+
+  const handleJobChangeChange =
+    (event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setJobChangeForm(
+        (current) => {
+          /*
+          Changing department invalidates the previously
+          selected target designation.
+          */
+
+          if (
+            name ===
+            "departmentId"
+          ) {
+            return {
+              ...current,
+              departmentId:
+                value,
+              designationId:
+                "",
+            };
+          }
+
+          return {
+            ...current,
+            [name]:
+              value,
+          };
+        }
+      );
+    };
+
+
+  /*
+  ============================================================
+  CANCEL JOB CHANGE
+  ============================================================
+  */
+
+  const cancelJobChange =
+    () => {
+      setJobChangeOpen(
+        false
+      );
+
+      setJobChangeCatalog(
+        []
+      );
+
+      setJobChangeForm({
+        departmentId: "",
+        designationId: "",
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+        reason: "",
+        notes: "",
+      });
+
+      setError("");
+    };
+
+
+  /*
+  ============================================================
+  PROCESS CONTROLLED EMPLOYEE JOB CHANGE
+  ============================================================
+  */
+
+  const handleJobChange =
+    async (event) => {
+      event.preventDefault();
+
+      if (
+        !jobChangeForm.departmentId
+      ) {
+        setError(
+          "Select the target department."
+        );
+
+        return;
+      }
+
+      if (
+        !jobChangeForm.designationId
+      ) {
+        setError(
+          "Select the target designation."
+        );
+
+        return;
+      }
+
+      if (
+        !jobChangeForm.effectiveDate
+      ) {
+        setError(
+          "Job Change effective date is required."
+        );
+
+        return;
+      }
+
+      if (
+        !jobChangeForm.reason
+          .trim()
+      ) {
+        setError(
+          "A reason is required for a Job Change."
+        );
+
+        return;
+      }
+
+      const selectedDesignation =
+        jobChangeCatalog.find(
+          (designation) =>
+            designation.id ===
+              jobChangeForm
+                .designationId
+        );
+
+      if (!selectedDesignation) {
+        setError(
+          "The selected designation is no longer available."
+        );
+
+        return;
+      }
+
+      if (
+        selectedDesignation
+          .department?.id !==
+        jobChangeForm.departmentId
+      ) {
+        setError(
+          "The selected designation does not belong to the selected department."
+        );
+
+        return;
+      }
+
+      /*
+      Prevent a no-change transaction in the UI.
+
+      The backend independently enforces this rule.
+      */
+
+      if (
+        selectedDesignation.name ===
+          profile.designation &&
+        selectedDesignation
+          .department?.name ===
+          profile.department
+      ) {
+        setError(
+          "Select a different department or designation before recording a Job Change."
+        );
+
+        return;
+      }
+
+      try {
+        setJobChangeSaving(
+          true
+        );
+
+        setError("");
+        setSuccess("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/${encodeURIComponent(
+              employeeNumber
+            )}/job-change`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  departmentId:
+                    jobChangeForm
+                      .departmentId,
+
+                  designationId:
+                    jobChangeForm
+                      .designationId,
+
+                  effectiveDate:
+                    jobChangeForm
+                      .effectiveDate,
+
+                  reason:
+                    jobChangeForm
+                      .reason
+                      .trim(),
+
+                  notes:
+                    jobChangeForm
+                      .notes
+                      .trim(),
+                }),
+            }
+          );
+
+        /*
+        Refresh the employee master record and permanent
+        Employment History together.
+        */
+
+        await Promise.all([
+          loadProfile(),
+          loadLifecycleHistory(),
+        ]);
+
+        setJobChangeOpen(
+          false
+        );
+
+        setJobChangeCatalog(
+          []
+        );
+
+        setJobChangeForm({
+          departmentId: "",
+          designationId: "",
+          effectiveDate:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+          reason: "",
+          notes: "",
+        });
+
+        setSuccess(
+          result.message ||
+            "Employee Job Change recorded successfully."
+        );
+
+        setTimeout(() => {
+          setSuccess("");
+        }, 4000);
+      } catch (err) {
+        console.error(
+          "Employee Job Change error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not process this Job Change."
+        );
+      } finally {
+        setJobChangeSaving(
+          false
+        );
+      }
+    };
+
+/*
   ============================================================
   OPEN CAREER PROMOTION FORM
   ============================================================
@@ -667,9 +1253,25 @@ const handleChange = (
 
         setEditing(false);
 
+        setConfirmationOpen(
+          false
+        );
+
+        setSuspensionOpen(
+          false
+        );
+
+        setReactivationOpen(
+          false
+        );
+
         setTransferOpen(
           false
         );
+
+      setJobChangeOpen(
+        false
+      );
 
         setPromotionOpen(
           true
@@ -962,6 +1564,753 @@ const handleChange = (
         );
       }
     };
+  /*
+  ============================================================
+  OPEN EMPLOYMENT CONFIRMATION
+  ============================================================
+  */
+
+  const openConfirmationForm =
+    () => {
+      setError("");
+      setSuccess("");
+
+      setTransferOpen(false);
+      setJobChangeOpen(false);
+      setPromotionOpen(false);
+      setSuspensionOpen(false);
+      setReactivationOpen(false);
+      setEditing(false);
+
+      setConfirmationForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        reason:
+          "Employment confirmed",
+
+        notes: "",
+      });
+
+      setConfirmationOpen(true);
+    };
+
+
+  /*
+  ============================================================
+  CONFIRMATION FORM CHANGE
+  ============================================================
+  */
+
+  const handleConfirmationChange =
+    (event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setConfirmationForm(
+        (current) => ({
+          ...current,
+
+          [name]:
+            value,
+        })
+      );
+    };
+
+
+  /*
+  ============================================================
+  CANCEL EMPLOYMENT CONFIRMATION
+  ============================================================
+  */
+
+  const cancelConfirmation =
+    () => {
+      setConfirmationOpen(false);
+
+      setConfirmationForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        reason:
+          "Employment confirmed",
+
+        notes: "",
+      });
+
+      setError("");
+    };
+
+
+  /*
+  ============================================================
+  PROCESS EMPLOYMENT CONFIRMATION
+  ============================================================
+  */
+
+  const handleConfirmation =
+    async (event) => {
+      event.preventDefault();
+
+      if (
+        !confirmationForm.effectiveDate
+      ) {
+        setError(
+          "Confirmation effective date is required."
+        );
+
+        return;
+      }
+
+      try {
+        setConfirmationSaving(true);
+
+        setError("");
+        setSuccess("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/${encodeURIComponent(
+              employeeNumber
+            )}/confirm`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  effectiveDate:
+                    confirmationForm.effectiveDate,
+
+                  reason:
+                    confirmationForm.reason
+                      .trim(),
+
+                  notes:
+                    confirmationForm.notes
+                      .trim(),
+                }),
+            }
+          );
+
+        /*
+        Refresh both the current employee record and
+        permanent Employment History.
+        */
+
+        await Promise.all([
+          loadProfile(),
+          loadLifecycleHistory(),
+        ]);
+
+        setConfirmationOpen(false);
+
+        setConfirmationForm({
+          effectiveDate:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+
+          reason:
+            "Employment confirmed",
+
+          notes: "",
+        });
+
+        setSuccess(
+          result.message ||
+            "Employment confirmed successfully."
+        );
+
+        setTimeout(() => {
+          setSuccess("");
+        }, 4000);
+      } catch (err) {
+        console.error(
+          "Employee confirmation error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not confirm this employee."
+        );
+      } finally {
+        setConfirmationSaving(false);
+      }
+    };
+
+  /*
+  ============================================================
+  OPEN EMPLOYEE SUSPENSION FORM
+  ============================================================
+  */
+
+  const openSuspensionForm =
+    () => {
+      setError("");
+      setSuccess("");
+
+      /*
+      Keep controlled employee transactions mutually exclusive.
+      */
+
+      setEditing(false);
+
+      setConfirmationOpen(
+        false
+      );
+
+      setTransferOpen(
+        false
+      );
+
+      setJobChangeOpen(
+        false
+      );
+
+      setPromotionOpen(
+        false
+      );
+
+      setReactivationOpen(
+        false
+      );
+
+      setSuspensionForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        suspensionEndDate: "",
+
+        reason: "",
+
+        notes: "",
+      });
+
+      setSuspensionOpen(
+        true
+      );
+    };
+
+
+  /*
+  ============================================================
+  SUSPENSION FORM CHANGE
+  ============================================================
+  */
+
+  const handleSuspensionChange =
+    (event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setSuspensionForm(
+        (current) => ({
+          ...current,
+
+          [name]:
+            value,
+        })
+      );
+    };
+
+
+  /*
+  ============================================================
+  CANCEL EMPLOYEE SUSPENSION
+  ============================================================
+  */
+
+  const cancelSuspension =
+    () => {
+      setSuspensionOpen(
+        false
+      );
+
+      setSuspensionForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        suspensionEndDate: "",
+
+        reason: "",
+
+        notes: "",
+      });
+
+      setError("");
+    };
+
+
+  /*
+  ============================================================
+  PROCESS EMPLOYEE SUSPENSION
+  ============================================================
+  */
+
+  const handleSuspension =
+    async (event) => {
+      event.preventDefault();
+
+
+      /*
+      ----------------------------------------------------------
+      CLIENT-SIDE ELIGIBILITY CHECK
+
+      Backend independently validates suspension eligibility.
+      ----------------------------------------------------------
+      */
+
+      if (
+        [
+          "Resigned",
+          "Terminated",
+          "Retired",
+          "Suspended",
+          "Inactive",
+        ].includes(
+          profile.status
+        )
+      ) {
+        setError(
+          "This employee is not eligible for suspension in the current employment status."
+        );
+
+        return;
+      }
+
+            /*
+      ----------------------------------------------------------
+      REQUIRED EFFECTIVE DATE
+      ----------------------------------------------------------
+      */
+
+      if (
+        !suspensionForm.effectiveDate
+      ) {
+        setError(
+          "Suspension effective date is required."
+        );
+
+        return;
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      REQUIRED SUSPENSION END DATE
+      ----------------------------------------------------------
+      */
+
+      if (
+        !suspensionForm.suspensionEndDate
+      ) {
+        setError(
+          "Suspension end date is required."
+        );
+
+        return;
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      SUSPENSION PERIOD VALIDATION
+      ----------------------------------------------------------
+      */
+
+      if (
+        new Date(
+          suspensionForm.suspensionEndDate
+        ) <
+        new Date(
+          suspensionForm.effectiveDate
+        )
+      ) {
+        setError(
+          "Suspension end date cannot be earlier than the effective date."
+        );
+
+        return;
+      }
+
+
+      /*
+      ----------------------------------------------------------
+      REQUIRED REASON
+      ----------------------------------------------------------
+      */
+
+      if (
+        !suspensionForm.reason
+          .trim()
+      ) {
+        setError(
+          "A reason is required to suspend an employee."
+        );
+
+        return;
+      }
+
+
+      try {
+        setSuspensionSaving(
+          true
+        );
+
+        setError("");
+        setSuccess("");
+
+
+        const result =
+          await apiRequest(
+            `/api/employees/${encodeURIComponent(
+              employeeNumber
+            )}/suspend`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  effectiveDate:
+                    suspensionForm.effectiveDate,
+
+                  suspensionEndDate:
+                    suspensionForm.suspensionEndDate,
+
+                  reason:
+                    suspensionForm.reason
+                      .trim(),
+
+                  notes:
+                    suspensionForm.notes
+                      .trim(),
+                }),
+            }
+          );
+
+
+        /*
+        Refresh both the employee master record and
+        permanent Employment History.
+        */
+
+        await Promise.all([
+          loadProfile(),
+          loadLifecycleHistory(),
+        ]);
+
+
+        setSuspensionOpen(
+          false
+        );
+
+        setSuspensionForm({
+          effectiveDate:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+
+          suspensionEndDate: "",
+
+          reason: "",
+
+          notes: "",
+        });
+
+
+        setSuccess(
+          result.message ||
+            "Employee suspended successfully."
+        );
+
+
+        setTimeout(() => {
+          setSuccess("");
+        }, 4000);
+      } catch (err) {
+        console.error(
+          "Employee suspension error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not suspend this employee."
+        );
+      } finally {
+        setSuspensionSaving(
+          false
+        );
+      }
+    };
+
+
+  /*
+  ============================================================
+  OPEN EMPLOYEE REACTIVATION FORM
+  ============================================================
+  */
+
+  const openReactivationForm =
+    () => {
+      setError("");
+      setSuccess("");
+
+      /*
+      Keep controlled employee transactions mutually exclusive.
+      */
+
+      setEditing(false);
+
+      setConfirmationOpen(
+        false
+      );
+
+      setSuspensionOpen(
+        false
+      );
+
+      setTransferOpen(
+        false
+      );
+
+      setJobChangeOpen(
+        false
+      );
+
+      setPromotionOpen(
+        false
+      );
+
+      setReactivationForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        reason: "",
+
+        notes: "",
+      });
+
+      setReactivationOpen(
+        true
+      );
+    };
+
+
+  /*
+  ============================================================
+  REACTIVATION FORM CHANGE
+  ============================================================
+  */
+
+  const handleReactivationChange =
+    (event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setReactivationForm(
+        (current) => ({
+          ...current,
+
+          [name]:
+            value,
+        })
+      );
+    };
+
+
+  /*
+  ============================================================
+  CANCEL EMPLOYEE REACTIVATION
+  ============================================================
+  */
+
+  const cancelReactivation =
+    () => {
+      setReactivationOpen(
+        false
+      );
+
+      setReactivationForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
+        reason: "",
+
+        notes: "",
+      });
+
+      setError("");
+    };
+
+
+  /*
+  ============================================================
+  PROCESS EMPLOYEE REACTIVATION
+  ============================================================
+  */
+
+  const handleReactivation =
+    async (event) => {
+      event.preventDefault();
+
+
+      /*
+      ----------------------------------------------------------
+      CLIENT-SIDE ELIGIBILITY CHECK
+
+      The backend independently enforces the same rule.
+      ----------------------------------------------------------
+      */
+
+      if (
+        ![
+          "Suspended",
+          "Inactive",
+        ].includes(
+          profile.status
+        )
+      ) {
+        setError(
+          "Only a suspended or inactive employee can be reactivated."
+        );
+
+        return;
+      }
+
+
+      if (
+        !reactivationForm.effectiveDate
+      ) {
+        setError(
+          "Reactivation effective date is required."
+        );
+
+        return;
+      }
+
+
+      if (
+        !reactivationForm.reason
+          .trim()
+      ) {
+        setError(
+          "A reason is required to reactivate an employee."
+        );
+
+        return;
+      }
+
+
+      try {
+        setReactivationSaving(
+          true
+        );
+
+        setError("");
+        setSuccess("");
+
+
+        const result =
+          await apiRequest(
+            `/api/employees/${encodeURIComponent(
+              employeeNumber
+            )}/reactivate`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  effectiveDate:
+                    reactivationForm.effectiveDate,
+
+                  reason:
+                    reactivationForm.reason
+                      .trim(),
+
+                  notes:
+                    reactivationForm.notes
+                      .trim(),
+                }),
+            }
+          );
+
+
+        /*
+        Refresh employee master record and permanent
+        Employment History together.
+        */
+
+        await Promise.all([
+          loadProfile(),
+          loadLifecycleHistory(),
+        ]);
+
+
+        setReactivationOpen(
+          false
+        );
+
+        setReactivationForm({
+          effectiveDate:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+
+          reason: "",
+
+          notes: "",
+        });
+
+
+        setSuccess(
+          result.message ||
+            "Employee reactivated successfully."
+        );
+
+
+        setTimeout(() => {
+          setSuccess("");
+        }, 4000);
+      } catch (err) {
+        console.error(
+          "Employee reactivation error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not reactivate this employee."
+        );
+      } finally {
+        setReactivationSaving(
+          false
+        );
+      }
+    };
+
 
   if (loading) {
     return (
@@ -1486,6 +2835,11 @@ const handleChange = (
                   setSuccess("");
                   setError("");
                   setTransferOpen(false);
+                  setPromotionOpen(false);
+                  setJobChangeOpen(false);
+                  setConfirmationOpen(false);
+                  setSuspensionOpen(false);
+                  setReactivationOpen(false);
                   setEditing(true);
                 }}
                 style={
@@ -1494,6 +2848,61 @@ const handleChange = (
               >
                 Edit Employee
               </button>
+              {profile.status ===
+                "Probation" && (
+                <button
+                  type="button"
+                  onClick={
+                    openConfirmationForm
+                  }
+                  style={
+                    actionButtonStyle
+                  }
+                >
+                  Confirm Employment
+                </button>
+              )}
+              {![
+                "Resigned",
+                "Terminated",
+                "Retired",
+                "Suspended",
+                "Inactive",
+              ].includes(
+                profile.status
+              ) && (
+                <button
+                  type="button"
+                  onClick={
+                    openSuspensionForm
+                  }
+                  style={
+                    actionButtonStyle
+                  }
+                >
+                  Suspend Employee
+                </button>
+              )}
+
+              {[
+                "Suspended",
+                "Inactive",
+              ].includes(
+                profile.status
+              ) && (
+                <button
+                  type="button"
+                  onClick={
+                    openReactivationForm
+                  }
+                  style={
+                    actionButtonStyle
+                  }
+                >
+                  Reactivate Employee
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={
@@ -1534,6 +2943,54 @@ const handleChange = (
               >
                 Transfer Employee
               </button>
+          <button
+            type="button"
+            onClick={
+              openJobChangeForm
+            }
+            disabled={
+              [
+                "Resigned",
+                "Terminated",
+                "Retired",
+                "Suspended",
+                "Inactive",
+              ].includes(
+                profile.status
+              )
+            }
+            style={{
+              ...actionButtonStyle,
+
+              opacity:
+                [
+                  "Resigned",
+                  "Terminated",
+                  "Retired",
+                  "Suspended",
+                  "Inactive",
+                ].includes(
+                  profile.status
+                )
+                  ? 0.5
+                  : 1,
+
+              cursor:
+                [
+                  "Resigned",
+                  "Terminated",
+                  "Retired",
+                  "Suspended",
+                  "Inactive",
+                ].includes(
+                  profile.status
+                )
+                  ? "not-allowed"
+                  : "pointer",
+            }}
+          >
+            Job Change
+          </button>
               <button
                 type="button"
                 onClick={
@@ -1597,6 +3054,932 @@ const handleChange = (
           </InformationCard>
         </div>
       )}
+      {confirmationOpen &&
+        !editing && (
+        <form
+          onSubmit={
+            handleConfirmation
+          }
+          style={
+            transferCardStyle
+          }
+        >
+          <div
+            style={
+              transferHeaderStyle
+            }
+          >
+            <div>
+              <p
+                style={
+                  transferEyebrowStyle
+                }
+              >
+                Employment Lifecycle
+              </p>
+
+              <h2
+                style={
+                  transferTitleStyle
+                }
+              >
+                Confirm Employment
+              </h2>
+
+              <p
+                style={
+                  transferSubtitleStyle
+                }
+              >
+                Confirm this employee's probation and
+                transition the employment status to Active.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                cancelConfirmation
+              }
+              disabled={
+                confirmationSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+          </div>
+
+          <div
+            style={
+              transferSummaryStyle
+            }
+          >
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Employee
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.name}
+              </strong>
+            </div>
+
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Current Status
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.status}
+              </strong>
+            </div>
+
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                New Status
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                Active
+              </strong>
+            </div>
+          </div>
+
+          <div
+            style={
+              transferGridStyle
+            }
+          >
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Confirmation Effective Date *
+              </label>
+
+              <input
+                type="date"
+                name="effectiveDate"
+                value={
+                  confirmationForm.effectiveDate
+                }
+                onChange={
+                  handleConfirmationChange
+                }
+                disabled={
+                  confirmationSaving
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Reason
+              </label>
+
+              <input
+                type="text"
+                name="reason"
+                value={
+                  confirmationForm.reason
+                }
+                onChange={
+                  handleConfirmationChange
+                }
+                disabled={
+                  confirmationSaving
+                }
+                placeholder="e.g. Successful completion of probation"
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop:
+                "18px",
+            }}
+          >
+            <label
+              style={
+                labelStyle
+              }
+            >
+              Notes
+            </label>
+
+            <textarea
+              name="notes"
+              value={
+                confirmationForm.notes
+              }
+              onChange={
+                handleConfirmationChange
+              }
+              disabled={
+                confirmationSaving
+              }
+              placeholder="Optional HR notes concerning this employment confirmation..."
+              rows={4}
+              style={
+                transferTextareaStyle
+              }
+            />
+          </div>
+
+          <div
+            style={
+              transferFooterStyle
+            }
+          >
+            <button
+              type="button"
+              onClick={
+                cancelConfirmation
+              }
+              disabled={
+                confirmationSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                confirmationSaving ||
+                !confirmationForm.effectiveDate
+              }
+              style={{
+                ...transferConfirmButtonStyle,
+
+                opacity:
+                  confirmationSaving ||
+                  !confirmationForm.effectiveDate
+                    ? 0.6
+                    : 1,
+
+                cursor:
+                  confirmationSaving ||
+                  !confirmationForm.effectiveDate
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {confirmationSaving
+                ? "Confirming..."
+                : "Confirm Employment"}
+            </button>
+          </div>
+        </form>
+      )}
+            {suspensionOpen &&
+        !editing && (
+        <form
+          onSubmit={
+            handleSuspension
+          }
+          style={
+            transferCardStyle
+          }
+        >
+          <div
+            style={
+              transferHeaderStyle
+            }
+          >
+            <div>
+              <p
+                style={
+                  transferEyebrowStyle
+                }
+              >
+                Employment Lifecycle
+              </p>
+
+              <h2
+                style={
+                  transferTitleStyle
+                }
+              >
+                Suspend Employee
+              </h2>
+
+              <p
+                style={
+                  transferSubtitleStyle
+                }
+              >
+                Record a controlled employee suspension period
+                while preserving the permanent employment history.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                cancelSuspension
+              }
+              disabled={
+                suspensionSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+          </div>
+
+
+          <div
+            style={
+              transferSummaryStyle
+            }
+          >
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Employee
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.name}
+              </strong>
+            </div>
+
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Current Status
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.status}
+              </strong>
+            </div>
+          </div>
+
+
+          <div
+            style={
+              transferGridStyle
+            }
+          >
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Suspension Effective Date *
+              </label>
+
+              <input
+                type="date"
+                name="effectiveDate"
+                value={
+                  suspensionForm.effectiveDate
+                }
+                onChange={
+                  handleSuspensionChange
+                }
+                disabled={
+                  suspensionSaving
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+
+
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Suspension End Date *
+              </label>
+
+              <input
+                type="date"
+                name="suspensionEndDate"
+                value={
+                  suspensionForm.suspensionEndDate
+                }
+                onChange={
+                  handleSuspensionChange
+                }
+                min={
+                  suspensionForm.effectiveDate
+                }
+                disabled={
+                  suspensionSaving
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+          </div>
+
+
+          {suspensionForm.effectiveDate &&
+            suspensionForm.suspensionEndDate && (
+              <div
+                style={{
+                  ...promotionOptionsMessageStyle,
+
+                  marginTop:
+                    "18px",
+                }}
+              >
+                <strong>
+                  Suspension Period
+                </strong>
+
+                <div
+                  style={{
+                    marginTop:
+                      "7px",
+                  }}
+                >
+                  {formatDate(
+                    suspensionForm.effectiveDate
+                  )}
+                  {" → "}
+                  {formatDate(
+                    suspensionForm.suspensionEndDate
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    marginTop:
+                      "3px",
+                  }}
+                >
+                  Duration:{" "}
+                  <strong>
+                    {Math.floor(
+                      (
+                        new Date(
+                          suspensionForm.suspensionEndDate
+                        ) -
+                        new Date(
+                          suspensionForm.effectiveDate
+                        )
+                      ) /
+                        (
+                          1000 *
+                          60 *
+                          60 *
+                          24
+                        )
+                    ) + 1}{" "}
+                    calendar day(s)
+                  </strong>
+                </div>
+              </div>
+            )}
+
+
+          <div
+            style={{
+              marginTop:
+                "18px",
+            }}
+          >
+            <label
+              style={
+                labelStyle
+              }
+            >
+              Reason *
+            </label>
+
+            <input
+              type="text"
+              name="reason"
+              value={
+                suspensionForm.reason
+              }
+              onChange={
+                handleSuspensionChange
+              }
+              disabled={
+                suspensionSaving
+              }
+              required
+              placeholder="e.g. Pending disciplinary investigation"
+              style={
+                fieldStyle
+              }
+            />
+          </div>
+
+
+          <div
+            style={{
+              marginTop:
+                "18px",
+            }}
+          >
+            <label
+              style={
+                labelStyle
+              }
+            >
+              Notes
+            </label>
+
+            <textarea
+              name="notes"
+              value={
+                suspensionForm.notes
+              }
+              onChange={
+                handleSuspensionChange
+              }
+              disabled={
+                suspensionSaving
+              }
+              placeholder="Optional HR notes concerning this suspension..."
+              rows={4}
+              style={
+                transferTextareaStyle
+              }
+            />
+          </div>
+
+
+          <div
+            style={{
+              ...promotionOptionsMessageStyle,
+
+              marginTop:
+                "18px",
+            }}
+          >
+            Submitting this suspension will change the employee's
+            status to Suspended and disable linked CHRIS access.
+
+            The recorded suspension end date represents the expected
+            expiry or review date. Reactivation remains a separate
+            controlled HR transaction.
+          </div>
+
+
+          <div
+            style={
+              transferFooterStyle
+            }
+          >
+            <button
+              type="button"
+              onClick={
+                cancelSuspension
+              }
+              disabled={
+                suspensionSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                suspensionSaving ||
+                !suspensionForm.effectiveDate ||
+                !suspensionForm.suspensionEndDate ||
+                !suspensionForm.reason.trim()
+              }
+              style={{
+                ...transferConfirmButtonStyle,
+
+                opacity:
+                  suspensionSaving ||
+                  !suspensionForm.effectiveDate ||
+                  !suspensionForm.suspensionEndDate ||
+                  !suspensionForm.reason.trim()
+                    ? 0.6
+                    : 1,
+
+                cursor:
+                  suspensionSaving ||
+                  !suspensionForm.effectiveDate ||
+                  !suspensionForm.suspensionEndDate ||
+                  !suspensionForm.reason.trim()
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {suspensionSaving
+                ? "Suspending..."
+                : "Suspend Employee"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {reactivationOpen &&
+        !editing && (
+        <form
+          onSubmit={
+            handleReactivation
+          }
+          style={
+            transferCardStyle
+          }
+        >
+          <div
+            style={
+              transferHeaderStyle
+            }
+          >
+            <div>
+              <p
+                style={
+                  transferEyebrowStyle
+                }
+              >
+                Employment Lifecycle
+              </p>
+
+              <h2
+                style={
+                  transferTitleStyle
+                }
+              >
+                Reactivate Employee
+              </h2>
+
+              <p
+                style={
+                  transferSubtitleStyle
+                }
+              >
+                Return this employee to active employment status
+                and restore linked CHRIS access.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                cancelReactivation
+              }
+              disabled={
+                reactivationSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+          </div>
+
+
+          <div
+            style={
+              transferSummaryStyle
+            }
+          >
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Employee
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.name}
+              </strong>
+            </div>
+
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Current Status
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.status}
+              </strong>
+            </div>
+
+            {profile.status ===
+              "Suspended" &&
+              profile.suspensionEndDate && (
+                <div>
+                  <span
+                    style={
+                      transferSummaryLabelStyle
+                    }
+                  >
+                    Suspension Review Date
+                  </span>
+
+                  <strong
+                    style={
+                      transferSummaryValueStyle
+                    }
+                  >
+                    {formatDate(
+                      profile.suspensionEndDate
+                    )}
+                  </strong>
+                </div>
+              )}
+          </div>
+
+
+          <div
+            style={
+              transferGridStyle
+            }
+          >
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Reactivation Effective Date *
+              </label>
+
+              <input
+                type="date"
+                name="effectiveDate"
+                value={
+                  reactivationForm.effectiveDate
+                }
+                onChange={
+                  handleReactivationChange
+                }
+                disabled={
+                  reactivationSaving
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Reason *
+              </label>
+
+              <input
+                type="text"
+                name="reason"
+                value={
+                  reactivationForm.reason
+                }
+                onChange={
+                  handleReactivationChange
+                }
+                disabled={
+                  reactivationSaving
+                }
+                required
+                placeholder="e.g. Suspension review completed"
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+          </div>
+
+
+          <div
+            style={{
+              marginTop:
+                "18px",
+            }}
+          >
+            <label
+              style={
+                labelStyle
+              }
+            >
+              Notes
+            </label>
+
+            <textarea
+              name="notes"
+              value={
+                reactivationForm.notes
+              }
+              onChange={
+                handleReactivationChange
+              }
+              disabled={
+                reactivationSaving
+              }
+              placeholder="Optional HR notes concerning this reactivation..."
+              rows={4}
+              style={
+                transferTextareaStyle
+              }
+            />
+          </div>
+
+
+          <div
+            style={{
+              ...promotionOptionsMessageStyle,
+
+              marginTop:
+                "18px",
+            }}
+          >
+            Submitting this reactivation will return the employee
+            to Active status and restore linked CHRIS access.
+
+            The original suspension period remains permanently
+            preserved in Employment History.
+          </div>
+
+
+          <div
+            style={
+              transferFooterStyle
+            }
+          >
+            <button
+              type="button"
+              onClick={
+                cancelReactivation
+              }
+              disabled={
+                reactivationSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                reactivationSaving ||
+                !reactivationForm.effectiveDate ||
+                !reactivationForm.reason.trim()
+              }
+              style={{
+                ...transferConfirmButtonStyle,
+
+                opacity:
+                  reactivationSaving ||
+                  !reactivationForm.effectiveDate ||
+                  !reactivationForm.reason.trim()
+                    ? 0.6
+                    : 1,
+
+                cursor:
+                  reactivationSaving ||
+                  !reactivationForm.effectiveDate ||
+                  !reactivationForm.reason.trim()
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {reactivationSaving
+                ? "Reactivating..."
+                : "Reactivate Employee"}
+            </button>
+          </div>
+        </form>
+      )}
+
       {transferOpen &&
         !editing && (
         <form
@@ -1890,6 +4273,487 @@ const handleChange = (
           </div>
         </form>
       )}
+  {jobChangeOpen &&
+    !editing && (
+    <form
+      onSubmit={
+        handleJobChange
+      }
+      style={
+        promotionCardStyle
+      }
+    >
+      <div
+        style={
+          promotionHeaderStyle
+        }
+      >
+        <div>
+          <p
+            style={
+              promotionEyebrowStyle
+            }
+          >
+            Employee Movement
+          </p>
+
+          <h2
+            style={
+              promotionTitleStyle
+            }
+          >
+            Job Change
+          </h2>
+
+          <p
+            style={
+              promotionSubtitleStyle
+            }
+          >
+            Record a controlled lateral move, department
+            reassignment, role reclassification, designation
+            correction, or organizational restructuring.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            cancelJobChange
+          }
+          disabled={
+            jobChangeSaving
+          }
+          style={
+            cancelButtonStyle
+          }
+        >
+          Cancel
+        </button>
+      </div>
+
+
+      <div
+        style={
+          promotionOptionsMessageStyle
+        }
+      >
+        <strong>
+          Current Assignment
+        </strong>
+
+        <div
+          style={{
+            marginTop:
+              "7px",
+          }}
+        >
+          Department:{" "}
+          <strong>
+            {
+              profile.department ||
+              "Not Assigned"
+            }
+          </strong>
+        </div>
+
+        <div
+          style={{
+            marginTop:
+              "3px",
+          }}
+        >
+          Designation:{" "}
+          <strong>
+            {
+              profile.designation ||
+              "Not Assigned"
+            }
+          </strong>
+        </div>
+      </div>
+
+
+      {jobChangeCatalogLoading ? (
+        <div
+          style={
+            promotionOptionsMessageStyle
+          }
+        >
+          Loading available departments and designations...
+        </div>
+      ) : (
+        <>
+          <div
+            style={
+              promotionGridStyle
+            }
+          >
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                New Department *
+              </label>
+
+              <select
+                name="departmentId"
+                value={
+                  jobChangeForm
+                    .departmentId
+                }
+                onChange={
+                  handleJobChangeChange
+                }
+                disabled={
+                  jobChangeSaving
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              >
+                <option value="">
+                  Select department
+                </option>
+
+                {Array.from(
+                  new Map(
+                    jobChangeCatalog
+                      .filter(
+                        (designation) =>
+                          designation
+                            .department?.id
+                      )
+                      .map(
+                        (designation) => [
+                          designation
+                            .department
+                            .id,
+                          designation
+                            .department,
+                        ]
+                      )
+                  ).values()
+                )
+                  .sort(
+                    (a, b) =>
+                      a.name.localeCompare(
+                        b.name
+                      )
+                  )
+                  .map(
+                    (department) => (
+                      <option
+                        key={
+                          department.id
+                        }
+                        value={
+                          department.id
+                        }
+                      >
+                        {
+                          department.name
+                        }
+                      </option>
+                    )
+                  )}
+              </select>
+
+              <p
+                style={
+                  promotionFieldHintStyle
+                }
+              >
+                Select the organizational department that will
+                own the employee's new role.
+              </p>
+            </div>
+
+
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                New Designation *
+              </label>
+
+              <select
+                name="designationId"
+                value={
+                  jobChangeForm
+                    .designationId
+                }
+                onChange={
+                  handleJobChangeChange
+                }
+                disabled={
+                  jobChangeSaving ||
+                  !jobChangeForm
+                    .departmentId
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              >
+                <option value="">
+                  Select designation
+                </option>
+
+                {jobChangeCatalog
+                  .filter(
+                    (designation) =>
+                      designation
+                        .department?.id ===
+                      jobChangeForm
+                        .departmentId
+                  )
+                  .sort(
+                    (a, b) => {
+                      const levelA =
+                        a.careerLevel ??
+                        999999;
+
+                      const levelB =
+                        b.careerLevel ??
+                        999999;
+
+                      if (
+                        levelA !==
+                        levelB
+                      ) {
+                        return (
+                          levelA -
+                          levelB
+                        );
+                      }
+
+                      return a.name
+                        .localeCompare(
+                          b.name
+                        );
+                    }
+                  )
+                  .map(
+                    (designation) => (
+                      <option
+                        key={
+                          designation.id
+                        }
+                        value={
+                          designation.id
+                        }
+                      >
+                        {
+                          designation.name
+                        }
+                        {
+                          designation
+                            .careerLevel !=
+                          null
+                            ? ` - Level ${designation.careerLevel}`
+                            : ""
+                        }
+                      </option>
+                    )
+                  )}
+              </select>
+
+              <p
+                style={
+                  promotionFieldHintStyle
+                }
+              >
+                Only active designations mapped to the selected
+                department are available.
+              </p>
+            </div>
+          </div>
+
+
+          <div
+            style={{
+              ...promotionGridStyle,
+              marginTop:
+                "18px",
+            }}
+          >
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Effective Date *
+              </label>
+
+              <input
+                type="date"
+                name="effectiveDate"
+                value={
+                  jobChangeForm
+                    .effectiveDate
+                }
+                onChange={
+                  handleJobChangeChange
+                }
+                disabled={
+                  jobChangeSaving
+                }
+                required
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+
+
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
+                Reason *
+              </label>
+
+              <input
+                type="text"
+                name="reason"
+                value={
+                  jobChangeForm.reason
+                }
+                onChange={
+                  handleJobChangeChange
+                }
+                disabled={
+                  jobChangeSaving
+                }
+                required
+                placeholder="e.g. Role reclassification"
+                style={
+                  fieldStyle
+                }
+              />
+            </div>
+          </div>
+
+
+          <div
+            style={{
+              marginTop:
+                "18px",
+            }}
+          >
+            <label
+              style={
+                labelStyle
+              }
+            >
+              Notes
+            </label>
+
+            <textarea
+              name="notes"
+              value={
+                jobChangeForm.notes
+              }
+              onChange={
+                handleJobChangeChange
+              }
+              disabled={
+                jobChangeSaving
+              }
+              placeholder="Optional HR notes concerning this Job Change..."
+              rows={4}
+              style={
+                promotionTextareaStyle
+              }
+            />
+          </div>
+
+
+          <div
+            style={
+              promotionFooterStyle
+            }
+          >
+            <button
+              type="button"
+              onClick={
+                cancelJobChange
+              }
+              disabled={
+                jobChangeSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                jobChangeSaving ||
+                !jobChangeForm
+                  .departmentId ||
+                !jobChangeForm
+                  .designationId ||
+                !jobChangeForm
+                  .effectiveDate ||
+                !jobChangeForm
+                  .reason
+                  .trim()
+              }
+              style={{
+                ...promotionConfirmButtonStyle,
+
+                opacity:
+                  jobChangeSaving ||
+                  !jobChangeForm
+                    .departmentId ||
+                  !jobChangeForm
+                    .designationId ||
+                  !jobChangeForm
+                    .effectiveDate ||
+                  !jobChangeForm
+                    .reason
+                    .trim()
+                    ? 0.6
+                    : 1,
+
+                cursor:
+                  jobChangeSaving ||
+                  !jobChangeForm
+                    .departmentId ||
+                  !jobChangeForm
+                    .designationId ||
+                  !jobChangeForm
+                    .effectiveDate ||
+                  !jobChangeForm
+                    .reason
+                    .trim()
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {jobChangeSaving
+                ? "Recording Job Change..."
+                : "Confirm Job Change"}
+            </button>
+          </div>
+        </>
+      )}
+    </form>
+  )}
+
       {promotionOpen &&
         !editing && (
         <form
@@ -2417,15 +5281,82 @@ function LifecycleEvent({
     event.toLocation?.name ||
     "Not Assigned";
 
+
+  /*
+  ============================================================
+  SUSPENSION PERIOD
+  ============================================================
+
+  Suspension duration is calculated from the lifecycle
+  effective date through the recorded suspension end date.
+
+  The calculation is inclusive:
+  14 Aug -> 14 Aug = 1 calendar day
+  14 Aug -> 20 Aug = 7 calendar days
+  ============================================================
+  */
+
+  let suspensionDurationDays =
+    null;
+
+  if (
+    event.eventType ===
+      "SUSPENDED" &&
+    event.effectiveDate &&
+    event.suspensionEndDate
+  ) {
+    const startDate =
+      new Date(
+        event.effectiveDate
+      );
+
+    const endDate =
+      new Date(
+        event.suspensionEndDate
+      );
+
+    const startUtc =
+      Date.UTC(
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth(),
+        startDate.getUTCDate()
+      );
+
+    const endUtc =
+      Date.UTC(
+        endDate.getUTCFullYear(),
+        endDate.getUTCMonth(),
+        endDate.getUTCDate()
+      );
+
+    suspensionDurationDays =
+      Math.floor(
+        (
+          endUtc -
+          startUtc
+        ) /
+          (
+            1000 *
+            60 *
+            60 *
+            24
+          )
+      ) + 1;
+  }
+
+
   return (
     <div
       style={{
         position:
           "relative",
+
         display:
           "grid",
+
         gridTemplateColumns:
           "34px 1fr",
+
         gap:
           "15px",
       }}
@@ -2434,8 +5365,10 @@ function LifecycleEvent({
         style={{
           position:
             "relative",
+
           display:
             "flex",
+
           justifyContent:
             "center",
         }}
@@ -2454,6 +5387,7 @@ function LifecycleEvent({
           />
         )}
       </div>
+
 
       <div
         style={{
@@ -2504,17 +5438,51 @@ function LifecycleEvent({
             </span>
           </div>
 
+
           {(event.previousStatus ||
-            event.newStatus) && (
-            <HistoryDetail
-              label="Status"
-              value={`${formatStatus(
-                event.previousStatus
-              )} \u2192 ${formatStatus(
-                event.newStatus
-              )}`}
-            />
-          )}
+            event.newStatus) &&
+            event.previousStatus !==
+              event.newStatus && (
+              <HistoryDetail
+                label="Status"
+                value={`${formatStatus(
+                  event.previousStatus
+                )} → ${formatStatus(
+                  event.newStatus
+                )}`}
+              />
+            )}
+
+
+          {event.eventType ===
+            "SUSPENDED" &&
+            event.suspensionEndDate && (
+              <>
+                <HistoryDetail
+                  label="Suspension Period"
+                  value={`${formatLongDate(
+                    event.effectiveDate
+                  )} → ${formatLongDate(
+                    event.suspensionEndDate
+                  )}`}
+                />
+
+                <HistoryDetail
+                  label="Duration"
+                  value={
+                    suspensionDurationDays
+                      ? `${suspensionDurationDays} calendar ${
+                          suspensionDurationDays ===
+                          1
+                            ? "day"
+                            : "days"
+                        }`
+                      : "-"
+                  }
+                />
+              </>
+            )}
+
 
           {(event.fromLocation ||
             event.toLocation) &&
@@ -2526,25 +5494,33 @@ function LifecycleEvent({
               />
             )}
 
-          {event.previousDepartment ||
-          event.newDepartment ? (
-            <HistoryDetail
-              label="Department"
-              value={`${event.previousDepartment?.name ||
-                "Not Assigned"} \u2192 ${event.newDepartment?.name ||
-                "Not Assigned"}`}
-            />
-          ) : null}
 
-          {event.previousDesignation ||
-          event.newDesignation ? (
-            <HistoryDetail
-              label="Designation"
-              value={`${event.previousDesignation?.name ||
-                "Not Assigned"} \u2192 ${event.newDesignation?.name ||
-                "Not Assigned"}`}
-            />
-          ) : null}
+          {(event.previousDepartment ||
+            event.newDepartment) &&
+            event.previousDepartment?.id !==
+              event.newDepartment?.id && (
+              <HistoryDetail
+                label="Department"
+                value={`${event.previousDepartment?.name ||
+                  "Not Assigned"} → ${event.newDepartment?.name ||
+                  "Not Assigned"}`}
+              />
+            )}
+
+
+          {(event.previousDesignation ||
+            event.newDesignation) &&
+            event.previousDesignation?.id !==
+              event.newDesignation?.id && (
+              <HistoryDetail
+                label="Designation"
+                value={`${event.previousDesignation?.name ||
+                  "Not Assigned"} → ${event.newDesignation?.name ||
+                  "Not Assigned"}`}
+              />
+            )}
+
+
           {event.reason && (
             <HistoryDetail
               label="Reason"
@@ -2554,6 +5530,7 @@ function LifecycleEvent({
             />
           )}
 
+
           {event.notes && (
             <HistoryDetail
               label="Notes"
@@ -2562,6 +5539,7 @@ function LifecycleEvent({
               }
             />
           )}
+
 
           <HistoryDetail
             label="Performed By"
@@ -2618,6 +5596,8 @@ function formatLifecycleEvent(
       "Employee Transferred",
     PROMOTED:
       "Employee Promoted",
+    JOB_CHANGED:
+      "Job Changed",
     SUSPENDED:
       "Employee Suspended",
     REACTIVATED:
@@ -3817,7 +6797,3 @@ const historyErrorStyle = {
   fontWeight: "700",
 };
 export default EmployeeProfile;
-
-
-
-

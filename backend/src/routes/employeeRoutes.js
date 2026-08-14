@@ -1,4 +1,4 @@
-const {
+﻿const {
   CAREER_STRUCTURE_TEMPLATES,
   getCareerStructureTemplate,
 } = require("../config/careerStructureTemplates");
@@ -695,6 +695,298 @@ router.put(
 
 /*
 ============================================================
+CONFIRM EMPLOYEE EMPLOYMENT
+Permission: employees.update
+============================================================
+
+Employment confirmation:
+- applies only to employees currently on PROBATION
+- changes employee status from PROBATION to ACTIVE
+- records confirmationDate
+- preserves department, designation and location
+- creates a permanent CONFIRMED lifecycle event
+============================================================
+*/
+
+router.patch(
+  "/:employeeNumber/confirm",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        employeeNumber,
+      } = req.params;
+
+      const {
+        effectiveDate,
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED EFFECTIVE DATE
+      --------------------------------------------------------
+      */
+
+      if (
+        !effectiveDate ||
+        !String(effectiveDate).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "EFFECTIVE_DATE_REQUIRED",
+          message:
+            "A confirmation effective date is required.",
+        });
+      }
+
+
+      const parsedEffectiveDate =
+        new Date(effectiveDate);
+
+      if (
+        Number.isNaN(
+          parsedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "INVALID_EFFECTIVE_DATE",
+          message:
+            "The supplied confirmation date is invalid.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      FUTURE DATE PROTECTION
+      --------------------------------------------------------
+
+      Confirmation changes the employee's live status
+      immediately. Scheduled future confirmations will be
+      handled separately when CHRIS supports pending HR
+      transactions.
+      --------------------------------------------------------
+      */
+
+      const confirmationDateOnly =
+        new Date(parsedEffectiveDate);
+
+      confirmationDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      if (
+        confirmationDateOnly >
+        today
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "FUTURE_CONFIRMATION_NOT_SUPPORTED",
+          message:
+            "Future-dated employment confirmation is not yet supported. Select today or an earlier effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD CURRENT EMPLOYEE
+      --------------------------------------------------------
+      */
+
+      const existingEmployee =
+        await getEmployee(
+          organizationId,
+          employeeNumber
+        );
+
+      if (!existingEmployee) {
+        return res.status(404).json({
+          status: "error",
+          code:
+            "EMPLOYEE_NOT_FOUND",
+          message:
+            "Employee not found.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      CONFIRMATION ELIGIBILITY
+      --------------------------------------------------------
+      */
+
+      if (
+        existingEmployee.status !==
+        "PROBATION"
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "EMPLOYEE_NOT_ON_PROBATION",
+          message:
+            existingEmployee.status ===
+            "ACTIVE"
+              ? "Employee is already active and cannot be confirmed again."
+              : "Only an employee currently on probation can be confirmed.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      TRANSACTION
+      --------------------------------------------------------
+      */
+
+      const employee =
+        await prisma.$transaction(
+          async (tx) => {
+
+            const updatedEmployee =
+              await tx.employee.update({
+                where: {
+                  id:
+                    existingEmployee.id,
+                },
+
+                data: {
+                  status:
+                    "ACTIVE",
+
+                  confirmationDate:
+                    parsedEffectiveDate,
+                },
+
+                include: {
+                  department: true,
+                  designation: true,
+                  location: true,
+
+                  user: {
+                    select: {
+                      id: true,
+                      isActive: true,
+                    },
+                  },
+                },
+              });
+
+
+            await tx.employeeLifecycleEvent.create({
+              data: {
+                organizationId,
+
+                employeeId:
+                  existingEmployee.id,
+
+                eventType:
+                  "CONFIRMED",
+
+                effectiveDate:
+                  parsedEffectiveDate,
+
+                previousStatus:
+                  existingEmployee.status,
+
+                newStatus:
+                  "ACTIVE",
+
+                fromLocationId:
+                  existingEmployee.locationId,
+
+                toLocationId:
+                  existingEmployee.locationId,
+
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  existingEmployee.departmentId,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  existingEmployee.designationId,
+
+                reason:
+                  reason &&
+                  String(reason).trim()
+                    ? String(reason).trim()
+                    : "Employment confirmed",
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
+                performedByUserId:
+                  req.auth.userId || null,
+              },
+            });
+
+
+            return updatedEmployee;
+          }
+        );
+
+
+      return res.status(200).json({
+        status: "success",
+
+        message:
+          "Employment confirmed successfully. Employee status is now Active.",
+
+        data: employee,
+      });
+    } catch (error) {
+      console.error(
+        "Employee confirmation error:",
+        error
+      );
+
+      return res.status(500).json({
+        status: "error",
+
+        message:
+          "Unable to confirm employee employment.",
+      });
+    }
+  }
+);
+
+
+
+/*
+============================================================
 SUSPEND EMPLOYEE
 Permission: employees.update
 ============================================================
@@ -703,6 +995,10 @@ Suspension:
 - preserves employee history
 - sets Employee to SUSPENDED
 - disables linked CHRIS User
+- records effective date
+- records suspension end date
+- records reason / notes
+- preserves department, designation and location
 ============================================================
 */
 
@@ -720,6 +1016,178 @@ router.patch(
         employeeNumber,
       } = req.params;
 
+      const {
+        effectiveDate,
+        suspensionEndDate,
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED FIELDS
+      --------------------------------------------------------
+      */
+
+      if (
+        !effectiveDate ||
+        !String(effectiveDate).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "EFFECTIVE_DATE_REQUIRED",
+          message:
+            "A suspension effective date is required.",
+        });
+      }
+
+
+      if (
+        !suspensionEndDate ||
+        !String(suspensionEndDate).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "SUSPENSION_END_DATE_REQUIRED",
+          message:
+            "A suspension end date is required.",
+        });
+      }
+
+
+      if (
+        !reason ||
+        !String(reason).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "SUSPENSION_REASON_REQUIRED",
+          message:
+            "A reason is required to suspend an employee.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      DATE VALIDATION
+      --------------------------------------------------------
+      */
+
+      const parsedEffectiveDate =
+        new Date(effectiveDate);
+
+      const parsedSuspensionEndDate =
+        new Date(suspensionEndDate);
+
+
+      if (
+        Number.isNaN(
+          parsedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "INVALID_EFFECTIVE_DATE",
+          message:
+            "The supplied suspension effective date is invalid.",
+        });
+      }
+
+
+      if (
+        Number.isNaN(
+          parsedSuspensionEndDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "INVALID_SUSPENSION_END_DATE",
+          message:
+            "The supplied suspension end date is invalid.",
+        });
+      }
+
+
+      const effectiveDateOnly =
+        new Date(parsedEffectiveDate);
+
+      effectiveDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+
+      const suspensionEndDateOnly =
+        new Date(parsedSuspensionEndDate);
+
+      suspensionEndDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+
+      if (
+        suspensionEndDateOnly <
+        effectiveDateOnly
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "INVALID_SUSPENSION_PERIOD",
+          message:
+            "Suspension end date cannot be earlier than the effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      FUTURE START DATE PROTECTION
+      --------------------------------------------------------
+      */
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+
+      if (
+        effectiveDateOnly >
+        today
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "FUTURE_SUSPENSION_NOT_SUPPORTED",
+          message:
+            "Future-dated employee suspension is not yet supported. Select today or an earlier effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD CURRENT EMPLOYEE
+      --------------------------------------------------------
+      */
+
       const existingEmployee =
         await getEmployee(
           organizationId,
@@ -729,39 +1197,59 @@ router.patch(
       if (!existingEmployee) {
         return res.status(404).json({
           status: "error",
+          code:
+            "EMPLOYEE_NOT_FOUND",
           message:
             "Employee not found.",
         });
       }
+
+
+      /*
+      --------------------------------------------------------
+      SUSPENSION ELIGIBILITY
+      --------------------------------------------------------
+      */
 
       if (
         EXIT_STATUSES.includes(
           existingEmployee.status
         )
       ) {
-        return res.status(400).json({
+        return res.status(409).json({
           status: "error",
-
+          code:
+            "EMPLOYEE_EXITED",
           message:
             "An exited employee cannot be suspended.",
         });
       }
 
+
       if (
         existingEmployee.status ===
         "SUSPENDED"
       ) {
-        return res.status(400).json({
+        return res.status(409).json({
           status: "error",
-
+          code:
+            "EMPLOYEE_ALREADY_SUSPENDED",
           message:
             "Employee is already suspended.",
         });
       }
 
+
+      /*
+      --------------------------------------------------------
+      TRANSACTION
+      --------------------------------------------------------
+      */
+
       const employee =
         await prisma.$transaction(
           async (tx) => {
+
             const updatedEmployee =
               await tx.employee.update({
                 where: {
@@ -772,14 +1260,29 @@ router.patch(
                 data: {
                   status:
                     "SUSPENDED",
+
+                  suspensionEndDate:
+                    parsedSuspensionEndDate,
                 },
 
                 include: {
                   department: true,
                   designation: true,
                   location: true,
+
+                  user: {
+                    select: {
+                      id: true,
+                      isActive: true,
+                    },
+                  },
                 },
               });
+
+
+            /*
+            Disable linked CHRIS access while suspended.
+            */
 
             if (
               existingEmployee.user
@@ -787,15 +1290,20 @@ router.patch(
               await tx.user.update({
                 where: {
                   id:
-                    existingEmployee
-                      .user.id,
+                    existingEmployee.user.id,
                 },
 
                 data: {
-                  isActive: false,
+                  isActive:
+                    false,
                 },
               });
             }
+
+
+            /*
+            Permanent employment lifecycle audit record.
+            */
 
             await tx.employeeLifecycleEvent.create({
               data: {
@@ -808,7 +1316,10 @@ router.patch(
                   "SUSPENDED",
 
                 effectiveDate:
-                  new Date(),
+                  parsedEffectiveDate,
+
+                suspensionEndDate:
+                  parsedSuspensionEndDate,
 
                 previousStatus:
                   existingEmployee.status,
@@ -822,14 +1333,37 @@ router.patch(
                 toLocationId:
                   existingEmployee.locationId,
 
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  existingEmployee.departmentId,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  existingEmployee.designationId,
+
+                reason:
+                  String(reason).trim(),
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
                 performedByUserId:
-                  req.auth.userId,
+                  req.auth.userId || null,
               },
             });
+
 
             return updatedEmployee;
           }
         );
+
 
       return res.status(200).json({
         status: "success",
@@ -837,7 +1371,8 @@ router.patch(
         message:
           "Employee suspended successfully. Linked CHRIS access has been disabled.",
 
-        data: employee,
+        data:
+          employee,
       });
     } catch (error) {
       console.error(
@@ -1198,10 +1733,18 @@ REACTIVATE EMPLOYEE
 Permission: employees.update
 ============================================================
 
-This is for SUSPENDED or INACTIVE employees.
+Reactivation:
+- applies only to SUSPENDED or INACTIVE employees
+- restores employee status to ACTIVE
+- restores linked CHRIS access
+- clears current suspensionEndDate
+- records effective date
+- records reason / notes
+- preserves department, designation and location
+- creates a permanent REACTIVATED lifecycle event
 
 Exited employees are intentionally excluded.
-Rehire should later be handled separately.
+Rehire remains a separate future process.
 ============================================================
 */
 
@@ -1219,6 +1762,137 @@ router.patch(
         employeeNumber,
       } = req.params;
 
+      const {
+        effectiveDate,
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED EFFECTIVE DATE
+      --------------------------------------------------------
+      */
+
+      if (
+        !effectiveDate ||
+        !String(effectiveDate).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+
+          code:
+            "EFFECTIVE_DATE_REQUIRED",
+
+          message:
+            "A reactivation effective date is required.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED REASON
+      --------------------------------------------------------
+      */
+
+      if (
+        !reason ||
+        !String(reason).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+
+          code:
+            "REACTIVATION_REASON_REQUIRED",
+
+          message:
+            "A reason is required to reactivate an employee.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      EFFECTIVE DATE VALIDATION
+      --------------------------------------------------------
+      */
+
+      const parsedEffectiveDate =
+        new Date(effectiveDate);
+
+      if (
+        Number.isNaN(
+          parsedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status: "error",
+
+          code:
+            "INVALID_EFFECTIVE_DATE",
+
+          message:
+            "The supplied reactivation effective date is invalid.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      FUTURE DATE PROTECTION
+
+      Reactivation immediately changes the employee's live
+      employment status and restores linked CHRIS access.
+
+      Future-dated reactivation will require CHRIS'
+      scheduled HR transaction engine.
+      --------------------------------------------------------
+      */
+
+      const effectiveDateOnly =
+        new Date(parsedEffectiveDate);
+
+      effectiveDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      if (
+        effectiveDateOnly >
+        today
+      ) {
+        return res.status(409).json({
+          status: "error",
+
+          code:
+            "FUTURE_REACTIVATION_NOT_SUPPORTED",
+
+          message:
+            "Future-dated employee reactivation is not yet supported. Select today or an earlier effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD CURRENT EMPLOYEE
+      --------------------------------------------------------
+      */
+
       const existingEmployee =
         await getEmployee(
           organizationId,
@@ -1228,23 +1902,52 @@ router.patch(
       if (!existingEmployee) {
         return res.status(404).json({
           status: "error",
+
+          code:
+            "EMPLOYEE_NOT_FOUND",
+
           message:
             "Employee not found.",
         });
       }
+
+
+      /*
+      --------------------------------------------------------
+      EXITED EMPLOYEE PROTECTION
+      --------------------------------------------------------
+      */
 
       if (
         EXIT_STATUSES.includes(
           existingEmployee.status
         )
       ) {
-        return res.status(400).json({
+        return res.status(409).json({
           status: "error",
+
+          code:
+            "EMPLOYEE_EXITED",
 
           message:
             "Exited employees cannot be reactivated here. Use the future Rehire process.",
         });
       }
+
+
+      /*
+      --------------------------------------------------------
+      REACTIVATION ELIGIBILITY
+
+      Reactivation is distinct from:
+      - Confirmation
+      - Reinstatement
+      - Rehire
+
+      Only suspended or inactive employees may use this
+      transaction.
+      --------------------------------------------------------
+      */
 
       if (
         ![
@@ -1254,17 +1957,34 @@ router.patch(
           existingEmployee.status
         )
       ) {
-        return res.status(400).json({
+        return res.status(409).json({
           status: "error",
+
+          code:
+            "EMPLOYEE_NOT_REACTIVATABLE",
 
           message:
             "Only suspended or inactive employees can be reactivated.",
         });
       }
 
+
+      /*
+      --------------------------------------------------------
+      TRANSACTION
+      --------------------------------------------------------
+      */
+
       const employee =
         await prisma.$transaction(
           async (tx) => {
+
+            /*
+            ----------------------------------------------------
+            RESTORE EMPLOYEE
+            ----------------------------------------------------
+            */
+
             const updatedEmployee =
               await tx.employee.update({
                 where: {
@@ -1275,14 +1995,47 @@ router.patch(
                 data: {
                   status:
                     "ACTIVE",
+
+                  /*
+                  Current suspension period is no longer active.
+
+                  Historical suspensionEndDate remains permanently
+                  preserved on the earlier SUSPENDED lifecycle
+                  event.
+                  */
+
+                  suspensionEndDate:
+                    null,
                 },
 
                 include: {
-                  department: true,
-                  designation: true,
-                  location: true,
+                  department:
+                    true,
+
+                  designation:
+                    true,
+
+                  location:
+                    true,
+
+                  user: {
+                    select: {
+                      id:
+                        true,
+
+                      isActive:
+                        true,
+                    },
+                  },
                 },
               });
+
+
+            /*
+            ----------------------------------------------------
+            RESTORE LINKED CHRIS ACCESS
+            ----------------------------------------------------
+            */
 
             if (
               existingEmployee.user
@@ -1290,15 +2043,22 @@ router.patch(
               await tx.user.update({
                 where: {
                   id:
-                    existingEmployee
-                      .user.id,
+                    existingEmployee.user.id,
                 },
 
                 data: {
-                  isActive: true,
+                  isActive:
+                    true,
                 },
               });
             }
+
+
+            /*
+            ----------------------------------------------------
+            PERMANENT EMPLOYMENT LIFECYCLE RECORD
+            ----------------------------------------------------
+            */
 
             await tx.employeeLifecycleEvent.create({
               data: {
@@ -1311,7 +2071,7 @@ router.patch(
                   "REACTIVATED",
 
                 effectiveDate:
-                  new Date(),
+                  parsedEffectiveDate,
 
                 previousStatus:
                   existingEmployee.status,
@@ -1319,28 +2079,64 @@ router.patch(
                 newStatus:
                   "ACTIVE",
 
+                /*
+                Organizational assignment remains unchanged.
+                */
+
                 fromLocationId:
                   existingEmployee.locationId,
 
                 toLocationId:
                   existingEmployee.locationId,
 
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  existingEmployee.departmentId,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  existingEmployee.designationId,
+
+                reason:
+                  String(reason).trim(),
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
                 performedByUserId:
-                  req.auth.userId,
+                  req.auth.userId ||
+                  null,
               },
             });
+
 
             return updatedEmployee;
           }
         );
 
+
+      /*
+      --------------------------------------------------------
+      SUCCESS RESPONSE
+      --------------------------------------------------------
+      */
+
       return res.status(200).json({
-        status: "success",
+        status:
+          "success",
 
         message:
-          "Employee reactivated successfully.",
+          "Employee reactivated successfully. Linked CHRIS access has been restored.",
 
-        data: employee,
+        data:
+          employee,
       });
     } catch (error) {
       console.error(
@@ -1349,7 +2145,8 @@ router.patch(
       );
 
       return res.status(500).json({
-        status: "error",
+        status:
+          "error",
 
         message:
           "Unable to reactivate employee.",
@@ -2441,7 +3238,7 @@ router.patch(
       }
 
 
-      /*
+            /*
       ----------------------------------------------------------
       VALIDATE DEPARTMENT
       ----------------------------------------------------------
@@ -3716,6 +4513,8 @@ router.patch(
       } = req.params;
 
       const {
+        name,
+        code,
         departmentId,
         careerTrack,
         careerLevel,
@@ -3837,7 +4636,130 @@ router.patch(
         });
       }
 
+            /*
+      ----------------------------------------------------------
+      VALIDATE DESIGNATION IDENTITY
+      ----------------------------------------------------------
+
+      Name and code are tenant-configurable organizational
+      terminology.
+
+      Editing them:
+      - preserves designation record ID
+      - preserves employee assignments
+      - preserves career structure
+      - preserves lifecycle history
+      - must remain unique within the tenant
+      ----------------------------------------------------------
+      */
+
+      const normalizedName =
+        name !== undefined
+          ? String(
+              name || ""
+            ).trim()
+          : designation.name;
+
+
+      if (!normalizedName) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_NAME_REQUIRED",
+
+          message:
+            "Designation name is required.",
+        });
+      }
+
+
+      const normalizedCode =
+        code !== undefined
+          ? String(
+              code || ""
+            ).trim() ||
+            null
+          : designation.code;
+
+
       /*
+      ----------------------------------------------------------
+      DUPLICATE NAME / CODE PROTECTION
+      ----------------------------------------------------------
+      */
+
+      const duplicateIdentity =
+        await prisma.designation.findFirst({
+          where: {
+            organizationId,
+
+            id: {
+              not:
+                designation.id,
+            },
+
+            OR: [
+              {
+                name: {
+                  equals:
+                    normalizedName,
+
+                  mode:
+                    "insensitive",
+                },
+              },
+
+              ...(normalizedCode
+                ? [
+                    {
+                      code: {
+                        equals:
+                          normalizedCode,
+
+                        mode:
+                          "insensitive",
+                      },
+                    },
+                  ]
+                : []),
+            ],
+          },
+
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        });
+
+
+      if (duplicateIdentity) {
+        const duplicateName =
+          duplicateIdentity.name
+            ?.toLowerCase() ===
+          normalizedName.toLowerCase();
+
+
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "DESIGNATION_IDENTITY_DUPLICATE",
+
+          message:
+            duplicateName
+              ? `Another designation already uses the name "${normalizedName}".`
+              : `Another designation already uses the code "${normalizedCode}".`,
+
+          conflict:
+            duplicateIdentity,
+        });
+      }
+
+/*
       ----------------------------------------------------------
       VALIDATE DEPARTMENT
       ----------------------------------------------------------
@@ -4059,6 +4981,12 @@ router.patch(
           },
 
           data: {
+            name:
+              normalizedName,
+
+            code:
+              normalizedCode,
+
             departmentId:
               normalizedDepartmentId,
 
@@ -4116,7 +5044,7 @@ router.patch(
           "success",
 
         message:
-          "Designation career position configured successfully.",
+          "Designation configuration updated successfully.",
 
         data:
           updatedDesignation,
@@ -4423,7 +5351,7 @@ router.get(
 
 /*
 ============================================================
-PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â CAREER PROGRESSION
+PROMOTE EMPLOYEE ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¾ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¾ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â CAREER PROGRESSION
 Permission: employees.update
 ============================================================
 
@@ -4454,6 +5382,492 @@ Lateral movement / department reassignment will be implemented
 as a separate Job Change / Reassignment transaction.
 ============================================================
 */
+
+
+/*
+============================================================
+CONTROLLED EMPLOYEE JOB CHANGE / REASSIGNMENT
+
+Used for:
+- lateral designation changes
+- designation corrections
+- role reclassification
+- department reassignment
+- organizational restructuring
+
+This is NOT a promotion transaction.
+
+The transaction preserves:
+- previous department
+- new department
+- previous designation
+- new designation
+- effective date
+- reason / notes
+- performing user
+============================================================
+*/
+
+router.patch(
+  "/:employeeNumber/job-change",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        employeeNumber,
+      } = req.params;
+
+      const {
+        departmentId,
+        designationId,
+        effectiveDate,
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED FIELDS
+      --------------------------------------------------------
+      */
+
+      if (
+        !designationId ||
+        !String(designationId).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "DESIGNATION_REQUIRED",
+          message:
+            "A target designation is required for a job change.",
+        });
+      }
+
+      if (
+        !effectiveDate ||
+        !String(effectiveDate).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "EFFECTIVE_DATE_REQUIRED",
+          message:
+            "An effective date is required for a job change.",
+        });
+      }
+
+      if (
+        !reason ||
+        !String(reason).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "JOB_CHANGE_REASON_REQUIRED",
+          message:
+            "A reason is required for a job change.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      EFFECTIVE DATE
+      --------------------------------------------------------
+      */
+
+      const parsedEffectiveDate =
+        new Date(effectiveDate);
+
+      if (
+        Number.isNaN(
+          parsedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code:
+            "INVALID_EFFECTIVE_DATE",
+          message:
+            "The supplied effective date is invalid.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD CURRENT EMPLOYEE
+      --------------------------------------------------------
+      */
+
+      const existingEmployee =
+        await prisma.employee.findFirst({
+          where: {
+            organizationId,
+            employeeNumber,
+          },
+
+          include: {
+            department: true,
+            designation: true,
+            location: true,
+
+            user: {
+              select: {
+                id: true,
+                isActive: true,
+              },
+            },
+          },
+        });
+
+
+      if (!existingEmployee) {
+        return res.status(404).json({
+          status: "error",
+          code:
+            "EMPLOYEE_NOT_FOUND",
+          message:
+            "Employee was not found.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      EMPLOYEE STATUS SAFETY
+      --------------------------------------------------------
+
+      EXITED employees must not receive job changes.
+
+      ACTIVE, PROBATION and LEAVE employees may legitimately
+      receive an approved structural/job correction.
+      --------------------------------------------------------
+      */
+
+      if (
+        existingEmployee.status ===
+        "EXITED"
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "EMPLOYEE_EXITED",
+          message:
+            "A job change cannot be processed for an exited employee.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      TARGET DESIGNATION
+      --------------------------------------------------------
+      */
+
+      const targetDesignation =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              String(
+                designationId
+              ).trim(),
+
+            organizationId,
+          },
+
+          include: {
+            department: true,
+          },
+        });
+
+
+      if (!targetDesignation) {
+        return res.status(404).json({
+          status: "error",
+          code:
+            "DESIGNATION_NOT_FOUND",
+          message:
+            "The selected designation does not exist in this organization.",
+        });
+      }
+
+
+      if (
+        targetDesignation.isActive ===
+        false
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "DESIGNATION_INACTIVE",
+          message:
+            "The selected designation is inactive and cannot receive employees.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      DETERMINE TARGET DEPARTMENT
+      --------------------------------------------------------
+
+      Normally the designation owns the department.
+
+      departmentId may be supplied by the UI, but it must agree
+      with the designation's configured department.
+      --------------------------------------------------------
+      */
+
+      const targetDepartmentId =
+        targetDesignation.departmentId ||
+        (
+          departmentId
+            ? String(
+                departmentId
+              ).trim()
+            : null
+        );
+
+
+      if (!targetDepartmentId) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "DESIGNATION_UNMAPPED",
+          message:
+            "The selected designation is not mapped to a department.",
+        });
+      }
+
+
+      if (
+        departmentId &&
+        targetDesignation.departmentId &&
+        String(departmentId).trim() !==
+          targetDesignation.departmentId
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "DEPARTMENT_DESIGNATION_MISMATCH",
+          message:
+            "The selected designation does not belong to the selected department.",
+        });
+      }
+
+
+      const targetDepartment =
+        await prisma.department.findFirst({
+          where: {
+            id: targetDepartmentId,
+            organizationId,
+          },
+        });
+
+
+      if (!targetDepartment) {
+        return res.status(404).json({
+          status: "error",
+          code:
+            "DEPARTMENT_NOT_FOUND",
+          message:
+            "The target department does not exist in this organization.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      NO-CHANGE PROTECTION
+      --------------------------------------------------------
+      */
+
+      const sameDepartment =
+        existingEmployee.departmentId ===
+        targetDepartment.id;
+
+      const sameDesignation =
+        existingEmployee.designationId ===
+        targetDesignation.id;
+
+
+      if (
+        sameDepartment &&
+        sameDesignation
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code:
+            "NO_JOB_CHANGE",
+          message:
+            "The employee is already assigned to the selected department and designation.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      TRANSACTION
+      --------------------------------------------------------
+      */
+
+      const employee =
+        await prisma.$transaction(
+          async (tx) => {
+
+            const updatedEmployee =
+              await tx.employee.update({
+                where: {
+                  id:
+                    existingEmployee.id,
+                },
+
+                data: {
+                  departmentId:
+                    targetDepartment.id,
+
+                  designationId:
+                    targetDesignation.id,
+                },
+
+                include: {
+                  department: true,
+                  designation: true,
+                  location: true,
+
+                  user: {
+                    select: {
+                      id: true,
+                      isActive: true,
+                    },
+                  },
+                },
+              });
+
+
+            await tx.employeeLifecycleEvent.create({
+              data: {
+                organizationId,
+
+                employeeId:
+                  existingEmployee.id,
+
+                eventType:
+                  "JOB_CHANGED",
+
+                effectiveDate:
+                  parsedEffectiveDate,
+
+                previousStatus:
+                  existingEmployee.status,
+
+                newStatus:
+                  existingEmployee.status,
+
+                fromLocationId:
+                  existingEmployee.locationId,
+
+                toLocationId:
+                  existingEmployee.locationId,
+
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  targetDepartment.id,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  targetDesignation.id,
+
+                reason:
+                  String(reason).trim(),
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
+                performedByUserId:
+                  req.auth.userId || null,
+              },
+            });
+
+
+            return updatedEmployee;
+          }
+        );
+
+
+      /*
+      --------------------------------------------------------
+      SUCCESS
+      --------------------------------------------------------
+      */
+
+      return res.status(200).json({
+        status: "success",
+
+        message:
+          `${employee.firstName} ${employee.lastName}'s job change was processed successfully.`,
+
+        data: {
+          employee,
+
+          movement: {
+            previousDepartment:
+              existingEmployee
+                .department?.name ||
+              null,
+
+            newDepartment:
+              employee
+                .department?.name ||
+              null,
+
+            previousDesignation:
+              existingEmployee
+                .designation?.name ||
+              null,
+
+            newDesignation:
+              employee
+                .designation?.name ||
+              null,
+
+            effectiveDate:
+              parsedEffectiveDate,
+
+            reason:
+              String(reason).trim(),
+          },
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Employee job change error:",
+        error
+      );
+
+      return res.status(500).json({
+        status: "error",
+        message:
+          "Unable to process employee job change.",
+      });
+    }
+  }
+);
 
 router.patch(
   "/:employeeNumber/promote",
@@ -6260,9 +7674,3 @@ router.get(
 );
 
 module.exports = router;
-
-
-
-
-
-

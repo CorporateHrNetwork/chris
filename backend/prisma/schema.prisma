@@ -322,6 +322,7 @@ model Employee {
 
   hireDate         DateTime?
   confirmationDate DateTime?
+  suspensionEndDate DateTime?
   exitDate         DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -370,6 +371,7 @@ model EmployeeLifecycleEvent {
   // into CHRIS.
 
   effectiveDate DateTime
+  suspensionEndDate DateTime?
 
   // Status change information.
 
@@ -379,7 +381,7 @@ model EmployeeLifecycleEvent {
   // Location movement information.
   //
   // These fields allow the same history table to record
-  // Head Office Ã¢â€ â€™ Lagos Ã¢â€ â€™ Port Harcourt transfers.
+  // Head Office ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Lagos ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Port Harcourt transfers.
 
   fromLocationId String?
   toLocationId   String?
@@ -442,6 +444,7 @@ model EmployeeLifecycleEvent {
   @@index([previousDesignationId])
   @@index([newDesignationId])
   @@index([performedByUserId])
+  @@index([suspensionEndDate])
   @@map("employee_lifecycle_events")
 }
 
@@ -483,6 +486,7 @@ enum EmployeeLifecycleEventType {
   CONFIRMED
   TRANSFERRED
   PROMOTED
+  JOB_CHANGED
   SUSPENDED
   REACTIVATED
   DEACTIVATED
