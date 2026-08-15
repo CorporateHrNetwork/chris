@@ -435,6 +435,7 @@ router.put(
         hireDate,
         confirmationDate,
         exitDate,
+        locationId,
       } = req.body;
 
       if (
@@ -461,6 +462,7 @@ router.put(
 
           include: {
             user: true,
+            location: true,
           },
         });
 
@@ -557,6 +559,106 @@ router.put(
           },
         });
 
+      /*
+      ------------------------------------------------------------
+      INITIAL / CORRECTIVE WORK LOCATION ASSIGNMENT
+      ------------------------------------------------------------
+
+      Employee master-data editing may assign a work location only
+      when the employee currently has no location.
+
+      Once a location is established, changing it through this PUT
+      route is prohibited. Genuine location movement must use the
+      controlled Transfer Employee workflow so CHRIS preserves the
+      employment lifecycle transaction.
+      ------------------------------------------------------------
+      */
+
+      let resolvedLocationId =
+        existingEmployee.locationId ||
+        null;
+
+      if (
+        existingEmployee.locationId
+      ) {
+        if (
+          locationId &&
+          String(locationId).trim() &&
+          String(locationId).trim() !==
+            existingEmployee.locationId
+        ) {
+          return res.status(409).json({
+            status:
+              "error",
+
+            code:
+              "LOCATION_CHANGE_REQUIRES_TRANSFER",
+
+            message:
+              "This employee already has a work location. Use Transfer Employee to move the employee to another location.",
+          });
+        }
+      } else {
+        if (
+          !locationId ||
+          !String(locationId).trim()
+        ) {
+          return res.status(400).json({
+            status:
+              "error",
+
+            code:
+              "INITIAL_EMPLOYEE_LOCATION_REQUIRED",
+
+            message:
+              "Select the employee's initial work location before saving.",
+          });
+        }
+
+        const locationRecord =
+          await prisma.organizationLocation.findFirst({
+            where: {
+              id:
+                String(
+                  locationId
+                ).trim(),
+
+              organizationId,
+
+              isActive:
+                true,
+            },
+
+            select: {
+              id:
+                true,
+
+              name:
+                true,
+
+              code:
+                true,
+            },
+          });
+
+        if (!locationRecord) {
+          return res.status(400).json({
+            status:
+              "error",
+
+            code:
+              "INVALID_EMPLOYEE_LOCATION",
+
+            message:
+              "Select an active work location from your organization's CHRIS location catalogue.",
+          });
+        }
+
+        resolvedLocationId =
+          locationRecord.id;
+      }
+
+
       const nextStatus =
         STATUS_MAP[status] ||
         existingEmployee.status;
@@ -577,6 +679,9 @@ router.put(
 
                   designationId:
                     designationRecord.id,
+
+                  locationId:
+                    resolvedLocationId,
 
                   firstName:
                     normalizedName.firstName,
@@ -662,7 +767,9 @@ router.put(
         status: "success",
 
         message:
-          "Employee updated successfully.",
+          existingEmployee.locationId
+            ? "Employee updated successfully."
+            : "Employee updated successfully. Initial work location has been assigned.",
 
         data: employee,
       });
@@ -1816,17 +1923,27 @@ EXIT EMPLOYEE
 Permission: employees.update
 ============================================================
 
-Expected body:
+Controlled employee exit supports:
 
-{
-  "exitStatus": "RESIGNED",
-  "exitDate": "2026-08-09"
-}
+- RESIGNED
+- TERMINATED
+- RETIRED
 
-Allowed:
-RESIGNED
-TERMINATED
-RETIRED
+The transaction:
+- requires an exit type
+- requires an exit effective date / last working day
+- requires a reason
+- accepts optional notes
+- prevents future-dated exit transactions for now
+- prevents duplicate exit processing
+- changes the employee's live status
+- records exitDate
+- disables linked CHRIS access
+- preserves department, designation and location
+- creates a permanent EXITED lifecycle event
+
+Future-dated exits will be supported later through CHRIS'
+scheduled HR transaction engine.
 ============================================================
 */
 
@@ -1847,7 +1964,16 @@ router.patch(
       const {
         exitStatus,
         exitDate,
-      } = req.body;
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      EXIT TYPE
+      --------------------------------------------------------
+      */
 
       if (
         !EXIT_STATUSES.includes(
@@ -1855,21 +1981,69 @@ router.patch(
         )
       ) {
         return res.status(400).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "INVALID_EXIT_STATUS",
 
           message:
             "Select a valid exit type: Resigned, Terminated or Retired.",
         });
       }
 
-      if (!exitDate) {
+
+      /*
+      --------------------------------------------------------
+      REQUIRED EXIT DATE
+      --------------------------------------------------------
+      */
+
+      if (
+        !exitDate ||
+        !String(exitDate).trim()
+      ) {
         return res.status(400).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "EXIT_DATE_REQUIRED",
 
           message:
-            "Exit date is required.",
+            "Exit effective date is required.",
         });
       }
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED REASON
+      --------------------------------------------------------
+      */
+
+      if (
+        !reason ||
+        !String(reason).trim()
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "EXIT_REASON_REQUIRED",
+
+          message:
+            "A reason is required to process an employee exit.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      DATE VALIDATION
+      --------------------------------------------------------
+      */
 
       const parsedExitDate =
         new Date(exitDate);
@@ -1880,12 +2054,72 @@ router.patch(
         )
       ) {
         return res.status(400).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "INVALID_EXIT_DATE",
 
           message:
-            "Enter a valid exit date.",
+            "The supplied exit effective date is invalid.",
         });
       }
+
+
+      /*
+      --------------------------------------------------------
+      FUTURE DATE PROTECTION
+
+      Exit changes the live employment status immediately and
+      disables linked CHRIS access.
+
+      Until CHRIS supports scheduled HR transactions, only
+      today's date or an earlier effective date may be used.
+      --------------------------------------------------------
+      */
+
+      const exitDateOnly =
+        new Date(parsedExitDate);
+
+      exitDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      if (
+        exitDateOnly >
+        today
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "FUTURE_EXIT_NOT_SUPPORTED",
+
+          message:
+            "Future-dated employee exits are not yet supported. Select today or an earlier effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD CURRENT EMPLOYEE
+      --------------------------------------------------------
+      */
 
       const existingEmployee =
         await getEmployee(
@@ -1895,15 +2129,86 @@ router.patch(
 
       if (!existingEmployee) {
         return res.status(404).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_NOT_FOUND",
+
           message:
             "Employee not found.",
         });
       }
 
+
+      /*
+      --------------------------------------------------------
+      ALREADY EXITED PROTECTION
+      --------------------------------------------------------
+      */
+
+      if (
+        EXIT_STATUSES.includes(
+          existingEmployee.status
+        )
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_ALREADY_EXITED",
+
+          message:
+            "This employee has already been exited from employment.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      SUSPENDED EMPLOYEE PROTECTION
+
+      Suspension should first be resolved before a separate
+      final exit transaction is processed.
+
+      This preserves a clear and auditable lifecycle sequence.
+      --------------------------------------------------------
+      */
+
+      if (
+        existingEmployee.status ===
+        "SUSPENDED"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_SUSPENDED",
+
+          message:
+            "A suspended employee cannot be exited directly. Resolve the suspension first.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      TRANSACTION
+      --------------------------------------------------------
+      */
+
       const employee =
         await prisma.$transaction(
           async (tx) => {
+
+            /*
+            ----------------------------------------------------
+            UPDATE EMPLOYEE MASTER RECORD
+            ----------------------------------------------------
+            */
+
             const updatedEmployee =
               await tx.employee.update({
                 where: {
@@ -1917,14 +2222,44 @@ router.patch(
 
                   exitDate:
                     parsedExitDate,
+
+                  /*
+                  Any current suspension expiry is irrelevant
+                  once employment has ended.
+                  */
+
+                  suspensionEndDate:
+                    null,
                 },
 
                 include: {
-                  department: true,
-                  designation: true,
-                  location: true,
+                  department:
+                    true,
+
+                  designation:
+                    true,
+
+                  location:
+                    true,
+
+                  user: {
+                    select: {
+                      id:
+                        true,
+
+                      isActive:
+                        true,
+                    },
+                  },
                 },
               });
+
+
+            /*
+            ----------------------------------------------------
+            DISABLE LINKED CHRIS ACCESS
+            ----------------------------------------------------
+            */
 
             if (
               existingEmployee.user
@@ -1932,15 +2267,22 @@ router.patch(
               await tx.user.update({
                 where: {
                   id:
-                    existingEmployee
-                      .user.id,
+                    existingEmployee.user.id,
                 },
 
                 data: {
-                  isActive: false,
+                  isActive:
+                    false,
                 },
               });
             }
+
+
+            /*
+            ----------------------------------------------------
+            PERMANENT EMPLOYMENT LIFECYCLE RECORD
+            ----------------------------------------------------
+            */
 
             await tx.employeeLifecycleEvent.create({
               data: {
@@ -1967,22 +2309,54 @@ router.patch(
                 toLocationId:
                   existingEmployee.locationId,
 
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  existingEmployee.departmentId,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  existingEmployee.designationId,
+
+                reason:
+                  String(reason).trim(),
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
                 performedByUserId:
-                  req.auth.userId,
+                  req.auth.userId ||
+                  null,
               },
             });
+
 
             return updatedEmployee;
           }
         );
 
+
+      /*
+      --------------------------------------------------------
+      SUCCESS RESPONSE
+      --------------------------------------------------------
+      */
+
       return res.status(200).json({
-        status: "success",
+        status:
+          "success",
 
         message:
           "Employee exit recorded successfully. Linked CHRIS access has been disabled.",
 
-        data: employee,
+        data:
+          employee,
       });
     } catch (error) {
       console.error(
@@ -1991,7 +2365,8 @@ router.patch(
       );
 
       return res.status(500).json({
-        status: "error",
+        status:
+          "error",
 
         message:
           "Unable to process employee exit.",
@@ -6854,6 +7229,19 @@ router.patch(
 CREATE EMPLOYEE
 Permission: employees.create
 ============================================================
+
+Controlled employee creation:
+
+- Department must already exist in this organization.
+- Department must be active.
+- Designation must already exist in this organization.
+- Designation must be active.
+- Designation must be mapped to the selected Department.
+- Work Location must already exist and be active in this organization.
+- Add Employee cannot silently create organizational structure.
+- Employee ID is allocated from the organization's permanent,
+  non-recyclable sequence.
+============================================================
 */
 
 router.post(
@@ -6868,32 +7256,77 @@ router.post(
 
       const {
         name,
-        department,
-        designation,
+        departmentId,
+        designationId,
+        locationId,
         email,
         phone,
         status = "Active",
-      } = req.body;
+      } = req.body || {};
+
+
+      /*
+      ------------------------------------------------------------
+      REQUIRED FIELDS
+      ------------------------------------------------------------
+      */
 
       if (
         !name?.trim() ||
-        !department?.trim() ||
-        !designation?.trim() ||
+        !departmentId ||
+        !designationId ||
+        !locationId ||
         !email?.trim() ||
         !phone?.trim()
       ) {
         return res.status(400).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_REQUIRED_FIELDS_MISSING",
 
           message:
             "Please complete all required employee fields.",
         });
       }
 
+
+      /*
+      ------------------------------------------------------------
+      NORMALIZE EMPLOYEE IDENTITY DATA
+      ------------------------------------------------------------
+      */
+
       const normalizedEmail =
         email
           .trim()
           .toLowerCase();
+
+      const normalizedName =
+        normalizeEmployeeName(
+          name
+        );
+
+      if (!normalizedName) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_EMPLOYEE_NAME",
+
+          message:
+            "Please enter at least the employee's first and last name.",
+        });
+      }
+
+
+      /*
+      ------------------------------------------------------------
+      DUPLICATE EMPLOYEE EMAIL
+      ------------------------------------------------------------
+      */
 
       const duplicateEmail =
         await prisma.employee.findFirst({
@@ -6903,168 +7336,316 @@ router.post(
             email:
               normalizedEmail,
           },
+
+          select: {
+            id:
+              true,
+
+            employeeNumber:
+              true,
+          },
         });
 
       if (duplicateEmail) {
         return res.status(409).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_EMAIL_ALREADY_EXISTS",
 
           message:
             "An employee with this email address already exists.",
         });
       }
 
-      const normalizedName =
-        normalizeEmployeeName(
-          name
-        );
 
-      if (!normalizedName) {
-        return res.status(400).json({
-          status: "error",
-
-          message:
-            "Please enter at least the employee's first and last name.",
-        });
-      }
+      /*
+      ------------------------------------------------------------
+      VALIDATE DEPARTMENT
+      ------------------------------------------------------------
+      */
 
       const departmentRecord =
-        await prisma.department.upsert({
+        await prisma.department.findFirst({
           where: {
-            organizationId_name: {
-              organizationId,
+            id:
+              String(
+                departmentId
+              ).trim(),
 
-              name:
-                department.trim(),
-            },
-          },
-
-          update: {},
-
-          create: {
             organizationId,
 
-            name:
-              department.trim(),
-          },
-        });
-
-      const designationRecord =
-        await prisma.designation.upsert({
-          where: {
-            organizationId_name: {
-              organizationId,
-
-              name:
-                designation.trim(),
-            },
-          },
-
-          update: {},
-
-          create: {
-            organizationId,
-
-            name:
-              designation.trim(),
-          },
-        });
-
-      const latestEmployee =
-        await prisma.employee.findFirst({
-          where: {
-            organizationId,
-
-            employeeNumber: {
-              startsWith: "CHR",
-            },
-          },
-
-          orderBy: {
-            employeeNumber:
-              "desc",
+            isActive:
+              true,
           },
 
           select: {
-            employeeNumber: true,
+            id:
+              true,
+
+            name:
+              true,
+
+            code:
+              true,
+
+            isActive:
+              true,
           },
         });
 
-      let nextNumber = 1;
+      if (!departmentRecord) {
+        return res.status(400).json({
+          status:
+            "error",
 
-      if (
-        latestEmployee?.employeeNumber
-      ) {
-        const numericPart =
-          Number(
-            latestEmployee.employeeNumber.replace(
-              /\D/g,
-              ""
-            )
-          );
+          code:
+            "INVALID_EMPLOYEE_DEPARTMENT",
 
-        if (
-          Number.isFinite(
-            numericPart
-          )
-        ) {
-          nextNumber =
-            numericPart + 1;
-        }
+          message:
+            "Select an active department from your organization's CHRIS structure.",
+        });
       }
 
-      const employeeNumber =
-        `CHR${String(
-          nextNumber
-        ).padStart(6, "0")}`;
 
-      const employee =
-        await prisma.employee.create({
-          data: {
+      /*
+      ------------------------------------------------------------
+      VALIDATE DESIGNATION + DEPARTMENT MAPPING
+      ------------------------------------------------------------
+      */
+
+      const designationRecord =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              String(
+                designationId
+              ).trim(),
+
             organizationId,
 
             departmentId:
               departmentRecord.id,
 
-            designationId:
-              designationRecord.id,
-
-            employeeNumber,
-
-            firstName:
-              normalizedName.firstName,
-
-            middleName:
-              normalizedName.middleName,
-
-            lastName:
-              normalizedName.lastName,
-
-            email:
-              normalizedEmail,
-
-            phone:
-              phone.trim(),
-
-            status:
-              STATUS_MAP[status] ||
-              "ACTIVE",
+            isActive:
+              true,
           },
 
-          include: {
-            department: true,
-            designation: true,
-            location: true,
+          select: {
+            id:
+              true,
+
+            name:
+              true,
+
+            code:
+              true,
+
+            departmentId:
+              true,
+
+            isActive:
+              true,
           },
         });
 
+      if (!designationRecord) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_EMPLOYEE_DESIGNATION",
+
+          message:
+            "Select an active designation mapped to the selected department.",
+        });
+      }
+
+
+      /*
+      ------------------------------------------------------------
+      VALIDATE WORK LOCATION / BRANCH
+      ------------------------------------------------------------
+      */
+
+      const locationRecord =
+        await prisma.organizationLocation.findFirst({
+          where: {
+            id:
+              String(
+                locationId
+              ).trim(),
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+
+          select: {
+            id:
+              true,
+
+            name:
+              true,
+
+            code:
+              true,
+
+            type:
+              true,
+
+            city:
+              true,
+
+            state:
+              true,
+
+            country:
+              true,
+
+            isActive:
+              true,
+          },
+        });
+
+      if (!locationRecord) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_EMPLOYEE_LOCATION",
+
+          message:
+            "Select an active work location from your organization's CHRIS location catalogue.",
+        });
+      }
+
+
+      /*
+      ------------------------------------------------------------
+      PERMANENT EMPLOYEE NUMBER ALLOCATION
+      ------------------------------------------------------------
+
+      The Organization owns a monotonically increasing sequence.
+
+      Once issued:
+      - an Employee ID is never recycled
+      - exit does not release it
+      - reinstatement keeps it
+      - future rehire keeps the employee's permanent ID
+
+      The sequence increment and Employee creation happen in the
+      same database transaction.
+      ------------------------------------------------------------
+      */
+
+      const employee =
+        await prisma.$transaction(
+          async (tx) => {
+            const sequenceOwner =
+              await tx.organization.update({
+                where: {
+                  id:
+                    organizationId,
+                },
+
+                data: {
+                  employeeNumberSequence: {
+                    increment:
+                      1,
+                  },
+                },
+
+                select: {
+                  employeeNumberSequence:
+                    true,
+                },
+              });
+
+            const nextNumber =
+              sequenceOwner
+                .employeeNumberSequence;
+
+            if (
+              nextNumber >
+              999999
+            ) {
+              throw new Error(
+                "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED"
+              );
+            }
+
+            const employeeNumber =
+              `CHR${String(
+                nextNumber
+              ).padStart(
+                6,
+                "0"
+              )}`;
+
+            return tx.employee.create({
+              data: {
+                organizationId,
+
+                departmentId:
+                  departmentRecord.id,
+
+                designationId:
+                  designationRecord.id,
+
+                locationId:
+                  locationRecord.id,
+
+                employeeNumber,
+
+                firstName:
+                  normalizedName.firstName,
+
+                middleName:
+                  normalizedName.middleName,
+
+                lastName:
+                  normalizedName.lastName,
+
+                email:
+                  normalizedEmail,
+
+                phone:
+                  phone.trim(),
+
+                status:
+                  STATUS_MAP[status] ||
+                  "ACTIVE",
+              },
+
+              include: {
+                department:
+                  true,
+
+                designation:
+                  true,
+
+                location:
+                  true,
+              },
+            });
+          }
+        );
+
+
       return res.status(201).json({
-        status: "success",
+        status:
+          "success",
 
         message:
-          "Employee created successfully.",
+          `Employee created successfully with permanent Employee ID ${employee.employeeNumber}.`,
 
-        data: employee,
+        data:
+          employee,
       });
     } catch (error) {
       console.error(
@@ -7073,10 +7654,31 @@ router.post(
       );
 
       if (
-        error.code === "P2002"
+        error.message ===
+        "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED"
       ) {
         return res.status(409).json({
-          status: "error",
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED",
+
+          message:
+            "The current CHRIS employee number range has been exhausted. Extend the employee number format before creating another employee.",
+        });
+      }
+
+      if (
+        error.code ===
+        "P2002"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_UNIQUE_CONFLICT",
 
           message:
             "The employee could not be created because a unique employee record already exists.",
@@ -7084,7 +7686,8 @@ router.post(
       }
 
       return res.status(500).json({
-        status: "error",
+        status:
+          "error",
 
         message:
           "Unable to create employee.",

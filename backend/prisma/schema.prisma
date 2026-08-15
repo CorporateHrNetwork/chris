@@ -20,6 +20,10 @@ model Organization {
   timezone  String  @default("Africa/Lagos")
   currency  String  @default("NGN")
 
+  // Permanent organization-level Employee ID sequence.
+  // Once a number is issued, it is never reused.
+  employeeNumberSequence Int @default(0)
+
   status OrganizationStatus @default(ACTIVE)
 
   users                      User[]
@@ -320,10 +324,10 @@ model Employee {
 
   status EmployeeStatus @default(ACTIVE)
 
-  hireDate         DateTime?
-  confirmationDate DateTime?
+  hireDate          DateTime?
+  confirmationDate  DateTime?
   suspensionEndDate DateTime?
-  exitDate         DateTime?
+  exitDate          DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
@@ -370,7 +374,7 @@ model EmployeeLifecycleEvent {
   // createdAt records when the transaction was entered
   // into CHRIS.
 
-  effectiveDate DateTime
+  effectiveDate     DateTime
   suspensionEndDate DateTime?
 
   // Status change information.

@@ -1,7 +1,8 @@
-﻿import {
+import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -68,6 +69,11 @@ function EmployeeTable() {
   ] = useState("All");
 
   const [
+    directoryMode,
+    setDirectoryMode,
+  ] = useState("CURRENT");
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -87,6 +93,15 @@ function EmployeeTable() {
     setActionEmployeeNumber,
   ] = useState(null);
 
+  const exitFormRef =
+    useRef(null);
+
+  const reinstateFormRef =
+    useRef(null);
+
+  const directoryRef =
+    useRef(null);
+
   const [
     exitEmployee,
     setExitEmployee,
@@ -105,6 +120,16 @@ function EmployeeTable() {
       .toISOString()
       .slice(0, 10)
   );
+
+  const [
+    exitReason,
+    setExitReason,
+  ] = useState("");
+
+  const [
+    exitNotes,
+    setExitNotes,
+  ] = useState("");
 
   /*
   ============================================================
@@ -302,6 +327,83 @@ function EmployeeTable() {
 
   /*
   ============================================================
+  WORKFORCE SEGMENTATION
+  ============================================================
+
+  Current Employee Directory contains employees whose employment
+  relationship is still active in CHRIS.
+
+  Exited Employees / Exit Register contains employees whose current
+  employment status is RESIGNED, TERMINATED or RETIRED.
+  ============================================================
+  */
+
+  const EXITED_STATUSES = [
+    "Resigned",
+    "Terminated",
+    "Retired",
+  ];
+
+  const currentEmployees =
+    useMemo(
+      () =>
+        employees.filter(
+          (employee) =>
+            !EXITED_STATUSES.includes(
+              employee.status
+            )
+        ),
+      [employees]
+    );
+
+  const exitedEmployees =
+    useMemo(
+      () =>
+        employees.filter(
+          (employee) =>
+            EXITED_STATUSES.includes(
+              employee.status
+            )
+        ),
+      [employees]
+    );
+
+  const visibleEmployees =
+    directoryMode ===
+      "EXITED"
+      ? exitedEmployees
+      : currentEmployees;
+
+
+  /*
+  ============================================================
+  DIRECTORY MODE
+  ============================================================
+  */
+
+  const changeDirectoryMode =
+    (mode) => {
+      setDirectoryMode(
+        mode
+      );
+
+      /*
+      Reset filters so switching between current and exited
+      populations never leaves the new register appearing empty
+      because of a filter selected in the previous register.
+      */
+
+      setSearch("");
+      setDepartment("All");
+      setLocationFilter("All");
+      setStatus("All");
+      setError("");
+      setSuccess("");
+    };
+
+
+  /*
+  ============================================================
   FILTER OPTIONS
   ============================================================
   */
@@ -312,7 +414,7 @@ function EmployeeTable() {
         "All",
         ...Array.from(
           new Set(
-            employees
+            visibleEmployees
               .map(
                 (employee) =>
                   employee.department
@@ -321,7 +423,7 @@ function EmployeeTable() {
           )
         ).sort(),
       ],
-      [employees]
+      [visibleEmployees]
     );
 
   const locations =
@@ -332,7 +434,7 @@ function EmployeeTable() {
           name: "All Locations",
           code: "",
           employeeCount:
-            employees.length,
+            visibleEmployees.length,
         },
 
         ...organizationLocations.map(
@@ -347,13 +449,17 @@ function EmployeeTable() {
               location.code,
 
             employeeCount:
-              location.employeeCount || 0,
+              visibleEmployees.filter(
+                (employee) =>
+                  employee.locationId ===
+                  location.id
+              ).length,
           })
         ),
       ],
       [
         organizationLocations,
-        employees.length,
+        visibleEmployees,
       ]
     );
 
@@ -363,7 +469,7 @@ function EmployeeTable() {
         "All",
         ...Array.from(
           new Set(
-            employees
+            visibleEmployees
               .map(
                 (employee) =>
                   employee.status
@@ -372,8 +478,9 @@ function EmployeeTable() {
           )
         ).sort(),
       ],
-      [employees]
+      [visibleEmployees]
     );
+
 
   /*
   ============================================================
@@ -383,7 +490,7 @@ function EmployeeTable() {
 
   const filteredEmployees =
     useMemo(() => {
-      return employees.filter(
+      return visibleEmployees.filter(
         (employee) => {
           const searchTerm =
             search
@@ -450,12 +557,13 @@ function EmployeeTable() {
         }
       );
     }, [
-      employees,
+      visibleEmployees,
       search,
       department,
       locationFilter,
       status,
     ]);
+
 
   /*
   ============================================================
@@ -472,9 +580,9 @@ function EmployeeTable() {
 
   const currentLocationCount =
     locationFilter ===
-    "All"
-      ? employees.length
-      : employees.filter(
+      "All"
+      ? visibleEmployees.length
+      : visibleEmployees.filter(
           (employee) =>
             employee.locationId ===
             locationFilter
@@ -600,8 +708,72 @@ function EmployeeTable() {
           .slice(0, 10)
       );
 
+      setExitReason(
+        ""
+      );
+
+      setExitNotes(
+        ""
+      );
+
       setError("");
+      setSuccess("");
     };
+
+  /*
+  ============================================================
+  AUTO-SCROLL CONTROLLED FORMS INTO VIEW
+  ============================================================
+
+  Exit and Reinstate forms are rendered above the directory.
+  When either form opens, CHRIS scrolls it into the current
+  viewport so the user receives immediate visual feedback.
+  ============================================================
+  */
+
+  useEffect(() => {
+    if (!exitEmployee) {
+      return;
+    }
+
+    const timer =
+      setTimeout(() => {
+        exitFormRef.current
+          ?.scrollIntoView({
+            behavior:
+              "smooth",
+
+            block:
+              "start",
+          });
+      }, 50);
+
+    return () =>
+      clearTimeout(timer);
+  }, [exitEmployee]);
+
+
+  useEffect(() => {
+    if (!reinstateEmployee) {
+      return;
+    }
+
+    const timer =
+      setTimeout(() => {
+        reinstateFormRef.current
+          ?.scrollIntoView({
+            behavior:
+              "smooth",
+
+            block:
+              "start",
+          });
+      }, 50);
+
+    return () =>
+      clearTimeout(timer);
+  }, [reinstateEmployee]);
+
 
   /*
   ============================================================
@@ -627,6 +799,16 @@ function EmployeeTable() {
         return;
       }
 
+      if (
+        !exitReason.trim()
+      ) {
+        showError(
+          "A reason is required to process an employee exit."
+        );
+
+        return;
+      }
+
       try {
         setActionEmployeeNumber(
           exitEmployee.id
@@ -645,6 +827,14 @@ function EmployeeTable() {
                 JSON.stringify({
                   exitStatus,
                   exitDate,
+
+                  reason:
+                    exitReason
+                      .trim(),
+
+                  notes:
+                    exitNotes
+                      .trim(),
                 }),
             }
           );
@@ -653,11 +843,34 @@ function EmployeeTable() {
           null
         );
 
+        setExitReason(
+          ""
+        );
+
+        setExitNotes(
+          ""
+        );
+
         showSuccess(
           result.message
         );
 
         await fetchEmployees();
+
+        changeDirectoryMode(
+          "EXITED"
+        );
+
+        setTimeout(() => {
+          directoryRef.current
+            ?.scrollIntoView({
+              behavior:
+                "smooth",
+
+              block:
+                "start",
+            });
+        }, 80);
       } catch (
         requestError
       ) {
@@ -791,6 +1004,21 @@ function EmployeeTable() {
         );
 
         await fetchEmployees();
+
+        changeDirectoryMode(
+          "CURRENT"
+        );
+
+        setTimeout(() => {
+          directoryRef.current
+            ?.scrollIntoView({
+              behavior:
+                "smooth",
+
+              block:
+                "start",
+            });
+        }, 80);
       } catch (
         requestError
       ) {
@@ -807,6 +1035,72 @@ function EmployeeTable() {
 
   return (
     <div>
+      {/* WORKFORCE REGISTER TABS */}
+
+      <div
+        style={
+          workforceTabsStyle
+        }
+      >
+        <button
+          type="button"
+
+          onClick={() =>
+            changeDirectoryMode(
+              "CURRENT"
+            )
+          }
+
+          style={{
+            ...workforceTabButtonStyle,
+
+            ...(directoryMode ===
+              "CURRENT"
+              ? workforceTabActiveStyle
+              : {}),
+          }}
+        >
+          Current Employees
+
+          <span
+            style={
+              workforceCountStyle
+            }
+          >
+            {currentEmployees.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+
+          onClick={() =>
+            changeDirectoryMode(
+              "EXITED"
+            )
+          }
+
+          style={{
+            ...workforceTabButtonStyle,
+
+            ...(directoryMode ===
+              "EXITED"
+              ? workforceTabActiveStyle
+              : {}),
+          }}
+        >
+          Exited Employees
+
+          <span
+            style={
+              workforceCountStyle
+            }
+          >
+            {exitedEmployees.length}
+          </span>
+        </button>
+      </div>
+
       {/* FILTERS */}
 
       <div
@@ -1102,7 +1396,10 @@ function EmployeeTable() {
                   "0.04em",
               }}
             >
-              Viewing Location
+              {directoryMode ===
+              "EXITED"
+                ? "Exit Register Location"
+                : "Viewing Location"}
             </div>
 
             <div
@@ -1199,6 +1496,10 @@ function EmployeeTable() {
 
       {exitEmployee && (
         <form
+          ref={
+            exitFormRef
+          }
+
           onSubmit={
             handleExit
           }
@@ -1309,6 +1610,116 @@ function EmployeeTable() {
 
           <div
             style={{
+              marginTop:
+                "15px",
+            }}
+          >
+            <FilterLabel>
+              Reason *
+            </FilterLabel>
+
+            <input
+              type="text"
+
+              placeholder="e.g. Voluntary resignation"
+
+              value={
+                exitReason
+              }
+
+              onChange={(
+                event
+              ) =>
+                setExitReason(
+                  event.target
+                    .value
+                )
+              }
+
+              style={{
+                ...inputStyle,
+
+                width:
+                  "100%",
+
+                boxSizing:
+                  "border-box",
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              marginTop:
+                "15px",
+            }}
+          >
+            <FilterLabel>
+              Notes
+            </FilterLabel>
+
+            <textarea
+              value={
+                exitNotes
+              }
+
+              onChange={(
+                event
+              ) =>
+                setExitNotes(
+                  event.target
+                    .value
+                )
+              }
+
+              placeholder="Optional HR notes concerning the employee exit..."
+
+              rows={3}
+
+              style={
+                exitTextareaStyle
+              }
+            />
+          </div>
+
+          <div
+            style={{
+              marginTop:
+                "14px",
+
+              padding:
+                "12px 14px",
+
+              background:
+                "#FFF7ED",
+
+              border:
+                "1px solid #FED7AA",
+
+              borderRadius:
+                "10px",
+
+              color:
+                "#9A3412",
+
+              fontSize:
+                "12px",
+
+              lineHeight:
+                "1.55",
+            }}
+          >
+            This is a final employment exit transaction, not a
+            temporary deactivation. Submitting it will record the
+            employee as {exitStatus === "RESIGNED"
+              ? "Resigned"
+              : exitStatus === "TERMINATED"
+                ? "Terminated"
+                : "Retired"} and disable linked CHRIS access.
+          </div>
+
+          <div
+            style={{
               display:
                 "flex",
 
@@ -1325,11 +1736,21 @@ function EmployeeTable() {
             <button
               type="button"
 
-              onClick={() =>
+              onClick={() => {
                 setExitEmployee(
                   null
-                )
-              }
+                );
+
+                setExitReason(
+                  ""
+                );
+
+                setExitNotes(
+                  ""
+                );
+
+                setError("");
+              }}
 
               style={
                 cancelButtonStyle
@@ -1341,11 +1762,37 @@ function EmployeeTable() {
             <button
               type="submit"
 
-              style={
-                exitButtonStyle
+              disabled={
+                actionEmployeeNumber ===
+                  exitEmployee.id ||
+                !exitDate ||
+                !exitReason.trim()
               }
+
+              style={{
+                ...exitButtonStyle,
+
+                opacity:
+                  actionEmployeeNumber ===
+                    exitEmployee.id ||
+                  !exitDate ||
+                  !exitReason.trim()
+                    ? 0.6
+                    : 1,
+
+                cursor:
+                  actionEmployeeNumber ===
+                    exitEmployee.id ||
+                  !exitDate ||
+                  !exitReason.trim()
+                    ? "not-allowed"
+                    : "pointer",
+              }}
             >
-              Confirm Exit
+              {actionEmployeeNumber ===
+              exitEmployee.id
+                ? "Processing Exit..."
+                : "Confirm Exit"}
             </button>
           </div>
         </form>
@@ -1355,6 +1802,10 @@ function EmployeeTable() {
 
       {reinstateEmployee && (
         <form
+          ref={
+            reinstateFormRef
+          }
+
           onSubmit={
             handleReinstate
           }
@@ -1618,6 +2069,10 @@ function EmployeeTable() {
       {/* DIRECTORY */}
 
       <div
+        ref={
+          directoryRef
+        }
+
         style={{
           background:
             "#FFFFFF",
@@ -1671,7 +2126,10 @@ function EmployeeTable() {
                   "800",
               }}
             >
-              Employee Directory
+              {directoryMode ===
+              "EXITED"
+                ? "Exited Employees / Exit Register"
+                : "Employee Directory"}
             </h2>
 
             <p
@@ -1688,12 +2146,20 @@ function EmployeeTable() {
             >
               {loading
                 ? "Loading employees..."
-                : `${filteredEmployees.length} employee${
-                    filteredEmployees.length !==
-                    1
-                      ? "s"
-                      : ""
-                  } matching current filters`}
+                : directoryMode ===
+                    "EXITED"
+                  ? `${filteredEmployees.length} exited employee${
+                      filteredEmployees.length !==
+                      1
+                        ? "s"
+                        : ""
+                    } matching current filters`
+                  : `${filteredEmployees.length} employee${
+                      filteredEmployees.length !==
+                      1
+                        ? "s"
+                        : ""
+                    } matching current filters`}
             </p>
           </div>
         </div>
@@ -1747,8 +2213,18 @@ function EmployeeTable() {
                 </th>
 
                 <th style={th}>
-                  Status
+                  {directoryMode ===
+                  "EXITED"
+                    ? "Exit Type"
+                    : "Status"}
                 </th>
+
+                {directoryMode ===
+                  "EXITED" && (
+                  <th style={th}>
+                    Exit Date
+                  </th>
+                )}
 
                 <th style={th}>
                   Actions
@@ -1760,7 +2236,7 @@ function EmployeeTable() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="7"
+                    colSpan={directoryMode === "EXITED" ? 8 : 7}
 
                     style={
                       emptyCellStyle
@@ -1884,6 +2360,15 @@ function EmployeeTable() {
                             }
                           />
                         </td>
+
+                        {directoryMode ===
+                          "EXITED" && (
+                          <td style={td}>
+                            {formatDirectoryDate(
+                              employee.exitDate
+                            )}
+                          </td>
+                        )}
 
                         <td style={td}>
                           <div
@@ -2035,13 +2520,16 @@ function EmployeeTable() {
               ) : (
                 <tr>
                   <td
-                    colSpan="7"
+                    colSpan={directoryMode === "EXITED" ? 8 : 7}
 
                     style={
                       emptyCellStyle
                     }
                   >
-                    No employees found for the selected location or filters.
+                    {directoryMode ===
+                    "EXITED"
+                      ? "No exited employees found for the selected filters."
+                      : "No current employees found for the selected location or filters."}
                   </td>
                 </tr>
               )}
@@ -2117,6 +2605,40 @@ function formatStatus(
     status
   );
 }
+
+function formatDirectoryDate(
+  value
+) {
+  if (!value) {
+    return "-";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "-";
+  }
+
+  return date.toLocaleDateString(
+    "en-GB",
+    {
+      day:
+        "2-digit",
+
+      month:
+        "short",
+
+      year:
+        "numeric",
+    }
+  );
+}
+
 
 function StatusBadge({
   status,
@@ -2218,6 +2740,120 @@ function StatusBadge({
     </span>
   );
 }
+
+const workforceTabsStyle = {
+  display:
+    "flex",
+
+  gap:
+    "10px",
+
+  flexWrap:
+    "wrap",
+
+  marginBottom:
+    "14px",
+
+  padding:
+    "8px",
+
+  background:
+    "#FFFFFF",
+
+  border:
+    "1px solid #E5E7EB",
+
+  borderRadius:
+    "14px",
+
+  boxShadow:
+    "0 5px 18px rgba(15,23,42,0.04)",
+};
+
+const workforceTabButtonStyle = {
+  display:
+    "inline-flex",
+
+  alignItems:
+    "center",
+
+  gap:
+    "8px",
+
+  padding:
+    "10px 14px",
+
+  border:
+    "1px solid transparent",
+
+  borderRadius:
+    "10px",
+
+  background:
+    "transparent",
+
+  color:
+    "#64748B",
+
+  fontSize:
+    "13px",
+
+  fontWeight:
+    "800",
+
+  cursor:
+    "pointer",
+};
+
+const workforceTabActiveStyle = {
+  background:
+    "#ECFDF5",
+
+  border:
+    "1px solid #A7F3D0",
+
+  color:
+    "#047857",
+};
+
+const workforceCountStyle = {
+  display:
+    "inline-flex",
+
+  alignItems:
+    "center",
+
+  justifyContent:
+    "center",
+
+  minWidth:
+    "22px",
+
+  height:
+    "22px",
+
+  padding:
+    "0 6px",
+
+  borderRadius:
+    "999px",
+
+  background:
+    "#FFFFFF",
+
+  color:
+    "#0B5E3B",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "800",
+
+  border:
+    "1px solid #D1FAE5",
+};
+
 
 const filtersPanelStyle = {
   display:
@@ -2631,6 +3267,44 @@ const exitGridStyle = {
 
   marginTop:
     "16px",
+};
+
+const exitTextareaStyle = {
+  width:
+    "100%",
+
+  boxSizing:
+    "border-box",
+
+  resize:
+    "vertical",
+
+  minHeight:
+    "82px",
+
+  padding:
+    "11px 13px",
+
+  border:
+    "1px solid #CBD5E1",
+
+  borderRadius:
+    "9px",
+
+  background:
+    "#FFFFFF",
+
+  color:
+    "#0F172A",
+
+  fontFamily:
+    "inherit",
+
+  fontSize:
+    "13px",
+
+  outline:
+    "none",
 };
 
 const cancelButtonStyle = {

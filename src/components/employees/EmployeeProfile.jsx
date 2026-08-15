@@ -401,6 +401,9 @@ function EmployeeProfile() {
         designation:
           normalizedProfile.designation,
 
+        locationId:
+          normalizedProfile.locationId,
+
         email:
           normalizedProfile.email,
 
@@ -506,6 +509,17 @@ const handleChange = (
   ) => {
     event.preventDefault();
 
+    if (
+      !profile.locationId &&
+      !formData.locationId
+    ) {
+      setError(
+        "Select the employee's initial work location before saving."
+      );
+
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -565,6 +579,9 @@ const handleChange = (
       designation:
         profile.designation,
 
+      locationId:
+        profile.locationId || "",
+
       email:
         profile.email,
 
@@ -590,6 +607,79 @@ const handleChange = (
         ),
     });
   };
+  /*
+  ============================================================
+  OPEN EMPLOYEE MASTER-DATA EDIT FORM
+  ============================================================
+
+  Location rule:
+  - if the employee has no current location, HR may make the
+    initial/corrective location assignment from the active
+    organization location catalogue;
+  - if a location is already assigned, Edit Employee cannot
+    change it. A genuine movement must use Transfer Employee.
+  ============================================================
+  */
+
+  const openEditForm =
+    async () => {
+      try {
+        setSuccess("");
+        setError("");
+
+        setTransferOpen(false);
+        setPromotionOpen(false);
+        setJobChangeOpen(false);
+        setConfirmationOpen(false);
+        setSuspensionOpen(false);
+        setReactivationOpen(false);
+        setDeactivationOpen(false);
+
+        setFormData(
+          (current) => ({
+            ...current,
+            locationId:
+              profile.locationId ||
+              "",
+          })
+        );
+
+        if (
+          !profile.locationId
+        ) {
+          const result =
+            await apiRequest(
+              "/api/location-catalog"
+            );
+
+          const activeLocations =
+            (result.data || [])
+              .filter(
+                (location) =>
+                  location.isActive !==
+                  false
+              );
+
+          setLocations(
+            activeLocations
+          );
+        }
+
+        setEditing(true);
+      } catch (err) {
+        console.error(
+          "Edit employee location catalogue load error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not load active work locations."
+        );
+      }
+    };
+
+
   /*
   ============================================================
   OPEN TRANSFER FORM
@@ -2927,6 +3017,119 @@ const handleChange = (
                   labelStyle
                 }
               >
+                Work Location / Branch
+              </label>
+
+              {profile.locationId ? (
+                <>
+                  <input
+                    type="text"
+                    value={`${profile.locationName}${
+                      profile.locationCode
+                        ? ` (${profile.locationCode})`
+                        : ""
+                    }`}
+                    readOnly
+                    disabled
+                    style={{
+                      ...fieldStyle,
+                      background:
+                        "#F8FAFC",
+                      color:
+                        "#475569",
+                      cursor:
+                        "not-allowed",
+                    }}
+                  />
+
+                  <p
+                    style={{
+                      margin:
+                        "7px 0 0",
+                      color:
+                        "#64748B",
+                      fontSize:
+                        "12px",
+                      lineHeight:
+                        "1.45",
+                    }}
+                  >
+                    Work location is already established. Use
+                    Transfer Employee for any movement to another
+                    location.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <select
+                    name="locationId"
+                    value={
+                      formData.locationId ||
+                      ""
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    required
+                    disabled={
+                      saving
+                    }
+                    style={
+                      fieldStyle
+                    }
+                  >
+                    <option value="">
+                      Select work location / branch
+                    </option>
+
+                    {locations.map(
+                      (location) => (
+                        <option
+                          key={
+                            location.id
+                          }
+                          value={
+                            location.id
+                          }
+                        >
+                          {location.name}
+                          {location.code
+                            ? ` (${location.code})`
+                            : ""}
+                          {location.city
+                            ? ` - ${location.city}`
+                            : ""}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+                  <p
+                    style={{
+                      margin:
+                        "7px 0 0",
+                      color:
+                        "#B45309",
+                      fontSize:
+                        "12px",
+                      lineHeight:
+                        "1.45",
+                    }}
+                  >
+                    Initial assignment only. After a location is
+                    established, future changes must use Transfer
+                    Employee.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div>
+              <label
+                style={
+                  labelStyle
+                }
+              >
                 Employment Status
               </label>
 
@@ -3134,18 +3337,9 @@ const handleChange = (
             >
               <button
                 type="button"
-                onClick={() => {
-                  setSuccess("");
-                  setError("");
-                  setTransferOpen(false);
-                  setPromotionOpen(false);
-                  setJobChangeOpen(false);
-                  setConfirmationOpen(false);
-                  setSuspensionOpen(false);
-                  setReactivationOpen(false);
-      setDeactivationOpen(false);
-                  setEditing(true);
-                }}
+                onClick={
+                  openEditForm
+                }
                 style={
                   actionButtonStyle
                 }
