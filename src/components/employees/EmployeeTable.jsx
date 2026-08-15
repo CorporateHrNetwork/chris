@@ -248,7 +248,7 @@ function EmployeeTable() {
             err
           );
 
-          setError(
+          showError(
             err.message ||
               "CHRIS could not load employee records."
           );
@@ -287,7 +287,7 @@ function EmployeeTable() {
             err
           );
 
-          setError(
+          showError(
             err.message ||
               "CHRIS could not load organization locations."
           );
@@ -497,160 +497,85 @@ function EmployeeTable() {
       }, 4000);
     };
 
+
+  /*
+  ============================================================
+  ERROR MESSAGE
+  ============================================================
+  */
+
+  const showError =
+    (message) => {
+      setError(
+        message
+      );
+
+      setTimeout(() => {
+        setError("");
+      }, 5000);
+    };
+
   /*
   ============================================================
   SUSPEND
   ============================================================
+
+  This controlled transaction is completed on Employee Profile,
+  where HR provides the required effective date and supporting
+  information.
+  ============================================================
   */
 
   const handleSuspend =
-    async (employee) => {
-      const confirmed =
-        window.confirm(
-          `Suspend ${employee.name}? Their linked CHRIS login will also be disabled.`
-        );
+    (employee) => {
+      setError("");
+      setSuccess("");
 
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        setActionEmployeeNumber(
-          employee.id
-        );
-
-        setError("");
-
-        const result =
-          await apiRequest(
-            `/api/employees/${employee.id}/suspend`,
-            {
-              method:
-                "PATCH",
-            }
-          );
-
-        showSuccess(
-          result.message
-        );
-
-        await fetchEmployees();
-      } catch (
-        requestError
-      ) {
-        setError(
-          requestError.message ||
-            "Unable to suspend employee."
-        );
-      } finally {
-        setActionEmployeeNumber(
-          null
-        );
-      }
+      navigate(
+        `/employees/${employee.id}?action=suspend`
+      );
     };
 
   /*
   ============================================================
   DEACTIVATE
   ============================================================
+
+  This controlled transaction is completed on Employee Profile,
+  where HR provides the required effective date and supporting
+  information.
+  ============================================================
   */
 
   const handleDeactivate =
-    async (employee) => {
-      const confirmed =
-        window.confirm(
-          `Deactivate ${employee.name}? Their linked CHRIS login will also be disabled.`
-        );
+    (employee) => {
+      setError("");
+      setSuccess("");
 
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        setActionEmployeeNumber(
-          employee.id
-        );
-
-        setError("");
-
-        const result =
-          await apiRequest(
-            `/api/employees/${employee.id}/deactivate`,
-            {
-              method:
-                "PATCH",
-            }
-          );
-
-        showSuccess(
-          result.message
-        );
-
-        await fetchEmployees();
-      } catch (
-        requestError
-      ) {
-        setError(
-          requestError.message ||
-            "Unable to deactivate employee."
-        );
-      } finally {
-        setActionEmployeeNumber(
-          null
-        );
-      }
+      navigate(
+        `/employees/${employee.id}?action=deactivate`
+      );
     };
 
   /*
   ============================================================
   REACTIVATE
   ============================================================
+
+  This controlled transaction is completed on Employee Profile,
+  where HR provides the required effective date and supporting
+  information.
+  ============================================================
   */
 
   const handleReactivate =
-    async (employee) => {
-      const confirmed =
-        window.confirm(
-          `Reactivate ${employee.name}?`
-        );
+    (employee) => {
+      setError("");
+      setSuccess("");
 
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        setActionEmployeeNumber(
-          employee.id
-        );
-
-        setError("");
-
-        const result =
-          await apiRequest(
-            `/api/employees/${employee.id}/reactivate`,
-            {
-              method:
-                "PATCH",
-            }
-          );
-
-        showSuccess(
-          result.message
-        );
-
-        await fetchEmployees();
-      } catch (
-        requestError
-      ) {
-        setError(
-          requestError.message ||
-            "Unable to reactivate employee."
-        );
-      } finally {
-        setActionEmployeeNumber(
-          null
-        );
-      }
+      navigate(
+        `/employees/${employee.id}?action=reactivate`
+      );
     };
 
   /*
@@ -695,7 +620,7 @@ function EmployeeTable() {
       }
 
       if (!exitDate) {
-        setError(
+        showError(
           "Exit date is required."
         );
 
@@ -736,7 +661,7 @@ function EmployeeTable() {
       } catch (
         requestError
       ) {
-        setError(
+        showError(
           requestError.message ||
             "Unable to process employee exit."
         );
@@ -809,7 +734,7 @@ function EmployeeTable() {
       if (
         !reinstateEffectiveDate
       ) {
-        setError(
+        showError(
           "Reinstatement effective date is required."
         );
 
@@ -869,7 +794,7 @@ function EmployeeTable() {
       } catch (
         requestError
       ) {
-        setError(
+        showError(
           requestError.message ||
             "Unable to reinstate employee."
         );

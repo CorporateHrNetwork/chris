@@ -1396,7 +1396,17 @@ DEACTIVATE EMPLOYEE
 Permission: employees.update
 ============================================================
 
-Use for a non-exit inactive employee.
+Deactivation:
+- applies to employees still in employment
+- changes employee status to INACTIVE
+- disables linked CHRIS access
+- records effective date
+- records reason / notes
+- preserves department, designation and location
+- creates a permanent DEACTIVATED lifecycle event
+
+This is not an employee exit transaction.
+Resignation, termination and retirement remain separate.
 ============================================================
 */
 
@@ -1414,6 +1424,137 @@ router.patch(
         employeeNumber,
       } = req.params;
 
+      const {
+        effectiveDate,
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED EFFECTIVE DATE
+      --------------------------------------------------------
+      */
+
+      if (
+        !effectiveDate ||
+        !String(effectiveDate).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+
+          code:
+            "EFFECTIVE_DATE_REQUIRED",
+
+          message:
+            "A deactivation effective date is required.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED REASON
+      --------------------------------------------------------
+      */
+
+      if (
+        !reason ||
+        !String(reason).trim()
+      ) {
+        return res.status(400).json({
+          status: "error",
+
+          code:
+            "DEACTIVATION_REASON_REQUIRED",
+
+          message:
+            "A reason is required to deactivate an employee.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      EFFECTIVE DATE VALIDATION
+      --------------------------------------------------------
+      */
+
+      const parsedEffectiveDate =
+        new Date(effectiveDate);
+
+      if (
+        Number.isNaN(
+          parsedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status: "error",
+
+          code:
+            "INVALID_EFFECTIVE_DATE",
+
+          message:
+            "The supplied deactivation effective date is invalid.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      FUTURE DATE PROTECTION
+
+      Deactivation changes the employee's live status and
+      disables linked CHRIS access immediately.
+
+      Future-dated deactivation will require the scheduled
+      HR transaction engine.
+      --------------------------------------------------------
+      */
+
+      const effectiveDateOnly =
+        new Date(parsedEffectiveDate);
+
+      effectiveDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      if (
+        effectiveDateOnly >
+        today
+      ) {
+        return res.status(409).json({
+          status: "error",
+
+          code:
+            "FUTURE_DEACTIVATION_NOT_SUPPORTED",
+
+          message:
+            "Future-dated employee deactivation is not yet supported. Select today or an earlier effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD CURRENT EMPLOYEE
+      --------------------------------------------------------
+      */
+
       const existingEmployee =
         await getEmployee(
           organizationId,
@@ -1423,27 +1564,97 @@ router.patch(
       if (!existingEmployee) {
         return res.status(404).json({
           status: "error",
+
+          code:
+            "EMPLOYEE_NOT_FOUND",
+
           message:
             "Employee not found.",
         });
       }
+
+
+      /*
+      --------------------------------------------------------
+      EXITED EMPLOYEE PROTECTION
+      --------------------------------------------------------
+      */
 
       if (
         EXIT_STATUSES.includes(
           existingEmployee.status
         )
       ) {
-        return res.status(400).json({
+        return res.status(409).json({
           status: "error",
+
+          code:
+            "EMPLOYEE_EXITED",
 
           message:
             "An exited employee cannot be deactivated through this action.",
         });
       }
 
+
+      /*
+      --------------------------------------------------------
+      ALREADY INACTIVE PROTECTION
+      --------------------------------------------------------
+      */
+
+      if (
+        existingEmployee.status ===
+        "INACTIVE"
+      ) {
+        return res.status(409).json({
+          status: "error",
+
+          code:
+            "EMPLOYEE_ALREADY_INACTIVE",
+
+          message:
+            "Employee is already inactive.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      SUSPENDED EMPLOYEE PROTECTION
+
+      Suspended employees should normally be reactivated or
+      otherwise resolved through the suspension workflow
+      before a separate deactivation transaction is recorded.
+      --------------------------------------------------------
+      */
+
+      if (
+        existingEmployee.status ===
+        "SUSPENDED"
+      ) {
+        return res.status(409).json({
+          status: "error",
+
+          code:
+            "EMPLOYEE_SUSPENDED",
+
+          message:
+            "A suspended employee cannot be deactivated directly. Resolve the suspension first.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      TRANSACTION
+      --------------------------------------------------------
+      */
+
       const employee =
         await prisma.$transaction(
           async (tx) => {
+
             const updatedEmployee =
               await tx.employee.update({
                 where: {
@@ -1457,11 +1668,33 @@ router.patch(
                 },
 
                 include: {
-                  department: true,
-                  designation: true,
-                  location: true,
+                  department:
+                    true,
+
+                  designation:
+                    true,
+
+                  location:
+                    true,
+
+                  user: {
+                    select: {
+                      id:
+                        true,
+
+                      isActive:
+                        true,
+                    },
+                  },
                 },
               });
+
+
+            /*
+            ----------------------------------------------------
+            DISABLE LINKED CHRIS ACCESS
+            ----------------------------------------------------
+            */
 
             if (
               existingEmployee.user
@@ -1469,15 +1702,22 @@ router.patch(
               await tx.user.update({
                 where: {
                   id:
-                    existingEmployee
-                      .user.id,
+                    existingEmployee.user.id,
                 },
 
                 data: {
-                  isActive: false,
+                  isActive:
+                    false,
                 },
               });
             }
+
+
+            /*
+            ----------------------------------------------------
+            PERMANENT EMPLOYMENT LIFECYCLE RECORD
+            ----------------------------------------------------
+            */
 
             await tx.employeeLifecycleEvent.create({
               data: {
@@ -1490,7 +1730,7 @@ router.patch(
                   "DEACTIVATED",
 
                 effectiveDate:
-                  new Date(),
+                  parsedEffectiveDate,
 
                 previousStatus:
                   existingEmployee.status,
@@ -1504,22 +1744,54 @@ router.patch(
                 toLocationId:
                   existingEmployee.locationId,
 
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  existingEmployee.departmentId,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  existingEmployee.designationId,
+
+                reason:
+                  String(reason).trim(),
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
                 performedByUserId:
-                  req.auth.userId,
+                  req.auth.userId ||
+                  null,
               },
             });
+
 
             return updatedEmployee;
           }
         );
 
+
+      /*
+      --------------------------------------------------------
+      SUCCESS RESPONSE
+      --------------------------------------------------------
+      */
+
       return res.status(200).json({
-        status: "success",
+        status:
+          "success",
 
         message:
           "Employee deactivated successfully. Linked CHRIS access has been disabled.",
 
-        data: employee,
+        data:
+          employee,
       });
     } catch (error) {
       console.error(
@@ -1528,7 +1800,8 @@ router.patch(
       );
 
       return res.status(500).json({
-        status: "error",
+        status:
+          "error",
 
         message:
           "Unable to deactivate employee.",

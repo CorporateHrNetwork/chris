@@ -126,6 +126,36 @@ function EmployeeProfile() {
 
   /*
   ============================================================
+  EMPLOYEE DEACTIVATION STATE
+  ============================================================
+  */
+
+  const [
+    deactivationOpen,
+    setDeactivationOpen,
+  ] = useState(false);
+
+  const [
+    deactivationSaving,
+    setDeactivationSaving,
+  ] = useState(false);
+
+  const [
+    deactivationForm,
+    setDeactivationForm,
+  ] = useState({
+    effectiveDate:
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+
+    reason: "",
+
+    notes: "",
+  });
+
+  /*
+  ============================================================
   EMPLOYMENT HISTORY STATE
   ============================================================
   */
@@ -584,6 +614,10 @@ const handleChange = (
           false
         );
 
+        setDeactivationOpen(
+          false
+        );
+
         setJobChangeOpen(
           false
         );
@@ -842,6 +876,10 @@ const handleChange = (
         );
 
         setReactivationOpen(
+          false
+        );
+
+        setDeactivationOpen(
           false
         );
 
@@ -1265,6 +1303,10 @@ const handleChange = (
           false
         );
 
+        setDeactivationOpen(
+          false
+        );
+
         setTransferOpen(
           false
         );
@@ -1580,6 +1622,7 @@ const handleChange = (
       setPromotionOpen(false);
       setSuspensionOpen(false);
       setReactivationOpen(false);
+      setDeactivationOpen(false);
       setEditing(false);
 
       setConfirmationForm({
@@ -1780,6 +1823,10 @@ const handleChange = (
       );
 
       setReactivationOpen(
+        false
+      );
+
+      setDeactivationOpen(
         false
       );
 
@@ -2150,6 +2197,10 @@ const handleChange = (
         false
       );
 
+      setDeactivationOpen(
+        false
+      );
+
       setReactivationForm({
         effectiveDate:
           new Date()
@@ -2273,6 +2324,10 @@ const handleChange = (
           false
         );
 
+        setDeactivationOpen(
+          false
+        );
+
         setReactivationForm({
           effectiveDate:
             new Date()
@@ -2310,6 +2365,254 @@ const handleChange = (
         );
       }
     };
+
+
+  /*
+  ============================================================
+  OPEN EMPLOYEE DEACTIVATION FORM
+  ============================================================
+  */
+
+  const openDeactivationForm =
+    () => {
+      setError("");
+      setSuccess("");
+
+      setEditing(false);
+      setConfirmationOpen(false);
+      setSuspensionOpen(false);
+      setReactivationOpen(false);
+      setTransferOpen(false);
+      setJobChangeOpen(false);
+      setPromotionOpen(false);
+
+      setDeactivationForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+        reason: "",
+        notes: "",
+      });
+
+      setDeactivationOpen(true);
+    };
+
+
+  const handleDeactivationChange =
+    (event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setDeactivationForm(
+        (current) => ({
+          ...current,
+          [name]: value,
+        })
+      );
+    };
+
+
+  const cancelDeactivation =
+    () => {
+      setDeactivationOpen(false);
+
+      setDeactivationForm({
+        effectiveDate:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+        reason: "",
+        notes: "",
+      });
+
+      setError("");
+    };
+
+
+  /*
+  ============================================================
+  PROCESS CONTROLLED EMPLOYEE DEACTIVATION
+  ============================================================
+  */
+
+  const handleDeactivation =
+    async (event) => {
+      event.preventDefault();
+
+      if (
+        [
+          "Resigned",
+          "Terminated",
+          "Retired",
+          "Suspended",
+          "Inactive",
+        ].includes(profile.status)
+      ) {
+        setError(
+          "This employee is not eligible for deactivation in the current employment status."
+        );
+        return;
+      }
+
+      if (!deactivationForm.effectiveDate) {
+        setError(
+          "Deactivation effective date is required."
+        );
+        return;
+      }
+
+      if (!deactivationForm.reason.trim()) {
+        setError(
+          "A reason is required to deactivate an employee."
+        );
+        return;
+      }
+
+      try {
+        setDeactivationSaving(true);
+        setError("");
+        setSuccess("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/${encodeURIComponent(
+              employeeNumber
+            )}/deactivate`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                effectiveDate:
+                  deactivationForm.effectiveDate,
+                reason:
+                  deactivationForm.reason.trim(),
+                notes:
+                  deactivationForm.notes.trim(),
+              }),
+            }
+          );
+
+        await Promise.all([
+          loadProfile(),
+          loadLifecycleHistory(),
+        ]);
+
+        setDeactivationOpen(false);
+        setDeactivationForm({
+          effectiveDate:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+          reason: "",
+          notes: "",
+        });
+
+        setSuccess(
+          result.message ||
+            "Employee deactivated successfully."
+        );
+
+        setTimeout(() => {
+          setSuccess("");
+        }, 4000);
+      } catch (err) {
+        console.error(
+          "Employee deactivation error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "CHRIS could not deactivate this employee."
+        );
+      } finally {
+        setDeactivationSaving(false);
+      }
+    };
+
+
+  /*
+  ============================================================
+  OPEN CONTROLLED ACTION REQUESTED FROM EMPLOYEE DIRECTORY
+  ============================================================
+
+  Employee Directory routes controlled lifecycle transactions
+  to Employee Profile so HR completes the authoritative form
+  before CHRIS submits the transaction.
+  ============================================================
+  */
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const requestedAction =
+      params.get("action");
+
+    if (
+      requestedAction ===
+        "suspend" &&
+      ![
+        "Resigned",
+        "Terminated",
+        "Retired",
+        "Suspended",
+        "Inactive",
+      ].includes(
+        profile.status
+      )
+    ) {
+      openSuspensionForm();
+    }
+
+    if (
+      requestedAction ===
+        "deactivate" &&
+      ![
+        "Resigned",
+        "Terminated",
+        "Retired",
+        "Suspended",
+        "Inactive",
+      ].includes(
+        profile.status
+      )
+    ) {
+      openDeactivationForm();
+    }
+
+    if (
+      requestedAction ===
+        "reactivate" &&
+      [
+        "Suspended",
+        "Inactive",
+      ].includes(
+        profile.status
+      )
+    ) {
+      openReactivationForm();
+    }
+
+    if (requestedAction) {
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname
+      );
+    }
+  }, [
+    profile?.status,
+    employeeNumber,
+  ]);
 
 
   if (loading) {
@@ -2840,6 +3143,7 @@ const handleChange = (
                   setConfirmationOpen(false);
                   setSuspensionOpen(false);
                   setReactivationOpen(false);
+      setDeactivationOpen(false);
                   setEditing(true);
                 }}
                 style={
@@ -2881,6 +3185,28 @@ const handleChange = (
                   }
                 >
                   Suspend Employee
+                </button>
+              )}
+
+              {![
+                "Resigned",
+                "Terminated",
+                "Retired",
+                "Suspended",
+                "Inactive",
+              ].includes(
+                profile.status
+              ) && (
+                <button
+                  type="button"
+                  onClick={
+                    openDeactivationForm
+                  }
+                  style={
+                    actionButtonStyle
+                  }
+                >
+                  Deactivate Employee
                 </button>
               )}
 
@@ -3682,6 +4008,239 @@ const handleChange = (
               {suspensionSaving
                 ? "Suspending..."
                 : "Suspend Employee"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {deactivationOpen &&
+        !editing && (
+        <form
+          onSubmit={
+            handleDeactivation
+          }
+          style={
+            transferCardStyle
+          }
+        >
+          <div
+            style={
+              transferHeaderStyle
+            }
+          >
+            <div>
+              <p
+                style={
+                  transferEyebrowStyle
+                }
+              >
+                Employment Lifecycle
+              </p>
+
+              <h2
+                style={
+                  transferTitleStyle
+                }
+              >
+                Deactivate Employee
+              </h2>
+
+              <p
+                style={
+                  transferSubtitleStyle
+                }
+              >
+                Place this employee in Inactive status without
+                recording an employment exit.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                cancelDeactivation
+              }
+              disabled={
+                deactivationSaving
+              }
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+          </div>
+
+          <div
+            style={
+              transferSummaryStyle
+            }
+          >
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Employee
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.name}
+              </strong>
+            </div>
+
+            <div>
+              <span
+                style={
+                  transferSummaryLabelStyle
+                }
+              >
+                Current Status
+              </span>
+
+              <strong
+                style={
+                  transferSummaryValueStyle
+                }
+              >
+                {profile.status}
+              </strong>
+            </div>
+          </div>
+
+          <div
+            style={
+              transferGridStyle
+            }
+          >
+            <div>
+              <label style={labelStyle}>
+                Deactivation Effective Date *
+              </label>
+
+              <input
+                type="date"
+                name="effectiveDate"
+                value={
+                  deactivationForm.effectiveDate
+                }
+                onChange={
+                  handleDeactivationChange
+                }
+                disabled={
+                  deactivationSaving
+                }
+                required
+                style={fieldStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>
+                Reason *
+              </label>
+
+              <input
+                type="text"
+                name="reason"
+                value={
+                  deactivationForm.reason
+                }
+                onChange={
+                  handleDeactivationChange
+                }
+                disabled={
+                  deactivationSaving
+                }
+                required
+                placeholder="e.g. Temporary inactive employment status"
+                style={fieldStyle}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: "18px",
+            }}
+          >
+            <label style={labelStyle}>
+              Notes
+            </label>
+
+            <textarea
+              name="notes"
+              value={
+                deactivationForm.notes
+              }
+              onChange={
+                handleDeactivationChange
+              }
+              disabled={
+                deactivationSaving
+              }
+              placeholder="Optional HR notes concerning this deactivation..."
+              rows={4}
+              style={
+                transferTextareaStyle
+              }
+            />
+          </div>
+
+          <div
+            style={{
+              ...promotionOptionsMessageStyle,
+              marginTop: "18px",
+            }}
+          >
+            Submitting this transaction will change the employee
+            to Inactive status and disable linked CHRIS access.
+            This is not an exit transaction and the employee can
+            later be reactivated through the controlled Reactivate
+            Employee process.
+          </div>
+
+          <div style={transferFooterStyle}>
+            <button
+              type="button"
+              onClick={cancelDeactivation}
+              disabled={deactivationSaving}
+              style={cancelButtonStyle}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={
+                deactivationSaving ||
+                !deactivationForm.effectiveDate ||
+                !deactivationForm.reason.trim()
+              }
+              style={{
+                ...transferConfirmButtonStyle,
+                opacity:
+                  deactivationSaving ||
+                  !deactivationForm.effectiveDate ||
+                  !deactivationForm.reason.trim()
+                    ? 0.6
+                    : 1,
+                cursor:
+                  deactivationSaving ||
+                  !deactivationForm.effectiveDate ||
+                  !deactivationForm.reason.trim()
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {deactivationSaving
+                ? "Deactivating..."
+                : "Deactivate Employee"}
             </button>
           </div>
         </form>
