@@ -51,3 +51,6 @@ Sidebar-*.txt
 Settings-*.txt
 Designations-*.txt
 
+
+# Local CHRIS development backups
+.chris-backups/
