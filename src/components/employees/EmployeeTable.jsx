@@ -1,4 +1,4 @@
-import {
+﻿import {
   useCallback,
   useEffect,
   useMemo,
@@ -17,6 +17,7 @@ import {
   FaSignOutAlt,
   FaUndo,
   FaMapMarkerAlt,
+  FaUserPlus,
 } from "react-icons/fa";
 
 import {
@@ -46,6 +47,16 @@ function EmployeeTable() {
   const [
     organizationLocations,
     setOrganizationLocations,
+  ] = useState([]);
+
+  const [
+    organizationDepartments,
+    setOrganizationDepartments,
+  ] = useState([]);
+
+  const [
+    organizationDesignations,
+    setOrganizationDesignations,
   ] = useState([]);
 
   const [
@@ -97,6 +108,9 @@ function EmployeeTable() {
     useRef(null);
 
   const reinstateFormRef =
+    useRef(null);
+
+  const rehireFormRef =
     useRef(null);
 
   const directoryRef =
@@ -168,6 +182,56 @@ function EmployeeTable() {
 
   /*
   ============================================================
+  REHIRE FORM STATE
+  ============================================================
+  */
+
+  const [
+    rehireEmployee,
+    setRehireEmployee,
+  ] = useState(null);
+
+  const [
+    rehireStatus,
+    setRehireStatus,
+  ] = useState("ACTIVE");
+
+  const [
+    rehireEffectiveDate,
+    setRehireEffectiveDate,
+  ] = useState(
+    new Date()
+      .toISOString()
+      .slice(0, 10)
+  );
+
+  const [
+    rehireDepartmentId,
+    setRehireDepartmentId,
+  ] = useState("");
+
+  const [
+    rehireDesignationId,
+    setRehireDesignationId,
+  ] = useState("");
+
+  const [
+    rehireLocationId,
+    setRehireLocationId,
+  ] = useState("");
+
+  const [
+    rehireReason,
+    setRehireReason,
+  ] = useState("");
+
+  const [
+    rehireNotes,
+    setRehireNotes,
+  ] = useState("");
+
+  /*
+  ============================================================
   LOAD EMPLOYEES
   ============================================================
   */
@@ -203,10 +267,20 @@ function EmployeeTable() {
                   .filter(Boolean)
                   .join(" "),
 
+                departmentId:
+                  employee.department
+                    ?.id ||
+                  null,
+
                 department:
                   employee.department
                     ?.name ||
                   "-",
+
+                designationId:
+                  employee.designation
+                    ?.id ||
+                  null,
 
                 designation:
                   employee.designation
@@ -327,6 +401,73 @@ function EmployeeTable() {
 
   /*
   ============================================================
+  LOAD ORGANIZATION DEPARTMENTS + DESIGNATIONS
+  ============================================================
+  */
+
+  const fetchOrganizationCareerStructure =
+    useCallback(
+      async () => {
+        try {
+          const [
+            departmentResult,
+            designationResult,
+          ] =
+            await Promise.all([
+              apiRequest(
+                "/api/employees/career/departments"
+              ),
+
+              apiRequest(
+                "/api/employees/career/catalog"
+              ),
+            ]);
+
+          setOrganizationDepartments(
+            (
+              departmentResult.data ||
+              []
+            ).filter(
+              (item) =>
+                item.isActive !==
+                false
+            )
+          );
+
+          setOrganizationDesignations(
+            (
+              designationResult.data ||
+              []
+            ).filter(
+              (item) =>
+                item.isActive !==
+                  false &&
+                item.department
+                  ?.isActive !==
+                  false
+            )
+          );
+        } catch (err) {
+          console.error(
+            "CHRIS career structure catalogue error:",
+            err
+          );
+
+          showError(
+            err.message ||
+              "CHRIS could not load the department and designation structure."
+          );
+        }
+      },
+      []
+    );
+
+  useEffect(() => {
+    fetchOrganizationCareerStructure();
+  }, [fetchOrganizationCareerStructure]);
+
+  /*
+  ============================================================
   WORKFORCE SEGMENTATION
   ============================================================
 
@@ -399,6 +540,22 @@ function EmployeeTable() {
       setStatus("All");
       setError("");
       setSuccess("");
+
+      setExitEmployee(
+        null
+      );
+
+      setRehireEmployee(
+        null
+      );
+
+      setReinstateEmployee(
+        null
+      );
+
+      setRehireEmployee(
+        null
+      );
     };
 
 
@@ -479,6 +636,21 @@ function EmployeeTable() {
         ).sort(),
       ],
       [visibleEmployees]
+    );
+
+
+  const rehireDesignationOptions =
+    useMemo(
+      () =>
+        organizationDesignations.filter(
+          (item) =>
+            item.departmentId ===
+            rehireDepartmentId
+        ),
+      [
+        organizationDesignations,
+        rehireDepartmentId,
+      ]
     );
 
 
@@ -694,6 +866,14 @@ function EmployeeTable() {
 
   const openExitForm =
     (employee) => {
+      setReinstateEmployee(
+        null
+      );
+
+      setRehireEmployee(
+        null
+      );
+
       setExitEmployee(
         employee
       );
@@ -725,8 +905,8 @@ function EmployeeTable() {
   AUTO-SCROLL CONTROLLED FORMS INTO VIEW
   ============================================================
 
-  Exit and Reinstate forms are rendered above the directory.
-  When either form opens, CHRIS scrolls it into the current
+  Exit, Reinstate and Rehire forms are rendered above the directory.
+  When any controlled form opens, CHRIS scrolls it into the current
   viewport so the user receives immediate visual feedback.
   ============================================================
   */
@@ -773,6 +953,28 @@ function EmployeeTable() {
     return () =>
       clearTimeout(timer);
   }, [reinstateEmployee]);
+
+
+  useEffect(() => {
+    if (!rehireEmployee) {
+      return;
+    }
+
+    const timer =
+      setTimeout(() => {
+        rehireFormRef.current
+          ?.scrollIntoView({
+            behavior:
+              "smooth",
+
+            block:
+              "start",
+          });
+      }, 50);
+
+    return () =>
+      clearTimeout(timer);
+  }, [rehireEmployee]);
 
 
   /*
@@ -1032,6 +1234,256 @@ function EmployeeTable() {
         );
       }
     };
+
+  /*
+  ============================================================
+  OPEN REHIRE FORM
+  ============================================================
+
+  Rehire starts a new employment episode while preserving the
+  employee's permanent CHR Employee ID.
+  ============================================================
+  */
+
+  const openRehireForm =
+    (employee) => {
+      setExitEmployee(
+        null
+      );
+
+      setReinstateEmployee(
+        null
+      );
+
+      setRehireEmployee(
+        employee
+      );
+
+      setRehireStatus(
+        "ACTIVE"
+      );
+
+      setRehireEffectiveDate(
+        new Date()
+          .toISOString()
+          .slice(0, 10)
+      );
+
+      const currentDepartmentAvailable =
+        organizationDepartments.some(
+          (item) =>
+            item.id ===
+            employee.departmentId
+        );
+
+      const resolvedDepartmentId =
+        currentDepartmentAvailable
+          ? employee.departmentId
+          : "";
+
+      setRehireDepartmentId(
+        resolvedDepartmentId
+      );
+
+      const currentDesignationAvailable =
+        organizationDesignations.some(
+          (item) =>
+            item.id ===
+              employee.designationId &&
+            item.departmentId ===
+              resolvedDepartmentId
+        );
+
+      setRehireDesignationId(
+        currentDesignationAvailable
+          ? employee.designationId
+          : ""
+      );
+
+      const currentLocationAvailable =
+        organizationLocations.some(
+          (item) =>
+            item.id ===
+            employee.locationId &&
+            item.isActive !==
+              false
+        );
+
+      setRehireLocationId(
+        currentLocationAvailable
+          ? employee.locationId
+          : ""
+      );
+
+      setRehireReason(
+        ""
+      );
+
+      setRehireNotes(
+        ""
+      );
+
+      setError("");
+      setSuccess("");
+    };
+
+
+  /*
+  ============================================================
+  PROCESS REHIRE
+  ============================================================
+  */
+
+  const handleRehire =
+    async (event) => {
+      event.preventDefault();
+
+      if (!rehireEmployee) {
+        return;
+      }
+
+      if (!rehireEffectiveDate) {
+        showError(
+          "Rehire effective date is required."
+        );
+
+        return;
+      }
+
+      if (!rehireDepartmentId) {
+        showError(
+          "Select a department for the new employment episode."
+        );
+
+        return;
+      }
+
+      if (!rehireDesignationId) {
+        showError(
+          "Select a designation mapped to the selected department."
+        );
+
+        return;
+      }
+
+      if (!rehireLocationId) {
+        showError(
+          "Select a work location for the new employment episode."
+        );
+
+        return;
+      }
+
+      if (
+        !rehireReason.trim()
+      ) {
+        showError(
+          "A reason is required to rehire an employee."
+        );
+
+        return;
+      }
+
+      try {
+        setActionEmployeeNumber(
+          rehireEmployee.id
+        );
+
+        setError("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/${rehireEmployee.id}/rehire`,
+            {
+              method:
+                "PATCH",
+
+              body:
+                JSON.stringify({
+                  status:
+                    rehireStatus,
+
+                  effectiveDate:
+                    rehireEffectiveDate,
+
+                  departmentId:
+                    rehireDepartmentId,
+
+                  designationId:
+                    rehireDesignationId,
+
+                  locationId:
+                    rehireLocationId,
+
+                  reason:
+                    rehireReason
+                      .trim(),
+
+                  notes:
+                    rehireNotes
+                      .trim(),
+                }),
+            }
+          );
+
+        setRehireEmployee(
+          null
+        );
+
+        setRehireDepartmentId(
+          ""
+        );
+
+        setRehireDesignationId(
+          ""
+        );
+
+        setRehireLocationId(
+          ""
+        );
+
+        setRehireReason(
+          ""
+        );
+
+        setRehireNotes(
+          ""
+        );
+
+        showSuccess(
+          result.message
+        );
+
+        await fetchEmployees();
+
+        changeDirectoryMode(
+          "CURRENT"
+        );
+
+        setTimeout(() => {
+          directoryRef.current
+            ?.scrollIntoView({
+              behavior:
+                "smooth",
+
+              block:
+                "start",
+            });
+        }, 80);
+      } catch (
+        requestError
+      ) {
+        showError(
+          requestError.message ||
+            "Unable to rehire employee."
+        );
+      } finally {
+        setActionEmployeeNumber(
+          null
+        );
+      }
+    };
+
 
   return (
     <div>
@@ -1476,7 +1928,7 @@ function EmployeeTable() {
             successStyle
           }
         >
-          âœ“ {success}
+          Ã¢Å“â€œ {success}
         </div>
       )}
 
@@ -1533,7 +1985,7 @@ function EmployeeTable() {
                   "13px",
               }}
             >
-              {exitEmployee.name} Â·{" "}
+              {exitEmployee.name} Ã‚Â·{" "}
               {exitEmployee.id}
             </div>
           </div>
@@ -1839,7 +2291,7 @@ function EmployeeTable() {
                   "13px",
               }}
             >
-              {reinstateEmployee.name} Â·{" "}
+              {reinstateEmployee.name} Ã‚Â·{" "}
               {reinstateEmployee.id}
             </div>
 
@@ -2061,6 +2513,449 @@ function EmployeeTable() {
               reinstateEmployee.id
                 ? "Reinstating..."
                 : "Confirm Reinstate"}
+            </button>
+          </div>
+        </form>
+      )}
+
+
+      {/* REHIRE FORM */}
+
+      {rehireEmployee && (
+        <form
+          ref={
+            rehireFormRef
+          }
+
+          onSubmit={
+            handleRehire
+          }
+
+          style={
+            rehireFormStyle
+          }
+        >
+          <div>
+            <h3
+              style={{
+                margin:
+                  "0 0 5px",
+
+                color:
+                  "#087A43",
+
+                fontSize:
+                  "18px",
+              }}
+            >
+              Rehire Employee
+            </h3>
+
+            <div
+              style={{
+                color:
+                  "#64748B",
+
+                fontSize:
+                  "13px",
+              }}
+            >
+              {rehireEmployee.name} ·{" "}
+              {rehireEmployee.id}
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  "7px",
+
+                color:
+                  "#64748B",
+
+                fontSize:
+                  "12px",
+
+                lineHeight:
+                  "1.5",
+              }}
+            >
+              Rehire opens a new employment episode while retaining
+              the employee's permanent CHR Employee ID. The previous
+              exited episode remains closed in CHRIS history.
+            </div>
+          </div>
+
+          <div
+            style={
+              rehireGridStyle
+            }
+          >
+            <label>
+              <FilterLabel>
+                Starting Status
+              </FilterLabel>
+
+              <select
+                value={
+                  rehireStatus
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setRehireStatus(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              >
+                <option value="ACTIVE">
+                  Active
+                </option>
+
+                <option value="PROBATION">
+                  Probation
+                </option>
+              </select>
+            </label>
+
+            <label>
+              <FilterLabel>
+                Rehire Effective Date
+              </FilterLabel>
+
+              <input
+                type="date"
+
+                value={
+                  rehireEffectiveDate
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setRehireEffectiveDate(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              />
+            </label>
+
+            <label>
+              <FilterLabel>
+                Department
+              </FilterLabel>
+
+              <select
+                value={
+                  rehireDepartmentId
+                }
+
+                onChange={(
+                  event
+                ) => {
+                  setRehireDepartmentId(
+                    event.target
+                      .value
+                  );
+
+                  setRehireDesignationId(
+                    ""
+                  );
+                }}
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              >
+                <option value="">
+                  Select Department
+                </option>
+
+                {organizationDepartments.map(
+                  (item) => (
+                    <option
+                      key={
+                        item.id
+                      }
+
+                      value={
+                        item.id
+                      }
+                    >
+                      {item.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+
+            <label>
+              <FilterLabel>
+                Designation
+              </FilterLabel>
+
+              <select
+                value={
+                  rehireDesignationId
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setRehireDesignationId(
+                    event.target
+                      .value
+                  )
+                }
+
+                disabled={
+                  !rehireDepartmentId
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+
+                  opacity:
+                    rehireDepartmentId
+                      ? 1
+                      : 0.65,
+                }}
+              >
+                <option value="">
+                  {rehireDepartmentId
+                    ? "Select Designation"
+                    : "Select Department First"}
+                </option>
+
+                {rehireDesignationOptions.map(
+                  (item) => (
+                    <option
+                      key={
+                        item.id
+                      }
+
+                      value={
+                        item.id
+                      }
+                    >
+                      {item.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+
+            <label>
+              <FilterLabel>
+                Work Location / Branch
+              </FilterLabel>
+
+              <select
+                value={
+                  rehireLocationId
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setRehireLocationId(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              >
+                <option value="">
+                  Select Work Location
+                </option>
+
+                {organizationLocations
+                  .filter(
+                    (item) =>
+                      item.isActive !==
+                      false
+                  )
+                  .map(
+                    (item) => (
+                      <option
+                        key={
+                          item.id
+                        }
+
+                        value={
+                          item.id
+                        }
+                      >
+                        {item.name}
+                        {item.code
+                          ? ` (${item.code})`
+                          : ""}
+                      </option>
+                    )
+                  )}
+              </select>
+            </label>
+
+            <label>
+              <FilterLabel>
+                Rehire Reason
+              </FilterLabel>
+
+              <input
+                type="text"
+
+                placeholder="e.g. Returning employee after prior resignation"
+
+                value={
+                  rehireReason
+                }
+
+                onChange={(
+                  event
+                ) =>
+                  setRehireReason(
+                    event.target
+                      .value
+                  )
+                }
+
+                style={{
+                  ...inputStyle,
+
+                  width:
+                    "100%",
+
+                  boxSizing:
+                    "border-box",
+                }}
+              />
+            </label>
+          </div>
+
+          <div
+            style={{
+              marginTop:
+                "15px",
+            }}
+          >
+            <FilterLabel>
+              HR Notes
+            </FilterLabel>
+
+            <textarea
+              value={
+                rehireNotes
+              }
+
+              onChange={(
+                event
+              ) =>
+                setRehireNotes(
+                  event.target
+                    .value
+                )
+              }
+
+              placeholder="Optional HR notes concerning the new employment episode..."
+
+              rows={3}
+
+              style={
+                rehireTextareaStyle
+              }
+            />
+          </div>
+
+          <div
+            style={{
+              display:
+                "flex",
+
+              justifyContent:
+                "flex-end",
+
+              gap:
+                "10px",
+
+              marginTop:
+                "16px",
+            }}
+          >
+            <button
+              type="button"
+
+              onClick={() =>
+                setRehireEmployee(
+                  null
+                )
+              }
+
+              style={
+                cancelButtonStyle
+              }
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+
+              disabled={
+                actionEmployeeNumber ===
+                rehireEmployee.id
+              }
+
+              style={
+                confirmRehireButtonStyle
+              }
+            >
+              {actionEmployeeNumber ===
+              rehireEmployee.id
+                ? "Rehiring..."
+                : "Confirm Rehire"}
             </button>
           </div>
         </form>
@@ -2490,26 +3385,49 @@ function EmployeeTable() {
 
                             {canUpdateEmployees &&
                               exited && (
-                                <button
-                                  type="button"
+                                <>
+                                  <button
+                                    type="button"
 
-                                  disabled={
-                                    updating
-                                  }
+                                    disabled={
+                                      updating
+                                    }
 
-                                  onClick={() =>
-                                    openReinstateForm(
-                                      employee
-                                    )
-                                  }
+                                    onClick={() =>
+                                      openReinstateForm(
+                                        employee
+                                      )
+                                    }
 
-                                  style={
-                                    reinstateButtonStyle
-                                  }
-                                >
-                                  <FaUndo />
-                                  Reinstate
-                                </button>
+                                    style={
+                                      reinstateButtonStyle
+                                    }
+                                  >
+                                    <FaUndo />
+                                    Reinstate
+                                  </button>
+
+                                  <button
+                                    type="button"
+
+                                    disabled={
+                                      updating
+                                    }
+
+                                    onClick={() =>
+                                      openRehireForm(
+                                        employee
+                                      )
+                                    }
+
+                                    style={
+                                      rehireButtonStyle
+                                    }
+                                  >
+                                    <FaUserPlus />
+                                    Rehire
+                                  </button>
+                                </>
                               )}
                           </div>
                         </td>
@@ -3138,6 +4056,117 @@ const reinstateButtonStyle = {
 
   color:
     "#047857",
+};
+
+const rehireButtonStyle = {
+  ...baseActionButton,
+
+  border:
+    "1px solid rgba(212,175,55,0.60)",
+
+  background:
+    "#FFF9E8",
+
+  color:
+    "#087A43",
+};
+
+const rehireFormStyle = {
+  marginBottom:
+    "22px",
+
+  padding:
+    "20px",
+
+  background:
+    "linear-gradient(145deg, #FFFFFF, #FBFDFB)",
+
+  border:
+    "1px solid rgba(212,175,55,0.52)",
+
+  borderRadius:
+    "14px",
+
+  boxShadow:
+    "0 10px 28px rgba(15,23,42,0.06)",
+};
+
+const rehireGridStyle = {
+  display:
+    "grid",
+
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(220px, 1fr))",
+
+  gap:
+    "15px",
+
+  marginTop:
+    "16px",
+};
+
+const rehireTextareaStyle = {
+  width:
+    "100%",
+
+  boxSizing:
+    "border-box",
+
+  resize:
+    "vertical",
+
+  minHeight:
+    "82px",
+
+  padding:
+    "11px 13px",
+
+  border:
+    "1px solid #CBD5E1",
+
+  borderRadius:
+    "9px",
+
+  background:
+    "#FFFFFF",
+
+  color:
+    "#0F172A",
+
+  fontFamily:
+    "inherit",
+
+  fontSize:
+    "13px",
+
+  outline:
+    "none",
+};
+
+const confirmRehireButtonStyle = {
+  padding:
+    "10px 14px",
+
+  border:
+    "1px solid #D4AF37",
+
+  borderRadius:
+    "8px",
+
+  background:
+    "#087A43",
+
+  color:
+    "#FFFFFF",
+
+  fontWeight:
+    "800",
+
+  cursor:
+    "pointer",
+
+  boxShadow:
+    "0 5px 14px rgba(8,122,67,0.16)",
 };
 
 const reinstateFormStyle = {

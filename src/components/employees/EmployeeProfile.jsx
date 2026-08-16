@@ -174,6 +174,27 @@ function EmployeeProfile() {
     lifecycleError,
     setLifecycleError,
   ] = useState("");
+
+  /*
+  ============================================================
+  EMPLOYMENT EPISODES STATE
+  ============================================================
+  */
+
+  const [
+    employmentEpisodes,
+    setEmploymentEpisodes,
+  ] = useState([]);
+
+  const [
+    episodesLoading,
+    setEpisodesLoading,
+  ] = useState(true);
+
+  const [
+    episodesError,
+    setEpisodesError,
+  ] = useState("");
   /*
   ============================================================
   EMPLOYEE TRANSFER STATE
@@ -484,9 +505,52 @@ function EmployeeProfile() {
       }
     };
 
-  useEffect(() => {
+    /*
+  ============================================================
+  LOAD EMPLOYMENT EPISODES
+  ============================================================
+  */
+
+  const loadEmploymentEpisodes =
+    async () => {
+      try {
+        setEpisodesLoading(
+          true
+        );
+
+        setEpisodesError("");
+
+        const result =
+          await apiRequest(
+            `/api/employees/${encodeURIComponent(
+              employeeNumber
+            )}/employment-episodes`
+          );
+
+        setEmploymentEpisodes(
+          result.data || []
+        );
+      } catch (err) {
+        console.error(
+          "Employee employment episodes error:",
+          err
+        );
+
+        setEpisodesError(
+          err.message ||
+            "CHRIS could not load employment episodes."
+        );
+      } finally {
+        setEpisodesLoading(
+          false
+        );
+      }
+    };
+
+useEffect(() => {
     loadProfile();
     loadLifecycleHistory();
+    loadEmploymentEpisodes();
   }, [employeeNumber]);
 const handleChange = (
     event
@@ -5950,6 +6014,11 @@ const handleChange = (
                 historyCountStyle
               }
             >
+                            {employmentEpisodes.length} episode
+              {employmentEpisodes.length === 1
+                ? ""
+                : "s"}
+              {" \u2022 "}
               {lifecycleHistory.length} event
               {lifecycleHistory.length === 1
                 ? ""
@@ -5957,7 +6026,100 @@ const handleChange = (
             </div>
           </div>
 
-          {lifecycleLoading ? (
+                    <div
+            style={
+              episodeSectionStyle
+            }
+          >
+            <div
+              style={
+                episodeSectionHeaderStyle
+              }
+            >
+              <div>
+                <div
+                  style={
+                    episodeSectionTitleStyle
+                  }
+                >
+                  Employment Episodes
+                </div>
+
+                <div
+                  style={
+                    episodeSectionSubtitleStyle
+                  }
+                >
+                  Distinct periods of service under this permanent employee identity.
+                </div>
+              </div>
+
+              <span
+                style={
+                  episodeIdentityBadgeStyle
+                }
+              >
+                Permanent ID: {profile.id}
+              </span>
+            </div>
+
+            {episodesLoading ? (
+              <div
+                style={
+                  episodeEmptyStyle
+                }
+              >
+                Loading employment episodes...
+              </div>
+            ) : episodesError ? (
+              <div
+                style={
+                  historyErrorStyle
+                }
+              >
+                {episodesError}
+              </div>
+            ) : employmentEpisodes.length ===
+              0 ? (
+              <div
+                style={
+                  episodeEmptyStyle
+                }
+              >
+                No employment episodes have been recorded for this employee yet.
+              </div>
+            ) : (
+              <div
+                style={
+                  episodeGridStyle
+                }
+              >
+                {employmentEpisodes.map(
+                  (episode) => (
+                    <EmploymentEpisode
+                      key={
+                        episode.id
+                      }
+                      episode={
+                        episode
+                      }
+                    />
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          <div
+            style={
+              lifecycleDividerStyle
+            }
+          >
+            <span>
+              Lifecycle Timeline
+            </span>
+          </div>
+{lifecycleLoading ? (
             <div
               style={
                 historyEmptyStyle
@@ -6011,6 +6173,232 @@ const handleChange = (
         </section>
       )}
 </div>
+  );
+}
+
+function EmploymentEpisode({
+  episode,
+}) {
+  const isCurrent =
+    !episode.endDate;
+
+  const startDepartment =
+    episode.startDepartment?.name ||
+    "Not Assigned";
+
+  const startDesignation =
+    episode.startDesignation?.name ||
+    "Not Assigned";
+
+  const startLocation =
+    episode.startLocation?.name ||
+    "Not Assigned";
+
+  const endDepartment =
+    episode.endDepartment?.name ||
+    startDepartment;
+
+  const endDesignation =
+    episode.endDesignation?.name ||
+    startDesignation;
+
+  const endLocation =
+    episode.endLocation?.name ||
+    startLocation;
+
+  const structureChanged =
+    startDepartment !==
+      endDepartment ||
+    startDesignation !==
+      endDesignation ||
+    startLocation !==
+      endLocation;
+
+  return (
+    <div
+      style={{
+        ...episodeCardStyle,
+
+        border:
+          isCurrent
+            ? "1px solid rgba(8,122,67,0.30)"
+            : "1px solid rgba(212,175,55,0.24)",
+
+        boxShadow:
+          isCurrent
+            ? "0 10px 26px rgba(8,122,67,0.08)"
+            : "0 8px 22px rgba(15,23,42,0.04)",
+      }}
+    >
+      <div
+        style={
+          episodeTopRowStyle
+        }
+      >
+        <div>
+          <div
+            style={
+              episodeNumberStyle
+            }
+          >
+            Episode {episode.sequenceNumber}
+          </div>
+
+          <div
+            style={
+              episodeDateRangeStyle
+            }
+          >
+            {formatLongDate(
+              episode.startDate
+            )}
+            {" \u2192 "}
+            {isCurrent
+              ? "Present"
+              : formatLongDate(
+                  episode.endDate
+                )}
+          </div>
+        </div>
+
+        <span
+          style={{
+            ...episodeStatusBadgeStyle,
+
+            background:
+              isCurrent
+                ? "rgba(8,122,67,0.10)"
+                : "rgba(212,175,55,0.12)",
+
+            color:
+              isCurrent
+                ? "#087A43"
+                : "#8A6B12",
+
+            border:
+              isCurrent
+                ? "1px solid rgba(8,122,67,0.18)"
+                : "1px solid rgba(212,175,55,0.24)",
+          }}
+        >
+          {isCurrent
+            ? "CURRENT"
+            : "CLOSED"}
+        </span>
+      </div>
+
+      <div
+        style={
+          episodeDetailsGridStyle
+        }
+      >
+        <EpisodeDetail
+          label="Started As"
+          value={
+            formatStatus(
+              episode.startStatus
+            )
+          }
+        />
+
+        <EpisodeDetail
+          label="Department"
+          value={
+            structureChanged
+              ? `${startDepartment} â†’ ${endDepartment}`
+              : startDepartment
+          }
+        />
+
+        <EpisodeDetail
+          label="Designation"
+          value={
+            structureChanged
+              ? `${startDesignation} â†’ ${endDesignation}`
+              : startDesignation
+          }
+        />
+
+        <EpisodeDetail
+          label="Location"
+          value={
+            structureChanged
+              ? `${startLocation} â†’ ${endLocation}`
+              : startLocation
+          }
+        />
+
+        {episode.startReason && (
+          <EpisodeDetail
+            label="Start Reason"
+            value={
+              episode.startReason
+            }
+          />
+        )}
+
+        {!isCurrent &&
+          episode.endStatus && (
+          <EpisodeDetail
+            label="Ended As"
+            value={
+              formatStatus(
+                episode.endStatus
+              )
+            }
+          />
+        )}
+
+        {!isCurrent &&
+          episode.endReason && (
+          <EpisodeDetail
+            label="Exit Reason"
+            value={
+              episode.endReason
+            }
+          />
+        )}
+
+        {episode.notes && (
+          <EpisodeDetail
+            label="Episode Notes"
+            value={
+              episode.notes
+            }
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function EpisodeDetail({
+  label,
+  value,
+}) {
+  return (
+    <div
+      style={
+        episodeDetailStyle
+      }
+    >
+      <div
+        style={
+          episodeDetailLabelStyle
+        }
+      >
+        {label}
+      </div>
+
+      <div
+        style={
+          episodeDetailValueStyle
+        }
+      >
+        {value || "-"}
+      </div>
+    </div>
   );
 }
 
@@ -7382,6 +7770,289 @@ const promotionConfirmButtonStyle = {
   cursor:
     "pointer",
 };
+const episodeSectionStyle = {
+  marginBottom:
+    "28px",
+
+  padding:
+    "20px",
+
+  border:
+    "1px solid rgba(8,122,67,0.14)",
+
+  borderRadius:
+    "15px",
+
+  background:
+    "linear-gradient(145deg, rgba(248,252,249,0.98), rgba(255,255,255,0.98))",
+};
+
+const episodeSectionHeaderStyle = {
+  display:
+    "flex",
+
+  justifyContent:
+    "space-between",
+
+  alignItems:
+    "flex-start",
+
+  gap:
+    "16px",
+
+  flexWrap:
+    "wrap",
+
+  marginBottom:
+    "16px",
+};
+
+const episodeSectionTitleStyle = {
+  color:
+    "#087A43",
+
+  fontSize:
+    "16px",
+
+  fontWeight:
+    "900",
+};
+
+const episodeSectionSubtitleStyle = {
+  marginTop:
+    "4px",
+
+  color:
+    "#64748B",
+
+  fontSize:
+    "12px",
+
+  lineHeight:
+    "1.5",
+};
+
+const episodeIdentityBadgeStyle = {
+  padding:
+    "6px 10px",
+
+  borderRadius:
+    "999px",
+
+  background:
+    "rgba(212,175,55,0.10)",
+
+  border:
+    "1px solid rgba(212,175,55,0.24)",
+
+  color:
+    "#72560C",
+
+  fontSize:
+    "10px",
+
+  fontWeight:
+    "900",
+};
+
+const episodeGridStyle = {
+  display:
+    "grid",
+
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(300px, 1fr))",
+
+  gap:
+    "14px",
+};
+
+const episodeCardStyle = {
+  padding:
+    "18px",
+
+  borderRadius:
+    "14px",
+
+  background:
+    "#FFFFFF",
+
+  position:
+    "relative",
+
+  overflow:
+    "hidden",
+};
+
+const episodeTopRowStyle = {
+  display:
+    "flex",
+
+  justifyContent:
+    "space-between",
+
+  alignItems:
+    "flex-start",
+
+  gap:
+    "12px",
+
+  marginBottom:
+    "14px",
+};
+
+const episodeNumberStyle = {
+  color:
+    "#172033",
+
+  fontSize:
+    "15px",
+
+  fontWeight:
+    "900",
+};
+
+const episodeDateRangeStyle = {
+  marginTop:
+    "4px",
+
+  color:
+    "#64748B",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "700",
+};
+
+const episodeStatusBadgeStyle = {
+  padding:
+    "5px 8px",
+
+  borderRadius:
+    "999px",
+
+  fontSize:
+    "9px",
+
+  fontWeight:
+    "900",
+
+  letterSpacing:
+    "0.05em",
+};
+
+const episodeDetailsGridStyle = {
+  display:
+    "grid",
+
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(180px, 1fr))",
+
+  gap:
+    "10px 16px",
+
+  paddingTop:
+    "12px",
+
+  borderTop:
+    "1px solid #E8EFEB",
+};
+
+const episodeDetailStyle = {
+  minWidth:
+    0,
+};
+
+const episodeDetailLabelStyle = {
+  color:
+    "#64748B",
+
+  fontSize:
+    "10px",
+
+  fontWeight:
+    "800",
+
+  textTransform:
+    "uppercase",
+
+  letterSpacing:
+    "0.04em",
+};
+
+const episodeDetailValueStyle = {
+  marginTop:
+    "3px",
+
+  color:
+    "#172033",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "800",
+
+  lineHeight:
+    "1.45",
+
+  wordBreak:
+    "break-word",
+};
+
+const episodeEmptyStyle = {
+  padding:
+    "20px",
+
+  textAlign:
+    "center",
+
+  border:
+    "1px dashed rgba(8,122,67,0.20)",
+
+  borderRadius:
+    "12px",
+
+  color:
+    "#64748B",
+
+  fontSize:
+    "12px",
+
+  background:
+    "rgba(248,252,249,0.80)",
+};
+
+const lifecycleDividerStyle = {
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  gap:
+    "12px",
+
+  margin:
+    "4px 0 18px",
+
+  color:
+    "#087A43",
+
+  fontSize:
+    "12px",
+
+  fontWeight:
+    "900",
+
+  textTransform:
+    "uppercase",
+
+  letterSpacing:
+    "0.05em",
+};
+
 const historySectionStyle = {
   marginTop: "22px",
   padding: "26px",

@@ -1,4 +1,4 @@
-﻿const {
+const {
   CAREER_STRUCTURE_TEMPLATES,
   getCareerStructureTemplate,
 } = require("../config/careerStructureTemplates");
@@ -188,6 +188,184 @@ router.get(
         status: "error",
         message:
           "Unable to fetch employee profile.",
+      });
+    }
+  }
+);
+
+/*
+============================================================
+GET EMPLOYEE EMPLOYMENT EPISODES
+Permission: employees.view
+============================================================
+
+Returns the employee's distinct service periods.
+
+Employment Episodes answer:
+- how many separate periods of employment exist;
+- when each period started and ended;
+- the starting and ending employment structure;
+- whether an episode is CURRENT or CLOSED.
+
+The permanent Employee ID is not recreated between episodes.
+============================================================
+*/
+
+router.get(
+  "/:employeeNumber/employment-episodes",
+  requirePermission(
+    "employees.view"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        employeeNumber,
+      } = req.params;
+
+      const employee =
+        await prisma.employee.findFirst({
+          where: {
+            organizationId,
+            employeeNumber,
+          },
+
+          select: {
+            id: true,
+            employeeNumber: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+          },
+        });
+
+      if (!employee) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          message:
+            "Employee not found.",
+        });
+      }
+
+      const episodes =
+        await prisma.employeeEmploymentEpisode.findMany({
+          where: {
+            organizationId,
+
+            employeeId:
+              employee.id,
+          },
+
+          include: {
+            startDepartment: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
+            startDesignation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                careerTrack: true,
+                careerLevel: true,
+              },
+            },
+
+            startLocation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                type: true,
+                city: true,
+                state: true,
+                country: true,
+              },
+            },
+
+            endDepartment: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+
+            endDesignation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                careerTrack: true,
+                careerLevel: true,
+              },
+            },
+
+            endLocation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                type: true,
+                city: true,
+                state: true,
+                country: true,
+              },
+            },
+          },
+
+          orderBy: {
+            sequenceNumber:
+              "desc",
+          },
+        });
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        results:
+          episodes.length,
+
+        employee: {
+          id:
+            employee.id,
+
+          employeeNumber:
+            employee.employeeNumber,
+
+          name: [
+            employee.firstName,
+            employee.middleName,
+            employee.lastName,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        },
+
+        data:
+          episodes,
+      });
+    } catch (error) {
+      console.error(
+        "Employee employment episodes fetch error:",
+        error
+      );
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to fetch employee employment episodes.",
       });
     }
   }
@@ -3264,6 +3442,803 @@ router.patch(
 
         message:
           "Unable to reinstate employee.",
+      });
+    }
+  }
+);
+/*
+============================================================
+REHIRE EMPLOYEE
+Permission: employees.update
+============================================================
+
+Use this when a former employee starts a NEW employment
+relationship after a completed exit.
+
+Business rules:
+- only RESIGNED, TERMINATED or RETIRED employees are eligible
+- the employee keeps the same permanent CHR Employee ID
+- the previous employment episode remains closed
+- a NEW employment episode is created using sequenceNumber + 1
+- Department, Designation and Location must be active and belong
+  to the authenticated organization
+- Designation must be mapped to the selected Department
+- linked CHRIS access is restored
+- a permanent REHIRED lifecycle event is created
+
+Expected body:
+
+{
+  "status": "ACTIVE",
+  "effectiveDate": "2026-08-16",
+  "departmentId": "department-id",
+  "designationId": "designation-id",
+  "locationId": "location-id",
+  "reason": "Returning employee",
+  "notes": "Optional HR notes"
+}
+
+Allowed starting statuses:
+ACTIVE
+PROBATION
+============================================================
+*/
+
+router.patch(
+  "/:employeeNumber/rehire",
+  requirePermission(
+    "employees.update"
+  ),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const {
+        employeeNumber,
+      } = req.params;
+
+      const {
+        status = "ACTIVE",
+        effectiveDate,
+        departmentId,
+        designationId,
+        locationId,
+        reason,
+        notes,
+      } = req.body || {};
+
+
+      /*
+      --------------------------------------------------------
+      REQUIRED FIELDS
+      --------------------------------------------------------
+      */
+
+      if (
+        ![
+          "ACTIVE",
+          "PROBATION",
+        ].includes(status)
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_REHIRE_STATUS",
+
+          message:
+            "Rehired employee status must be Active or Probation.",
+        });
+      }
+
+      if (
+        !effectiveDate ||
+        !String(effectiveDate).trim()
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_EFFECTIVE_DATE_REQUIRED",
+
+          message:
+            "A rehire effective date is required.",
+        });
+      }
+
+      if (
+        !departmentId ||
+        !String(departmentId).trim()
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_DEPARTMENT_REQUIRED",
+
+          message:
+            "Select the employee's department for the new employment episode.",
+        });
+      }
+
+      if (
+        !designationId ||
+        !String(designationId).trim()
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_DESIGNATION_REQUIRED",
+
+          message:
+            "Select the employee's designation for the new employment episode.",
+        });
+      }
+
+      if (
+        !locationId ||
+        !String(locationId).trim()
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_LOCATION_REQUIRED",
+
+          message:
+            "Select the employee's work location for the new employment episode.",
+        });
+      }
+
+      const normalizedReason =
+        String(
+          reason || ""
+        ).trim();
+
+      if (!normalizedReason) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_REASON_REQUIRED",
+
+          message:
+            "A reason is required to rehire an employee.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      EFFECTIVE DATE VALIDATION
+      --------------------------------------------------------
+      */
+
+      const parsedEffectiveDate =
+        new Date(
+          effectiveDate
+        );
+
+      if (
+        Number.isNaN(
+          parsedEffectiveDate.getTime()
+        )
+      ) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_REHIRE_EFFECTIVE_DATE",
+
+          message:
+            "The supplied rehire effective date is invalid.",
+        });
+      }
+
+      const effectiveDateOnly =
+        new Date(
+          parsedEffectiveDate
+        );
+
+      effectiveDateOnly.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      if (
+        effectiveDateOnly >
+        today
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "FUTURE_REHIRE_NOT_SUPPORTED",
+
+          message:
+            "Future-dated rehire is not yet supported. Select today or an earlier effective date.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      LOAD FORMER EMPLOYEE
+      --------------------------------------------------------
+      */
+
+      const existingEmployee =
+        await getEmployee(
+          organizationId,
+          employeeNumber
+        );
+
+      if (!existingEmployee) {
+        return res.status(404).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_NOT_FOUND",
+
+          message:
+            "Employee not found.",
+        });
+      }
+
+      if (
+        !EXIT_STATUSES.includes(
+          existingEmployee.status
+        )
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYEE_NOT_ELIGIBLE_FOR_REHIRE",
+
+          message:
+            "Only resigned, terminated or retired employees can be rehired.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      VALIDATE DEPARTMENT
+      --------------------------------------------------------
+      */
+
+      const departmentRecord =
+        await prisma.department.findFirst({
+          where: {
+            id:
+              String(
+                departmentId
+              ).trim(),
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+
+          select: {
+            id:
+              true,
+
+            name:
+              true,
+
+            code:
+              true,
+
+            isActive:
+              true,
+          },
+        });
+
+      if (!departmentRecord) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_REHIRE_DEPARTMENT",
+
+          message:
+            "Select an active department from your organization's CHRIS structure.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      VALIDATE DESIGNATION + DEPARTMENT MAPPING
+      --------------------------------------------------------
+      */
+
+      const designationRecord =
+        await prisma.designation.findFirst({
+          where: {
+            id:
+              String(
+                designationId
+              ).trim(),
+
+            organizationId,
+
+            departmentId:
+              departmentRecord.id,
+
+            isActive:
+              true,
+          },
+
+          select: {
+            id:
+              true,
+
+            name:
+              true,
+
+            code:
+              true,
+
+            departmentId:
+              true,
+
+            isActive:
+              true,
+          },
+        });
+
+      if (!designationRecord) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_REHIRE_DESIGNATION",
+
+          message:
+            "Select an active designation mapped to the selected department.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      VALIDATE WORK LOCATION
+      --------------------------------------------------------
+      */
+
+      const locationRecord =
+        await prisma.organizationLocation.findFirst({
+          where: {
+            id:
+              String(
+                locationId
+              ).trim(),
+
+            organizationId,
+
+            isActive:
+              true,
+          },
+
+          select: {
+            id:
+              true,
+
+            name:
+              true,
+
+            code:
+              true,
+
+            type:
+              true,
+
+            city:
+              true,
+
+            state:
+              true,
+
+            country:
+              true,
+
+            isActive:
+              true,
+          },
+        });
+
+      if (!locationRecord) {
+        return res.status(400).json({
+          status:
+            "error",
+
+          code:
+            "INVALID_REHIRE_LOCATION",
+
+          message:
+            "Select an active work location from your organization's CHRIS location catalogue.",
+        });
+      }
+
+
+      /*
+      --------------------------------------------------------
+      REHIRE TRANSACTION
+      --------------------------------------------------------
+      */
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+
+            /*
+            ----------------------------------------------------
+            LOAD THE MOST RECENT EMPLOYMENT EPISODE
+            ----------------------------------------------------
+
+            Rehire must start a new service period. The immediately
+            preceding episode must therefore already be closed.
+            ----------------------------------------------------
+            */
+
+            const latestEpisode =
+              await tx.employeeEmploymentEpisode.findFirst({
+                where: {
+                  organizationId,
+
+                  employeeId:
+                    existingEmployee.id,
+                },
+
+                orderBy: {
+                  sequenceNumber:
+                    "desc",
+                },
+              });
+
+            if (!latestEpisode) {
+              throw new Error(
+                "EMPLOYMENT_EPISODE_NOT_FOUND"
+              );
+            }
+
+            if (
+              latestEpisode.endDate ===
+              null
+            ) {
+              throw new Error(
+                "EMPLOYMENT_EPISODE_ALREADY_OPEN"
+              );
+            }
+
+            if (
+              parsedEffectiveDate <
+              latestEpisode.endDate
+            ) {
+              throw new Error(
+                "REHIRE_BEFORE_PREVIOUS_EPISODE_END"
+              );
+            }
+
+            const nextSequenceNumber =
+              latestEpisode.sequenceNumber +
+              1;
+
+
+            /*
+            ----------------------------------------------------
+            RESTORE EMPLOYEE MASTER RECORD
+            ----------------------------------------------------
+
+            Employee.employeeNumber is deliberately untouched.
+            The permanent CHR identity is retained.
+            ----------------------------------------------------
+            */
+
+            const updatedEmployee =
+              await tx.employee.update({
+                where: {
+                  id:
+                    existingEmployee.id,
+                },
+
+                data: {
+                  departmentId:
+                    departmentRecord.id,
+
+                  designationId:
+                    designationRecord.id,
+
+                  locationId:
+                    locationRecord.id,
+
+                  status,
+
+                  hireDate:
+                    parsedEffectiveDate,
+
+                  confirmationDate:
+                    null,
+
+                  exitDate:
+                    null,
+
+                  suspensionEndDate:
+                    null,
+                },
+
+                include: {
+                  department:
+                    true,
+
+                  designation:
+                    true,
+
+                  location:
+                    true,
+
+                  user: {
+                    select: {
+                      id:
+                        true,
+
+                      isActive:
+                        true,
+                    },
+                  },
+                },
+              });
+
+
+            /*
+            ----------------------------------------------------
+            RESTORE LINKED CHRIS ACCESS
+            ----------------------------------------------------
+            */
+
+            if (
+              existingEmployee.user
+            ) {
+              await tx.user.update({
+                where: {
+                  id:
+                    existingEmployee.user.id,
+                },
+
+                data: {
+                  isActive:
+                    true,
+                },
+              });
+            }
+
+
+            /*
+            ----------------------------------------------------
+            CREATE THE NEW EMPLOYMENT EPISODE
+            ----------------------------------------------------
+            */
+
+            const employmentEpisode =
+              await tx.employeeEmploymentEpisode.create({
+                data: {
+                  organizationId,
+
+                  employeeId:
+                    existingEmployee.id,
+
+                  sequenceNumber:
+                    nextSequenceNumber,
+
+                  startDate:
+                    parsedEffectiveDate,
+
+                  startStatus:
+                    status,
+
+                  startDepartmentId:
+                    departmentRecord.id,
+
+                  startDesignationId:
+                    designationRecord.id,
+
+                  startLocationId:
+                    locationRecord.id,
+
+                  startReason:
+                    normalizedReason,
+                },
+              });
+
+
+            /*
+            ----------------------------------------------------
+            PERMANENT REHIRE LIFECYCLE EVENT
+            ----------------------------------------------------
+            */
+
+            await tx.employeeLifecycleEvent.create({
+              data: {
+                organizationId,
+
+                employeeId:
+                  existingEmployee.id,
+
+                eventType:
+                  "REHIRED",
+
+                effectiveDate:
+                  parsedEffectiveDate,
+
+                previousStatus:
+                  existingEmployee.status,
+
+                newStatus:
+                  status,
+
+                fromLocationId:
+                  existingEmployee.locationId,
+
+                toLocationId:
+                  locationRecord.id,
+
+                previousDepartmentId:
+                  existingEmployee.departmentId,
+
+                newDepartmentId:
+                  departmentRecord.id,
+
+                previousDesignationId:
+                  existingEmployee.designationId,
+
+                newDesignationId:
+                  designationRecord.id,
+
+                reason:
+                  normalizedReason,
+
+                notes:
+                  notes &&
+                  String(notes).trim()
+                    ? String(notes).trim()
+                    : null,
+
+                performedByUserId:
+                  req.auth.userId ||
+                  null,
+              },
+            });
+
+
+            return {
+              employee:
+                updatedEmployee,
+
+              employmentEpisode,
+            };
+          }
+        );
+
+
+      return res.status(200).json({
+        status:
+          "success",
+
+        message:
+          `Employee rehired successfully under permanent Employee ID ${result.employee.employeeNumber}. Employment Episode ${result.employmentEpisode.sequenceNumber} has been opened.`,
+
+        data:
+          result.employee,
+
+        employmentEpisode:
+          result.employmentEpisode,
+      });
+    } catch (error) {
+      console.error(
+        "Employee rehire error:",
+        error
+      );
+
+      if (
+        error.message ===
+        "EMPLOYMENT_EPISODE_NOT_FOUND"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYMENT_EPISODE_NOT_FOUND",
+
+          message:
+            "CHRIS could not find the employee's previous employment episode. Resolve the employment history before rehire.",
+        });
+      }
+
+      if (
+        error.message ===
+        "EMPLOYMENT_EPISODE_ALREADY_OPEN"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYMENT_EPISODE_ALREADY_OPEN",
+
+          message:
+            "The employee already has an open employment episode and cannot be rehired again.",
+        });
+      }
+
+      if (
+        error.message ===
+        "REHIRE_BEFORE_PREVIOUS_EPISODE_END"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_BEFORE_PREVIOUS_EPISODE_END",
+
+          message:
+            "The rehire effective date cannot be earlier than the end date of the employee's previous employment episode.",
+        });
+      }
+
+      if (
+        error.code ===
+        "P2002"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "REHIRE_EPISODE_CONFLICT",
+
+          message:
+            "CHRIS detected an employment episode sequence conflict. Refresh the employee record and try again.",
+        });
+      }
+
+      return res.status(500).json({
+        status:
+          "error",
+
+        message:
+          "Unable to rehire employee.",
       });
     }
   }
