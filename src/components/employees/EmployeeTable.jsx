@@ -1178,7 +1178,7 @@ function EmployeeTable() {
                   "translateY(-50%)",
 
                 color:
-                  "#0B5E3B",
+                  "#087A43",
 
                 pointerEvents:
                   "none",
@@ -1215,7 +1215,7 @@ function EmployeeTable() {
                   "700",
 
                 color:
-                  "#0B5E3B",
+                  "#087A43",
               }}
             >
               {locations.map(
@@ -1408,7 +1408,7 @@ function EmployeeTable() {
                   "2px",
 
                 color:
-                  "#0B5E3B",
+                  "#087A43",
 
                 fontSize:
                   "15px",
@@ -1433,7 +1433,7 @@ function EmployeeTable() {
           <div
             style={{
               color:
-                "#0B5E3B",
+                "#087A43",
 
               fontSize:
                 "22px",
@@ -1515,7 +1515,7 @@ function EmployeeTable() {
                   "0 0 5px",
 
                 color:
-                  "#0B5E3B",
+                  "#087A43",
 
                 fontSize:
                   "18px",
@@ -2117,7 +2117,7 @@ function EmployeeTable() {
                 margin: 0,
 
                 color:
-                  "#0B5E3B",
+                  "#087A43",
 
                 fontSize:
                   "20px",
@@ -2322,7 +2322,7 @@ function EmployeeTable() {
                           >
                             <FaMapMarkerAlt
                               size={11}
-                              color="#0B5E3B"
+                              color="#087A43"
                             />
 
                             {
@@ -2842,7 +2842,7 @@ const workforceCountStyle = {
     "#FFFFFF",
 
   color:
-    "#0B5E3B",
+    "#087A43",
 
   fontSize:
     "11px",
@@ -2973,7 +2973,7 @@ const locationIconStyle = {
     "#FFFFFF",
 
   color:
-    "#0B5E3B",
+    "#087A43",
 
   border:
     "1px solid #D1FAE5",
@@ -3066,10 +3066,10 @@ const viewButtonStyle = {
   ...baseActionButton,
 
   border:
-    "1px solid #0B5E3B",
+    "1px solid #087A43",
 
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",

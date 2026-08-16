@@ -466,7 +466,7 @@ function UsersRolesSettings() {
             margin: 0,
 
             color:
-              "#0B5E3B",
+              "#087A43",
 
             fontSize:
               "32px",
@@ -1442,7 +1442,7 @@ function RolesTab({
                             0,
 
                           color:
-                            "#0B5E3B",
+                            "#087A43",
 
                           fontSize:
                             "17px",
@@ -1565,7 +1565,7 @@ function RolesTab({
                         administrator ||
                         !canManage
                           ? "#FFFFFF"
-                          : "#0B5E3B",
+                          : "#087A43",
 
                       color:
                         administrator ||
@@ -1577,7 +1577,7 @@ function RolesTab({
                         administrator ||
                         !canManage
                           ? "1px solid #CBD5E1"
-                          : "1px solid #0B5E3B",
+                          : "1px solid #087A43",
                     }}
                   >
                     {buttonLabel}
@@ -1640,7 +1640,7 @@ function SummaryCard({
         <span
           style={{
             color:
-              "#0B5E3B",
+              "#087A43",
 
             fontSize:
               "20px",
@@ -1671,7 +1671,7 @@ function SummaryCard({
       <div
         style={{
           color:
-            "#0B5E3B",
+            "#087A43",
 
           fontSize:
             "30px",
@@ -1720,7 +1720,7 @@ function TabButton({
 
         borderBottom:
           active
-            ? "3px solid #0B5E3B"
+            ? "3px solid #087A43"
             : "3px solid transparent",
 
         background:
@@ -1731,7 +1731,7 @@ function TabButton({
 
         color:
           active
-            ? "#0B5E3B"
+            ? "#087A43"
             : "#64748B",
 
         fontSize:
@@ -1811,7 +1811,7 @@ function RoleMetric({
       <div
         style={{
           color:
-            "#0B5E3B",
+            "#087A43",
 
           fontSize:
             "20px",
@@ -2031,7 +2031,7 @@ const createButtonStyle = {
     "11px 16px",
 
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",

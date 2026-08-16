@@ -401,7 +401,7 @@ function Login() {
           zIndex: 1,
 
           background:
-            "rgba(255,255,255,0.68)",
+            "linear-gradient(180deg, rgba(3,12,8,0.94), rgba(5,24,15,0.92))",
 
           backdropFilter:
             "blur(14px)",
@@ -410,14 +410,14 @@ function Login() {
             "blur(14px)",
 
           border:
-            "1px solid rgba(255,255,255,0.68)",
+            "1px solid rgba(212,175,55,0.38)",
 
           borderRadius: "24px",
 
           padding: "38px",
 
           boxShadow:
-            "0 25px 70px rgba(0,0,0,0.22)",
+            "0 28px 80px rgba(0,0,0,0.46), 0 0 30px rgba(8,122,67,0.12)",
         }}
       >
         {mode === "login" ? (
@@ -646,7 +646,7 @@ function Login() {
                         "16px",
 
                       accentColor:
-                        "#0B5E3B",
+                        "#087A43",
 
                       cursor:
                         "pointer",
@@ -689,7 +689,7 @@ function Login() {
                   background:
                     loading
                       ? "#688B79"
-                      : "#0B5E3B",
+                      : "#087A43",
 
                   cursor:
                     loading
@@ -751,7 +751,7 @@ function Login() {
                   margin: 0,
 
                   color:
-                    "#0B5E3B",
+                    "#087A43",
 
                   fontSize:
                     "26px",
@@ -857,7 +857,7 @@ function Login() {
                   background:
                     recoveryLoading
                       ? "#688B79"
-                      : "#0B5E3B",
+                      : "#087A43",
 
                   cursor:
                     recoveryLoading
@@ -889,76 +889,130 @@ function LoginHeader() {
     <div
       style={{
         textAlign: "center",
-
         marginBottom: "28px",
       }}
     >
-      <ChrisLogo />
-
-      <h1
+      <div
         style={{
-          margin: 0,
-
-          color: "#0B5E3B",
-
-          fontSize: "28px",
-
+          color: "#D4AF37",
+          fontSize: "16px",
           fontWeight: "800",
+          letterSpacing: "0.04em",
+          marginBottom: "8px",
         }}
       >
-        Welcome to CHRIS
-      </h1>
+        Welcome to
+      </div>
 
-      <p
-        style={
-          subtitleStyle
-        }
+      <ChrisLogo />
+
+      <div
+        style={{
+          marginTop: "3px",
+          color: "#087A43",
+          fontSize: "17px",
+          fontWeight: "900",
+          lineHeight: "1.25",
+          letterSpacing: "0.01em",
+          textShadow:
+            "0 0 9px rgba(8,122,67,0.22)",
+        }}
       >
-        CorporateHr Information System
-      </p>
+        CorporateHR Network
+      </div>
+
+      <div
+        style={{
+          marginTop: "5px",
+          color: "#D4AF37",
+          fontSize: "10px",
+          fontWeight: "800",
+          lineHeight: "1.3",
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          textShadow:
+            "0 0 8px rgba(212,175,55,0.18)",
+        }}
+      >
+        Information System
+      </div>
+
+      <div
+        aria-hidden="true"
+        style={{
+          width: "62%",
+          height: "1px",
+          margin: "15px auto 0",
+          background:
+            "linear-gradient(90deg, transparent 0%, rgba(8,122,67,0.72) 25%, rgba(212,175,55,0.92) 50%, rgba(8,122,67,0.72) 75%, transparent 100%)",
+        }}
+      />
     </div>
   );
 }
 
 function ChrisLogo() {
   return (
-    <div
-      style={{
-        width: "110px",
+    <>
+      <style>
+        {`
+          @keyframes chrisLoginLogoPulse {
+            0%, 100% {
+              opacity: 1;
+              transform: scale(1);
+              filter:
+                drop-shadow(0 0 6px rgba(0,155,74,0.24))
+                drop-shadow(0 0 5px rgba(212,175,55,0.15));
+            }
 
-        minHeight: "82px",
+            50% {
+              opacity: 0.64;
+              transform: scale(1.035);
+              filter:
+                drop-shadow(0 0 14px rgba(0,185,88,0.40))
+                drop-shadow(0 0 11px rgba(212,175,55,0.28));
+            }
+          }
 
-        margin:
-          "0 auto 16px",
+          @media (prefers-reduced-motion: reduce) {
+            .chris-login-logo {
+              animation: none !important;
+            }
+          }
+        `}
+      </style>
 
-        display: "flex",
-
-        alignItems: "center",
-
-        justifyContent:
-          "center",
-      }}
-    >
-      <img
-        src={chrisLogo}
-
-        alt="CorporateHr Network CHRIS"
-
+      <div
         style={{
-          display: "block",
-
-          maxWidth: "110px",
-
-          maxHeight: "82px",
-
-          width: "auto",
-
-          height: "auto",
-
-          objectFit: "contain",
+          width: "100%",
+          minHeight: "86px",
+          margin: "0 auto 5px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "visible",
         }}
-      />
-    </div>
+      >
+        <img
+          className="chris-login-logo"
+          src={chrisLogo}
+          alt="CHRIS"
+          style={{
+            display: "block",
+            width: "245px",
+            maxWidth: "92%",
+            height: "auto",
+            objectFit: "contain",
+            border: "none",
+            outline: "none",
+            background: "transparent",
+            animation:
+              "chrisLoginLogoPulse 2.5s ease-in-out infinite",
+            transformOrigin: "center",
+          }}
+        />
+      </div>
+    </>
   );
 }
 
@@ -983,7 +1037,7 @@ function Footer() {
 
           textAlign: "center",
 
-          color: "#64748B",
+          color: "#7FAF96",
 
           fontSize: "12px",
 
@@ -1059,7 +1113,7 @@ const decoyStyle = {
 const subtitleStyle = {
   margin: "9px 0 0",
 
-  color: "#475569",
+  color: "#A8C3B5",
 
   fontSize: "14px",
 
@@ -1073,7 +1127,7 @@ const labelStyle = {
 
   marginBottom: "8px",
 
-  color: "#1E293B",
+  color: "#D7E4DC",
 
   fontSize: "13px",
 
@@ -1110,14 +1164,14 @@ const iconInputStyle = {
   boxSizing: "border-box",
 
   border:
-    "1px solid rgba(148,163,184,0.60)",
+    "1px solid rgba(8,122,67,0.70)",
 
   borderRadius: "11px",
 
   background:
-    "rgba(255,255,255,0.67)",
+    "rgba(2,10,7,0.62)",
 
-  color: "#0F172A",
+  color: "#F8FAF9",
 
   fontSize: "14px",
 
@@ -1164,7 +1218,7 @@ const linkButtonStyle = {
   background:
     "transparent",
 
-  color: "#0B5E3B",
+  color: "#D4AF37",
 
   fontSize: "13px",
 
@@ -1182,7 +1236,7 @@ const signInButtonStyle = {
 
   padding: "14px",
 
-  background: "#0B5E3B",
+  background: "linear-gradient(90deg, #075F36, #0B7A45)",
 
   color: "#FFFFFF",
 
@@ -1193,7 +1247,7 @@ const signInButtonStyle = {
   cursor: "pointer",
 
   boxShadow:
-    "0 8px 18px rgba(11,94,59,0.24)",
+    "0 8px 22px rgba(0,0,0,0.30), 0 0 14px rgba(8,122,67,0.18)",
 };
 
 const backButtonStyle = {
@@ -1207,7 +1261,7 @@ const backButtonStyle = {
 
   background: "transparent",
 
-  color: "#0B5E3B",
+  color: "#087A43",
 
   fontSize: "13px",
 

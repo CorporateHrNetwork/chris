@@ -422,7 +422,7 @@ function AddEmployee({
               0,
 
             color:
-              "#0B5E3B",
+              "#087A43",
 
             fontSize:
               "32px",
@@ -502,7 +502,7 @@ function AddEmployee({
                     0,
 
                   color:
-                    "#0B5E3B",
+                    "#087A43",
 
                   fontSize:
                     "19px",
@@ -1233,7 +1233,7 @@ const cancelButtonStyle = {
 
 const saveButtonStyle = {
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",

@@ -201,7 +201,7 @@ function Employees() {
           <h1
             style={{
               margin: 0,
-              color: "#0B5E3B",
+              color: "#087A43",
               fontSize: "32px",
               fontWeight: "800",
             }}
@@ -336,7 +336,7 @@ function SummaryCard({
 
       <div
         style={{
-          color: "#0B5E3B",
+          color: "#087A43",
           fontSize: "30px",
           fontWeight: "800",
           lineHeight: 1,
@@ -360,7 +360,7 @@ function SummaryCard({
 }
 
 const addButtonStyle = {
-  background: "#0B5E3B",
+  background: "#087A43",
   color: "#FFFFFF",
 
   border: "none",
@@ -381,7 +381,7 @@ const backButtonStyle = {
   border: "none",
   background: "transparent",
 
-  color: "#0B5E3B",
+  color: "#087A43",
 
   fontSize: "14px",
   fontWeight: "800",

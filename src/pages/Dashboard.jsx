@@ -93,25 +93,26 @@ function Dashboard() {
   }, []);
 
   return (
-    <>
+    <div
+      style={{
+        position: "relative",
+        minHeight: "100%",
+      }}
+    >
       <DashboardHeader />
 
       {/* KPI CARDS */}
       <div
         style={{
           display: "grid",
-
           gridTemplateColumns:
             "repeat(auto-fit, minmax(240px, 1fr))",
-
           gap: "24px",
-
           marginTop: "30px",
         }}
       >
         <KpiCard
           title="Employees"
-
           value={
             employeeLoading
               ? "..."
@@ -119,16 +120,13 @@ function Dashboard() {
                   employeeSummary.total
                 )
           }
-
           subtitle={
             employeeLoading
               ? "Loading employee data"
               : `${employeeSummary.active} Active • ${employeeSummary.probation} Probation`
           }
-
           icon="👥"
-
-          color="#0B5E3B"
+          color="#087A43"
         />
 
         <KpiCard
@@ -144,7 +142,7 @@ function Dashboard() {
           value="12"
           subtitle="Awaiting Approval"
           icon="📅"
-          color="#F59E0B"
+          color="#D4AF37"
         />
 
         {canViewPayroll && (
@@ -162,18 +160,14 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
-
           gridTemplateColumns:
             "repeat(auto-fit, minmax(180px, 1fr))",
-
           gap: "16px",
-
           marginTop: "24px",
         }}
       >
         <MiniStat
           title="Active Employees"
-
           value={
             employeeLoading
               ? "..."
@@ -183,7 +177,6 @@ function Dashboard() {
 
         <MiniStat
           title="On Leave"
-
           value={
             employeeLoading
               ? "..."
@@ -193,7 +186,6 @@ function Dashboard() {
 
         <MiniStat
           title="Probation"
-
           value={
             employeeLoading
               ? "..."
@@ -203,7 +195,6 @@ function Dashboard() {
 
         <MiniStat
           title="Total Employees"
-
           value={
             employeeLoading
               ? "..."
@@ -216,12 +207,9 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
-
           gridTemplateColumns:
             "repeat(auto-fit, minmax(360px, 1fr))",
-
           gap: "20px",
-
           marginTop: "35px",
         }}
       >
@@ -232,12 +220,9 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
-
           gridTemplateColumns:
             "repeat(auto-fit, minmax(360px, 1fr))",
-
           gap: "20px",
-
           marginTop: "20px",
         }}
       >
@@ -248,14 +233,11 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
-
           gridTemplateColumns:
             canViewPayroll
               ? "repeat(auto-fit, minmax(360px, 1fr))"
               : "1fr",
-
           gap: "20px",
-
           marginTop: "20px",
         }}
       >
@@ -265,7 +247,7 @@ function Dashboard() {
           <PayrollSummary />
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -276,32 +258,42 @@ function MiniStat({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-
+        background:
+          "linear-gradient(145deg, rgba(255,255,255,0.98), rgba(247,250,248,0.96))",
         border:
-          "1px solid #E5E7EB",
-
-        borderRadius: "14px",
-
+          "1px solid rgba(212,175,55,0.18)",
+        borderRadius: "16px",
         padding: "18px",
-
         boxShadow:
-          "0 5px 18px rgba(15,23,42,0.04)",
+          "0 10px 28px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.85)",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          width: "90px",
+          height: "90px",
+          right: "-34px",
+          top: "-34px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(212,175,55,0.14), transparent 68%)",
+        }}
+      />
+
+      <div
         style={{
           color: "#64748B",
-
           fontSize: "12px",
-
           fontWeight: "700",
-
           textTransform:
             "uppercase",
-
           letterSpacing:
             "0.03em",
+          position: "relative",
         }}
       >
         {title}
@@ -310,12 +302,10 @@ function MiniStat({
       <div
         style={{
           marginTop: "8px",
-
-          color: "#0B5E3B",
-
+          color: "#087A43",
           fontSize: "26px",
-
           fontWeight: "800",
+          position: "relative",
         }}
       >
         {value}

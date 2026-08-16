@@ -1,4 +1,4 @@
-import chrisLogo from "../../assets/logos/chris-logo.png";
+﻿import chrisLogo from "../../assets/logos/chris-logo.png";
 import background from "../../assets/images/login-bg.png";
 
 function LoginForm() {
@@ -55,7 +55,7 @@ function LoginForm() {
           <h2
             style={{
               margin: 0,
-              color: "#0B5E3B",
+              color: "#087A43",
               fontSize: "24px",
               fontWeight: "700",
             }}
@@ -113,7 +113,7 @@ function LoginForm() {
           <a
             href="#"
             style={{
-              color: "#0B5E3B",
+              color: "#087A43",
               textDecoration: "none",
               fontWeight: "600",
             }}
@@ -195,7 +195,7 @@ function LoginForm() {
             lineHeight: "1.5",
           }}
         >
-          © 2026 CorporateHr Network
+          Â© 2026 CorporateHr Network
 
           <br />
 
@@ -209,7 +209,7 @@ function LoginForm() {
 
           <span
             style={{
-              color: "#0B5E3B",
+              color: "#087A43",
               fontWeight: "700",
             }}
           >
@@ -239,7 +239,7 @@ const buttonStyle = {
   padding: "12px",
   border: "none",
   borderRadius: "10px",
-  background: "linear-gradient(135deg,#0B5E3B,#14824F)",
+  background: "linear-gradient(135deg,#087A43,#14824F)",
   color: "#fff",
   fontSize: "15px",
   fontWeight: "700",

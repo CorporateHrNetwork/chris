@@ -2205,6 +2205,50 @@ router.patch(
 
             /*
             ----------------------------------------------------
+            LOAD CURRENT OPEN EMPLOYMENT EPISODE
+            ----------------------------------------------------
+
+            Exit must close the employee's current service period.
+            There should be exactly one open episode.
+            ----------------------------------------------------
+            */
+
+            const openEpisode =
+              await tx.employeeEmploymentEpisode.findFirst({
+                where: {
+                  organizationId,
+
+                  employeeId:
+                    existingEmployee.id,
+
+                  endDate:
+                    null,
+                },
+
+                orderBy: {
+                  sequenceNumber:
+                    "desc",
+                },
+              });
+
+            if (!openEpisode) {
+              throw new Error(
+                "OPEN_EMPLOYMENT_EPISODE_NOT_FOUND"
+              );
+            }
+
+            if (
+              parsedExitDate <
+              openEpisode.startDate
+            ) {
+              throw new Error(
+                "EXIT_BEFORE_EPISODE_START"
+              );
+            }
+
+
+            /*
+            ----------------------------------------------------
             UPDATE EMPLOYEE MASTER RECORD
             ----------------------------------------------------
             */
@@ -2276,6 +2320,40 @@ router.patch(
                 },
               });
             }
+
+
+            /*
+            ----------------------------------------------------
+            CLOSE CURRENT EMPLOYMENT EPISODE
+            ----------------------------------------------------
+            */
+
+            await tx.employeeEmploymentEpisode.update({
+              where: {
+                id:
+                  openEpisode.id,
+              },
+
+              data: {
+                endDate:
+                  parsedExitDate,
+
+                endStatus:
+                  exitStatus,
+
+                endDepartmentId:
+                  existingEmployee.departmentId,
+
+                endDesignationId:
+                  existingEmployee.designationId,
+
+                endLocationId:
+                  existingEmployee.locationId,
+
+                endReason:
+                  String(reason).trim(),
+              },
+            });
 
 
             /*
@@ -2363,6 +2441,38 @@ router.patch(
         "Employee exit error:",
         error
       );
+
+      if (
+        error.message ===
+        "OPEN_EMPLOYMENT_EPISODE_NOT_FOUND"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "OPEN_EMPLOYMENT_EPISODE_NOT_FOUND",
+
+          message:
+            "CHRIS could not find the employee's current open employment episode. Resolve the employment history before processing the exit.",
+        });
+      }
+
+      if (
+        error.message ===
+        "EXIT_BEFORE_EPISODE_START"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EXIT_BEFORE_EPISODE_START",
+
+          message:
+            "The exit effective date cannot be earlier than the start date of the current employment episode.",
+        });
+      }
 
       return res.status(500).json({
         status:
@@ -2918,6 +3028,49 @@ router.patch(
       const employee =
         await prisma.$transaction(
           async (tx) => {
+
+            /*
+            ----------------------------------------------------
+            LOAD MOST RECENT EMPLOYMENT EPISODE
+            ----------------------------------------------------
+
+            Reinstatement reverses the exit and therefore reopens
+            the same employment episode. It does NOT create a new
+            service period.
+            ----------------------------------------------------
+            */
+
+            const latestEpisode =
+              await tx.employeeEmploymentEpisode.findFirst({
+                where: {
+                  organizationId,
+
+                  employeeId:
+                    existingEmployee.id,
+                },
+
+                orderBy: {
+                  sequenceNumber:
+                    "desc",
+                },
+              });
+
+            if (!latestEpisode) {
+              throw new Error(
+                "EMPLOYMENT_EPISODE_NOT_FOUND"
+              );
+            }
+
+            if (
+              latestEpisode.endDate ===
+              null
+            ) {
+              throw new Error(
+                "EMPLOYMENT_EPISODE_ALREADY_OPEN"
+              );
+            }
+
+
             const updatedEmployee =
               await tx.employee.update({
                 where: {
@@ -2974,6 +3127,42 @@ router.patch(
                 },
               });
             }
+
+            /*
+            Reopen the same employment episode.
+
+            The historical exit itself remains permanently visible
+            in EmployeeLifecycleEvent. Reinstatement removes the
+            episode closure because the same service period continues.
+            */
+
+            await tx.employeeEmploymentEpisode.update({
+              where: {
+                id:
+                  latestEpisode.id,
+              },
+
+              data: {
+                endDate:
+                  null,
+
+                endStatus:
+                  null,
+
+                endDepartmentId:
+                  null,
+
+                endDesignationId:
+                  null,
+
+                endLocationId:
+                  null,
+
+                endReason:
+                  null,
+              },
+            });
+
 
             /*
             Permanent lifecycle history.
@@ -3036,6 +3225,38 @@ router.patch(
         "Employee reinstatement error:",
         error
       );
+
+      if (
+        error.message ===
+        "EMPLOYMENT_EPISODE_NOT_FOUND"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYMENT_EPISODE_NOT_FOUND",
+
+          message:
+            "CHRIS could not find an employment episode for this employee. Resolve the employment history before reinstatement.",
+        });
+      }
+
+      if (
+        error.message ===
+        "EMPLOYMENT_EPISODE_ALREADY_OPEN"
+      ) {
+        return res.status(409).json({
+          status:
+            "error",
+
+          code:
+            "EMPLOYMENT_EPISODE_ALREADY_OPEN",
+
+          message:
+            "The employee's latest employment episode is already open and cannot be reinstated again.",
+        });
+      }
 
       return res.status(500).json({
         status:
@@ -7587,52 +7808,98 @@ router.post(
                 "0"
               )}`;
 
-            return tx.employee.create({
+            const createdEmployee =
+              await tx.employee.create({
+                data: {
+                  organizationId,
+
+                  departmentId:
+                    departmentRecord.id,
+
+                  designationId:
+                    designationRecord.id,
+
+                  locationId:
+                    locationRecord.id,
+
+                  employeeNumber,
+
+                  firstName:
+                    normalizedName.firstName,
+
+                  middleName:
+                    normalizedName.middleName,
+
+                  lastName:
+                    normalizedName.lastName,
+
+                  email:
+                    normalizedEmail,
+
+                  phone:
+                    phone.trim(),
+
+                  status:
+                    STATUS_MAP[status] ||
+                    "ACTIVE",
+                },
+
+                include: {
+                  department:
+                    true,
+
+                  designation:
+                    true,
+
+                  location:
+                    true,
+                },
+              });
+
+
+            /*
+            ------------------------------------------------------
+            EMPLOYMENT EPISODE 1
+
+            A genuine new hire always starts Episode 1.
+            The permanent Employee record stores current state;
+            Employment Episodes store service periods.
+            ------------------------------------------------------
+            */
+
+            await tx.employeeEmploymentEpisode.create({
               data: {
                 organizationId,
 
-                departmentId:
-                  departmentRecord.id,
+                employeeId:
+                  createdEmployee.id,
 
-                designationId:
-                  designationRecord.id,
+                sequenceNumber:
+                  1,
 
-                locationId:
-                  locationRecord.id,
+                startDate:
+                  createdEmployee.hireDate ||
+                  createdEmployee.createdAt,
 
-                employeeNumber,
+                startStatus:
+                  createdEmployee.status,
 
-                firstName:
-                  normalizedName.firstName,
+                startDepartmentId:
+                  createdEmployee.departmentId,
 
-                middleName:
-                  normalizedName.middleName,
+                startDesignationId:
+                  createdEmployee.designationId,
 
-                lastName:
-                  normalizedName.lastName,
+                startLocationId:
+                  createdEmployee.locationId,
 
-                email:
-                  normalizedEmail,
-
-                phone:
-                  phone.trim(),
-
-                status:
-                  STATUS_MAP[status] ||
-                  "ACTIVE",
-              },
-
-              include: {
-                department:
-                  true,
-
-                designation:
-                  true,
-
-                location:
-                  true,
+                startReason:
+                  "Initial employment",
               },
             });
+
+
+            return createdEmployee;
           }
         );
 

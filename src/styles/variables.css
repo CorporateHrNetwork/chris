@@ -1,7 +1,7 @@
 :root {
 
   /* Brand Colours */
-  --primary: #0B5E3B;
+  --primary: #087A43;
   --primary-hover: #117347;
 
   --gold: #C89B2C;
@@ -26,3 +26,62 @@
   --radius: 16px;
   --radius-lg: 24px;
 }
+
+/* === CHRIS BRAND THEME START === */
+
+:root {
+  /* Primary brand language */
+  --chris-brand-green: #087A43;
+  --chris-brand-green-deep: #064E32;
+  --chris-brand-green-soft: #0B8F58;
+  --chris-brand-green-glow: rgba(8, 122, 67, 0.22);
+
+  --chris-gold: #D4AF37;
+  --chris-gold-soft: #E2C45A;
+  --chris-gold-glow: rgba(212, 175, 55, 0.18);
+
+  /* Dark CHRIS shell */
+  --chris-shell-black: #030705;
+  --chris-shell-dark: #06110C;
+  --chris-shell-green: #081A11;
+
+  /* Operational surfaces */
+  --chris-surface: #F8FAF7;
+  --chris-surface-white: #FFFFFF;
+  --chris-surface-soft-green: #F4F9F5;
+
+  /* Typography */
+  --chris-text-primary: #172033;
+  --chris-text-secondary: #64748B;
+  --chris-text-on-dark: #F8FAF9;
+  --chris-text-on-dark-muted: #BBD3C6;
+
+  /* Borders / shadows */
+  --chris-border: #E3E9E5;
+  --chris-border-gold: rgba(212, 175, 55, 0.20);
+  --chris-card-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+
+  /* Semantic colours remain independent of brand green */
+  --chris-success: #15803D;
+  --chris-warning: #D97706;
+  --chris-danger: #B91C1C;
+  --chris-info: #2563EB;
+}
+
+/* Reusable brand utilities */
+.chris-brand-text {
+  color: var(--chris-brand-green);
+}
+
+.chris-brand-title {
+  color: var(--chris-brand-green);
+  font-weight: 800;
+}
+
+.chris-gold-text {
+  color: var(--chris-gold);
+}
+
+/* === CHRIS BRAND THEME END === */
+
+

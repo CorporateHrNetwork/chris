@@ -529,7 +529,7 @@ function OrganizationLocationsSettings() {
             style={{
               margin: 0,
               color:
-                "#0B5E3B",
+                "#087A43",
               fontSize:
                 "26px",
               fontWeight:
@@ -1107,7 +1107,7 @@ function LocationCard({
               style={{
                 margin: 0,
                 color:
-                  "#0B5E3B",
+                  "#087A43",
                 fontSize:
                   "17px",
                 fontWeight:
@@ -1312,7 +1312,7 @@ function MetricCard({
           marginTop:
             "6px",
           color:
-            "#0B5E3B",
+            "#087A43",
           fontSize:
             "26px",
           fontWeight:
@@ -1345,7 +1345,7 @@ function MetricBox({
       <div
         style={{
           color:
-            "#0B5E3B",
+            "#087A43",
           fontSize:
             "18px",
           fontWeight:
@@ -1552,7 +1552,7 @@ const locationIconStyle = {
   background:
     "#ECFDF5",
   color:
-    "#0B5E3B",
+    "#087A43",
 };
 
 const metricCardStyle = {
@@ -1580,7 +1580,7 @@ const primaryButtonStyle = {
   borderRadius:
     "8px",
   background:
-    "#0B5E3B",
+    "#087A43",
   color:
     "#FFFFFF",
   fontSize:

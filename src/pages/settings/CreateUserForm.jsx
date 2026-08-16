@@ -216,7 +216,7 @@ function CreateUserForm({
 
               background: "#ECFDF5",
 
-              color: "#0B5E3B",
+              color: "#087A43",
 
               display: "flex",
               alignItems: "center",
@@ -459,7 +459,7 @@ function CreateUserForm({
 
                       border:
                         selected
-                          ? "2px solid #0B5E3B"
+                          ? "2px solid #087A43"
                           : "1px solid #E2E8F0",
 
                       borderRadius:
@@ -752,7 +752,7 @@ const saveButtonStyle = {
 
   borderRadius: "9px",
 
-  background: "#0B5E3B",
+  background: "#087A43",
 
   color: "#FFFFFF",
 

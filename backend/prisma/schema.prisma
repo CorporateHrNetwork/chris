@@ -32,6 +32,7 @@ model Organization {
   designations               Designation[]
   employees                  Employee[]
   locations                  OrganizationLocation[]
+  employmentEpisodes         EmployeeEmploymentEpisode[]
   employeeLifecycleEvents    EmployeeLifecycleEvent[]
   designationLifecycleEvents DesignationLifecycleEvent[]
 
@@ -68,6 +69,9 @@ model OrganizationLocation {
 
   lifecycleEventsFrom EmployeeLifecycleEvent[] @relation("LifecycleFromLocation")
   lifecycleEventsTo   EmployeeLifecycleEvent[] @relation("LifecycleToLocation")
+
+  employmentEpisodesStarted EmployeeEmploymentEpisode[] @relation("EmploymentEpisodeStartLocation")
+  employmentEpisodesEnded   EmployeeEmploymentEpisode[] @relation("EmploymentEpisodeEndLocation")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -229,6 +233,9 @@ model Department {
   previousDepartmentEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDepartment")
   newDepartmentEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDepartment")
 
+  employmentEpisodesStarted EmployeeEmploymentEpisode[] @relation("EmploymentEpisodeStartDepartment")
+  employmentEpisodesEnded   EmployeeEmploymentEpisode[] @relation("EmploymentEpisodeEndDepartment")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -289,6 +296,9 @@ model Designation {
   previousDesignationEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDesignation")
   newDesignationEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDesignation")
 
+  employmentEpisodesStarted EmployeeEmploymentEpisode[] @relation("EmploymentEpisodeStartDesignation")
+  employmentEpisodesEnded   EmployeeEmploymentEpisode[] @relation("EmploymentEpisodeEndDesignation")
+
   lifecycleEvents DesignationLifecycleEvent[]
 
   createdAt DateTime @default(now())
@@ -345,7 +355,8 @@ model Employee {
 
   user User?
 
-  lifecycleEvents EmployeeLifecycleEvent[]
+  employmentEpisodes EmployeeEmploymentEpisode[]
+  lifecycleEvents    EmployeeLifecycleEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -358,6 +369,74 @@ model Employee {
   @@index([locationId])
   @@index([status])
   @@map("employees")
+}
+
+model EmployeeEmploymentEpisode {
+  id String @id @default(uuid())
+
+  organizationId String
+  employeeId     String
+
+  // Permanent sequence of employment periods for this employee.
+  // Episode 1 = original employment.
+  // Episode 2+ = genuine rehire periods.
+  sequenceNumber Int
+
+  startDate DateTime
+  endDate   DateTime?
+
+  startStatus EmployeeStatus
+  endStatus   EmployeeStatus?
+
+  startDepartmentId String?
+  endDepartmentId   String?
+
+  startDesignationId String?
+  endDesignationId   String?
+
+  startLocationId String?
+  endLocationId   String?
+
+  // Why this employment period started / ended.
+  // Examples:
+  // startReason: "Initial employment", "Rehired after resignation"
+  // endReason: "Voluntary resignation", "Retirement"
+  startReason String?
+  endReason   String?
+
+  notes String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  employee Employee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+
+  startDepartment Department? @relation("EmploymentEpisodeStartDepartment", fields: [organizationId, startDepartmentId], references: [organizationId, id], onDelete: Restrict)
+
+  endDepartment Department? @relation("EmploymentEpisodeEndDepartment", fields: [organizationId, endDepartmentId], references: [organizationId, id], onDelete: Restrict)
+
+  startDesignation Designation? @relation("EmploymentEpisodeStartDesignation", fields: [organizationId, startDesignationId], references: [organizationId, id], onDelete: Restrict)
+
+  endDesignation Designation? @relation("EmploymentEpisodeEndDesignation", fields: [organizationId, endDesignationId], references: [organizationId, id], onDelete: Restrict)
+
+  startLocation OrganizationLocation? @relation("EmploymentEpisodeStartLocation", fields: [organizationId, startLocationId], references: [organizationId, id], onDelete: Restrict)
+
+  endLocation OrganizationLocation? @relation("EmploymentEpisodeEndLocation", fields: [organizationId, endLocationId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, employeeId, sequenceNumber])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([startDepartmentId])
+  @@index([endDepartmentId])
+  @@index([startDesignationId])
+  @@index([endDesignationId])
+  @@index([startLocationId])
+  @@index([endLocationId])
+  @@map("employee_employment_episodes")
 }
 
 model EmployeeLifecycleEvent {
@@ -385,7 +464,7 @@ model EmployeeLifecycleEvent {
   // Location movement information.
   //
   // These fields allow the same history table to record
-  // Head Office ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Lagos ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Port Harcourt transfers.
+  // Head Office ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Lagos ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Port Harcourt transfers.
 
   fromLocationId String?
   toLocationId   String?

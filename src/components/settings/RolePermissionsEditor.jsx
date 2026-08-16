@@ -553,7 +553,7 @@ function RolePermissionsEditor({
                 "#ECFDF5",
 
               color:
-                "#0B5E3B",
+                "#087A43",
 
               fontSize:
                 "18px",
@@ -846,7 +846,7 @@ function RolePermissionsEditor({
                 "999px",
 
               color:
-                "#0B5E3B",
+                "#087A43",
 
               fontSize:
                 "12px",
@@ -948,7 +948,7 @@ function RolePermissionsEditor({
                         <div
                           style={{
                             color:
-                              "#0B5E3B",
+                              "#087A43",
 
                             fontSize:
                               "14px",
@@ -1785,7 +1785,7 @@ const saveButtonStyle = {
     "9px",
 
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",

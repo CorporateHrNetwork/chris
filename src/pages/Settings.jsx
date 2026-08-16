@@ -43,7 +43,7 @@ function Settings() {
             background:
               activeSection ===
               "users-roles"
-                ? "#0B5E3B"
+                ? "#087A43"
                 : "#FFFFFF",
 
             color:
@@ -55,7 +55,7 @@ function Settings() {
             border:
               activeSection ===
               "users-roles"
-                ? "1px solid #0B5E3B"
+                ? "1px solid #087A43"
                 : "1px solid #CBD5E1",
           }}
         >
@@ -77,7 +77,7 @@ function Settings() {
             background:
               activeSection ===
               "locations"
-                ? "#0B5E3B"
+                ? "#087A43"
                 : "#FFFFFF",
 
             color:
@@ -89,7 +89,7 @@ function Settings() {
             border:
               activeSection ===
               "locations"
-                ? "1px solid #0B5E3B"
+                ? "1px solid #087A43"
                 : "1px solid #CBD5E1",
           }}
         >

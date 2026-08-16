@@ -166,10 +166,11 @@ function Designations() {
     careerForm,
     setCareerForm,
   ] = useState({
+    name: "",
+    code: "",
     careerTrack: "",
     careerLevel: "",
     reportsToDesignationId: "",
-
   });
 
 
@@ -1206,6 +1207,14 @@ Existing compatible designations will be reused and the recommended career level
       setSuccess("");
 
       setCareerForm({
+        name:
+          designation.name ||
+          "",
+
+        code:
+          designation.code ||
+          "",
+
         careerTrack:
           designation.careerTrack ||
           "",
@@ -1230,6 +1239,8 @@ Existing compatible designations will be reused and the recommended career level
       setEditingId("");
 
       setCareerForm({
+        name: "",
+        code: "",
         careerTrack: "",
         careerLevel: "",
         reportsToDesignationId: "",
@@ -1295,6 +1306,12 @@ Existing compatible designations will be reused and the recommended career level
 
               body:
                 JSON.stringify({
+                  name:
+                    careerForm.name.trim(),
+
+                  code:
+                    careerForm.code.trim(),
+
                   departmentId:
                     selectedDepartmentId,
 
@@ -2505,7 +2522,7 @@ Unmapping will be blocked if current employees or reporting positions still depe
 
                       borderColor:
                         checked
-                          ? "#0B5E3B"
+                          ? "#087A43"
                           : "#E2E8F0",
 
                       background:
@@ -2952,11 +2969,38 @@ Unmapping will be blocked if current employees or reporting positions still depe
                                 cellStyle
                               }
                             >
-                              <strong>
-                                {
-                                  designation.name
-                                }
-                              </strong>
+                              {isEditing ? (
+                                <input
+                                  value={
+                                    careerForm.name
+                                  }
+                                  onChange={(
+                                    event
+                                  ) =>
+                                    setCareerForm(
+                                      (
+                                        current
+                                      ) => ({
+                                        ...current,
+
+                                        name:
+                                          event.target.value,
+                                      })
+                                    )
+                                  }
+                                  style={
+                                    inputStyle
+                                  }
+                                  placeholder="Designation name"
+                                  required
+                                />
+                              ) : (
+                                <strong>
+                                  {
+                                    designation.name
+                                  }
+                                </strong>
+                              )}
                             </td>
 
                             <td
@@ -2964,10 +3008,37 @@ Unmapping will be blocked if current employees or reporting positions still depe
                                 cellStyle
                               }
                             >
-                              {
+                              {isEditing ? (
+                                <input
+                                  value={
+                                    careerForm.code
+                                  }
+                                  onChange={(
+                                    event
+                                  ) =>
+                                    setCareerForm(
+                                      (
+                                        current
+                                      ) => ({
+                                        ...current,
+
+                                        code:
+                                          event.target.value,
+                                      })
+                                    )
+                                  }
+                                  style={{
+                                    ...inputStyle,
+
+                                    width:
+                                      "120px",
+                                  }}
+                                  placeholder="Code"
+                                />
+                              ) : (
                                 designation.code ||
                                 "-"
-                              }
+                              )}
                             </td>
 
                             <td
@@ -3914,7 +3985,7 @@ const eyebrowStyle = {
     "0 0 5px",
 
   color:
-    "#0B5E3B",
+    "#087A43",
 
   fontSize:
     "11px",
@@ -4024,7 +4095,7 @@ const selectedDepartmentStyle = {
     "9px",
 
   color:
-    "#0B5E3B",
+    "#087A43",
 
   fontSize:
     "12px",
@@ -4235,13 +4306,13 @@ const primaryButtonStyle = {
     "9px 13px",
 
   border:
-    "1px solid #0B5E3B",
+    "1px solid #087A43",
 
   borderRadius:
     "7px",
 
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",
@@ -4360,7 +4431,7 @@ const summaryCardStyle = {
 
 const summaryValueStyle = {
   color:
-    "#0B5E3B",
+    "#087A43",
 
   fontSize:
     "24px",
@@ -4649,7 +4720,7 @@ const templatePositionStyle = {
 
 const templateLevelStyle = {
   color:
-    "#0B5E3B",
+    "#087A43",
 
   fontSize:
     "10px",
@@ -4905,7 +4976,7 @@ const lifecyclePanelHeaderStyle = {
 };
 
 const lifecycleEyebrowStyle = {
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "10px",
   fontWeight: "900",
   letterSpacing: "0.08em",
@@ -5092,9 +5163,9 @@ const deactivatePrimaryButtonStyle = {
 
 const reactivatePrimaryButtonStyle = {
   padding: "10px 14px",
-  border: "1px solid #0B5E3B",
+  border: "1px solid #087A43",
   borderRadius: "8px",
-  background: "#0B5E3B",
+  background: "#087A43",
   color: "#FFFFFF",
   fontFamily: "inherit",
   fontSize: "11px",
@@ -5164,3 +5235,4 @@ const recommendedDepartmentCreatingStyle = {
 };
 
 export default Designations;
+

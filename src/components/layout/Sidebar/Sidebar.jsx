@@ -9,7 +9,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import Logo from "../Logo/Logo";
+import chrisLogo from "../../../assets/images/chris-logo.png";
 
 import {
   FaTachometerAlt,
@@ -1928,13 +1928,13 @@ function Sidebar() {
           "column",
 
         background:
-          "#0B5E3B",
+          "linear-gradient(180deg, #030705 0%, #06110C 42%, #081A11 100%)",
 
         color:
           "#FFFFFF",
 
         boxShadow:
-          "4px 0 16px rgba(15,23,42,0.15)",
+          "8px 0 28px rgba(0,0,0,0.34)",
 
         overflow:
           "hidden",
@@ -1949,18 +1949,352 @@ function Sidebar() {
           30,
       }}
     >
-      {/* LOGO */}
+      {/* CHRIS AMBIENT SIDEBAR DESIGN */}
+
+      <div
+        aria-hidden="true"
+
+        style={{
+          position:
+            "absolute",
+
+          inset:
+            0,
+
+          pointerEvents:
+            "none",
+
+          overflow:
+            "hidden",
+
+          zIndex:
+            0,
+        }}
+      >
+        <div
+          style={{
+            position:
+              "absolute",
+
+            width:
+              "260px",
+
+            height:
+              "260px",
+
+            top:
+              "-85px",
+
+            left:
+              "-90px",
+
+            borderRadius:
+              "50%",
+
+            background:
+              "radial-gradient(circle, rgba(0,150,78,0.24) 0%, rgba(0,120,65,0.10) 38%, transparent 72%)",
+
+            filter:
+              "blur(8px)",
+          }}
+        />
+
+        <div
+          style={{
+            position:
+              "absolute",
+
+            width:
+              "220px",
+
+            height:
+              "220px",
+
+            right:
+              "-125px",
+
+            top:
+              "34%",
+
+            borderRadius:
+              "50%",
+
+            background:
+              "radial-gradient(circle, rgba(212,175,55,0.16) 0%, rgba(212,175,55,0.06) 40%, transparent 74%)",
+
+            filter:
+              "blur(10px)",
+          }}
+        />
+
+        <div
+          style={{
+            position:
+              "absolute",
+
+            width:
+              "340px",
+
+            height:
+              "150px",
+
+            left:
+              "-100px",
+
+            bottom:
+              "40px",
+
+            transform:
+              "rotate(-18deg)",
+
+            borderRadius:
+              "50%",
+
+            borderTop:
+              "1px solid rgba(212,175,55,0.22)",
+
+            borderBottom:
+              "1px solid rgba(0,150,78,0.16)",
+
+            boxShadow:
+              "0 -10px 45px rgba(0,140,75,0.06), 0 12px 45px rgba(212,175,55,0.05)",
+          }}
+        />
+
+        <div
+          style={{
+            position:
+              "absolute",
+
+            inset:
+              0,
+
+            opacity:
+              0.24,
+
+            backgroundImage:
+              "radial-gradient(circle at center, rgba(212,175,55,0.42) 0.8px, transparent 0.9px)",
+
+            backgroundSize:
+              "24px 24px",
+
+            maskImage:
+              "linear-gradient(to bottom, transparent 0%, black 20%, black 82%, transparent 100%)",
+
+            WebkitMaskImage:
+              "linear-gradient(to bottom, transparent 0%, black 20%, black 82%, transparent 100%)",
+          }}
+        />
+      </div>
+
+      {/* CHRIS BRAND HEADER */}
+
+      <style>
+        {`
+          @keyframes chrisLogoPulse {
+            0%, 100% {
+              opacity: 1;
+              transform: scale(1);
+
+              filter:
+                drop-shadow(0 0 6px rgba(0, 155, 74, 0.24))
+                drop-shadow(0 0 5px rgba(212, 175, 55, 0.15));
+            }
+
+            50% {
+              opacity: 0.64;
+              transform: scale(1.035);
+
+              filter:
+                drop-shadow(0 0 14px rgba(0, 185, 88, 0.40))
+                drop-shadow(0 0 11px rgba(212, 175, 55, 0.28));
+            }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .chris-sidebar-logo {
+              animation: none !important;
+            }
+          }
+        `}
+      </style>
 
       <div
         style={{
           flexShrink:
             0,
 
+          position:
+            "relative",
+
+          zIndex:
+            1,
+
+          padding:
+            "18px 12px 17px",
+
+          textAlign:
+            "center",
+
           borderBottom:
-            "1px solid rgba(255,255,255,0.10)",
+            "1px solid rgba(212,175,55,0.18)",
+
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0))",
         }}
       >
-        <Logo />
+        {/* LARGE BLINKING CHRIS LOGO */}
+
+        <div
+          style={{
+            width:
+              "100%",
+
+            display:
+              "flex",
+
+            alignItems:
+              "center",
+
+            justifyContent:
+              "center",
+
+            overflow:
+              "visible",
+          }}
+        >
+          <img
+            className="chris-sidebar-logo"
+
+            src={
+              chrisLogo
+            }
+
+            alt="CHRIS"
+
+            style={{
+              display:
+                "block",
+
+              width:
+                "220px",
+
+              maxWidth:
+                "96%",
+
+              height:
+                "auto",
+
+              objectFit:
+                "contain",
+
+              border:
+                "none",
+
+              outline:
+                "none",
+
+              background:
+                "transparent",
+
+              animation:
+                "chrisLogoPulse 2.5s ease-in-out infinite",
+
+              transformOrigin:
+                "center",
+            }}
+          />
+        </div>
+
+        {/* CORPORATEHR NETWORK */}
+
+        <div
+          style={{
+            marginTop:
+              "4px",
+
+            color:
+              "#087A43",
+
+            textAlign:
+              "center",
+
+            fontSize:
+              "15px",
+
+            fontWeight:
+              "900",
+
+            lineHeight:
+              "1.25",
+
+            letterSpacing:
+              "0.01em",
+
+            textShadow:
+              "0 0 8px rgba(8,122,67,0.16)",
+          }}
+        >
+          CorporateHR Network
+        </div>
+
+        {/* INFORMATION SYSTEM */}
+
+        <div
+          style={{
+            marginTop:
+              "5px",
+
+            color:
+              "#D4AF37",
+
+            textAlign:
+              "center",
+
+            fontSize:
+              "10px",
+
+            fontWeight:
+              "800",
+
+            lineHeight:
+              "1.3",
+
+            letterSpacing:
+              "0.16em",
+
+            textTransform:
+              "uppercase",
+
+            textShadow:
+              "0 0 7px rgba(212,175,55,0.16)",
+          }}
+        >
+          Information System
+        </div>
+
+        {/* BRAND DIVIDER */}
+
+        <div
+          aria-hidden="true"
+
+          style={{
+            width:
+              "74%",
+
+            height:
+              "1px",
+
+            margin:
+              "14px auto 0",
+
+            background:
+              "linear-gradient(90deg, transparent 0%, rgba(8,122,67,0.72) 25%, rgba(212,175,55,0.92) 50%, rgba(8,122,67,0.72) 75%, transparent 100%)",
+
+            boxShadow:
+              "0 0 8px rgba(212,175,55,0.14)",
+          }}
+        />
       </div>
 
       {/* NAVIGATION */}
@@ -1986,7 +2320,13 @@ function Sidebar() {
             "thin",
 
           scrollbarColor:
-            "rgba(255,255,255,.30) transparent",
+            "rgba(212,175,55,.35) transparent",
+
+          position:
+            "relative",
+
+          zIndex:
+            1,
         }}
       >
         <div
@@ -1995,7 +2335,7 @@ function Sidebar() {
               "5px 12px 9px",
 
             color:
-              "#91B7A4",
+              "#D4AF37",
 
             fontSize:
               "9px",
@@ -2045,18 +2385,23 @@ function Sidebar() {
 
                     background:
                       isActive
-                        ? "#14824F"
-                        : "transparent",
+                        ? "linear-gradient(90deg, rgba(8,122,67,0.24), rgba(8,122,67,0.10))"
+                        : "linear-gradient(90deg, rgba(8,122,67,0.16), rgba(8,122,67,0.055))",
 
                     color:
                       isActive
                         ? "#FFFFFF"
-                        : "#D7E8DF",
+                        : "#DCEBE3",
 
                     borderLeft:
                       isActive
-                        ? "3px solid #D4AF37"
-                        : "3px solid transparent",
+                        ? "3px solid rgba(212,175,55,0.88)"
+                        : "3px solid rgba(8,122,67,0.42)",
+
+                    boxShadow:
+                      isActive
+                        ? "inset 0 0 0 1px rgba(212,175,55,0.08), 0 0 12px rgba(8,122,67,0.08)"
+                        : "none",
                   })}
                 >
                   <span
@@ -2156,18 +2501,23 @@ function Sidebar() {
 
                     background:
                       groupActive
-                        ? "rgba(20,130,79,0.72)"
-                        : "transparent",
+                        ? "linear-gradient(90deg, rgba(8,122,67,0.24), rgba(8,122,67,0.10))"
+                        : "linear-gradient(90deg, rgba(8,122,67,0.16), rgba(8,122,67,0.055))",
 
                     color:
                       groupActive
                         ? "#FFFFFF"
-                        : "#D7E8DF",
+                        : "#DCEBE3",
 
                     borderLeft:
                       groupActive
-                        ? "3px solid #D4AF37"
-                        : "3px solid transparent",
+                        ? "3px solid rgba(212,175,55,0.88)"
+                        : "3px solid rgba(8,122,67,0.42)",
+
+                    boxShadow:
+                      groupActive
+                        ? "inset 0 0 0 1px rgba(212,175,55,0.08), 0 0 12px rgba(8,122,67,0.08)"
+                        : "none",
                   }}
                 >
                   <span
@@ -2221,7 +2571,7 @@ function Sidebar() {
                         "8px",
 
                       borderLeft:
-                        "1px solid rgba(255,255,255,0.14)",
+                        "1px solid rgba(212,175,55,0.20)",
                     }}
                   >
                     {group.children.map(
@@ -2321,8 +2671,8 @@ function Sidebar() {
 
                               background:
                                 isActive
-                                  ? "rgba(255,255,255,0.10)"
-                                  : "transparent",
+                                  ? "linear-gradient(90deg, rgba(212,175,55,0.13), rgba(0,122,67,0.16))"
+                                  : "rgba(8,122,67,0.045)",
 
                               color:
                                 isActive
@@ -2377,13 +2727,19 @@ function Sidebar() {
             0,
 
           borderTop:
-            "1px solid rgba(255,255,255,0.10)",
+            "1px solid rgba(8,122,67,0.20)",
 
           padding:
-            "9px 8px 12px",
+            "8px 8px 10px",
 
           background:
-            "#094F33",
+            "transparent",
+
+          position:
+            "relative",
+
+          zIndex:
+            1,
         }}
       >
         <button
@@ -2440,7 +2796,7 @@ const mainItemStyle = {
     "9px 11px",
 
   borderRadius:
-    "7px",
+    "9px",
 
   textDecoration:
     "none",
@@ -2484,7 +2840,7 @@ const groupButtonStyle = {
     "none",
 
   borderRadius:
-    "7px",
+    "9px",
 
   background:
     "transparent",
@@ -2566,10 +2922,10 @@ const plannedChildStyle = {
     "6px",
 
   background:
-    "transparent",
+    "rgba(8,122,67,0.045)",
 
   color:
-    "#A9C6B7",
+    "#BBD3C6",
 
   fontFamily:
     "inherit",
@@ -2646,14 +3002,17 @@ const logoutButtonStyle = {
   border:
     "none",
 
+  borderLeft:
+    "3px solid rgba(8,122,67,0.42)",
+
   borderRadius:
-    "7px",
+    "9px",
 
   background:
-    "transparent",
+    "linear-gradient(90deg, rgba(8,122,67,0.16), rgba(8,122,67,0.055))",
 
   color:
-    "#F5D8D5",
+    "#DCEBE3",
 
   fontFamily:
     "inherit",
@@ -2666,6 +3025,12 @@ const logoutButtonStyle = {
 
   cursor:
     "pointer",
+
+  boxSizing:
+    "border-box",
+
+  transition:
+    "background 0.18s ease, color 0.18s ease, transform 0.18s ease",
 };
 
 export default Sidebar;

@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useState,
 } from "react";
@@ -343,7 +343,7 @@ function FullScreenMessage({
               "#ECFDF5",
 
             color:
-              "#0B5E3B",
+              "#087A43",
 
             fontSize:
               "22px",
@@ -361,7 +361,7 @@ function FullScreenMessage({
               "0 0 10px",
 
             color:
-              "#0B5E3B",
+              "#087A43",
 
             fontSize:
               "22px",
@@ -413,7 +413,7 @@ function FullScreenMessage({
                 "9px",
 
               background:
-                "#0B5E3B",
+                "#087A43",
 
               color:
                 "#FFFFFF",

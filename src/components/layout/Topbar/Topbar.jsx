@@ -1,4 +1,4 @@
-import {
+﻿import {
   FaBell,
   FaSearch,
   FaBars,
@@ -50,7 +50,8 @@ function Topbar() {
         minHeight: "78px",
         flexShrink: 0,
 
-        background: "#FFFFFF",
+        background:
+          "linear-gradient(90deg, #030705 0%, #06110C 48%, #081A11 100%)",
 
         display: "flex",
         alignItems: "center",
@@ -62,16 +63,70 @@ function Topbar() {
         padding: "0 28px",
 
         borderBottom:
-          "1px solid #E5E7EB",
+          "1px solid rgba(212,175,55,0.24)",
 
         boxShadow:
-          "0 2px 8px rgba(15,23,42,0.04)",
+          "0 5px 22px rgba(0,0,0,0.30), 0 1px 0 rgba(8,122,67,0.12)",
 
         boxSizing: "border-box",
         position: "relative",
         zIndex: 20,
+        overflow: "hidden",
       }}
     >
+      {/* AMBIENT TOPBAR DESIGN */}
+
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          overflow: "hidden",
+          zIndex: 0,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            width: "260px",
+            height: "140px",
+            left: "8%",
+            top: "-70px",
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(8,122,67,0.18), transparent 70%)",
+            filter: "blur(10px)",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            width: "240px",
+            height: "120px",
+            right: "12%",
+            bottom: "-70px",
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(212,175,55,0.12), transparent 70%)",
+            filter: "blur(10px)",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            width: "52%",
+            height: "1px",
+            right: "0",
+            bottom: "0",
+            background:
+              "linear-gradient(90deg, transparent, rgba(8,122,67,0.38), rgba(212,175,55,0.62), transparent)",
+          }}
+        />
+      </div>
+
       {/* LEFT */}
 
       <div
@@ -80,6 +135,8 @@ function Topbar() {
           alignItems: "center",
           gap: "14px",
           minWidth: 0,
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <button
@@ -91,11 +148,19 @@ function Topbar() {
               "center",
             width: "38px",
             height: "38px",
+
             border:
-              "1px solid #E2E8F0",
+              "1px solid rgba(212,175,55,0.28)",
+
             borderRadius: "9px",
-            background: "#FFFFFF",
-            color: "#0B5E3B",
+
+            background:
+              "linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.10))",
+
+            color: "#D4AF37",
+
+            boxShadow:
+              "inset 0 0 12px rgba(8,122,67,0.05)",
           }}
           aria-label="Open navigation"
         >
@@ -109,13 +174,16 @@ function Topbar() {
         >
           <div
             style={{
-              color: "#0B5E3B",
+              color: "#087A43",
               fontSize: "18px",
-              fontWeight: "800",
+              fontWeight: "900",
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow:
                 "ellipsis",
+
+              textShadow:
+                "0 0 8px rgba(8,122,67,0.20)",
             }}
           >
             {organizationName}
@@ -124,9 +192,11 @@ function Topbar() {
           <div
             style={{
               marginTop: "3px",
-              color: "#64748B",
+              color: "#D4AF37",
               fontSize: "11px",
-              fontWeight: "600",
+              fontWeight: "700",
+              letterSpacing:
+                "0.01em",
             }}
           >
             {today}
@@ -142,6 +212,8 @@ function Topbar() {
           alignItems: "center",
           gap: "16px",
           minWidth: 0,
+          position: "relative",
+          zIndex: 1,
         }}
       >
         {/* SEARCH */}
@@ -158,18 +230,21 @@ function Topbar() {
               "9px 14px",
 
             border:
-              "1px solid #E2E8F0",
+              "1px solid rgba(8,122,67,0.42)",
 
             borderRadius:
               "10px",
 
             background:
-              "#F8FAFC",
+              "rgba(2,10,7,0.56)",
+
+            boxShadow:
+              "inset 0 0 16px rgba(8,122,67,0.04), 0 0 12px rgba(0,0,0,0.10)",
           }}
         >
           <FaSearch
             size={13}
-            color="#94A3B8"
+            color="#D4AF37"
           />
 
           <input
@@ -185,7 +260,7 @@ function Topbar() {
               marginLeft:
                 "9px",
 
-              color: "#334155",
+              color: "#F8FAF9",
               fontSize: "13px",
             }}
           />
@@ -206,19 +281,22 @@ function Topbar() {
               "center",
 
             border:
-              "1px solid #E2E8F0",
+              "1px solid rgba(212,175,55,0.30)",
 
             borderRadius:
               "9px",
 
             background:
-              "#FFFFFF",
+              "linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.09))",
 
             color:
-              "#0B5E3B",
+              "#D4AF37",
 
             cursor:
               "pointer",
+
+            boxShadow:
+              "0 0 14px rgba(212,175,55,0.06)",
           }}
         >
           <FaBell />
@@ -252,6 +330,9 @@ function Topbar() {
 
               border:
                 "2px solid #D4AF37",
+
+              boxShadow:
+                "0 0 12px rgba(212,175,55,0.16), 0 0 14px rgba(8,122,67,0.12)",
             }}
           />
 
@@ -264,7 +345,7 @@ function Topbar() {
             <div
               style={{
                 color:
-                  "#0F172A",
+                  "#087A43",
 
                 fontSize:
                   "12px",
@@ -291,7 +372,7 @@ function Topbar() {
                   "2px",
 
                 color:
-                  "#64748B",
+                  "#9DB8AA",
 
                 fontSize:
                   "10px",

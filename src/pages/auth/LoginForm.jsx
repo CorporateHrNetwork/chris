@@ -12,7 +12,7 @@ function LoginForm() {
       {/* Heading */}
       <h2
         style={{
-          color: "#0B5E3B",
+          color: "#087A43",
           marginBottom: "10px",
           textAlign: "center",
         }}
@@ -78,7 +78,7 @@ function LoginForm() {
         <a
           href="/forgot-password"
           style={{
-            color: "#0B5E3B",
+            color: "#087A43",
             textDecoration: "none",
             fontWeight: "600",
           }}
@@ -92,7 +92,7 @@ function LoginForm() {
         style={{
           width: "100%",
           padding: "14px",
-          background: "#0B5E3B",
+          background: "#087A43",
           color: "#fff",
           border: "none",
           borderRadius: "8px",
@@ -160,7 +160,7 @@ function LoginForm() {
 
         <div
           style={{
-            color: "#0B5E3B",
+            color: "#087A43",
             fontWeight: "600",
             fontSize: "14px",
           }}
@@ -182,7 +182,7 @@ function LoginForm() {
           fontSize: "12px",
         }}
       >
-        <strong style={{ color: "#0B5E3B" }}>
+        <strong style={{ color: "#087A43" }}>
           © 2026 CorporateHr Network
         </strong>
 

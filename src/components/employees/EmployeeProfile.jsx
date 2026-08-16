@@ -6659,7 +6659,7 @@ const backButtonStyle = {
   border: "none",
   background:
     "transparent",
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "14px",
   fontWeight: "700",
   cursor: "pointer",
@@ -6695,7 +6695,7 @@ const avatarStyle = {
   height: "72px",
   borderRadius: "50%",
   background: "#E8F5EF",
-  color: "#0B5E3B",
+  color: "#087A43",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -6726,7 +6726,7 @@ const subtitleStyle = {
 
 const employeeNumberStyle = {
   margin: "5px 0 0",
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "13px",
   fontWeight: "700",
 };
@@ -6750,7 +6750,7 @@ const informationCardStyle = {
 
 const informationTitleStyle = {
   margin: "0 0 18px",
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "18px",
   fontWeight: "800",
 };
@@ -6790,7 +6790,7 @@ const actionButtonStyle = {
   border:
     "1px solid #D1E5DB",
   background: "#F8FCFA",
-  color: "#0B5E3B",
+  color: "#087A43",
   borderRadius: "10px",
   padding: "12px",
   fontSize: "13px",
@@ -6821,7 +6821,7 @@ const editHeaderStyle = {
 
 const editTitleStyle = {
   margin: 0,
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "21px",
   fontWeight: "800",
 };
@@ -6868,7 +6868,7 @@ const buttonGroupStyle = {
 
 const saveButtonStyle = {
   border: "none",
-  background: "#0B5E3B",
+  background: "#087A43",
   color: "#FFFFFF",
   borderRadius: "9px",
   padding: "11px 18px",
@@ -6962,7 +6962,7 @@ const transferTitleStyle = {
   margin:
     0,
   color:
-    "#0B5E3B",
+    "#087A43",
   fontSize:
     "21px",
   fontWeight:
@@ -7070,7 +7070,7 @@ const transferConfirmButtonStyle = {
   border:
     "none",
   background:
-    "#0B5E3B",
+    "#087A43",
   color:
     "#FFFFFF",
   borderRadius:
@@ -7149,7 +7149,7 @@ const promotionTitleStyle = {
     0,
 
   color:
-    "#0B5E3B",
+    "#087A43",
 
   fontSize:
     "21px",
@@ -7362,7 +7362,7 @@ const promotionConfirmButtonStyle = {
     "none",
 
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",
@@ -7416,7 +7416,7 @@ const historyEyebrowStyle = {
 
 const historyTitleStyle = {
   margin: 0,
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "21px",
   fontWeight: "800",
 };
@@ -7449,7 +7449,7 @@ const timelineDotStyle = {
   height: "12px",
   marginTop: "8px",
   borderRadius: "50%",
-  background: "#0B5E3B",
+  background: "#087A43",
   border:
     "3px solid #D1FAE5",
   boxSizing: "content-box",
@@ -7499,7 +7499,7 @@ const lifecycleEventBadgeStyle = {
   padding: "5px 8px",
   borderRadius: "999px",
   background: "#E8F5EF",
-  color: "#0B5E3B",
+  color: "#087A43",
   fontSize: "9px",
   fontWeight: "900",
   letterSpacing:

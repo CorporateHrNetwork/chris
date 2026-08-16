@@ -267,7 +267,7 @@ function ResetPassword() {
             style={{
               margin: 0,
 
-              color: "#0B5E3B",
+              color: "#087A43",
 
               fontSize: "27px",
 
@@ -399,7 +399,7 @@ function ResetPassword() {
                 success ||
                 !resetToken
                   ? "#688B79"
-                  : "#0B5E3B",
+                  : "#087A43",
 
               cursor:
                 loading ||
@@ -669,7 +669,7 @@ const backButtonStyle = {
 
   background: "transparent",
 
-  color: "#0B5E3B",
+  color: "#087A43",
 
   fontSize: "13px",
 

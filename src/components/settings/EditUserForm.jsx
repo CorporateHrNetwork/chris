@@ -509,7 +509,7 @@ function EditUserForm({
                 margin: 0,
 
                 color:
-                  "#0B5E3B",
+                  "#087A43",
 
                 fontSize:
                   "21px",
@@ -669,7 +669,7 @@ function EditUserForm({
                 <div
                   style={{
                     color:
-                      "#0B5E3B",
+                      "#087A43",
 
                     fontSize:
                       "14px",
@@ -1029,7 +1029,7 @@ function EditUserForm({
 
                       border:
                         selected
-                          ? "1px solid #0B5E3B"
+                          ? "1px solid #087A43"
                           : "1px solid #E2E8F0",
 
                       borderRadius:
@@ -1068,7 +1068,7 @@ function EditUserForm({
                       style={{
                         color:
                           selected
-                            ? "#0B5E3B"
+                            ? "#087A43"
                             : "#475569",
 
                         fontSize:
@@ -1160,7 +1160,7 @@ function EditUserForm({
               border:
                 locationScope ===
                 "ALL_LOCATIONS"
-                  ? "1px solid #0B5E3B"
+                  ? "1px solid #087A43"
                   : "1px solid #E2E8F0",
 
               background:
@@ -1239,7 +1239,7 @@ function EditUserForm({
               border:
                 locationScope ===
                 "ASSIGNED_LOCATIONS"
-                  ? "1px solid #0B5E3B"
+                  ? "1px solid #087A43"
                   : "1px solid #E2E8F0",
 
               background:
@@ -1440,7 +1440,7 @@ function EditUserForm({
 
                               border:
                                 selected
-                                  ? "1px solid #0B5E3B"
+                                  ? "1px solid #087A43"
                                   : "1px solid #CBD5E1",
 
                               borderRadius:
@@ -1475,7 +1475,7 @@ function EditUserForm({
                                 style={{
                                   color:
                                     selected
-                                      ? "#0B5E3B"
+                                      ? "#087A43"
                                       : "#334155",
 
                                   fontSize:
@@ -1518,7 +1518,7 @@ function EditUserForm({
                                       "4px",
 
                                     color:
-                                      "#0B5E3B",
+                                      "#087A43",
 
                                     fontSize:
                                       "10px",
@@ -1861,7 +1861,7 @@ const saveButtonStyle = {
     "9px",
 
   background:
-    "#0B5E3B",
+    "#087A43",
 
   color:
     "#FFFFFF",

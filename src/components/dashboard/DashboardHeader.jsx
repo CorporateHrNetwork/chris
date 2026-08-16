@@ -83,7 +83,7 @@ function DashboardHeader() {
       <h1
         style={{
           margin: 0,
-          color: "#065F46",
+          color: "#087A43",
           fontSize: "46px",
           fontWeight: "700",
         }}
