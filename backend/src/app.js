@@ -11,6 +11,7 @@ const employmentServiceRoutes = require("./routes/employmentServiceRoutes");
 const employmentEligibilityRoutes = require("./routes/employmentEligibilityRoutes");
 const employeeReportRoutes = require("./routes/employeeReportRoutes");
 const employeeIntegrityRoutes = require("./routes/employeeIntegrityRoutes");
+const leaveRoutes = require("./routes/leaveRoutes");
 
 const app = express();
 
@@ -108,6 +109,11 @@ app.use(
 app.use(
   "/api/employee-integrity",
   employeeIntegrityRoutes
+);
+
+app.use(
+  "/api/leave",
+  leaveRoutes
 );
 
 app.use(
