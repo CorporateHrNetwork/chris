@@ -7,6 +7,7 @@ const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const locationCatalogRoutes = require("./routes/locationCatalogRoutes");
+const employmentServiceRoutes = require("./routes/employmentServiceRoutes");
 
 const app = express();
 
@@ -84,6 +85,11 @@ app.use(
 app.use(
   "/api/employees",
   employeeRoutes
+);
+
+app.use(
+  "/api/employment-service",
+  employmentServiceRoutes
 );
 
 app.use(

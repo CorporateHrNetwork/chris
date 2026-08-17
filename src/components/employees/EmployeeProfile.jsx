@@ -8,6 +8,8 @@ import {
   apiRequest,
 } from "../../services/api";
 
+import EmploymentServiceSummary from "./EmploymentServiceSummary";
+
 function EmployeeProfile() {
   const { employeeNumber } = useParams();
 
@@ -6026,7 +6028,13 @@ const handleChange = (
             </div>
           </div>
 
-                    <div
+                    <EmploymentServiceSummary
+            episodes={
+              employmentEpisodes
+            }
+          />
+
+          <div
             style={
               episodeSectionStyle
             }
@@ -6305,7 +6313,7 @@ function EmploymentEpisode({
           label="Department"
           value={
             structureChanged
-              ? `${startDepartment} â†’ ${endDepartment}`
+              ? `${startDepartment} Ã¢â€ â€™ ${endDepartment}`
               : startDepartment
           }
         />
@@ -6314,7 +6322,7 @@ function EmploymentEpisode({
           label="Designation"
           value={
             structureChanged
-              ? `${startDesignation} â†’ ${endDesignation}`
+              ? `${startDesignation} Ã¢â€ â€™ ${endDesignation}`
               : startDesignation
           }
         />
@@ -6323,7 +6331,7 @@ function EmploymentEpisode({
           label="Location"
           value={
             structureChanged
-              ? `${startLocation} â†’ ${endLocation}`
+              ? `${startLocation} Ã¢â€ â€™ ${endLocation}`
               : startLocation
           }
         />
@@ -8221,3 +8229,5 @@ const historyErrorStyle = {
   fontWeight: "700",
 };
 export default EmployeeProfile;
+
+
