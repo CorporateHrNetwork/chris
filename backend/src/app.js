@@ -12,6 +12,7 @@ const employmentEligibilityRoutes = require("./routes/employmentEligibilityRoute
 const employeeReportRoutes = require("./routes/employeeReportRoutes");
 const employeeIntegrityRoutes = require("./routes/employeeIntegrityRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
+const attendanceRoutes = require("./routes/attendanceRoutes");
 
 const app = express();
 
@@ -114,6 +115,11 @@ app.use(
 app.use(
   "/api/leave",
   leaveRoutes
+);
+
+app.use(
+  "/api/attendance",
+  attendanceRoutes
 );
 
 app.use(
