@@ -35,6 +35,13 @@ model Organization {
   employmentEpisodes         EmployeeEmploymentEpisode[]
   employeeLifecycleEvents    EmployeeLifecycleEvent[]
   designationLifecycleEvents DesignationLifecycleEvent[]
+  leaveTypes                 LeaveType[]
+  leavePolicies              LeavePolicy[]
+  leaveBalances              LeaveBalance[]
+  leaveRequests              LeaveRequest[]
+  workShifts                 WorkShift[]
+  employeeShiftAssignments   EmployeeShiftAssignment[]
+  attendanceRecords          AttendanceRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -115,6 +122,8 @@ model User {
 
   performedLifecycleEvents            EmployeeLifecycleEvent[]    @relation("LifecyclePerformedBy")
   performedDesignationLifecycleEvents DesignationLifecycleEvent[] @relation("DesignationLifecyclePerformedBy")
+  reviewedLeaveRequests               LeaveRequest[]              @relation("LeaveRequestReviewedBy")
+  recordedAttendanceRecords           AttendanceRecord[]          @relation("AttendanceRecordedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -357,6 +366,10 @@ model Employee {
 
   employmentEpisodes EmployeeEmploymentEpisode[]
   lifecycleEvents    EmployeeLifecycleEvent[]
+  leaveBalances      LeaveBalance[]
+  leaveRequests      LeaveRequest[]
+  shiftAssignments   EmployeeShiftAssignment[]
+  attendanceRecords  AttendanceRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -529,6 +542,299 @@ model EmployeeLifecycleEvent {
   @@index([performedByUserId])
   @@index([suspensionEndDate])
   @@map("employee_lifecycle_events")
+}
+
+// ============================================================
+// LEAVE & ATTENDANCE MANAGEMENT
+// Sprint 2A Foundation
+// ============================================================
+
+model LeaveType {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  code        String
+  description String?
+
+  unit LeaveUnit @default(DAYS)
+
+  isPaid   Boolean @default(true)
+  isActive Boolean @default(true)
+
+  requiresAttachment Boolean @default(false)
+  allowsHalfDay      Boolean @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  policies LeavePolicy[]
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, name])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("leave_types")
+}
+
+model LeavePolicy {
+  id             String @id @default(uuid())
+  organizationId String
+  leaveTypeId    String
+
+  name        String
+  description String?
+
+  entitlementDays Decimal @db.Decimal(8, 2)
+
+  accrualMethod LeaveAccrualMethod @default(ANNUAL)
+  accrualRate   Decimal?           @db.Decimal(8, 4)
+
+  minimumServiceDays Int               @default(0)
+  serviceBasis       LeaveServiceBasis @default(CURRENT_EPISODE)
+
+  allowCarryForward   Boolean  @default(false)
+  maxCarryForwardDays Decimal? @db.Decimal(8, 2)
+
+  allowNegativeBalance Boolean  @default(false)
+  maxNegativeDays      Decimal? @db.Decimal(8, 2)
+
+  noticeDays Int @default(0)
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  isActive Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([leaveTypeId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@index([isActive])
+  @@map("leave_policies")
+}
+
+model LeaveBalance {
+  id             String @id @default(uuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+
+  leaveYear Int
+
+  openingBalance Decimal @default(0) @db.Decimal(8, 2)
+  accrued        Decimal @default(0) @db.Decimal(8, 2)
+  carriedForward Decimal @default(0) @db.Decimal(8, 2)
+  used           Decimal @default(0) @db.Decimal(8, 2)
+  adjusted       Decimal @default(0) @db.Decimal(8, 2)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, employeeId, leaveTypeId, leaveYear])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([leaveYear])
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id             String @id @default(uuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+
+  startDate DateTime
+  endDate   DateTime
+
+  requestedUnits Decimal @db.Decimal(8, 2)
+
+  reason        String?
+  attachmentUrl String?
+
+  status LeaveRequestStatus @default(PENDING)
+
+  submittedAt DateTime @default(now())
+
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  reviewNotes      String?
+
+  cancelledAt        DateTime?
+  cancellationReason String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+
+  reviewedBy User? @relation("LeaveRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([reviewedByUserId])
+  @@map("leave_requests")
+}
+
+model WorkShift {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name String
+  code String
+
+  startTime String
+  endTime   String
+
+  breakMinutes Int @default(0)
+  graceMinutes Int @default(0)
+
+  crossesMidnight Boolean @default(false)
+  isActive        Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  assignments       EmployeeShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, name])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("work_shifts")
+}
+
+model EmployeeShiftAssignment {
+  id             String @id @default(uuid())
+  organizationId String
+  employeeId     String
+  shiftId        String
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  shift        WorkShift    @relation(fields: [organizationId, shiftId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([shiftId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("employee_shift_assignments")
+}
+
+model AttendanceRecord {
+  id             String  @id @default(uuid())
+  organizationId String
+  employeeId     String
+  shiftId        String?
+
+  attendanceDate DateTime
+
+  clockIn  DateTime?
+  clockOut DateTime?
+
+  status AttendanceStatus @default(PRESENT)
+
+  lateMinutes     Int @default(0)
+  overtimeMinutes Int @default(0)
+
+  source AttendanceSource @default(MANUAL)
+
+  notes String?
+
+  recordedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  shift        WorkShift?   @relation(fields: [organizationId, shiftId], references: [organizationId, id], onDelete: Restrict)
+
+  recordedBy User? @relation("AttendanceRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, employeeId, attendanceDate])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([shiftId])
+  @@index([attendanceDate])
+  @@index([status])
+  @@index([recordedByUserId])
+  @@map("attendance_records")
+}
+
+enum LeaveUnit {
+  DAYS
+  HOURS
+}
+
+enum LeaveAccrualMethod {
+  ANNUAL
+  MONTHLY
+  NONE
+}
+
+enum LeaveServiceBasis {
+  CURRENT_EPISODE
+  CUMULATIVE
+}
+
+enum LeaveRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  ON_LEAVE
+  REST_DAY
+  HOLIDAY
+}
+
+enum AttendanceSource {
+  MANUAL
+  WEB
+  MOBILE
+  IMPORT
+  INTEGRATION
 }
 
 model PasswordResetToken {
