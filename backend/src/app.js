@@ -8,6 +8,7 @@ const roleRoutes = require("./routes/roleRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const locationCatalogRoutes = require("./routes/locationCatalogRoutes");
 const employmentServiceRoutes = require("./routes/employmentServiceRoutes");
+const employmentEligibilityRoutes = require("./routes/employmentEligibilityRoutes");
 
 const app = express();
 
@@ -90,6 +91,11 @@ app.use(
 app.use(
   "/api/employment-service",
   employmentServiceRoutes
+);
+
+app.use(
+  "/api/employment-eligibility",
+  employmentEligibilityRoutes
 );
 
 app.use(
