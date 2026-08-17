@@ -6313,7 +6313,7 @@ function EmploymentEpisode({
           label="Department"
           value={
             structureChanged
-              ? `${startDepartment} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${endDepartment}`
+              ? `${startDepartment} \u2192 ${endDepartment}`
               : startDepartment
           }
         />
@@ -6322,7 +6322,7 @@ function EmploymentEpisode({
           label="Designation"
           value={
             structureChanged
-              ? `${startDesignation} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${endDesignation}`
+              ? `${startDesignation} \u2192 ${endDesignation}`
               : startDesignation
           }
         />
@@ -6331,7 +6331,7 @@ function EmploymentEpisode({
           label="Location"
           value={
             structureChanged
-              ? `${startLocation} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${endLocation}`
+              ? `${startLocation} \u2192 ${endLocation}`
               : startLocation
           }
         />
