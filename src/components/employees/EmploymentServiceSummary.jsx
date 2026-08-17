@@ -1,10 +1,55 @@
-function EmploymentServiceSummary({
-  episodes = [],
-}) {
-  const summary =
-    buildSummary(
-      episodes
-    );
+import { useEffect, useState } from "react";
+
+import { apiRequest } from "../../services/api";
+
+function EmploymentServiceSummary({ employeeNumber }) {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSummary() {
+      if (!employeeNumber) {
+        setSummary(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+
+        const result = await apiRequest(
+          `/api/employment-service/${encodeURIComponent(employeeNumber)}`
+        );
+
+        if (!cancelled) {
+          setSummary(result.data || null);
+        }
+      } catch (err) {
+        console.error("Employment service summary error:", err);
+
+        if (!cancelled) {
+          setError(
+            err.message ||
+              "CHRIS could not load employment service information."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeNumber]);
 
   return (
     <section
@@ -12,21 +57,17 @@ function EmploymentServiceSummary({
         marginTop: "22px",
         padding: "22px",
         borderRadius: "16px",
-        border:
-          "1px solid rgba(8, 122, 67, 0.18)",
+        border: "1px solid rgba(8, 122, 67, 0.18)",
         background:
           "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(244,249,245,0.98))",
-        boxShadow:
-          "0 10px 28px rgba(15,23,42,0.05)",
+        boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
       }}
     >
       <div
         style={{
           display: "flex",
-          alignItems:
-            "flex-start",
-          justifyContent:
-            "space-between",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
           gap: "18px",
           flexWrap: "wrap",
         }}
@@ -34,12 +75,9 @@ function EmploymentServiceSummary({
         <div>
           <div
             style={{
-              color:
-                "#087A43",
-              fontSize:
-                "16px",
-              fontWeight:
-                "900",
+              color: "#087A43",
+              fontSize: "16px",
+              fontWeight: "900",
             }}
           >
             Employment Service
@@ -47,176 +85,172 @@ function EmploymentServiceSummary({
 
           <div
             style={{
-              marginTop:
-                "4px",
-              color:
-                "#64748B",
-              fontSize:
-                "12px",
+              marginTop: "4px",
+              color: "#64748B",
+              fontSize: "12px",
             }}
           >
             Service and tenure intelligence calculated from permanent employment episodes.
           </div>
         </div>
 
-        <span
+        {summary && (
+          <StatusBadge
+            status={
+              summary.employmentStatus ||
+              summary.employee?.status
+            }
+          />
+        )}
+      </div>
+
+      {loading ? (
+        <MessageBox>Loading employment service...</MessageBox>
+      ) : error ? (
+        <MessageBox error>{error}</MessageBox>
+      ) : !summary ? (
+        <MessageBox>
+          Employment service information is unavailable.
+        </MessageBox>
+      ) : (
+        <div
           style={{
-            padding:
-              "7px 11px",
-            borderRadius:
-              "999px",
-            background:
-              summary.inService
-                ? "#ECFDF5"
-                : "#F8FAFC",
-            border:
-              summary.inService
-                ? "1px solid #A7F3D0"
-                : "1px solid #CBD5E1",
-            color:
-              summary.inService
-                ? "#047857"
-                : "#475569",
-            fontSize:
-              "10px",
-            fontWeight:
-              "900",
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(170px, 1fr))",
+            gap: "12px",
+            marginTop: "18px",
           }}
         >
-          {summary.inService
-            ? "ACTIVE"
-            : "EXITED"}
-        </span>
-      </div>
+          <Metric
+            label="Original Employment"
+            value={formatDate(summary.originalEmploymentDate)}
+          />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(170px, 1fr))",
-          gap: "12px",
-          marginTop: "18px",
-        }}
-      >
-        <Metric
-          label="Original Employment"
-          value={
-            formatDate(
-              summary.originalEmploymentDate
-            )
-          }
-        />
+          <Metric
+            label={
+              summary.latestRehireDate
+                ? "Latest Rehire"
+                : "Latest Employment"
+            }
+            value={formatDate(summary.latestEmploymentDate)}
+          />
 
-        <Metric
-          label={
-            summary.latestRehireDate
-              ? "Latest Rehire"
-              : "Latest Employment"
-          }
-          value={
-            formatDate(
-              summary.latestEmploymentDate
-            )
-          }
-        />
+          <Metric
+            label="Current Episode"
+            value={
+              summary.currentEpisode
+                ? compactDuration(summary.currentEpisode.duration)
+                : "No current episode"
+            }
+          />
 
-        <Metric
-          label="Current Episode"
-          value={
-            summary.currentEpisode
-              ? durationLabel(
-                  summary.currentEpisode
-                    .days
-                )
-              : "No current episode"
-          }
-        />
+          <Metric
+            label="Cumulative Service"
+            value={compactDuration(summary.cumulativeService)}
+          />
 
-        <Metric
-          label="Cumulative Service"
-          value={
-            durationLabel(
-              summary.totalServiceDays
-            )
-          }
-        />
+          <Metric
+            label="Previous Service"
+            value={compactDuration(summary.previousCompletedService)}
+          />
 
-        <Metric
-          label="Previous Service"
-          value={
-            durationLabel(
-              summary.completedServiceDays
-            )
-          }
-        />
+          <Metric
+            label="Employment Episodes"
+            value={String(summary.episodeCount || 0)}
+          />
 
-        <Metric
-          label="Employment Episodes"
-          value={String(
-            summary.episodeCount
-          )}
-        />
+          <Metric
+            label="Service Gaps"
+            value={
+              summary.serviceGaps?.count
+                ? `${summary.serviceGaps.count} gap${
+                    summary.serviceGaps.count === 1 ? "" : "s"
+                  }`
+                : "None"
+            }
+          />
 
-        <Metric
-          label="Service Gaps"
-          value={
-            summary.gapCount ===
-            0
-              ? "None"
-              : `${summary.gapCount} gap${
-                  summary.gapCount ===
-                  1
-                    ? ""
-                    : "s"
-                }`
-          }
-        />
-
-        <Metric
-          label="Total Gap Time"
-          value={
-            summary.gapCount ===
-            0
-              ? "0 days"
-              : durationLabel(
-                  summary.totalGapDays
-                )
-          }
-        />
-      </div>
+          <Metric
+            label="Total Gap Time"
+            value={compactDuration(summary.serviceGaps?.totalDuration)}
+          />
+        </div>
+      )}
     </section>
   );
 }
 
-function Metric({
-  label,
-  value,
-}) {
+function StatusBadge({ status }) {
+  const label = formatStatus(status);
+
+  const active =
+    status === "ACTIVE" ||
+    status === "PROBATION" ||
+    status === "LEAVE";
+
+  return (
+    <span
+      style={{
+        padding: "7px 11px",
+        borderRadius: "999px",
+        background: active ? "#ECFDF5" : "#F8FAFC",
+        border: active
+          ? "1px solid #A7F3D0"
+          : "1px solid #CBD5E1",
+        color: active ? "#047857" : "#475569",
+        fontSize: "10px",
+        fontWeight: "900",
+        textTransform: "uppercase",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function MessageBox({ children, error = false }) {
   return (
     <div
       style={{
-        padding:
-          "14px 15px",
-        borderRadius:
-          "12px",
-        background:
-          "#FFFFFF",
-        border:
-          "1px solid #E3E9E5",
+        marginTop: "18px",
+        padding: "14px 15px",
+        borderRadius: "12px",
+        border: error
+          ? "1px solid #FECACA"
+          : "1px solid #E3E9E5",
+        background: error
+          ? "#FEF2F2"
+          : "#FFFFFF",
+        color: error
+          ? "#991B1B"
+          : "#64748B",
+        fontSize: "12px",
+        fontWeight: "700",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div
+      style={{
+        padding: "14px 15px",
+        borderRadius: "12px",
+        background: "#FFFFFF",
+        border: "1px solid #E3E9E5",
       }}
     >
       <div
         style={{
-          color:
-            "#64748B",
-          fontSize:
-            "9px",
-          fontWeight:
-            "900",
-          textTransform:
-            "uppercase",
-          letterSpacing:
-            "0.05em",
+          color: "#64748B",
+          fontSize: "9px",
+          fontWeight: "900",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
         }}
       >
         {label}
@@ -224,14 +258,10 @@ function Metric({
 
       <div
         style={{
-          marginTop:
-            "7px",
-          color:
-            "#172033",
-          fontSize:
-            "14px",
-          fontWeight:
-            "800",
+          marginTop: "7px",
+          color: "#172033",
+          fontSize: "14px",
+          fontWeight: "800",
         }}
       >
         {value}
@@ -240,283 +270,59 @@ function Metric({
   );
 }
 
-function buildSummary(
-  episodes
-) {
-  const ordered =
-    [...episodes].sort(
-      (a, b) =>
-        Number(
-          a.sequenceNumber
-        ) -
-        Number(
-          b.sequenceNumber
-        )
-    );
-
-  const now =
-    new Date();
-
-  const original =
-    ordered[0] ||
-    null;
-
-  const latest =
-    ordered[
-      ordered.length - 1
-    ] ||
-    null;
-
-  const current =
-    ordered.find(
-      (episode) =>
-        !episode.endDate
-    ) ||
-    null;
-
-  let totalServiceDays =
-    0;
-
-  let completedServiceDays =
-    0;
-
-  let totalGapDays =
-    0;
-
-  const gaps = [];
-
-  ordered.forEach(
-    (episode) => {
-      const end =
-        episode.endDate
-          ? new Date(
-              episode.endDate
-            )
-          : now;
-
-      const days =
-        diffDays(
-          new Date(
-            episode.startDate
-          ),
-          end
-        );
-
-      totalServiceDays +=
-        days;
-
-      if (
-        episode.endDate
-      ) {
-        completedServiceDays +=
-          days;
-      }
-    }
-  );
-
-  for (
-    let index = 1;
-    index < ordered.length;
-    index += 1
-  ) {
-    const previous =
-      ordered[
-        index - 1
-      ];
-
-    const next =
-      ordered[index];
-
-    if (
-      !previous.endDate
-    ) {
-      continue;
-    }
-
-    const days =
-      diffDays(
-        new Date(
-          previous.endDate
-        ),
-        new Date(
-          next.startDate
-        )
-      );
-
-    totalGapDays +=
-      days;
-
-    gaps.push({
-      afterEpisode:
-        previous.sequenceNumber,
-      beforeEpisode:
-        next.sequenceNumber,
-      days,
-    });
+function compactDuration(duration) {
+  if (!duration) {
+    return "0d";
   }
-
-  return {
-    inService:
-      Boolean(current),
-
-    originalEmploymentDate:
-      original?.startDate ||
-      null,
-
-    latestEmploymentDate:
-      latest?.startDate ||
-      null,
-
-    latestRehireDate:
-      ordered.length > 1
-        ? latest?.startDate ||
-          null
-        : null,
-
-    currentEpisode:
-      current
-        ? {
-            days:
-              diffDays(
-                new Date(
-                  current.startDate
-                ),
-                now
-              ),
-          }
-        : null,
-
-    episodeCount:
-      ordered.length,
-
-    totalServiceDays,
-
-    completedServiceDays,
-
-    gapCount:
-      gaps.length,
-
-    totalGapDays,
-
-    gaps,
-  };
-}
-
-function diffDays(
-  start,
-  end
-) {
-  const oneDay =
-    24 * 60 * 60 * 1000;
-
-  const startUtc =
-    Date.UTC(
-      start.getUTCFullYear(),
-      start.getUTCMonth(),
-      start.getUTCDate()
-    );
-
-  const endUtc =
-    Date.UTC(
-      end.getUTCFullYear(),
-      end.getUTCMonth(),
-      end.getUTCDate()
-    );
-
-  return Math.max(
-    0,
-    Math.round(
-      (
-        endUtc -
-        startUtc
-      ) /
-        oneDay
-    )
-  );
-}
-
-function durationLabel(
-  totalDays
-) {
-  const safeDays =
-    Math.max(
-      0,
-      Number(
-        totalDays
-      ) || 0
-    );
-
-  const years =
-    Math.floor(
-      safeDays / 365
-    );
-
-  const afterYears =
-    safeDays % 365;
-
-  const months =
-    Math.floor(
-      afterYears / 30
-    );
-
-  const days =
-    afterYears % 30;
 
   const parts = [];
 
-  if (years) {
-    parts.push(
-      `${years}y`
-    );
+  if (Number(duration.years)) {
+    parts.push(`${duration.years}y`);
   }
 
-  if (months) {
-    parts.push(
-      `${months}m`
-    );
+  if (Number(duration.months)) {
+    parts.push(`${duration.months}m`);
   }
 
-  if (
-    days ||
-    parts.length === 0
-  ) {
-    parts.push(
-      `${days}d`
-    );
+  if (Number(duration.days) || parts.length === 0) {
+    parts.push(`${Number(duration.days) || 0}d`);
   }
 
   return parts.join(" ");
 }
 
-function formatDate(
-  value
-) {
+function formatStatus(status) {
+  const labels = {
+    ACTIVE: "Active",
+    PROBATION: "Probation",
+    LEAVE: "Leave",
+    SUSPENDED: "Suspended",
+    TERMINATED: "Terminated",
+    RESIGNED: "Resigned",
+    RETIRED: "Retired",
+    INACTIVE: "Inactive",
+  };
+
+  return labels[status] || status || "Unknown";
+}
+
+function formatDate(value) {
   if (!value) {
     return "-";
   }
 
-  const date =
-    new Date(value);
+  const date = new Date(value);
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return "-";
   }
 
-  return date.toLocaleDateString(
-    "en-GB",
-    {
-      day:
-        "2-digit",
-      month:
-        "short",
-      year:
-        "numeric",
-    }
-  );
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default EmploymentServiceSummary;

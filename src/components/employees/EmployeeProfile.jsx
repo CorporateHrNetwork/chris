@@ -4094,7 +4094,7 @@ const handleChange = (
                   {formatDate(
                     suspensionForm.effectiveDate
                   )}
-                  {" → "}
+                  {" \u2192 "}
                   {formatDate(
                     suspensionForm.suspensionEndDate
                   )}
@@ -6029,8 +6029,8 @@ const handleChange = (
           </div>
 
                     <EmploymentServiceSummary
-            episodes={
-              employmentEpisodes
+            employeeNumber={
+              employeeNumber
             }
           />
 
@@ -6313,7 +6313,7 @@ function EmploymentEpisode({
           label="Department"
           value={
             structureChanged
-              ? `${startDepartment} Ã¢â€ â€™ ${endDepartment}`
+              ? `${startDepartment} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${endDepartment}`
               : startDepartment
           }
         />
@@ -6322,7 +6322,7 @@ function EmploymentEpisode({
           label="Designation"
           value={
             structureChanged
-              ? `${startDesignation} Ã¢â€ â€™ ${endDesignation}`
+              ? `${startDesignation} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${endDesignation}`
               : startDesignation
           }
         />
@@ -6331,7 +6331,7 @@ function EmploymentEpisode({
           label="Location"
           value={
             structureChanged
-              ? `${startLocation} Ã¢â€ â€™ ${endLocation}`
+              ? `${startLocation} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ${endLocation}`
               : startLocation
           }
         />
@@ -6596,7 +6596,7 @@ function LifecycleEvent({
                 label="Status"
                 value={`${formatStatus(
                   event.previousStatus
-                )} → ${formatStatus(
+                )} \u2192 ${formatStatus(
                   event.newStatus
                 )}`}
               />
@@ -6611,7 +6611,7 @@ function LifecycleEvent({
                   label="Suspension Period"
                   value={`${formatLongDate(
                     event.effectiveDate
-                  )} → ${formatLongDate(
+                  )} \u2192 ${formatLongDate(
                     event.suspensionEndDate
                   )}`}
                 />
@@ -6639,7 +6639,7 @@ function LifecycleEvent({
               event.toLocation?.id && (
               <HistoryDetail
                 label="Location"
-                value={`${fromLocation} → ${toLocation}`}
+                value={`${fromLocation} \u2192 ${toLocation}`}
               />
             )}
 
@@ -6651,7 +6651,7 @@ function LifecycleEvent({
               <HistoryDetail
                 label="Department"
                 value={`${event.previousDepartment?.name ||
-                  "Not Assigned"} → ${event.newDepartment?.name ||
+                  "Not Assigned"} \u2192 ${event.newDepartment?.name ||
                   "Not Assigned"}`}
               />
             )}
@@ -6664,7 +6664,7 @@ function LifecycleEvent({
               <HistoryDetail
                 label="Designation"
                 value={`${event.previousDesignation?.name ||
-                  "Not Assigned"} → ${event.newDesignation?.name ||
+                  "Not Assigned"} \u2192 ${event.newDesignation?.name ||
                   "Not Assigned"}`}
               />
             )}
@@ -8229,5 +8229,6 @@ const historyErrorStyle = {
   fontWeight: "700",
 };
 export default EmployeeProfile;
+
 
 
