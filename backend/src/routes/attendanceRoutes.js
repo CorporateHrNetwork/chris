@@ -50,6 +50,18 @@ const {
 } = require(
   "../services/attendancePayrollService"
 );
+const {
+  getScheduledVsActual,
+  getEmployeeScheduledHourBasis,
+} = require(
+  "../services/attendanceScheduleComparisonService"
+);
+const {
+  updateManualPayrollInput,
+  deleteManualPayrollInput,
+} = require(
+  "../services/attendancePayrollInputLifecycleService"
+);
 const router =
   express.Router();
 
@@ -634,6 +646,117 @@ router.post(
     }
   }
 );
+router.get(
+  "/scheduled-vs-actual",
+  requirePermission(
+    "attendance.view"
+  ),
+  async (req, res) => {
+    try {
+      const data =
+        await getScheduledVsActual({
+          organizationId:
+            req.auth.organizationId,
+          from:
+            req.query.from,
+          to:
+            req.query.to,
+          employeeNumber:
+            req.query.employeeNumber,
+        });
+
+      return res.json({
+        status:
+          "success",
+        data,
+      });
+    } catch (error) {
+      return handleError(
+        error,
+        res
+      );
+    }
+  }
+);
+router.get(
+  "/scheduled-hour-basis",
+  requirePermission(
+    "attendance.view"
+  ),
+  async (req, res) => {
+    try {
+      const data =
+        await getEmployeeScheduledHourBasis({
+          organizationId:
+            req.auth.organizationId,
+          employeeNumber:
+            req.query.employeeNumber,
+          from:
+            req.query.from,
+          to:
+            req.query.to,
+        });
+
+      return res.json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      return handleError(error, res);
+    }
+  }
+);
+router.patch(
+  "/manual-payroll-inputs/:id",
+  requirePermission(
+    "attendance.manage"
+  ),
+  async (req, res) => {
+    try {
+      const data =
+        await updateManualPayrollInput({
+          organizationId:
+            req.auth.organizationId,
+          id:
+            req.params.id,
+          payload:
+            req.body || {},
+          recordedByUserId:
+            req.auth.userId,
+        });
+
+      return res.json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      return handleError(error, res);
+    }
+  }
+);
+
+router.delete(
+  "/manual-payroll-inputs/:id",
+  requirePermission(
+    "attendance.manage"
+  ),
+  async (req, res) => {
+    try {
+      await deleteManualPayrollInput({
+        organizationId:
+          req.auth.organizationId,
+        id:
+          req.params.id,
+      });
+
+      return res.json({
+        status: "success",
+      });
+    } catch (error) {
+      return handleError(error, res);
+    }
+  }
+);
 function handleError(
   error,
   res
@@ -661,6 +784,8 @@ function handleError(
       "SHIFT_ASSIGNMENT_NOT_FOUND",
       "INVALID_ATTENDANCE_DATE",
       "INVALID_MANUAL_PAYROLL_ATTENDANCE",
+      "MANUAL_PAYROLL_INPUT_DUPLICATE_PERIOD",
+      "MANUAL_PAYROLL_INPUT_NOT_FOUND",
       "MANUAL_PAYROLL_ATTENDANCE_REQUIRED",
       "INVALID_PAYROLL_ATTENDANCE_PERIOD",
       "INVALID_PAYROLL_ATTENDANCE_BASIS",
