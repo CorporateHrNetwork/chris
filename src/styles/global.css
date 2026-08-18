@@ -55,3 +55,186 @@ input{
     border-radius:20px;
 
 }
+/* ============================================================
+   CHRIS UNIFIED TYPOGRAPHY & CONTROL LANGUAGE
+   ============================================================ */
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--chris-font-family);
+}
+
+body {
+  font-size: var(--chris-font-md);
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: var(--chris-font-md);
+}
+
+::placeholder {
+  color: var(--chris-text-muted);
+  opacity: 1;
+}
+/* ============================================================
+   CHRIS GLOBAL PAGE LANGUAGE V1
+   Reference: Time & Attendance premium dark UI.
+   Applies consistently across all current and future pages.
+   ============================================================ */
+
+.chris-page,
+.chris-page * {
+  box-sizing: border-box;
+}
+
+.chris-page {
+  color: var(--chris-text-main);
+  font-family: var(--chris-font-family);
+  font-size: var(--chris-font-md);
+}
+
+.chris-page h1 {
+  color: var(--chris-text-main) !important;
+  font-family: var(--chris-font-family) !important;
+  font-size: var(--chris-font-2xl) !important;
+  line-height: 1.15 !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.chris-page h2 {
+  color: var(--chris-text-main) !important;
+  font-family: var(--chris-font-family) !important;
+  font-size: var(--chris-font-xl) !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+}
+
+.chris-page h3 {
+  color: var(--chris-text-main) !important;
+  font-family: var(--chris-font-family) !important;
+  font-size: var(--chris-font-lg) !important;
+  font-weight: 800 !important;
+}
+
+.chris-page p {
+  font-family: var(--chris-font-family) !important;
+  line-height: 1.55;
+}
+
+.chris-page label {
+  color: var(--chris-text-secondary) !important;
+  font-family: var(--chris-font-family) !important;
+  font-size: var(--chris-font-sm) !important;
+  font-weight: 700 !important;
+}
+
+.chris-page input,
+.chris-page select,
+.chris-page textarea {
+  color: var(--chris-text-main) !important;
+  background: var(--chris-input-bg) !important;
+  border: 1px solid var(--chris-border-soft) !important;
+  border-radius: var(--chris-radius-md) !important;
+  font-family: var(--chris-font-family) !important;
+  font-size: var(--chris-font-md) !important;
+  outline: none !important;
+}
+
+.chris-page input:focus,
+.chris-page select:focus,
+.chris-page textarea:focus {
+  border-color: rgba(212,175,55,0.52) !important;
+  box-shadow: 0 0 0 3px rgba(212,175,55,0.08) !important;
+}
+
+.chris-page input::placeholder,
+.chris-page textarea::placeholder {
+  color: var(--chris-text-muted) !important;
+  opacity: 1;
+}
+
+.chris-page button {
+  font-family: var(--chris-font-family) !important;
+}
+
+.chris-page button[type="submit"],
+.chris-page form button:not([type]),
+.chris-page .chris-primary-button {
+  border: 0 !important;
+  border-radius: var(--chris-radius-md) !important;
+  background: linear-gradient(
+    135deg,
+    var(--chris-gold),
+    var(--chris-gold-deep)
+  ) !important;
+  color: #07110C !important;
+  font-weight: 800 !important;
+  box-shadow: 0 8px 20px rgba(212,175,55,0.10) !important;
+}
+
+.chris-page section,
+.chris-page .chris-panel,
+.chris-page .chris-card {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(12,38,26,.90),
+      rgba(7,18,13,.96)
+    ) !important;
+  border: 1px solid var(--chris-border-gold) !important;
+  border-radius: var(--chris-radius-card) !important;
+  box-shadow: var(--chris-shadow-card) !important;
+  color: var(--chris-text-main) !important;
+}
+
+.chris-page table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--chris-text-main);
+  font-family: var(--chris-font-family);
+}
+
+.chris-page th {
+  color: var(--chris-text-secondary) !important;
+  font-size: var(--chris-font-xs) !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--chris-border-soft) !important;
+}
+
+.chris-page td {
+  color: var(--chris-text-main) !important;
+  border-bottom: 1px solid var(--chris-border-soft) !important;
+}
+
+.chris-page a {
+  color: var(--chris-gold);
+}
+
+.chris-page .card,
+.chris-page .panel,
+.chris-page .dashboard-card,
+.chris-page .metric-card,
+.chris-page .stat-card,
+.chris-page .summary-card {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(12,38,26,.90),
+      rgba(7,18,13,.96)
+    ) !important;
+  border: 1px solid var(--chris-border-gold) !important;
+  border-radius: var(--chris-radius-card) !important;
+  box-shadow: var(--chris-shadow-card) !important;
+  color: var(--chris-text-main) !important;
+}

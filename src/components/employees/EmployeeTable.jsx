@@ -1,4 +1,4 @@
-﻿import {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -1630,7 +1630,7 @@ function EmployeeTable() {
                   "translateY(-50%)",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 pointerEvents:
                   "none",
@@ -1667,7 +1667,7 @@ function EmployeeTable() {
                   "700",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
               }}
             >
               {locations.map(
@@ -1833,7 +1833,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "10px",
@@ -1860,7 +1860,7 @@ function EmployeeTable() {
                   "2px",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "15px",
@@ -1967,7 +1967,7 @@ function EmployeeTable() {
                   "0 0 5px",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "18px",
@@ -1979,7 +1979,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -2285,7 +2285,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -2301,7 +2301,7 @@ function EmployeeTable() {
                   "7px",
 
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "12px",
@@ -2542,7 +2542,7 @@ function EmployeeTable() {
                   "0 0 5px",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "18px",
@@ -2554,7 +2554,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -2570,7 +2570,7 @@ function EmployeeTable() {
                   "7px",
 
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "12px",
@@ -3012,7 +3012,7 @@ function EmployeeTable() {
                 margin: 0,
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "20px",
@@ -3033,7 +3033,7 @@ function EmployeeTable() {
                   "5px 0 0",
 
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -3725,13 +3725,13 @@ const workforceTabButtonStyle = {
 
 const workforceTabActiveStyle = {
   background:
-    "#ECFDF5",
+    "linear-gradient(145deg, rgba(8,122,67,.40), rgba(3,42,25,.78))",
 
   border:
-    "1px solid #A7F3D0",
+    "1px solid rgba(212,175,55,0.72)",
 
   color:
-    "#047857",
+    "#F2CF57",
 };
 
 const workforceCountStyle = {
@@ -3856,16 +3856,16 @@ const locationSummaryStyle = {
     "18px",
 
   padding:
-    "13px 16px",
+    "14px 16px",
 
   background:
-    "#F0FDF4",
+    "linear-gradient(145deg, rgba(5,60,34,.92), rgba(2,28,17,.96))",
 
   border:
-    "1px solid #BBF7D0",
+    "1px solid rgba(212,175,55,.42)",
 
   borderRadius:
-    "12px",
+    "14px",
 };
 
 const locationIconStyle = {

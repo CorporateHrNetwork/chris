@@ -259,9 +259,9 @@ function MiniStat({
     <div
       style={{
         background:
-          "linear-gradient(145deg, rgba(255,255,255,0.98), rgba(247,250,248,0.96))",
+          "radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, #063722, #02170f)",
         border:
-          "1px solid rgba(212,175,55,0.18)",
+          "1px solid rgba(212,175,55,0.72)",
         borderRadius: "16px",
         padding: "18px",
         boxShadow:
@@ -286,7 +286,7 @@ function MiniStat({
 
       <div
         style={{
-          color: "#64748B",
+          color: "#F7FAF8",
           fontSize: "12px",
           fontWeight: "700",
           textTransform:
@@ -302,7 +302,7 @@ function MiniStat({
       <div
         style={{
           marginTop: "8px",
-          color: "#087A43",
+          color: "#2EE98B",
           fontSize: "26px",
           fontWeight: "800",
           position: "relative",

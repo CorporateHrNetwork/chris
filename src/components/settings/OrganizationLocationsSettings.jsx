@@ -22,6 +22,8 @@ import {
 
 import useAuthorization from "../../hooks/useAuthorization";
 
+
+import "./chris-settings-visual.css";
 const EMPTY_FORM = {
   id: "",
   name: "",
@@ -494,7 +496,7 @@ function OrganizationLocationsSettings() {
   }
 
   return (
-    <div>
+    <div className="chris-organization-locations">
       <div
         style={{
           display: "flex",

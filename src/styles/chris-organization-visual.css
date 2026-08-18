@@ -1,0 +1,917 @@
+/* ============================================================
+   CHRIS ORGANIZATION VISUAL STANDARD V1
+   Applies to /organization and all /organization/* child pages.
+   Canonical reference:
+   near-black/deep-green surfaces, natural-gold borders,
+   soft-white headings, sage support text, green/gold metrics.
+   ============================================================ */
+
+body[data-chris-route-scope="organization"] main {
+  color: #C7D3CC;
+}
+
+/* ------------------------------------------------------------
+   PAGE ROOT / LEGACY LIGHT BACKGROUNDS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main > div,
+body[data-chris-route-scope="organization"] main > section {
+  color: #C7D3CC;
+}
+
+body[data-chris-route-scope="organization"] main div[style*="#FFFFFF"],
+body[data-chris-route-scope="organization"] main div[style*="#FFF"],
+body[data-chris-route-scope="organization"] main div[style*="#F8FAFC"],
+body[data-chris-route-scope="organization"] main div[style*="#F9FAFB"],
+body[data-chris-route-scope="organization"] main div[style*="#F3F4F6"],
+body[data-chris-route-scope="organization"] main div[style*="#F3F6F4"],
+body[data-chris-route-scope="organization"] main div[style*="rgba(255,255,255"],
+body[data-chris-route-scope="organization"] main div[style*="rgba(255, 255, 255"],
+body[data-chris-route-scope="organization"] main section[style*="#FFFFFF"],
+body[data-chris-route-scope="organization"] main section[style*="#FFF"],
+body[data-chris-route-scope="organization"] main section[style*="#F8FAFC"] {
+  background:
+    radial-gradient(
+      circle at 16% 0%,
+      rgba(46,233,139,.10),
+      transparent 30%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(6,55,34,.98),
+      rgba(2,23,15,.99)
+    ) !important;
+
+  border-color:
+    rgba(212,175,55,.46) !important;
+
+  color:
+    #C7D3CC !important;
+
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.28) !important;
+}
+
+/* Fix large white page canvases that use generic light background colours */
+body[data-chris-route-scope="organization"] main [style*="background: rgb(255, 255, 255)"],
+body[data-chris-route-scope="organization"] main [style*="background: white"],
+body[data-chris-route-scope="organization"] main [style*="background-color: white"] {
+  background:
+    linear-gradient(
+      145deg,
+      rgba(5,42,26,.98),
+      rgba(2,20,13,.99)
+    ) !important;
+}
+
+/* ------------------------------------------------------------
+   TYPOGRAPHY
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main h1,
+body[data-chris-route-scope="organization"] main h2,
+body[data-chris-route-scope="organization"] main h3,
+body[data-chris-route-scope="organization"] main h4,
+body[data-chris-route-scope="organization"] main h5,
+body[data-chris-route-scope="organization"] main h6 {
+  color:
+    #F7FAF8 !important;
+}
+
+body[data-chris-route-scope="organization"] main p,
+body[data-chris-route-scope="organization"] main label,
+body[data-chris-route-scope="organization"] main li {
+  color:
+    #C7D3CC;
+}
+
+body[data-chris-route-scope="organization"] main [style*="#0F172A"],
+body[data-chris-route-scope="organization"] main [style*="#111827"] {
+  color:
+    #F7FAF8 !important;
+}
+
+body[data-chris-route-scope="organization"] main [style*="#334155"],
+body[data-chris-route-scope="organization"] main [style*="#475569"] {
+  color:
+    #C7D3CC !important;
+}
+
+body[data-chris-route-scope="organization"] main [style*="#64748B"],
+body[data-chris-route-scope="organization"] main [style*="#6B7280"] {
+  color:
+    #9FB1A7 !important;
+}
+
+body[data-chris-route-scope="organization"] main [style*="#94A3B8"] {
+  color:
+    #7F988B !important;
+}
+
+/* Legacy green headings become white; metric values remain bright green */
+body[data-chris-route-scope="organization"] main h1[style*="#087A43"],
+body[data-chris-route-scope="organization"] main h2[style*="#087A43"],
+body[data-chris-route-scope="organization"] main h3[style*="#087A43"],
+body[data-chris-route-scope="organization"] main h4[style*="#087A43"] {
+  color:
+    #F7FAF8 !important;
+}
+
+body[data-chris-route-scope="organization"] main div[style*="#087A43"],
+body[data-chris-route-scope="organization"] main span[style*="#087A43"],
+body[data-chris-route-scope="organization"] main strong[style*="#087A43"] {
+  color:
+    #2EE98B !important;
+}
+
+/* Eyebrow / configuration labels */
+body[data-chris-route-scope="organization"] main [style*="textTransform"][style*="uppercase"],
+body[data-chris-route-scope="organization"] main [style*="text-transform"][style*="uppercase"] {
+  color:
+    #F2CF57 !important;
+}
+
+/* ------------------------------------------------------------
+   ORGANIZATION PANELS / CARDS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"][style*="background"],
+body[data-chris-route-scope="organization"] main section[style*="borderRadius"][style*="background"] {
+  border-color:
+    rgba(212,175,55,.46) !important;
+}
+
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"][style*="boxShadow"],
+body[data-chris-route-scope="organization"] main section[style*="borderRadius"][style*="boxShadow"] {
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.28) !important;
+}
+
+/* Career-level cards / metric boxes */
+body[data-chris-route-scope="organization"] main div[style*="#F8FAFC"],
+body[data-chris-route-scope="organization"] main div[style*="#F1F5F9"],
+body[data-chris-route-scope="organization"] main div[style*="#ECFDF5"] {
+  background:
+    rgba(2,42,25,.92) !important;
+
+  border-color:
+    rgba(212,175,55,.34) !important;
+}
+
+/* ------------------------------------------------------------
+   INPUTS / SELECTS / FORMS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main input,
+body[data-chris-route-scope="organization"] main select,
+body[data-chris-route-scope="organization"] main textarea {
+  background:
+    rgba(3,34,22,.94) !important;
+
+  color:
+    #F7FAF8 !important;
+
+  border-color:
+    rgba(255,255,255,.14) !important;
+}
+
+body[data-chris-route-scope="organization"] main input::placeholder,
+body[data-chris-route-scope="organization"] main textarea::placeholder {
+  color:
+    #7F988B !important;
+}
+
+body[data-chris-route-scope="organization"] main select option {
+  background:
+    #062219;
+
+  color:
+    #F7FAF8;
+}
+
+body[data-chris-route-scope="organization"] main input:focus,
+body[data-chris-route-scope="organization"] main select:focus,
+body[data-chris-route-scope="organization"] main textarea:focus {
+  outline:
+    none !important;
+
+  border-color:
+    #D4AF37 !important;
+
+  box-shadow:
+    0 0 0 3px rgba(212,175,55,.10) !important;
+}
+
+/* ------------------------------------------------------------
+   TABLES
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main table {
+  background:
+    transparent !important;
+
+  color:
+    #C7D3CC !important;
+}
+
+body[data-chris-route-scope="organization"] main thead,
+body[data-chris-route-scope="organization"] main thead tr {
+  background:
+    #021D13 !important;
+}
+
+body[data-chris-route-scope="organization"] main th {
+  color:
+    #DDE7E1 !important;
+
+  border-color:
+    rgba(212,175,55,.20) !important;
+}
+
+body[data-chris-route-scope="organization"] main td {
+  color:
+    #C7D3CC !important;
+
+  border-color:
+    rgba(255,255,255,.07) !important;
+}
+
+body[data-chris-route-scope="organization"] main tbody tr:hover {
+  background:
+    rgba(8,122,67,.10) !important;
+}
+
+/* ------------------------------------------------------------
+   BUTTONS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main button {
+  font-family:
+    inherit;
+
+  font-weight:
+    800;
+}
+
+body[data-chris-route-scope="organization"] main button:not(:disabled) {
+  transition:
+    transform .16s ease,
+    filter .16s ease,
+    border-color .16s ease;
+}
+
+body[data-chris-route-scope="organization"] main button:not(:disabled):hover {
+  transform:
+    translateY(-1px);
+
+  filter:
+    brightness(1.05);
+}
+
+/* Generic green action buttons */
+body[data-chris-route-scope="organization"] main button[style*="#087A43"],
+body[data-chris-route-scope="organization"] main button[style*="#059669"],
+body[data-chris-route-scope="organization"] main button[style*="#047857"] {
+  background:
+    linear-gradient(
+      145deg,
+      #0A8F50,
+      #056838
+    ) !important;
+
+  border-color:
+    rgba(212,175,55,.36) !important;
+
+  color:
+    #FFFFFF !important;
+}
+
+/* Generic white / neutral buttons */
+body[data-chris-route-scope="organization"] main button[style*="#FFFFFF"],
+body[data-chris-route-scope="organization"] main button[style*="#FFF"] {
+  background:
+    rgba(255,255,255,.055) !important;
+
+  border-color:
+    rgba(255,255,255,.16) !important;
+
+  color:
+    #F7FAF8 !important;
+}
+
+/* ------------------------------------------------------------
+   BADGES / STATUS PILLS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main span[style*="#ECFDF5"] {
+  background:
+    rgba(46,233,139,.12) !important;
+
+  color:
+    #2EE98B !important;
+
+  border-color:
+    rgba(46,233,139,.26) !important;
+}
+
+body[data-chris-route-scope="organization"] main span[style*="#FEF2F2"] {
+  background:
+    rgba(248,113,113,.10) !important;
+
+  color:
+    #FF8A80 !important;
+
+  border-color:
+    rgba(248,113,113,.25) !important;
+}
+
+/* ------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  body[data-chris-route-scope="organization"] main h1 {
+    font-size:
+      clamp(28px,6vw,38px) !important;
+  }
+
+  body[data-chris-route-scope="organization"] main table {
+    min-width:
+      760px;
+  }
+}
+
+/* ============================================================
+   CHRIS ORGANIZATION LOCATIONS VISUAL STANDARD V2
+   Target: Head Office & Branches / Organization Locations page
+   Approved language:
+   - deep green / black cards
+   - natural gold borders
+   - white font language
+   - bright vegetation green metrics
+   - semantic green/red actions
+   ============================================================ */
+
+body[data-chris-route-scope="organization"] main {
+  color: #F7FAF8;
+}
+
+/* Page header language */
+body[data-chris-route-scope="organization"] main h1,
+body[data-chris-route-scope="organization"] main h2,
+body[data-chris-route-scope="organization"] main h3,
+body[data-chris-route-scope="organization"] main h4,
+body[data-chris-route-scope="organization"] main h5,
+body[data-chris-route-scope="organization"] main h6 {
+  color: #F7FAF8 !important;
+}
+
+body[data-chris-route-scope="organization"] main p,
+body[data-chris-route-scope="organization"] main label,
+body[data-chris-route-scope="organization"] main li,
+body[data-chris-route-scope="organization"] main td {
+  color: #F7FAF8 !important;
+}
+
+/* Supporting/secondary copy: still white family, slightly muted */
+body[data-chris-route-scope="organization"] main [style*="#64748B"],
+body[data-chris-route-scope="organization"] main [style*="#6B7280"],
+body[data-chris-route-scope="organization"] main [style*="#94A3B8"],
+body[data-chris-route-scope="organization"] main [style*="#475569"],
+body[data-chris-route-scope="organization"] main [style*="#334155"] {
+  color: #C7D3CC !important;
+}
+
+body[data-chris-route-scope="organization"] main [style*="#0F172A"],
+body[data-chris-route-scope="organization"] main [style*="#111827"] {
+  color: #F7FAF8 !important;
+}
+
+/* Eyebrows / module labels */
+body[data-chris-route-scope="organization"] main [style*="textTransform"][style*="uppercase"],
+body[data-chris-route-scope="organization"] main [style*="text-transform"][style*="uppercase"] {
+  color: #F2CF57 !important;
+}
+
+/* Legacy green large headings -> white */
+body[data-chris-route-scope="organization"] main h1[style*="#087A43"],
+body[data-chris-route-scope="organization"] main h2[style*="#087A43"],
+body[data-chris-route-scope="organization"] main h3[style*="#087A43"],
+body[data-chris-route-scope="organization"] main h4[style*="#087A43"] {
+  color: #F7FAF8 !important;
+}
+
+/* Values stay bright green */
+body[data-chris-route-scope="organization"] main div[style*="#087A43"],
+body[data-chris-route-scope="organization"] main span[style*="#087A43"],
+body[data-chris-route-scope="organization"] main strong[style*="#087A43"] {
+  color: #2EE98B !important;
+}
+
+/* ------------------------------------------------------------
+   LIGHT CARDS -> PREMIUM CHRIS DARK CARDS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main div[style*="#FFFFFF"],
+body[data-chris-route-scope="organization"] main div[style*="#FFF"],
+body[data-chris-route-scope="organization"] main div[style*="#F8FAFC"],
+body[data-chris-route-scope="organization"] main div[style*="#F9FAFB"],
+body[data-chris-route-scope="organization"] main div[style*="#F3F4F6"],
+body[data-chris-route-scope="organization"] main div[style*="#F3F6F4"],
+body[data-chris-route-scope="organization"] main div[style*="#ECFDF5"],
+body[data-chris-route-scope="organization"] main div[style*="rgba(255,255,255"],
+body[data-chris-route-scope="organization"] main div[style*="rgba(255, 255, 255"] {
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(46,233,139,.10),
+      transparent 30%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(6,55,34,.98),
+      rgba(2,23,15,.99)
+    ) !important;
+
+  border-color:
+    rgba(212,175,55,.52) !important;
+
+  color:
+    #F7FAF8 !important;
+
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.30) !important;
+}
+
+/* Card-like rounded panels */
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"][style*="background"],
+body[data-chris-route-scope="organization"] main section[style*="borderRadius"][style*="background"] {
+  border-color:
+    rgba(212,175,55,.52) !important;
+}
+
+/* KPI cards: white labels, green values */
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] > div[style*="borderRadius"] {
+  background:
+    radial-gradient(
+      circle at 16% 0%,
+      rgba(46,233,139,.10),
+      transparent 34%
+    ),
+    linear-gradient(
+      145deg,
+      #063722,
+      #02170F
+    ) !important;
+
+  border:
+    1px solid rgba(212,175,55,.62) !important;
+
+  box-shadow:
+    0 16px 36px rgba(0,0,0,.26) !important;
+}
+
+/* KPI labels */
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] > div[style*="borderRadius"] [style*="fontWeight"] {
+  color: #F7FAF8 !important;
+}
+
+/* KPI numeric values */
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] > div[style*="borderRadius"] [style*="fontSize: 26"],
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] > div[style*="borderRadius"] [style*="fontSize: 28"],
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] > div[style*="borderRadius"] [style*="fontSize: 30"],
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] > div[style*="borderRadius"] [style*="fontSize: 32"] {
+  color: #2EE98B !important;
+}
+
+/* ------------------------------------------------------------
+   LOCATION CARDS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main div[style*="minHeight"][style*="borderRadius"],
+body[data-chris-route-scope="organization"] main div[style*="padding"][style*="borderRadius"][style*="boxShadow"] {
+  background:
+    radial-gradient(
+      circle at 14% 0%,
+      rgba(46,233,139,.10),
+      transparent 34%
+    ),
+    linear-gradient(
+      145deg,
+      #073723,
+      #02170F
+    ) !important;
+
+  border:
+    1px solid rgba(212,175,55,.62) !important;
+
+  box-shadow:
+    0 18px 42px rgba(0,0,0,.30) !important;
+
+  color:
+    #F7FAF8 !important;
+}
+
+/* Head Office / Lagos / Port Harcourt titles */
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"] h3,
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"] h4 {
+  color: #F7FAF8 !important;
+}
+
+/* Employee / Assigned User metric boxes */
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] div[style*="borderRadius"][style*="padding"] {
+  background:
+    rgba(3,42,25,.84) !important;
+
+  border:
+    1px solid rgba(255,255,255,.10) !important;
+}
+
+/* Metric labels white */
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] div[style*="borderRadius"][style*="padding"] p,
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] div[style*="borderRadius"][style*="padding"] span {
+  color: #F7FAF8 !important;
+}
+
+/* Metric values green */
+body[data-chris-route-scope="organization"] main div[style*="gridTemplateColumns"] div[style*="borderRadius"][style*="padding"] strong {
+  color: #2EE98B !important;
+}
+
+/* Location / address labels */
+body[data-chris-route-scope="organization"] main strong,
+body[data-chris-route-scope="organization"] main b {
+  color: #F7FAF8;
+}
+
+/* ------------------------------------------------------------
+   TABS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main button {
+  font-family: inherit;
+  font-weight: 800;
+}
+
+body[data-chris-route-scope="organization"] main button[style*="background: transparent"] {
+  color: #F7FAF8 !important;
+  border-color: rgba(255,255,255,.12) !important;
+}
+
+body[data-chris-route-scope="organization"] main button[style*="#087A43"],
+body[data-chris-route-scope="organization"] main button[style*="#059669"],
+body[data-chris-route-scope="organization"] main button[style*="#047857"] {
+  background:
+    linear-gradient(
+      145deg,
+      #0A8F50,
+      #056838
+    ) !important;
+
+  color:
+    #FFFFFF !important;
+
+  border-color:
+    rgba(212,175,55,.38) !important;
+}
+
+/* Neutral/edit buttons */
+body[data-chris-route-scope="organization"] main button[style*="#FFFFFF"],
+body[data-chris-route-scope="organization"] main button[style*="#FFF"] {
+  background:
+    rgba(255,255,255,.055) !important;
+
+  color:
+    #F7FAF8 !important;
+
+  border-color:
+    rgba(255,255,255,.16) !important;
+}
+
+/* Danger action */
+body[data-chris-route-scope="organization"] main button[style*="#B91C1C"],
+body[data-chris-route-scope="organization"] main button[style*="#DC2626"] {
+  color:
+    #FF4D4F !important;
+
+  border-color:
+    rgba(255,77,79,.55) !important;
+
+  background:
+    rgba(110,15,18,.10) !important;
+}
+
+/* ------------------------------------------------------------
+   STATUS / TYPE BADGES
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main span[style*="#ECFDF5"] {
+  background:
+    rgba(46,233,139,.12) !important;
+
+  color:
+    #2EE98B !important;
+
+  border-color:
+    rgba(46,233,139,.28) !important;
+}
+
+body[data-chris-route-scope="organization"] main span[style*="#FEF3C7"],
+body[data-chris-route-scope="organization"] main span[style*="#FEF9C3"] {
+  background:
+    rgba(212,175,55,.14) !important;
+
+  color:
+    #F2CF57 !important;
+
+  border-color:
+    rgba(212,175,55,.34) !important;
+}
+
+/* ------------------------------------------------------------
+   INPUTS
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main input,
+body[data-chris-route-scope="organization"] main select,
+body[data-chris-route-scope="organization"] main textarea {
+  background:
+    rgba(3,34,22,.94) !important;
+
+  color:
+    #F7FAF8 !important;
+
+  border-color:
+    rgba(255,255,255,.14) !important;
+}
+
+body[data-chris-route-scope="organization"] main input::placeholder,
+body[data-chris-route-scope="organization"] main textarea::placeholder {
+  color:
+    #9FB1A7 !important;
+}
+
+body[data-chris-route-scope="organization"] main select option {
+  background:
+    #062219;
+
+  color:
+    #F7FAF8;
+}
+
+/* ------------------------------------------------------------
+   TABLES
+   ------------------------------------------------------------ */
+
+body[data-chris-route-scope="organization"] main table {
+  background:
+    transparent !important;
+
+  color:
+    #F7FAF8 !important;
+}
+
+body[data-chris-route-scope="organization"] main thead,
+body[data-chris-route-scope="organization"] main thead tr {
+  background:
+    #021D13 !important;
+}
+
+body[data-chris-route-scope="organization"] main th {
+  color:
+    #F7FAF8 !important;
+
+  border-color:
+    rgba(212,175,55,.20) !important;
+}
+
+body[data-chris-route-scope="organization"] main td {
+  color:
+    #F7FAF8 !important;
+
+  border-color:
+    rgba(255,255,255,.07) !important;
+}
+
+body[data-chris-route-scope="organization"] main tbody tr:hover {
+  background:
+    rgba(8,122,67,.10) !important;
+}
+
+/* ============================================================
+   CHRIS ORGANIZATION BACKGROUND STANDARD V3
+   Entire Organization module + all child components
+   ============================================================ */
+
+body[data-chris-route-scope="organization"] main {
+  background:
+    radial-gradient(circle at 8% 5%, rgba(0,145,78,0.14), transparent 25%),
+    radial-gradient(circle at 92% 88%, rgba(212,175,55,0.10), transparent 24%),
+    linear-gradient(135deg, #07110C 0%, #0A1510 48%, #07100B 100%) !important;
+  color: #F7FAF8 !important;
+}
+
+/* Remove any legacy light canvas across Organization pages */
+body[data-chris-route-scope="organization"] main > div,
+body[data-chris-route-scope="organization"] main > div > div,
+body[data-chris-route-scope="organization"] main > section,
+body[data-chris-route-scope="organization"] main [style*="background: #FFFFFF"],
+body[data-chris-route-scope="organization"] main [style*="background:#FFFFFF"],
+body[data-chris-route-scope="organization"] main [style*="background: white"],
+body[data-chris-route-scope="organization"] main [style*="background-color: white"],
+body[data-chris-route-scope="organization"] main [style*="#F8FAFC"],
+body[data-chris-route-scope="organization"] main [style*="#F9FAFB"],
+body[data-chris-route-scope="organization"] main [style*="#F3F4F6"],
+body[data-chris-route-scope="organization"] main [style*="#F3F6F4"] {
+  background-color: transparent !important;
+}
+
+/* Main cards/panels */
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"],
+body[data-chris-route-scope="organization"] main section[style*="borderRadius"] {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(46,233,139,.09), transparent 30%),
+    linear-gradient(145deg, #063722, #02170F) !important;
+  border-color: rgba(212,175,55,.52) !important;
+  color: #F7FAF8 !important;
+  box-shadow: 0 16px 38px rgba(0,0,0,.28) !important;
+}
+
+/* Nested cards / metric boxes */
+body[data-chris-route-scope="organization"] main div[style*="borderRadius"] div[style*="borderRadius"] {
+  background:
+    linear-gradient(145deg, rgba(5,48,30,.96), rgba(2,28,18,.96)) !important;
+  border-color: rgba(255,255,255,.10) !important;
+  box-shadow: none !important;
+}
+
+/* Tables */
+body[data-chris-route-scope="organization"] main table {
+  background: rgba(2,23,15,.95) !important;
+}
+body[data-chris-route-scope="organization"] main thead,
+body[data-chris-route-scope="organization"] main thead tr {
+  background: #021D13 !important;
+}
+body[data-chris-route-scope="organization"] main tbody tr {
+  background: rgba(5,55,34,.72) !important;
+}
+body[data-chris-route-scope="organization"] main tbody tr:nth-child(even) {
+  background: rgba(3,45,28,.82) !important;
+}
+body[data-chris-route-scope="organization"] main tbody tr:hover {
+  background: rgba(8,122,67,.16) !important;
+}
+
+/* Form/control backgrounds */
+body[data-chris-route-scope="organization"] main input,
+body[data-chris-route-scope="organization"] main select,
+body[data-chris-route-scope="organization"] main textarea {
+  background: rgba(3,34,22,.94) !important;
+  color: #F7FAF8 !important;
+  border-color: rgba(212,175,55,.24) !important;
+}
+
+/* Any legacy white button backgrounds become neutral dark unless semantic */
+body[data-chris-route-scope="organization"] main button[style*="#FFFFFF"],
+body[data-chris-route-scope="organization"] main button[style*="#FFF"] {
+  background: rgba(255,255,255,.06) !important;
+  color: #F7FAF8 !important;
+  border-color: rgba(255,255,255,.16) !important;
+}
+
+/* Keep major call-to-action buttons green */
+body[data-chris-route-scope="organization"] main button[style*="#087A43"],
+body[data-chris-route-scope="organization"] main button[style*="#059669"],
+body[data-chris-route-scope="organization"] main button[style*="#047857"] {
+  background: linear-gradient(145deg, #0A8F50, #056838) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(212,175,55,.34) !important;
+}
+
+/* White font hierarchy throughout Organization */
+body[data-chris-route-scope="organization"] main h1,
+body[data-chris-route-scope="organization"] main h2,
+body[data-chris-route-scope="organization"] main h3,
+body[data-chris-route-scope="organization"] main h4,
+body[data-chris-route-scope="organization"] main h5,
+body[data-chris-route-scope="organization"] main h6,
+body[data-chris-route-scope="organization"] main th {
+  color: #F7FAF8 !important;
+}
+
+body[data-chris-route-scope="organization"] main p,
+body[data-chris-route-scope="organization"] main label,
+body[data-chris-route-scope="organization"] main td,
+body[data-chris-route-scope="organization"] main li {
+  color: #C7D3CC !important;
+}
+
+/* KPI / numeric values */
+body[data-chris-route-scope="organization"] main strong[style*="#087A43"],
+body[data-chris-route-scope="organization"] main div[style*="#087A43"],
+body[data-chris-route-scope="organization"] main span[style*="#087A43"] {
+  color: #2EE98B !important;
+}
+
+/* ============================================================
+   CHRIS ORGANIZATION BACKGROUND FIX V4
+   Fixes browser-serialized RGB inline light backgrounds.
+   ============================================================ */
+
+/* Entire Organization content canvas */
+body[data-chris-route-scope="organization"] main,
+body[data-chris-route-scope="organization"] main > div,
+body[data-chris-route-scope="organization"] main > div > div {
+  background:
+    radial-gradient(circle at 8% 5%, rgba(0,145,78,.11), transparent 26%),
+    radial-gradient(circle at 92% 88%, rgba(212,175,55,.07), transparent 24%),
+    linear-gradient(135deg, #07110C 0%, #0A1510 48%, #07100B 100%) !important;
+  color: #F7FAF8 !important;
+}
+
+/* Browser serializes React hex colours into rgb(...).
+   These selectors target the actual rendered style attributes. */
+body[data-chris-route-scope="organization"] main [style*="rgb(255, 255, 255)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(248, 250, 252)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(249, 250, 251)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(243, 244, 246)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(243, 246, 244)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(247, 250, 248)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(246, 250, 247)"] {
+  background:
+    radial-gradient(circle at 16% 0%, rgba(46,233,139,.08), transparent 32%),
+    linear-gradient(145deg, #063722, #02170F) !important;
+  background-color: #02170F !important;
+  color: #F7FAF8 !important;
+  border-color: rgba(212,175,55,.50) !important;
+}
+
+/* Large page-shell blocks should blend into the module canvas, not look like cards. */
+body[data-chris-route-scope="organization"] main > div[style*="rgb(255, 255, 255)"],
+body[data-chris-route-scope="organization"] main > div[style*="rgb(248, 250, 252)"],
+body[data-chris-route-scope="organization"] main > div > div[style*="rgb(255, 255, 255)"],
+body[data-chris-route-scope="organization"] main > div > div[style*="rgb(248, 250, 252)"] {
+  background:
+    radial-gradient(circle at 8% 5%, rgba(0,145,78,.11), transparent 26%),
+    radial-gradient(circle at 92% 88%, rgba(212,175,55,.07), transparent 24%),
+    linear-gradient(135deg, #07110C 0%, #0A1510 48%, #07100B 100%) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Dark premium cards and panels */
+body[data-chris-route-scope="organization"] main [style*="border-radius"][style*="rgb(255, 255, 255)"],
+body[data-chris-route-scope="organization"] main [style*="border-radius"][style*="rgb(248, 250, 252)"],
+body[data-chris-route-scope="organization"] main [style*="borderRadius"][style*="rgb(255, 255, 255)"],
+body[data-chris-route-scope="organization"] main [style*="borderRadius"][style*="rgb(248, 250, 252)"] {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(46,233,139,.10), transparent 30%),
+    linear-gradient(145deg, #063722, #02170F) !important;
+  border: 1px solid rgba(212,175,55,.52) !important;
+  box-shadow: 0 16px 38px rgba(0,0,0,.28) !important;
+}
+
+/* Browser-serialized legacy text colours */
+body[data-chris-route-scope="organization"] main [style*="rgb(15, 23, 42)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(17, 24, 39)"] {
+  color: #F7FAF8 !important;
+}
+body[data-chris-route-scope="organization"] main [style*="rgb(51, 65, 85)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(71, 85, 105)"] {
+  color: #C7D3CC !important;
+}
+body[data-chris-route-scope="organization"] main [style*="rgb(100, 116, 139)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(107, 114, 128)"] {
+  color: #9FB1A7 !important;
+}
+body[data-chris-route-scope="organization"] main [style*="rgb(8, 122, 67)"] {
+  color: #2EE98B !important;
+}
+body[data-chris-route-scope="organization"] main h1[style*="rgb(8, 122, 67)"],
+body[data-chris-route-scope="organization"] main h2[style*="rgb(8, 122, 67)"],
+body[data-chris-route-scope="organization"] main h3[style*="rgb(8, 122, 67)"],
+body[data-chris-route-scope="organization"] main h4[style*="rgb(8, 122, 67)"] {
+  color: #F7FAF8 !important;
+}
+
+/* Force headings and primary labels white */
+body[data-chris-route-scope="organization"] main h1,
+body[data-chris-route-scope="organization"] main h2,
+body[data-chris-route-scope="organization"] main h3,
+body[data-chris-route-scope="organization"] main h4,
+body[data-chris-route-scope="organization"] main h5,
+body[data-chris-route-scope="organization"] main h6,
+body[data-chris-route-scope="organization"] main th {
+  color: #F7FAF8 !important;
+}
+
+/* Career-structure / organization-config panels */
+body[data-chris-route-scope="organization"] main [style*="rgb(30, 58, 47)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(23, 55, 35)"],
+body[data-chris-route-scope="organization"] main [style*="rgb(4, 47, 29)"] {
+  background:
+    linear-gradient(145deg, #063722, #02170F) !important;
+  color: #F7FAF8 !important;
+  border-color: rgba(212,175,55,.50) !important;
+}

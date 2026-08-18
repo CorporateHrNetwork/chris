@@ -328,7 +328,40 @@ async function assignShift({
     );
   }
 
-  return prisma.employeeShiftAssignment.create({
+    const overlappingAssignment =
+    await prisma.employeeShiftAssignment.findFirst({
+      where: {
+        organizationId,
+        employeeId:
+          employee.id,
+        effectiveFrom: {
+          lte:
+            end ||
+            new Date("9999-12-31T00:00:00.000Z"),
+        },
+        OR: [
+          {
+            effectiveTo: null,
+          },
+          {
+            effectiveTo: {
+              gte:
+                start,
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+      },
+    });
+
+  if (overlappingAssignment) {
+    throw new Error(
+      "SHIFT_ASSIGNMENT_OVERLAP"
+    );
+  }
+return prisma.employeeShiftAssignment.create({
     data: {
       organizationId,
       employeeId:

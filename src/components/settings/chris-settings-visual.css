@@ -1,0 +1,255 @@
+/* CHRIS VISUAL STANDARD V1 â€” Settings child pages
+   Non-invasive presentation layer: existing component logic is preserved. */
+
+:root {
+  --chris-bg: #03160f;
+  --chris-panel: #063522;
+  --chris-panel-2: #04291b;
+  --chris-green: #0aa85b;
+  --chris-green-bright: #19d477;
+  --chris-gold: #d4af37;
+  --chris-gold-soft: #f0cf58;
+  --chris-text: #f5fbf7;
+  --chris-muted: #91a99e;
+}
+
+/* Settings components use inline styles. These descendant overrides deliberately
+   normalize the old white/light cards without changing handlers or data flow. */
+main:has(h1) h1,
+main:has(h2) h2,
+main:has(h3) h3,
+main:has(h1) h2,
+main:has(h1) h3 {
+  color: var(--chris-text) !important;
+}
+
+main:has(h1) p,
+main:has(h2) p {
+  color: var(--chris-muted) !important;
+}
+
+/* White/light cards and panels */
+main:has(h1) div[style*="background: rgb(255, 255, 255)"],
+main:has(h1) div[style*="background: #FFF"],
+main:has(h1) div[style*="background: #FFFFFF"],
+main:has(h2) div[style*="background: rgb(255, 255, 255)"],
+main:has(h2) div[style*="background: #FFF"],
+main:has(h2) div[style*="background: #FFFFFF"] {
+  background: linear-gradient(145deg, rgba(6,55,34,.96), rgba(2,23,15,.98)) !important;
+  border-color: rgba(212,175,55,.42) !important;
+  color: var(--chris-text) !important;
+  box-shadow: 0 16px 38px rgba(0,0,0,.22);
+}
+
+/* Tables */
+main table {
+  background: transparent !important;
+  color: var(--chris-text) !important;
+}
+main thead,
+main thead tr {
+  background: #021d13 !important;
+}
+main th {
+  color: #dcebe3 !important;
+  border-color: rgba(212,175,55,.22) !important;
+}
+main td {
+  color: #d7e5dd !important;
+  border-color: rgba(82,145,110,.22) !important;
+}
+main tbody tr:hover {
+  background: rgba(10,168,91,.08) !important;
+}
+
+/* Form surfaces */
+main input,
+main select,
+main textarea {
+  background: rgba(2,29,19,.92) !important;
+  color: var(--chris-text) !important;
+  border-color: rgba(76,154,108,.42) !important;
+}
+main input::placeholder,
+main textarea::placeholder {
+  color: #7f9a8d !important;
+}
+main input:focus,
+main select:focus,
+main textarea:focus {
+  outline: none !important;
+  border-color: var(--chris-gold) !important;
+  box-shadow: 0 0 0 3px rgba(212,175,55,.12) !important;
+}
+
+/* Preserve semantic badges/buttons while giving generic light controls contrast. */
+main button {
+  font-weight: 800;
+}
+main button:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+/* Gold edge and subtle glow on card-like rounded blocks */
+main div[style*="borderRadius"],
+main div[style*="border-radius"] {
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+/* Responsive settings tables/cards */
+@media (max-width: 900px) {
+  main table {
+    min-width: 760px;
+  }
+}
+
+/* ============================================================
+   CHRIS SETTINGS TYPOGRAPHY STANDARD V1
+   Canonical font-colour hierarchy for all Settings children.
+   ============================================================ */
+
+.chris-settings-skin {
+  color: #C7D3CC !important;
+}
+
+/* Primary page / section headings */
+.chris-settings-skin h1,
+.chris-settings-skin h2,
+.chris-settings-skin h3,
+.chris-settings-skin h4,
+.chris-settings-skin h5,
+.chris-settings-skin h6 {
+  color: #F7FAF8 !important;
+}
+
+/* Legacy heading greens are normalized to white headings */
+.chris-settings-skin h1[style*="#087A43"],
+.chris-settings-skin h2[style*="#087A43"],
+.chris-settings-skin h3[style*="#087A43"],
+.chris-settings-skin h4[style*="#087A43"] {
+  color: #F7FAF8 !important;
+}
+
+/* Standard supporting copy */
+.chris-settings-skin p,
+.chris-settings-skin label,
+.chris-settings-skin td,
+.chris-settings-skin li {
+  color: #C7D3CC;
+}
+
+/* Normalize old slate colours still embedded inline */
+.chris-settings-skin [style*="#64748B"] {
+  color: #9FB1A7 !important;
+}
+
+.chris-settings-skin [style*="#475569"],
+.chris-settings-skin [style*="#334155"] {
+  color: #C7D3CC !important;
+}
+
+.chris-settings-skin [style*="#94A3B8"] {
+  color: #7F988B !important;
+}
+
+.chris-settings-skin [style*="#0F172A"] {
+  color: #F7FAF8 !important;
+}
+
+/* Metric / operational values retain CHRIS green */
+.chris-settings-skin div[style*="#087A43"],
+.chris-settings-skin span[style*="#087A43"],
+.chris-settings-skin strong[style*="#087A43"] {
+  color: #2EE98B !important;
+}
+
+/* But headings using the same old green stay white */
+.chris-settings-skin h1[style*="#087A43"],
+.chris-settings-skin h2[style*="#087A43"],
+.chris-settings-skin h3[style*="#087A43"],
+.chris-settings-skin h4[style*="#087A43"] {
+  color: #F7FAF8 !important;
+}
+
+/* Table typography */
+.chris-settings-skin thead th {
+  color: #DDE7E1 !important;
+}
+
+.chris-settings-skin tbody td {
+  color: #C7D3CC !important;
+}
+
+.chris-settings-skin tbody td strong,
+.chris-settings-skin tbody td b {
+  color: #F7FAF8 !important;
+}
+
+/* Keep semantic status badges readable */
+.chris-settings-skin span[style*="#047857"] {
+  color: #047857 !important;
+}
+
+.chris-settings-skin span[style*="#B91C1C"],
+.chris-settings-skin span[style*="#991B1B"] {
+  color: #B91C1C !important;
+}
+
+.chris-settings-skin span[style*="#1D4ED8"] {
+  color: #1D4ED8 !important;
+}
+
+.chris-settings-skin span[style*="#C2410C"] {
+  color: #C2410C !important;
+}
+
+/* Buttons keep semantic foreground colours */
+.chris-settings-skin button {
+  font-family: inherit;
+}
+
+.chris-settings-skin button[style*="#087A43"] {
+  color: #FFFFFF !important;
+}
+
+/* Standard tabs */
+.chris-settings-skin .chris-settings-tab--active {
+  color: #F2CF57 !important;
+}
+
+.chris-settings-skin .chris-settings-tab--inactive {
+  color: #C7D3CC !important;
+}
+
+/* Section eyebrow / administrative labels */
+.chris-settings-skin > div:first-child > p:first-child {
+  color: #F2CF57 !important;
+}
+
+/* Inputs */
+.chris-settings-skin input,
+.chris-settings-skin select,
+.chris-settings-skin textarea {
+  color: #F7FAF8 !important;
+}
+
+.chris-settings-skin input::placeholder,
+.chris-settings-skin textarea::placeholder {
+  color: #7F988B !important;
+}
+
+/* CHRIS SETTINGS FONT COLOUR LANGUAGE V2 */
+.chris-settings-skin { color:#C7D3CC !important; }
+.chris-settings-skin h1,.chris-settings-skin h2,.chris-settings-skin h3,.chris-settings-skin h4,.chris-settings-skin h5,.chris-settings-skin h6 { color:#F7FAF8 !important; }
+.chris-settings-skin p,.chris-settings-skin label,.chris-settings-skin td,.chris-settings-skin li { color:#C7D3CC; }
+.chris-settings-skin [style*="#64748B"],.chris-settings-skin [style*="#6B7280"] { color:#9FB1A7 !important; }
+.chris-settings-skin [style*="#475569"],.chris-settings-skin [style*="#334155"] { color:#C7D3CC !important; }
+.chris-settings-skin [style*="#94A3B8"] { color:#7F988B !important; }
+.chris-settings-skin [style*="#0F172A"] { color:#F7FAF8 !important; }
+.chris-settings-skin div[style*="#087A43"],.chris-settings-skin span[style*="#087A43"],.chris-settings-skin strong[style*="#087A43"] { color:#2EE98B !important; }
+.chris-settings-skin h1[style*="#087A43"],.chris-settings-skin h2[style*="#087A43"],.chris-settings-skin h3[style*="#087A43"],.chris-settings-skin h4[style*="#087A43"] { color:#F7FAF8 !important; }
+.chris-settings-skin thead th { color:#DDE7E1 !important; }
+.chris-settings-skin tbody td { color:#C7D3CC !important; }
+.chris-settings-skin tbody td strong,.chris-settings-skin tbody td b { color:#F7FAF8 !important; }
+.chris-settings-skin .chris-settings-tab--active,.chris-settings-skin > div:first-child > p:first-child { color:#F2CF57 !important; }

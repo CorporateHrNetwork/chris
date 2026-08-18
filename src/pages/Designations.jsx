@@ -1807,9 +1807,10 @@ Unmapping will be blocked if current employees or reporting positions still depe
   ) {
     return (
       <div
-        style={
-          pageStyle
-        }
+      className="chris-organization-structure"
+      style={
+        pageStyle
+      }
       >
         <div
           style={
@@ -1825,6 +1826,7 @@ Unmapping will be blocked if current employees or reporting positions still depe
 
   return (
     <div
+      className="chris-organization-structure"
       style={
         pageStyle
       }

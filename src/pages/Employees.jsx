@@ -293,7 +293,9 @@ function Employees() {
       </div>
 
       {/* EMPLOYEE DIRECTORY */}
-      <EmployeeTable />
+      <div className="chris-employee-directory-skin">
+        <EmployeeTable />
+      </div>
     </div>
   );
 }
@@ -306,15 +308,17 @@ function SummaryCard({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        borderRadius: "16px",
+        position: "relative",
+        overflow: "hidden",
+        background:
+          "radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, #063722, #02170f)",
+        border:
+          "1px solid rgba(212,175,55,0.88)",
+        borderRadius: "20px",
         padding: "22px",
         minHeight: "125px",
-
         boxShadow:
-          "0 6px 20px rgba(15,23,42,0.05)",
-
+          "0 18px 42px rgba(0,0,0,0.34)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
@@ -322,13 +326,11 @@ function SummaryCard({
     >
       <div
         style={{
-          color: "#64748B",
+          color: "#F7FAF8",
           fontSize: "13px",
-          fontWeight: "700",
-
+          fontWeight: "900",
           textTransform: "uppercase",
-
-          letterSpacing: "0.03em",
+          letterSpacing: "0.04em",
         }}
       >
         {title}
@@ -336,9 +338,9 @@ function SummaryCard({
 
       <div
         style={{
-          color: "#087A43",
-          fontSize: "30px",
-          fontWeight: "800",
+          color: "#2EE98B",
+          fontSize: "34px",
+          fontWeight: "900",
           lineHeight: 1,
           marginTop: "10px",
         }}
@@ -348,7 +350,7 @@ function SummaryCard({
 
       <div
         style={{
-          color: "#94A3B8",
+          color: "#C7D3CC",
           fontSize: "12px",
           marginTop: "8px",
         }}

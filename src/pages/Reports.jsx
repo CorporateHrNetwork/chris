@@ -1,9 +1,217 @@
+import {
+  FaChartBar,
+  FaUsers,
+  FaClock,
+  FaMoneyBillWave,
+  FaUmbrellaBeach,
+  FaDownload,
+  FaFileAlt,
+  FaChartPie,
+} from "react-icons/fa";
+
+import {
+  AnalyticsPanel,
+  DashboardCard,
+  ModuleDashboardShell,
+  QuickActionCard,
+  RecentActivityList,
+} from "../components/dashboard";
+
 function Reports() {
+  const activity = [
+    {
+      id: "workforce",
+      icon: <FaUsers />,
+      title: "Workforce Reports",
+      description:
+        "Employee workforce reporting is already available from the reporting engine.",
+      time: "Available",
+    },
+    {
+      id: "lifecycle",
+      icon: <FaFileAlt />,
+      title: "Lifecycle Reports",
+      description:
+        "Employee lifecycle reporting is available per employee.",
+      time: "Available",
+    },
+    {
+      id: "attendance",
+      icon: <FaClock />,
+      title: "Attendance Reports",
+      description:
+        "Attendance reporting will expand as more operational analytics are connected.",
+      time: "Partial",
+      tone: "warning",
+    },
+    {
+      id: "payroll",
+      icon: <FaMoneyBillWave />,
+      title: "Payroll Reports",
+      description:
+        "Payroll analytics will activate with the payroll engine.",
+      time: "Planned",
+      tone: "warning",
+    },
+  ];
+
   return (
-    <>
-      <h1>Reports Module</h1>
-      <p>Coming soon...</p>
-    </>
+    <ModuleDashboardShell
+      eyebrow="REPORTING & INSIGHTS"
+      title="Reports & Analytics Dashboard"
+      description="Access workforce, lifecycle, attendance, leave, payroll and management reporting from one analytical home."
+      metrics={[
+        <DashboardCard
+          key="workforce"
+          title="Workforce Reports"
+          value="Live"
+          subtitle="Employee workforce reporting"
+          icon={<FaUsers />}
+          tone="green"
+        />,
+        <DashboardCard
+          key="lifecycle"
+          title="Lifecycle Reports"
+          value="Live"
+          subtitle="Employee lifecycle history"
+          icon={<FaFileAlt />}
+          tone="gold"
+        />,
+        <DashboardCard
+          key="attendance"
+          title="Attendance Reports"
+          value="Partial"
+          subtitle="Operational attendance reporting"
+          icon={<FaClock />}
+          tone="green"
+        />,
+        <DashboardCard
+          key="payroll"
+          title="Payroll Reports"
+          value="—"
+          subtitle="Activates with payroll engine"
+          icon={<FaMoneyBillWave />}
+          tone="gold"
+        />,
+      ]}
+      analytics={
+        <AnalyticsPanel
+          title="Reporting Coverage"
+          subtitle="Current CHRIS reporting coverage across core modules."
+          icon={<FaChartPie />}
+        >
+          <div
+            style={{
+              display: "grid",
+              gap: 14,
+            }}
+          >
+            {[
+              ["Workforce", 100],
+              ["Employee Lifecycle", 100],
+              ["Attendance", 45],
+              ["Leave", 30],
+              ["Payroll", 0],
+              ["Performance", 0],
+              ["Training", 0],
+            ].map(([label, progress]) => (
+              <div
+                key={label}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "150px 1fr 55px",
+                  gap: 12,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    color:
+                      "var(--chris-dashboard-text)",
+                    fontWeight: 800,
+                  }}
+                >
+                  {label}
+                </span>
+
+                <div className="chris-progress">
+                  <div
+                    className="chris-progress__bar"
+                    style={{
+                      width: `${progress}%`,
+                    }}
+                  />
+                </div>
+
+                <strong
+                  style={{
+                    color:
+                      "var(--chris-dashboard-gold-bright)",
+                    textAlign: "right",
+                  }}
+                >
+                  {progress}%
+                </strong>
+              </div>
+            ))}
+          </div>
+        </AnalyticsPanel>
+      }
+      recentActivity={
+        <AnalyticsPanel
+          title="Reporting Intelligence"
+          subtitle="Availability and readiness of CHRIS analytical outputs."
+          icon={<FaChartBar />}
+        >
+          <RecentActivityList
+            items={activity}
+          />
+        </AnalyticsPanel>
+      }
+      quickActions={[
+        <QuickActionCard
+          key="workforce"
+          title="Workforce Report"
+          subtitle="Open workforce reporting"
+          icon={<FaUsers />}
+          disabled
+          onClick={() => {}}
+        />,
+        <QuickActionCard
+          key="lifecycle"
+          title="Lifecycle Report"
+          subtitle="Open employee lifecycle reporting"
+          icon={<FaFileAlt />}
+          disabled
+          onClick={() => {}}
+        />,
+        <QuickActionCard
+          key="attendance"
+          title="Attendance Report"
+          subtitle="Review attendance analytics"
+          icon={<FaClock />}
+          disabled
+          onClick={() => {}}
+        />,
+        <QuickActionCard
+          key="leave"
+          title="Leave Report"
+          subtitle="Review leave analytics"
+          icon={<FaUmbrellaBeach />}
+          disabled
+          onClick={() => {}}
+        />,
+        <QuickActionCard
+          key="export"
+          title="Export Centre"
+          subtitle="CSV and report exports"
+          icon={<FaDownload />}
+          disabled
+          onClick={() => {}}
+        />,
+      ]}
+    />
   );
 }
 

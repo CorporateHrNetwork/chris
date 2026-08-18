@@ -1,4 +1,4 @@
-﻿import {
+import {
   useEffect,
   useMemo,
   useState,
@@ -120,12 +120,19 @@ function Sidebar() {
             "employees.view",
 
           children: [
-            {
+                        {
+              label:
+                "Employee Dashboard",
+
+              path:
+                "/employees",
+            },
+{
               label:
                 "Employee Directory",
 
               path:
-                "/employees",
+                "/employees/directory",
             },
 
             {
@@ -304,72 +311,72 @@ function Sidebar() {
               label:
                 "Attendance Register",
 
-              planned:
-                true,
+              path:
+                "/attendance/register",
             },
 
             {
               label:
                 "Shifts",
 
-              planned:
-                true,
+              path:
+                "/attendance/shifts",
             },
 
             {
               label:
                 "Shift Schedule",
 
-              planned:
-                true,
+              path:
+                "/attendance/shift-schedule",
             },
 
             {
               label:
                 "Worked Hours",
 
-              planned:
-                true,
+              path:
+                "/attendance/worked-hours",
             },
 
             {
               label:
                 "Worked Days",
 
-              planned:
-                true,
+              path:
+                "/attendance/worked-days",
             },
 
             {
               label:
                 "Off Days",
 
-              planned:
-                true,
+              path:
+                "/attendance/off-days",
             },
 
             {
               label:
                 "Overtime",
 
-              planned:
-                true,
+              path:
+                "/attendance/overtime",
             },
 
             {
               label:
                 "Public Holidays",
 
-              planned:
-                true,
+              path:
+                "/attendance/public-holidays",
             },
 
             {
               label:
                 "Lateness & Absence",
 
-              planned:
-                true,
+              path:
+                "/attendance/lateness-absence",
             },
           ],
         },
@@ -406,8 +413,8 @@ function Sidebar() {
               label:
                 "Leave Requests",
 
-              planned:
-                true,
+              path:
+                "/leave/requests",
             },
 
             {
@@ -430,16 +437,16 @@ function Sidebar() {
               label:
                 "Leave Balances",
 
-              planned:
-                true,
+              path:
+                "/leave/balances",
             },
 
             {
               label:
                 "Leave Policies",
 
-              planned:
-                true,
+              path:
+                "/leave/policies",
             },
           ],
         },
@@ -672,88 +679,88 @@ function Sidebar() {
               label:
                 "Benefits Overview",
 
-              planned:
-                true,
+              path:
+                "/benefits",
             },
 
             {
               label:
                 "Pension",
 
-              planned:
-                true,
+              path:
+                "/benefits/pension",
             },
 
             {
               label:
                 "Gratuity",
 
-              planned:
-                true,
+              path:
+                "/benefits/gratuity",
             },
 
             {
               label:
                 "Health Insurance",
 
-              planned:
-                true,
+              path:
+                "/benefits/health-insurance",
             },
 
             {
               label:
                 "Life Insurance",
 
-              planned:
-                true,
+              path:
+                "/benefits/life-insurance",
             },
 
             {
               label:
                 "Medical Benefits",
 
-              planned:
-                true,
+              path:
+                "/benefits/medical",
             },
 
             {
               label:
                 "Housing / Rent",
 
-              planned:
-                true,
+              path:
+                "/benefits/housing",
             },
 
             {
               label:
                 "Transport Benefits",
 
-              planned:
-                true,
+              path:
+                "/benefits/transport",
             },
 
             {
               label:
                 "Meal Benefits",
 
-              planned:
-                true,
+              path:
+                "/benefits/meals",
             },
 
             {
               label:
                 "Other Benefits",
 
-              planned:
-                true,
+              path:
+                "/benefits/other",
             },
 
             {
               label:
                 "Benefit Enrolments",
 
-              planned:
-                true,
+              path:
+                "/benefits/enrolments",
             },
           ],
         },
@@ -1853,6 +1860,7 @@ function Sidebar() {
     );
   }, [
     location.pathname,
+    visibleGroups,
   ]);
 
   /*
@@ -2659,10 +2667,7 @@ function Sidebar() {
                               child.path
                             }
 
-                            end={
-                              child.path ===
-                              "/"
-                            }
+                            end={true}
 
                             style={({
                               isActive,

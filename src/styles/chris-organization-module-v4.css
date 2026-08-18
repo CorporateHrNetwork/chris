@@ -1,0 +1,366 @@
+/* ============================================================
+   CHRIS ORGANIZATION MODULE VISUAL STANDARD V4
+   Component-scoped, route-independent authority.
+
+   Applies to:
+   1. Departments & Designations / Career Structure
+   2. Head Office & Branches / Organization Locations
+
+   This file intentionally overrides legacy inline styles with !important.
+   ============================================================ */
+
+.chris-organization-structure,
+.chris-organization-locations {
+  --org-bg: #07110C;
+  --org-bg-2: #0A1510;
+  --org-panel: #063722;
+  --org-panel-deep: #02170F;
+  --org-panel-soft: #073723;
+  --org-green: #2EE98B;
+  --org-gold: #D4AF37;
+  --org-gold-bright: #F2CF57;
+  --org-white: #F7FAF8;
+  --org-muted: #C7D3CC;
+  --org-muted-2: #9FB1A7;
+  --org-line: rgba(255,255,255,.08);
+  --org-border: rgba(212,175,55,.52);
+
+  min-height: 100% !important;
+  color: var(--org-white) !important;
+  background:
+    radial-gradient(circle at 8% 5%, rgba(0,145,78,.12), transparent 26%),
+    radial-gradient(circle at 92% 88%, rgba(212,175,55,.07), transparent 24%),
+    linear-gradient(135deg, var(--org-bg) 0%, var(--org-bg-2) 48%, var(--org-bg) 100%) !important;
+}
+
+/* ============================================================
+   PAGE CANVAS
+   ============================================================ */
+
+.chris-organization-structure {
+  padding: 26px !important;
+  box-sizing: border-box !important;
+}
+
+.chris-organization-locations {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Neutralize legacy page-level light canvases */
+.chris-organization-structure[style],
+.chris-organization-locations[style] {
+  background:
+    radial-gradient(circle at 8% 5%, rgba(0,145,78,.12), transparent 26%),
+    radial-gradient(circle at 92% 88%, rgba(212,175,55,.07), transparent 24%),
+    linear-gradient(135deg, var(--org-bg) 0%, var(--org-bg-2) 48%, var(--org-bg) 100%) !important;
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+
+.chris-organization-structure h1,
+.chris-organization-structure h2,
+.chris-organization-structure h3,
+.chris-organization-structure h4,
+.chris-organization-structure h5,
+.chris-organization-structure h6,
+.chris-organization-locations h1,
+.chris-organization-locations h2,
+.chris-organization-locations h3,
+.chris-organization-locations h4,
+.chris-organization-locations h5,
+.chris-organization-locations h6 {
+  color: var(--org-white) !important;
+}
+
+.chris-organization-structure p,
+.chris-organization-structure label,
+.chris-organization-structure td,
+.chris-organization-structure li,
+.chris-organization-locations p,
+.chris-organization-locations label,
+.chris-organization-locations td,
+.chris-organization-locations li {
+  color: var(--org-muted) !important;
+}
+
+.chris-organization-structure strong,
+.chris-organization-structure b,
+.chris-organization-locations strong,
+.chris-organization-locations b {
+  color: var(--org-white);
+}
+
+/* Eyebrows */
+.chris-organization-structure [style*="text-transform: uppercase"],
+.chris-organization-structure [style*="textTransform"],
+.chris-organization-locations [style*="text-transform: uppercase"],
+.chris-organization-locations [style*="textTransform"] {
+  color: var(--org-gold-bright) !important;
+}
+
+/* Legacy slate text values */
+.chris-organization-structure [style*="#0F172A"],
+.chris-organization-structure [style*="#111827"],
+.chris-organization-locations [style*="#0F172A"],
+.chris-organization-locations [style*="#111827"] {
+  color: var(--org-white) !important;
+}
+
+.chris-organization-structure [style*="#334155"],
+.chris-organization-structure [style*="#475569"],
+.chris-organization-structure [style*="#64748B"],
+.chris-organization-locations [style*="#334155"],
+.chris-organization-locations [style*="#475569"],
+.chris-organization-locations [style*="#64748B"] {
+  color: var(--org-muted) !important;
+}
+
+/* Browser-serialized inline colours */
+.chris-organization-structure [style*="rgb(15, 23, 42)"],
+.chris-organization-locations [style*="rgb(15, 23, 42)"] {
+  color: var(--org-white) !important;
+}
+
+.chris-organization-structure [style*="rgb(51, 65, 85)"],
+.chris-organization-structure [style*="rgb(71, 85, 105)"],
+.chris-organization-structure [style*="rgb(100, 116, 139)"],
+.chris-organization-locations [style*="rgb(51, 65, 85)"],
+.chris-organization-locations [style*="rgb(71, 85, 105)"],
+.chris-organization-locations [style*="rgb(100, 116, 139)"] {
+  color: var(--org-muted) !important;
+}
+
+/* Metric values */
+.chris-organization-structure [style*="#087A43"],
+.chris-organization-locations [style*="#087A43"],
+.chris-organization-structure [style*="rgb(8, 122, 67)"],
+.chris-organization-locations [style*="rgb(8, 122, 67)"] {
+  color: var(--org-green) !important;
+}
+
+.chris-organization-structure h1[style*="#087A43"],
+.chris-organization-structure h2[style*="#087A43"],
+.chris-organization-structure h3[style*="#087A43"],
+.chris-organization-locations h1[style*="#087A43"],
+.chris-organization-locations h2[style*="#087A43"],
+.chris-organization-locations h3[style*="#087A43"] {
+  color: var(--org-white) !important;
+}
+
+/* ============================================================
+   ALL LEGACY LIGHT PANELS -> DARK PREMIUM PANELS
+   ============================================================ */
+
+.chris-organization-structure [style*="#FFFFFF"],
+.chris-organization-structure [style*="#FFF"],
+.chris-organization-structure [style*="#F8FAFC"],
+.chris-organization-structure [style*="#F9FAFB"],
+.chris-organization-structure [style*="#F3F4F6"],
+.chris-organization-structure [style*="#FAFCFB"],
+.chris-organization-structure [style*="#FFFCF3"],
+.chris-organization-structure [style*="#FFFDF5"],
+.chris-organization-locations [style*="#FFFFFF"],
+.chris-organization-locations [style*="#FFF"],
+.chris-organization-locations [style*="#F8FAFC"],
+.chris-organization-locations [style*="#F9FAFB"],
+.chris-organization-locations [style*="#F3F4F6"],
+.chris-organization-locations [style*="#ECFDF5"],
+.chris-organization-locations [style*="#EFF6FF"] {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(46,233,139,.09), transparent 30%),
+    linear-gradient(145deg, var(--org-panel), var(--org-panel-deep)) !important;
+  background-color: var(--org-panel-deep) !important;
+  border-color: var(--org-border) !important;
+  color: var(--org-white) !important;
+  box-shadow: 0 16px 38px rgba(0,0,0,.28) !important;
+}
+
+/* Browser-serialized light inline backgrounds */
+.chris-organization-structure [style*="rgb(255, 255, 255)"],
+.chris-organization-structure [style*="rgb(248, 250, 252)"],
+.chris-organization-structure [style*="rgb(250, 252, 251)"],
+.chris-organization-structure [style*="rgb(255, 252, 243)"],
+.chris-organization-structure [style*="rgb(255, 253, 245)"],
+.chris-organization-locations [style*="rgb(255, 255, 255)"],
+.chris-organization-locations [style*="rgb(248, 250, 252)"],
+.chris-organization-locations [style*="rgb(236, 253, 245)"],
+.chris-organization-locations [style*="rgb(239, 246, 255)"] {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(46,233,139,.09), transparent 30%),
+    linear-gradient(145deg, var(--org-panel), var(--org-panel-deep)) !important;
+  background-color: var(--org-panel-deep) !important;
+  border-color: var(--org-border) !important;
+  color: var(--org-white) !important;
+}
+
+/* ============================================================
+   CARDS / SECTIONS
+   ============================================================ */
+
+.chris-organization-structure section,
+.chris-organization-locations form,
+.chris-organization-locations > div > div[style*="borderRadius"],
+.chris-organization-locations > div > div[style*="border-radius"] {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(46,233,139,.08), transparent 30%),
+    linear-gradient(145deg, var(--org-panel), var(--org-panel-deep)) !important;
+  border-color: var(--org-border) !important;
+  box-shadow: 0 16px 38px rgba(0,0,0,.25) !important;
+}
+
+/* Summary / metric cards */
+.chris-organization-structure div[style*="gridTemplateColumns"] > div[style*="borderRadius"],
+.chris-organization-locations div[style*="gridTemplateColumns"] > div[style*="borderRadius"] {
+  background:
+    linear-gradient(145deg, #073723, #02170F) !important;
+  border: 1px solid rgba(212,175,55,.52) !important;
+  color: var(--org-white) !important;
+}
+
+/* Nested metric boxes */
+.chris-organization-locations div[style*="gridTemplateColumns"] div[style*="borderRadius"] {
+  background: rgba(3,42,25,.88) !important;
+  border-color: rgba(255,255,255,.10) !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   FORMS / INPUTS
+   ============================================================ */
+
+.chris-organization-structure input,
+.chris-organization-structure select,
+.chris-organization-structure textarea,
+.chris-organization-locations input,
+.chris-organization-locations select,
+.chris-organization-locations textarea {
+  background: rgba(3,34,22,.94) !important;
+  color: var(--org-white) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+.chris-organization-structure input::placeholder,
+.chris-organization-structure textarea::placeholder,
+.chris-organization-locations input::placeholder,
+.chris-organization-locations textarea::placeholder {
+  color: var(--org-muted-2) !important;
+}
+
+.chris-organization-structure select option,
+.chris-organization-locations select option {
+  background: #062219;
+  color: var(--org-white);
+}
+
+.chris-organization-structure input:focus,
+.chris-organization-structure select:focus,
+.chris-organization-structure textarea:focus,
+.chris-organization-locations input:focus,
+.chris-organization-locations select:focus,
+.chris-organization-locations textarea:focus {
+  outline: none !important;
+  border-color: var(--org-gold) !important;
+  box-shadow: 0 0 0 3px rgba(212,175,55,.10) !important;
+}
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+
+.chris-organization-structure table,
+.chris-organization-locations table {
+  background: rgba(2,23,15,.96) !important;
+  color: var(--org-white) !important;
+}
+
+.chris-organization-structure thead,
+.chris-organization-structure thead tr,
+.chris-organization-locations thead,
+.chris-organization-locations thead tr {
+  background: #021D13 !important;
+}
+
+.chris-organization-structure th,
+.chris-organization-locations th {
+  color: var(--org-white) !important;
+  border-color: rgba(212,175,55,.20) !important;
+}
+
+.chris-organization-structure td,
+.chris-organization-locations td {
+  color: var(--org-muted) !important;
+  border-color: var(--org-line) !important;
+}
+
+.chris-organization-structure tbody tr,
+.chris-organization-locations tbody tr {
+  background: rgba(5,55,34,.72) !important;
+}
+
+.chris-organization-structure tbody tr:nth-child(even),
+.chris-organization-locations tbody tr:nth-child(even) {
+  background: rgba(3,45,28,.82) !important;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.chris-organization-structure button,
+.chris-organization-locations button {
+  font-family: inherit;
+  font-weight: 800;
+}
+
+/* Primary green actions */
+.chris-organization-structure button[style*="#087A43"],
+.chris-organization-locations button[style*="#087A43"],
+.chris-organization-structure button[style*="rgb(8, 122, 67)"],
+.chris-organization-locations button[style*="rgb(8, 122, 67)"] {
+  background: linear-gradient(145deg, #0A8F50, #056838) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(212,175,55,.34) !important;
+}
+
+/* Neutral legacy white buttons */
+.chris-organization-structure button[style*="#FFFFFF"],
+.chris-organization-locations button[style*="#FFFFFF"],
+.chris-organization-structure button[style*="rgb(255, 255, 255)"],
+.chris-organization-locations button[style*="rgb(255, 255, 255)"] {
+  background: rgba(255,255,255,.055) !important;
+  color: var(--org-white) !important;
+  border-color: rgba(255,255,255,.16) !important;
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+
+.chris-organization-structure span[style*="#DCFCE7"],
+.chris-organization-locations span[style*="#ECFDF5"] {
+  background: rgba(46,233,139,.12) !important;
+  color: var(--org-green) !important;
+  border-color: rgba(46,233,139,.28) !important;
+}
+
+.chris-organization-structure span[style*="#F1F5F9"],
+.chris-organization-locations span[style*="#F8FAFC"] {
+  background: rgba(255,255,255,.06) !important;
+  color: var(--org-white) !important;
+  border-color: rgba(255,255,255,.14) !important;
+}
+
+/* ============================================================
+   MODALS / LIFECYCLE PANELS
+   ============================================================ */
+
+.chris-organization-structure [style*="position: fixed"] > div,
+.chris-organization-structure [style*="position:fixed"] > div {
+  background:
+    linear-gradient(145deg, var(--org-panel), var(--org-panel-deep)) !important;
+  color: var(--org-white) !important;
+  border-color: var(--org-border) !important;
+}

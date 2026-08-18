@@ -34,6 +34,8 @@ model Organization {
   locations                  OrganizationLocation[]
   employmentEpisodes         EmployeeEmploymentEpisode[]
   employeeLifecycleEvents    EmployeeLifecycleEvent[]
+  attendancePayrollSetting   AttendancePayrollSetting?
+  attendancePayrollInputs    AttendancePayrollInput[]
   designationLifecycleEvents DesignationLifecycleEvent[]
   leaveTypes                 LeaveType[]
   leavePolicies              LeavePolicy[]
@@ -122,6 +124,8 @@ model User {
 
   performedLifecycleEvents            EmployeeLifecycleEvent[]    @relation("LifecyclePerformedBy")
   performedDesignationLifecycleEvents DesignationLifecycleEvent[] @relation("DesignationLifecyclePerformedBy")
+  attendancePayrollSettingsUpdated    AttendancePayrollSetting[]  @relation("AttendancePayrollSettingUpdatedBy")
+  attendancePayrollInputsRecorded     AttendancePayrollInput[]    @relation("AttendancePayrollInputRecordedBy")
   reviewedLeaveRequests               LeaveRequest[]              @relation("LeaveRequestReviewedBy")
   recordedAttendanceRecords           AttendanceRecord[]          @relation("AttendanceRecordedBy")
 
@@ -364,12 +368,13 @@ model Employee {
 
   user User?
 
-  employmentEpisodes EmployeeEmploymentEpisode[]
-  lifecycleEvents    EmployeeLifecycleEvent[]
-  leaveBalances      LeaveBalance[]
-  leaveRequests      LeaveRequest[]
-  shiftAssignments   EmployeeShiftAssignment[]
-  attendanceRecords  AttendanceRecord[]
+  employmentEpisodes      EmployeeEmploymentEpisode[]
+  lifecycleEvents         EmployeeLifecycleEvent[]
+  attendancePayrollInputs AttendancePayrollInput[]
+  leaveBalances           LeaveBalance[]
+  leaveRequests           LeaveRequest[]
+  shiftAssignments        EmployeeShiftAssignment[]
+  attendanceRecords       AttendanceRecord[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -932,4 +937,63 @@ model DesignationLifecycleEvent {
 enum DesignationLifecycleEventType {
   ACTIVATED
   DEACTIVATED
+}
+
+model PublicHoliday {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  holidayDate    DateTime @db.Date
+  isRecurring    Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, holidayDate, name])
+  @@index([organizationId, holidayDate])
+  @@map("public_holidays")
+}
+
+enum AttendancePayrollBasis {
+  SYSTEM
+  ADMIN_ENTERED
+}
+
+model AttendancePayrollSetting {
+  id              String                 @id @default(uuid())
+  organizationId  String                 @unique
+  basis           AttendancePayrollBasis @default(SYSTEM)
+  updatedByUserId String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy    User?        @relation("AttendancePayrollSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([basis])
+  @@map("attendance_payroll_settings")
+}
+
+model AttendancePayrollInput {
+  id               String   @id @default(uuid())
+  organizationId   String
+  employeeId       String
+  periodStart      DateTime @db.Date
+  periodEnd        DateTime @db.Date
+  workedHours      Float?
+  workedDays       Float?
+  notes            String?
+  recordedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  recordedBy   User?        @relation("AttendancePayrollInputRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, employeeId, periodStart, periodEnd])
+  @@index([organizationId, periodStart, periodEnd])
+  @@index([employeeId])
+  @@index([recordedByUserId])
+  @@map("attendance_payroll_inputs")
 }

@@ -14,84 +14,83 @@ function Settings() {
   );
 
   return (
-    <div>
+    <div className="chris-settings-skin">
       <div
         style={{
-          display: "flex",
-
-          gap: "10px",
-
-          flexWrap:
-            "wrap",
-
-          marginBottom:
-            "24px",
+          marginBottom: "20px",
         }}
       >
+        <p
+          style={{
+            margin: "0 0 6px",
+            color:
+              "var(--chris-dashboard-gold-bright)",
+            fontSize: "12px",
+            fontWeight: "900",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          System Administration
+        </p>
+
+        <h1
+          style={{
+            margin: 0,
+            color:
+              "var(--chris-dashboard-text)",
+            fontSize: "30px",
+            fontWeight: "850",
+          }}
+        >
+          Settings
+        </h1>
+
+        <p
+          style={{
+            margin: "8px 0 0",
+            color:
+              "var(--chris-dashboard-muted)",
+            fontSize: "14px",
+          }}
+        >
+          Manage users, roles, permissions and organization locations.
+        </p>
+      </div>
+
+      <div className="chris-settings-tabs">
         <button
           type="button"
-
           onClick={() =>
             setActiveSection(
               "users-roles"
             )
           }
-
-          style={{
-            ...sectionButtonStyle,
-
-            background:
-              activeSection ===
-              "users-roles"
-                ? "#087A43"
-                : "#FFFFFF",
-
-            color:
-              activeSection ===
-              "users-roles"
-                ? "#FFFFFF"
-                : "#475569",
-
-            border:
-              activeSection ===
-              "users-roles"
-                ? "1px solid #087A43"
-                : "1px solid #CBD5E1",
-          }}
+          className={[
+            "chris-settings-tab",
+            activeSection ===
+            "users-roles"
+              ? "chris-settings-tab--active"
+              : "chris-settings-tab--inactive",
+          ].join(" ")}
         >
           Users & Roles
         </button>
 
         <button
           type="button"
-
           onClick={() =>
             setActiveSection(
               "locations"
             )
           }
-
-          style={{
-            ...sectionButtonStyle,
-
-            background:
-              activeSection ===
-              "locations"
-                ? "#087A43"
-                : "#FFFFFF",
-
-            color:
-              activeSection ===
-              "locations"
-                ? "#FFFFFF"
-                : "#475569",
-
-            border:
-              activeSection ===
-              "locations"
-                ? "1px solid #087A43"
-                : "1px solid #CBD5E1",
-          }}
+          className={[
+            "chris-settings-tab",
+            activeSection ===
+            "locations"
+              ? "chris-settings-tab--active"
+              : "chris-settings-tab--inactive",
+          ].join(" ")}
         >
           Organization Locations
         </button>
@@ -109,22 +108,5 @@ function Settings() {
     </div>
   );
 }
-
-const sectionButtonStyle = {
-  padding:
-    "10px 14px",
-
-  borderRadius:
-    "8px",
-
-  fontSize:
-    "12px",
-
-  fontWeight:
-    "800",
-
-  cursor:
-    "pointer",
-};
 
 export default Settings;

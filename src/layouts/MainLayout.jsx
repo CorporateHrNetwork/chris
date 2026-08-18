@@ -106,7 +106,7 @@ function MainLayout({
             />
           </div>
 
-          <div
+          <div className="chris-page"
             style={{
               width: "100%",
               maxWidth: "1700px",
