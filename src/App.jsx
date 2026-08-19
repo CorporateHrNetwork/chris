@@ -18,6 +18,8 @@ import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
+import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
+import EmployeeOnboarding from "./pages/EmployeeOnboarding";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
 import Recruitment from "./pages/Recruitment";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
@@ -125,7 +127,69 @@ function App() {
           }
         />
 
+                <Route
+          path="/employees/profiles"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeModuleWorkspace mode="profiles" />
+            </PermissionLayout>
+          }
+        />
+
         <Route
+          path="/employees/onboarding"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeOnboarding />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/analytics"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeModuleWorkspace mode="analytics" />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/transfers"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeModuleWorkspace mode="transfers" />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/promotions"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeModuleWorkspace mode="promotions" />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/exits"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeModuleWorkspace mode="exits" />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/line-managers"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeModuleWorkspace mode="line-managers" />
+            </PermissionLayout>
+          }
+        />
+<Route
           path="/employees/:employeeNumber"
           element={
             <PermissionLayout

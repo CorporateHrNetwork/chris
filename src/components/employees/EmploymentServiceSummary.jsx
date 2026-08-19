@@ -22,15 +22,15 @@ function EmploymentServiceSummary({ employeeNumber }) {
         setError("");
 
         const result = await apiRequest(
-          `/api/employment-service/${encodeURIComponent(employeeNumber)}`
+          `/api/employment-service/${encodeURIComponent(
+            employeeNumber
+          )}`
         );
 
         if (!cancelled) {
           setSummary(result.data || null);
         }
       } catch (err) {
-        console.error("Employment service summary error:", err);
-
         if (!cancelled) {
           setError(
             err.message ||
@@ -52,56 +52,26 @@ function EmploymentServiceSummary({ employeeNumber }) {
   }, [employeeNumber]);
 
   return (
-    <section
-      style={{
-        marginTop: "22px",
-        padding: "22px",
-        borderRadius: "16px",
-        border: "1px solid rgba(8, 122, 67, 0.18)",
-        background:
-          "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(244,249,245,0.98))",
-        boxShadow: "0 10px 28px rgba(15,23,42,0.05)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: "18px",
-          flexWrap: "wrap",
-        }}
-      >
+    <section style={panelStyle}>
+      <div style={headerStyle}>
         <div>
-          <div
-            style={{
-              color: "#087A43",
-              fontSize: "16px",
-              fontWeight: "900",
-            }}
-          >
+          <div style={titleStyle}>
             Employment Service
           </div>
 
-          <div
-            style={{
-              marginTop: "4px",
-              color: "#64748B",
-              fontSize: "12px",
-            }}
-          >
+          <div style={subtitleStyle}>
             Service and tenure intelligence calculated from permanent employment episodes.
           </div>
         </div>
 
-        {summary && (
+        {summary ? (
           <StatusBadge
             status={
               summary.employmentStatus ||
               summary.employee?.status
             }
           />
-        )}
+        ) : null}
       </div>
 
       {loading ? (
@@ -113,15 +83,7 @@ function EmploymentServiceSummary({ employeeNumber }) {
           Employment service information is unavailable.
         </MessageBox>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(170px, 1fr))",
-            gap: "12px",
-            marginTop: "18px",
-          }}
-        >
+        <div style={metricGridStyle}>
           <Metric
             label="Original Employment"
             value={formatDate(summary.originalEmploymentDate)}
@@ -140,7 +102,9 @@ function EmploymentServiceSummary({ employeeNumber }) {
             label="Current Episode"
             value={
               summary.currentEpisode
-                ? compactDuration(summary.currentEpisode.duration)
+                ? compactDuration(
+                    summary.currentEpisode.duration
+                  )
                 : "No current episode"
             }
           />
@@ -152,7 +116,9 @@ function EmploymentServiceSummary({ employeeNumber }) {
 
           <Metric
             label="Previous Service"
-            value={compactDuration(summary.previousCompletedService)}
+            value={compactDuration(
+              summary.previousCompletedService
+            )}
           />
 
           <Metric
@@ -173,7 +139,9 @@ function EmploymentServiceSummary({ employeeNumber }) {
 
           <Metric
             label="Total Gap Time"
-            value={compactDuration(summary.serviceGaps?.totalDuration)}
+            value={compactDuration(
+              summary.serviceGaps?.totalDuration
+            )}
           />
         </div>
       )}
@@ -182,29 +150,9 @@ function EmploymentServiceSummary({ employeeNumber }) {
 }
 
 function StatusBadge({ status }) {
-  const label = formatStatus(status);
-
-  const active =
-    status === "ACTIVE" ||
-    status === "PROBATION" ||
-    status === "LEAVE";
-
   return (
-    <span
-      style={{
-        padding: "7px 11px",
-        borderRadius: "999px",
-        background: active ? "#ECFDF5" : "#F8FAFC",
-        border: active
-          ? "1px solid #A7F3D0"
-          : "1px solid #CBD5E1",
-        color: active ? "#047857" : "#475569",
-        fontSize: "10px",
-        fontWeight: "900",
-        textTransform: "uppercase",
-      }}
-    >
-      {label}
+    <span style={statusStyle}>
+      {formatStatus(status)}
     </span>
   );
 }
@@ -213,20 +161,13 @@ function MessageBox({ children, error = false }) {
   return (
     <div
       style={{
-        marginTop: "18px",
-        padding: "14px 15px",
-        borderRadius: "12px",
-        border: error
-          ? "1px solid #FECACA"
-          : "1px solid #E3E9E5",
-        background: error
-          ? "#FEF2F2"
-          : "#FFFFFF",
+        ...messageStyle,
         color: error
-          ? "#991B1B"
-          : "#64748B",
-        fontSize: "12px",
-        fontWeight: "700",
+          ? "var(--chris-danger)"
+          : "var(--chris-text-secondary)",
+        border: error
+          ? "1px solid rgba(251,113,133,.30)"
+          : "1px solid var(--chris-border-soft)",
       }}
     >
       {children}
@@ -236,44 +177,15 @@ function MessageBox({ children, error = false }) {
 
 function Metric({ label, value }) {
   return (
-    <div
-      style={{
-        padding: "14px 15px",
-        borderRadius: "12px",
-        background: "#FFFFFF",
-        border: "1px solid #E3E9E5",
-      }}
-    >
-      <div
-        style={{
-          color: "#64748B",
-          fontSize: "9px",
-          fontWeight: "900",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          marginTop: "7px",
-          color: "#172033",
-          fontSize: "14px",
-          fontWeight: "800",
-        }}
-      >
-        {value}
-      </div>
+    <div style={metricStyle}>
+      <div style={metricLabelStyle}>{label}</div>
+      <div style={metricValueStyle}>{value}</div>
     </div>
   );
 }
 
 function compactDuration(duration) {
-  if (!duration) {
-    return "0d";
-  }
+  if (!duration) return "0d";
 
   const parts = [];
 
@@ -285,32 +197,34 @@ function compactDuration(duration) {
     parts.push(`${duration.months}m`);
   }
 
-  if (Number(duration.days) || parts.length === 0) {
-    parts.push(`${Number(duration.days) || 0}d`);
+  if (
+    Number(duration.days) ||
+    parts.length === 0
+  ) {
+    parts.push(
+      `${Number(duration.days) || 0}d`
+    );
   }
 
   return parts.join(" ");
 }
 
 function formatStatus(status) {
-  const labels = {
-    ACTIVE: "Active",
-    PROBATION: "Probation",
-    LEAVE: "Leave",
-    SUSPENDED: "Suspended",
-    TERMINATED: "Terminated",
-    RESIGNED: "Resigned",
-    RETIRED: "Retired",
-    INACTIVE: "Inactive",
-  };
+  if (!status) return "Unknown";
 
-  return labels[status] || status || "Unknown";
+  return String(status)
+    .toLowerCase()
+    .split("_")
+    .map(
+      (part) =>
+        part.charAt(0).toUpperCase() +
+        part.slice(1)
+    )
+    .join(" ");
 }
 
 function formatDate(value) {
-  if (!value) {
-    return "-";
-  }
+  if (!value) return "-";
 
   const date = new Date(value);
 
@@ -324,5 +238,85 @@ function formatDate(value) {
     year: "numeric",
   });
 }
+
+const panelStyle = {
+  marginTop: "22px",
+  padding: "22px",
+  borderRadius: "var(--chris-radius-card)",
+  border: "1px solid var(--chris-border-gold)",
+  background:
+    "linear-gradient(145deg,rgba(12,38,26,.94),rgba(7,18,13,.98))",
+  boxShadow: "var(--chris-shadow-card)",
+  color: "var(--chris-text-main)",
+};
+
+const headerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 18,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+};
+
+const titleStyle = {
+  color: "var(--chris-text-main)",
+  fontSize: "var(--chris-font-xl)",
+  fontWeight: 900,
+};
+
+const subtitleStyle = {
+  marginTop: 4,
+  color: "var(--chris-text-secondary)",
+  fontSize: "var(--chris-font-sm)",
+};
+
+const metricGridStyle = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit,minmax(170px,1fr))",
+  gap: 12,
+  marginTop: 18,
+};
+
+const metricStyle = {
+  padding: "14px 15px",
+  borderRadius: "var(--chris-radius-md)",
+  background: "rgba(255,255,255,.025)",
+  border: "1px solid var(--chris-border-soft)",
+};
+
+const metricLabelStyle = {
+  color: "var(--chris-text-secondary)",
+  fontSize: "var(--chris-font-xs)",
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: ".05em",
+};
+
+const metricValueStyle = {
+  marginTop: 7,
+  color: "var(--chris-text-main)",
+  fontSize: "var(--chris-font-sm)",
+  fontWeight: 900,
+};
+
+const statusStyle = {
+  padding: "6px 10px",
+  borderRadius: "var(--chris-radius-pill)",
+  border: "1px solid rgba(212,175,55,.25)",
+  background: "rgba(212,175,55,.07)",
+  color: "var(--chris-gold)",
+  fontSize: "var(--chris-font-xs)",
+  fontWeight: 900,
+};
+
+const messageStyle = {
+  marginTop: 18,
+  padding: "14px 15px",
+  borderRadius: "var(--chris-radius-md)",
+  background: "rgba(255,255,255,.025)",
+  fontSize: "var(--chris-font-sm)",
+  fontWeight: 700,
+};
 
 export default EmploymentServiceSummary;

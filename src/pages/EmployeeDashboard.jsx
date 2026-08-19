@@ -349,18 +349,20 @@ function EmployeeDashboard() {
           <QuickActionCard
             key="analytics"
             title="Employee Analytics"
-            subtitle="Status and workforce insights"
+            subtitle="Status, gender and workforce insights"
             icon={<FaChartPie />}
-            onClick={() => {}}
-            disabled
+            onClick={() =>
+              navigate("/employees/analytics")
+            }
           />,
           <QuickActionCard
             key="transfers"
             title="Transfers"
-            subtitle="Planned employee movement"
+            subtitle="Controlled employee movement"
             icon={<FaExchangeAlt />}
-            onClick={() => {}}
-            disabled
+            onClick={() =>
+              navigate("/employees/transfers")
+            }
           />,
         ]}
       />

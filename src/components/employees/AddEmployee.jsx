@@ -20,6 +20,7 @@ function AddEmployee({
     locationId: "",
     email: "",
     phone: "",
+    gender: "",
     status: "Active",
   });
 
@@ -295,7 +296,8 @@ function AddEmployee({
       !formData.designationId ||
       !formData.locationId ||
       !formData.email.trim() ||
-      !formData.phone.trim()
+      !formData.phone.trim() ||
+      !formData.gender
     ) {
       setError(
         "Please complete all required fields before saving the employee."
@@ -353,6 +355,9 @@ function AddEmployee({
 
                 phone:
                   formData.phone,
+
+                gender:
+                  formData.gender,
 
                 status:
                   formData.status,
@@ -850,6 +855,23 @@ function AddEmployee({
               }
             />
 
+            <div>
+              <RequiredLabel>Gender</RequiredLabel>
+              <select
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                required
+                disabled={saving}
+                style={fieldStyle}
+              >
+                <option value="">Select gender</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other</option>
+                <option value="UNSPECIFIED">Prefer not to specify</option>
+              </select>
+            </div>
             <div>
               <label
                 style={

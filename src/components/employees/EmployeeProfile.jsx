@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   useNavigate,
   useParams,
+  useLocation,
 } from "react-router-dom";
 
 import {
@@ -14,6 +15,9 @@ function EmployeeProfile() {
   const { employeeNumber } = useParams();
 
   const navigate = useNavigate();
+
+  const location =
+    useLocation();
 
   const [profile, setProfile] =
     useState(null);
@@ -332,7 +336,26 @@ function EmployeeProfile() {
         .slice(0, 10),
     reason: "",
     notes: "",
-  });
+  });  const goBackFromProfile = () => {
+    const from =
+      location?.state?.from;
+
+    if (
+      from &&
+      String(from).startsWith("/employees")
+    ) {
+      navigate(from);
+      return;
+    }
+
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate("/employees/directory");
+  };
+
 
   const loadProfile = async () => {
     try {
@@ -377,6 +400,11 @@ function EmployeeProfile() {
 
         phone:
           employee.phone || "",
+
+        gender:
+          formatGender(
+            employee.gender
+          ),
 
         status:
           formatStatus(
@@ -432,6 +460,9 @@ function EmployeeProfile() {
 
         phone:
           normalizedProfile.phone,
+
+        gender:
+          normalizedProfile.gender,
 
         status:
           normalizedProfile.status,
@@ -653,6 +684,9 @@ const handleChange = (
 
       phone:
         profile.phone,
+
+      gender:
+        profile.gender,
 
       status:
         profile.status,
@@ -2793,16 +2827,12 @@ const handleChange = (
       >
         <button
           type="button"
-          onClick={() =>
-            navigate(
-              "/employees"
-            )
-          }
+          onClick={goBackFromProfile}
           style={
             backButtonStyle
           }
         >
-          &lt; Back to Employees
+          Ã¢â€ Â Back
         </button>
 
         <ErrorMessage
@@ -2832,16 +2862,12 @@ const handleChange = (
     >
       <button
         type="button"
-        onClick={() =>
-          navigate(
-            "/employees"
-          )
-        }
+        onClick={goBackFromProfile}
         style={
           backButtonStyle
         }
       >
-        &lt; Back to Employees
+        Ã¢â€ Â Back
       </button>
 
       {success && (
@@ -3046,6 +3072,27 @@ const handleChange = (
                 saving
               }
             />
+            <div>
+              <label style={labelStyle}>
+                Gender
+              </label>
+
+              <select
+                name="gender"
+                value={formData.gender || "UNSPECIFIED"}
+                onChange={handleChange}
+                disabled={saving}
+                style={fieldStyle}
+              >
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other</option>
+                <option value="UNSPECIFIED">
+                  Prefer not to specify
+                </option>
+              </select>
+            </div>
+
 
             <FormField
               label="Department"
@@ -3100,9 +3147,9 @@ const handleChange = (
                     style={{
                       ...fieldStyle,
                       background:
-                        "#F8FAFC",
+                        "rgba(255,255,255,.035)",
                       color:
-                        "#475569",
+                        "var(--chris-text-muted)",
                       cursor:
                         "not-allowed",
                     }}
@@ -3113,7 +3160,7 @@ const handleChange = (
                       margin:
                         "7px 0 0",
                       color:
-                        "#64748B",
+                        "var(--chris-text-secondary)",
                       fontSize:
                         "12px",
                       lineHeight:
@@ -3330,6 +3377,11 @@ const handleChange = (
                 profile.designation
               }
             />
+            <InfoRow
+              label="Gender"
+              value={profile.gender}
+            />
+
 
             <InfoRow
               label="Employment Status"
@@ -3625,17 +3677,47 @@ const handleChange = (
               >
                 Promote Employee
               </button>
-<ActionButton
-                text="Leave"
-              />
+<button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/leave?employeeNumber=${encodeURIComponent(
+                      employeeNumber
+                    )}`
+                  )
+                }
+                style={actionButtonStyle}
+              >
+                Leave
+              </button>
 
-              <ActionButton
-                text="Payroll"
-              />
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/payroll?employeeNumber=${encodeURIComponent(
+                      employeeNumber
+                    )}`
+                  )
+                }
+                style={actionButtonStyle}
+              >
+                Payroll
+              </button>
 
-              <ActionButton
-                text="Documents"
-              />
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/documents?employeeNumber=${encodeURIComponent(
+                      employeeNumber
+                    )}`
+                  )
+                }
+                style={actionButtonStyle}
+              >
+                Documents
+              </button>
             </div>
           </InformationCard>
         </div>
@@ -6847,6 +6929,20 @@ function ErrorMessage({
   );
 }
 
+function formatGender(value) {
+  switch (String(value || "").trim().toUpperCase()) {
+    case "MALE":
+      return "Male";
+    case "FEMALE":
+      return "Female";
+    case "OTHER":
+      return "Other";
+    case "UNSPECIFIED":
+    default:
+      return "Not Specified";
+  }
+}
+
 function formatStatus(
   status
 ) {
@@ -6905,7 +7001,7 @@ function StatusBadge({
     "#F1F5F9";
 
   let color =
-    "#475569";
+    "var(--chris-text-muted)";
 
   if (
     status === "Active"
@@ -7047,7 +7143,7 @@ const pageStyle = {
 const loadingStyle = {
   padding: "40px",
   textAlign: "center",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "14px",
 };
 
@@ -7102,21 +7198,21 @@ const avatarStyle = {
 
 const eyebrowStyle = {
   margin: "0 0 5px",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "13px",
   fontWeight: "600",
 };
 
 const nameStyle = {
   margin: 0,
-  color: "#0F172A",
+  color: "var(--chris-text-main)",
   fontSize: "28px",
   fontWeight: "800",
 };
 
 const subtitleStyle = {
   margin: "6px 0 0",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "14px",
 };
 
@@ -7135,13 +7231,14 @@ const cardsGridStyle = {
 };
 
 const informationCardStyle = {
-  background: "#FFFFFF",
-  border:
-    "1px solid #E5E7EB",
-  borderRadius: "18px",
   padding: "24px",
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  minHeight: "260px",
+  background:
+    "linear-gradient(145deg, rgba(12,38,26,.94), rgba(7,18,13,.98))",
+  border: "1px solid var(--chris-border-gold)",
+  borderRadius: "var(--chris-radius-card)",
+  boxShadow: "var(--chris-shadow-card)",
+  color: "var(--chris-text-main)",
 };
 
 const informationTitleStyle = {
@@ -7164,15 +7261,17 @@ const infoRowStyle = {
 };
 
 const infoLabelStyle = {
-  color: "#64748B",
-  fontSize: "13px",
+  color: "var(--chris-text-secondary)",
+  fontSize: "var(--chris-font-sm)",
+  fontWeight: "600",
 };
 
 const infoValueStyle = {
-  color: "#0F172A",
-  fontSize: "14px",
-  fontWeight: "700",
+  color: "var(--chris-text-main)",
+  fontSize: "var(--chris-font-sm)",
+  fontWeight: "800",
   textAlign: "right",
+  wordBreak: "break-word",
 };
 
 const actionsGridStyle = {
@@ -7185,7 +7284,7 @@ const actionsGridStyle = {
 const actionButtonStyle = {
   border:
     "1px solid #D1E5DB",
-  background: "#F8FCFA",
+  background: "rgba(255,255,255,.025)",
   color: "#087A43",
   borderRadius: "10px",
   padding: "12px",
@@ -7195,13 +7294,14 @@ const actionButtonStyle = {
 };
 
 const editCardStyle = {
-  background: "#FFFFFF",
-  border:
-    "1px solid #E5E7EB",
-  borderRadius: "18px",
+  marginTop: "22px",
   padding: "26px",
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  background:
+    "linear-gradient(145deg, rgba(12,38,26,.96), rgba(7,18,13,.98))",
+  border: "1px solid var(--chris-border-gold)",
+  borderRadius: "var(--chris-radius-card)",
+  boxShadow: "var(--chris-shadow-card)",
+  color: "var(--chris-text-main)",
 };
 
 const editHeaderStyle = {
@@ -7217,15 +7317,15 @@ const editHeaderStyle = {
 
 const editTitleStyle = {
   margin: 0,
-  color: "#087A43",
-  fontSize: "21px",
+  color: "var(--chris-text-main)",
+  fontSize: "var(--chris-font-xl)",
   fontWeight: "800",
 };
 
 const editSubtitleStyle = {
   margin: "6px 0 0",
-  color: "#64748B",
-  fontSize: "13px",
+  color: "var(--chris-text-secondary)",
+  fontSize: "var(--chris-font-sm)",
 };
 
 const formGridStyle = {
@@ -7238,22 +7338,24 @@ const formGridStyle = {
 const labelStyle = {
   display: "block",
   marginBottom: "7px",
-  color: "#334155",
-  fontSize: "13px",
+  color: "var(--chris-text-secondary)",
+  fontSize: "var(--chris-font-sm)",
   fontWeight: "700",
 };
 
 const fieldStyle = {
   width: "100%",
-  boxSizing:
-    "border-box",
+  boxSizing: "border-box",
   padding: "12px 13px",
-  borderRadius: "10px",
-  border:
-    "1px solid #CBD5E1",
-  background: "#FFFFFF",
-  color: "#0F172A",
-  fontSize: "14px",
+  borderRadius: "var(--chris-radius-md)",
+  border: "1px solid var(--chris-border-soft)",
+  background: "var(--chris-input-bg)",
+  color: "var(--chris-text-main)",
+  WebkitTextFillColor: "var(--chris-text-main)",
+  caretColor: "var(--chris-gold)",
+  opacity: 1,
+  fontSize: "var(--chris-font-sm)",
+  fontFamily: "var(--chris-font-family)",
   outline: "none",
 };
 
@@ -7277,7 +7379,7 @@ const cancelButtonStyle = {
   border:
     "1px solid #CBD5E1",
   background: "#FFFFFF",
-  color: "#475569",
+  color: "var(--chris-text-muted)",
   borderRadius: "9px",
   padding: "11px 18px",
   fontSize: "13px",
@@ -7343,7 +7445,7 @@ const transferEyebrowStyle = {
   margin:
     "0 0 4px",
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
   fontSize:
     "11px",
   fontWeight:
@@ -7369,7 +7471,7 @@ const transferSubtitleStyle = {
   margin:
     "6px 0 0",
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
   fontSize:
     "13px",
   lineHeight:
@@ -7388,7 +7490,7 @@ const transferSummaryStyle = {
   marginBottom:
     "20px",
   background:
-    "#F8FCFA",
+    "rgba(255,255,255,.025)",
   border:
     "1px solid #DDECE4",
   borderRadius:
@@ -7401,7 +7503,7 @@ const transferSummaryLabelStyle = {
   marginBottom:
     "5px",
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
   fontSize:
     "11px",
   fontWeight:
@@ -7412,7 +7514,7 @@ const transferSummaryLabelStyle = {
 
 const transferSummaryValueStyle = {
   color:
-    "#0F172A",
+    "var(--chris-text-main)",
   fontSize:
     "14px",
 };
@@ -7440,7 +7542,7 @@ const transferTextareaStyle = {
   background:
     "#FFFFFF",
   color:
-    "#0F172A",
+    "var(--chris-text-main)",
   fontSize:
     "14px",
   fontFamily:
@@ -7525,7 +7627,7 @@ const promotionEyebrowStyle = {
     "0 0 4px",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "11px",
@@ -7559,7 +7661,7 @@ const promotionSubtitleStyle = {
     "6px 0 0",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "13px",
@@ -7585,7 +7687,7 @@ const promotionSummaryStyle = {
     "20px",
 
   background:
-    "#F8FCFA",
+    "rgba(255,255,255,.025)",
 
   border:
     "1px solid #DDECE4",
@@ -7602,7 +7704,7 @@ const promotionSummaryLabelStyle = {
     "5px",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "11px",
@@ -7616,7 +7718,7 @@ const promotionSummaryLabelStyle = {
 
 const promotionSummaryValueStyle = {
   color:
-    "#0F172A",
+    "var(--chris-text-main)",
 
   fontSize:
     "14px",
@@ -7638,7 +7740,7 @@ const promotionFieldHintStyle = {
     "6px 0 0",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "11px",
@@ -7658,13 +7760,13 @@ const promotionOptionsMessageStyle = {
     "12px",
 
   background:
-    "#F8FAFC",
+    "rgba(255,255,255,.035)",
 
   border:
     "1px solid #CBD5E1",
 
   color:
-    "#475569",
+    "var(--chris-text-muted)",
 
   fontSize:
     "13px",
@@ -7724,7 +7826,7 @@ const promotionTextareaStyle = {
     "#FFFFFF",
 
   color:
-    "#0F172A",
+    "var(--chris-text-main)",
 
   fontSize:
     "14px",
@@ -7792,7 +7894,7 @@ const episodeSectionStyle = {
     "15px",
 
   background:
-    "linear-gradient(145deg, rgba(248,252,249,0.98), rgba(255,255,255,0.98))",
+    "linear-gradient(145deg, rgba(12,38,26,.94), rgba(7,18,13,.98))",
 };
 
 const episodeSectionHeaderStyle = {
@@ -7831,7 +7933,7 @@ const episodeSectionSubtitleStyle = {
     "4px",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "12px",
@@ -7910,7 +8012,7 @@ const episodeTopRowStyle = {
 
 const episodeNumberStyle = {
   color:
-    "#172033",
+    "var(--chris-text-main)",
 
   fontSize:
     "15px",
@@ -7924,7 +8026,7 @@ const episodeDateRangeStyle = {
     "4px",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "12px",
@@ -7974,7 +8076,7 @@ const episodeDetailStyle = {
 
 const episodeDetailLabelStyle = {
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "10px",
@@ -7994,7 +8096,7 @@ const episodeDetailValueStyle = {
     "3px",
 
   color:
-    "#172033",
+    "var(--chris-text-main)",
 
   fontSize:
     "12px",
@@ -8023,7 +8125,7 @@ const episodeEmptyStyle = {
     "12px",
 
   color:
-    "#64748B",
+    "var(--chris-text-secondary)",
 
   fontSize:
     "12px",
@@ -8084,7 +8186,7 @@ const historyHeaderStyle = {
 
 const historyEyebrowStyle = {
   margin: "0 0 4px",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "11px",
   fontWeight: "800",
   textTransform:
@@ -8102,7 +8204,7 @@ const historyTitleStyle = {
 
 const historySubtitleStyle = {
   margin: "6px 0 0",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "13px",
   lineHeight: "1.6",
 };
@@ -8145,7 +8247,7 @@ const timelineLineStyle = {
 
 const lifecycleCardStyle = {
   padding: "17px",
-  background: "#F8FCFA",
+  background: "rgba(255,255,255,.025)",
   border:
     "1px solid #DDECE4",
   borderRadius: "13px",
@@ -8163,14 +8265,14 @@ const lifecycleTopRowStyle = {
 };
 
 const lifecycleEventTitleStyle = {
-  color: "#0F172A",
+  color: "var(--chris-text-main)",
   fontSize: "15px",
   fontWeight: "800",
 };
 
 const lifecycleDateStyle = {
   marginTop: "3px",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "12px",
 };
 
@@ -8196,13 +8298,13 @@ const historyDetailStyle = {
 };
 
 const historyDetailLabelStyle = {
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "12px",
   fontWeight: "700",
 };
 
 const historyDetailValueStyle = {
-  color: "#334155",
+  color: "var(--chris-text-main)",
   fontSize: "12px",
   fontWeight: "700",
 };
@@ -8210,11 +8312,11 @@ const historyDetailValueStyle = {
 const historyEmptyStyle = {
   padding: "28px",
   textAlign: "center",
-  background: "#F8FAFC",
+  background: "rgba(255,255,255,.035)",
   border:
     "1px dashed #CBD5E1",
   borderRadius: "12px",
-  color: "#64748B",
+  color: "var(--chris-text-secondary)",
   fontSize: "13px",
 };
 

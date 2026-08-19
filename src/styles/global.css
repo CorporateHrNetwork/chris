@@ -238,3 +238,34 @@ textarea {
   box-shadow: var(--chris-shadow-card) !important;
   color: var(--chris-text-main) !important;
 }
+/*
+============================================================
+CHRIS AUTOFILL NORMALIZATION
+============================================================
+Keeps browser autofill/focus from replacing CHRIS dark inputs
+with white/light browser styling.
+============================================================
+*/
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--chris-text-main) !important;
+  caret-color: var(--chris-text-main) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--chris-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--chris-input-bg) inset !important;
+  transition: background-color 9999s ease-out 0s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  color: var(--chris-text-main);
+  background: var(--chris-input-bg);
+}

@@ -37,6 +37,12 @@ const EXIT_STATUSES = [
   "RETIRED",
 ];
 
+function normalizeEmployeeGender(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(normalized)
+    ? normalized
+    : "UNSPECIFIED";
+}
 function normalizeEmployeeName(name) {
   const nameParts = name
     .trim()
@@ -610,6 +616,7 @@ router.put(
         email,
         phone,
         status,
+        gender,
         hireDate,
         confirmationDate,
         exitDate,
@@ -875,6 +882,9 @@ router.put(
 
                   phone:
                     phone.trim(),
+
+                  gender:
+                    normalizeEmployeeGender(gender),
 
                   status:
                     nextStatus,
@@ -8813,6 +8823,9 @@ router.post(
 
                   phone:
                     phone.trim(),
+
+                gender:
+                  normalizeEmployeeGender(gender),
 
                   status:
                     STATUS_MAP[status] ||

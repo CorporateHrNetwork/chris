@@ -219,8 +219,36 @@ export async function apiRequest(
   const token =
     getAuthToken();
 
+  const rawBody =
+    options.body;
+
+  const isFormData =
+    typeof FormData !== "undefined" &&
+    rawBody instanceof FormData;
+
+  const isBlob =
+    typeof Blob !== "undefined" &&
+    rawBody instanceof Blob;
+
+  const isUrlSearchParams =
+    typeof URLSearchParams !== "undefined" &&
+    rawBody instanceof URLSearchParams;
+
+  const shouldSerializeJson =
+    rawBody !== undefined &&
+    rawBody !== null &&
+    typeof rawBody === "object" &&
+    !isFormData &&
+    !isBlob &&
+    !isUrlSearchParams;
+
+  const requestBody =
+    shouldSerializeJson
+      ? JSON.stringify(rawBody)
+      : rawBody;
   const headers = {
-    ...(options.body
+    ...(shouldSerializeJson ||
+    typeof rawBody === "string"
       ? {
           "Content-Type":
             "application/json",
@@ -249,6 +277,9 @@ export async function apiRequest(
         `${API_BASE_URL}${endpoint}`,
         {
           ...options,
+
+          body:
+            requestBody,
 
           headers,
 

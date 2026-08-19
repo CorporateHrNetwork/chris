@@ -1,11 +1,7 @@
 require("dotenv").config();
-const onboardingRoutes = require("./routes/onboardingRoutes");
-
 const app = require("./app");
 
 const PORT = process.env.PORT || 5000;
-
-app.use("/api/employees/onboarding", onboardingRoutes);
 
 app.listen(PORT, () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);

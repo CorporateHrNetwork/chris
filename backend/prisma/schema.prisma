@@ -26,24 +26,26 @@ model Organization {
 
   status OrganizationStatus @default(ACTIVE)
 
-  users                      User[]
-  roles                      Role[]
-  departments                Department[]
-  designations               Designation[]
-  employees                  Employee[]
-  locations                  OrganizationLocation[]
-  employmentEpisodes         EmployeeEmploymentEpisode[]
-  employeeLifecycleEvents    EmployeeLifecycleEvent[]
-  attendancePayrollSetting   AttendancePayrollSetting?
-  attendancePayrollInputs    AttendancePayrollInput[]
-  designationLifecycleEvents DesignationLifecycleEvent[]
-  leaveTypes                 LeaveType[]
-  leavePolicies              LeavePolicy[]
-  leaveBalances              LeaveBalance[]
-  leaveRequests              LeaveRequest[]
-  workShifts                 WorkShift[]
-  employeeShiftAssignments   EmployeeShiftAssignment[]
-  attendanceRecords          AttendanceRecord[]
+  users                       User[]
+  roles                       Role[]
+  departments                 Department[]
+  designations                Designation[]
+  employees                   Employee[]
+  locations                   OrganizationLocation[]
+  employmentEpisodes          EmployeeEmploymentEpisode[]
+  employeeLifecycleEvents     EmployeeLifecycleEvent[]
+  attendancePayrollSetting    AttendancePayrollSetting?
+  attendancePayrollInputs     AttendancePayrollInput[]
+  designationLifecycleEvents  DesignationLifecycleEvent[]
+  leaveTypes                  LeaveType[]
+  leavePolicies               LeavePolicy[]
+  leaveBalances               LeaveBalance[]
+  leaveRequests               LeaveRequest[]
+  workShifts                  WorkShift[]
+  employeeShiftAssignments    EmployeeShiftAssignment[]
+  attendanceRecords           AttendanceRecord[]
+  onboardingWorkflowTemplates OnboardingWorkflowTemplate[]
+  employeeOnboardings         EmployeeOnboarding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -122,12 +124,16 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
 
-  performedLifecycleEvents            EmployeeLifecycleEvent[]    @relation("LifecyclePerformedBy")
-  performedDesignationLifecycleEvents DesignationLifecycleEvent[] @relation("DesignationLifecyclePerformedBy")
-  attendancePayrollSettingsUpdated    AttendancePayrollSetting[]  @relation("AttendancePayrollSettingUpdatedBy")
-  attendancePayrollInputsRecorded     AttendancePayrollInput[]    @relation("AttendancePayrollInputRecordedBy")
-  reviewedLeaveRequests               LeaveRequest[]              @relation("LeaveRequestReviewedBy")
-  recordedAttendanceRecords           AttendanceRecord[]          @relation("AttendanceRecordedBy")
+  performedLifecycleEvents            EmployeeLifecycleEvent[]     @relation("LifecyclePerformedBy")
+  performedDesignationLifecycleEvents DesignationLifecycleEvent[]  @relation("DesignationLifecyclePerformedBy")
+  attendancePayrollSettingsUpdated    AttendancePayrollSetting[]   @relation("AttendancePayrollSettingUpdatedBy")
+  attendancePayrollInputsRecorded     AttendancePayrollInput[]     @relation("AttendancePayrollInputRecordedBy")
+  reviewedLeaveRequests               LeaveRequest[]               @relation("LeaveRequestReviewedBy")
+  recordedAttendanceRecords           AttendanceRecord[]           @relation("AttendanceRecordedBy")
+  onboardingTemplatesCreated          OnboardingWorkflowTemplate[] @relation("OnboardingTemplateCreatedBy")
+  employeeOnboardingsAssigned         EmployeeOnboarding[]         @relation("EmployeeOnboardingAssignedTo")
+  employeeOnboardingsCreated          EmployeeOnboarding[]         @relation("EmployeeOnboardingCreatedBy")
+  employeeOnboardingsCompleted        EmployeeOnboarding[]         @relation("EmployeeOnboardingCompletedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -330,6 +336,13 @@ model Designation {
   @@map("designations")
 }
 
+enum EmployeeGender {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
 model Employee {
   id             String  @id @default(uuid())
   organizationId String
@@ -342,8 +355,9 @@ model Employee {
   middleName     String?
   lastName       String
 
-  email String?
-  phone String?
+  email  String?
+  phone  String?
+  gender EmployeeGender @default(UNSPECIFIED)
 
   status EmployeeStatus @default(ACTIVE)
 
@@ -375,6 +389,7 @@ model Employee {
   leaveRequests           LeaveRequest[]
   shiftAssignments        EmployeeShiftAssignment[]
   attendanceRecords       AttendanceRecord[]
+  onboardings             EmployeeOnboarding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -996,4 +1011,77 @@ model AttendancePayrollInput {
   @@index([employeeId])
   @@index([recordedByUserId])
   @@map("attendance_payroll_inputs")
+}
+
+enum OnboardingStatus {
+  DRAFT
+  IN_PROGRESS
+  AWAITING_EMPLOYEE
+  AWAITING_HR
+  READY_FOR_ACTIVATION
+  COMPLETED
+  BLOCKED
+}
+
+model OnboardingWorkflowTemplate {
+  id              String  @id @default(uuid())
+  organizationId  String
+  name            String
+  code            String
+  employmentType  String?
+  sections        Json
+  isActive        Boolean @default(true)
+  createdByUserId String?
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy           User?                @relation("OnboardingTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  employeeOnboardings EmployeeOnboarding[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([employmentType])
+  @@index([isActive])
+  @@index([createdByUserId])
+  @@map("onboarding_workflow_templates")
+}
+
+model EmployeeOnboarding {
+  id                String           @id @default(uuid())
+  organizationId    String
+  employeeId        String
+  templateId        String
+  status            OnboardingStatus @default(DRAFT)
+  completionPercent Int              @default(0)
+  currentStage      String?
+  sectionProgress   Json
+  sectionData       Json             @default("{}")
+  assignedToUserId  String?
+  createdByUserId   String?
+  completedByUserId String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee                   @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  template     OnboardingWorkflowTemplate @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Restrict)
+  assignedTo   User?                      @relation("EmployeeOnboardingAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdBy    User?                      @relation("EmployeeOnboardingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  completedBy  User?                      @relation("EmployeeOnboardingCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([templateId])
+  @@index([status])
+  @@index([assignedToUserId])
+  @@index([createdByUserId])
+  @@index([completedByUserId])
+  @@map("employee_onboardings")
 }

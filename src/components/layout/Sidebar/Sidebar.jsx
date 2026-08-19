@@ -139,56 +139,56 @@ function Sidebar() {
               label:
                 "Employee Profiles",
 
-              planned:
-                true,
+              path:
+                "/employees/profiles",
             },
 
             {
               label:
                 "Onboarding",
 
-              planned:
-                true,
+              path:
+                "/employees/onboarding",
             },
 
             {
               label:
                 "Employee Analytics",
 
-              planned:
-                true,
+              path:
+                "/employees/analytics",
             },
 
             {
               label:
                 "Transfers",
 
-              planned:
-                true,
+              path:
+                "/employees/transfers",
             },
 
             {
               label:
                 "Promotions",
 
-              planned:
-                true,
+              path:
+                "/employees/promotions",
             },
 
             {
               label:
                 "Exits",
 
-              planned:
-                true,
+              path:
+                "/employees/exits",
             },
 
             {
               label:
                 "Line Managers",
 
-              planned:
-                true,
+              path:
+                "/employees/line-managers",
             },
           ],
         },

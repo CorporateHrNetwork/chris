@@ -24,6 +24,9 @@ function Dashboard() {
     active: 0,
     leave: 0,
     probation: 0,
+    male: 0,
+    female: 0,
+    genderPending: 0,
   });
 
   const [
@@ -77,6 +80,16 @@ function Dashboard() {
                 (employee) =>
                   employee.status ===
                   "PROBATION"
+              ).length,
+            male:
+              employees.filter((employee) => employee.gender === "MALE").length,
+
+            female:
+              employees.filter((employee) => employee.gender === "FEMALE").length,
+
+            genderPending:
+              employees.filter(
+                (employee) => !employee.gender || employee.gender === "UNSPECIFIED"
               ).length,
           });
         } catch (error) {
@@ -193,6 +206,9 @@ function Dashboard() {
           }
         />
 
+        <MiniStat title="Male Employees" value={employeeLoading ? "..." : employeeSummary.male} />
+        <MiniStat title="Female Employees" value={employeeLoading ? "..." : employeeSummary.female} />
+        <MiniStat title="Gender Data Pending" value={employeeLoading ? "..." : employeeSummary.genderPending} />
         <MiniStat
           title="Total Employees"
           value={

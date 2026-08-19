@@ -19,6 +19,9 @@ function Employees() {
     active: 0,
     leave: 0,
     probation: 0,
+    male: 0,
+    female: 0,
+    genderPending: 0,
   });
 
   const [summaryLoading, setSummaryLoading] =
@@ -63,6 +66,11 @@ function Employees() {
           probation: employees.filter(
             (employee) =>
               employee.status === "PROBATION"
+          ).length,
+          male: employees.filter((employee) => employee.gender === "MALE").length,
+          female: employees.filter((employee) => employee.gender === "FEMALE").length,
+          genderPending: employees.filter(
+            (employee) => !employee.gender || employee.gender === "UNSPECIFIED"
           ).length,
         });
       } catch (error) {
@@ -281,6 +289,9 @@ function Employees() {
           subtitle="Currently on leave"
         />
 
+        <SummaryCard title="Male Employees" value={summaryLoading ? "..." : summary.male} subtitle="Recorded male employees" />
+        <SummaryCard title="Female Employees" value={summaryLoading ? "..." : summary.female} subtitle="Recorded female employees" />
+        <SummaryCard title="Gender Data Pending" value={summaryLoading ? "..." : summary.genderPending} subtitle="Employee records requiring gender data" />
         <SummaryCard
           title="Probation"
           value={
