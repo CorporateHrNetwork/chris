@@ -1189,6 +1189,234 @@ router.post(
   }
 );
 
+async function recalculateDocumentsProgress({
+  onboardingId,
+  organizationId,
+  userId,
+}) {
+  const onboarding = await prisma.employeeOnboarding.findFirst({
+    where: { id: onboardingId, organizationId },
+    include: { template: true },
+  });
+
+  if (!onboarding) return null;
+
+  const documents = await prisma.employeeDocument.findMany({
+    where: { organizationId, onboardingId },
+  });
+
+  const sections = normalizeSections(onboarding.template.sections);
+  const section = sections.find((item) => item.key === "documents");
+
+  if (!section) return onboarding;
+
+  const sectionData = { ...(onboarding.sectionData || {}) };
+  sectionData.documents = {
+    uploadedCount: documents.length,
+    lastUpdatedAt: new Date().toISOString(),
+  };
+
+  const completedItemKeys = buildCompletion(
+    "documents",
+    sectionData.documents,
+    documents
+  );
+
+  return applySectionProgress({
+    onboarding,
+    section,
+    sectionKey: "documents",
+    sectionData,
+    completedItemKeys,
+    userId,
+  });
+}
+
+router.delete(
+  "/records/:id/documents/:documentId",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const onboarding = await prisma.employeeOnboarding.findFirst({
+        where: {
+          id: req.params.id,
+          organizationId: req.auth.organizationId,
+        },
+        select: { id: true },
+      });
+
+      if (!onboarding) {
+        return res.status(404).json({
+          status: "error",
+          message: "Employee onboarding record not found.",
+        });
+      }
+
+      const document = await prisma.employeeDocument.findFirst({
+        where: {
+          id: req.params.documentId,
+          onboardingId: onboarding.id,
+          organizationId: req.auth.organizationId,
+        },
+      });
+
+      if (!document) {
+        return res.status(404).json({
+          status: "error",
+          message: "Employee document not found.",
+        });
+      }
+
+      await prisma.employeeDocument.delete({
+        where: { id: document.id },
+      });
+
+      if (document.storagePath && fs.existsSync(document.storagePath)) {
+        try {
+          fs.unlinkSync(document.storagePath);
+        } catch (fileError) {
+          console.error("Delete onboarding document file error:", fileError);
+        }
+      }
+
+      const updatedOnboarding = await recalculateDocumentsProgress({
+        onboardingId: onboarding.id,
+        organizationId: req.auth.organizationId,
+        userId: req.auth.userId,
+      });
+
+      return res.json({
+        status: "success",
+        message: "Employee document deleted successfully.",
+        onboarding: updatedOnboarding,
+      });
+    } catch (error) {
+      console.error("Delete onboarding document error:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "Unable to delete employee document.",
+      });
+    }
+  }
+);
+
+router.post(
+  "/records/:id/documents/:documentId/replace",
+  requirePermission("employees.update"),
+  upload.single("document"),
+  async (req, res) => {
+    try {
+      const onboarding = await prisma.employeeOnboarding.findFirst({
+        where: {
+          id: req.params.id,
+          organizationId: req.auth.organizationId,
+        },
+        select: { id: true },
+      });
+
+      if (!onboarding) {
+        if (req.file?.path) fs.unlink(req.file.path, () => {});
+        return res.status(404).json({
+          status: "error",
+          message: "Employee onboarding record not found.",
+        });
+      }
+
+      const existingDocument = await prisma.employeeDocument.findFirst({
+        where: {
+          id: req.params.documentId,
+          onboardingId: onboarding.id,
+          organizationId: req.auth.organizationId,
+        },
+      });
+
+      if (!existingDocument) {
+        if (req.file?.path) fs.unlink(req.file.path, () => {});
+        return res.status(404).json({
+          status: "error",
+          message: "Employee document not found.",
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          status: "error",
+          message: "Choose the replacement document.",
+        });
+      }
+
+      const category = String(
+        req.body?.category || existingDocument.category
+      ).trim().toUpperCase();
+
+      if (!DOCUMENT_CATEGORY_LABELS[category]) {
+        fs.unlink(req.file.path, () => {});
+        return res.status(400).json({
+          status: "error",
+          message: "Select a valid document type.",
+        });
+      }
+
+      let updatedDocument;
+      try {
+        updatedDocument = await prisma.employeeDocument.update({
+          where: { id: existingDocument.id },
+          data: {
+            category,
+            originalName: req.file.originalname,
+            storedName: req.file.filename,
+            mimeType: req.file.mimetype,
+            sizeBytes: req.file.size,
+            storagePath: req.file.path,
+            notes: req.body?.notes
+              ? String(req.body.notes).trim()
+              : existingDocument.notes,
+            uploadedByUserId: req.auth.userId || null,
+          },
+        });
+      } catch (updateError) {
+        fs.unlink(req.file.path, () => {});
+        throw updateError;
+      }
+
+      if (
+        existingDocument.storagePath &&
+        existingDocument.storagePath !== updatedDocument.storagePath &&
+        fs.existsSync(existingDocument.storagePath)
+      ) {
+        try {
+          fs.unlinkSync(existingDocument.storagePath);
+        } catch (fileError) {
+          console.error("Delete replaced onboarding file error:", fileError);
+        }
+      }
+
+      const updatedOnboarding = await recalculateDocumentsProgress({
+        onboardingId: onboarding.id,
+        organizationId: req.auth.organizationId,
+        userId: req.auth.userId,
+      });
+
+      return res.json({
+        status: "success",
+        message: "Employee document replaced successfully.",
+        data: {
+          ...updatedDocument,
+          categoryLabel:
+            DOCUMENT_CATEGORY_LABELS[updatedDocument.category] ||
+            updatedDocument.category,
+        },
+        onboarding: updatedOnboarding,
+      });
+    } catch (error) {
+      console.error("Replace onboarding document error:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "Unable to replace employee document.",
+      });
+    }
+  }
+);
 router.patch(
   "/records/:id/sections/:sectionKey",
   requirePermission("employees.update"),
