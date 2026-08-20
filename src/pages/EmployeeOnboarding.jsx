@@ -17,6 +17,8 @@ import {
 import {
   apiRequest,
 } from "../services/api";
+import OnboardingSectionDataForm from "../components/employees/OnboardingSectionDataForm";
+import OnboardingDocumentsForm from "../components/employees/OnboardingDocumentsForm";
 import {
   COUNTRY_CATALOG,
   getCountryByCode,
@@ -107,6 +109,27 @@ const EMPLOYMENT_TYPES = [
   "Custom",
 ];
 
+const NIGERIA_PFAS = [
+  "Access ARM Pensions Limited",
+  "Cardinal Stone Pensions Limited",
+  "Citizens Pensions Limited",
+  "Crusader Sterling Pensions Limited",
+  "FCMB Pensions Limited",
+  "Fidelity Pension Managers Limited",
+  "Guaranty Trust Pension Managers Limited",
+  "Leadway PFA Limited",
+  "Nigerian University Pension Management Company (NUPEMCO)",
+  "NLPC Pension Fund Administrators Limited",
+  "Norrenberger Pensions Limited",
+  "NPF Pension Managers Limited",
+  "OAK Pensions Limited",
+  "Parthian Pensions Limited",
+  "Premium Pension Limited",
+  "Stanbic IBTC Pension Managers Limited",
+  "Tangerine APT Pensions Limited",
+  "Trustfund Pensions Limited",
+  "Veritas Glanvills Pensions Limited",
+];
 const WORKFLOW_NAME_OPTIONS = [
   "Permanent Employee Onboarding",
   "Contract Employee Onboarding",
@@ -317,6 +340,10 @@ function EmployeeOnboarding() {
   ] = useState(
     EMPTY_PERSONAL_FORM
   );
+  const [
+    sectionDataForm,
+    setSectionDataForm,
+  ] = useState({});
 
   const [loading, setLoading] =
     useState(true);
@@ -669,6 +696,18 @@ function EmployeeOnboarding() {
     );
 
     if (
+      section.key !==
+        "personal-details" &&
+      section.key !==
+        "documents"
+    ) {
+      setSectionDataForm(
+        record.sectionData?.[
+          section.key
+        ] || {}
+      );
+    }
+    if (
       section.key ===
       "personal-details"
     ) {
@@ -945,6 +984,17 @@ function EmployeeOnboarding() {
 
         body.data = {
           ...sectionForm,
+        };
+      }
+
+      if (
+        activeSection.key !==
+          "personal-details" &&
+        activeSection.key !==
+          "documents"
+      ) {
+        body.data = {
+          ...sectionDataForm,
         };
       }
 
@@ -1968,6 +2018,9 @@ function EmployeeOnboarding() {
                     setSectionForm(
                       EMPTY_PERSONAL_FORM
                     );
+                    setSectionDataForm(
+                      {}
+                    );
                   }}
                 >
                   Close
@@ -2315,31 +2368,48 @@ function EmployeeOnboarding() {
                     details remain attached to this onboarding record.
                   </div>
                 </>
-              ) : (
-                <div style={checklistStyle}>
-                  {sectionItems.map(
-                    (item) => (
-                      <label
-                        key={item.label}
-                        style={checklistItemStyle}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={item.completed}
-                          onChange={() =>
-                            toggleSectionItem(
-                              item.label
-                            )
-                          }
-                        />
+              ) : String(
+                    activeSection.key || ""
+                  )
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[_\s]+/g, "-") ===
+                  "statutory-details" ? (
+                <StatutoryDetailsInlineForm
+                  value={sectionDataForm}
+                  onChange={
+                    setSectionDataForm
+                  }
+                />
+              ) : activeSection.key ===
+                "documents" ? (
+                <OnboardingDocumentsForm
+                  record={selectedRecord}
+                  inputStyle={inputStyle}
+                  onSaved={async (updated) => {
+                    if (updated) {
+                      setSelectedRecord(
+                        updated
+                      );
+                    }
 
-                        <span>
-                          {item.label}
-                        </span>
-                      </label>
-                    )
-                  )}
-                </div>
+                    await load();
+                  }}
+                />
+              ) : (
+                <OnboardingSectionDataForm
+                  sectionKey={
+                    activeSection.key
+                  }
+                  value={sectionDataForm}
+                  onChange={
+                    setSectionDataForm
+                  }
+                  inputStyle={inputStyle}
+                  textareaStyle={
+                    textareaStyle
+                  }
+                />
               )}
 
 <div
@@ -2357,32 +2427,38 @@ function EmployeeOnboarding() {
                     ? calculatePersonalCompletedItems(
                         sectionForm
                       )
-                    : sectionItems.filter(
-                        (item) =>
-                          item.completed
-                      ).length}
+                    : Number(
+                        selectedRecord
+                          .sectionProgress?.[
+                          activeSection.key
+                        ]?.completedItems ||
+                          0
+                      )}
                   /
                   {activeSection.items.length}{" "}
                   completed
                 </span>
 
-                <button
-                  type="button"
-                  style={
-                    primaryButtonStyle
-                  }
-                  disabled={
-                    savingSection
-                  }
-                  onClick={
-                    saveSection
-                  }
-                >
-                  <FaSave />
-                  {savingSection
-                    ? "Saving..."
-                    : "Save Section"}
-                </button>
+                {activeSection.key !==
+                "documents" ? (
+                  <button
+                    type="button"
+                    style={
+                      primaryButtonStyle
+                    }
+                    disabled={
+                      savingSection
+                    }
+                    onClick={
+                      saveSection
+                    }
+                  >
+                    <FaSave />
+                    {savingSection
+                      ? "Saving..."
+                      : "Save Section"}
+                  </button>
+                ) : null}
               </div>
             </section>
           ) : null}
@@ -2392,6 +2468,182 @@ function EmployeeOnboarding() {
   );
 }
 
+function StatutoryDetailsInlineForm({
+  value,
+  onChange,
+}) {
+  const data = value || {};
+
+  function setField(
+    name,
+    nextValue
+  ) {
+    onChange({
+      ...data,
+      [name]: nextValue,
+    });
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns:
+          "repeat(auto-fit,minmax(240px,1fr))",
+        gap: 14,
+      }}
+    >
+      <Field label="Tax Identification Number (TIN)">
+        <input
+          value={
+            data.taxIdentificationNumber || ""
+          }
+          onChange={(event) =>
+            setField(
+              "taxIdentificationNumber",
+              event.target.value
+            )
+          }
+          style={inputStyle}
+        />
+      </Field>
+
+      <Field label="PAYE State / Tax Authority">
+        <select
+          value={
+            data.payeState || ""
+          }
+          onChange={(event) =>
+            setField(
+              "payeState",
+              event.target.value
+            )
+          }
+          style={inputStyle}
+        >
+          <option value="">
+            Select PAYE state
+          </option>
+
+          {NIGERIA_STATES.map(
+            (state) => (
+              <option
+                key={state}
+                value={state}
+              >
+                {state}
+              </option>
+            )
+          )}
+        </select>
+      </Field>
+
+      <Field label="Pension Fund Administrator (PFA)">
+        <select
+          value={
+            data.pensionPfa || ""
+          }
+          onChange={(event) =>
+            setField(
+              "pensionPfa",
+              event.target.value
+            )
+          }
+          style={inputStyle}
+        >
+          <option value="">
+            Select Pension Fund Administrator
+          </option>
+
+          {NIGERIA_PFAS.map(
+            (pfa) => (
+              <option
+                key={pfa}
+                value={pfa}
+              >
+                {pfa}
+              </option>
+            )
+          )}
+        </select>
+      </Field>
+
+      <Field label="Retirement Savings Account (RSA) PIN">
+        <input
+          value={
+            data.pensionPin || ""
+          }
+          onChange={(event) =>
+            setField(
+              "pensionPin",
+              event.target.value
+            )
+          }
+          style={inputStyle}
+        />
+      </Field>
+
+      <Field label="NHIA / Health Insurance Number">
+        <input
+          value={
+            data.nhiaNumber || ""
+          }
+          onChange={(event) =>
+            setField(
+              "nhiaNumber",
+              event.target.value
+            )
+          }
+          style={inputStyle}
+        />
+      </Field>
+
+      <Field label="Other Statutory Requirements">
+        <select
+          value={
+            data.otherStatutoryStatus || ""
+          }
+          onChange={(event) =>
+            setField(
+              "otherStatutoryStatus",
+              event.target.value
+            )
+          }
+          style={inputStyle}
+        >
+          <option value="">
+            Select option
+          </option>
+          <option value="Completed">
+            Completed
+          </option>
+          <option value="Not Applicable">
+            Not Applicable
+          </option>
+          <option value="Pending">
+            Pending
+          </option>
+        </select>
+      </Field>
+
+      <Field label="Other Statutory Notes">
+        <textarea
+          value={
+            data.otherStatutoryNotes || ""
+          }
+          onChange={(event) =>
+            setField(
+              "otherStatutoryNotes",
+              event.target.value
+            )
+          }
+          style={textareaStyle}
+          rows="3"
+        />
+      </Field>
+    </div>
+  );
+}
 function TabButton({
   active,
   children,

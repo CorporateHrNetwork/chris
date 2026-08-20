@@ -3,6 +3,7 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
+const onboardingRoutes = require("./routes/onboardingRoutes");
 const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
 const locationRoutes = require("./routes/locationRoutes");
@@ -85,6 +86,11 @@ CHRIS API ROUTES
 app.use(
   "/api/auth",
   authRoutes
+);
+
+app.use(
+  "/api/employees/onboarding",
+  onboardingRoutes
 );
 
 app.use(

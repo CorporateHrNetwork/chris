@@ -46,6 +46,7 @@ model Organization {
   attendanceRecords           AttendanceRecord[]
   onboardingWorkflowTemplates OnboardingWorkflowTemplate[]
   employeeOnboardings         EmployeeOnboarding[]
+  employeeDocuments           EmployeeDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -134,6 +135,7 @@ model User {
   employeeOnboardingsAssigned         EmployeeOnboarding[]         @relation("EmployeeOnboardingAssignedTo")
   employeeOnboardingsCreated          EmployeeOnboarding[]         @relation("EmployeeOnboardingCreatedBy")
   employeeOnboardingsCompleted        EmployeeOnboarding[]         @relation("EmployeeOnboardingCompletedBy")
+  employeeDocumentsUploaded           EmployeeDocument[]           @relation("EmployeeDocumentUploadedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -390,6 +392,7 @@ model Employee {
   shiftAssignments        EmployeeShiftAssignment[]
   attendanceRecords       AttendanceRecord[]
   onboardings             EmployeeOnboarding[]
+  documents               EmployeeDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1072,6 +1075,7 @@ model EmployeeOnboarding {
   assignedTo   User?                      @relation("EmployeeOnboardingAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   createdBy    User?                      @relation("EmployeeOnboardingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   completedBy  User?                      @relation("EmployeeOnboardingCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  documents    EmployeeDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1084,4 +1088,34 @@ model EmployeeOnboarding {
   @@index([createdByUserId])
   @@index([completedByUserId])
   @@map("employee_onboardings")
+}
+
+model EmployeeDocument {
+  id               String  @id @default(uuid())
+  organizationId   String
+  employeeId       String
+  onboardingId     String?
+  category         String
+  originalName     String
+  storedName       String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String
+  notes            String?
+  uploadedByUserId String?
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee            @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  onboarding   EmployeeOnboarding? @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  uploadedBy   User?               @relation("EmployeeDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([onboardingId])
+  @@index([category])
+  @@index([uploadedByUserId])
+  @@map("employee_documents")
 }
