@@ -866,38 +866,14 @@ function EmployeeTable() {
 
   const openExitForm =
     (employee) => {
-      setReinstateEmployee(
-        null
-      );
-
-      setRehireEmployee(
-        null
-      );
-
-      setExitEmployee(
-        employee
-      );
-
-      setExitStatus(
-        "RESIGNED"
-      );
-
-      setExitDate(
-        new Date()
-          .toISOString()
-          .slice(0, 10)
-      );
-
-      setExitReason(
-        ""
-      );
-
-      setExitNotes(
-        ""
-      );
-
       setError("");
       setSuccess("");
+
+      navigate(
+        `/employees/exits?employeeNumber=${encodeURIComponent(
+          employee.id
+        )}`
+      );
     };
 
   /*

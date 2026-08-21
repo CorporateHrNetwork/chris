@@ -20,6 +20,7 @@ import Employees from "./pages/Employees";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
 import EmployeeOnboarding from "./pages/EmployeeOnboarding";
+import EmployeeExits from "./pages/EmployeeExits";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
 import Recruitment from "./pages/Recruitment";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
@@ -176,7 +177,7 @@ function App() {
           path="/employees/exits"
           element={
             <PermissionLayout permission="employees.view">
-              <EmployeeModuleWorkspace mode="exits" />
+              <EmployeeExits />
             </PermissionLayout>
           }
         />

@@ -2832,7 +2832,7 @@ const handleChange = (
             backButtonStyle
           }
         >
-          Ã¢â€ Â Back
+          {"<-"} Back
         </button>
 
         <ErrorMessage
@@ -2867,7 +2867,7 @@ const handleChange = (
           backButtonStyle
         }
       >
-        Ã¢â€ Â Back
+        {"<-"} Back
       </button>
 
       {success && (

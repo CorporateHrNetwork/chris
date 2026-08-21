@@ -37,6 +37,11 @@ const EXIT_STATUSES = [
   "RETIRED",
 ];
 
+const REHIRE_STATUSES = [
+  ...EXIT_STATUSES,
+  "INACTIVE",
+];
+
 function normalizeEmployeeGender(value) {
   const normalized = String(value || "").trim().toUpperCase();
   return ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(normalized)
@@ -3719,9 +3724,10 @@ router.patch(
       }
 
       if (
-        !EXIT_STATUSES.includes(
+        !REHIRE_STATUSES.includes(
           existingEmployee.status
-        )
+        ) ||
+        !existingEmployee.exitDate
       ) {
         return res.status(409).json({
           status:
@@ -3731,7 +3737,7 @@ router.patch(
             "EMPLOYEE_NOT_ELIGIBLE_FOR_REHIRE",
 
           message:
-            "Only resigned, terminated or retired employees can be rehired.",
+            "Only employees with a completed exit can be rehired.",
         });
       }
 
