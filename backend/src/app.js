@@ -15,6 +15,7 @@ const employeeIntegrityRoutes = require("./routes/employeeIntegrityRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const exitRoutes = require("./routes/exitRoutes");
+const lineManagerRoutes = require("./routes/lineManagerRoutes");
 
 const app = express();
 
@@ -131,6 +132,10 @@ app.use(
 app.use(
   "/api/exits",
   exitRoutes
+);
+app.use(
+  "/api/line-managers",
+  lineManagerRoutes
 );
 
 app.use(

@@ -48,6 +48,7 @@ model Organization {
   employeeOnboardings         EmployeeOnboarding[]
   employeeDocuments           EmployeeDocument[]
   employeeExitProcesses       EmployeeExitProcess[]
+  lineManagerAssignments      EmployeeLineManagerAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,20 +127,21 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
 
-  performedLifecycleEvents            EmployeeLifecycleEvent[]     @relation("LifecyclePerformedBy")
-  performedDesignationLifecycleEvents DesignationLifecycleEvent[]  @relation("DesignationLifecyclePerformedBy")
-  attendancePayrollSettingsUpdated    AttendancePayrollSetting[]   @relation("AttendancePayrollSettingUpdatedBy")
-  attendancePayrollInputsRecorded     AttendancePayrollInput[]     @relation("AttendancePayrollInputRecordedBy")
-  reviewedLeaveRequests               LeaveRequest[]               @relation("LeaveRequestReviewedBy")
-  recordedAttendanceRecords           AttendanceRecord[]           @relation("AttendanceRecordedBy")
-  onboardingTemplatesCreated          OnboardingWorkflowTemplate[] @relation("OnboardingTemplateCreatedBy")
-  employeeOnboardingsAssigned         EmployeeOnboarding[]         @relation("EmployeeOnboardingAssignedTo")
-  employeeOnboardingsCreated          EmployeeOnboarding[]         @relation("EmployeeOnboardingCreatedBy")
-  employeeOnboardingsCompleted        EmployeeOnboarding[]         @relation("EmployeeOnboardingCompletedBy")
-  employeeDocumentsUploaded           EmployeeDocument[]           @relation("EmployeeDocumentUploadedBy")
-  employeeExitProcessesInitiated      EmployeeExitProcess[]        @relation("EmployeeExitInitiatedBy")
-  employeeExitProcessesCompleted      EmployeeExitProcess[]        @relation("EmployeeExitCompletedBy")
-  employeeExitProcessesCancelled      EmployeeExitProcess[]        @relation("EmployeeExitCancelledBy")
+  performedLifecycleEvents            EmployeeLifecycleEvent[]        @relation("LifecyclePerformedBy")
+  performedDesignationLifecycleEvents DesignationLifecycleEvent[]     @relation("DesignationLifecyclePerformedBy")
+  attendancePayrollSettingsUpdated    AttendancePayrollSetting[]      @relation("AttendancePayrollSettingUpdatedBy")
+  attendancePayrollInputsRecorded     AttendancePayrollInput[]        @relation("AttendancePayrollInputRecordedBy")
+  reviewedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReviewedBy")
+  recordedAttendanceRecords           AttendanceRecord[]              @relation("AttendanceRecordedBy")
+  onboardingTemplatesCreated          OnboardingWorkflowTemplate[]    @relation("OnboardingTemplateCreatedBy")
+  employeeOnboardingsAssigned         EmployeeOnboarding[]            @relation("EmployeeOnboardingAssignedTo")
+  employeeOnboardingsCreated          EmployeeOnboarding[]            @relation("EmployeeOnboardingCreatedBy")
+  employeeOnboardingsCompleted        EmployeeOnboarding[]            @relation("EmployeeOnboardingCompletedBy")
+  employeeDocumentsUploaded           EmployeeDocument[]              @relation("EmployeeDocumentUploadedBy")
+  employeeExitProcessesInitiated      EmployeeExitProcess[]           @relation("EmployeeExitInitiatedBy")
+  employeeExitProcessesCompleted      EmployeeExitProcess[]           @relation("EmployeeExitCompletedBy")
+  employeeExitProcessesCancelled      EmployeeExitProcess[]           @relation("EmployeeExitCancelledBy")
+  lineManagerAssignmentsPerformed     EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentPerformedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -388,16 +390,18 @@ model Employee {
 
   user User?
 
-  employmentEpisodes      EmployeeEmploymentEpisode[]
-  lifecycleEvents         EmployeeLifecycleEvent[]
-  attendancePayrollInputs AttendancePayrollInput[]
-  leaveBalances           LeaveBalance[]
-  leaveRequests           LeaveRequest[]
-  shiftAssignments        EmployeeShiftAssignment[]
-  attendanceRecords       AttendanceRecord[]
-  onboardings             EmployeeOnboarding[]
-  documents               EmployeeDocument[]
-  exitProcesses           EmployeeExitProcess[]
+  employmentEpisodes         EmployeeEmploymentEpisode[]
+  lifecycleEvents            EmployeeLifecycleEvent[]
+  attendancePayrollInputs    AttendancePayrollInput[]
+  leaveBalances              LeaveBalance[]
+  leaveRequests              LeaveRequest[]
+  shiftAssignments           EmployeeShiftAssignment[]
+  attendanceRecords          AttendanceRecord[]
+  onboardings                EmployeeOnboarding[]
+  documents                  EmployeeDocument[]
+  exitProcesses              EmployeeExitProcess[]
+  lineManagerAssignments     EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentEmployee")
+  managedEmployeeAssignments EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentManager")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -410,6 +414,34 @@ model Employee {
   @@index([locationId])
   @@index([status])
   @@map("employees")
+}
+
+model EmployeeLineManagerAssignment {
+  id                String    @id @default(uuid())
+  organizationId    String
+  employeeId        String
+  managerEmployeeId String
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  reason            String?
+  notes             String?
+  performedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation("LineManagerAssignmentEmployee", fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  manager      Employee     @relation("LineManagerAssignmentManager", fields: [organizationId, managerEmployeeId], references: [organizationId, id], onDelete: Restrict)
+  performedBy  User?        @relation("LineManagerAssignmentPerformedBy", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, managerEmployeeId])
+  @@index([employeeId, effectiveFrom])
+  @@index([managerEmployeeId, effectiveTo])
+  @@index([performedByUserId])
+  @@map("employee_line_manager_assignments")
 }
 
 model EmployeeEmploymentEpisode {

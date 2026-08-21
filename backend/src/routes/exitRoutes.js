@@ -5,6 +5,9 @@ const {
   requireAuth,
   requirePermission,
 } = require("../middleware/authMiddleware");
+const {
+  closeLineManagerAssignmentsForExit,
+} = require("../services/lineManagerService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -479,6 +482,13 @@ router.post(
             data: { isActive: false },
           });
         }
+
+        await closeLineManagerAssignmentsForExit(tx, {
+          organizationId,
+          employeeId: employee.id,
+          effectiveTo: exitProcess.lastWorkingDay,
+          performedByUserId: req.auth.userId || null,
+        });
 
         return tx.employeeExitProcess.update({
           where: { id: exitProcess.id },

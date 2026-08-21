@@ -287,6 +287,14 @@ function EmployeeTable() {
                     ?.name ||
                   "-",
 
+                lineManager:
+                  employee.lineManagerAssignments?.[0]?.manager
+                    ? [
+                        employee.lineManagerAssignments[0].manager.firstName,
+                        employee.lineManagerAssignments[0].manager.lastName,
+                      ].filter(Boolean).join(" ")
+                    : "Not Assigned",
+
                 locationId:
                   employee.location
                     ?.id ||
@@ -3080,6 +3088,10 @@ function EmployeeTable() {
                 </th>
 
                 <th style={th}>
+                  Line Manager
+                </th>
+
+                <th style={th}>
                   Location
                 </th>
 
@@ -3170,6 +3182,10 @@ function EmployeeTable() {
 
                         <td style={td}>
                           {employee.designation}
+                        </td>
+
+                        <td style={td}>
+                          {employee.lineManager}
                         </td>
 
                         <td style={td}>

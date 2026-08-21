@@ -89,6 +89,13 @@ async function getEmployee(
       designation: true,
       location: true,
       user: true,
+      lineManagerAssignments: {
+        where: { effectiveTo: null },
+        take: 1,
+        include: {
+          manager: { include: { department: true, designation: true } },
+        },
+      },
     },
   });
 }
@@ -118,6 +125,13 @@ router.get(
             department: true,
             designation: true,
             location: true,
+            lineManagerAssignments: {
+              where: { effectiveTo: null },
+              take: 1,
+              include: {
+                manager: { include: { department: true, designation: true } },
+              },
+            },
 
             user: {
               select: {

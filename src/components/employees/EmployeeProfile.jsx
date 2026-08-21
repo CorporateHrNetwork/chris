@@ -362,12 +362,19 @@ function EmployeeProfile() {
       setLoading(true);
       setError("");
 
-      const result =
-        await apiRequest(
+      const [
+        result,
+        lineManagerResult,
+      ] = await Promise.all([
+        apiRequest(
           `/api/employees/${encodeURIComponent(
             employeeNumber
           )}`
-        );
+        ),
+        apiRequest(
+          `/api/line-managers/employees/${encodeURIComponent(employeeNumber)}`
+        ),
+      ]);
 
       const employee =
         result.data;
@@ -436,6 +443,11 @@ function EmployeeProfile() {
           employee.location
             ?.code ||
           "",
+
+        lineManagerAssignments:
+          lineManagerResult.current
+            ? [lineManagerResult.current]
+            : [],
       };
 
       setProfile(
@@ -3443,6 +3455,25 @@ const handleChange = (
                 )
               }
             />
+          </InformationCard>
+
+          <InformationCard title="Line Manager">
+            <InfoRow
+              label="Current Manager"
+              value={
+                profile.lineManagerAssignments?.[0]
+                  ? [
+                      profile.lineManagerAssignments[0].manager.firstName,
+                      profile.lineManagerAssignments[0].manager.middleName,
+                      profile.lineManagerAssignments[0].manager.lastName,
+                    ].filter(Boolean).join(" ")
+                  : "Not assigned"
+              }
+            />
+            <InfoRow label="Employee Number" value={profile.lineManagerAssignments?.[0]?.manager?.employeeNumber || "-"} />
+            <InfoRow label="Designation" value={profile.lineManagerAssignments?.[0]?.manager?.designation?.name || "-"} />
+            <InfoRow label="Department" value={profile.lineManagerAssignments?.[0]?.manager?.department?.name || "-"} />
+            <InfoRow label="Effective From" value={formatDate(profile.lineManagerAssignments?.[0]?.effectiveFrom)} />
           </InformationCard>
 
           <InformationCard

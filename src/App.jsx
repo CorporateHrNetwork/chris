@@ -21,6 +21,7 @@ import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
 import EmployeeOnboarding from "./pages/EmployeeOnboarding";
 import EmployeeExits from "./pages/EmployeeExits";
+import LineManagers from "./pages/LineManagers";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
 import Recruitment from "./pages/Recruitment";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
@@ -186,7 +187,7 @@ function App() {
           path="/employees/line-managers"
           element={
             <PermissionLayout permission="employees.view">
-              <EmployeeModuleWorkspace mode="line-managers" />
+              <LineManagers />
             </PermissionLayout>
           }
         />
