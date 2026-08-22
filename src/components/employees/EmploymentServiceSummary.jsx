@@ -1,6 +1,8 @@
+import EmployeeStatusBadge from "../common/StatusBadge";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "../../services/api";
+import { formatDate } from "../../utils/dateFormat";
 
 function EmploymentServiceSummary({ employeeNumber }) {
   const [summary, setSummary] = useState(null);
@@ -65,7 +67,7 @@ function EmploymentServiceSummary({ employeeNumber }) {
         </div>
 
         {summary ? (
-          <StatusBadge
+          <EmployeeStatusBadge
             status={
               summary.employmentStatus ||
               summary.employee?.status
@@ -149,13 +151,6 @@ function EmploymentServiceSummary({ employeeNumber }) {
   );
 }
 
-function StatusBadge({ status }) {
-  return (
-    <span style={statusStyle}>
-      {formatStatus(status)}
-    </span>
-  );
-}
 
 function MessageBox({ children, error = false }) {
   return (
@@ -209,35 +204,6 @@ function compactDuration(duration) {
   return parts.join(" ");
 }
 
-function formatStatus(status) {
-  if (!status) return "Unknown";
-
-  return String(status)
-    .toLowerCase()
-    .split("_")
-    .map(
-      (part) =>
-        part.charAt(0).toUpperCase() +
-        part.slice(1)
-    )
-    .join(" ");
-}
-
-function formatDate(value) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 const panelStyle = {
   marginTop: "22px",
@@ -297,16 +263,6 @@ const metricValueStyle = {
   marginTop: 7,
   color: "var(--chris-text-main)",
   fontSize: "var(--chris-font-sm)",
-  fontWeight: 900,
-};
-
-const statusStyle = {
-  padding: "6px 10px",
-  borderRadius: "var(--chris-radius-pill)",
-  border: "1px solid rgba(212,175,55,.25)",
-  background: "rgba(212,175,55,.07)",
-  color: "var(--chris-gold)",
-  fontSize: "var(--chris-font-xs)",
   fontWeight: 900,
 };
 

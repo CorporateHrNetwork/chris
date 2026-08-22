@@ -9,8 +9,20 @@ const {
   closeLineManagerAssignmentsForExit,
 } = require("../services/lineManagerService");
 
+const { getExitRegister } = require("../services/exitRegisterService");
+
 const router = express.Router();
 router.use(requireAuth);
+
+router.get("/register", requirePermission("employees.view"), async (req, res) => {
+  try {
+    const data = await getExitRegister(prisma, req.auth.organizationId);
+    return res.json({ status: "success", data });
+  } catch (error) {
+    console.error("Load exit register error:", error);
+    return res.status(500).json({ status: "error", message: "Unable to load the exit register." });
+  }
+});
 
 const EXIT_TYPES = {
   RESIGNATION: "RESIGNED",

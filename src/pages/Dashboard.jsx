@@ -11,6 +11,7 @@ import RecentEmployees from "../components/dashboard/RecentEmployees";
 import Announcements from "../components/dashboard/Announcements";
 import QuickActions from "../components/dashboard/QuickActions";
 import PayrollSummary from "../components/dashboard/PayrollSummary";
+import WorkforceKpis from "../components/dashboard/WorkforceKpis";
 
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
@@ -114,6 +115,8 @@ function Dashboard() {
     >
       <DashboardHeader />
 
+      <WorkforceKpis />
+
       {/* KPI CARDS */}
       <div
         style={{
@@ -169,54 +172,12 @@ function Dashboard() {
         )}
       </div>
 
-      {/* EMPLOYEE STATUS SUMMARY */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: "16px",
-          marginTop: "24px",
-        }}
-      >
-        <MiniStat
-          title="Active Employees"
-          value={
-            employeeLoading
-              ? "..."
-              : employeeSummary.active
-          }
-        />
-
-        <MiniStat
-          title="On Leave"
-          value={
-            employeeLoading
-              ? "..."
-              : employeeSummary.leave
-          }
-        />
-
-        <MiniStat
-          title="Probation"
-          value={
-            employeeLoading
-              ? "..."
-              : employeeSummary.probation
-          }
-        />
-
+      {/* EMPLOYEE DEMOGRAPHICS */}
+      <h2 style={{ margin: "28px 0 0", color: "#F7FAF8", fontSize: "17px" }}>Employee Demographics</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginTop: "12px" }}>
         <MiniStat title="Male Employees" value={employeeLoading ? "..." : employeeSummary.male} />
         <MiniStat title="Female Employees" value={employeeLoading ? "..." : employeeSummary.female} />
         <MiniStat title="Gender Data Pending" value={employeeLoading ? "..." : employeeSummary.genderPending} />
-        <MiniStat
-          title="Total Employees"
-          value={
-            employeeLoading
-              ? "..."
-              : employeeSummary.total
-          }
-        />
       </div>
 
       {/* DASHBOARD CONTENT */}

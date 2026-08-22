@@ -49,11 +49,35 @@ model Organization {
   employeeDocuments           EmployeeDocument[]
   employeeExitProcesses       EmployeeExitProcess[]
   lineManagerAssignments      EmployeeLineManagerAssignment[]
+  workforceSnapshots          WorkforceSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("organizations")
+}
+
+model WorkforceSnapshot {
+  id             String   @id @default(uuid())
+  organizationId String
+  snapshotDate   DateTime
+
+  totalCurrent    Int
+  activeCount     Int
+  probationCount  Int
+  leaveCount      Int
+  suspendedCount  Int
+  totalHistorical Int
+  exitedCount     Int
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, snapshotDate])
+  @@index([organizationId, snapshotDate])
+  @@map("workforce_snapshots")
 }
 
 model OrganizationLocation {

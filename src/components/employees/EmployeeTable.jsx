@@ -1,3 +1,5 @@
+import { formatEmployeeStatus } from "../../utils/employeeStatus";
+import EmployeeStatusBadge from "../common/StatusBadge";
 import {
   useCallback,
   useEffect,
@@ -327,7 +329,7 @@ function EmployeeTable() {
                   employee.status,
 
                 status:
-                  formatStatus(
+                  formatEmployeeStatus(
                     employee.status
                   ),
 
@@ -3241,7 +3243,7 @@ function EmployeeTable() {
                         </td>
 
                         <td style={td}>
-                          <StatusBadge
+                          <EmployeeStatusBadge
                             status={
                               employee.status
                             }
@@ -3481,40 +3483,6 @@ function FilterLabel({
   );
 }
 
-function formatStatus(
-  status
-) {
-  const labels = {
-    ACTIVE:
-      "Active",
-
-    PROBATION:
-      "Probation",
-
-    LEAVE:
-      "Leave",
-
-    SUSPENDED:
-      "Suspended",
-
-    TERMINATED:
-      "Terminated",
-
-    RESIGNED:
-      "Resigned",
-
-    RETIRED:
-      "Retired",
-
-    INACTIVE:
-      "Inactive",
-  };
-
-  return (
-    labels[status] ||
-    status
-  );
-}
 
 function formatDirectoryDate(
   value
@@ -3550,106 +3518,6 @@ function formatDirectoryDate(
 }
 
 
-function StatusBadge({
-  status,
-}) {
-  let background =
-    "#F1F5F9";
-
-  let color =
-    "#475569";
-
-  if (
-    status ===
-    "Active"
-  ) {
-    background =
-      "#E8F8F0";
-
-    color =
-      "#087443";
-  }
-
-  if (
-    status ===
-    "Leave"
-  ) {
-    background =
-      "#FFF4E5";
-
-    color =
-      "#B45309";
-  }
-
-  if (
-    status ===
-    "Probation"
-  ) {
-    background =
-      "#F0E9FF";
-
-    color =
-      "#6D28D9";
-  }
-
-  if (
-    status ===
-    "Suspended"
-  ) {
-    background =
-      "#FEF2F2";
-
-    color =
-      "#B91C1C";
-  }
-
-  if (
-    [
-      "Terminated",
-      "Resigned",
-      "Retired",
-      "Inactive",
-    ].includes(
-      status
-    )
-  ) {
-    background =
-      "#F1F5F9";
-
-    color =
-      "#475569";
-  }
-
-  return (
-    <span
-      style={{
-        display:
-          "inline-flex",
-
-        alignItems:
-          "center",
-
-        padding:
-          "6px 10px",
-
-        borderRadius:
-          "999px",
-
-        background,
-
-        color,
-
-        fontSize:
-          "12px",
-
-        fontWeight:
-          "700",
-      }}
-    >
-      {status}
-    </span>
-  );
-}
 
 const workforceTabsStyle = {
   display:

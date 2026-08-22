@@ -1,3 +1,4 @@
+import { formatEmployeeStatus, getEmployeeStatusMeta } from "../utils/employeeStatus";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -23,6 +24,7 @@ import {
 function EmployeeDashboard() {
   const navigate = useNavigate();
   const [employees, setEmployees] = useState([]);
+  const [workforceAnalytics, setWorkforceAnalytics] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -32,11 +34,14 @@ function EmployeeDashboard() {
       setError("");
 
       try {
-        const result = await apiRequest(
-          "/api/employees"
-        );
+        const [result, analyticsResult] = await Promise.all([
+          apiRequest("/api/employees"),
+          apiRequest("/api/analytics/workforce"),
+        ]);
 
         if (!active) return;
+
+        setWorkforceAnalytics(analyticsResult?.data || null);
 
         setEmployees(
           Array.isArray(result?.data)
@@ -82,11 +87,10 @@ function EmployeeDashboard() {
       probation:
         statusCount.PROBATION || 0,
       inactive:
-        (statusCount.INACTIVE || 0) +
-        (statusCount.EXITED || 0),
+        workforceAnalytics?.headcount?.exited || 0,
       statusCount,
     };
-  }, [employees]);
+  }, [employees, workforceAnalytics]);
 
   const activity = useMemo(() => {
     const latest =
@@ -134,7 +138,7 @@ function EmployeeDashboard() {
           employee.employeeNumber ||
           "Employee",
         description:
-          `${employee.employeeNumber || "Employee"} • ${formatStatus(
+          `${employee.employeeNumber || "Employee"} • ${formatEmployeeStatus(
             employee.status
           )}`,
         time:
@@ -254,12 +258,12 @@ function EmployeeDashboard() {
                       <span
                         style={{
                           color:
-                            "var(--chris-dashboard-text)",
+                            getEmployeeStatusMeta(status).color,
                           fontWeight:
                             800,
                         }}
                       >
-                        {formatStatus(
+                        {formatEmployeeStatus(
                           status
                         )}
                       </span>
@@ -368,22 +372,6 @@ function EmployeeDashboard() {
       />
     </>
   );
-}
-
-function formatStatus(value) {
-  if (!value) {
-    return "Unspecified";
-  }
-
-  return String(value)
-    .toLowerCase()
-    .split("_")
-    .map(
-      (part) =>
-        part.charAt(0).toUpperCase() +
-        part.slice(1)
-    )
-    .join(" ");
 }
 
 export default EmployeeDashboard;

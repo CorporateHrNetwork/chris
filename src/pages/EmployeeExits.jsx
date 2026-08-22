@@ -1,3 +1,4 @@
+import EmployeeStatusBadge from "../components/common/StatusBadge";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaCheckCircle, FaRedo, FaSignOutAlt } from "react-icons/fa";
@@ -84,6 +85,7 @@ export default function EmployeeExits() {
   const [selectedEmployeeRecord,setSelectedEmployeeRecord] = useState(null);
   const [rehireEmployeeRecord,setRehireEmployeeRecord] = useState(null);
   const [exits, setExits] = useState([]);
+  const [exitRegister, setExitRegister] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -97,10 +99,11 @@ export default function EmployeeExits() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [employeeResult, exitResult, departmentResult, designationResult, locationResult] =
+      const [employeeResult, exitResult, registerResult, departmentResult, designationResult, locationResult] =
         await Promise.all([
           apiRequest("/api/employees"),
           apiRequest("/api/exits"),
+          apiRequest("/api/exits/register"),
           apiRequest("/api/employees/career/departments"),
           apiRequest("/api/employees/career/catalog"),
           apiRequest("/api/location-catalog"),
@@ -108,6 +111,7 @@ export default function EmployeeExits() {
 
       setEmployees(employeeResult?.data || []);
       setExits(exitResult?.data || []);
+      setExitRegister(registerResult?.data || []);
       setDepartments((departmentResult?.data || []).filter((item) => item.isActive !== false));
       setDesignations((designationResult?.data || []).filter((item) => item.isActive !== false));
       setLocations((locationResult?.data || []).filter((item) => item.isActive !== false));
@@ -185,18 +189,7 @@ export default function EmployeeExits() {
     [selectedEmployee, exits]
   );
 
-  const exitedEmployees = useMemo(
-    () =>
-      employees.filter((employee) => {
-        const hasCompletedExit = exits.some(
-          (item) => item.employeeId === employee.id && item.status === "COMPLETED"
-        );
-        const finalStatus = ["RESIGNED", "TERMINATED", "RETIRED"].includes(employee.status);
-        const inactiveExit = employee.status === "INACTIVE" && Boolean(employee.exitDate);
-        return hasCompletedExit && Boolean(employee.exitDate) && (finalStatus || inactiveExit);
-      }),
-    [employees, exits]
-  );
+  const exitedEmployees = exitRegister;
 
   const rehireDesignationOptions = useMemo(
     () =>
@@ -687,7 +680,7 @@ export default function EmployeeExits() {
       <PageHero
         eyebrow="EMPLOYEE LIFECYCLE"
         title="Exited Employees"
-        subtitle="Permanent exit register. Employees appear here automatically after the exit workflow is completed."
+        subtitle="Current-state exit register for employees whose employment relationship has concluded."
       />
 
       {feedback ? <div style={feedbackStyle}>{feedback}</div> : null}
@@ -716,12 +709,13 @@ export default function EmployeeExits() {
                   <th style={th}>Location</th>
                   <th style={th}>Status</th>
                   <th style={th}>Exit Date</th>
+                  <th style={th}>Exit Workflow</th>
                   <th style={th}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {exitedEmployees.map((employee) => (
-                  <tr key={employee.id}>
+                  <tr key={employee.employeeId}>
                     <td style={td}>
                       <strong style={{ color: "#F7FAF8" }}>{nameOf(employee)}</strong>
                       <div style={muted}>{employee.employeeNumber}</div>
@@ -729,8 +723,9 @@ export default function EmployeeExits() {
                     <td style={td}>{employee.department?.name || "-"}</td>
                     <td style={td}>{employee.designation?.name || "-"}</td>
                     <td style={td}>{employee.location?.name || "-"}</td>
-                    <td style={td}><span style={statusBadge}>{titleCase(employee.status)}</span></td>
-                    <td style={td}>{dateText(employee.exitDate)}</td>
+                    <td style={td}><EmployeeStatusBadge status={employee.status} /></td>
+                    <td style={td}>{dateText(employee.exitProcess?.effectiveDate || employee.exitDate)}</td>
+                    <td style={td}>{employee.exitProcess ? `${titleCase(employee.exitProcess.status)} · ${titleCase(employee.exitProcess.exitType)}` : "Not recorded"}</td>
                     <td style={td}>
                       <button
                         type="button"
@@ -885,6 +880,5 @@ const tableWrap = { overflowX: "auto", border: "1px solid rgba(255,255,255,.055)
 const table = { width: "100%", borderCollapse: "collapse", minWidth: 900 };
 const th = { padding: "12px 14px", textAlign: "left", borderBottom: "1px solid rgba(212,175,55,.20)", background: "rgba(255,255,255,.025)", color: "#AFC0B7", fontSize: 10, fontWeight: 900, textTransform: "uppercase" };
 const td = { padding: "13px 14px", borderBottom: "1px solid rgba(255,255,255,.045)", color: "#E5ECE8", fontSize: 12 };
-const statusBadge = { display: "inline-flex", padding: "5px 8px", border: "1px solid rgba(212,175,55,.28)", borderRadius: 999, background: "rgba(212,175,55,.08)", color: "var(--chris-gold)", fontSize: 10, fontWeight: 900 };
 const rehireButton = { minHeight: 34, display: "inline-flex", alignItems: "center", gap: 6, padding: "0 11px", border: "1px solid rgba(212,175,55,.45)", borderRadius: 8, background: "rgba(212,175,55,.07)", color: "var(--chris-gold)", fontWeight: 850, cursor: "pointer" };
 const empty = { minHeight: 150, display: "grid", placeItems: "center", color: "#9FB0A7", fontSize: 13 };

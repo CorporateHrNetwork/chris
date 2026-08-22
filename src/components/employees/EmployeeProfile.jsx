@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { formatEmployeeStatus } from "../../utils/employeeStatus";
+import EmployeeStatusBadge from "../common/StatusBadge";
+import { useEffect, useRef, useState } from "react";
 import {
   useNavigate,
   useParams,
   useLocation,
+  useSearchParams,
 } from "react-router-dom";
+import {
+  buildEmployeeProfileTarget,
+  getEmployeeProfileAction,
+} from "../../utils/employeeProfileRoute";
 
 import {
   apiRequest,
@@ -19,6 +26,17 @@ function EmployeeProfile() {
   const location =
     useLocation();
 
+  const [searchParams] = useSearchParams();
+  const requestedProfileAction = getEmployeeProfileAction(searchParams);
+  const handledProfileAction = useRef("");
+  const promotionWorkflowRef = useRef(null);
+  const transferWorkflowRef = useRef(null);
+
+  const activateProfileAction = (action) => {
+    navigate(buildEmployeeProfileTarget(employeeNumber, action), {
+      state: location.state,
+    });
+  };
   const [profile, setProfile] =
     useState(null);
 
@@ -414,7 +432,7 @@ function EmployeeProfile() {
           ),
 
         status:
-          formatStatus(
+          formatEmployeeStatus(
             employee.status
           ),
 
@@ -920,6 +938,7 @@ const handleChange = (
       });
 
       setError("");
+      navigate(buildEmployeeProfileTarget(employeeNumber), { replace: true });
     };
 
 
@@ -1645,6 +1664,7 @@ const handleChange = (
       });
 
       setError("");
+      navigate(buildEmployeeProfileTarget(employeeNumber), { replace: true });
     };
 
 
@@ -2751,13 +2771,14 @@ const handleChange = (
       return;
     }
 
-    const params =
-      new URLSearchParams(
-        window.location.search
-      );
+    const requestedAction = requestedProfileAction;
+    const actionKey = `${employeeNumber}:${requestedAction || "profile"}`;
 
-    const requestedAction =
-      params.get("action");
+    if (handledProfileAction.current === actionKey) {
+      return;
+    }
+
+    handledProfileAction.current = actionKey;
 
     if (
       requestedAction ===
@@ -2804,19 +2825,39 @@ const handleChange = (
       openReactivationForm();
     }
 
-    if (requestedAction) {
-      window.history.replaceState(
-        {},
-        "",
-        window.location.pathname
-      );
+    if (requestedAction === "transfer") {
+      openTransferForm();
     }
+
+    if (requestedAction === "promotion") {
+      openPromotionForm();
+    }
+
   }, [
     profile?.status,
     employeeNumber,
+    requestedProfileAction,
   ]);
 
 
+  useEffect(() => {
+    const target =
+      requestedProfileAction === "promotion" && promotionOpen
+        ? promotionWorkflowRef.current
+        : requestedProfileAction === "transfer" && transferOpen
+          ? transferWorkflowRef.current
+          : null;
+
+    if (!target) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestedProfileAction, promotionOpen, transferOpen]);
   if (loading) {
     return (
       <div
@@ -2955,7 +2996,7 @@ const handleChange = (
           </div>
         </div>
 
-        <StatusBadge
+        <EmployeeStatusBadge
           status={
             profile.status
           }
@@ -3463,9 +3504,9 @@ const handleChange = (
               value={
                 profile.lineManagerAssignments?.[0]
                   ? [
-                      profile.lineManagerAssignments[0].manager.firstName,
-                      profile.lineManagerAssignments[0].manager.middleName,
-                      profile.lineManagerAssignments[0].manager.lastName,
+                      profile.lineManagerAssignments[0].manager?.firstName,
+                      profile.lineManagerAssignments[0].manager?.middleName,
+                      profile.lineManagerAssignments[0].manager?.lastName,
                     ].filter(Boolean).join(" ")
                   : "Not assigned"
               }
@@ -3574,9 +3615,7 @@ const handleChange = (
 
               <button
                 type="button"
-                onClick={
-                  openTransferForm
-                }
+                onClick={() => activateProfileAction("transfer")}
                 disabled={
                   [
                     "Resigned",
@@ -3586,8 +3625,9 @@ const handleChange = (
                     profile.status
                   )
                 }
+                aria-pressed={requestedProfileAction === "transfer"}
                 style={{
-                  ...actionButtonStyle,
+                  ...getRouteActionButtonStyle("transfer", requestedProfileAction),
                   opacity:
                     [
                       "Resigned",
@@ -3611,6 +3651,7 @@ const handleChange = (
                 }}
               >
                 Transfer Employee
+                {requestedProfileAction === "transfer" ? " • Active" : ""}
               </button>
           <button
             type="button"
@@ -3662,9 +3703,7 @@ const handleChange = (
           </button>
               <button
                 type="button"
-                onClick={
-                  openPromotionForm
-                }
+                onClick={() => activateProfileAction("promotion")}
                 disabled={
                   [
                     "Resigned",
@@ -3676,8 +3715,9 @@ const handleChange = (
                     profile.status
                   )
                 }
+                aria-pressed={requestedProfileAction === "promotion"}
                 style={{
-                  ...actionButtonStyle,
+                  ...getRouteActionButtonStyle("promotion", requestedProfileAction),
 
                   opacity:
                     [
@@ -3707,6 +3747,7 @@ const handleChange = (
                 }}
               >
                 Promote Employee
+                {requestedProfileAction === "promotion" ? " • Active" : ""}
               </button>
 <button
                 type="button"
@@ -4915,6 +4956,8 @@ const handleChange = (
       {transferOpen &&
         !editing && (
         <form
+          ref={transferWorkflowRef}
+          className="employee-workflow"
           onSubmit={
             handleTransfer
           }
@@ -4953,21 +4996,6 @@ const handleChange = (
                 while preserving the permanent employment history.
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={
-                cancelTransfer
-              }
-              disabled={
-                transferSaving
-              }
-              style={
-                cancelButtonStyle
-              }
-            >
-              Cancel
-            </button>
           </div>
 
           <div
@@ -5041,9 +5069,7 @@ const handleChange = (
                   transferSaving
                 }
                 required
-                style={
-                  fieldStyle
-                }
+                style={workflowFieldStyle}
               >
                 <option value="">
                   Select destination
@@ -5097,9 +5123,7 @@ const handleChange = (
                   transferSaving
                 }
                 required
-                style={
-                  fieldStyle
-                }
+                style={workflowFieldStyle}
               />
             </div>
 
@@ -5125,9 +5149,7 @@ const handleChange = (
                   transferSaving
                 }
                 placeholder="e.g. Operational deployment"
-                style={
-                  fieldStyle
-                }
+                style={workflowFieldStyle}
               />
             </div>
           </div>
@@ -5178,9 +5200,7 @@ const handleChange = (
               disabled={
                 transferSaving
               }
-              style={
-                cancelButtonStyle
-              }
+              style={workflowCancelButtonStyle}
             >
               Cancel
             </button>
@@ -5689,6 +5709,8 @@ const handleChange = (
       {promotionOpen &&
         !editing && (
         <form
+          ref={promotionWorkflowRef}
+          className="employee-workflow"
           onSubmit={
             handlePromotion
           }
@@ -5727,21 +5749,6 @@ const handleChange = (
                 the organization's configured designation hierarchy.
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={
-                cancelPromotion
-              }
-              disabled={
-                promotionSaving
-              }
-              style={
-                cancelButtonStyle
-              }
-            >
-              Cancel
-            </button>
           </div>
 
 
@@ -5904,9 +5911,7 @@ const handleChange = (
                       promotionSaving
                     }
                     required
-                    style={
-                      fieldStyle
-                    }
+                    style={workflowFieldStyle}
                   >
                     <option value="">
                       Select eligible position
@@ -5964,9 +5969,7 @@ const handleChange = (
                       promotionSaving
                     }
                     required
-                    style={
-                      fieldStyle
-                    }
+                    style={workflowFieldStyle}
                   />
                 </div>
 
@@ -5993,9 +5996,7 @@ const handleChange = (
                       promotionSaving
                     }
                     placeholder="e.g. Performance-based promotion"
-                    style={
-                      fieldStyle
-                    }
+                    style={workflowFieldStyle}
                   />
                 </div>
               </div>
@@ -6048,9 +6049,7 @@ const handleChange = (
                   disabled={
                     promotionSaving
                   }
-                  style={
-                    cancelButtonStyle
-                  }
+                  style={workflowCancelButtonStyle}
                 >
                   Cancel
                 </button>
@@ -6416,7 +6415,7 @@ function EmploymentEpisode({
         <EpisodeDetail
           label="Started As"
           value={
-            formatStatus(
+            formatEmployeeStatus(
               episode.startStatus
             )
           }
@@ -6463,7 +6462,7 @@ function EmploymentEpisode({
           <EpisodeDetail
             label="Ended As"
             value={
-              formatStatus(
+              formatEmployeeStatus(
                 episode.endStatus
               )
             }
@@ -6707,9 +6706,9 @@ function LifecycleEvent({
               event.newStatus && (
               <HistoryDetail
                 label="Status"
-                value={`${formatStatus(
+                value={`${formatEmployeeStatus(
                   event.previousStatus
-                )} \u2192 ${formatStatus(
+                )} \u2192 ${formatEmployeeStatus(
                   event.newStatus
                 )}`}
               />
@@ -6960,6 +6959,21 @@ function ErrorMessage({
   );
 }
 
+function getRouteActionButtonStyle(action, activeAction) {
+  const active = action === activeAction;
+
+  return {
+    ...actionButtonStyle,
+    border: active
+      ? "1px solid var(--chris-gold)"
+      : actionButtonStyle.border,
+    background: active
+      ? "linear-gradient(135deg,rgba(212,175,55,.22),rgba(8,122,67,.24))"
+      : actionButtonStyle.background,
+    color: active ? "var(--chris-gold)" : actionButtonStyle.color,
+    boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
+  };
+}
 function formatGender(value) {
   switch (String(value || "").trim().toUpperCase()) {
     case "MALE":
@@ -6974,30 +6988,6 @@ function formatGender(value) {
   }
 }
 
-function formatStatus(
-  status
-) {
-  const labels = {
-    ACTIVE: "Active",
-    PROBATION: "Probation",
-    LEAVE: "Leave",
-    SUSPENDED: "Suspended",
-    TERMINATED:
-      "Terminated",
-    RESIGNED: "Resigned",
-    RETIRED: "Retired",
-    INACTIVE: "Inactive",
-  };
-
-  if (!status) {
-    return "-";
-  }
-
-  return (
-    labels[status] ||
-    status
-  );
-}
 
 function formatDate(
   value
@@ -7025,78 +7015,6 @@ function toDateInput(
     .slice(0, 10);
 }
 
-function StatusBadge({
-  status,
-}) {
-  let background =
-    "#F1F5F9";
-
-  let color =
-    "var(--chris-text-muted)";
-
-  if (
-    status === "Active"
-  ) {
-    background =
-      "#E8F8F0";
-
-    color =
-      "#087443";
-  }
-
-  if (
-    status === "Leave"
-  ) {
-    background =
-      "#FFF4E5";
-
-    color =
-      "#B45309";
-  }
-
-  if (
-    status === "Probation"
-  ) {
-    background =
-      "#F0E9FF";
-
-    color =
-      "#6D28D9";
-  }
-
-  if (
-    status === "Suspended"
-  ) {
-    background =
-      "#FEF2F2";
-
-    color =
-      "#B91C1C";
-  }
-
-  return (
-    <div
-      style={{
-        display:
-          "inline-flex",
-        alignItems:
-          "center",
-        padding:
-          "8px 14px",
-        borderRadius:
-          "999px",
-        background,
-        color,
-        fontSize:
-          "13px",
-        fontWeight:
-          "700",
-      }}
-    >
-      {status}
-    </div>
-  );
-}
 
 function InformationCard({
   title,
@@ -7442,19 +7360,35 @@ const errorStyle = {
   fontWeight: "700",
 };
 
+const workflowFieldStyle = {
+  ...fieldStyle,
+  border: "1px solid rgba(212,175,55,.34)",
+  background: "#081a12",
+  color: "var(--chris-text-main)",
+  WebkitTextFillColor: "var(--chris-text-main)",
+  colorScheme: "dark",
+  outlineOffset: "2px",
+};
+
+const workflowCancelButtonStyle = {
+  border: "1px solid rgba(212,175,55,.42)",
+  background: "rgba(255,255,255,.025)",
+  color: "var(--chris-gold)",
+  borderRadius: "var(--chris-radius-md)",
+  padding: "11px 18px",
+  fontSize: "13px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
 const transferCardStyle = {
-  marginTop:
-    "22px",
-  padding:
-    "26px",
-  background:
-    "#FFFFFF",
-  border:
-    "1px solid #D1E5DB",
-  borderRadius:
-    "18px",
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  marginTop: "22px",
+  padding: "clamp(18px, 3vw, 26px)",
+  scrollMarginTop: "96px",
+  color: "var(--chris-text-main)",
+  background: "linear-gradient(145deg,rgba(12,38,26,.98),rgba(5,14,10,.99))",
+  border: "1px solid var(--chris-border-gold)",
+  borderRadius: "var(--chris-radius-card)",
+  boxShadow: "0 18px 46px rgba(0,0,0,.30)",
 };
 
 const transferHeaderStyle = {
@@ -7476,7 +7410,7 @@ const transferEyebrowStyle = {
   margin:
     "0 0 4px",
   color:
-    "var(--chris-text-secondary)",
+    "var(--chris-gold)",
   fontSize:
     "11px",
   fontWeight:
@@ -7491,7 +7425,7 @@ const transferTitleStyle = {
   margin:
     0,
   color:
-    "#087A43",
+    "var(--chris-text-main)",
   fontSize:
     "21px",
   fontWeight:
@@ -7521,9 +7455,9 @@ const transferSummaryStyle = {
   marginBottom:
     "20px",
   background:
-    "rgba(255,255,255,.025)",
+    "rgba(8,122,67,.12)",
   border:
-    "1px solid #DDECE4",
+    "1px solid rgba(212,175,55,.24)",
   borderRadius:
     "12px",
 };
@@ -7534,7 +7468,7 @@ const transferSummaryLabelStyle = {
   marginBottom:
     "5px",
   color:
-    "var(--chris-text-secondary)",
+    "var(--chris-gold)",
   fontSize:
     "11px",
   fontWeight:
@@ -7560,28 +7494,11 @@ const transferGridStyle = {
 };
 
 const transferTextareaStyle = {
-  width:
-    "100%",
-  boxSizing:
-    "border-box",
-  padding:
-    "12px 13px",
-  borderRadius:
-    "10px",
-  border:
-    "1px solid #CBD5E1",
-  background:
-    "#FFFFFF",
-  color:
-    "var(--chris-text-main)",
-  fontSize:
-    "14px",
-  fontFamily:
-    "inherit",
-  resize:
-    "vertical",
-  outline:
-    "none",
+  ...workflowFieldStyle,
+  width: "100%",
+  boxSizing: "border-box",
+  minHeight: "108px",
+  resize: "vertical",
 };
 
 const transferFooterStyle = {
@@ -7596,41 +7513,18 @@ const transferFooterStyle = {
 };
 
 const transferConfirmButtonStyle = {
-  border:
-    "none",
-  background:
-    "#087A43",
-  color:
-    "#FFFFFF",
-  borderRadius:
-    "9px",
-  padding:
-    "11px 18px",
-  fontSize:
-    "13px",
-  fontWeight:
-    "700",
-  cursor:
-    "pointer",
+  border: "1px solid #e6c955",
+  background: "linear-gradient(135deg,#d4af37,#f0d66d)",
+  color: "#07110c",
+  borderRadius: "var(--chris-radius-md)",
+  padding: "11px 18px",
+  fontSize: "13px",
+  fontWeight: 900,
+  cursor: "pointer",
+  boxShadow: "0 9px 24px rgba(212,175,55,.18)",
 };
 const promotionCardStyle = {
-  marginTop:
-    "22px",
-
-  padding:
-    "26px",
-
-  background:
-    "#FFFFFF",
-
-  border:
-    "1px solid #D1E5DB",
-
-  borderRadius:
-    "18px",
-
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  ...transferCardStyle,
 };
 
 const promotionHeaderStyle = {
@@ -7658,7 +7552,7 @@ const promotionEyebrowStyle = {
     "0 0 4px",
 
   color:
-    "var(--chris-text-secondary)",
+    "var(--chris-gold)",
 
   fontSize:
     "11px",
@@ -7678,7 +7572,7 @@ const promotionTitleStyle = {
     0,
 
   color:
-    "#087A43",
+    "var(--chris-text-main)",
 
   fontSize:
     "21px",
@@ -7718,10 +7612,10 @@ const promotionSummaryStyle = {
     "20px",
 
   background:
-    "rgba(255,255,255,.025)",
+    "rgba(8,122,67,.12)",
 
   border:
-    "1px solid #DDECE4",
+    "1px solid rgba(212,175,55,.24)",
 
   borderRadius:
     "12px",
@@ -7735,7 +7629,7 @@ const promotionSummaryLabelStyle = {
     "5px",
 
   color:
-    "var(--chris-text-secondary)",
+    "var(--chris-gold)",
 
   fontSize:
     "11px",
@@ -7820,13 +7714,13 @@ const promotionNoOptionsStyle = {
     "12px",
 
   background:
-    "#FFFBEB",
+    "rgba(212,175,55,.08)",
 
   border:
-    "1px solid #FDE68A",
+    "1px solid rgba(212,175,55,.34)",
 
   color:
-    "#92400E",
+    "var(--chris-gold)",
 
   fontSize:
     "13px",
@@ -7838,38 +7732,7 @@ const promotionNoOptionsStyle = {
     "1.6",
 };
 const promotionTextareaStyle = {
-  width:
-    "100%",
-
-  boxSizing:
-    "border-box",
-
-  padding:
-    "12px 13px",
-
-  borderRadius:
-    "10px",
-
-  border:
-    "1px solid #CBD5E1",
-
-  background:
-    "#FFFFFF",
-
-  color:
-    "var(--chris-text-main)",
-
-  fontSize:
-    "14px",
-
-  fontFamily:
-    "inherit",
-
-  resize:
-    "vertical",
-
-  outline:
-    "none",
+  ...transferTextareaStyle,
 };
 
 const promotionFooterStyle = {
@@ -7887,29 +7750,7 @@ const promotionFooterStyle = {
 };
 
 const promotionConfirmButtonStyle = {
-  border:
-    "none",
-
-  background:
-    "#087A43",
-
-  color:
-    "#FFFFFF",
-
-  borderRadius:
-    "9px",
-
-  padding:
-    "11px 18px",
-
-  fontSize:
-    "13px",
-
-  fontWeight:
-    "700",
-
-  cursor:
-    "pointer",
+  ...transferConfirmButtonStyle,
 };
 const episodeSectionStyle = {
   marginBottom:
@@ -8362,6 +8203,3 @@ const historyErrorStyle = {
   fontWeight: "700",
 };
 export default EmployeeProfile;
-
-
-

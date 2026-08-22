@@ -18,11 +18,13 @@ import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
+import EmployeeAnalytics from "./pages/EmployeeAnalytics";
 import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
 import EmployeeOnboarding from "./pages/EmployeeOnboarding";
 import EmployeeExits from "./pages/EmployeeExits";
 import LineManagers from "./pages/LineManagers";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
+import EmployeeProfileErrorBoundary from "./components/employees/EmployeeProfileErrorBoundary";
 import Recruitment from "./pages/Recruitment";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
 import AttendanceRegister from "./pages/AttendanceRegister";
@@ -151,7 +153,7 @@ function App() {
           path="/employees/analytics"
           element={
             <PermissionLayout permission="employees.view">
-              <EmployeeModuleWorkspace mode="analytics" />
+              <EmployeeAnalytics />
             </PermissionLayout>
           }
         />
@@ -197,7 +199,9 @@ function App() {
             <PermissionLayout
               permission="employees.view"
             >
-              <EmployeeProfile />
+              <EmployeeProfileErrorBoundary>
+                <EmployeeProfile />
+              </EmployeeProfileErrorBoundary>
             </PermissionLayout>
           }
         />
@@ -596,4 +600,3 @@ function App() {
 }
 
 export default App;
-

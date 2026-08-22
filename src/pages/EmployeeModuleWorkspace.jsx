@@ -1,3 +1,5 @@
+import { formatEmployeeStatus } from "../utils/employeeStatus";
+import EmployeeStatusBadge from "../components/common/StatusBadge";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,6 +14,8 @@ import {
 } from "react-icons/fa";
 
 import { apiRequest } from "../services/api";
+import useAuthorization from "../hooks/useAuthorization";
+import { buildEmployeeProfileTarget } from "../utils/employeeProfileRoute";
 
 const CONFIG = {
   profiles: {
@@ -70,6 +74,9 @@ const EXITED = new Set(["RESIGNED", "TERMINATED", "RETIRED"]);
 function EmployeeModuleWorkspace({ mode }) {
   const navigate = useNavigate();
   const config = CONFIG[mode] || CONFIG.profiles;
+  const { hasPermission, loading: authorizationLoading } =
+    useAuthorization();
+  const canUpdateEmployees = hasPermission("employees.update");
 
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -248,14 +255,8 @@ function EmployeeModuleWorkspace({ mode }) {
   }, [normalized]);
 
   function openProfile(employee, action) {
-    const suffix = action
-      ? `?action=${encodeURIComponent(action)}`
-      : "";
-
     navigate(
-      `/employees/${encodeURIComponent(
-        employee.employeeNumber
-      )}${suffix}`,
+      buildEmployeeProfileTarget(employee.employeeNumber, action),
       {
         state: {
           from: window.location.pathname,
@@ -355,7 +356,13 @@ function EmployeeModuleWorkspace({ mode }) {
               </thead>
 
               <tbody>
-                {filtered.length ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" style={emptyStyle}>
+                      Loading employee data...
+                    </td>
+                  </tr>
+                ) : filtered.length ? (
                   filtered.map((employee) => (
                     <tr key={employee.id}>
                       <td>
@@ -371,7 +378,7 @@ function EmployeeModuleWorkspace({ mode }) {
                       <td>{employee.designationName}</td>
                       <td>{employee.locationName}</td>
                       <td>
-                        <StatusBadge
+                        <EmployeeStatusBadge
                           status={employee.status}
                         />
                       </td>
@@ -380,23 +387,33 @@ function EmployeeModuleWorkspace({ mode }) {
                           <button
                             type="button"
                             style={actionButtonStyle}
-                            onClick={() =>
-                              openProfile(
-                                employee,
+                            disabled={authorizationLoading}
+                            onClick={() => {
+                              const controlledAction =
                                 mode === "transfers"
                                   ? "transfer"
                                   : mode === "promotions"
                                     ? "promotion"
                                     : mode === "exits"
                                       ? "exit"
-                                      : undefined
-                              )
-                            }
+                                      : undefined;
+
+                              openProfile(
+                                employee,
+                                controlledAction && canUpdateEmployees
+                                  ? controlledAction
+                                  : undefined
+                              );
+                            }}
                           >
                             {mode === "transfers"
-                              ? "Transfer"
+                              ? canUpdateEmployees
+                                ? "Transfer"
+                                : "View"
                               : mode === "promotions"
-                                ? "Promote"
+                                ? canUpdateEmployees
+                                  ? "Promote"
+                                  : "View"
                                 : mode === "exits"
                                   ? EXITED.has(
                                       String(
@@ -418,13 +435,28 @@ function EmployeeModuleWorkspace({ mode }) {
                       colSpan="7"
                       style={emptyStyle}
                     >
-                      No employee records match this workspace.
+                      {search.trim()
+                        ? "No employee records match your search."
+                        : mode === "promotions"
+                          ? "No promotion records found."
+                          : mode === "transfers"
+                            ? "No transfer records found."
+                            : "No employee records found."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {!authorizationLoading &&
+          !canUpdateEmployees &&
+          (mode === "promotions" || mode === "transfers") ? (
+            <div style={noticeStyle}>
+              You can review employee records. The employees.update
+              permission is required to start this action.
+            </div>
+          ) : null}
 
           {mode === "line-managers" ? (
             <div style={noticeStyle}>
@@ -479,7 +511,7 @@ function Distribution({ title, data }) {
           entries.map(([label, value]) => (
             <div key={label}>
               <div style={distributionRowStyle}>
-                <span>{formatStatus(label)}</span>
+                <span>{formatEmployeeStatus(label)}</span>
                 <strong>{value}</strong>
               </div>
 
@@ -513,13 +545,6 @@ function Metric({ label, value }) {
   );
 }
 
-function StatusBadge({ status }) {
-  return (
-    <span style={badgeStyle}>
-      {formatStatus(status)}
-    </span>
-  );
-}
 
 function formatGender(value) {
   const labels = {
@@ -535,19 +560,6 @@ function formatGender(value) {
   );
 }
 
-function formatStatus(value) {
-  if (!value) return "Unspecified";
-
-  return String(value)
-    .toLowerCase()
-    .split("_")
-    .map(
-      (part) =>
-        part.charAt(0).toUpperCase() +
-        part.slice(1)
-    )
-    .join(" ");
-}
 
 const pageStyle = {
   color: "var(--chris-text-main)",
@@ -687,17 +699,6 @@ const mutedStyle = {
   color: "var(--chris-text-secondary)",
   fontSize: "var(--chris-font-xs)",
   marginTop: 4,
-};
-
-const badgeStyle = {
-  display: "inline-flex",
-  padding: "5px 9px",
-  borderRadius: "var(--chris-radius-pill)",
-  border: "1px solid rgba(212,175,55,.25)",
-  background: "rgba(212,175,55,.07)",
-  color: "var(--chris-gold)",
-  fontSize: "var(--chris-font-xs)",
-  fontWeight: 800,
 };
 
 const actionsStyle = {

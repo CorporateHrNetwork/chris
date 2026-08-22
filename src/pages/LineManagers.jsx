@@ -44,6 +44,7 @@ export default function LineManagers() {
 
   async function save(event) {
     event.preventDefault();
+    setMessage("");
     setBusy(true);
     try {
       const result = await apiRequest(`/api/line-managers/employees/${encodeURIComponent(employeeNumber)}`, { method: "PUT", body: form });
@@ -53,6 +54,7 @@ export default function LineManagers() {
   }
 
   async function remove() {
+    setMessage("");
     if (!form.reason.trim()) return showMessage("A reason is required when removing a manager.");
     if (!window.confirm("Remove the current line manager?")) return;
     setBusy(true);
@@ -72,7 +74,10 @@ export default function LineManagers() {
     <div style={columns}>
       <section style={panel}>
         <div style={eyebrow}>EMPLOYEE</div>
-        <select style={field} value={employeeNumber} onChange={(event) => setEmployeeNumber(event.target.value)}>
+        <select style={field} value={employeeNumber} onChange={(event) => {
+          setMessage("");
+          setEmployeeNumber(event.target.value);
+        }}>
           <option value="">Select employee</option>
           {employees.map((employee) => <option key={employee.id} value={employee.employeeNumber}>{employee.employeeNumber} · {fullName(employee)} · {employee.department?.name || "No department"}</option>)}
         </select>

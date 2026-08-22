@@ -16,6 +16,7 @@ const leaveRoutes = require("./routes/leaveRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 
 const app = express();
 
@@ -168,5 +169,7 @@ app.use(
   "/api/location-catalog",
   locationCatalogRoutes
 );
+
+app.use("/api/analytics", analyticsRoutes);
 
 module.exports = app;
