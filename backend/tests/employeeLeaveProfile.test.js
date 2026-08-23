@@ -21,7 +21,7 @@ assert.match(profile, /Leave Profile/);
 assert.match(profile, /activateProfileAction\("leave"\)/);
 assert.match(profile, /leaveProfileOpen \? " • Active"/);
 assert.match(profileRoute, /"leave"/);
-assert.match(panel, /\/api\/leave\/employees\/\$\{encodeURIComponent\(employeeNumber/);
+assert.match(panel, /\/api\/leave\/employees\/\$\{encodeURIComponent\(\s*employeeNumber\s*\)\}\/profile/);
 for (const field of ["Carryover", "Adjustments", "Used", "Committed", "Available", "Maximum Requestable", "Utilization History", "Active Leave", "Next Upcoming Approved Leave"]) assert.ok(panel.includes(field), `profile panel missing ${field}`);
 assert.match(panel, /reviewedAt/);
 assert.match(panel, /commencedAt/);
