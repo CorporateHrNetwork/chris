@@ -58,7 +58,7 @@ function EmployeeProfile() {
 
   const [success, setSuccess] =
     useState("");
-  const [leaveProfileOpen, setLeaveProfileOpen] = useState(false);
+  const leaveProfileOpen = requestedProfileAction === "leave";
   /*
   ============================================================
   EMPLOYMENT CONFIRMATION STATE
@@ -3762,10 +3762,18 @@ const handleChange = (
               </button>
 <button
                 type="button"
-                onClick={() => setLeaveProfileOpen(true)}
-                style={actionButtonStyle}
+                onClick={() => activateProfileAction("leave")}
+                style={{
+                  ...actionButtonStyle,
+                  borderColor: leaveProfileOpen
+                    ? "var(--chris-gold)"
+                    : actionButtonStyle.borderColor,
+                  boxShadow: leaveProfileOpen
+                    ? "0 0 0 2px rgba(212,175,55,.16)"
+                    : actionButtonStyle.boxShadow,
+                }}
               >
-                Employee Leave Profile
+                Leave Profile{leaveProfileOpen ? " • Active" : ""}
               </button>
 
               <button
@@ -3797,7 +3805,7 @@ const handleChange = (
               </button>
             </div>
           </InformationCard>
-          <EmployeeLeaveProfilePanel employeeNumber={employeeNumber} open={leaveProfileOpen} onClose={() => setLeaveProfileOpen(false)} />
+          <EmployeeLeaveProfilePanel employeeNumber={employeeNumber} open={leaveProfileOpen} onClose={() => navigate(`/employees/${encodeURIComponent(employeeNumber)}`, { state: location.state })} />
         </div>
       )}
       {confirmationOpen &&
