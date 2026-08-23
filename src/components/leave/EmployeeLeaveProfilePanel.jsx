@@ -330,8 +330,8 @@ export default function EmployeeLeaveProfilePanel({
                     <StatusBadge status={request.status} />
                     <small style={styles.muted}>
                       Approved:{" "}
-                      {request.approvedAt
-                        ? formatDate(request.approvedAt)
+                      {request.reviewedAt
+                        ? formatDate(request.reviewedAt)
                         : "—"}
                       <br />
                       Commenced:{" "}
@@ -340,9 +340,9 @@ export default function EmployeeLeaveProfilePanel({
                         : "—"}
                       <br />
                       Returned:{" "}
-                      {request.actualReturnDate
+                      {request.returnedAt
                         ? formatDate(
-                            request.actualReturnDate
+                            request.returnedAt
                           )
                         : "—"}
                     </small>
