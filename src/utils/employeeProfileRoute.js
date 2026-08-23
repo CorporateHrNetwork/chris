@@ -4,6 +4,7 @@ const EMPLOYEE_PROFILE_ACTIONS = new Set([
   "suspend",
   "deactivate",
   "reactivate",
+  "leave",
 ]);
 
 export function buildEmployeeProfileTarget(employeeNumber, action) {
