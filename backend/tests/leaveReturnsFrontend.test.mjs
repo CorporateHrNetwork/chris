@@ -6,4 +6,5 @@ assert.match(source,/Unable to load return-to-work cases/);
 assert.match(source,/Array\.isArray\(response\?\.data\)/);
 assert.doesNotMatch(source,/return null/);
 assert.match(source,/returnDate:/);
+assert.match(source,/setTimeout\(\(\)=>setMessage\(""\),4000\)/);
 console.log("PASS: Return to Work visible-state tests passed.");

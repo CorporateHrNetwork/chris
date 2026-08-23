@@ -17,6 +17,7 @@ import {
 } from "../../services/api";
 
 import EmploymentServiceSummary from "./EmploymentServiceSummary";
+import EmployeeLeaveProfilePanel from "../leave/EmployeeLeaveProfilePanel";
 
 function EmployeeProfile() {
   const { employeeNumber } = useParams();
@@ -57,6 +58,7 @@ function EmployeeProfile() {
 
   const [success, setSuccess] =
     useState("");
+  const [leaveProfileOpen, setLeaveProfileOpen] = useState(false);
   /*
   ============================================================
   EMPLOYMENT CONFIRMATION STATE
@@ -3760,16 +3762,10 @@ const handleChange = (
               </button>
 <button
                 type="button"
-                onClick={() =>
-                  navigate(
-                    `/leave?employeeNumber=${encodeURIComponent(
-                      employeeNumber
-                    )}`
-                  )
-                }
+                onClick={() => setLeaveProfileOpen(true)}
                 style={actionButtonStyle}
               >
-                Leave
+                Employee Leave Profile
               </button>
 
               <button
@@ -3801,6 +3797,7 @@ const handleChange = (
               </button>
             </div>
           </InformationCard>
+          <EmployeeLeaveProfilePanel employeeNumber={employeeNumber} open={leaveProfileOpen} onClose={() => setLeaveProfileOpen(false)} />
         </div>
       )}
       {confirmationOpen &&

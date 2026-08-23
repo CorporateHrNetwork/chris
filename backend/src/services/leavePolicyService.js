@@ -8,6 +8,54 @@ const RULE_FIELDS = [
   "coverageRules",
 ];
 
+const NIGERIA_JURISDICTIONS = [
+  ["NG-FEDERAL", "Nigeria — Federal"],
+  ...[
+    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa",
+    "Benue", "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti",
+    "Enugu", "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina",
+    "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun",
+    "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba",
+    "Yobe", "Zamfara",
+  ].map((state) => [
+    `NG-${state.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}`,
+    `${state} State, Nigeria`,
+  ]),
+  ["NG-FCT", "Federal Capital Territory, Nigeria"],
+].map(([value, label]) => ({ value, label }));
+
+const POLICY_NAME_OPTIONS = {
+  ANNUAL: ["Standard Annual Leave", "Executive Annual Leave", "Custom Policy"],
+  SICK: ["Standard Sick Leave", "Extended Sick Leave", "Custom Policy"],
+  UNPAID: ["Standard Unpaid Leave", "Extended Unpaid Leave", "Custom Policy"],
+  MATERNITY: ["Maternity Leave", "Enhanced Maternity Leave", "Custom Policy"],
+  PATERNITY: ["Paternity / Partner Leave", "Enhanced Partner Leave", "Custom Policy"],
+  DEFAULT: ["Standard Policy", "Custom Policy"],
+};
+
+const CHRIS_RECOMMENDED_DEFAULTS = {
+  ANNUAL: { value: 20, unit: "WORKING_DAYS", legalMinimum: false },
+  SICK: { value: 12, unit: "WORKING_DAYS", legalMinimum: false },
+  UNPAID: { value: 5, unit: "WORKING_DAYS", legalMinimum: false },
+};
+
+function isNigeria(country) {
+  return ["NG", "NGA", "NIGERIA"].includes(String(country || "").trim().toUpperCase());
+}
+
+function validateJurisdiction(country, jurisdiction) {
+  const value = String(jurisdiction || "").trim();
+  if (!value) return null;
+  if (isNigeria(country)) {
+    const allowed = new Set(["NG", ...NIGERIA_JURISDICTIONS.map((item) => item.value)]);
+    if (!allowed.has(value.toUpperCase())) throw new Error("INVALID_POLICY_JURISDICTION");
+  } else if (/^NG(?:-|$)/i.test(value)) {
+    throw new Error("INVALID_POLICY_JURISDICTION");
+  }
+  if (value.length > 120) throw new Error("INVALID_POLICY_JURISDICTION");
+  return value;
+}
+
 function cleanCode(value) {
   const code = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9_]+/g, "_");
   if (!code) throw new Error("POLICY_CODE_REQUIRED");
@@ -145,8 +193,26 @@ function buildPolicyData(input, actorUserId) {
   return data;
 }
 
+async function generatePolicyCode(tx, organizationId, input, leaveType) {
+  if (String(input.code || "").trim()) return cleanCode(input.code);
+  if (!String(input.name || "").trim()) throw new Error("POLICY_NAME_REQUIRED");
+  const typePart = cleanCode(leaveType.code || leaveType.name).slice(0, 18);
+  const namePart = cleanCode(input.name).slice(0, 28);
+  const base = `${typePart}_${namePart}`.replace(/_+/g, "_").replace(/^_|_$/g, "");
+  const matches = await tx.leavePolicy.findMany({
+    where: { organizationId, code: { startsWith: base } },
+    select: { code: true },
+  });
+  const occupied = new Set(matches.map((item) => item.code));
+  if (!occupied.has(base)) return base;
+  let suffix = 2;
+  while (occupied.has(`${base}_${suffix}`)) suffix += 1;
+  return `${base}_${suffix}`;
+}
+
 async function listPolicyWorkspace({ organizationId }) {
-  const [templates, policies, complianceFloors] = await Promise.all([
+  const [organization, templates, policies, complianceFloors] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { country: true } }),
     prisma.leavePolicyTemplate.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.leavePolicy.findMany({
       where: { organizationId },
@@ -155,14 +221,31 @@ async function listPolicyWorkspace({ organizationId }) {
     }),
     prisma.leaveComplianceFloor.findMany({ where: { isActive: true }, orderBy: [{ jurisdiction: "asc" }, { ruleCategory: "asc" }] }),
   ]);
-  return { templates, policies, complianceFloors };
+  const nigeriaOrganization = isNigeria(organization?.country);
+  return {
+    templates,
+    policies,
+    complianceFloors,
+    organization: { country: organization?.country || null },
+    jurisdictionOptions: nigeriaOrganization ? NIGERIA_JURISDICTIONS : [],
+    defaultJurisdiction: nigeriaOrganization ? "NG-FEDERAL" : (organization?.country || ""),
+    policyNameOptions: POLICY_NAME_OPTIONS,
+    recommendedDefaults: CHRIS_RECOMMENDED_DEFAULTS,
+    recommendationNotice: "CHRIS recommended defaults are configurable starting points, not universal statutory entitlements.",
+  };
 }
 
 async function createPolicy({ organizationId, actorUserId, input }) {
   return prisma.$transaction(async (tx) => {
-    const data = buildPolicyData(input, actorUserId);
-    const type = await tx.leaveType.findFirst({ where: { id: data.leaveTypeId, organizationId } });
+    const type = await tx.leaveType.findFirst({ where: { id: input.leaveTypeId, organizationId } });
     if (!type) throw new Error("LEAVE_TYPE_NOT_FOUND");
+    const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
+    const normalizedInput = {
+      ...input,
+      code: await generatePolicyCode(tx, organizationId, input, type),
+      jurisdiction: validateJurisdiction(organization?.country, input.jurisdiction),
+    };
+    const data = buildPolicyData(normalizedInput, actorUserId);
     const assessment = await assessCompliance(tx, data);
     const policy = await tx.leavePolicy.create({ data: { organizationId, ...data, ...assessment }, include: { leaveType: true } });
     await tx.leavePolicyAudit.create({ data: { organizationId, leavePolicyId: policy.id, actorUserId, action: "CREATED", newValue: snapshot(policy), reason: data.changeReason } });
@@ -180,6 +263,7 @@ async function adoptTemplate({ organizationId, actorUserId, templateCode, mode, 
       if (existing) return existing;
     }
     const leaveType = await ensureLeaveType(tx, organizationId, template, overrides.leaveTypeId);
+    const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
     const config = template.configuration;
     const input = {
       ...config,
@@ -189,7 +273,10 @@ async function adoptTemplate({ organizationId, actorUserId, templateCode, mode, 
       code: overrides.code || (isClone ? template.code + "_CUSTOM_" + crypto.randomUUID().slice(0, 8).toUpperCase() : template.code),
       description: overrides.description || template.description,
       category: overrides.category || template.category,
-      jurisdiction: overrides.jurisdiction ?? template.jurisdiction,
+      jurisdiction: validateJurisdiction(
+        organization?.country,
+        overrides.jurisdiction ?? (isNigeria(organization?.country) ? (template.jurisdiction || "NG-FEDERAL") : (organization?.country || null))
+      ),
       status: isClone ? "DRAFT" : "ACTIVE",
       origin: isClone ? "CLONED_TEMPLATE" : "CHRIS_TEMPLATE",
       sourceTemplateCode: template.code,
@@ -225,7 +312,8 @@ async function createPolicyVersion({ organizationId, actorUserId, policyId, inpu
   return prisma.$transaction(async (tx) => {
     const current = await tx.leavePolicy.findFirst({ where: { id: policyId, organizationId } });
     if (!current) throw new Error("LEAVE_POLICY_NOT_FOUND");
-    const nextInput = { ...snapshot(current), ...input, leaveTypeId: input.leaveTypeId || current.leaveTypeId, code: current.code || input.code, versionGroupId: current.versionGroupId || current.id, versionNumber: current.versionNumber + 1, origin: current.origin, effectiveFrom: input.effectiveFrom, changeReason: input.changeReason };
+    const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
+    const nextInput = { ...snapshot(current), ...input, jurisdiction: validateJurisdiction(organization?.country, input.jurisdiction ?? current.jurisdiction), leaveTypeId: input.leaveTypeId || current.leaveTypeId, code: current.code || input.code, versionGroupId: current.versionGroupId || current.id, versionNumber: current.versionNumber + 1, origin: current.origin, effectiveFrom: input.effectiveFrom, changeReason: input.changeReason };
     const data = buildPolicyData(nextInput, actorUserId);
     if (data.effectiveFrom <= current.effectiveFrom) throw new Error("POLICY_VERSION_DATE_INVALID");
     await tx.leavePolicy.update({ where: { id: current.id }, data: { effectiveTo: new Date(data.effectiveFrom.getTime() - 1), isActive: false, status: "RETIRED" } });
@@ -236,4 +324,16 @@ async function createPolicyVersion({ organizationId, actorUserId, policyId, inpu
   });
 }
 
-module.exports = { RULE_FIELDS, previewPolicy, legacyProjection, listPolicyWorkspace, createPolicy, adoptTemplate, changePolicyStatus, createPolicyVersion };
+module.exports = {
+  RULE_FIELDS,
+  NIGERIA_JURISDICTIONS,
+  POLICY_NAME_OPTIONS,
+  CHRIS_RECOMMENDED_DEFAULTS,
+  previewPolicy,
+  legacyProjection,
+  listPolicyWorkspace,
+  createPolicy,
+  adoptTemplate,
+  changePolicyStatus,
+  createPolicyVersion,
+};

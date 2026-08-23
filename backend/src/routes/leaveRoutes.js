@@ -36,6 +36,11 @@ const { getLeaveOverview, getBalanceRegister, getEntitlementRegister } = require
 const {
   getEmployeePolicyBalance,
 } = require("../services/leaveBalanceService");
+const {
+  createEntitlementAdjustment,
+  listEntitlementAdjustments,
+} = require("../services/leaveEntitlementAdjustmentService");
+const { getEmployeeLeaveProfile } = require("../services/employeeLeaveProfileService");
 
 const prisma =
   require("../config/prisma");
@@ -50,6 +55,7 @@ router.use(
 
 router.get("/overview",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getLeaveOverview({organizationId:req.auth.organizationId})})}catch(error){return handleError(error,res)}});
 router.get("/balance-register",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getBalanceRegister({organizationId:req.auth.organizationId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
+router.get("/employees/:employeeNumber/profile",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEmployeeLeaveProfile({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,asOfDate:req.query.asOfDate})})}catch(error){return handleError(error,res)}});
 router.get(
   "/employees/:employeeNumber/policy-balance",
   requirePermission("employees.view"),
@@ -75,7 +81,9 @@ router.get(
     }
   }
 );
-router.get("/entitlements",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEntitlementRegister({organizationId:req.auth.organizationId,asOfDate:req.query.asOfDate})})}catch(error){return handleError(error,res)}});
+router.get("/entitlements",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEntitlementRegister({organizationId:req.auth.organizationId,asOfDate:req.query.asOfDate,employeeNumber:req.query.employeeNumber})})}catch(error){return handleError(error,res)}});
+router.get("/entitlements/adjustments",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEntitlementAdjustments({organizationId:req.auth.organizationId,employeeNumber:req.query.employeeNumber,leavePolicyId:req.query.leavePolicyId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
+router.post("/entitlements/adjustments",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await createEntitlementAdjustment({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,employeeNumber:req.body.employeeNumber,leavePolicyId:req.body.leavePolicyId,leaveYear:req.body.leaveYear,amount:req.body.amount,reason:req.body.reason,effectiveDate:req.body.effectiveDate})})}catch(error){return handleError(error,res)}});
 router.get("/request-day-calculation",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await calculateLeaveRequestDays({organizationId:req.auth.organizationId,employeeNumber:req.query.employeeNumber,leaveTypeId:req.query.leaveTypeId,leavePolicyId:req.query.leavePolicyId,startDate:req.query.startDate,endDate:req.query.endDate})})}catch(error){return handleError(error,res)}});
 
 router.get(
@@ -521,6 +529,14 @@ function handleError(
       "EARLY_RETURN_NOT_ALLOWED",
       "RETURN_DOCUMENTATION_REQUIRED",
       "FITNESS_CERTIFICATE_REQUIRED",
+      "INVALID_POLICY_JURISDICTION",
+      "EMPLOYEE_REQUIRED",
+      "LEAVE_POLICY_REQUIRED",
+      "INVALID_ADJUSTMENT_AMOUNT",
+      "INVALID_LEAVE_YEAR",
+      "ADJUSTMENT_REASON_REQUIRED",
+      "INVALID_ADJUSTMENT_DATE",
+      "ADJUSTMENT_EXCEEDS_AVAILABLE_BALANCE",
     ]);
 
   if (

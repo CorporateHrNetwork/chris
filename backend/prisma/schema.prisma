@@ -42,6 +42,7 @@ model Organization {
   leavePolicyAudits           LeavePolicyAudit[]
   leaveBalances               LeaveBalance[]
   leaveRequests               LeaveRequest[]
+  leaveEntitlementAdjustments LeaveEntitlementAdjustment[]
   workShifts                  WorkShift[]
   employeeShiftAssignments    EmployeeShiftAssignment[]
   attendanceRecords           AttendanceRecord[]
@@ -161,6 +162,7 @@ model User {
   leavePoliciesCreated                LeavePolicy[]                   @relation("LeavePolicyCreatedBy")
   leavePoliciesApproved               LeavePolicy[]                   @relation("LeavePolicyApprovedBy")
   leavePolicyAudits                   LeavePolicyAudit[]
+  leaveEntitlementAdjustmentsCreated  LeaveEntitlementAdjustment[]    @relation("LeaveEntitlementAdjustmentCreatedBy")
   commencedLeaveRequests              LeaveRequest[]                  @relation("LeaveRequestCommencedBy")
   returnedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReturnedBy")
   recordedAttendanceRecords           AttendanceRecord[]              @relation("AttendanceRecordedBy")
@@ -421,18 +423,19 @@ model Employee {
 
   user User?
 
-  employmentEpisodes         EmployeeEmploymentEpisode[]
-  lifecycleEvents            EmployeeLifecycleEvent[]
-  attendancePayrollInputs    AttendancePayrollInput[]
-  leaveBalances              LeaveBalance[]
-  leaveRequests              LeaveRequest[]
-  shiftAssignments           EmployeeShiftAssignment[]
-  attendanceRecords          AttendanceRecord[]
-  onboardings                EmployeeOnboarding[]
-  documents                  EmployeeDocument[]
-  exitProcesses              EmployeeExitProcess[]
-  lineManagerAssignments     EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentEmployee")
-  managedEmployeeAssignments EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentManager")
+  employmentEpisodes          EmployeeEmploymentEpisode[]
+  lifecycleEvents             EmployeeLifecycleEvent[]
+  attendancePayrollInputs     AttendancePayrollInput[]
+  leaveBalances               LeaveBalance[]
+  leaveRequests               LeaveRequest[]
+  leaveEntitlementAdjustments LeaveEntitlementAdjustment[]
+  shiftAssignments            EmployeeShiftAssignment[]
+  attendanceRecords           AttendanceRecord[]
+  onboardings                 EmployeeOnboarding[]
+  documents                   EmployeeDocument[]
+  exitProcesses               EmployeeExitProcess[]
+  lineManagerAssignments      EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentEmployee")
+  managedEmployeeAssignments  EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentManager")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -658,9 +661,10 @@ model LeaveType {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  policies LeavePolicy[]
-  balances LeaveBalance[]
-  requests LeaveRequest[]
+  policies               LeavePolicy[]
+  balances               LeaveBalance[]
+  requests               LeaveRequest[]
+  entitlementAdjustments LeaveEntitlementAdjustment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -749,12 +753,13 @@ model LeavePolicy {
 
   isActive Boolean @default(true)
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    User?              @relation("LeavePolicyCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  approvedBy   User?              @relation("LeavePolicyApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  leaveType    LeaveType          @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
-  requests     LeaveRequest[]
-  audits       LeavePolicyAudit[]
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy              User?                        @relation("LeavePolicyCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedBy             User?                        @relation("LeavePolicyApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  leaveType              LeaveType                    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  requests               LeaveRequest[]
+  audits                 LeavePolicyAudit[]
+  entitlementAdjustments LeaveEntitlementAdjustment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -830,9 +835,10 @@ model LeaveBalance {
   used           Decimal @default(0) @db.Decimal(8, 2)
   adjusted       Decimal @default(0) @db.Decimal(8, 2)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
-  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee               Employee                     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  leaveType              LeaveType                    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  entitlementAdjustments LeaveEntitlementAdjustment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -843,6 +849,37 @@ model LeaveBalance {
   @@index([leaveTypeId])
   @@index([leaveYear])
   @@map("leave_balances")
+}
+
+/// Append-only audit ledger. Corrections are recorded as new offsetting rows.
+model LeaveEntitlementAdjustment {
+  id              String   @id @default(uuid())
+  organizationId  String
+  employeeId      String
+  leaveBalanceId  String
+  leaveTypeId     String
+  leavePolicyId   String?
+  leaveYear       Int
+  amount          Decimal  @db.Decimal(8, 2)
+  balanceBefore   Decimal  @db.Decimal(8, 2)
+  balanceAfter    Decimal  @db.Decimal(8, 2)
+  reason          String
+  effectiveDate   DateTime
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  leaveBalance LeaveBalance @relation(fields: [leaveBalanceId], references: [id], onDelete: Restrict)
+  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  leavePolicy  LeavePolicy? @relation(fields: [leavePolicyId], references: [id], onDelete: Restrict)
+  createdBy    User?        @relation("LeaveEntitlementAdjustmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId, leaveYear])
+  @@index([organizationId, leavePolicyId])
+  @@index([leaveBalanceId, createdAt])
+  @@index([createdByUserId])
+  @@map("leave_entitlement_adjustments")
 }
 
 model LeaveRequest {

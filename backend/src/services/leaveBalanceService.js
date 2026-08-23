@@ -111,6 +111,7 @@ async function getEmployeePolicyBalance({
   employeeNumber,
   leavePolicyId,
   leaveYear,
+  entitlement,
   tx = prisma,
 }) {
   const year = Number(
@@ -208,7 +209,7 @@ async function getEmployeePolicyBalance({
     balance,
     policy,
     committed: pending._sum.requestedUnits,
-    entitlement: policy.entitlementDays,
+    entitlement: entitlement ?? policy.entitlementDays,
   });
 
   return {

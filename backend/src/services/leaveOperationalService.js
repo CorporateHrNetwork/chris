@@ -1,5 +1,6 @@
 const prisma=require("../config/prisma");
 const {balanceAvailable,policyEntitlementForService}=require("./leaveService");
+const {getEmployeePolicyBalance}=require("./leaveBalanceService");
 function dayStart(value=new Date()){const d=new Date(value);d.setHours(0,0,0,0);return d}
 async function getLeaveOverview({organizationId,asOfDate=new Date()}){
  const today=dayStart(asOfDate),tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
@@ -27,15 +28,31 @@ async function getBalanceRegister({organizationId,leaveYear}){
  const policyMap=new Map(policies.map(p=>[p.leaveTypeId,p]));
  return balances.map(b=>{const allocation=allocationMap.get(b.employeeId+":"+b.leaveTypeId)||{pending:0,approved:0};return {...b,employeeName:[b.employee.firstName,b.employee.middleName,b.employee.lastName].filter(Boolean).join(" "),policy:policyMap.get(b.leaveTypeId)||null,pendingAllocation:allocation.pending,approvedAllocation:allocation.approved,available:balanceAvailable(b)}});
 }
-async function getEntitlementRegister({organizationId,asOfDate=new Date()}){
+async function getEntitlementRegister({organizationId,asOfDate=new Date(),employeeNumber}){
  const date=dayStart(asOfDate),year=date.getFullYear();
- const [employees,policies,balances]=await Promise.all([
-  prisma.employee.findMany({where:{organizationId,status:{in:["ACTIVE","PROBATION","LEAVE"]},employmentEpisodes:{some:{endDate:null}}},select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,status:true,employmentEpisodes:{where:{endDate:null},orderBy:{sequenceNumber:"desc"},take:1,select:{startDate:true}}},orderBy:{employeeNumber:"asc"}}),
+ const [employees,policies]=await Promise.all([
+  prisma.employee.findMany({where:{organizationId,...(employeeNumber?{employeeNumber}:{}),status:{in:["ACTIVE","PROBATION","LEAVE"]},employmentEpisodes:{some:{endDate:null}}},select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,status:true,employmentEpisodes:{where:{endDate:null},orderBy:{sequenceNumber:"desc"},take:1,select:{startDate:true}}},orderBy:{employeeNumber:"asc"}}),
   prisma.leavePolicy.findMany({where:{organizationId,status:"ACTIVE",effectiveFrom:{lte:date},OR:[{effectiveTo:null},{effectiveTo:{gte:date}}]},include:{leaveType:true},orderBy:{name:"asc"}}),
-  prisma.leaveBalance.findMany({where:{organizationId,leaveYear:year}})
  ]);
- const balanceMap=new Map(balances.map(b=>[b.employeeId+":"+b.leaveTypeId,b]));
- const rows=[];for(const employee of employees){const episode=employee.employmentEpisodes[0];const serviceDays=episode?Math.max(0,Math.floor((date-new Date(episode.startDate))/86400000)):0;for(const policy of policies){const eligibility=policy.eligibilityRules||{};const minimum=Number(eligibility.minimumServiceDays||policy.minimumServiceDays||0);if(serviceDays<minimum)continue;const base=Number(policy.entitlementDays);const finalEntitlement=policyEntitlementForService(policy,{eligibility:{measured:{serviceDays}}});const balance=balanceMap.get(employee.id+":"+policy.leaveTypeId);const advancedPending=Boolean((eligibility.scope&&eligibility.scope!=="ALL_EMPLOYEES")||(Array.isArray(eligibility.criteria)&&eligibility.criteria.length)||(policy.coverageRules&&Object.keys(policy.coverageRules).length));rows.push({employeeId:employee.id,employeeNumber:employee.employeeNumber,employeeName:[employee.firstName,employee.middleName,employee.lastName].filter(Boolean).join(" "),policyId:policy.id,policyName:policy.name,policyVersion:policy.versionNumber,baseEntitlement:base,serviceBandAdjustment:finalEntitlement-base,proration:policy.entitlementRules?.proration||"NONE",carryover:Number(balance?.carriedForward||0),finalEntitlement,effectiveFrom:policy.effectiveFrom,effectiveTo:policy.effectiveTo,engineStatus:advancedPending?"Advanced eligibility rule pending engine support":"Applied from supported service/status rules"})}}
- return rows;
+ const candidates=[];
+ for(const employee of employees){
+  const episode=employee.employmentEpisodes[0];
+  const serviceDays=episode?Math.max(0,Math.floor((date-new Date(episode.startDate))/86400000)):0;
+  for(const policy of policies){
+   const eligibility=policy.eligibilityRules||{};
+   const minimum=Number(eligibility.minimumServiceDays||policy.minimumServiceDays||0);
+   if(serviceDays<minimum)continue;
+   const base=Number(policy.entitlementDays);
+   const finalEntitlement=policyEntitlementForService(policy,{eligibility:{measured:{serviceDays}}});
+   const advancedPending=Boolean((eligibility.scope&&eligibility.scope!=="ALL_EMPLOYEES")||(Array.isArray(eligibility.criteria)&&eligibility.criteria.length)||(policy.coverageRules&&Object.keys(policy.coverageRules).length));
+   candidates.push({employee,policy,base,finalEntitlement,advancedPending});
+  }
+ }
+ const projections=await Promise.all(candidates.map(({employee,policy,finalEntitlement})=>getEmployeePolicyBalance({organizationId,employeeNumber:employee.employeeNumber,leavePolicyId:policy.id,leaveYear:year,entitlement:finalEntitlement})));
+ return candidates.map(({employee,policy,base,finalEntitlement,advancedPending},index)=>{
+  const projection=projections[index];
+  const otherActivePolicies=candidates.filter(item=>item.employee.id===employee.id&&item.policy.id!==policy.id).map(item=>({id:item.policy.id,name:item.policy.name,versionNumber:item.policy.versionNumber,leaveType:item.policy.leaveType}));
+  return {employeeId:employee.id,employeeNumber:employee.employeeNumber,employeeName:[employee.firstName,employee.middleName,employee.lastName].filter(Boolean).join(" "),policyId:policy.id,policyName:policy.name,policyVersion:policy.versionNumber,leaveType:policy.leaveType,baseEntitlement:base,serviceBandAdjustment:finalEntitlement-base,proration:policy.entitlementRules?.proration||"NONE",carryover:projection.carryover,finalEntitlement,entitlement:projection.entitlement,used:projection.used,committed:projection.committed,available:projection.available,adjustments:projection.adjustments,unit:projection.unit,leaveYear:year,otherActivePolicies,effectiveFrom:policy.effectiveFrom,effectiveTo:policy.effectiveTo,engineStatus:advancedPending?"Advanced eligibility rule pending engine support":"Applied from supported service/status rules"};
+ });
 }
 module.exports={getLeaveOverview,getBalanceRegister,getEntitlementRegister};
