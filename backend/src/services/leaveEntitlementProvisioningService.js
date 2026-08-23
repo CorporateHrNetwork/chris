@@ -53,6 +53,10 @@ async function buildProvisioningPreview({
   const selectedPolicyIds = normalizedList(policyIds);
   const selectedEmployees = normalizedList(employeeNumbers);
   const effectiveDate = new Date(Date.UTC(year, 0, 1));
+  const evaluationDate =
+    year === new Date().getFullYear()
+      ? new Date()
+      : new Date(Date.UTC(year, 11, 31));
   const policyWhere = {
     organizationId,
     status: "ACTIVE",
@@ -143,7 +147,7 @@ async function buildProvisioningPreview({
   const candidates = [];
 
   for (const employee of employees) {
-    const serviceDays = serviceDaysAt(employee, effectiveDate);
+    const serviceDays = serviceDaysAt(employee, evaluationDate);
 
     for (const policy of policies) {
       const eligibility = policy.eligibilityRules || {};
