@@ -438,7 +438,7 @@ async function recordAttendance({
             employeeId:
               employee.id,
             status:
-              "APPROVED",
+              "ACTIVE",
             startDate: {
               lte:
                 dayStart,
@@ -448,8 +448,8 @@ async function recordAttendance({
                 dayStart,
             },
           },
-          select: {
-            id: true,
+          include: {
+            leavePolicy: { select: { attendanceRules: true } },
           },
         });
 
@@ -485,8 +485,11 @@ async function recordAttendance({
           },
         });
 
+      const suppressExpectedAttendance =
+        leave && leave.leavePolicy?.attendanceRules?.suppressExpectedAttendance !== false;
+
       const finalStatus =
-        leave
+        suppressExpectedAttendance
           ? "ON_LEAVE"
           : String(
               status ||

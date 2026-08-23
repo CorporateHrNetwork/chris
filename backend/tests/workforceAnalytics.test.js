@@ -7,7 +7,7 @@ const current = [
   { id: "e2", status: "PROBATION", gender: "FEMALE", departmentId: "d1", designationId: null, locationId: "l1" },
   { id: "e3", status: "LEAVE", gender: "UNSPECIFIED", departmentId: null, designationId: "j1", locationId: null },
 ];
-const all = [{ status: "ACTIVE" }, { status: "PROBATION" }, { status: "LEAVE" }, { status: "RESIGNED" }, { status: "TERMINATED" }];
+const all = [{ id: "e1", status: "ACTIVE" }, { id: "e2", status: "PROBATION" }, { id: "e3", status: "LEAVE" }, { id: "e4", status: "RESIGNED" }, { id: "e5", status: "TERMINATED" }];
 const model = (name, result) => ({ findMany: async (query) => { calls.push({ name, query }); return result; } });
 const prisma = {
   employee: { findMany: async (query) => { calls.push({ name: "employee", query }); return typeof query.where.status === "object" ? current : all; } },
@@ -18,7 +18,7 @@ const prisma = {
   employeeExitProcess: model("exits", [{ targetStatus: "RESIGNED", lastWorkingDay: new Date("2026-08-15") }]),
   employeeLineManagerAssignment: model("managers", [{ employeeId: "e1", managerEmployeeId: "e2", manager: { firstName: "Ada", lastName: "Okafor" } }]),
   employeeOnboarding: model("onboarding", [{ status: "IN_PROGRESS", completionPercent: 50 }, { status: "COMPLETED", completionPercent: 100 }]),
-  leaveRequest: model("leave", [{ employeeId: "e3", status: "APPROVED", startDate: new Date("2026-08-20"), endDate: new Date("2026-08-22") }, { employeeId: "e2", status: "PENDING", startDate: new Date("2026-09-01"), endDate: new Date("2026-09-02") }]),
+  leaveRequest: model("leave", [{ employeeId: "e3", status: "APPROVED", startDate: new Date("2026-08-20"), endDate: new Date("2026-08-22"), cancelledAt: null }, { employeeId: "e2", status: "PENDING", startDate: new Date("2026-09-01"), endDate: new Date("2026-09-02"), cancelledAt: null }]),
   attendanceRecord: model("attendance", [{ status: "PRESENT" }, { status: "LATE" }]),
 };
 
@@ -32,7 +32,15 @@ const prisma = {
   assert.equal(data.movements.hiringActivity.thisYear, 2); assert.equal(data.movements.hiringActivity.rehiresThisYear, 1);
   assert.equal(data.movements.exits.thisYear, 1); assert.equal(data.managers.assigned, 1); assert.equal(data.managers.unassigned, 2);
   assert.equal(data.onboarding.averageCompletion, 75); assert.equal(data.leave.employeesOnLeaveToday, 1); assert.equal(data.attendance.lateToday, 1);
+  assert.equal(data.leave.activeApprovedRequests, 1); assert.equal(data.leave.approvedCurrentOrUpcoming, 1);
+  assert.deepEqual(data.leave.statusRequestConsistency, { onLeaveWithoutActiveApprovedRequest: 0, activeApprovedRequestWithoutOnLeaveStatus: 0 });
   assert.ok(calls.every((call) => call.query.where.organizationId === "org-a"), "all queries are tenant scoped");
+  const leaveQuery = calls.find((call) => call.name === "leave").query;
+  assert.equal(leaveQuery.where.organizationId, "org-a", "leave analytics must remain tenant scoped");
+  assert.deepEqual(leaveQuery.where.status.in, ["PENDING", "APPROVED"]);
+  assert.equal(leaveQuery.where.cancelledAt, null);
+  assert.equal(leaveQuery.where.endDate.gte.toISOString(), "2026-08-20T23:00:00.000Z");
+  assert.equal(leaveQuery.select.cancelledAt, true);
   const exitWhere = calls.find((call) => call.name === "exits").query.where;
   assert.equal(exitWhere.status, "COMPLETED"); assert.equal(exitWhere.cancelledAt, null);
   const emptyModel = { findMany: async () => [] };

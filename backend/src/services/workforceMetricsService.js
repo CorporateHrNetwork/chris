@@ -1,4 +1,4 @@
-const { assertCalendarDate } = require("./workforceSnapshotService");
+const { assertCalendarDate, serializeSnapshotComposition } = require("./workforceSnapshotService");
 
 function round(value, places = 2) {
   const factor = 10 ** places;
@@ -53,7 +53,7 @@ async function getWorkforceMetrics(prisma, { organizationId, from, to }) {
 
   const [opening, closing, hires, completedExits] = await Promise.all([
     prisma.workforceSnapshot.findFirst({
-      where: { organizationId, snapshotDate: { lte: snapshotFrom } },
+      where: { organizationId, snapshotDate: { lt: snapshotFrom } },
       orderBy: { snapshotDate: "desc" },
     }),
     // Closing must be represented by a snapshot inside the reporting period;
@@ -103,6 +103,7 @@ async function getWorkforceMetrics(prisma, { organizationId, from, to }) {
       averageHeadcount,
       turnoverRate,
     },
+    closingWorkforce: serializeSnapshotComposition(closing),
     availability: {
       openingHeadcount: availability(openingHeadcount !== null, openingReason),
       closingHeadcount: availability(closingHeadcount !== null, closingReason),

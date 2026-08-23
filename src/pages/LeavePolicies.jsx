@@ -1,27 +1,62 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../services/api";
+import useAuthorization from "../hooks/useAuthorization";
 
+const today=()=>new Date().toISOString().slice(0,10);
+const sections=[
+ ["Policy Details",null],["Eligibility","eligibilityRules"],["Entitlement","entitlementRules"],
+ ["Accrual & Carryover","balanceRules"],["Request Rules","requestRules"],
+ ["Approval Workflow","approvalWorkflow"],["Commencement & Return","lifecycleRules"],
+ ["Payroll Treatment","payrollRules"],["Attendance Treatment","attendanceRules"],
+ ["Review & Activate",null]
+];
+const jurisdictionName=value=>({NG:"Nigeria",NIGERIA:"Nigeria",GH:"Ghana",GHANA:"Ghana",GB:"United Kingdom",UK:"United Kingdom"}[String(value||"").trim().toUpperCase()]||String(value||"").trim());
+const blank=(jurisdiction="")=>({name:"",code:"",leaveTypeId:"",description:"",category:"ORGANIZATION_BENEFIT",jurisdiction,effectiveFrom:today(),effectiveTo:"",status:"DRAFT",changeReason:"",
+ eligibilityRules:{scope:"ALL_EMPLOYEES",minimumServiceDays:0},entitlementRules:{value:20,unit:"WORKING_DAYS",frequency:"ANNUAL",accrual:"MONTHLY",proration:"BOTH"},serviceBands:[],
+ balanceRules:{carryoverAllowed:false,negativeBalanceAllowed:false,cashOutAllowed:false},requestRules:{minimumNotice:0,minimumDuration:.5,halfDayAllowed:true,backdatedRequestsAllowed:false,attachmentRequired:false,reasonRequired:true},
+ approvalWorkflow:{type:"MANAGER_HR",steps:["LINE_MANAGER","HR"]},lifecycleRules:{explicitCommencementRequired:true,commencementActor:"HR",allowEarlyCommencement:false,returnToWorkRequired:true,returnConfirmedBy:"HR",allowEarlyReturn:true,fitnessCertificateRequired:false,returnDocumentationRequired:false},
+ payrollRules:{treatment:"FULLY_PAID",payPercentage:100},attendanceRules:{excusedAbsence:true,suppressExpectedAttendance:true,clockInRequired:false},calendarRules:{countWeekends:false,countPublicHolidays:false,useEmployeeWorkSchedule:true},
+ documentationRules:{},overlapRules:{action:"BLOCK"},coverageRules:{}});
 function LeavePolicies(){
-  const navigate=useNavigate();
-  const [policies,setPolicies]=useState([]);
-  const [error,setError]=useState("");
-  useEffect(()=>{(async()=>{try{const r=await apiRequest("/api/leave/policies");setPolicies(r.data||[])}catch(e){setError(e.message||"Unable to load leave policies.")}})()},[]);
-  return <div style={{color:"var(--chris-text-main)"}}>
-    <button type="button" onClick={()=>navigate("/leave")} style={back}>{"\u2190"} Back to Leave Dashboard</button>
-    <div style={{marginBottom:22}}><div style={eyebrow}>PEOPLE OPERATIONS</div><h1 style={titleStyle}>Leave Policies</h1><p style={desc}>Review active leave policies, entitlement rules and eligibility configuration.</p></div>
-    {error&&<div style={{...panel,padding:"12px 16px",marginBottom:18,color:"var(--chris-warning)"}}>{error}</div>}
-    <section style={panel}>
-      {policies.length?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>{policies.map(p=><div key={p.id} style={policy}><div><strong>{p.name}</strong><div style={muted}>{p.leaveType?.name||"Leave policy"}</div></div><div style={{textAlign:"right"}}><strong style={{color:"var(--chris-gold)",fontSize:20}}>{String(p.entitlementDays??"—")}</strong><div style={muted}>days</div></div></div>)}</div>:<div style={empty}>No leave policies are configured yet.</div>}
-    </section>
-  </div>;
+ const nav=useNavigate(),{hasPermission,profile}=useAuthorization(),canManage=hasPermission("leave.manage"),[data,setData]=useState({templates:[],policies:[]}),[types,setTypes]=useState([]),[error,setError]=useState(""),[message,setMessage]=useState(""),[view,setView]=useState(null),[builder,setBuilder]=useState(null),[step,setStep]=useState(1),[saving,setSaving]=useState(false);
+ async function load(){try{const [w,t]=await Promise.all([apiRequest("/api/leave/policy-workspace"),apiRequest("/api/leave/types")]);setData(w.data||{templates:[],policies:[]});setTypes(t.data||[])}catch(e){setError(e.message||"Unable to load policies.")}}
+ useEffect(()=>{let active=true;(async()=>{try{const [w,t]=await Promise.all([apiRequest("/api/leave/policy-workspace"),apiRequest("/api/leave/types")]);if(active){setData(w.data||{templates:[],policies:[]});setTypes(t.data||[])}}catch(e){if(active)setError(e.message||"Unable to load policies.")}})();return()=>{active=false}},[]);
+ function start(mode,source){setError("");setMessage("");const defaultJurisdiction=jurisdictionName(profile?.organization?.country);let policy=blank(defaultJurisdiction);if(mode==="CLONE")policy={...policy,...source.configuration,name:source.name+" - Custom",code:source.code+"_CUSTOM",description:source.description||"",category:source.category||"",jurisdiction:source.jurisdiction||""};if(mode==="VERSION"){for(const k of Object.keys(policy))policy[k]=source[k]??policy[k];policy={...policy,effectiveFrom:today(),effectiveTo:"",status:"DRAFT",changeReason:""}}setBuilder({mode,source,policy});setStep(1)}
+ async function call(path,body){setError("");setMessage("");try{await apiRequest(path,{method:"POST",body:JSON.stringify(body)});setError("");setMessage("Policy operation completed.");setBuilder(null);await load();window.setTimeout(()=>setMessage(""),4500)}catch(e){const text=e.message||"Policy operation failed.";setError(text);window.setTimeout(()=>setError(current=>current===text?"":current),4500)}}
+ async function save(status){const p={...builder.policy,status};if(!p.name||!p.code||!p.effectiveFrom||(builder.mode==="CREATE"&&!p.leaveTypeId)){setError("Name, code, leave type and effective date are required.");setStep(1);return}setSaving(true);if(builder.mode==="CLONE")await call(`/api/leave/policy-templates/${builder.source.code}/clone`,p);else if(builder.mode==="VERSION")await call(`/api/leave/policies/${builder.source.id}/versions`,p);else await call("/api/leave/policies",p);setSaving(false)}
+ async function status(p,next){const reason=window.prompt("Reason for status change:");if(reason)await call(`/api/leave/policies/${p.id}/status`,{status:next,reason})}
+ return <div style={{color:"var(--chris-text-main)"}}>
+  <button style={back} onClick={()=>nav("/leave")}>{"\u2190"} Back to Leave Dashboard</button>
+  <header style={head}><div><b style={eye}>POLICY ENGINE</b><h1>Leave Policies</h1><p style={muted}>Recommended templates and tenant-owned effective-dated policy versions.</p></div><button disabled={!canManage} style={{...primary,opacity:canManage?1:.5}} onClick={()=>start("CREATE")}>+ Create Leave Policy</button></header>
+  {!canManage&&<Notice>Read-only access: leave.manage is required for policy changes.</Notice>}{message&&<Notice ok>{message}</Notice>}{error&&<Notice>{error}</Notice>}
+  <Section title="CHRIS Recommended Policies" note="Read-only system templates. Compliance controls are not legal advice.">
+   <div style={grid}>{data.templates.map(t=><Card key={t.code} title={t.name} tag="CHRIS TEMPLATE" text={t.previewText}>
+    <button style={button} onClick={()=>setView(t)}>View</button><button disabled={!canManage} style={{...primary,opacity:canManage?1:.5}} onClick={()=>call(`/api/leave/policy-templates/${t.code}/use`,{effectiveFrom:today()})}>Use Policy</button><button disabled={!canManage} style={button} onClick={()=>start("CLONE",t)}>Clone & Customize</button>
+   </Card>)}</div>
+  </Section>
+  <Section title="Organization Policies" note="Historical versions remain attached to the leave requests they governed.">
+   <div style={grid}>{data.policies.map(p=><Card key={p.id} title={p.name} tag={p.status} text={p.previewText}>
+    <small style={muted}>{p.code} - Version {p.versionNumber} - {p.complianceStatus?.replaceAll("_"," ")}</small>
+    <button style={button} onClick={()=>setView(p)}>View</button>{p.status==="DRAFT"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Activate</button>}{p.status==="ACTIVE"&&<button style={button} onClick={()=>status(p,"SUSPENDED")}>Suspend</button>}{p.status==="SUSPENDED"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Reactivate</button>}{p.status!=="RETIRED"&&<button style={button} onClick={()=>start("VERSION",p)}>New Version</button>}{p.status!=="RETIRED"&&<button style={danger} onClick={()=>status(p,"RETIRED")}>Retire</button>}
+   </Card>)}</div>{!data.policies.length&&<p style={muted}>No organization policies yet.</p>}
+  </Section>
+  {view&&<Modal title={view.name} close={()=>setView(null)}><pre style={preview}>{view.previewText||JSON.stringify(view.configuration||view,null,2)}</pre>{view.complianceNotes&&<p style={warn}>{view.complianceNotes}</p>}</Modal>}
+  {builder&&<Modal wide title={builder.mode==="CLONE"?"Clone & Customize":builder.mode==="VERSION"?"Create Policy Version":"Create Leave Policy"} close={()=>setBuilder(null)}>
+   <div style={steps}>{sections.map((s,i)=><button key={s[0]} style={pill(step===i+1)} onClick={()=>setStep(i+1)}>{i+1}</button>)}</div>
+   <h3>{step}. {sections[step-1][0]}</h3><BuilderStep step={step} policy={builder.policy} types={types} change={policy=>setBuilder({...builder,policy})}/>
+   <footer style={foot}><button style={button} disabled={step===1} onClick={()=>setStep(step-1)}>Previous</button><span><button style={button} disabled={saving} onClick={()=>save("DRAFT")}>Save Draft</button> {step<10?<button style={primary} onClick={()=>setStep(step+1)}>Next</button>:<button style={primary} disabled={saving} onClick={()=>save("ACTIVE")}>Preview & Activate</button>}</span></footer>
+  </Modal>}
+ </div>
 }
-const panel={background:"linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))",border:"1px solid var(--chris-border-gold)",borderRadius:"var(--chris-radius-card)",padding:20,boxShadow:"var(--chris-shadow-card)"};
-const back={marginBottom:16,padding:0,border:"none",background:"transparent",color:"var(--chris-gold)",fontSize:"var(--chris-font-sm)",fontWeight:800};
-const eyebrow={color:"var(--chris-gold)",fontSize:"var(--chris-font-sm)",fontWeight:800,letterSpacing:"0.15em"};
-const titleStyle={margin:"7px 0 6px",fontSize:"var(--chris-font-2xl)",fontWeight:800};
-const desc={margin:0,color:"var(--chris-text-secondary)",fontSize:"var(--chris-font-md)"};
-const policy={display:"flex",justifyContent:"space-between",gap:14,padding:14,borderRadius:"var(--chris-radius-md)",background:"rgba(255,255,255,.035)",border:"1px solid var(--chris-border-soft)"};
-const muted={color:"var(--chris-text-secondary)",fontSize:"var(--chris-font-sm)",marginTop:4};
-const empty={color:"var(--chris-text-secondary)",padding:"18px 0"};
+function BuilderStep({step,policy,types,change}){const set=(k,v)=>change({...policy,[k]:v});if(step===1)return <div style={form}><Field label="Policy Name *" value={policy.name} set={v=>set("name",v)}/><Field label="Policy Code *" value={policy.code} set={v=>set("code",v.toUpperCase())}/><label>Leave Type *<select style={input} value={policy.leaveTypeId} onChange={e=>set("leaveTypeId",e.target.value)}><option value="">Select</option>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><Field label="Category" value={policy.category} set={v=>set("category",v)}/><label>Jurisdiction<input list="leave-jurisdictions" style={input} value={policy.jurisdiction} onChange={e=>set("jurisdiction",e.target.value)}/><datalist id="leave-jurisdictions"><option value="Nigeria"/><option value="Nigeria — Federal"/><option value="Lagos State, Nigeria"/><option value="Ghana"/><option value="United Kingdom"/></datalist><small style={muted}>Legal or regulatory jurisdiction governing this leave policy.</small></label><Field type="date" label="Effective From *" value={policy.effectiveFrom} set={v=>set("effectiveFrom",v)}/><Field type="date" label="Effective To" value={policy.effectiveTo} set={v=>set("effectiveTo",v)}/><Field label="Change Reason" value={policy.changeReason} set={v=>set("changeReason",v)}/><label style={{gridColumn:"1/-1"}}>Description<textarea style={area} value={policy.description} onChange={e=>set("description",e.target.value)}/></label></div>;
+ const key=sections[step-1][1];if(step===10)return <><Json label="Attendance Treatment" value={policy.attendanceRules} set={v=>set("attendanceRules",v)}/><Json label="Weekend & Holiday Rules" value={policy.calendarRules} set={v=>set("calendarRules",v)}/><Json label="Documentation Rules" value={policy.documentationRules} set={v=>set("documentationRules",v)}/><Json label="Overlap Controls" value={policy.overlapRules} set={v=>set("overlapRules",v)}/><Json label="Workforce Coverage Controls" value={policy.coverageRules} set={v=>set("coverageRules",v)}/><p style={warn}>Review the human-readable preview before activation. Compliance status is a control, not legal advice.</p></>;
+ return <Json label={sections[step-1][0]+" Configuration"} value={policy[key]} set={v=>set(key,v)}/>}
+function Json({label,value,set}){const [text,setText]=useState(JSON.stringify(value,null,2)),[bad,setBad]=useState(false);function apply(){try{set(JSON.parse(text));setBad(false)}catch{setBad(true)}}return <label>{label}<textarea style={{...area,borderColor:bad?"#F87171":undefined}} value={text} onChange={e=>setText(e.target.value)} onBlur={apply}/>{bad&&<small style={{color:"#F87171"}}>Enter valid JSON.</small>}</label>}
+function Field({label,value,set,type="text"}){return <label>{label}<input style={input} type={type} value={value||""} onChange={e=>set(e.target.value)}/></label>}
+function Section({title,note,children}){return <section style={panel}><h2>{title}</h2><p style={muted}>{note}</p>{children}</section>}
+function Card({title,tag,text,children}){return <article style={card}><b style={eye}>{tag}</b><h3>{title}</h3><p style={muted}>{text}</p><div style={actions}>{children}</div></article>}
+function Notice({children,ok}){return <div style={{...panel,color:ok?"var(--chris-success)":"var(--chris-warning)"}}>{children}</div>}
+function Modal({title,close,children,wide}){return <div style={overlay}><div style={{...modal,maxWidth:wide?1000:700}}><header style={{...head,position:"sticky",top:0,zIndex:2,background:"#07150E"}}><h2>{title}</h2><button style={button} onClick={close}>Close</button></header>{children}</div></div>}
+const panel={marginBottom:18,padding:20,border:"1px solid var(--chris-border-gold)",borderRadius:16,background:"rgba(7,24,15,.95)"},head={display:"flex",justifyContent:"space-between",gap:15,alignItems:"center"},grid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12},card={padding:15,border:"1px solid var(--chris-border-soft)",borderRadius:12,background:"rgba(255,255,255,.035)"},actions={display:"flex",gap:7,flexWrap:"wrap"},form={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12},input={display:"block",width:"100%",boxSizing:"border-box",padding:10,marginTop:6,borderRadius:8,border:"1px solid var(--chris-border-soft)",background:"var(--chris-input-bg)",color:"var(--chris-text-main)"},area={...input,minHeight:190,fontFamily:"ui-monospace,monospace"},primary={padding:"9px 12px",border:0,borderRadius:8,background:"var(--chris-gold)",color:"#07110C",fontWeight:800},button={padding:"9px 12px",border:"1px solid var(--chris-border-soft)",borderRadius:8,background:"transparent",color:"var(--chris-text-main)"},danger={...button,color:"#FCA5A5"},eye={color:"var(--chris-gold)",fontSize:11,letterSpacing:".1em"},muted={color:"var(--chris-text-secondary)",lineHeight:1.5},back={...button,border:0,color:"var(--chris-gold)"},overlay={position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"clamp(16px,4vh,40px) 16px",background:"rgba(0,0,0,.78)"},modal={width:"min(100%,700px)",maxHeight:"calc(100dvh - 32px)",overflowY:"auto",overscrollBehavior:"contain",padding:22,borderRadius:16,border:"1px solid var(--chris-border-gold)",background:"#07150E"},steps={display:"flex",gap:7,flexWrap:"wrap",marginBottom:18},pill=active=>({width:34,height:34,borderRadius:"50%",border:"1px solid var(--chris-gold)",background:active?"var(--chris-gold)":"transparent",color:active?"#07110C":"white"}),foot={display:"flex",justifyContent:"space-between",position:"sticky",bottom:0,marginTop:18,paddingTop:12,background:"#07150E"},preview={whiteSpace:"pre-wrap",fontFamily:"inherit",color:"var(--chris-text-secondary)",lineHeight:1.7},warn={padding:12,background:"rgba(212,175,55,.08)",color:"var(--chris-warning)",borderRadius:8};
 export default LeavePolicies;

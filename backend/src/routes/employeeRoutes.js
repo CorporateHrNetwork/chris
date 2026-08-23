@@ -89,6 +89,12 @@ async function getEmployee(
       designation: true,
       location: true,
       user: true,
+      leaveRequests: {
+        where: { status: "ACTIVE" },
+        orderBy: { commencementDate: "desc" },
+        take: 1,
+        include: { leaveType: true },
+      },
       lineManagerAssignments: {
         where: { effectiveTo: null },
         take: 1,

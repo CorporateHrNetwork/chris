@@ -48,17 +48,24 @@ function snapshotCounts(employees) {
   };
 }
 
+function serializeSnapshotComposition(snapshot) {
+  if (!snapshot) return null;
+  return {
+    active: snapshot.activeCount,
+    probation: snapshot.probationCount,
+    leave: snapshot.leaveCount,
+    suspended: snapshot.suspendedCount,
+    exited: snapshot.exitedCount,
+  };
+}
+
 function serializeSnapshot(snapshot) {
   return {
     id: snapshot.id,
     snapshotDate: snapshot.snapshotDate.toISOString().slice(0, 10),
     totalHistorical: snapshot.totalHistorical,
     totalCurrent: snapshot.totalCurrent,
-    active: snapshot.activeCount,
-    probation: snapshot.probationCount,
-    leave: snapshot.leaveCount,
-    suspended: snapshot.suspendedCount,
-    exited: snapshot.exitedCount,
+    ...serializeSnapshotComposition(snapshot),
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt,
   };
@@ -118,6 +125,7 @@ module.exports = {
   dateKeyForTimezone,
   normalizedSnapshotDate,
   snapshotCounts,
+  serializeSnapshotComposition,
   serializeSnapshot,
   captureWorkforceSnapshot,
   getWorkforceSnapshots,

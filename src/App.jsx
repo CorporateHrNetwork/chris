@@ -33,6 +33,11 @@ import LeaveDashboard from "./pages/LeaveDashboard";
 import LeaveRequests from "./pages/LeaveRequests";
 import LeaveBalances from "./pages/LeaveBalances";
 import LeavePolicies from "./pages/LeavePolicies";
+import LeaveActive from "./pages/LeaveActive";
+import LeaveReturns from "./pages/LeaveReturns";
+import LeaveCalendarPage from "./pages/LeaveCalendarPage";
+import LeaveEntitlements from "./pages/LeaveEntitlements";
+import LeaveExceptions from "./pages/LeaveExceptions";
 import Payroll from "./pages/Payroll";
 import Benefits from "./pages/Benefits";
 import BenefitChildPage from "./pages/benefits/BenefitChildPage";
@@ -335,6 +340,12 @@ function App() {
           }
         />
 
+        <Route path="/leave/active" element={<PermissionLayout permission="leave.view"><LeaveActive /></PermissionLayout>} />
+        <Route path="/leave/returns" element={<PermissionLayout permission="leave.view"><LeaveReturns /></PermissionLayout>} />
+        <Route path="/leave/calendar" element={<PermissionLayout permission="leave.view"><LeaveCalendarPage /></PermissionLayout>} />
+        <Route path="/leave/entitlements" element={<PermissionLayout permission="leave.view"><LeaveEntitlements /></PermissionLayout>} />
+        <Route path="/leave/exceptions" element={<PermissionLayout permission="leave.view"><LeaveExceptions /></PermissionLayout>} />
+
         <Route
           path="/leave/balances"
           element={
@@ -490,8 +501,6 @@ function App() {
         <Route path="/recruitment/offers" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/recruitment/ats" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/recruitment/talent-pool" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/leave/calendar" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/leave/entitlements" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/periods" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/salary-rates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />

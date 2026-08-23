@@ -3,6 +3,7 @@ const {
   dateKeyForTimezone,
   normalizedSnapshotDate,
   snapshotCounts,
+  serializeSnapshotComposition,
   captureWorkforceSnapshot,
   getWorkforceSnapshots,
 } = require("../src/services/workforceSnapshotService");
@@ -23,6 +24,10 @@ assert.deepEqual(snapshotCounts([]), {
   totalCurrent: 0, activeCount: 0, probationCount: 0, leaveCount: 0, suspendedCount: 0,
   totalHistorical: 0, exitedCount: 0, unclassifiedCount: 0,
 });
+assert.deepEqual(serializeSnapshotComposition({
+  activeCount: 7, probationCount: 0, leaveCount: 1, suspendedCount: 0, exitedCount: 1,
+}), { active: 7, probation: 0, leave: 1, suspended: 0, exited: 1 });
+assert.equal(serializeSnapshotComposition(null), null);
 
 function createPrisma(employeeRows = []) {
   const calls = [];

@@ -1,69 +1,932 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../services/api";
 
-function LeaveRequests() {
-  const navigate = useNavigate();
-  const [types, setTypes] = useState([]);
-  const [employeeNumber, setEmployeeNumber] = useState("");
-  const [form, setForm] = useState({ leaveTypeId:"", startDate:"", endDate:"", requestedUnits:"", reason:"" });
-  const [message, setMessage] = useState("");
+import { apiRequest } from "../services/api";
+import useAuthorization from "../hooks/useAuthorization";
+import EmployeeSearchSelect from "../components/leave/EmployeeSearchSelect";
+import {
+  LeavePage,
+  Panel,
+  Notice,
+  Table,
+  StatusBadge,
+  formatDate,
+  employeeName,
+  styles,
+} from "../components/leave/LeaveUi";
+
+import "./LeaveRequests.css";
+
+const emptyForm = {
+  employeeNumber: "",
+  leaveTypeId: "",
+  leavePolicyId: "",
+  startDate: "",
+  endDate: "",
+  reason: "",
+};
+
+function readableUnit(unit) {
+  if (!unit) return "days";
+
+  const normalized = String(unit)
+    .replaceAll("_", " ")
+    .toLowerCase();
+
+  if (normalized === "working days") return "working days";
+  if (normalized === "calendar days") return "calendar days";
+  if (normalized === "hours") return "hours";
+  if (normalized === "weeks") return "weeks";
+
+  return normalized;
+}
+
+export default function LeaveRequests() {
+  const nav = useNavigate();
+  const { hasPermission } = useAuthorization();
+
+  const canRequest =
+    hasPermission("leave.request") || hasPermission("leave.manage");
+
+  const canApprove =
+    hasPermission("leave.approve") || hasPermission("leave.manage");
+
+  const [policies, setPolicies] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [employeeLoading, setEmployeeLoading] = useState(true);
+
+  const [form, setForm] = useState(emptyForm);
+  const [calculation, setCalculation] = useState(null);
+
+  const [balance, setBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceError, setBalanceError] = useState("");
+
+  const [open, setOpen] = useState(false);
+  const [requests, setRequests] = useState([]);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState("");
+
+  const normalizeEmployees = (response) => {
+    const raw = Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data?.employees)
+          ? response.data.employees
+          : [];
+
+    return raw;
+  };
+
+  const loadRequests = () =>
+    apiRequest("/api/leave/requests")
+      .then((response) => {
+        setRequests(response.data || []);
+      })
+      .catch((requestError) => {
+        setError(requestError.message);
+      });
+
+  const loadReferenceData = async () => {
+    try {
+      setEmployeeLoading(true);
+
+      const [policyResponse, employeeResponse] = await Promise.all([
+        apiRequest("/api/leave/policies"),
+        apiRequest("/api/employees"),
+      ]);
+
+      setPolicies(
+        (policyResponse.data || []).filter(
+          (item) =>
+            item.status === "ACTIVE" &&
+            item.isActive !== false
+        )
+      );
+
+      setEmployees(normalizeEmployees(employeeResponse));
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      setEmployeeLoading(false);
+    }
+  };
 
   useEffect(() => {
-    (async()=>{try{const r=await apiRequest("/api/leave/types");setTypes(r.data||[])}catch(e){setError(e.message||"Unable to load leave types.")}})();
-  },[]);
+    loadRequests();
+    loadReferenceData();
+  }, []);
 
-  async function submit(e){
-    e.preventDefault(); setMessage(""); setError("");
-    try{
-      await apiRequest("/api/leave/requests",{method:"POST",body:JSON.stringify({
-        employeeNumber:employeeNumber.trim(),
-        leaveTypeId:form.leaveTypeId,
-        startDate:form.startDate,
-        endDate:form.endDate,
-        requestedUnits:Number(form.requestedUnits),
-        reason:form.reason
-      })});
-      setMessage("Leave request submitted successfully.");
-      setForm({leaveTypeId:"",startDate:"",endDate:"",requestedUnits:"",reason:""});
-    }catch(err){setError(err.message||"Unable to submit leave request.");}
+  function updateForm(patch) {
+    setForm((current) => ({
+      ...current,
+      ...patch,
+    }));
   }
 
-  return <div style={{color:"var(--chris-text-main)"}}>
-    <Back onClick={()=>navigate("/leave")} />
-    <Header title="Leave Requests" description="Create and manage employee leave requests." />
-    {message&&<Notice success>{message}</Notice>}
-    {error&&<Notice>{error}</Notice>}
-    <section style={panel}>
-      <h2 style={sectionTitle}>New Leave Request</h2>
-      <p style={sectionSub}>Capture the employee and requested leave period.</p>
-      <form onSubmit={submit} style={{display:"grid",gap:14,marginTop:18}}>
-        <Field label="Employee Number"><input style={input} value={employeeNumber} onChange={e=>setEmployeeNumber(e.target.value)} placeholder="e.g. CHR000006" required /></Field>
-        <Field label="Leave Type"><select style={input} value={form.leaveTypeId} onChange={e=>setForm({...form,leaveTypeId:e.target.value})} required><option value="">Select leave type</option>{types.filter(x=>x.isActive!==false).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Field label="Start Date"><input style={input} type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})} required /></Field>
-          <Field label="End Date"><input style={input} type="date" value={form.endDate} onChange={e=>setForm({...form,endDate:e.target.value})} required /></Field>
+  function resetRequestForm() {
+    setForm(emptyForm);
+    setCalculation(null);
+    setBalance(null);
+    setBalanceError("");
+    setBalanceLoading(false);
+  }
+
+  function closeRequestModal() {
+    resetRequestForm();
+    setOpen(false);
+  }
+
+  useEffect(() => {
+    if (!form.employeeNumber || !form.leavePolicyId) {
+      setBalance(null);
+      setBalanceError("");
+      setBalanceLoading(false);
+      return;
+    }
+
+    let live = true;
+
+    setBalance(null);
+    setBalanceError("");
+    setBalanceLoading(true);
+
+    const query = new URLSearchParams({
+      leavePolicyId: form.leavePolicyId,
+    }).toString();
+
+    apiRequest(
+      `/api/leave/employees/${encodeURIComponent(
+        form.employeeNumber
+      )}/policy-balance?${query}`
+    )
+      .then((response) => {
+        if (!live) return;
+
+        setBalance(response.data);
+        setBalanceError("");
+      })
+      .catch((balanceLoadError) => {
+        if (!live) return;
+
+        setBalance(null);
+        setBalanceError(
+          balanceLoadError.message ||
+            "Unable to load leave balance."
+        );
+      })
+      .finally(() => {
+        if (live) {
+          setBalanceLoading(false);
+        }
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [form.employeeNumber, form.leavePolicyId]);
+
+  useEffect(() => {
+    if (
+      !form.employeeNumber ||
+      !form.leavePolicyId ||
+      !form.startDate ||
+      !form.endDate
+    ) {
+      setCalculation(null);
+      return;
+    }
+
+    let live = true;
+
+    const query = new URLSearchParams({
+      employeeNumber: form.employeeNumber,
+      leaveTypeId: form.leaveTypeId,
+      leavePolicyId: form.leavePolicyId,
+      startDate: form.startDate,
+      endDate: form.endDate,
+    }).toString();
+
+    apiRequest(`/api/leave/request-day-calculation?${query}`)
+      .then((response) => {
+        if (!live) return;
+
+        setCalculation(response.data);
+      })
+      .catch((calculationError) => {
+        if (!live) return;
+
+        setCalculation(null);
+        setError(calculationError.message);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [
+    form.employeeNumber,
+    form.leaveTypeId,
+    form.leavePolicyId,
+    form.startDate,
+    form.endDate,
+  ]);
+
+  const requestedUnits = Number(
+    calculation?.requestedUnits || 0
+  );
+
+  const maximumRequestable = Number(
+    balance?.maximumRequestable || 0
+  );
+
+  const exceedsMaximum =
+    Boolean(calculation) &&
+    Boolean(balance?.hasEntitlement) &&
+    requestedUnits > maximumRequestable;
+
+  const selectedPolicy = useMemo(
+    () =>
+      policies.find(
+        (policy) => policy.id === form.leavePolicyId
+      ) || null,
+    [policies, form.leavePolicyId]
+  );
+
+  async function action(request, path, body, label) {
+    setBusy(request.id);
+    setError("");
+    setMessage("");
+
+    try {
+      await apiRequest(
+        `/api/leave/requests/${request.id}/${path}`,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        }
+      );
+
+      setMessage(label);
+      await loadRequests();
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+
+    setError("");
+    setMessage("");
+
+    if (!form.employeeNumber) {
+      setError("Select an employee.");
+      return;
+    }
+
+    if (!form.leavePolicyId) {
+      setError("Select an active leave policy.");
+      return;
+    }
+
+    if (!balance) {
+      setError(
+        balanceError ||
+          "Leave balance has not been loaded."
+      );
+      return;
+    }
+
+    if (!balance.hasEntitlement) {
+      setError(
+        `No entitlement is currently configured for this employee under ${
+          selectedPolicy?.name || "the selected leave policy"
+        }.`
+      );
+      return;
+    }
+
+    if (!calculation || requestedUnits <= 0) {
+      setError(
+        "Select valid leave dates so CHRIS can calculate the leave duration."
+      );
+      return;
+    }
+
+    if (requestedUnits > maximumRequestable) {
+      setError(
+        `Request exceeds the maximum available entitlement of ${maximumRequestable} ${readableUnit(
+          balance.unit
+        )}.`
+      );
+      return;
+    }
+
+    try {
+      await apiRequest("/api/leave/requests", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+
+      setMessage(
+        `Leave request submitted for ${requestedUnits} ${readableUnit(
+          calculation.unit
+        )}.`
+      );
+
+      resetRequestForm();
+      setOpen(false);
+
+      await loadRequests();
+    } catch (submitError) {
+      setError(submitError.message);
+    }
+  }
+
+  function actions(request) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startDate = new Date(request.startDate);
+    startDate.setHours(0, 0, 0, 0);
+
+    const due = startDate <= today;
+
+    const early =
+      request.leavePolicy?.lifecycleRules
+        ?.allowEarlyCommencement === true;
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap",
+        }}
+      >
+        {request.status === "PENDING" && (
+          <>
+            <button
+              disabled={
+                !canApprove || busy === request.id
+              }
+              style={styles.button}
+              onClick={() =>
+                action(
+                  request,
+                  "review",
+                  { decision: "APPROVE" },
+                  "Request approved."
+                )
+              }
+            >
+              Approve
+            </button>
+
+            <button
+              disabled={
+                !canApprove || busy === request.id
+              }
+              style={styles.button}
+              onClick={() =>
+                action(
+                  request,
+                  "review",
+                  { decision: "REJECT" },
+                  "Request rejected."
+                )
+              }
+            >
+              Reject
+            </button>
+          </>
+        )}
+
+        {["PENDING", "APPROVED"].includes(
+          request.status
+        ) && (
+          <button
+            disabled={
+              !canApprove || busy === request.id
+            }
+            style={styles.button}
+            onClick={() =>
+              action(
+                request,
+                "cancel",
+                {
+                  cancellationReason:
+                    "Cancelled from leave register",
+                },
+                "Request cancelled."
+              )
+            }
+          >
+            Cancel
+          </button>
+        )}
+
+        {request.status === "APPROVED" && (
+          <button
+            title={
+              !due && !early
+                ? "Policy does not permit early commencement"
+                : ""
+            }
+            disabled={
+              (!due && !early) ||
+              !canApprove ||
+              busy === request.id
+            }
+            style={{
+              ...styles.primary,
+              opacity: due || early ? 1 : 0.5,
+            }}
+            onClick={() =>
+              action(
+                request,
+                "commence",
+                {
+                  effectiveDate: new Date()
+                    .toISOString()
+                    .slice(0, 10),
+                },
+                "Leave commenced."
+              )
+            }
+          >
+            Commence Leave
+          </button>
+        )}
+
+        {request.status === "ACTIVE" && (
+          <button
+            style={styles.primary}
+            onClick={() => nav("/leave/returns")}
+          >
+            Return to Work
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  function lifecycleLabel(request, due) {
+    if (request.status === "APPROVED") {
+      return due
+        ? "Approved - Ready to Commence"
+        : `Approved - Starts ${formatDate(
+            request.startDate
+          )}`;
+    }
+
+    if (request.status === "ACTIVE") {
+      return "On Leave";
+    }
+
+    if (request.status === "COMPLETED") {
+      return `Completed - Returned ${formatDate(
+        request.actualReturnDate
+      )}`;
+    }
+
+    return request.status;
+  }
+
+  const columns = [
+    {
+      key: "employee",
+      label: "Employee",
+      render: (row) =>
+        `${employeeName(row.employee)} (${
+          row.employee?.employeeNumber
+        })`,
+    },
+    {
+      key: "type",
+      label: "Leave Type",
+      render: (row) => row.leaveType?.name,
+    },
+    {
+      key: "dates",
+      label: "Leave Dates",
+      render: (row) =>
+        `${formatDate(row.startDate)} - ${formatDate(
+          row.endDate
+        )}`,
+    },
+    {
+      key: "duration",
+      label: "Days Applied For",
+      render: (row) => row.requestedUnits,
+    },
+    {
+      key: "policy",
+      label: "Policy / Version",
+      render: (row) =>
+        row.leavePolicy
+          ? `${row.leavePolicy.name} v${row.leavePolicy.versionNumber}`
+          : "-",
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (row) => {
+        const due =
+          new Date(row.startDate) <= new Date();
+
+        return (
+          <>
+            <StatusBadge status={row.status} />
+            <div style={styles.muted}>
+              {lifecycleLabel(row, due)}
+            </div>
+          </>
+        );
+      },
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      render: actions,
+    },
+  ];
+
+  return (
+    <LeavePage
+      title="Leave Requests"
+      description="Create, review and manage the complete leave request lifecycle."
+      actions={
+        <button
+          disabled={!canRequest}
+          style={{
+            ...styles.primary,
+            opacity: canRequest ? 1 : 0.5,
+          }}
+          onClick={() => {
+            setError("");
+            setMessage("");
+            resetRequestForm();
+            setOpen(true);
+          }}
+        >
+          + New Leave Request
+        </button>
+      }
+    >
+      {error && <Notice error>{error}</Notice>}
+      {message && <Notice>{message}</Notice>}
+
+      <Panel title="Request Register">
+        <Table
+          rows={requests}
+          columns={columns}
+          empty="No leave requests found."
+        />
+      </Panel>
+
+      {open && (
+        <div
+          className="leave-request-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeRequestModal();
+            }
+          }}
+        >
+          <section
+            className="leave-request-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="leave-request-title"
+          >
+            <header className="leave-request-modal__header">
+              <div>
+                <h2
+                  id="leave-request-title"
+                  style={{ margin: 0 }}
+                >
+                  New Leave Request
+                </h2>
+
+                <p style={styles.muted}>
+                  Leave End Date is the final day of
+                  leave and is counted inclusively.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                style={styles.button}
+                onClick={closeRequestModal}
+              >
+                Close
+              </button>
+            </header>
+
+            <form
+              className="leave-request-form"
+              onSubmit={submit}
+            >
+              <EmployeeSearchSelect
+                employees={employees}
+                loading={employeeLoading}
+                value={form.employeeNumber}
+                onChange={(employeeNumber) => {
+                  setBalance(null);
+                  setBalanceError("");
+                  setCalculation(null);
+
+                  updateForm({
+                    employeeNumber,
+                  });
+                }}
+              />
+
+              {!policies.length && (
+                <Notice error>
+                  No active leave policy is configured
+                  for this organization. Go to Leave
+                  Policies to activate or use a CHRIS
+                  recommended policy.
+                </Notice>
+              )}
+
+              <label className="leave-field">
+                <span>Leave Policy *</span>
+
+                <select
+                  style={styles.input}
+                  value={form.leavePolicyId}
+                  onChange={(event) => {
+                    const policy = policies.find(
+                      (item) =>
+                        item.id === event.target.value
+                    );
+
+                    setBalance(null);
+                    setBalanceError("");
+                    setCalculation(null);
+
+                    updateForm({
+                      leavePolicyId: event.target.value,
+                      leaveTypeId:
+                        policy?.leaveTypeId || "",
+                    });
+                  }}
+                  required
+                >
+                  <option value="">
+                    Select active policy
+                  </option>
+
+                  {policies.map((policy) => (
+                    <option
+                      key={policy.id}
+                      value={policy.id}
+                    >
+                      {policy.name} v
+                      {policy.versionNumber} -{" "}
+                      {policy.leaveType?.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="leave-field">
+                <span>Available Leave Balance</span>
+
+                <div
+                  style={{
+                    minHeight: 44,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "0 12px",
+                    borderRadius: 10,
+                    background: "#10261d",
+                    color: "#f4f7f5",
+                    fontWeight: 700,
+                    border: "1px solid rgba(206, 168, 27, 0.3)",
+                  }}
+                >
+                  {!form.employeeNumber ||
+                  !form.leavePolicyId
+                    ? "Select employee and leave policy"
+                    : balanceLoading
+                      ? "Loading leave balance..."
+                      : balanceError
+                        ? "Unable to load leave balance."
+                        : !balance
+                          ? "-"
+                          : !balance.hasEntitlement
+                            ? "No applicable entitlement"
+                            : `${balance.available} ${readableUnit(
+                                balance.unit
+                              )}`}
+                </div>
+              </div>
+
+              <div className="leave-field">
+                <span>Maximum Requestable</span>
+
+                <div
+                  style={{
+                    minHeight: 44,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "0 12px",
+                    borderRadius: 10,
+                    background: "#10261d",
+                    color: "#e2bd31",
+                    fontWeight: 800,
+                    border: "1px solid rgba(206, 168, 27, 0.4)",
+                  }}
+                >
+                  {!form.employeeNumber ||
+                  !form.leavePolicyId
+                    ? "Select employee and leave policy"
+                    : balanceLoading
+                      ? "Loading..."
+                      : !balance ||
+                          !balance.hasEntitlement
+                        ? "-"
+                        : `${balance.maximumRequestable} ${readableUnit(
+                            balance.unit
+                          )}`}
+                </div>
+              </div>
+
+              {balance?.hasEntitlement && (
+                <div
+                  className="leave-field--wide"
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    background: "#10261d",
+                    border: "1px solid rgba(206, 168, 27, 0.18)",
+                    color: "#a8b9b0",
+                    fontSize: 13,
+                  }}
+                >
+                  Entitlement: {balance.entitlement}
+                  {" | "}
+                  Carryover: {balance.carryover}
+                  {" | "}
+                  Adjustments: {balance.adjustments}
+                  {" | "}
+                  Used: {balance.used}
+                  {" | "}
+                  Pending / Committed: {balance.committed}
+                </div>
+              )}
+
+              {balanceError && (
+                <div className="leave-field--wide">
+                  <Notice error>
+                    {balanceError}
+                  </Notice>
+                </div>
+              )}
+
+              <label className="leave-field">
+                <span>Leave Start Date *</span>
+
+                <input
+                  style={styles.input}
+                  type="date"
+                  value={form.startDate}
+                  onChange={(event) =>
+                    updateForm({
+                      startDate: event.target.value,
+                    })
+                  }
+                  required
+                />
+              </label>
+
+              <label className="leave-field">
+                <span>
+                  Leave End Date (inclusive) *
+                </span>
+
+                <input
+                  style={styles.input}
+                  type="date"
+                  value={form.endDate}
+                  min={form.startDate}
+                  onChange={(event) =>
+                    updateForm({
+                      endDate: event.target.value,
+                    })
+                  }
+                  required
+                />
+              </label>
+
+              <label className="leave-field">
+                <span>Days Applied For</span>
+
+                <input
+                  style={styles.input}
+                  value={
+                    calculation?.requestedUnits ?? ""
+                  }
+                  readOnly
+                  aria-readonly="true"
+                  placeholder="Calculated from policy"
+                />
+              </label>
+
+              <label className="leave-field leave-field--wide">
+                <span>Reason</span>
+
+                <textarea
+                  style={{
+                    ...styles.input,
+                    minHeight: 90,
+                  }}
+                  value={form.reason}
+                  onChange={(event) =>
+                    updateForm({
+                      reason: event.target.value,
+                    })
+                  }
+                />
+              </label>
+
+              {calculation && (
+                <div
+                  className="leave-field--wide"
+                  style={styles.muted}
+                >
+                  {calculation.policyName} v
+                  {calculation.policyVersion}:{" "}
+                  {readableUnit(calculation.unit)};
+                  weekends{" "}
+                  {calculation.countWeekends
+                    ? "included"
+                    : "excluded"}
+                  ; public holidays{" "}
+                  {calculation.countPublicHolidays
+                    ? "included"
+                    : "excluded"}
+                  . {calculation.scheduleNote}
+                </div>
+              )}
+
+              {exceedsMaximum && (
+                <div className="leave-field--wide">
+                  <Notice error>
+                    Request exceeds the maximum
+                    available entitlement of{" "}
+                    {maximumRequestable}{" "}
+                    {readableUnit(balance?.unit)}.
+                  </Notice>
+                </div>
+              )}
+
+              <footer className="leave-request-actions">
+                <button
+                  type="button"
+                  style={styles.button}
+                  onClick={closeRequestModal}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={
+                    !calculation ||
+                    requestedUnits <= 0 ||
+                    balanceLoading ||
+                    !balance?.hasEntitlement ||
+                    exceedsMaximum
+                  }
+                  style={{
+                    ...styles.primary,
+                    opacity:
+                      !calculation ||
+                      requestedUnits <= 0 ||
+                      balanceLoading ||
+                      !balance?.hasEntitlement ||
+                      exceedsMaximum
+                        ? 0.55
+                        : 1,
+                  }}
+                >
+                  Submit Leave Request
+                </button>
+              </footer>
+            </form>
+          </section>
         </div>
-        <Field label="Requested Days / Units"><input style={input} type="number" min="0.5" step="0.5" value={form.requestedUnits} onChange={e=>setForm({...form,requestedUnits:e.target.value})} required /></Field>
-        <Field label="Reason"><textarea style={{...input,minHeight:100}} value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/></Field>
-        <button style={button}>Submit Leave Request</button>
-      </form>
-    </section>
-  </div>;
+      )}
+    </LeavePage>
+  );
 }
-function Header({title,description}){return <div style={{marginBottom:22}}><div style={eyebrow}>PEOPLE OPERATIONS</div><h1 style={titleStyle}>{title}</h1><p style={desc}>{description}</p></div>}
-function Back({onClick}){return <button type="button" onClick={onClick} style={back}>{"\u2190"} Back to Leave Dashboard</button>}
-function Field({label,children}){return <label><div style={labelStyle}>{label}</div>{children}</label>}
-function Notice({children,success}){return <div style={{...panel,padding:"12px 16px",marginBottom:18,color:success?"var(--chris-success)":"var(--chris-warning)"}}>{children}</div>}
-const panel={background:"linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))",border:"1px solid var(--chris-border-gold)",borderRadius:"var(--chris-radius-card)",padding:20,boxShadow:"var(--chris-shadow-card)",maxWidth:980};
-const input={width:"100%",boxSizing:"border-box",padding:"11px 12px",borderRadius:"var(--chris-radius-md)",border:"1px solid var(--chris-border-soft)",background:"var(--chris-input-bg)",color:"var(--chris-text-main)",fontFamily:"var(--chris-font-family)",fontSize:"var(--chris-font-md)"};
-const button={border:0,borderRadius:"var(--chris-radius-md)",padding:"12px 16px",background:"linear-gradient(135deg,var(--chris-gold),var(--chris-gold-deep))",color:"#07110C",fontWeight:800};
-const back={marginBottom:16,padding:0,border:"none",background:"transparent",color:"var(--chris-gold)",fontSize:"var(--chris-font-sm)",fontWeight:800};
-const eyebrow={color:"var(--chris-gold)",fontSize:"var(--chris-font-sm)",fontWeight:800,letterSpacing:"0.15em"};
-const titleStyle={margin:"7px 0 6px",fontSize:"var(--chris-font-2xl)",fontWeight:800};
-const desc={margin:0,color:"var(--chris-text-secondary)",fontSize:"var(--chris-font-md)"};
-const labelStyle={color:"var(--chris-text-secondary)",fontSize:"var(--chris-font-sm)",fontWeight:700,marginBottom:7};
-const sectionTitle={margin:0,fontSize:"var(--chris-font-xl)",fontWeight:800};
-const sectionSub={margin:"6px 0 0",color:"var(--chris-text-secondary)",fontSize:"var(--chris-font-sm)"};
-export default LeaveRequests;

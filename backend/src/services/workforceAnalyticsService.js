@@ -2,6 +2,10 @@ const {
   CURRENT_WORKFORCE_STATUSES: CURRENT_STATUSES,
   EXITED_EMPLOYEE_STATUSES: EXIT_STATUSES,
 } = require("./employeeStatusSemantics");
+const {
+  summarizeOperationalLeave,
+  reconcileLeaveStatus,
+} = require("./leaveAnalyticsService");
 const GENDERS = ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"];
 const ONBOARDING_STATUSES = ["DRAFT", "IN_PROGRESS", "AWAITING_EMPLOYEE", "AWAITING_HR", "READY_FOR_ACTIVATION", "COMPLETED", "BLOCKED"];
 
@@ -34,7 +38,7 @@ async function getWorkforceAnalytics(prisma, { organizationId, filters = {}, now
   const currentWhere = { organizationId, status: f.status || { in: CURRENT_STATUSES }, ...(f.departmentId && { departmentId: f.departmentId }), ...(f.locationId && { locationId: f.locationId }), ...(f.gender && { gender: f.gender }) };
   const [current, allEmployees, departments, locations, designations, episodes, exits, assignments, onboardings, leaveRequests, attendance] = await Promise.all([
     prisma.employee.findMany({ where: currentWhere, select: { id: true, status: true, gender: true, departmentId: true, designationId: true, locationId: true } }),
-    prisma.employee.findMany({ where: { organizationId }, select: { status: true } }),
+    prisma.employee.findMany({ where: { organizationId }, select: { id: true, status: true } }),
     prisma.department.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.organizationLocation.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.designation.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -42,14 +46,15 @@ async function getWorkforceAnalytics(prisma, { organizationId, filters = {}, now
     prisma.employeeExitProcess.findMany({ where: { organizationId, status: "COMPLETED", completedAt: { not: null }, cancelledAt: null, lastWorkingDay: { gte: yearStart, lt: yearEnd } }, select: { targetStatus: true, lastWorkingDay: true } }),
     prisma.employeeLineManagerAssignment.findMany({ where: { organizationId, effectiveTo: null, employee: { status: { in: CURRENT_STATUSES } }, manager: { status: { in: CURRENT_STATUSES } } }, select: { employeeId: true, managerEmployeeId: true, manager: { select: { firstName: true, lastName: true } } } }),
     prisma.employeeOnboarding.findMany({ where: { organizationId }, select: { status: true, completionPercent: true } }),
-    prisma.leaveRequest.findMany({ where: { organizationId, status: { in: ["PENDING", "APPROVED"] }, endDate: { gte: today } }, select: { employeeId: true, status: true, startDate: true, endDate: true } }),
+    prisma.leaveRequest.findMany({ where: { organizationId, status: { in: ["PENDING", "APPROVED"] }, cancelledAt: null, endDate: { gte: today } }, select: { employeeId: true, status: true, startDate: true, endDate: true, cancelledAt: true } }),
     prisma.attendanceRecord.findMany({ where: { organizationId, attendanceDate: { gte: today, lt: tomorrow } }, select: { status: true } }),
   ]);
   const status = distribution(allEmployees, [...CURRENT_STATUSES, ...EXIT_STATUSES], (row) => row.status, allEmployees.length);
   const byCatalog = (catalog, field) => [...catalog.map((item) => ({ key: item.id, label: item.name, count: current.filter((employee) => employee[field] === item.id).length })), { key: "UNASSIGNED", label: "Unassigned", count: current.filter((employee) => !employee[field]).length }].map((row) => ({ ...row, percentage: pct(row.count, current.length) }));
   const teams = new Map(); const teamNames = new Map(); for (const row of assignments) { teams.set(row.managerEmployeeId, (teams.get(row.managerEmployeeId) || 0) + 1); teamNames.set(row.managerEmployeeId, `${row.manager.firstName} ${row.manager.lastName}`.trim()); }
   const assigned = new Set(assignments.map((row) => row.employeeId));
-  const currentLeave = new Set(leaveRequests.filter((row) => row.status === "APPROVED" && row.startDate < tomorrow && row.endDate >= today).map((row) => row.employeeId));
+  const operationalLeave = summarizeOperationalLeave(leaveRequests, { today, tomorrow });
+  const leaveConsistency = reconcileLeaveStatus(allEmployees, operationalLeave.activeEmployeeIds);
   const attendanceCounts = {}; for (const row of attendance) attendanceCounts[row.status] = (attendanceCounts[row.status] || 0) + 1;
   return {
     meta: { generatedAt: new Date(now).toISOString(), year: f.year, filters: f, currentStatuses: CURRENT_STATUSES },
@@ -59,7 +64,7 @@ async function getWorkforceAnalytics(prisma, { organizationId, filters = {}, now
     movements: { hiringActivity: { thisMonth: episodes.filter((row) => row.startDate >= monthStart && row.startDate < tomorrow).length, thisYear: episodes.length, rehiresThisYear: episodes.filter((row) => row.sequenceNumber > 1).length, trend: monthTrend(episodes, (row) => row.startDate, f.year) }, exits: { thisMonth: exits.filter((row) => row.lastWorkingDay >= monthStart && row.lastWorkingDay < tomorrow).length, thisYear: exits.length, byStatus: distribution(exits, EXIT_STATUSES, (row) => row.targetStatus, exits.length), trend: monthTrend(exits, (row) => row.lastWorkingDay, f.year) } },
     managers: { assigned: current.filter((row) => assigned.has(row.id)).length, unassigned: current.filter((row) => !assigned.has(row.id)).length, managersWithReports: teams.size, averageDirectReports: teams.size ? Math.round(assignments.length / teams.size * 10) / 10 : 0, largestTeams: Array.from(teams, ([managerEmployeeId, count]) => ({ managerEmployeeId, managerName: teamNames.get(managerEmployeeId), count })).sort((a, b) => b.count - a.count).slice(0, 5) },
     onboarding: { total: onboardings.length, averageCompletion: onboardings.length ? Math.round(onboardings.reduce((sum, row) => sum + row.completionPercent, 0) / onboardings.length) : 0, byStatus: distribution(onboardings, ONBOARDING_STATUSES, (row) => row.status, onboardings.length) },
-    leave: { employeesOnLeaveToday: currentLeave.size, pendingRequests: leaveRequests.filter((row) => row.status === "PENDING").length, approvedCurrentOrUpcoming: leaveRequests.filter((row) => row.status === "APPROVED").length },
+    leave: { employeesOnLeaveToday: operationalLeave.activeEmployeeIds.size, activeApprovedRequests: operationalLeave.activeApprovedRequests, pendingRequests: operationalLeave.pendingRequests, approvedCurrentOrUpcoming: operationalLeave.approvedCurrentOrUpcoming, statusRequestConsistency: leaveConsistency },
     attendance: { recordsToday: attendance.length, presentToday: attendanceCounts.PRESENT || 0, absentToday: attendanceCounts.ABSENT || 0, lateToday: attendanceCounts.LATE || 0, onLeaveToday: attendanceCounts.ON_LEAVE || 0 },
   };
 }

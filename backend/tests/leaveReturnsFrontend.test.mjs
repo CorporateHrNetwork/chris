@@ -1,0 +1,9 @@
+import fs from "node:fs";import assert from "node:assert/strict";
+const source=fs.readFileSync(new URL("../../src/pages/LeaveReturns.jsx",import.meta.url),"utf8");
+assert.match(source,/Loading return-to-work cases/);
+assert.match(source,/No employees are currently awaiting return-to-work processing/);
+assert.match(source,/Unable to load return-to-work cases/);
+assert.match(source,/Array\.isArray\(response\?\.data\)/);
+assert.doesNotMatch(source,/return null/);
+assert.match(source,/returnDate:/);
+console.log("PASS: Return to Work visible-state tests passed.");

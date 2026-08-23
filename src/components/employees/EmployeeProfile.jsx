@@ -436,6 +436,9 @@ function EmployeeProfile() {
             employee.status
           ),
 
+        activeLeave:
+          employee.leaveRequests?.[0] || null,
+
         hireDate:
           employee.hireDate,
 
@@ -3001,6 +3004,12 @@ const handleChange = (
             profile.status
           }
         />
+        {profile.activeLeave && (
+          <div style={{color:"var(--chris-text-secondary)",fontSize:13,textAlign:"right"}}>
+            <strong style={{color:"var(--chris-warning)"}}>On Leave</strong>
+            <div>Leave period: {new Date(profile.activeLeave.commencementDate).toLocaleDateString()} - {new Date(profile.activeLeave.endDate).toLocaleDateString()}</div>
+          </div>
+        )}
       </div>
 
       {editing ? (

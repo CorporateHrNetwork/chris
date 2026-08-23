@@ -401,53 +401,15 @@ function Sidebar() {
             "leave.view",
 
           children: [
-            {
-              label:
-                "Leave Overview",
-
-              path:
-                "/leave",
-            },
-
-            {
-              label:
-                "Leave Requests",
-
-              path:
-                "/leave/requests",
-            },
-
-            {
-              label:
-                "Leave Calendar",
-
-              planned:
-                true,
-            },
-
-            {
-              label:
-                "Leave Entitlements",
-
-              planned:
-                true,
-            },
-
-            {
-              label:
-                "Leave Balances",
-
-              path:
-                "/leave/balances",
-            },
-
-            {
-              label:
-                "Leave Policies",
-
-              path:
-                "/leave/policies",
-            },
+            { label: "Leave Overview", path: "/leave" },
+            { label: "Leave Requests", path: "/leave/requests" },
+            { label: "Active Leave", path: "/leave/active" },
+            { label: "Return to Work", path: "/leave/returns" },
+            { label: "Leave Calendar", path: "/leave/calendar" },
+            { label: "Leave Balances", path: "/leave/balances" },
+            { label: "Leave Entitlements", path: "/leave/entitlements" },
+            { label: "Leave Policies", path: "/leave/policies" },
+            { label: "Leave Exceptions", path: "/leave/exceptions" },
           ],
         },
 

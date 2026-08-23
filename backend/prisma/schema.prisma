@@ -39,6 +39,7 @@ model Organization {
   designationLifecycleEvents  DesignationLifecycleEvent[]
   leaveTypes                  LeaveType[]
   leavePolicies               LeavePolicy[]
+  leavePolicyAudits           LeavePolicyAudit[]
   leaveBalances               LeaveBalance[]
   leaveRequests               LeaveRequest[]
   workShifts                  WorkShift[]
@@ -155,7 +156,13 @@ model User {
   performedDesignationLifecycleEvents DesignationLifecycleEvent[]     @relation("DesignationLifecyclePerformedBy")
   attendancePayrollSettingsUpdated    AttendancePayrollSetting[]      @relation("AttendancePayrollSettingUpdatedBy")
   attendancePayrollInputsRecorded     AttendancePayrollInput[]        @relation("AttendancePayrollInputRecordedBy")
+  createdLeaveRequests                LeaveRequest[]                  @relation("LeaveRequestCreatedBy")
   reviewedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReviewedBy")
+  leavePoliciesCreated                LeavePolicy[]                   @relation("LeavePolicyCreatedBy")
+  leavePoliciesApproved               LeavePolicy[]                   @relation("LeavePolicyApprovedBy")
+  leavePolicyAudits                   LeavePolicyAudit[]
+  commencedLeaveRequests              LeaveRequest[]                  @relation("LeaveRequestCommencedBy")
+  returnedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReturnedBy")
   recordedAttendanceRecords           AttendanceRecord[]              @relation("AttendanceRecordedBy")
   onboardingTemplatesCreated          OnboardingWorkflowTemplate[]    @relation("OnboardingTemplateCreatedBy")
   employeeOnboardingsAssigned         EmployeeOnboarding[]            @relation("EmployeeOnboardingAssignedTo")
@@ -666,13 +673,60 @@ model LeaveType {
   @@map("leave_types")
 }
 
+model LeavePolicyTemplate {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  category      String?
+  jurisdiction  String?
+  configuration Json
+  previewText   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("leave_policy_templates")
+}
+
 model LeavePolicy {
   id             String @id @default(uuid())
   organizationId String
   leaveTypeId    String
 
-  name        String
-  description String?
+  name         String
+  code         String?
+  description  String?
+  category     String?
+  jurisdiction String?
+
+  status             LeavePolicyStatus     @default(ACTIVE)
+  origin             LeavePolicyOrigin     @default(ORGANIZATION)
+  complianceStatus   LeaveComplianceStatus @default(CUSTOM_NOT_ASSESSED)
+  complianceNotes    String?
+  versionGroupId     String?
+  versionNumber      Int                   @default(1)
+  changeReason       String?
+  sourceTemplateCode String?
+  createdByUserId    String?
+  approvedByUserId   String?
+  approvedAt         DateTime?
+
+  eligibilityRules   Json    @default("{}")
+  entitlementRules   Json    @default("{}")
+  serviceBands       Json    @default("[]")
+  balanceRules       Json    @default("{}")
+  requestRules       Json    @default("{}")
+  approvalWorkflow   Json    @default("{}")
+  lifecycleRules     Json    @default("{}")
+  payrollRules       Json    @default("{}")
+  attendanceRules    Json    @default("{}")
+  calendarRules      Json    @default("{}")
+  documentationRules Json    @default("{}")
+  overlapRules       Json    @default("{}")
+  coverageRules      Json    @default("{}")
+  previewText        String?
 
   entitlementDays Decimal @db.Decimal(8, 2)
 
@@ -695,18 +749,71 @@ model LeavePolicy {
 
   isActive Boolean @default(true)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?              @relation("LeavePolicyCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedBy   User?              @relation("LeavePolicyApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  leaveType    LeaveType          @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  requests     LeaveRequest[]
+  audits       LeavePolicyAudit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, code, versionNumber])
   @@index([organizationId])
   @@index([leaveTypeId])
+  @@index([status])
+  @@index([versionGroupId])
+  @@index([createdByUserId])
+  @@index([approvedByUserId])
   @@index([effectiveFrom])
   @@index([effectiveTo])
   @@index([isActive])
   @@map("leave_policies")
+}
+
+model LeavePolicyAudit {
+  id             String                 @id @default(uuid())
+  organizationId String
+  leavePolicyId  String
+  actorUserId    String?
+  action         LeavePolicyAuditAction
+  previousValue  Json?
+  newValue       Json?
+  reason         String?
+  createdAt      DateTime               @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leavePolicy  LeavePolicy  @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([leavePolicyId])
+  @@index([actorUserId])
+  @@index([action])
+  @@map("leave_policy_audits")
+}
+
+model LeaveComplianceFloor {
+  id                         String    @id @default(uuid())
+  jurisdiction               String
+  ruleCategory               String
+  applicableEmployeeCategory String?
+  effectiveFrom              DateTime
+  effectiveTo                DateTime?
+  minimumEntitlement         Decimal?  @db.Decimal(8, 2)
+  entitlementUnit            String?
+  payRequirement             String?
+  documentationRule          String?
+  legalSource                String
+  complianceNotes            String?
+  isActive                   Boolean   @default(true)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@index([jurisdiction, ruleCategory, effectiveFrom])
+  @@index([isActive])
+  @@map("leave_compliance_floors")
 }
 
 model LeaveBalance {
@@ -739,10 +846,11 @@ model LeaveBalance {
 }
 
 model LeaveRequest {
-  id             String @id @default(uuid())
+  id             String  @id @default(uuid())
   organizationId String
   employeeId     String
   leaveTypeId    String
+  leavePolicyId  String?
 
   startDate DateTime
   endDate   DateTime
@@ -756,6 +864,7 @@ model LeaveRequest {
 
   submittedAt DateTime @default(now())
 
+  createdByUserId  String?
   reviewedByUserId String?
   reviewedAt       DateTime?
   reviewNotes      String?
@@ -764,11 +873,26 @@ model LeaveRequest {
   cancellationReason String?
   cancelledByUserId  String?
 
+  // Approved dates remain historical; these fields record the actual lifecycle.
+  commencedAt            DateTime?
+  commencementDate       DateTime?
+  commencedByUserId      String?
+  returnedAt             DateTime?
+  actualReturnDate       DateTime?
+  returnedByUserId       String?
+  preLeaveStatus         EmployeeStatus?
+  returnDocumentationUrl String?
+  fitnessCertificateUrl  String?
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
   leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  leavePolicy  LeavePolicy? @relation(fields: [leavePolicyId], references: [id], onDelete: Restrict)
 
-  reviewedBy User? @relation("LeaveRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  createdBy   User? @relation("LeaveRequestCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy  User? @relation("LeaveRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  commencedBy User? @relation("LeaveRequestCommencedBy", fields: [commencedByUserId], references: [id], onDelete: SetNull)
+  returnedBy  User? @relation("LeaveRequestReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -776,10 +900,16 @@ model LeaveRequest {
   @@index([organizationId])
   @@index([employeeId])
   @@index([leaveTypeId])
+  @@index([leavePolicyId])
   @@index([status])
   @@index([startDate])
   @@index([endDate])
+  @@index([createdByUserId])
   @@index([reviewedByUserId])
+  @@index([commencedByUserId])
+  @@index([returnedByUserId])
+  @@index([commencementDate])
+  @@index([actualReturnDate])
   @@map("leave_requests")
 }
 
@@ -880,6 +1010,39 @@ model AttendanceRecord {
   @@map("attendance_records")
 }
 
+enum LeavePolicyStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+enum LeavePolicyOrigin {
+  ORGANIZATION
+  CHRIS_TEMPLATE
+  CLONED_TEMPLATE
+}
+
+enum LeaveComplianceStatus {
+  COMPLIANT
+  REVIEW_REQUIRED
+  BELOW_STATUTORY_FLOOR
+  CUSTOM_NOT_ASSESSED
+}
+
+enum LeavePolicyAuditAction {
+  CREATED
+  CLONED
+  CHANGED
+  ACTIVATED
+  SUSPENDED
+  RETIRED
+  ENTITLEMENT_CHANGED
+  ELIGIBILITY_CHANGED
+  APPROVAL_WORKFLOW_CHANGED
+  COMPLIANCE_OVERRIDE
+}
+
 enum LeaveUnit {
   DAYS
   HOURS
@@ -900,6 +1063,8 @@ enum LeaveRequestStatus {
   DRAFT
   PENDING
   APPROVED
+  ACTIVE
+  COMPLETED
   REJECTED
   CANCELLED
 }
@@ -1007,6 +1172,8 @@ enum EmployeeLifecycleEventType {
   EXITED
   REINSTATED
   REHIRED
+  LEAVE_COMMENCED
+  RETURNED_FROM_LEAVE
 }
 
 enum LocationType {
