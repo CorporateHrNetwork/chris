@@ -41,6 +41,10 @@ const {
   listEntitlementAdjustments,
 } = require("../services/leaveEntitlementAdjustmentService");
 const { getEmployeeLeaveProfile } = require("../services/employeeLeaveProfileService");
+const {
+  buildProvisioningPreview,
+  provisionEntitlements,
+} = require("../services/leaveEntitlementProvisioningService");
 
 const prisma =
   require("../config/prisma");
@@ -82,6 +86,8 @@ router.get(
   }
 );
 router.get("/entitlements",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEntitlementRegister({organizationId:req.auth.organizationId,asOfDate:req.query.asOfDate,employeeNumber:req.query.employeeNumber})})}catch(error){return handleError(error,res)}});
+router.post("/entitlements/provisioning-preview",requirePermission("leave.manage"),async(req,res)=>{try{return res.json({status:"success",data:await buildProvisioningPreview({organizationId:req.auth.organizationId,leaveYear:req.body.leaveYear,policyIds:req.body.policyIds,employeeNumbers:req.body.employeeNumbers})})}catch(error){return handleError(error,res)}});
+router.post("/entitlements/provision",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await provisionEntitlements({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,leaveYear:req.body.leaveYear,policyIds:req.body.policyIds,employeeNumbers:req.body.employeeNumbers,reason:req.body.reason})})}catch(error){return handleError(error,res)}});
 router.get("/entitlements/adjustments",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEntitlementAdjustments({organizationId:req.auth.organizationId,employeeNumber:req.query.employeeNumber,leavePolicyId:req.query.leavePolicyId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
 router.post("/entitlements/adjustments",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await createEntitlementAdjustment({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,employeeNumber:req.body.employeeNumber,leavePolicyId:req.body.leavePolicyId,leaveYear:req.body.leaveYear,amount:req.body.amount,reason:req.body.reason,effectiveDate:req.body.effectiveDate})})}catch(error){return handleError(error,res)}});
 router.get("/request-day-calculation",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await calculateLeaveRequestDays({organizationId:req.auth.organizationId,employeeNumber:req.query.employeeNumber,leaveTypeId:req.query.leaveTypeId,leavePolicyId:req.query.leavePolicyId,startDate:req.query.startDate,endDate:req.query.endDate})})}catch(error){return handleError(error,res)}});
@@ -537,6 +543,8 @@ function handleError(
       "ADJUSTMENT_REASON_REQUIRED",
       "INVALID_ADJUSTMENT_DATE",
       "ADJUSTMENT_EXCEEDS_AVAILABLE_BALANCE",
+      "PROVISIONING_REASON_REQUIRED",
+      "MULTIPLE_POLICIES_FOR_LEAVE_TYPE",
     ]);
 
   if (
