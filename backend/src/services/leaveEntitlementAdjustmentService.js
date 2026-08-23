@@ -54,17 +54,7 @@ async function createEntitlementAdjustment({
         },
       },
     });
-    if (!balance) {
-      balance = await tx.leaveBalance.create({
-        data: {
-          organizationId,
-          employeeId: employee.id,
-          leaveTypeId: policy.leaveTypeId,
-          leaveYear: year,
-          openingBalance: policyEntitlement,
-        },
-      });
-    }
+    if (!balance) throw new Error("ENTITLEMENT_NOT_PROVISIONED");
 
     const yearStart = new Date(Date.UTC(year, 0, 1));
     const nextYearStart = new Date(Date.UTC(year + 1, 0, 1));
