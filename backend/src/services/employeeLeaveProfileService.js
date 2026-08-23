@@ -5,7 +5,7 @@ const { listEntitlementAdjustments } = require("./leaveEntitlementAdjustmentServ
 async function getEmployeeLeaveProfile({ organizationId, employeeNumber, asOfDate = new Date() }) {
   const employee = await prisma.employee.findFirst({
     where: { organizationId, employeeNumber },
-    select: { id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true, status: true },
+    select: { id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true, status: true, department: { select: { id: true, name: true } }, designation: { select: { id: true, name: true } }, location: { select: { id: true, name: true } } },
   });
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
 
@@ -25,7 +25,7 @@ async function getEmployeeLeaveProfile({ organizationId, employeeNumber, asOfDat
     .filter((request) => request.status === "APPROVED" && new Date(request.startDate) >= now)
     .sort((left, right) => new Date(left.startDate) - new Date(right.startDate))[0] || null;
   const warnings = [];
-  if (employee.status === "LEAVE" && !activeLeave) warnings.push("Employee status is Leave without an ACTIVE leave request.");
+  if (employee.status === "LEAVE" && !activeLeave) warnings.push("Leave data requires review: Employee is marked On Leave but no active commenced leave request exists.");
   if (employee.status !== "LEAVE" && activeLeave) warnings.push("An ACTIVE leave request exists while employee status is not Leave.");
   entitlementRows.forEach((row) => {
     if (Number(row.available) < 0) warnings.push(`${row.policyName} has a negative authoritative available balance.`);
@@ -47,13 +47,15 @@ async function getEmployeeLeaveProfile({ organizationId, employeeNumber, asOfDat
       policyName: row.policyName,
       leaveYear: row.leaveYear,
       entitlement: row.entitlement,
+      carryover: row.carryover,
       used: row.used,
       committed: row.committed,
       available: row.available,
+      maximumRequestable: row.maximumRequestable,
       adjustment: row.adjustments,
       unit: row.unit,
     })),
-    utilizationHistory: requests.filter((request) => ["APPROVED", "ACTIVE", "COMPLETED"].includes(request.status)),
+    utilizationHistory: requests,
     adjustmentHistory: adjustments,
     activeLeave,
     nextUpcomingApprovedLeave,
