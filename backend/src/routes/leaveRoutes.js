@@ -44,7 +44,16 @@ const { getEmployeeLeaveProfile } = require("../services/employeeLeaveProfileSer
 const {
   buildProvisioningPreview,
   provisionEntitlements,
+  listEntitlementMatrix,
+  saveEntitlementMatrixRule,
 } = require("../services/leaveEntitlementProvisioningService");
+const { getEmployeeLeaveLedger } = require("../services/employeeLeaveLedgerService");
+const {
+  listLeaveExceptions,
+  keepExceptionOpen,
+  restoreWorkingStatus,
+  reconstructHistoricalLeave,
+} = require("../services/leaveExceptionService");
 
 const prisma =
   require("../config/prisma");
@@ -60,6 +69,7 @@ router.use(
 router.get("/overview",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getLeaveOverview({organizationId:req.auth.organizationId})})}catch(error){return handleError(error,res)}});
 router.get("/balance-register",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getBalanceRegister({organizationId:req.auth.organizationId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
 router.get("/employees/:employeeNumber/profile",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEmployeeLeaveProfile({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,asOfDate:req.query.asOfDate})})}catch(error){return handleError(error,res)}});
+router.get("/employees/:employeeNumber/ledger",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEmployeeLeaveLedger({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,leavePolicyId:req.query.leavePolicyId,leaveYear:req.query.leaveYear,proposedUnits:req.query.proposedUnits})})}catch(error){return handleError(error,res)}});
 router.get(
   "/employees/:employeeNumber/policy-balance",
   requirePermission("employees.view"),
@@ -86,8 +96,10 @@ router.get(
   }
 );
 router.get("/entitlements",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEntitlementRegister({organizationId:req.auth.organizationId,asOfDate:req.query.asOfDate,employeeNumber:req.query.employeeNumber})})}catch(error){return handleError(error,res)}});
-router.post("/entitlements/provisioning-preview",requirePermission("leave.manage"),async(req,res)=>{try{return res.json({status:"success",data:await buildProvisioningPreview({organizationId:req.auth.organizationId,leaveYear:req.body.leaveYear,policyIds:req.body.policyIds,employeeNumbers:req.body.employeeNumbers})})}catch(error){return handleError(error,res)}});
-router.post("/entitlements/provision",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await provisionEntitlements({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,leaveYear:req.body.leaveYear,policyIds:req.body.policyIds,employeeNumbers:req.body.employeeNumbers,reason:req.body.reason})})}catch(error){return handleError(error,res)}});
+router.get("/entitlement-matrix",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEntitlementMatrix({organizationId:req.auth.organizationId})})}catch(error){return handleError(error,res)}});
+router.post("/entitlement-matrix",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await saveEntitlementMatrixRule({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,input:req.body})})}catch(error){return handleError(error,res)}});
+router.post("/entitlements/provisioning-preview",requirePermission("leave.manage"),async(req,res)=>{try{return res.json({status:"success",data:await buildProvisioningPreview({organizationId:req.auth.organizationId,leaveYear:req.body.leaveYear,policyIds:req.body.policyIds,employeeNumbers:req.body.employeeNumbers,baselineOnly:req.body.baselineOnly,rebaseExisting:req.body.rebaseExisting})})}catch(error){return handleError(error,res)}});
+router.post("/entitlements/provision",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await provisionEntitlements({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,leaveYear:req.body.leaveYear,policyIds:req.body.policyIds,employeeNumbers:req.body.employeeNumbers,reason:req.body.reason,baselineOnly:req.body.baselineOnly,rebaseExisting:req.body.rebaseExisting,method:req.body.method})})}catch(error){return handleError(error,res)}});
 router.get("/entitlements/adjustments",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEntitlementAdjustments({organizationId:req.auth.organizationId,employeeNumber:req.query.employeeNumber,leavePolicyId:req.query.leavePolicyId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
 router.post("/entitlements/adjustments",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await createEntitlementAdjustment({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,employeeNumber:req.body.employeeNumber,leavePolicyId:req.body.leavePolicyId,leaveYear:req.body.leaveYear,amount:req.body.amount,reason:req.body.reason,effectiveDate:req.body.effectiveDate})})}catch(error){return handleError(error,res)}});
 router.get("/request-day-calculation",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await calculateLeaveRequestDays({organizationId:req.auth.organizationId,employeeNumber:req.query.employeeNumber,leaveTypeId:req.query.leaveTypeId,leavePolicyId:req.query.leavePolicyId,startDate:req.query.startDate,endDate:req.query.endDate})})}catch(error){return handleError(error,res)}});
@@ -313,6 +325,11 @@ router.get(
     }
   }
 );
+
+router.get("/exceptions",requireAnyPermission("leave.view","employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listLeaveExceptions({organizationId:req.auth.organizationId})})}catch(error){return handleError(error,res)}});
+router.post("/exceptions/:employeeNumber/investigation",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await keepExceptionOpen({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,actorUserId:req.auth.userId,note:req.body.note})})}catch(error){return handleError(error,res)}});
+router.post("/exceptions/:employeeNumber/restore-status",requirePermission("leave.manage"),async(req,res)=>{try{return res.json({status:"success",data:await restoreWorkingStatus({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,actorUserId:req.auth.userId,newStatus:req.body.newStatus,reason:req.body.reason})})}catch(error){return handleError(error,res)}});
+router.post("/exceptions/:employeeNumber/reconstruct",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await reconstructHistoricalLeave({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,actorUserId:req.auth.userId,input:req.body})})}catch(error){return handleError(error,res)}});
 
 router.post(
   "/requests/:id/commence",
@@ -546,6 +563,19 @@ function handleError(
       "ENTITLEMENT_NOT_PROVISIONED",
       "PROVISIONING_REASON_REQUIRED",
       "MULTIPLE_POLICIES_FOR_LEAVE_TYPE",
+      "INVALID_EMPLOYMENT_LEVEL",
+      "EMPLOYMENT_LEVEL_NAME_REQUIRED",
+      "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+      "INVALID_ENTITLEMENT",
+      "INVALID_ENTITLEMENT_EFFECTIVE_DATE_SEQUENCE",
+      "ACTIVE_ENTITLEMENT_MATRIX_RULE_EXISTS",
+      "LEAVE_EXCEPTION_NOTE_REQUIRED",
+      "LEAVE_EXCEPTION_REASON_REQUIRED",
+      "INVALID_LEAVE_EXCEPTION_RETURN_STATUS",
+      "INVALID_RECONSTRUCTED_LEAVE_STATUS",
+      "LEAVE_EXCEPTION_NO_LONGER_ACTIVE",
+      "TENANT_LEAVE_POLICY_NOT_FOUND",
+      "HISTORICAL_GOVERNING_POLICY_NOT_FOUND",
     ]);
 
   if (

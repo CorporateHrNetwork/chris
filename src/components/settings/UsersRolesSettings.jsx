@@ -14,6 +14,7 @@ import {
   FaToggleOn,
   FaToggleOff,
 } from "react-icons/fa";
+import "./UsersRolesSettings.chris.css";
 
 import {
   apiRequest,
@@ -437,7 +438,7 @@ function UsersRolesSettings() {
     ).length;
 
   return (
-    <div>
+    <div className="chris-users-roles">
       {/* HEADER */}
       <div
         style={{

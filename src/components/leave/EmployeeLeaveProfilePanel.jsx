@@ -37,6 +37,9 @@ export default function EmployeeLeaveProfilePanel({
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [leaveYear, setLeaveYear] = useState(new Date().getFullYear());
+  const [ledgerData, setLedgerData] = useState(null);
+  const [selectedPolicyId, setSelectedPolicyId] = useState("");
 
   const canRequest =
     hasPermission("leave.request") ||
@@ -75,6 +78,25 @@ export default function EmployeeLeaveProfilePanel({
     };
   }, [employeeNumber, open]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    let active = true;
+    const query = new URLSearchParams({ leaveYear: String(leaveYear) });
+    if (selectedPolicyId) query.set("leavePolicyId", selectedPolicyId);
+    apiRequest(`/api/leave/employees/${encodeURIComponent(employeeNumber)}/ledger?${query}`)
+      .then((response) => {
+        if (!active) return;
+        setLedgerData(response.data);
+        if (!selectedPolicyId && response.data?.policies?.[0]?.id) {
+          setSelectedPolicyId(response.data.policies[0].id);
+        }
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError.message || "Unable to load employee leave ledger.");
+      });
+    return () => { active = false; };
+  }, [employeeNumber, leaveYear, open, selectedPolicyId]);
+
   if (!open) return null;
 
   const employee = data?.employee;
@@ -110,6 +132,9 @@ export default function EmployeeLeaveProfilePanel({
                 {employee.designation?.name || "No designation"} ·{" "}
                 {employee.location?.name || "No location"} ·{" "}
                 {employee.status}
+                {ledgerData?.employmentLevel?.name
+                  ? ` · ${ledgerData.employmentLevel.name} (designation-derived)`
+                  : ""}
               </div>
             )}
           </div>
@@ -276,6 +301,32 @@ export default function EmployeeLeaveProfilePanel({
                   No active applicable policies.
                 </div>
               )}
+            </ProfileSection>
+
+            <ProfileSection title="Employee Leave Ledger">
+              <div style={quickActions}>
+                <label>Leave Year <input style={{ ...styles.input, width: 110 }} type="number" min="2000" max="2200" value={leaveYear} onChange={(event) => setLeaveYear(event.target.value)} /></label>
+                <label>Policy <select style={{ ...styles.input, minWidth: 260 }} value={selectedPolicyId} onChange={(event) => setSelectedPolicyId(event.target.value)}><option value="">Select policy</option>{(ledgerData?.policies || []).map((policy) => <option key={policy.id} value={policy.id}>{policy.name} v{policy.versionNumber}</option>)}</select></label>
+              </div>
+              {ledgerData?.exceptions?.map((exception) => <Notice error key={exception.code}>{exception.message}</Notice>)}
+              {ledgerData?.ledger ? (
+                <article style={card}>
+                  <strong>{ledgerData.ledger.policy.name} · {ledgerData.ledger.leaveYear}</strong>
+                  <small style={styles.muted}>Append-only allocation source: {ledgerData.ledger.allocation?.method || "policy/balance fallback"} · {readableUnit(ledgerData.ledger.unit)}</small>
+                  <div style={metrics}>
+                    <Metric label="Base" value={ledgerData.ledger.baseEntitlement} />
+                    <Metric label="Allocated" value={ledgerData.ledger.allocatedEntitlement} />
+                    <Metric label="Carryover" value={ledgerData.ledger.carryover} />
+                    <Metric label="Adjustments" value={ledgerData.ledger.adjustments} />
+                    <Metric label="Used" value={ledgerData.ledger.used} />
+                    <Metric label="Pending" value={ledgerData.ledger.pending} />
+                    <Metric label="Approved upcoming" value={ledgerData.ledger.approvedUpcoming} />
+                    <Metric label="Active" value={ledgerData.ledger.activeLeave} />
+                    <Metric label="Requestable" value={ledgerData.ledger.requestableAvailable} />
+                    <Metric label="Maximum Requestable" value={ledgerData.ledger.maximumRequestable} />
+                  </div>
+                </article>
+              ) : <div style={styles.empty}>Select an active tenant policy to view the leave ledger.</div>}
             </ProfileSection>
 
             <div style={twoColumns}>

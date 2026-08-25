@@ -1,0 +1,48 @@
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const read = (relative) => fs.readFileSync(path.resolve(__dirname, "..", relative), "utf8");
+
+const schema = read("prisma/schema.prisma");
+const migration = read("prisma/migrations/20260824173000_complete_organization_module/migration.sql");
+const service = read("src/services/organizationService.js");
+const routes = read("src/routes/organizationRoutes.js");
+const lineManager = read("src/services/lineManagerService.js");
+const app = read("src/app.js");
+const frontendRoutes = read("../src/App.jsx");
+const sidebar = read("../src/components/layout/Sidebar/Sidebar.jsx");
+const profile = read("../src/pages/OrganizationProfile.jsx");
+const chart = read("../src/pages/OrganizationChart.jsx");
+const reporting = read("../src/pages/ReportingLines.jsx");
+const costs = read("../src/pages/CostCentres.jsx");
+
+assert.match(schema, /model OrganizationAudit/);
+assert.match(schema, /model CostCentre/);
+assert.match(schema, /@@unique\(\[organizationId, code\]\)/);
+assert.match(schema, /costCentreId\s+String\?/);
+assert.match(migration, /organization_audits/);
+assert.match(migration, /cost_centres_organizationId_code_key/);
+assert.match(service, /type: "HEAD_OFFICE"/);
+assert.match(service, /Designation|designations/);
+assert.match(service, /employeeLineManagerAssignment/);
+assert.match(service, /organizationAudit\.create/);
+assert.match(service, /INVALID_EFFECTIVE_INTERVAL/);
+assert.match(routes, /requirePermission\("settings\.view"\)/);
+assert.match(routes, /requirePermission\("settings\.manage"\)/);
+assert.match(app, /"\/api\/organization"/);
+assert.match(lineManager, /SELF_MANAGER/);
+assert.match(lineManager, /MANAGEMENT_CYCLE/);
+assert.match(lineManager, /effectiveTo: null/);
+assert.match(frontendRoutes, /<OrganizationProfile/);
+assert.match(frontendRoutes, /<OrganizationChart/);
+assert.match(frontendRoutes, /<ReportingLines/);
+assert.match(frontendRoutes, /<CostCentres/);
+assert.match(frontendRoutes, /path="\/organization\/departments" element={<Navigate to="\/designations" replace \/>}/);
+for (const label of ["Organization Profile", "Departments & Designations", "Organization Chart", "Reporting Lines", "Cost Centres"]) assert.match(sidebar, new RegExp(label.replace("&", "\\&")));
+assert.match(profile, /\/api\/organization\/profile/);
+assert.match(chart, /Organization → Departments → Designations → Employees/);
+assert.match(reporting, /<LineManagers/);
+assert.match(costs, /\/api\/organization\/cost-centres/);
+assert.doesNotMatch(service, /leaveBalance|leaveRequest|leavePolicy/);
+
+console.log("PASS: CHRIS Organization module contract tests passed.");

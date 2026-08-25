@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -14,10 +15,15 @@ import {
   styles,
 } from "../components/leave/LeaveUi";
 import useAuthorization from "../hooks/useAuthorization";
-import { apiRequest } from "../services/api";
+import { apiRequest, getStoredOrganization } from "../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYear = () => new Date().getFullYear();
+const tenantDate = (timezone) => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const value = (type) => parts.find((part) => part.type === type)?.value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
+};
 
 function employeeName(employee) {
   return [
@@ -46,6 +52,8 @@ export default function LeaveEntitlements() {
   const [history, setHistory] = useState([]);
   const [policies, setPolicies] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [matrix, setMatrix] = useState([]);
+  const [matrixDraft, setMatrixDraft] = useState(null);
   const [selected, setSelected] = useState(null);
   const [provisioningOpen, setProvisioningOpen] =
     useState(false);
@@ -55,6 +63,8 @@ export default function LeaveEntitlements() {
     policyIds: [],
     employeeScope: "ALL",
     employeeNumber: "",
+    baselineOnly: false,
+    rebaseExisting: false,
     reason: "Initial policy-derived entitlement allocation",
   });
   const [form, setForm] = useState({
@@ -65,24 +75,50 @@ export default function LeaveEntitlements() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [tenantTimezone, setTenantTimezone] = useState(() => getStoredOrganization()?.timezone || "Africa/Lagos");
+  const successTimer = useRef(null);
+  const matrixPanelRef = useRef(null);
+  const matrixFirstInputRef = useRef(null);
+
+  const clearSuccess = useCallback(() => {
+    if (successTimer.current) window.clearTimeout(successTimer.current);
+    successTimer.current = null;
+    setMessage("");
+  }, []);
+
+  const showTransientSuccess = useCallback((text) => {
+    if (successTimer.current) window.clearTimeout(successTimer.current);
+    setError("");
+    setMessage(text);
+    successTimer.current = window.setTimeout(() => {
+      setMessage("");
+      successTimer.current = null;
+    }, 4500);
+  }, []);
 
   const load = useCallback(async () => {
     setError("");
 
     try {
+      const requests = [
+        ["employee entitlements", "/api/leave/entitlements"],
+        ["adjustment history", "/api/leave/entitlements/adjustments"],
+        ["leave policies", "/api/leave/policies"],
+        ["employees", "/api/employees"],
+        ["entitlement matrix", "/api/leave/entitlement-matrix"],
+        ["organization profile", "/api/organization/profile"],
+      ];
+      const settled = await Promise.allSettled(requests.map(([,url])=>apiRequest(url)));
+      const failed = settled.findIndex(item=>item.status==="rejected");
+      if (failed >= 0) throw new Error(`Unable to load ${requests[failed][0]}: ${settled[failed].reason?.message || "request failed"}`);
       const [
         entitlements,
         adjustments,
         policyResponse,
         employeeResponse,
-      ] = await Promise.all([
-        apiRequest("/api/leave/entitlements"),
-        apiRequest(
-          "/api/leave/entitlements/adjustments"
-        ),
-        apiRequest("/api/leave/policies"),
-        apiRequest("/api/employees"),
-      ]);
+        matrixResponse,
+        organizationResponse,
+      ] = settled.map(item=>item.value);
 
       setRows(entitlements.data || []);
       setHistory(adjustments.data || []);
@@ -101,6 +137,8 @@ export default function LeaveEntitlements() {
         : employeeResponse?.data?.employees || [];
 
       setEmployees(rawEmployees);
+      setMatrix(matrixResponse.data || []);
+      setTenantTimezone(organizationResponse.data?.organization?.timezone || organizationResponse.data?.timezone || getStoredOrganization()?.timezone || "Africa/Lagos");
     } catch (loadError) {
       setError(
         loadError.message ||
@@ -112,6 +150,29 @@ export default function LeaveEntitlements() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => () => {
+    if (successTimer.current) window.clearTimeout(successTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (!matrixDraft) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      matrixPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => matrixFirstInputRef.current?.focus({ preventScroll: true }), 350);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [matrixDraft?.id]);
+
+  const updateMatrixRule = (field, value) => {
+    setMatrixDraft((current) => ({
+      ...current,
+      [field]: value,
+      ...(!current.effectiveDateManuallySet && !current.changeDateProposed
+        ? { effectiveFrom: tenantDate(tenantTimezone), changeDateProposed: true }
+        : {}),
+    }));
+  };
 
   const selectedEmployeeNumbers = useMemo(
     () =>
@@ -170,6 +231,8 @@ export default function LeaveEntitlements() {
             ),
             policyIds: provisioning.policyIds,
             employeeNumbers: selectedEmployeeNumbers,
+            baselineOnly: provisioning.baselineOnly,
+            rebaseExisting: provisioning.rebaseExisting,
           }),
         }
       );
@@ -186,7 +249,7 @@ export default function LeaveEntitlements() {
   }
 
   async function confirmProvisioning() {
-    if (!preview?.summary?.ready) {
+    if (!(preview?.summary?.ready || preview?.summary?.rebaseReady)) {
       setError(
         "There are no missing eligible entitlements to provision."
       );
@@ -196,6 +259,20 @@ export default function LeaveEntitlements() {
     if (preview.summary.conflicts) {
       setError(
         "Resolve policy conflicts before provisioning. Select only one policy for each leave type."
+      );
+      return;
+    }
+
+    if (preview.summary.deficits) {
+      setError(
+        "Resolve entitlement deficit exceptions before reconciliation. Retained usage will not be rewritten."
+      );
+      return;
+    }
+
+    if (preview.summary.matrixRequired) {
+      setError(
+        "Configure the Employment Level entitlement matrix for every selected policy before reconciliation."
       );
       return;
     }
@@ -221,13 +298,15 @@ export default function LeaveEntitlements() {
             ),
             policyIds: provisioning.policyIds,
             employeeNumbers: selectedEmployeeNumbers,
+            baselineOnly: provisioning.baselineOnly,
+            rebaseExisting: provisioning.rebaseExisting,
             reason: provisioning.reason,
           }),
         }
       );
 
-      setMessage(
-        `${response.data?.createdCount || 0} entitlement(s) provisioned. Existing balances were preserved.`
+      showTransientSuccess(
+        `${response.data?.createdCount || 0} entitlement(s) provisioned; ${response.data?.rebasedCount || 0} current-year entitlement(s) reconciled. Historical usage was preserved.`
       );
       setProvisioningOpen(false);
       setPreview(null);
@@ -236,16 +315,42 @@ export default function LeaveEntitlements() {
         policyIds: [],
         employeeScope: "ALL",
         employeeNumber: "",
+        baselineOnly: false,
+        rebaseExisting: false,
         reason:
           "Initial policy-derived entitlement allocation",
       });
       await load();
-      window.setTimeout(() => setMessage(""), 4500);
     } catch (provisionError) {
       setError(
         provisionError.message ||
           "Unable to provision entitlements."
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveMatrixRule(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await apiRequest("/api/leave/entitlement-matrix", {
+        method: "POST",
+        body: JSON.stringify({
+          levelNumber: matrixDraft.levelNumber,
+          leavePolicyId: matrixDraft.leavePolicyId,
+          defaultEntitlement: Number(matrixDraft.defaultEntitlement),
+          unit: matrixDraft.unit,
+          newHireTreatment: matrixDraft.newHireTreatment,
+          effectiveFrom: matrixDraft.effectiveFrom || `${currentYear()}-01-01`,
+        }),
+      });
+      showTransientSuccess("Employment-level entitlement rule saved.");
+      await load();
+    } catch (saveError) {
+      setError(saveError.message || "Unable to save entitlement rule.");
     } finally {
       setSaving(false);
     }
@@ -272,7 +377,7 @@ export default function LeaveEntitlements() {
         }
       );
 
-      setMessage(
+      showTransientSuccess(
         "Entitlement adjustment recorded. Corrections require a new offsetting adjustment."
       );
       setSelected(null);
@@ -282,7 +387,6 @@ export default function LeaveEntitlements() {
         effectiveDate: today(),
       });
       await load();
-      window.setTimeout(() => setMessage(""), 4500);
     } catch (saveError) {
       setError(
         saveError.message ||
@@ -388,6 +492,16 @@ export default function LeaveEntitlements() {
           : row.leaveType?.name,
     },
     {
+      key: "designation",
+      label: "Designation",
+      render: (row) => row.designation?.name || "—",
+    },
+    {
+      key: "employmentLevel",
+      label: "Employment Level",
+      render: (row) => row.employmentLevel?.name || "Exception",
+    },
+    {
       key: "amount",
       label: "Signed Adjustment",
       render: (row) =>
@@ -437,7 +551,18 @@ export default function LeaveEntitlements() {
         )} ${readableUnit(row.unit)}`,
     },
     { key: "status", label: "Status" },
+    { key: "retainedUsed", label: "Retained Used" },
+    { key: "retainedPending", label: "Retained Pending" },
     { key: "message", label: "Result" },
+  ];
+
+  const matrixColumns = [
+    { key: "level", label: "Employment Level", render: (row) => row.employmentLevel?.name || `Level ${row.levelNumber}` },
+    { key: "policy", label: "Tenant Policy", render: (row) => `${row.leavePolicy?.name} v${row.leavePolicy?.versionNumber}` },
+    { key: "type", label: "Leave Type", render: (row) => row.leaveType?.name },
+    { key: "defaultEntitlement", label: "Default Entitlement", render: (row) => `${Number(row.defaultEntitlement)} ${readableUnit(row.unit)}` },
+    { key: "newHireTreatment", label: "New Hire", render: (row) => row.newHireTreatment },
+    { key: "configure", label: "Action", render: (row) => <button type="button" style={styles.button} disabled={!canManage} onClick={() => { clearSuccess(); setError(""); setMatrixDraft({ ...row, defaultEntitlement: Number(row.defaultEntitlement), effectiveFrom: String(row.effectiveFrom).slice(0, 10), effectiveDateManuallySet: false, changeDateProposed: false }); }}>Configure</button> },
   ];
 
   return (
@@ -468,8 +593,28 @@ export default function LeaveEntitlements() {
           provision or adjust entitlements.
         </Notice>
       )}
-      {error && <Notice error>{error}</Notice>}
-      {message && <Notice>{message}</Notice>}
+      {error && !matrixDraft && <Notice error>{error}</Notice>}
+      {message && !matrixDraft && <Notice>{message}</Notice>}
+
+      <Panel
+        title="Designation-driven Entitlement Matrix"
+        subtitle="Designation.careerLevel determines the employee level. Configure tenant policy/year defaults here; CHRIS recommendations remain customizable starting points."
+      >
+        <Table rows={matrix} columns={matrixColumns} empty="Activate or use a tenant leave policy to create level entitlement rules." />
+        {matrixDraft && (
+          <form ref={matrixPanelRef} onSubmit={saveMatrixRule} style={{ ...previewPanel, marginTop: 16, scrollMarginTop: 92 }}>
+            <h3 style={{ marginTop: 0 }}>Configure {matrixDraft.employmentLevel?.name || `Level ${matrixDraft.levelNumber}`} — {matrixDraft.leavePolicy?.name}</h3>
+            {error && <Notice error>{error}</Notice>}
+            {message && <Notice>{message}</Notice>}
+            <div style={summaryGrid}>
+              <label>Entitlement<input ref={matrixFirstInputRef} style={styles.input} type="number" min="0" step="0.5" value={matrixDraft.defaultEntitlement} onChange={(event) => updateMatrixRule("defaultEntitlement", event.target.value)} required /></label>
+              <label>New-hire treatment<select style={styles.input} value={matrixDraft.newHireTreatment} onChange={(event) => updateMatrixRule("newHireTreatment", event.target.value)}><option value="FULL">Full</option><option value="PRORATED">Prorated</option><option value="MANUAL">Manual confirmation</option></select></label>
+              <label>Effective date<input style={styles.input} type="date" value={matrixDraft.effectiveFrom} onChange={(event) => setMatrixDraft({ ...matrixDraft, effectiveFrom: event.target.value, effectiveDateManuallySet: true })} required /></label>
+            </div>
+            <div style={modalActions}><button type="button" style={styles.button} onClick={() => setMatrixDraft(null)}>Cancel</button><button type="submit" style={styles.primary} disabled={saving}>Save Rule</button></div>
+          </form>
+        )}
+      </Panel>
 
       <Panel
         title="Employee Entitlements"
@@ -513,8 +658,9 @@ export default function LeaveEntitlements() {
                 </h2>
                 <p style={styles.muted}>
                   Create only missing employee-policy/year
-                  balances. Existing balances and usage are
-                  preserved.
+                  balances. Existing balances and usage are preserved.
+                  Reconciliation changes only the current-year opening
+                  entitlement after a reviewed preview.
                 </p>
               </div>
               <button
@@ -598,6 +744,13 @@ export default function LeaveEntitlements() {
                   Policies.
                 </Notice>
               )}
+            </fieldset>
+
+            <fieldset style={fieldset}>
+              <legend>Reconciliation Scope</legend>
+              <label style={radioOption}><input type="checkbox" checked={provisioning.baselineOnly} onChange={(event) => { setPreview(null); setProvisioning({ ...provisioning, baselineOnly: event.target.checked }); }} /> CHRIS baseline policy types only (Annual, Sick and Unpaid where active)</label>
+              <label style={radioOption}><input type="checkbox" checked={provisioning.rebaseExisting} onChange={(event) => { setPreview(null); setProvisioning({ ...provisioning, rebaseExisting: event.target.checked }); }} /> Reconcile existing current-year opening entitlements from the level matrix</label>
+              <p style={styles.muted}>Preview is mandatory. Annual, Sick and Unpaid are the mandatory baseline set. Other active policies without a level rule are informational unless explicitly selected, assigned or required. Reconciliation appends allocation history and preserves used leave, adjustments and lifecycle records.</p>
             </fieldset>
 
             <fieldset style={fieldset}>
@@ -699,6 +852,10 @@ export default function LeaveEntitlements() {
                     label="Existing—preserved"
                     value={preview.summary.existing}
                   />
+                  <Summary label="Rebase ready" value={preview.summary.rebaseReady || 0} />
+                  <Summary label="Level exceptions" value={preview.summary.exceptions || 0} />
+                  <Summary label="Deficit review" value={preview.summary.deficits || 0} />
+                  <Summary label="Matrix required" value={preview.summary.matrixRequired || 0} />
                   <Summary
                     label="Ineligible"
                     value={preview.summary.ineligible}
@@ -738,15 +895,19 @@ export default function LeaveEntitlements() {
                   type="button"
                   disabled={
                     saving ||
-                    !preview.summary.ready ||
-                    preview.summary.conflicts > 0
+                    !(preview.summary.ready || preview.summary.rebaseReady) ||
+                    preview.summary.conflicts > 0 ||
+                    preview.summary.deficits > 0 ||
+                    preview.summary.matrixRequired > 0
                   }
                   style={{
                     ...styles.primary,
                     opacity:
                       !saving &&
-                      preview.summary.ready &&
-                      !preview.summary.conflicts
+                      (preview.summary.ready || preview.summary.rebaseReady) &&
+                      !preview.summary.conflicts &&
+                      !preview.summary.deficits &&
+                      !preview.summary.matrixRequired
                         ? 1
                         : 0.5,
                   }}

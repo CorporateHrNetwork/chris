@@ -19,6 +19,13 @@ model Organization {
   country   String?
   timezone  String  @default("Africa/Lagos")
   currency  String  @default("NGN")
+  code               String?
+  registrationNumber String?
+  taxNumber           String?
+  industry            String?
+  organizationType    String?
+  website             String?
+  logoUrl             String?
 
   // Permanent organization-level Employee ID sequence.
   // Once a number is issued, it is never reused.
@@ -30,6 +37,7 @@ model Organization {
   roles                       Role[]
   departments                 Department[]
   designations                Designation[]
+  employmentLevels            OrganizationEmploymentLevel[]
   employees                   Employee[]
   locations                   OrganizationLocation[]
   employmentEpisodes          EmployeeEmploymentEpisode[]
@@ -43,6 +51,8 @@ model Organization {
   leaveBalances               LeaveBalance[]
   leaveRequests               LeaveRequest[]
   leaveEntitlementAdjustments LeaveEntitlementAdjustment[]
+  leaveEntitlementMatrixRules LeaveEntitlementMatrixRule[]
+  leaveEntitlementAllocations LeaveEntitlementAllocation[]
   workShifts                  WorkShift[]
   employeeShiftAssignments    EmployeeShiftAssignment[]
   attendanceRecords           AttendanceRecord[]
@@ -52,11 +62,58 @@ model Organization {
   employeeExitProcesses       EmployeeExitProcess[]
   lineManagerAssignments      EmployeeLineManagerAssignment[]
   workforceSnapshots          WorkforceSnapshot[]
+  organizationAudits          OrganizationAudit[]
+  costCentres                 CostCentre[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("organizations")
+}
+
+model OrganizationAudit {
+  id             String   @id @default(uuid())
+  organizationId String
+  actorUserId    String?
+  entityType     String
+  entityId       String
+  action         String
+  previousValue  Json?
+  newValue       Json?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor User? @relation("OrganizationAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("organization_audits")
+}
+
+model CostCentre {
+  id             String           @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  description    String?
+  status         CostCentreStatus @default(ACTIVE)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departments Department[]
+  employees Employee[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("cost_centres")
 }
 
 model WorkforceSnapshot {
@@ -163,6 +220,8 @@ model User {
   leavePoliciesApproved               LeavePolicy[]                   @relation("LeavePolicyApprovedBy")
   leavePolicyAudits                   LeavePolicyAudit[]
   leaveEntitlementAdjustmentsCreated  LeaveEntitlementAdjustment[]    @relation("LeaveEntitlementAdjustmentCreatedBy")
+  leaveEntitlementMatrixRulesCreated  LeaveEntitlementMatrixRule[]     @relation("LeaveEntitlementMatrixRuleCreatedBy")
+  leaveEntitlementAllocationsCreated  LeaveEntitlementAllocation[]     @relation("LeaveEntitlementAllocationCreatedBy")
   commencedLeaveRequests              LeaveRequest[]                  @relation("LeaveRequestCommencedBy")
   returnedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReturnedBy")
   recordedAttendanceRecords           AttendanceRecord[]              @relation("AttendanceRecordedBy")
@@ -175,6 +234,7 @@ model User {
   employeeExitProcessesCompleted      EmployeeExitProcess[]           @relation("EmployeeExitCompletedBy")
   employeeExitProcessesCancelled      EmployeeExitProcess[]           @relation("EmployeeExitCancelledBy")
   lineManagerAssignmentsPerformed     EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentPerformedBy")
+  organizationAuditsPerformed         OrganizationAudit[]             @relation("OrganizationAuditActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -284,8 +344,10 @@ model Department {
   code           String?
   description    String?
   isActive       Boolean @default(true)
+  costCentreId   String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  costCentre CostCentre? @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
 
   employees    Employee[]
   designations Designation[]
@@ -303,6 +365,7 @@ model Department {
   @@unique([organizationId, code])
   @@unique([organizationId, id])
   @@index([organizationId])
+  @@index([costCentreId])
   @@map("departments")
 }
 
@@ -346,6 +409,7 @@ model Designation {
   // cannot be linked to another tenant's department.
 
   department Department? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  employmentLevel OrganizationEmploymentLevel? @relation(fields: [organizationId, careerLevel], references: [organizationId, levelNumber], onDelete: Restrict)
 
   employees Employee[]
 
@@ -377,6 +441,31 @@ model Designation {
   @@map("designations")
 }
 
+/// Tenant-owned metadata for the numeric Designation.careerLevel hierarchy.
+/// Designation.careerLevel remains the authoritative employee-level mapping.
+model OrganizationEmploymentLevel {
+  organizationId String
+  levelNumber    Int
+  name           String
+  code           String
+  description    String?
+  displayOrder   Int      @default(0)
+  isActive       Boolean  @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  designations Designation[]
+  matrixRules LeaveEntitlementMatrixRule[]
+  allocations LeaveEntitlementAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([organizationId, levelNumber])
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@map("organization_employment_levels")
+}
+
 enum EmployeeGender {
   MALE
   FEMALE
@@ -390,6 +479,7 @@ model Employee {
   departmentId   String?
   designationId  String?
   locationId     String?
+  costCentreId   String?
 
   employeeNumber String
   firstName      String
@@ -420,6 +510,7 @@ model Employee {
   // normally be deactivated rather than deleted.
 
   location OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  costCentre CostCentre? @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
 
   user User?
 
@@ -429,6 +520,7 @@ model Employee {
   leaveBalances               LeaveBalance[]
   leaveRequests               LeaveRequest[]
   leaveEntitlementAdjustments LeaveEntitlementAdjustment[]
+  leaveEntitlementAllocations LeaveEntitlementAllocation[]
   shiftAssignments            EmployeeShiftAssignment[]
   attendanceRecords           AttendanceRecord[]
   onboardings                 EmployeeOnboarding[]
@@ -446,6 +538,7 @@ model Employee {
   @@index([departmentId])
   @@index([designationId])
   @@index([locationId])
+  @@index([costCentreId])
   @@index([status])
   @@map("employees")
 }
@@ -665,6 +758,8 @@ model LeaveType {
   balances               LeaveBalance[]
   requests               LeaveRequest[]
   entitlementAdjustments LeaveEntitlementAdjustment[]
+  entitlementMatrixRules LeaveEntitlementMatrixRule[]
+  entitlementAllocations LeaveEntitlementAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -760,11 +855,14 @@ model LeavePolicy {
   requests               LeaveRequest[]
   audits                 LeavePolicyAudit[]
   entitlementAdjustments LeaveEntitlementAdjustment[]
+  entitlementMatrixRules LeaveEntitlementMatrixRule[]
+  entitlementAllocations LeaveEntitlementAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, code, versionNumber])
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([leaveTypeId])
   @@index([status])
@@ -839,6 +937,7 @@ model LeaveBalance {
   employee               Employee                     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
   leaveType              LeaveType                    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
   entitlementAdjustments LeaveEntitlementAdjustment[]
+  entitlementAllocations LeaveEntitlementAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -849,6 +948,86 @@ model LeaveBalance {
   @@index([leaveTypeId])
   @@index([leaveYear])
   @@map("leave_balances")
+}
+
+enum LeaveEntitlementAllocationMethod {
+  LEVEL_DEFAULT
+  POLICY_DEFAULT
+  PRORATED
+  MANUAL_OVERRIDE
+  BASELINE_REPROVISION
+  AUTOMATIC_NEW_HIRE
+}
+
+enum NewHireEntitlementTreatment {
+  FULL
+  PRORATED
+  MANUAL
+}
+
+/// Effective-dated tenant default linking designation level to a policy.
+model LeaveEntitlementMatrixRule {
+  id               String @id @default(uuid())
+  organizationId   String
+  levelNumber      Int
+  leavePolicyId    String
+  leaveTypeId      String
+  defaultEntitlement Decimal @db.Decimal(8, 2)
+  unit             String
+  newHireTreatment NewHireEntitlementTreatment @default(FULL)
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  isActive          Boolean @default(true)
+  createdByUserId   String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
+  leavePolicy LeavePolicy @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
+  leaveType LeaveType @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  createdBy User? @relation("LeaveEntitlementMatrixRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, levelNumber, leavePolicyId, effectiveFrom])
+  @@index([organizationId, levelNumber, isActive])
+  @@index([leavePolicyId])
+  @@index([leaveTypeId])
+  @@map("leave_entitlement_matrix_rules")
+}
+
+/// Append-only record of the employee's approved policy/year allocation.
+model LeaveEntitlementAllocation {
+  id                  String @id @default(uuid())
+  organizationId      String
+  employeeId          String
+  leaveBalanceId      String
+  leavePolicyId       String
+  leaveTypeId         String
+  levelNumber         Int
+  leaveYear           Int
+  baseEntitlement     Decimal @db.Decimal(8, 2)
+  allocatedEntitlement Decimal @db.Decimal(8, 2)
+  method              LeaveEntitlementAllocationMethod
+  effectiveDate       DateTime
+  reason              String
+  createdByUserId     String?
+  createdAt           DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  leaveBalance LeaveBalance @relation(fields: [leaveBalanceId], references: [id], onDelete: Restrict)
+  leavePolicy LeavePolicy @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
+  leaveType LeaveType @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
+  createdBy User? @relation("LeaveEntitlementAllocationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId, leaveYear])
+  @@index([leaveBalanceId, createdAt])
+  @@index([leavePolicyId])
+  @@index([leaveTypeId])
+  @@index([createdByUserId])
+  @@map("leave_entitlement_allocations")
 }
 
 /// Append-only audit ledger. Corrections are recorded as new offsetting rows.
@@ -920,6 +1099,8 @@ model LeaveRequest {
   preLeaveStatus         EmployeeStatus?
   returnDocumentationUrl String?
   fitnessCertificateUrl  String?
+  administrativeReconstruction Boolean @default(false)
+  reconstructionReason          String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
@@ -1143,6 +1324,11 @@ model PasswordResetToken {
 enum OrganizationStatus {
   ACTIVE
   SUSPENDED
+  INACTIVE
+}
+
+enum CostCentreStatus {
+  ACTIVE
   INACTIVE
 }
 

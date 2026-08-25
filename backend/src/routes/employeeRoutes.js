@@ -4,6 +4,16 @@ const {
 } = require("../config/careerStructureTemplates");
 const express = require("express");
 const prisma = require("../config/prisma");
+const {
+  listEmploymentLevels,
+  ensureEmploymentLevels,
+  saveEmploymentLevel,
+  resolveEmploymentLevelFromDesignation,
+  listEmploymentLevelExceptions,
+} = require("../services/designationEmploymentLevelService");
+const {
+  provisionNewEmployeeEntitlements,
+} = require("../services/leaveEntitlementProvisioningService");
 
 const {
   requireAuth,
@@ -13,6 +23,12 @@ const {
 const router = express.Router();
 
 router.use(requireAuth);
+
+router.get("/career/levels",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEmploymentLevels({organizationId:req.auth.organizationId})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase(),details:error.details})}});
+router.post("/career/levels",requirePermission("employees.update"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:req.body})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
+router.patch("/career/levels/:levelNumber",requirePermission("employees.update"),async(req,res)=>{try{return res.json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:{...req.body,levelNumber:req.params.levelNumber}})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
+router.get("/career/employment-level-exceptions",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEmploymentLevelExceptions({organizationId:req.auth.organizationId})})}catch(error){return res.status(500).json({status:"error",message:"Unable to load Employment Level exceptions."})}});
+router.get("/career/designations/:designationId/employment-level",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await resolveEmploymentLevelFromDesignation({organizationId:req.auth.organizationId,designationId:req.params.designationId})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase(),details:error.details})}});
 
 /*
 ============================================================
@@ -86,7 +102,7 @@ async function getEmployee(
 
     include: {
       department: true,
-      designation: true,
+      designation: { include: { employmentLevel: true } },
       location: true,
       user: true,
       leaveRequests: {
@@ -129,7 +145,7 @@ router.get(
 
           include: {
             department: true,
-            designation: true,
+            designation: { include: { employmentLevel: true } },
             location: true,
             lineManagerAssignments: {
               where: { effectiveTo: null },
@@ -3847,6 +3863,9 @@ router.patch(
             departmentId:
               true,
 
+            careerLevel:
+              true,
+
             isActive:
               true,
           },
@@ -3862,6 +3881,14 @@ router.patch(
 
           message:
             "Select an active designation mapped to the selected department.",
+        });
+      }
+
+      if (designationRecord.careerLevel == null) {
+        return res.status(400).json({
+          status: "error",
+          code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+          message: "This designation has no Employment Level configured. Configure the designation before creating the employee.",
         });
       }
 
@@ -4437,6 +4464,7 @@ router.post(
         name,
         code,
         description,
+        isActive,
       } = req.body || {};
 
       const normalizedName =
@@ -4517,9 +4545,8 @@ router.post(
       }
 
 
-      const department =
-        await prisma.department.create({
-          data: {
+      const department = await prisma.$transaction(async (tx) => {
+        const created = await tx.department.create({ data: {
             organizationId,
 
             name:
@@ -4531,10 +4558,11 @@ router.post(
             description:
               normalizedDescription,
 
-            isActive:
-              true,
-          },
-        });
+            isActive: isActive !== false,
+          } });
+        await tx.organizationAudit.create({ data: { organizationId, actorUserId: req.auth.userId, entityType: "DEPARTMENT", entityId: created.id, action: "CREATED", previousValue: null, newValue: created, reason: "Department created from Organization structure administration" } });
+        return created;
+      });
 
 
       return res.status(201).json({
@@ -6489,6 +6517,24 @@ router.patch(
         });
       }
 
+      await ensureEmploymentLevels({ organizationId });
+      await prisma.organizationEmploymentLevel.upsert({
+        where: {
+          organizationId_levelNumber: {
+            organizationId,
+            levelNumber: normalizedCareerLevel,
+          },
+        },
+        update: {},
+        create: {
+          organizationId,
+          levelNumber: normalizedCareerLevel,
+          name: `Level ${normalizedCareerLevel}`,
+          code: `LEVEL_${normalizedCareerLevel}`,
+          displayOrder: normalizedCareerLevel,
+        },
+      });
+
 
       /*
       ----------------------------------------------------------
@@ -7493,6 +7539,24 @@ router.patch(
         });
       }
 
+      let resolvedTargetLevel;
+      try {
+        resolvedTargetLevel = await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: targetDesignation.id,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "The selected designation must have an active Employment Level before the job change can proceed.",
+          });
+        }
+        throw levelError;
+      }
+
 
       /*
       --------------------------------------------------------
@@ -7731,6 +7795,10 @@ router.patch(
 
             reason:
               String(reason).trim(),
+            resolvedEmploymentLevel:
+              resolvedTargetLevel.employmentLevel,
+            entitlementReconciliation:
+              "NOT_APPLIED",
           },
         },
       });
@@ -7923,6 +7991,24 @@ router.patch(
         });
       }
 
+      let resolvedCurrentLevel;
+      try {
+        resolvedCurrentLevel = await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: currentDesignation.id,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "The employee's current designation must resolve to an active Employment Level before promotion.",
+          });
+        }
+        throw levelError;
+      }
+
 
       /*
       ----------------------------------------------------------
@@ -7975,6 +8061,24 @@ router.patch(
           message:
             "The selected designation has not been configured in the career hierarchy.",
         });
+      }
+
+      let resolvedTargetLevel;
+      try {
+        resolvedTargetLevel = await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: targetDesignation.id,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "The promotion designation must resolve to an active Employment Level.",
+          });
+        }
+        throw levelError;
       }
 
 
@@ -8141,7 +8245,16 @@ router.patch(
             currentDesignation.careerLevel,
 
           newLevel:
-            targetDesignation.careerLevel,
+            resolvedTargetLevel.levelNumber,
+
+          previousEmploymentLevel:
+            resolvedCurrentLevel.employmentLevel,
+
+          newEmploymentLevel:
+            resolvedTargetLevel.employmentLevel,
+
+          entitlementReconciliation:
+            "NOT_APPLIED",
 
           previousDesignation: {
             id:
@@ -8493,6 +8606,7 @@ router.post(
         locationId,
         email,
         phone,
+        gender,
         status = "Active",
       } = req.body || {};
 
@@ -8509,7 +8623,8 @@ router.post(
         !designationId ||
         !locationId ||
         !email?.trim() ||
-        !phone?.trim()
+        !phone?.trim() ||
+        !gender?.trim()
       ) {
         return res.status(400).json({
           status:
@@ -8539,6 +8654,22 @@ router.post(
         normalizeEmployeeName(
           name
         );
+
+      const normalizedGender =
+        String(gender)
+          .trim()
+          .toUpperCase();
+
+      if (
+        !["MALE", "FEMALE", "OTHER", "UNSPECIFIED"]
+          .includes(normalizedGender)
+      ) {
+        return res.status(400).json({
+          status: "error",
+          code: "INVALID_EMPLOYEE_GENDER",
+          message: "Select a valid employee gender.",
+        });
+      }
 
       if (!normalizedName) {
         return res.status(400).json({
@@ -8677,6 +8808,9 @@ router.post(
             departmentId:
               true,
 
+            careerLevel:
+              true,
+
             isActive:
               true,
           },
@@ -8692,6 +8826,15 @@ router.post(
 
           message:
             "Select an active designation mapped to the selected department.",
+        });
+      }
+
+      if (!Number.isInteger(designationRecord.careerLevel)) {
+        return res.status(400).json({
+          status: "error",
+          code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+          message:
+            "Map the selected designation to an Employment Level before creating the employee.",
         });
       }
 
@@ -8851,7 +8994,7 @@ router.post(
                     phone.trim(),
 
                 gender:
-                  normalizeEmployeeGender(gender),
+                  normalizedGender,
 
                   status:
                     STATUS_MAP[status] ||
@@ -8910,6 +9053,13 @@ router.post(
                 startReason:
                   "Initial employment",
               },
+            });
+
+            await provisionNewEmployeeEntitlements({
+              organizationId,
+              employeeNumber: createdEmployee.employeeNumber,
+              actorUserId: req.auth.userId,
+              tx,
             });
 
 

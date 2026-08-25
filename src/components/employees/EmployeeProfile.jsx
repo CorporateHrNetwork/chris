@@ -422,6 +422,12 @@ function EmployeeProfile() {
           employee.designation
             ?.name || "",
 
+        employmentLevel:
+          employee.designation?.employmentLevel?.name ||
+          (Number.isInteger(employee.designation?.careerLevel)
+            ? `Level ${employee.designation.careerLevel}`
+            : "Not Configured"),
+
         email:
           employee.email || "",
 
@@ -2998,6 +3004,9 @@ const handleChange = (
             >
               {profile.id}
             </p>
+            <p style={employeeNumberStyle}>
+              Employment Level: {profile.employmentLevel}
+            </p>
           </div>
         </div>
 
@@ -3440,6 +3449,10 @@ const handleChange = (
               value={
                 profile.designation
               }
+            />
+            <InfoRow
+              label="Employment Level"
+              value={profile.employmentLevel}
             />
             <InfoRow
               label="Gender"

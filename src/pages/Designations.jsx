@@ -20,6 +20,10 @@ function Designations() {
     setDesignations,
   ] = useState([]);
 
+  const [employmentLevels, setEmploymentLevels] = useState([]);
+  const [levelDrafts, setLevelDrafts] = useState({});
+  const [savingLevel, setSavingLevel] = useState("");
+
   const [
     selectedDepartmentId,
     setSelectedDepartmentId,
@@ -151,6 +155,7 @@ function Designations() {
     name: "",
     code: "",
     description: "",
+    status: "ACTIVE",
   });
 
   const [
@@ -190,6 +195,7 @@ function Designations() {
           departmentResult,
           designationResult,
           templateResult,
+          levelResult,
         ] =
           await Promise.all([
             apiRequest(
@@ -202,6 +208,10 @@ function Designations() {
 
             apiRequest(
               "/api/employees/career/templates"
+            ),
+
+            apiRequest(
+              "/api/employees/career/levels"
             ),
           ]);
 
@@ -221,6 +231,20 @@ function Designations() {
         setCareerTemplates(
           templateResult.data ||
           []
+        );
+
+        const nextLevels = levelResult.data || [];
+        setEmploymentLevels(nextLevels);
+        setLevelDrafts(
+          nextLevels.reduce((drafts, level) => ({
+            ...drafts,
+            [level.levelNumber]: {
+              name: level.name,
+              code: level.code,
+              description: level.description || "",
+              isActive: level.isActive !== false,
+            },
+          }), {})
         );
 
         setSelectedDepartmentId(
@@ -1069,6 +1093,7 @@ Existing compatible designations will be reused and the recommended career level
                   description:
                     departmentForm.description.trim() ||
                     null,
+                  isActive: departmentForm.status === "ACTIVE",
                 }),
             }
           );
@@ -1077,6 +1102,7 @@ Existing compatible designations will be reused and the recommended career level
           name: "",
           code: "",
           description: "",
+          status: "ACTIVE",
         });
 
         setShowDepartmentForm(
@@ -1344,6 +1370,29 @@ Existing compatible designations will be reused and the recommended career level
         setSavingId("");
       }
     };
+
+  const saveEmploymentLevel = async (levelNumber) => {
+    const draft = levelDrafts[levelNumber];
+    if (!draft?.name?.trim()) {
+      setError("Employment Level name is required.");
+      return;
+    }
+    try {
+      setSavingLevel(String(levelNumber));
+      setError("");
+      setSuccess("");
+      await apiRequest(`/api/employees/career/levels/${levelNumber}`, {
+        method: "PATCH",
+        body: JSON.stringify(draft),
+      });
+      setSuccess(`Level ${levelNumber} metadata saved.`);
+      await loadData();
+    } catch (err) {
+      setError(err.message || "Unable to save Employment Level metadata.");
+    } finally {
+      setSavingLevel("");
+    }
+  };
 
 
   /*
@@ -1901,6 +1950,35 @@ Unmapping will be blocked if current employees or reporting positions still depe
         </div>
       )}
 
+      <section style={{ ...departmentToolbarStyle, display: "block" }}>
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ margin: 0, color: "var(--chris-green-bright)" }}>
+            Employment Level Configuration
+          </h2>
+          <p style={subtitleStyle}>
+            Configure tenant terminology for each numeric level. Employee level remains derived from the designation&apos;s careerLevel mapping below.
+          </p>
+        </div>
+        <div style={tableWrapperStyle}>
+          <table style={tableStyle}>
+            <thead><tr><TableHead>Level</TableHead><TableHead>Name</TableHead><TableHead>Code</TableHead><TableHead>Description</TableHead><TableHead>Active</TableHead><TableHead>Action</TableHead></tr></thead>
+            <tbody>
+              {employmentLevels.map((level) => {
+                const draft = levelDrafts[level.levelNumber] || {};
+                return <tr key={level.levelNumber} style={rowStyle}>
+                  <td style={cellStyle}><strong>{level.levelNumber}</strong></td>
+                  <td style={cellStyle}><input style={inputStyle} value={draft.name || ""} onChange={(event) => setLevelDrafts((current) => ({ ...current, [level.levelNumber]: { ...current[level.levelNumber], name: event.target.value } }))} /></td>
+                  <td style={cellStyle}><input style={inputStyle} value={draft.code || ""} onChange={(event) => setLevelDrafts((current) => ({ ...current, [level.levelNumber]: { ...current[level.levelNumber], code: event.target.value } }))} /></td>
+                  <td style={cellStyle}><input style={inputStyle} value={draft.description || ""} onChange={(event) => setLevelDrafts((current) => ({ ...current, [level.levelNumber]: { ...current[level.levelNumber], description: event.target.value } }))} /></td>
+                  <td style={cellStyle}><input type="checkbox" checked={draft.isActive !== false} onChange={(event) => setLevelDrafts((current) => ({ ...current, [level.levelNumber]: { ...current[level.levelNumber], isActive: event.target.checked } }))} /></td>
+                  <td style={cellStyle}><button type="button" style={secondaryButtonStyle} disabled={savingLevel === String(level.levelNumber)} onClick={() => saveEmploymentLevel(level.levelNumber)}>{savingLevel === String(level.levelNumber) ? "Saving..." : "Save"}</button></td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
 
       {showDepartmentForm && (
         <section
@@ -2004,6 +2082,7 @@ Unmapping will be blocked if current employees or reporting positions still depe
                 buttonRowStyle
               }
             >
+              <Field label="Status"><select style={inputStyle} value={departmentForm.status} onChange={(event)=>setDepartmentForm((current)=>({...current,status:event.target.value}))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Field>
               <button
                 type="submit"
                 style={
@@ -3104,10 +3183,7 @@ Unmapping will be blocked if current employees or reporting positions still depe
                               }
                             >
                               {isEditing ? (
-                                <input
-                                  type="number"
-                                  min="1"
-                                  step="1"
+                                <select
                                   value={
                                     careerForm.careerLevel
                                   }
@@ -3129,12 +3205,19 @@ Unmapping will be blocked if current employees or reporting positions still depe
                                     ...inputStyle,
 
                                     width:
-                                      "85px",
+                                      "150px",
                                   }}
-                                />
+                                >
+                                  <option value="">Select level</option>
+                                  {employmentLevels.filter((level) => level.isActive !== false).map((level) => (
+                                    <option key={level.levelNumber} value={level.levelNumber}>
+                                      {level.name} ({level.levelNumber})
+                                    </option>
+                                  ))}
+                                </select>
                               ) : designation.careerLevel !=
                                 null ? (
-                                `Level ${designation.careerLevel}`
+                                employmentLevels.find((level) => level.levelNumber === designation.careerLevel)?.name || `Level ${designation.careerLevel}`
                               ) : (
                                 "-"
                               )}
@@ -5237,4 +5320,3 @@ const recommendedDepartmentCreatingStyle = {
 };
 
 export default Designations;
-

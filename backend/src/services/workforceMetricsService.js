@@ -1,4 +1,9 @@
-const { assertCalendarDate, serializeSnapshotComposition } = require("./workforceSnapshotService");
+const {
+  assertCalendarDate,
+  captureWorkforceSnapshot,
+  dateKeyForTimezone,
+  serializeSnapshotComposition,
+} = require("./workforceSnapshotService");
 
 function round(value, places = 2) {
   const factor = 10 ** places;
@@ -34,7 +39,7 @@ function availability(available, unavailableReason = null) {
   return { available, reason: available ? null : unavailableReason };
 }
 
-async function getWorkforceMetrics(prisma, { organizationId, from, to }) {
+async function getWorkforceMetrics(prisma, { organizationId, from, to, now = new Date() }) {
   if (!organizationId) throw new Error("organizationId is required");
   const fromKey = assertCalendarDate(String(from || ""));
   const toKey = assertCalendarDate(String(to || ""));
@@ -45,6 +50,11 @@ async function getWorkforceMetrics(prisma, { organizationId, from, to }) {
     select: { id: true, timezone: true },
   });
   if (!organization) throw new Error("ORGANIZATION_NOT_FOUND");
+
+  const currentDateKey = dateKeyForTimezone(now, organization.timezone);
+  if (toKey === currentDateKey) {
+    await captureWorkforceSnapshot(prisma, organizationId, now);
+  }
 
   const snapshotFrom = new Date(`${fromKey}T00:00:00.000Z`);
   const snapshotTo = new Date(`${toKey}T00:00:00.000Z`);
@@ -122,6 +132,7 @@ async function getWorkforceMetrics(prisma, { organizationId, from, to }) {
       hires: "EMPLOYMENT_EPISODE_STARTS",
       exits: "COMPLETED_EXIT_PROCESSES_BY_COMPLETED_AT",
       averageHeadcount: "OPENING_CLOSING_MEAN",
+      currentDaySnapshot: toKey === currentDateKey ? "REFRESHED_IDEMPOTENTLY" : "HISTORICAL_UNCHANGED",
     },
   };
 }

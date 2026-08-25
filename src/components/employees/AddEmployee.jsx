@@ -238,6 +238,11 @@ function AddEmployee({
       ]
     );
 
+  const selectedDesignationForDisplay =
+    availableDesignations.find(
+      (designation) => designation.id === formData.designationId
+    );
+
 
   /*
   ============================================================
@@ -322,6 +327,13 @@ function AddEmployee({
         "The selected designation is not mapped to the selected department."
       );
 
+      return;
+    }
+
+    if (!Number.isInteger(selectedDesignation.careerLevel)) {
+      setError(
+        "The selected designation has no Employment Level. Ask an administrator to configure its career level before creating the employee."
+      );
       return;
     }
 
@@ -723,10 +735,19 @@ function AddEmployee({
                       {designation.code
                         ? ` (${designation.code})`
                         : ""}
+                      {Number.isInteger(designation.careerLevel)
+                        ? ` — Level ${designation.careerLevel}`
+                        : " — Employment Level required"}
                     </option>
                   )
                 )}
               </select>
+
+              {formData.designationId && (
+                <p style={helperWarningStyle}>
+                  Employment Level: {Number.isInteger(selectedDesignationForDisplay?.careerLevel) ? `Level ${selectedDesignationForDisplay.careerLevel} (derived from designation)` : "Not configured"}
+                </p>
+              )}
 
               {formData.departmentId &&
                 !structureLoading &&
@@ -992,7 +1013,8 @@ function AddEmployee({
                 structureLoading ||
                 !formData.departmentId ||
                 !formData.designationId ||
-                !formData.locationId
+                !formData.locationId ||
+                !Number.isInteger(selectedDesignationForDisplay?.careerLevel)
               }
 
               style={{
@@ -1002,7 +1024,8 @@ function AddEmployee({
                   saving ||
                   structureLoading ||
                   !formData.departmentId ||
-                  !formData.designationId
+                  !formData.designationId ||
+                  !Number.isInteger(selectedDesignationForDisplay?.careerLevel)
                     ? "not-allowed"
                     : "pointer",
 
@@ -1010,7 +1033,8 @@ function AddEmployee({
                   saving ||
                   structureLoading ||
                   !formData.departmentId ||
-                  !formData.designationId
+                  !formData.designationId ||
+                  !Number.isInteger(selectedDesignationForDisplay?.careerLevel)
                     ? 0.6
                     : 1,
               }}

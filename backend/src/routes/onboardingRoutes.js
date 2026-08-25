@@ -5,6 +5,9 @@ const multer = require("multer");
 
 const prisma = require("../config/prisma");
 const {
+  resolveEmploymentLevelFromDesignation,
+} = require("../services/designationEmploymentLevelService");
+const {
   requireAuth,
   requirePermission,
 } = require("../middleware/authMiddleware");
@@ -326,6 +329,20 @@ async function applySectionProgress({
   const onboardingCompleted =
     completionPercent === 100;
 
+  if (onboardingCompleted) {
+    const employee = await prisma.employee.findFirst({
+      where: {
+        id: onboarding.employeeId,
+        organizationId: onboarding.organizationId,
+      },
+      select: { designationId: true },
+    });
+    await resolveEmploymentLevelFromDesignation({
+      organizationId: onboarding.organizationId,
+      designationId: employee?.designationId,
+    });
+  }
+
   return prisma.employeeOnboarding.update({
     where: {
       id: onboarding.id,
@@ -502,6 +519,10 @@ router.get(
                 status: true,
                 hireDate: true,
                 confirmationDate: true,
+                department: true,
+                designation: {
+                  include: { employmentLevel: true },
+                },
               },
             },
             template: true,
@@ -796,6 +817,11 @@ router.post(
             employeeNumber:
               req.params.employeeNumber,
           },
+          include: {
+            designation: {
+              include: { employmentLevel: true },
+            },
+          },
         });
 
       if (!employee) {
@@ -804,6 +830,23 @@ router.post(
           message:
             "Employee not found.",
         });
+      }
+
+      try {
+        await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: employee.designationId,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "Configure the employee's designation and Employment Level before starting onboarding.",
+          });
+        }
+        throw levelError;
       }
 
       const template =
@@ -887,6 +930,15 @@ router.post(
       });
     } catch (error) {
       console.error(error);
+      if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(error.message)) {
+        return res.status(400).json({
+          status: "error",
+          code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+          message:
+            "Onboarding cannot start until the employee's designation has an active Employment Level.",
+        });
+      }
+
       return res.status(500).json({
         status: "error",
         message:
@@ -1673,6 +1725,15 @@ router.patch(
         "Update onboarding section error:",
         error
       );
+
+      if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(error.message)) {
+        return res.status(400).json({
+          status: "error",
+          code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+          message:
+            "Onboarding cannot be completed until the employee's designation has an active Employment Level.",
+        });
+      }
 
       return res.status(500).json({
         status: "error",

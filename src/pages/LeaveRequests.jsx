@@ -18,6 +18,7 @@ import {
 import "./LeaveRequests.css";
 
 const emptyForm = {
+  leaveYear: new Date().getFullYear(),
   employeeNumber: "",
   leaveTypeId: "",
   leavePolicyId: "",
@@ -155,6 +156,7 @@ export default function LeaveRequests() {
 
     const query = new URLSearchParams({
       leavePolicyId: form.leavePolicyId,
+      leaveYear: String(form.leaveYear),
     }).toString();
 
     apiRequest(
@@ -186,7 +188,7 @@ export default function LeaveRequests() {
     return () => {
       live = false;
     };
-  }, [form.employeeNumber, form.leavePolicyId]);
+  }, [form.employeeNumber, form.leavePolicyId, form.leaveYear]);
 
   useEffect(() => {
     if (
@@ -698,6 +700,13 @@ export default function LeaveRequests() {
                 </select>
               </label>
 
+              <label className="leave-field">
+                <span>Leave Year *</span>
+                <select style={styles.input} value={form.leaveYear} onChange={(event) => { setBalance(null); setCalculation(null); updateForm({ leaveYear: Number(event.target.value) }); }} required>
+                  {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => <option key={year} value={year}>{year}</option>)}
+                </select>
+              </label>
+
               <div className="leave-field">
                 <span>Available Leave Balance</span>
 
@@ -774,6 +783,7 @@ export default function LeaveRequests() {
                   }}
                 >
                   Entitlement: {balance.entitlement}
+                  {balance.allocation?.method ? ` (${balance.allocation.method.replaceAll("_", " ").toLowerCase()})` : ""}
                   {" | "}
                   Carryover: {balance.carryover}
                   {" | "}

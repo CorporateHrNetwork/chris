@@ -47,6 +47,10 @@ import Training from "./pages/Training";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Designations from "./pages/Designations";
+import OrganizationProfile from "./pages/OrganizationProfile";
+import OrganizationChart from "./pages/OrganizationChart";
+import ReportingLines from "./pages/ReportingLines";
+import CostCentres from "./pages/CostCentres";
 
 import ShiftSchedule from "./pages/ShiftSchedule";
 import AttendanceAnalyticsPage from "./pages/AttendanceAnalyticsPage";
@@ -562,11 +566,11 @@ function App() {
         <Route path="/reports/compensation" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/benefits" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/custom" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/organization/profile" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/organization/departments" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/organization/chart" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/organization/reporting-lines" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/organization/cost-centres" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/organization/profile" element={<PermissionLayout permission="settings.view"><OrganizationProfile /></PermissionLayout>} />
+        <Route path="/organization/departments" element={<Navigate to="/designations" replace />} />
+        <Route path="/organization/chart" element={<PermissionLayout permission="settings.view"><OrganizationChart /></PermissionLayout>} />
+        <Route path="/organization/reporting-lines" element={<PermissionLayout permission="settings.view"><ReportingLines /></PermissionLayout>} />
+        <Route path="/organization/cost-centres" element={<PermissionLayout permission="settings.view"><CostCentres /></PermissionLayout>} />
         <Route path="/workflows/approval-inbox" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/workflows/my-requests" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/workflows/templates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />

@@ -289,6 +289,12 @@ function EmployeeTable() {
                     ?.name ||
                   "-",
 
+                employmentLevel:
+                  employee.designation?.employmentLevel?.name ||
+                  (Number.isInteger(employee.designation?.careerLevel)
+                    ? `Level ${employee.designation.careerLevel}`
+                    : "Not Configured"),
+
                 lineManager:
                   employee.lineManagerAssignments?.[0]?.manager
                     ? [
@@ -3090,6 +3096,10 @@ function EmployeeTable() {
                 </th>
 
                 <th style={th}>
+                  Employment Level
+                </th>
+
+                <th style={th}>
                   Line Manager
                 </th>
 
@@ -3121,7 +3131,7 @@ function EmployeeTable() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={directoryMode === "EXITED" ? 8 : 7}
+                    colSpan={directoryMode === "EXITED" ? 9 : 8}
 
                     style={
                       emptyCellStyle
@@ -3184,6 +3194,10 @@ function EmployeeTable() {
 
                         <td style={td}>
                           {employee.designation}
+                        </td>
+
+                        <td style={td}>
+                          {employee.employmentLevel}
                         </td>
 
                         <td style={td}>
@@ -3432,7 +3446,7 @@ function EmployeeTable() {
               ) : (
                 <tr>
                   <td
-                    colSpan={directoryMode === "EXITED" ? 8 : 7}
+                    colSpan={directoryMode === "EXITED" ? 9 : 8}
 
                     style={
                       emptyCellStyle

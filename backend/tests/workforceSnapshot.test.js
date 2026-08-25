@@ -59,10 +59,11 @@ function createPrisma(employeeRows = []) {
   const first = await captureWorkforceSnapshot(fixture.prisma, "org-a", "2026-08-21");
   assert.equal(first.totalHistorical, 3); assert.equal(first.totalCurrent, 2); assert.equal(first.active, 1); assert.equal(first.leave, 1); assert.equal(first.exited, 1);
   assert.equal(fixture.stored.size, 1, "first capture creates one canonical day row");
-  fixture.prisma.employee.findMany = async (query) => { fixture.calls.push({ model: "employee", query }); return [{ status: "ACTIVE" }, { status: "ACTIVE" }]; };
+  fixture.prisma.employee.findMany = async (query) => { fixture.calls.push({ model: "employee", query }); return [{ status: "ACTIVE" }, { status: "ACTIVE" }, { status: "PROBATION" }]; };
   const second = await captureWorkforceSnapshot(fixture.prisma, "org-a", "2026-08-21");
   assert.equal(fixture.stored.size, 1, "same-day recapture is idempotent");
-  assert.equal(second.active, 2, "same-day recapture updates changed counts"); assert.equal(second.exited, 0);
+  assert.equal(second.totalCurrent, 3, "same-day recapture includes a qualifying newly added employee");
+  assert.equal(second.active, 2, "same-day recapture updates changed counts"); assert.equal(second.probation, 1); assert.equal(second.exited, 0);
   assert.ok(fixture.calls.filter((call) => call.model === "employee").every((call) => call.query.where.organizationId === "org-a"));
   assert.ok(fixture.calls.filter((call) => call.model === "upsert").every((call) => call.query.where.organizationId_snapshotDate.organizationId === "org-a"));
 

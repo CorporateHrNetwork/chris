@@ -174,7 +174,7 @@ async function getEmployeePolicyBalance({
     Date.UTC(year + 1, 0, 1)
   );
 
-  const [balance, pending] =
+  const [balance, pending, latestAllocation] =
     await Promise.all([
       tx.leaveBalance.findUnique({
         where: {
@@ -203,13 +203,30 @@ async function getEmployeePolicyBalance({
           requestedUnits: true,
         },
       }),
+
+      tx.leaveEntitlementAllocation.findFirst({
+        where: {
+          organizationId,
+          employeeId: employee.id,
+          leavePolicyId: policy.id,
+          leaveYear: year,
+        },
+        orderBy: [
+          { effectiveDate: "desc" },
+          { createdAt: "desc" },
+        ],
+      }),
     ]);
 
   const projected = projectBalance({
     balance,
     policy,
     committed: pending._sum.requestedUnits,
-    entitlement: entitlement ?? policy.entitlementDays,
+    entitlement:
+      entitlement ??
+      latestAllocation?.allocatedEntitlement ??
+      balance?.openingBalance ??
+      policy.entitlementDays,
   });
 
   return {
@@ -222,6 +239,7 @@ async function getEmployeePolicyBalance({
       leaveType: policy.leaveType,
     },
     leaveYear: year,
+    allocation: latestAllocation,
     ...projected,
   };
 }

@@ -1275,8 +1275,8 @@ function Sidebar() {
               label:
                 "Organization Profile",
 
-              planned:
-                true,
+              path:
+                "/organization/profile",
             },
 
             {
@@ -1289,15 +1289,7 @@ function Sidebar() {
 
             {
               label:
-                "Departments",
-
-              planned:
-                true,
-            },
-
-            {
-              label:
-                "Designations",
+                "Departments & Designations",
 
               path:
                 "/designations",
@@ -1307,24 +1299,24 @@ function Sidebar() {
               label:
                 "Organization Chart",
 
-              planned:
-                true,
+              path:
+                "/organization/chart",
             },
 
             {
               label:
                 "Reporting Lines",
 
-              planned:
-                true,
+              path:
+                "/organization/reporting-lines",
             },
 
             {
               label:
                 "Cost Centres",
 
-              planned:
-                true,
+              path:
+                "/organization/cost-centres",
             },
           ],
         },

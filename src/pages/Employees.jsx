@@ -1,8 +1,10 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 import EmployeeTable from "../components/employees/EmployeeTable";
 import AddEmployee from "../components/employees/AddEmployee";
@@ -11,8 +13,11 @@ import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 
 function Employees() {
+  const navigate = useNavigate();
   const [showAddEmployee, setShowAddEmployee] =
     useState(false);
+  const [createdEmployee, setCreatedEmployee] = useState(null);
+  const successTimer = useRef(null);
 
   const [summary, setSummary] = useState({
     total: 0,
@@ -94,7 +99,25 @@ function Employees() {
     loadEmployeeSummary();
   }, [loadEmployeeSummary]);
 
-  const handleEmployeeSaved = async () => {
+  useEffect(() => {
+    if (!createdEmployee) return undefined;
+    successTimer.current = window.setTimeout(() => {
+      setCreatedEmployee(null);
+      successTimer.current = null;
+    }, 7500);
+    return () => {
+      if (successTimer.current) window.clearTimeout(successTimer.current);
+      successTimer.current = null;
+    };
+  }, [createdEmployee]);
+
+  const followCreationAction = (path) => {
+    setCreatedEmployee(null);
+    navigate(path);
+  };
+
+  const handleEmployeeSaved = async (employee) => {
+    setCreatedEmployee(employee);
     setShowAddEmployee(false);
 
     await loadEmployeeSummary();
@@ -183,6 +206,19 @@ function Employees() {
 
   return (
     <div>
+      {createdEmployee && (
+        <section role="status" style={successNoticeStyle}>
+          <div>
+            <strong>Employee created successfully — {createdEmployee.employeeNumber} {[createdEmployee.firstName, createdEmployee.middleName, createdEmployee.lastName].filter(Boolean).join(" ")}</strong>
+            <p style={{ margin: "5px 0 0", color: "#C7D3CC" }}>The employee record, employment episode and required entitlement provisioning committed successfully.</p>
+          </div>
+          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+            <button type="button" style={successSecondaryButton} onClick={() => followCreationAction(`/employees/${createdEmployee.employeeNumber}`)}>View Employee Profile</button>
+            <button type="button" style={successPrimaryButton} onClick={() => followCreationAction(`/employees/onboarding?employeeNumber=${encodeURIComponent(createdEmployee.employeeNumber)}`)}>Continue Onboarding</button>
+            <button type="button" aria-label="Dismiss employee creation confirmation" style={successDismissButton} onClick={() => setCreatedEmployee(null)}>×</button>
+          </div>
+        </section>
+      )}
       {/* PAGE HEADER */}
       <div
         style={{
@@ -435,5 +471,10 @@ const accessDeniedStyle = {
 
   maxWidth: "600px",
 };
+
+const successNoticeStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20, padding: "16px 18px", border: "1px solid rgba(212,175,55,.65)", borderRadius: 13, background: "linear-gradient(145deg,#06452b,#031c13)", color: "#F7FAF8", boxShadow: "0 12px 28px rgba(0,0,0,.25)" };
+const successPrimaryButton = { ...addButtonStyle, background: "#D4AF37", color: "#07140D", padding: "10px 13px" };
+const successSecondaryButton = { ...successPrimaryButton, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.6)" };
+const successDismissButton = { ...successSecondaryButton, padding: "7px 11px", fontSize: 18 };
 
 export default Employees;

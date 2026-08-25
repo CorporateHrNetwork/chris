@@ -17,6 +17,7 @@ const attendanceRoutes = require("./routes/attendanceRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
+const organizationRoutes = require("./routes/organizationRoutes");
 
 const app = express();
 
@@ -137,6 +138,11 @@ app.use(
 app.use(
   "/api/line-managers",
   lineManagerRoutes
+);
+
+app.use(
+  "/api/organization",
+  organizationRoutes
 );
 
 app.use(

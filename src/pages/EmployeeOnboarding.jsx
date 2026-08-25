@@ -583,6 +583,13 @@ function EmployeeOnboarding() {
         return;
       }
 
+      if (!Number.isInteger(selectedEmployee?.designation?.careerLevel)) {
+        setError(
+          "Configure the employee's designation and Employment Level before starting onboarding."
+        );
+        return;
+      }
+
       const result =
         await apiRequest(
           `/api/employees/onboarding/${encodeURIComponent(
@@ -1607,7 +1614,7 @@ function EmployeeOnboarding() {
                           employee.employeeNumber
                         }{" "}
                         {" "}
-                        {[
+                      {[
                           employee.firstName,
                           employee.middleName,
                           employee.lastName,
@@ -1618,10 +1625,23 @@ function EmployeeOnboarding() {
                           .join(
                             " "
                           )}
+                        {employee.designation?.name
+                          ? ` — ${employee.designation.name}`
+                          : " — Designation required"}
                       </option>
                     )
                   )}
                 </select>
+              </Field>
+
+              <Field label="Designation / Employment Level">
+                <input
+                  value={selectedEmployee
+                    ? `${selectedEmployee.designation?.name || "Not configured"} — ${selectedEmployee.designation?.employmentLevel?.name || (Number.isInteger(selectedEmployee.designation?.careerLevel) ? `Level ${selectedEmployee.designation.careerLevel}` : "Employment Level required")}`
+                    : "Select employee first"}
+                  disabled
+                  style={readOnlyInputStyle}
+                />
               </Field>
 
               <Field label="Workflow Name">
