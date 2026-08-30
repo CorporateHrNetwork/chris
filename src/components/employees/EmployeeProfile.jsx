@@ -40,6 +40,7 @@ function EmployeeProfile() {
   };
   const [profile, setProfile] =
     useState(null);
+  const [onboardingRecord, setOnboardingRecord] = useState(null);
 
   const [formData, setFormData] =
     useState(null);
@@ -482,6 +483,15 @@ function EmployeeProfile() {
       setProfile(
         normalizedProfile
       );
+
+      apiRequest("/api/employees/onboarding/status")
+        .then((onboardingResult) => {
+          const match = (onboardingResult?.data || []).find(
+            (record) => record.employee?.employeeNumber === employeeNumber
+          );
+          setOnboardingRecord(match || null);
+        })
+        .catch(() => setOnboardingRecord(null));
 
       setFormData({
         name:
@@ -3773,7 +3783,7 @@ const handleChange = (
                 Promote Employee
                 {requestedProfileAction === "promotion" ? " • Active" : ""}
               </button>
-<button
+              <button
                 type="button"
                 onClick={() => activateProfileAction("leave")}
                 style={{
@@ -3787,6 +3797,24 @@ const handleChange = (
                 }}
               >
                 Leave Profile{leaveProfileOpen ? " • Active" : ""}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/employees/${encodeURIComponent(
+                      employeeNumber
+                    )}/onboarding`
+                  )
+                }
+                style={actionButtonStyle}
+              >
+                {onboardingRecord?.status === "COMPLETED"
+                  ? "Review Onboarding"
+                  : onboardingRecord
+                    ? "Continue Onboarding"
+                    : "Start Onboarding"}
               </button>
 
               <button

@@ -120,6 +120,13 @@ function Sidebar() {
             "employees.view",
 
           children: [
+            {
+              label:
+                "Add / Onboard Employee",
+
+              path:
+                "/employees/add",
+            },
                         {
               label:
                 "Employee Dashboard",
@@ -145,7 +152,7 @@ function Sidebar() {
 
             {
               label:
-                "Onboarding",
+                "Onboarding Tracker",
 
               path:
                 "/employees/onboarding",

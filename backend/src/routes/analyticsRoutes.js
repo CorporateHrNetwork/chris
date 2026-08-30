@@ -13,6 +13,12 @@ router.get("/workforce/metrics", requirePermission("employees.view"), async (req
       organizationId: req.auth.organizationId,
       from: req.query.from,
       to: req.query.to,
+      filters: {
+        departmentId: req.query.departmentId,
+        locationId: req.query.locationId,
+        status: req.query.status,
+        gender: req.query.gender,
+      },
     });
     return res.status(200).json({ status: "success", data });
   } catch (error) {

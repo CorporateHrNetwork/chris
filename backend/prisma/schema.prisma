@@ -10,22 +10,22 @@ datasource db {
 }
 
 model Organization {
-  id        String  @id @default(uuid())
-  name      String
-  slug      String  @unique
-  legalName String?
-  email     String?
-  phone     String?
-  country   String?
-  timezone  String  @default("Africa/Lagos")
-  currency  String  @default("NGN")
+  id                 String  @id @default(uuid())
+  name               String
+  slug               String  @unique
+  legalName          String?
+  email              String?
+  phone              String?
+  country            String?
+  timezone           String  @default("Africa/Lagos")
+  currency           String  @default("NGN")
   code               String?
   registrationNumber String?
-  taxNumber           String?
-  industry            String?
-  organizationType    String?
-  website             String?
-  logoUrl             String?
+  taxNumber          String?
+  industry           String?
+  organizationType   String?
+  website            String?
+  logoUrl            String?
 
   // Permanent organization-level Employee ID sequence.
   // Once a number is issued, it is never reused.
@@ -58,6 +58,7 @@ model Organization {
   attendanceRecords           AttendanceRecord[]
   onboardingWorkflowTemplates OnboardingWorkflowTemplate[]
   employeeOnboardings         EmployeeOnboarding[]
+  employeeOnboardingTasks     EmployeeOnboardingTask[]
   employeeDocuments           EmployeeDocument[]
   employeeExitProcesses       EmployeeExitProcess[]
   lineManagerAssignments      EmployeeLineManagerAssignment[]
@@ -84,7 +85,7 @@ model OrganizationAudit {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  actor User? @relation("OrganizationAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor        User?        @relation("OrganizationAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, entityType, entityId])
   @@index([actorUserId])
@@ -105,8 +106,8 @@ model CostCentre {
   updatedAt      DateTime         @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  departments Department[]
-  employees Employee[]
+  departments  Department[]
+  employees    Employee[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, id])
@@ -220,8 +221,8 @@ model User {
   leavePoliciesApproved               LeavePolicy[]                   @relation("LeavePolicyApprovedBy")
   leavePolicyAudits                   LeavePolicyAudit[]
   leaveEntitlementAdjustmentsCreated  LeaveEntitlementAdjustment[]    @relation("LeaveEntitlementAdjustmentCreatedBy")
-  leaveEntitlementMatrixRulesCreated  LeaveEntitlementMatrixRule[]     @relation("LeaveEntitlementMatrixRuleCreatedBy")
-  leaveEntitlementAllocationsCreated  LeaveEntitlementAllocation[]     @relation("LeaveEntitlementAllocationCreatedBy")
+  leaveEntitlementMatrixRulesCreated  LeaveEntitlementMatrixRule[]    @relation("LeaveEntitlementMatrixRuleCreatedBy")
+  leaveEntitlementAllocationsCreated  LeaveEntitlementAllocation[]    @relation("LeaveEntitlementAllocationCreatedBy")
   commencedLeaveRequests              LeaveRequest[]                  @relation("LeaveRequestCommencedBy")
   returnedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReturnedBy")
   recordedAttendanceRecords           AttendanceRecord[]              @relation("AttendanceRecordedBy")
@@ -230,6 +231,8 @@ model User {
   employeeOnboardingsCreated          EmployeeOnboarding[]            @relation("EmployeeOnboardingCreatedBy")
   employeeOnboardingsCompleted        EmployeeOnboarding[]            @relation("EmployeeOnboardingCompletedBy")
   employeeDocumentsUploaded           EmployeeDocument[]              @relation("EmployeeDocumentUploadedBy")
+  onboardingTasksOwned                EmployeeOnboardingTask[]        @relation("EmployeeOnboardingTaskOwner")
+  onboardingTasksCompleted            EmployeeOnboardingTask[]        @relation("EmployeeOnboardingTaskCompletedBy")
   employeeExitProcessesInitiated      EmployeeExitProcess[]           @relation("EmployeeExitInitiatedBy")
   employeeExitProcessesCompleted      EmployeeExitProcess[]           @relation("EmployeeExitCompletedBy")
   employeeExitProcessesCancelled      EmployeeExitProcess[]           @relation("EmployeeExitCancelledBy")
@@ -347,7 +350,7 @@ model Department {
   costCentreId   String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  costCentre CostCentre? @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
+  costCentre   CostCentre?  @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
 
   employees    Employee[]
   designations Designation[]
@@ -408,7 +411,7 @@ model Designation {
   // organizationId + departmentId guarantees that a designation
   // cannot be linked to another tenant's department.
 
-  department Department? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  department      Department?                  @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
   employmentLevel OrganizationEmploymentLevel? @relation(fields: [organizationId, careerLevel], references: [organizationId, levelNumber], onDelete: Restrict)
 
   employees Employee[]
@@ -449,13 +452,13 @@ model OrganizationEmploymentLevel {
   name           String
   code           String
   description    String?
-  displayOrder   Int      @default(0)
-  isActive       Boolean  @default(true)
+  displayOrder   Int     @default(0)
+  isActive       Boolean @default(true)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   designations Designation[]
-  matrixRules LeaveEntitlementMatrixRule[]
-  allocations LeaveEntitlementAllocation[]
+  matrixRules  LeaveEntitlementMatrixRule[]
+  allocations  LeaveEntitlementAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -509,8 +512,8 @@ model Employee {
   // Locations with historical employee records should
   // normally be deactivated rather than deleted.
 
-  location OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
-  costCentre CostCentre? @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
+  location   OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  costCentre CostCentre?           @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
 
   user User?
 
@@ -532,6 +535,9 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  nationalIdentificationNumber String?
+
+  @@unique([organizationId, nationalIdentificationNumber])
   @@unique([organizationId, employeeNumber])
   @@unique([organizationId, id])
   @@index([organizationId])
@@ -967,24 +973,24 @@ enum NewHireEntitlementTreatment {
 
 /// Effective-dated tenant default linking designation level to a policy.
 model LeaveEntitlementMatrixRule {
-  id               String @id @default(uuid())
-  organizationId   String
-  levelNumber      Int
-  leavePolicyId    String
-  leaveTypeId      String
-  defaultEntitlement Decimal @db.Decimal(8, 2)
-  unit             String
-  newHireTreatment NewHireEntitlementTreatment @default(FULL)
-  effectiveFrom    DateTime
-  effectiveTo      DateTime?
-  isActive          Boolean @default(true)
-  createdByUserId   String?
+  id                 String                      @id @default(uuid())
+  organizationId     String
+  levelNumber        Int
+  leavePolicyId      String
+  leaveTypeId        String
+  defaultEntitlement Decimal                     @db.Decimal(8, 2)
+  unit               String
+  newHireTreatment   NewHireEntitlementTreatment @default(FULL)
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  isActive           Boolean                     @default(true)
+  createdByUserId    String?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
-  leavePolicy LeavePolicy @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
-  leaveType LeaveType @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
-  createdBy User? @relation("LeaveEntitlementMatrixRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  leavePolicy     LeavePolicy                 @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
+  leaveType       LeaveType                   @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User?                       @relation("LeaveEntitlementMatrixRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -998,29 +1004,29 @@ model LeaveEntitlementMatrixRule {
 
 /// Append-only record of the employee's approved policy/year allocation.
 model LeaveEntitlementAllocation {
-  id                  String @id @default(uuid())
-  organizationId      String
-  employeeId          String
-  leaveBalanceId      String
-  leavePolicyId       String
-  leaveTypeId         String
-  levelNumber         Int
-  leaveYear           Int
-  baseEntitlement     Decimal @db.Decimal(8, 2)
-  allocatedEntitlement Decimal @db.Decimal(8, 2)
-  method              LeaveEntitlementAllocationMethod
-  effectiveDate       DateTime
-  reason              String
-  createdByUserId     String?
-  createdAt           DateTime @default(now())
+  id                   String                           @id @default(uuid())
+  organizationId       String
+  employeeId           String
+  leaveBalanceId       String
+  leavePolicyId        String
+  leaveTypeId          String
+  levelNumber          Int
+  leaveYear            Int
+  baseEntitlement      Decimal                          @db.Decimal(8, 2)
+  allocatedEntitlement Decimal                          @db.Decimal(8, 2)
+  method               LeaveEntitlementAllocationMethod
+  effectiveDate        DateTime
+  reason               String
+  createdByUserId      String?
+  createdAt            DateTime                         @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
-  leaveBalance LeaveBalance @relation(fields: [leaveBalanceId], references: [id], onDelete: Restrict)
-  leavePolicy LeavePolicy @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
-  leaveType LeaveType @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  organization    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee        Employee                    @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  leaveBalance    LeaveBalance                @relation(fields: [leaveBalanceId], references: [id], onDelete: Restrict)
+  leavePolicy     LeavePolicy                 @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
+  leaveType       LeaveType                   @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
   employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
-  createdBy User? @relation("LeaveEntitlementAllocationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdBy       User?                       @relation("LeaveEntitlementAllocationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, employeeId, leaveYear])
   @@index([leaveBalanceId, createdAt])
@@ -1090,17 +1096,17 @@ model LeaveRequest {
   cancelledByUserId  String?
 
   // Approved dates remain historical; these fields record the actual lifecycle.
-  commencedAt            DateTime?
-  commencementDate       DateTime?
-  commencedByUserId      String?
-  returnedAt             DateTime?
-  actualReturnDate       DateTime?
-  returnedByUserId       String?
-  preLeaveStatus         EmployeeStatus?
-  returnDocumentationUrl String?
-  fitnessCertificateUrl  String?
-  administrativeReconstruction Boolean @default(false)
-  reconstructionReason          String?
+  commencedAt                  DateTime?
+  commencementDate             DateTime?
+  commencedByUserId            String?
+  returnedAt                   DateTime?
+  actualReturnDate             DateTime?
+  returnedByUserId             String?
+  preLeaveStatus               EmployeeStatus?
+  returnDocumentationUrl       String?
+  fitnessCertificateUrl        String?
+  administrativeReconstruction Boolean         @default(false)
+  reconstructionReason         String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
@@ -1518,6 +1524,13 @@ enum OnboardingStatus {
   BLOCKED
 }
 
+enum EmployeeOnboardingTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  NOT_APPLICABLE
+}
+
 model OnboardingWorkflowTemplate {
   id              String  @id @default(uuid())
   organizationId  String
@@ -1568,10 +1581,12 @@ model EmployeeOnboarding {
   createdBy    User?                      @relation("EmployeeOnboardingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   completedBy  User?                      @relation("EmployeeOnboardingCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
   documents    EmployeeDocument[]
+  tasks        EmployeeOnboardingTask[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([employeeId])
   @@index([templateId])
@@ -1580,6 +1595,37 @@ model EmployeeOnboarding {
   @@index([createdByUserId])
   @@index([completedByUserId])
   @@map("employee_onboardings")
+}
+
+model EmployeeOnboardingTask {
+  id                String                       @id @default(uuid())
+  organizationId    String
+  onboardingId      String
+  itemKey           String
+  title             String
+  category          String
+  isRequired        Boolean                      @default(true)
+  status            EmployeeOnboardingTaskStatus @default(NOT_STARTED)
+  ownerUserId       String?
+  dueDate           DateTime?
+  completedAt       DateTime?
+  completedByUserId String?
+  notes             String?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboarding   EmployeeOnboarding @relation(fields: [organizationId, onboardingId], references: [organizationId, id], onDelete: Cascade)
+  owner        User?              @relation("EmployeeOnboardingTaskOwner", fields: [organizationId, ownerUserId], references: [organizationId, id], onDelete: Restrict)
+  completedBy  User?              @relation("EmployeeOnboardingTaskCompletedBy", fields: [organizationId, completedByUserId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([onboardingId, itemKey])
+  @@index([organizationId, onboardingId])
+  @@index([organizationId, ownerUserId])
+  @@index([organizationId, status])
+  @@index([dueDate])
+  @@map("employee_onboarding_tasks")
 }
 
 model EmployeeDocument {

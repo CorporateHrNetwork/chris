@@ -5,7 +5,15 @@ import {
 
 import {
   apiRequest,
+  getStoredOrganization,
 } from "../../services/api";
+
+import {
+  NIGERIA_PFAS,
+  findNigeriaPfa,
+} from "../../data/nigeriaPfas";
+import { NIGERIA_STATES } from "../../data/nigeriaStatesLgas";
+import SearchableRegistrySelect from "../common/SearchableRegistrySelect";
 
 import {
   COUNTRY_CATALOG,
@@ -15,8 +23,8 @@ const SECTION_CONFIG = {
   "statutory-details": {
     fields: [
       { name: "taxIdentificationNumber", label: "Tax Identification Number (TIN)", type: "text" },
-      { name: "payeState", label: "PAYE State / Tax Authority", type: "text" },
-      { name: "pensionPfa", label: "Pension Fund Administrator (PFA)", type: "text" },
+      { name: "payeState", label: "PAYE State / Tax Authority", type: "nigeria-state" },
+      { name: "pensionPfa", label: "Pension Fund Administrator (PFA)", type: "nigeria-pfa" },
       { name: "pensionPin", label: "Retirement Savings Account (RSA) PIN", type: "text" },
       { name: "nhiaNumber", label: "NHIA / Health Insurance Number", type: "text" },
       { name: "otherStatutoryStatus", label: "Other Statutory Requirements", type: "select", options: ["Completed", "Not Applicable", "Pending"] },
@@ -428,7 +436,7 @@ function PaymentDetailsForm({
 
       <label style={fieldStyle}>
         <span style={labelStyle}>
-          Payroll Currency
+          Payroll Currency (default, editable)
         </span>
 
         <select
@@ -473,7 +481,7 @@ function PaymentDetailsForm({
 
       <label style={fieldStyle}>
         <span style={labelStyle}>
-          Payment Method
+          Payment Method (default, editable)
         </span>
 
         <select
@@ -519,6 +527,8 @@ export default function OnboardingSectionDataForm({
   onChange,
   inputStyle,
   textareaStyle,
+  countryContext,
+  fieldErrors = [],
 }) {
   const resolvedKey =
     normalizeSectionKey(
@@ -546,6 +556,13 @@ export default function OnboardingSectionDataForm({
   const data =
     value || {};
 
+  const organization = getStoredOrganization();
+  const organizationCountry = String(
+    organization?.country || organization?.countryCode || ""
+  ).trim().toUpperCase();
+  const country = String(countryContext || organizationCountry).trim().toUpperCase();
+  const isNigerianOrganization = ["NIGERIA", "NIGERIAN", "NG", "NGA"].includes(country);
+
   if (!config) {
     return (
       <div style={unsupportedStyle}>
@@ -565,10 +582,74 @@ export default function OnboardingSectionDataForm({
     });
   }
 
+  const errorFor = (name) =>
+    fieldErrors.find(
+      (item) => item.field === name
+    )?.message || "";
+
+  const shellProps = (field) => ({
+    "data-onboarding-field": field.name,
+    style: errorFor(field.name)
+      ? {
+          ...fieldStyle,
+          ...invalidFieldStyle,
+        }
+      : fieldStyle,
+  });
+
+  const FieldError = ({ name }) =>
+    errorFor(name) ? (
+      <small
+        role="alert"
+        style={fieldErrorStyle}
+      >
+        {errorFor(name)}
+      </small>
+    ) : null;
+
   return (
     <div style={gridStyle}>
       {config.fields.map(
         (field) => {
+          if (field.type === "nigeria-state" && isNigerianOrganization) {
+            return (
+              <label key={field.name} {...shellProps(field)}>
+                <span style={labelStyle}>{field.label}</span>
+                <SearchableRegistrySelect
+                  ariaLabel={field.label}
+                  value={data.payeState || ""}
+                  options={NIGERIA_STATES.map((state) => ({ value: state, label: state }))}
+                  onChange={(payeState) => setField("payeState", payeState)}
+                  placeholder="Search state or FCT"
+                  inputStyle={inputStyle}
+                />
+                <small style={hintStyle}>State/FCT tax authority context only; this does not verify PAYE registration.</small>
+              </label>
+            );
+          }
+          if (field.type === "nigeria-pfa" && isNigerianOrganization) {
+            return (
+              <label key={field.name} {...shellProps(field)}>
+                <span style={labelStyle}>{field.label}</span>
+                <SearchableRegistrySelect
+                  ariaLabel={field.label}
+                  value={data.pensionPfa || ""}
+                  options={NIGERIA_PFAS.map((pfa) => ({ value: pfa.code, label: pfa.name }))}
+                  onChange={(pensionPfa, selected) => {
+                    const match = selected || findNigeriaPfa(pensionPfa);
+                    onChange({
+                      ...data,
+                      pensionPfa,
+                      pensionPfaCode: match?.code || "",
+                    });
+                  }}
+                  placeholder="Search approved Pension Fund Administrator"
+                  inputStyle={inputStyle}
+                />
+                <small style={hintStyle}>Select an ordinary PFA from the centrally maintained PenCom registry.</small>
+              </label>
+            );
+          }
           if (
             field.type ===
             "textarea"
@@ -712,6 +793,23 @@ const gridStyle = {
 const fieldStyle = {
   display: "grid",
   gap: 7,
+};
+
+const invalidFieldStyle = {
+  padding: 9,
+  border:
+    "1px solid #d77b62",
+  borderRadius:
+    "var(--chris-radius-md)",
+  background:
+    "rgba(215,123,98,.08)",
+};
+
+const fieldErrorStyle = {
+  color: "#f2a68f",
+  fontSize:
+    "var(--chris-font-xs)",
+  fontWeight: 700,
 };
 
 const labelStyle = {

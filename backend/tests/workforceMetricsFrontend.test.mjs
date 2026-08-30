@@ -13,3 +13,10 @@ assert.equal(source.includes("closingWorkforce.leave || 0"), false, "missing lea
 assert.equal(source.includes("closingWorkforce.leave ?? 0"), false, "missing leave data must not silently default to zero");
 
 console.log("PASS: CHRIS workforce metrics frontend contract tests passed.");
+
+assert.ok(source.includes("departmentId: filters.departmentId"), "Advanced metrics must inherit the selected department filter");
+assert.ok(source.includes("locationId: filters.locationId"), "Advanced metrics must inherit the selected location filter");
+assert.ok(source.includes("status: filters.status"), "Advanced metrics must inherit the selected status filter");
+assert.ok(source.includes("gender: filters.gender"), "Advanced metrics must inherit the selected gender filter");
+assert.ok(source.includes("Filtered workforce scope"), "Advanced metrics must disclose when a filtered scope is active");
+assert.ok(source.includes("Historical headcount trend is unavailable for filtered views"), "organization-wide snapshot history must not masquerade as a filtered trend");

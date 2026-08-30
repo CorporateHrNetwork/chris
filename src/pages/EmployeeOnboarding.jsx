@@ -1,8 +1,14 @@
-import {
+﻿import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+
+import {
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 
 import {
   FaCheckCircle,
@@ -19,6 +25,10 @@ import {
 } from "../services/api";
 import OnboardingSectionDataForm from "../components/employees/OnboardingSectionDataForm";
 import OnboardingDocumentsForm from "../components/employees/OnboardingDocumentsForm";
+import OnboardingTaskChecklist from "../components/employees/OnboardingTaskChecklist";
+import "../components/employees/OnboardingTaskChecklist.css";
+import { loadOnboardingPageResources } from "../utils/onboardingPageResources";
+import { findNextIncompleteSection } from "../utils/onboardingProgress";
 import {
   COUNTRY_CATALOG,
   getCountryByCode,
@@ -29,6 +39,10 @@ import {
   NIGERIA_STATES,
   getNigeriaLgas,
 } from "../data/nigeriaStatesLgas";
+import {
+  NIGERIA_PFAS,
+  findNigeriaPfa,
+} from "../data/nigeriaPfas";
 
 function countryFlagPath(code) {
   return `/flags/${String(
@@ -81,22 +95,6 @@ function normalizeGenderValue(value) {
     : "UNSPECIFIED";
 }
 
-function calculatePersonalCompletedItems(form) {
-  return [
-    Boolean(String(form.fullName || "").trim()),
-    Boolean(String(form.phone || "").trim()),
-    Boolean(String(form.email || "").trim()),
-    Boolean(form.gender && form.gender !== "UNSPECIFIED"),
-    Boolean(form.dateOfBirth),
-    Boolean(form.maritalStatus),
-    Boolean(String(form.nationality || "").trim()),
-    Boolean(String(form.residentialAddress || "").trim()),
-    Boolean(
-      String(form.idType || "").trim() &&
-      String(form.idNumber || "").trim()
-    ),
-  ].filter(Boolean).length;
-}
 
 const EMPLOYMENT_TYPES = [
   "Permanent",
@@ -109,27 +107,6 @@ const EMPLOYMENT_TYPES = [
   "Custom",
 ];
 
-const NIGERIA_PFAS = [
-  "Access ARM Pensions Limited",
-  "Cardinal Stone Pensions Limited",
-  "Citizens Pensions Limited",
-  "Crusader Sterling Pensions Limited",
-  "FCMB Pensions Limited",
-  "Fidelity Pension Managers Limited",
-  "Guaranty Trust Pension Managers Limited",
-  "Leadway PFA Limited",
-  "Nigerian University Pension Management Company (NUPEMCO)",
-  "NLPC Pension Fund Administrators Limited",
-  "Norrenberger Pensions Limited",
-  "NPF Pension Managers Limited",
-  "OAK Pensions Limited",
-  "Parthian Pensions Limited",
-  "Premium Pension Limited",
-  "Stanbic IBTC Pension Managers Limited",
-  "Tangerine APT Pensions Limited",
-  "Trustfund Pensions Limited",
-  "Veritas Glanvills Pensions Limited",
-];
 const WORKFLOW_NAME_OPTIONS = [
   "Permanent Employee Onboarding",
   "Contract Employee Onboarding",
@@ -267,9 +244,18 @@ const STATUS_LABELS = {
   BLOCKED: "Blocked",
 };
 
-function EmployeeOnboarding() {
+function EmployeeOnboarding({
+  initialTab = "WORKFLOWS",
+}) {
+  const {
+    employeeNumber: routeEmployeeNumber = "",
+  } = useParams();
+  const navigate = useNavigate();
+  const continuationOpenedFor = useRef("");
+  const sectionEditorRef = useRef(null);
+  const workflowCompletionRef = useRef(null);
   const [tab, setTab] =
-    useState("WORKFLOWS");
+    useState(routeEmployeeNumber ? "STATUS" : initialTab);
 
   const [templates, setTemplates] =
     useState([]);
@@ -308,7 +294,7 @@ function EmployeeOnboarding() {
   const [
     employeeNumber,
     setEmployeeNumber,
-  ] = useState("");
+  ] = useState(routeEmployeeNumber);
 
   const [
     templateId,
@@ -354,46 +340,73 @@ function EmployeeOnboarding() {
   const [error, setError] =
     useState("");
 
-  async function load() {
-    try {
-      setLoading(true);
-      setError("");
+  const [employeeLoadError, setEmployeeLoadError] =
+    useState("");
+  const [templateLoadError, setTemplateLoadError] =
+    useState("");
+  const [statusLoadError, setStatusLoadError] =
+    useState("");
+  const [employeesLoaded, setEmployeesLoaded] =
+    useState(false);
+  const [workflowCompleteRecordId, setWorkflowCompleteRecordId] =
+    useState("");
+  const [fieldErrors, setFieldErrors] =
+    useState([]);
+  const [completingOnboarding, setCompletingOnboarding] =
+    useState(false);
+  const [completionError, setCompletionError] =
+    useState("");
+  const [startError, setStartError] =
+    useState("");
 
-      const [
-        templateResult,
-        recordResult,
-        employeeResult,
-      ] = await Promise.all([
-        apiRequest(
-          "/api/employees/onboarding/templates"
-        ),
-        apiRequest(
-          "/api/employees/onboarding/status"
-        ),
-        apiRequest(
-          "/api/employees"
-        ),
-      ]);
-
-      setTemplates(
-        templateResult?.data || []
-      );
-
-      setRecords(
-        recordResult?.data || []
-      );
-
-      setEmployees(
-        employeeResult?.data || []
-      );
-    } catch (err) {
-      setError(
-        err?.message ||
-          "Unable to load onboarding information."
-      );
-    } finally {
-      setLoading(false);
+  /*
+   * AUTO-CLEAR START ONBOARDING ERROR
+   */
+  useEffect(() => {
+    if (!startError) {
+      return undefined;
     }
+
+    const timer = window.setTimeout(() => {
+      setStartError("");
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
+  }, [startError]);
+
+  async function load() {
+    setLoading(true);
+    setEmployeeLoadError("");
+    setTemplateLoadError("");
+    setStatusLoadError("");
+
+    const results = await loadOnboardingPageResources({
+      apiRequest,
+      onEmployees: (items) => {
+        setEmployees(items);
+        setEmployeesLoaded(true);
+      },
+      onTemplates: setTemplates,
+      onRecords: setRecords,
+    });
+
+    if (!results.employees.ok) {
+      setEmployeesLoaded(false);
+      setEmployeeLoadError(
+        results.employees.error || "Unable to load employees."
+      );
+    }
+    if (!results.templates.ok) {
+      setTemplateLoadError(
+        results.templates.error || "Unable to load onboarding templates."
+      );
+    }
+    if (!results.records.ok) {
+      setStatusLoadError(
+        results.records.error || "Unable to load onboarding status."
+      );
+    }
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -403,19 +416,18 @@ function EmployeeOnboarding() {
   AUTO-CLEAR ONBOARDING FEEDBACK
   */
   useEffect(() => {
-    if (!message && !error) {
+    if (!message) {
       return undefined;
     }
 
     const timer =
       window.setTimeout(() => {
         setMessage("");
-        setError("");
       }, 6000);
 
     return () =>
       window.clearTimeout(timer);
-  }, [message, error]);
+  }, [message]);
 
 
   const activeTemplates =
@@ -426,6 +438,19 @@ function EmployeeOnboarding() {
             item.isActive !== false
         ),
       [templates]
+    );
+
+  const displayedRecords =
+    useMemo(
+      () =>
+        routeEmployeeNumber
+          ? records.filter(
+              (record) =>
+                record.employee?.employeeNumber ===
+                routeEmployeeNumber
+            )
+          : records,
+      [records, routeEmployeeNumber]
     );
 
   const selectedEmployee =
@@ -571,20 +596,21 @@ function EmployeeOnboarding() {
   async function startOnboarding() {
     try {
       setError("");
+      setStartError("");
       setMessage("");
 
       if (
         !employeeNumber ||
         !templateId
       ) {
-        setError(
+        setStartError(
           "Select an employee and onboarding workflow."
         );
         return;
       }
 
       if (!Number.isInteger(selectedEmployee?.designation?.careerLevel)) {
-        setError(
+        setStartError(
           "Configure the employee's designation and Employment Level before starting onboarding."
         );
         return;
@@ -615,7 +641,7 @@ function EmployeeOnboarding() {
 
       setTab("STATUS");
     } catch (err) {
-      setError(
+      setStartError(
         err?.message ||
           "Unable to start employee onboarding."
       );
@@ -658,6 +684,8 @@ function EmployeeOnboarding() {
     record,
     section
   ) {
+    setFieldErrors([]);
+    setWorkflowCompleteRecordId("");
     setSelectedRecord(record);
     setSelectedSectionKey(
       section.key
@@ -668,14 +696,14 @@ function EmployeeOnboarding() {
     the selected section has rendered.
     */
     window.setTimeout(() => {
-      document
-        .getElementById(
-          "chris-onboarding-section-editor"
-        )
-        ?.scrollIntoView({
+      const editor = sectionEditorRef.current;
+      if (editor) {
+        editor.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
+        editor.focus({ preventScroll: true });
+      }
     }, 80);
 
     const progress =
@@ -695,9 +723,8 @@ function EmployeeOnboarding() {
         (item) => ({
           label: item,
           completed:
-            completedKeys.includes(
-              item
-            ),
+            progress.completed === true ||
+            completedKeys.includes(item),
         })
       )
     );
@@ -825,6 +852,79 @@ function EmployeeOnboarding() {
     }
   }
 
+  function clearSectionEditor() {
+    setSelectedSectionKey("");
+    setSectionItems([]);
+    setSectionForm(EMPTY_PERSONAL_FORM);
+    setSectionDataForm({});
+    setFieldErrors([]);
+  }
+
+  async function advanceAfterSuccessfulSectionSave(updatedRecord, sectionKey) {
+    const sectionCompleted =
+      updatedRecord?.sectionProgress?.[sectionKey]?.completed === true;
+
+    if (!sectionCompleted) {
+      window.setTimeout(() => {
+        sectionEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        sectionEditorRef.current?.focus({ preventScroll: true });
+      }, 80);
+      return;
+    }
+
+    const nextSection = findNextIncompleteSection(updatedRecord, sectionKey);
+    clearSectionEditor();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    if (nextSection) {
+      await openSection(updatedRecord, nextSection);
+      return;
+    }
+
+    setMessage("Onboarding workflow sections are complete.");
+    setWorkflowCompleteRecordId(updatedRecord.id);
+    window.setTimeout(() => {
+      workflowCompletionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      workflowCompletionRef.current?.focus({ preventScroll: true });
+    }, 80);
+  }
+
+  useEffect(() => {
+    if (!routeEmployeeNumber) {
+      continuationOpenedFor.current = "";
+      return;
+    }
+
+    setTab("STATUS");
+    setEmployeeNumber(routeEmployeeNumber);
+
+    const record = records.find(
+      (item) =>
+        item.employee?.employeeNumber ===
+        routeEmployeeNumber
+    );
+
+    if (
+      !record ||
+      continuationOpenedFor.current === routeEmployeeNumber
+    ) {
+      return;
+    }
+
+    continuationOpenedFor.current = routeEmployeeNumber;
+    const sections = record.template?.sections || [];
+    const nextSection =
+      sections.find(
+        (section) =>
+          record.sectionProgress?.[section.key]?.completed !== true
+      ) || sections[0];
+
+    if (nextSection) {
+      openSection(record, nextSection);
+    }
+  }, [records, routeEmployeeNumber]);
+
   function handleSectionFormChange(
     event
   ) {
@@ -832,6 +932,14 @@ function EmployeeOnboarding() {
       name,
       value,
     } = event.target;
+
+    if (name === "idNumber") {
+      setFieldErrors((current) =>
+        current.filter(
+          (item) => item.field !== "idNumber"
+        )
+      );
+    }
 
     setSectionForm(
       (current) => {
@@ -942,6 +1050,7 @@ function EmployeeOnboarding() {
     setSavingSection(true);
     setError("");
     setMessage("");
+    setFieldErrors([]);
 
     try {
       let completedItemKeys =
@@ -974,21 +1083,11 @@ function EmployeeOnboarding() {
         activeSection.key ===
         "personal-details"
       ) {
-        completedItems =
-          calculatePersonalCompletedItems(
-            sectionForm
-          );
-
-        completed =
-          completedItems >=
-          activeSection.items.length;
-
-        body.completed =
-          completed;
-
-        body.completedItems =
-          completedItems;
-
+        /*
+         * Backend section validation/buildCompletion is authoritative.
+         * The browser submits personal data only and never overrides
+         * completed/completedItems for Personal Details.
+         */
         body.data = {
           ...sectionForm,
         };
@@ -1018,79 +1117,191 @@ function EmployeeOnboarding() {
           }
         );
 
-      if (result?.data) {
-        setSelectedRecord(
-          result.data
-        );
-      }
+      const updatedRecord = result?.data
+        ? {
+            ...selectedRecord,
+            ...result.data,
+            tasks: selectedRecord.tasks || [],
+          }
+        : selectedRecord;
+
+      setSelectedRecord(updatedRecord);
+      setRecords((current) => current.map((record) =>
+        record.id === updatedRecord.id ? { ...record, ...updatedRecord } : record
+      ));
 
       setMessage(
-        result?.message ||
-          "Onboarding section updated successfully."
+        result?.message || "Onboarding section updated successfully."
       );
 
-      try {
-        const [
-          templateResult,
-          recordResult,
-          employeeResult,
-        ] = await Promise.all([
-          apiRequest(
-            "/api/employees/onboarding/templates"
-          ),
-          apiRequest(
-            "/api/employees/onboarding/status"
-          ),
-          apiRequest(
-            "/api/employees"
-          ),
-        ]);
+      await advanceAfterSuccessfulSectionSave(updatedRecord, activeSection.key);
 
-        setTemplates(
-          templateResult?.data || []
-        );
-
-        setRecords(
-          recordResult?.data || []
-        );
-
-        setEmployees(
-          employeeResult?.data || []
-        );
-
-        if (result?.data?.id) {
-          const refreshedRecord =
-            (recordResult?.data || [])
-              .find(
-                (item) =>
-                  item.id ===
-                  result.data.id
-              );
-
-          if (refreshedRecord) {
-            setSelectedRecord(
-              refreshedRecord
-            );
-          }
-        }
-      } catch (refreshError) {
-        console.error(
-          "Onboarding post-save refresh error:",
-          refreshError
-        );
-      }
+      await load();
     } catch (err) {
       console.error(
         "Onboarding save error:",
         err
       );
 
-      setError(
-        err?.message ||
-          "Unable to update onboarding section."
-      );
+      const structuredFields =
+        err?.details?.fields ||
+        err?.fieldErrors ||
+        [];
+
+      setFieldErrors(structuredFields);
+
+      if (structuredFields.length) {
+
+        window.setTimeout(() => {
+          const shell =
+            document.querySelector(
+              `[data-onboarding-field="${structuredFields[0].field}"]`
+            );
+
+          shell?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          shell
+            ?.querySelector(
+              "input, select, textarea, button, [tabindex]"
+            )
+            ?.focus({
+              preventScroll: true,
+            });
+        }, 80);
+
+
+        setError("");
+
+        window.setTimeout(() => {
+          setFieldErrors([]);
+        }, 4000);
+      } else {
+        setError(
+          err?.message ||
+            "Unable to update onboarding section."
+        );
+      }
     } finally {
       setSavingSection(false);
+    }
+  }
+  async function completeOnboarding() {
+    if (
+      !selectedRecord ||
+      completingOnboarding
+    ) {
+      return;
+    }
+
+    setCompletingOnboarding(true);
+    setCompletionError("");
+    setError("");
+    setMessage("");
+    setFieldErrors([]);
+
+    try {
+      const result =
+        await apiRequest(
+          `/api/employees/onboarding/records/${encodeURIComponent(
+            selectedRecord.id
+          )}/complete`,
+          {
+            method: "POST",
+          }
+        );
+
+      await load();
+
+      clearSectionEditor();
+      setSelectedRecord(null);
+      setWorkflowCompleteRecordId("");
+      setEmployeeNumber("");
+      setTemplateId("");
+      continuationOpenedFor.current = "";
+
+      setCompletionError("");
+      setMessage(
+        result?.message ||
+          "Onboarding completed successfully."
+      );
+
+      navigate(
+        "/employees/add",
+        { replace: true }
+      );
+    } catch (err) {
+      const incomplete =
+        err?.details
+          ?.incompleteSections?.[0];
+
+      if (incomplete) {
+        const section =
+          selectedRecord.sections?.find(
+            (item) =>
+              item.key ===
+              incomplete.sectionKey
+          );
+
+        if (section) {
+          await openSection(
+            selectedRecord,
+            section
+          );
+        }
+
+        const incompleteFields =
+          incomplete.fields || [];
+
+        setFieldErrors(
+          incompleteFields
+        );
+
+        window.setTimeout(() => {
+          const first =
+            incompleteFields[0];
+
+          const shell =
+            first
+              ? document.querySelector(
+                  `[data-onboarding-field="${first.field}"]`
+                )
+              : null;
+
+          shell?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          shell
+            ?.querySelector(
+              "input, select, textarea, button, [tabindex]"
+            )
+            ?.focus({
+              preventScroll: true,
+            });
+        }, 80);
+      }
+
+      const blockingTask =
+        err?.details?.blockingTasks?.[0];
+
+      if (blockingTask) {
+        setCompletionError(
+          `${blockingTask.category || "Operational Checklist"}: ${blockingTask.title} is still outstanding. Update this task in the Operational Checklist below, then complete onboarding again.`
+        );
+        setError("");
+      } else {
+        setCompletionError("");
+        setError(
+          err?.message ||
+            "Unable to complete onboarding."
+        );
+      }
+    } finally {
+      setCompletingOnboarding(false);
     }
   }
   return (
@@ -1134,7 +1345,7 @@ function EmployeeOnboarding() {
         ) : null}
       </div>
 
-      <div style={tabsStyle}>
+      {!routeEmployeeNumber && <div style={tabsStyle}>
         <TabButton
           active={
             tab ===
@@ -1159,7 +1370,7 @@ function EmployeeOnboarding() {
         >
           Onboarding Status
         </TabButton>
-      </div>
+      </div>}
 
       {message && !selectedRecord ? (
         <div
@@ -1174,6 +1385,18 @@ function EmployeeOnboarding() {
       {error && !selectedRecord ? (
         <div style={errorStyle}>
           {error}
+        </div>
+      ) : null}
+
+      {templateLoadError ? (
+        <div style={errorStyle} role="alert">
+          Onboarding templates could not be loaded: {templateLoadError}
+        </div>
+      ) : null}
+
+      {statusLoadError ? (
+        <div style={errorStyle} role="alert">
+          Onboarding status could not be loaded: {statusLoadError}
         </div>
       ) : null}
 
@@ -1598,6 +1821,12 @@ function EmployeeOnboarding() {
                     Select employee
                   </option>
 
+                  {employeesLoaded && employees.length === 0 ? (
+                    <option disabled>
+                      No employees available
+                    </option>
+                  ) : null}
+
                   {employees.map(
                     (
                       employee
@@ -1626,18 +1855,23 @@ function EmployeeOnboarding() {
                             " "
                           )}
                         {employee.designation?.name
-                          ? ` — ${employee.designation.name}`
-                          : " — Designation required"}
+                          ? ` â€” ${employee.designation.name}`
+                          : " â€” Designation required"}
                       </option>
                     )
                   )}
                 </select>
+                {employeeLoadError ? (
+                  <div style={errorStyle} role="alert">
+                    Employee list could not be loaded: {employeeLoadError}
+                  </div>
+                ) : null}
               </Field>
 
               <Field label="Designation / Employment Level">
                 <input
                   value={selectedEmployee
-                    ? `${selectedEmployee.designation?.name || "Not configured"} — ${selectedEmployee.designation?.employmentLevel?.name || (Number.isInteger(selectedEmployee.designation?.careerLevel) ? `Level ${selectedEmployee.designation.careerLevel}` : "Employment Level required")}`
+                    ? `${selectedEmployee.designation?.name || "Not configured"} â€” ${selectedEmployee.designation?.employmentLevel?.name || (Number.isInteger(selectedEmployee.designation?.careerLevel) ? `Level ${selectedEmployee.designation.careerLevel}` : "Employment Level required")}`
                     : "Select employee first"}
                   disabled
                   style={readOnlyInputStyle}
@@ -1649,14 +1883,12 @@ function EmployeeOnboarding() {
                   value={
                     templateId
                   }
-                  onChange={(
-                    event
-                  ) =>
+                  onChange={(event) => {
                     setTemplateId(
-                      event.target
-                        .value
-                    )
-                  }
+                      event.target.value
+                    );
+                    setStartError("");
+                  }}
                   style={inputStyle}
                 >
                   <option value="">
@@ -1684,18 +1916,40 @@ function EmployeeOnboarding() {
                 </select>
               </Field>
 
-              <button
-                type="button"
-                style={
-                  primaryButtonStyle
-                }
-                onClick={
-                  startOnboarding
-                }
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
               >
-                <FaUserCheck />
-                Start Onboarding
-              </button>
+                <button
+                  type="button"
+                  style={primaryButtonStyle}
+                  onClick={startOnboarding}
+                >
+                  <FaUserCheck />
+                  Start Onboarding
+                </button>
+
+                {startError ? (
+                  <div
+                    id="chris-start-onboarding-feedback"
+                    role="alert"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      lineHeight: 1.4,
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border:
+                        "1px solid rgba(255,100,120,.45)",
+                    }}
+                  >
+                    {startError}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </section>
 
@@ -1739,8 +1993,8 @@ function EmployeeOnboarding() {
                 statusCardGridStyle
               }
             >
-              {records.length ? (
-                records.map(
+              {displayedRecords.length ? (
+                displayedRecords.map(
                   (record) => (
                     <article
                       key={
@@ -1949,10 +2203,58 @@ function EmployeeOnboarding() {
             </div>
           </section>
 
+          {selectedRecord?.id === workflowCompleteRecordId ? (
+            <div
+              ref={workflowCompletionRef}
+              tabIndex={-1}
+              style={editorSuccessStyle}
+              role="status"
+            >
+              <span>
+                Onboarding workflow sections are complete. Review any explicitly managed operational checklist items that remain outstanding.
+              </span>
+              {completionError ? (
+                <div
+                  role="alert"
+                  style={{
+                    marginTop: 10,
+                    padding: "9px 11px",
+                    border: "1px solid #d77b62",
+                    borderRadius: 8,
+                    color: "#f2a68f",
+                    fontWeight: 700,
+                  }}
+                >
+                  {completionError}
+                </div>
+              ) : null}
+              {selectedRecord?.status !== "COMPLETED" ? (
+                <button
+                  type="button"
+                  onClick={completeOnboarding}
+                  disabled={completingOnboarding}
+                  style={{
+                    ...primaryButtonStyle,
+                    marginLeft: 14,
+                  }}
+                >
+                  {completingOnboarding
+                    ? "Completing..."
+                    : "Complete Onboarding"}
+                </button>
+              ) : null}
+
+            </div>
+          ) : null}
+
+          {selectedRecord ? <OnboardingTaskChecklist record={selectedRecord} onSaved={load} /> : null}
+
           {selectedRecord &&
           activeSection ? (
             <section
               id="chris-onboarding-section-editor"
+              ref={sectionEditorRef}
+              tabIndex={-1}
               style={
                 editorPanelStyle
               }
@@ -2361,14 +2663,74 @@ function EmployeeOnboarding() {
                       </select>
                     </Field>
 
+                    <div
+                    data-onboarding-field="idNumber"
+                    style={
+                      fieldErrors.some(
+                        (item) =>
+                          item.field === "idNumber"
+                      )
+                        ? {
+                            padding: 8,
+                            border:
+                              "1px solid #d77b62",
+                            borderRadius: 10,
+                            background:
+                              "rgba(215,123,98,.08)",
+                          }
+                        : undefined
+                    }
+                  >
                     <Field label="ID Number *">
+                      {fieldErrors.some(
+                        (item) =>
+                          item.field === "idNumber"
+                      ) ? (
+                        <small
+                          role="alert"
+                          style={{
+                            display: "block",
+                            marginBottom: 6,
+                            color: "#f2a68f",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {
+                            fieldErrors.find(
+                              (item) =>
+                                item.field === "idNumber"
+                            )?.message
+                          }
+                        </small>
+                      ) : null}
+
                       <input
                         name="idNumber"
                         value={sectionForm.idNumber}
-                        onChange={handleSectionFormChange}
-                        style={inputStyle}
+                        onChange={
+                          handleSectionFormChange
+                        }
+                        aria-invalid={
+                          fieldErrors.some(
+                            (item) =>
+                              item.field === "idNumber"
+                          )
+                        }
+                        style={
+                          fieldErrors.some(
+                            (item) =>
+                              item.field === "idNumber"
+                          )
+                            ? {
+                                ...inputStyle,
+                                border:
+                                  "1px solid #d77b62",
+                              }
+                            : inputStyle
+                        }
                       />
                     </Field>
+                  </div>
 
                     <Field label="ID Expiry Date">
                       <input
@@ -2408,11 +2770,27 @@ function EmployeeOnboarding() {
                   inputStyle={inputStyle}
                   onSaved={async (updated) => {
                     if (updated) {
-                      setSelectedRecord(
-                        updated
-                      );
+                      setSelectedRecord((current) => ({
+                        ...current,
+                        ...updated,
+                        tasks: current?.tasks || [],
+                      }));
                     }
-
+                    await load();
+                  }}
+                  onCompleted={async (updated) => {
+                    if (!updated) return;
+                    const updatedRecord = {
+                      ...selectedRecord,
+                      ...updated,
+                      tasks: selectedRecord.tasks || [],
+                    };
+                    setSelectedRecord(updatedRecord);
+                    setRecords((current) => current.map((record) =>
+                      record.id === updatedRecord.id ? { ...record, ...updatedRecord } : record
+                    ));
+                    setMessage("Documents section completed successfully.");
+                    await advanceAfterSuccessfulSectionSave(updatedRecord, "documents");
                     await load();
                   }}
                 />
@@ -2429,6 +2807,7 @@ function EmployeeOnboarding() {
                   textareaStyle={
                     textareaStyle
                   }
+                  fieldErrors={fieldErrors}
                 />
               )}
 
@@ -2442,18 +2821,12 @@ function EmployeeOnboarding() {
                     mutedStyle
                   }
                 >
-                  {activeSection.key ===
-                  "personal-details"
-                    ? calculatePersonalCompletedItems(
-                        sectionForm
-                      )
-                    : Number(
-                        selectedRecord
-                          .sectionProgress?.[
-                          activeSection.key
-                        ]?.completedItems ||
-                          0
-                      )}
+                  {Number(
+                    selectedRecord
+                      .sectionProgress?.[
+                      activeSection.key
+                    ]?.completedItems || 0
+                  )}
                   /
                   {activeSection.items.length}{" "}
                   completed
@@ -2563,25 +2936,28 @@ function StatutoryDetailsInlineForm({
           value={
             data.pensionPfa || ""
           }
-          onChange={(event) =>
-            setField(
-              "pensionPfa",
-              event.target.value
-            )
-          }
+          onChange={(event) => {
+            const pensionPfa = event.target.value;
+            const match = findNigeriaPfa(pensionPfa);
+            onChange({ ...data, pensionPfa, pensionPfaCode: match?.code || "" });
+          }}
           style={inputStyle}
         >
           <option value="">
             Select Pension Fund Administrator
           </option>
 
+          {data.pensionPfa && !findNigeriaPfa(data.pensionPfa) ? (
+            <option value={data.pensionPfa}>{data.pensionPfa} (historical)</option>
+          ) : null}
+
           {NIGERIA_PFAS.map(
             (pfa) => (
               <option
-                key={pfa}
-                value={pfa}
+                key={pfa.code}
+                value={pfa.name}
               >
-                {pfa}
+                {pfa.name}
               </option>
             )
           )}
@@ -3280,6 +3656,7 @@ const editorSuccessStyle = {
 const editorPanelStyle = {
   ...builderMainStyle,
   marginTop: 18,
+  scrollMarginTop: 92,
 };
 
 const countryFlagStyle = {

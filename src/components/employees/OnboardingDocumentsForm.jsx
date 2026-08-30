@@ -10,12 +10,13 @@ const DOCUMENT_TYPES = [
   ["OTHER", "Other Required Documents"],
 ];
 
-export default function OnboardingDocumentsForm({ record, onSaved, inputStyle }) {
+export default function OnboardingDocumentsForm({ record, onSaved, onCompleted, inputStyle }) {
   const [category, setCategory] = useState("CV_RESUME");
   const [file, setFile] = useState(null);
   const [notes, setNotes] = useState("");
   const [documents, setDocuments] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [replacingDocument, setReplacingDocument] = useState(null);
   const fileInputRef = useRef(null);
@@ -150,6 +151,27 @@ export default function OnboardingDocumentsForm({ record, onSaved, inputStyle })
     }
   }
 
+  async function completeDocuments() {
+    setCompleting(true);
+    setFeedback("");
+    try {
+      const result = await apiRequest(
+        `/api/employees/onboarding/records/${encodeURIComponent(record.id)}/documents/complete`,
+        { method: "POST" }
+      );
+      setFeedback(result?.message || "Documents section completed successfully.");
+      await onCompleted?.(result?.data);
+    } catch (error) {
+      setFeedback(error?.message || "Unable to complete the Documents section.");
+    } finally {
+      setCompleting(false);
+    }
+  }
+
+  const completedCategories = new Set(documents.map((document) => document.category));
+  const requiredCount = DOCUMENT_TYPES.length;
+  const completedCount = DOCUMENT_TYPES.filter(([value]) => completedCategories.has(value)).length;
+
   return (
     <div style={wrapStyle}>
       <style>{`
@@ -170,6 +192,11 @@ export default function OnboardingDocumentsForm({ record, onSaved, inputStyle })
         }
       `}</style>
       {feedback ? <div style={feedbackStyle}>{feedback}</div> : null}
+
+      <div style={documentProgressStyle}>
+        <strong>Required documents</strong>
+        <span>{completedCount}/{requiredCount} uploaded</span>
+      </div>
 
       {replacingDocument ? (
         <div style={replaceBannerStyle}>
@@ -248,6 +275,17 @@ export default function OnboardingDocumentsForm({ record, onSaved, inputStyle })
           <div style={mutedStyle}>No onboarding documents uploaded yet.</div>
         )}
       </div>
+
+      {completedCount === requiredCount ? (
+        <button
+          type="button"
+          onClick={completeDocuments}
+          disabled={busy || completing}
+          style={completeButtonStyle}
+        >
+          {completing ? "Completing Documents…" : "Complete Documents & Continue"}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -275,6 +313,26 @@ const uploadButtonStyle = {
   cursor: "pointer",
 };
 const listStyle = { display: "grid", gap: 8 };
+const documentProgressStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: 12,
+  border: "1px solid var(--chris-border)",
+  borderRadius: "var(--chris-radius-md)",
+  background: "rgba(255,255,255,.025)",
+};
+const completeButtonStyle = {
+  minHeight: 42,
+  justifySelf: "end",
+  padding: "0 16px",
+  border: "1px solid var(--chris-gold)",
+  borderRadius: "var(--chris-radius-md)",
+  background: "var(--chris-gold)",
+  color: "#07130D",
+  fontWeight: 900,
+  cursor: "pointer",
+};
 const documentRowStyle = {
   display: "flex",
   justifyContent: "space-between",

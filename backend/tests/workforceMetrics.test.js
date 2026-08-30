@@ -107,6 +107,119 @@ function fixture({ opening = null, closing = null, hires = 0, exits = 0 } = {}) 
   assert.equal(zero.metrics.headcountGrowthRate, null); assert.equal(zero.availability.growth.reason, "ZERO_OPENING_HEADCOUNT");
   assert.equal(zero.metrics.averageHeadcount, 0); assert.equal(zero.metrics.turnoverRate, null); assert.equal(zero.availability.turnover.reason, "INSUFFICIENT_AVERAGE_HEADCOUNT");
 
+
+  const scopedCalls = [];
+  const scopedPrisma = {
+    organization: {
+      findFirst: async (query) => ({
+        id: query.where.id,
+        timezone: "Africa/Lagos",
+      }),
+    },
+    workforceSnapshot: {
+      findFirst: async () => {
+        throw new Error("filtered metrics must not read organization-wide snapshots");
+      },
+    },
+    employee: {
+      findMany: async (query) => {
+        scopedCalls.push({ model: "employees", query });
+        return [
+          { status: "PROBATION" },
+          { status: "PROBATION" },
+          { status: "ACTIVE" },
+        ];
+      },
+    },
+    employeeEmploymentEpisode: {
+      count: async (query) => {
+        scopedCalls.push({ model: "hires", query });
+        return 2;
+      },
+    },
+    employeeExitProcess: {
+      count: async (query) => {
+        scopedCalls.push({ model: "exits", query });
+        return 1;
+      },
+    },
+  };
+
+  const scoped = await getWorkforceMetrics(scopedPrisma, {
+    organizationId: "org-a",
+    from: "2026-08-01",
+    to: "2026-08-30",
+    now: new Date("2026-08-30T12:00:00.000Z"),
+    filters: {
+      departmentId: "dept-payroll",
+      locationId: "loc-abuja",
+    },
+  });
+
+  assert.equal(scoped.scope.filtered, true);
+  assert.equal(scoped.metrics.closingHeadcount, 3, "filtered current closing headcount must come from the filtered employee population");
+  assert.deepEqual(
+    scoped.closingWorkforce,
+    { active: 1, probation: 2, leave: 0, suspended: 0, exited: 0 },
+    "filtered closing composition must never leak organization-wide snapshot counts"
+  );
+  assert.equal(scoped.metrics.openingHeadcount, null);
+  assert.equal(scoped.metrics.averageHeadcount, null);
+  assert.equal(scoped.metrics.turnoverRate, null);
+  assert.equal(scoped.availability.openingHeadcount.reason, "FILTERED_SNAPSHOT_HISTORY_UNAVAILABLE");
+  assert.equal(scoped.metrics.hires, 2);
+  assert.equal(scoped.metrics.completedExits, 1);
+  assert.equal(scoped.metrics.netMovement, 1);
+
+  const scopedEmployeeWhere = scopedCalls.find((call) => call.model === "employees").query.where;
+  assert.equal(scopedEmployeeWhere.organizationId, "org-a");
+  assert.equal(scopedEmployeeWhere.departmentId, "dept-payroll");
+  assert.equal(scopedEmployeeWhere.locationId, "loc-abuja");
+
+  const scopedHireWhere = scopedCalls.find((call) => call.model === "hires").query.where;
+  assert.equal(scopedHireWhere.startDepartmentId, "dept-payroll");
+  assert.equal(scopedHireWhere.startLocationId, "loc-abuja");
+
+  const scopedExitWhere = scopedCalls.find((call) => call.model === "exits").query.where;
+  assert.equal(scopedExitWhere.employee.departmentId, "dept-payroll");
+  assert.equal(scopedExitWhere.employee.locationId, "loc-abuja");
+
+  const historicalScopedPrisma = {
+    organization: {
+      findFirst: async (query) => ({
+        id: query.where.id,
+        timezone: "Africa/Lagos",
+      }),
+    },
+    workforceSnapshot: {
+      findFirst: async () => {
+        throw new Error("filtered historical metrics must not read organization-wide snapshots");
+      },
+    },
+    employee: {
+      findMany: async () => {
+        throw new Error("historical filtered closing must not be fabricated from today's employees");
+      },
+    },
+    employeeEmploymentEpisode: { count: async () => 0 },
+    employeeExitProcess: { count: async () => 0 },
+  };
+
+  const historicalScoped = await getWorkforceMetrics(historicalScopedPrisma, {
+    organizationId: "org-a",
+    from: "2026-07-01",
+    to: "2026-07-31",
+    now: new Date("2026-08-30T12:00:00.000Z"),
+    filters: { departmentId: "dept-payroll" },
+  });
+
+  assert.equal(historicalScoped.metrics.closingHeadcount, null);
+  assert.equal(
+    historicalScoped.availability.closingHeadcount.reason,
+    "FILTERED_HISTORICAL_CLOSING_UNAVAILABLE"
+  );
+  assert.equal(historicalScoped.closingWorkforce, null);
+
   await assert.rejects(() => getWorkforceMetrics(fixture().prisma, { organizationId: "org-a", from: "bad", to: "2026-08-31" }), /INVALID_SNAPSHOT_DATE/);
   await assert.rejects(() => getWorkforceMetrics(fixture().prisma, { organizationId: "org-a", from: "2026-08-01", to: "bad" }), /INVALID_SNAPSHOT_DATE/);
   await assert.rejects(() => getWorkforceMetrics(fixture().prisma, { organizationId: "org-a", from: "2026-09-01", to: "2026-08-01" }), /INVALID_DATE_RANGE/);

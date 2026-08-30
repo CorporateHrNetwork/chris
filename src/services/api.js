@@ -347,10 +347,14 @@ export async function apiRequest(
   }
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       result.message ||
         "Unable to complete request."
     );
+    error.code = result.code || "REQUEST_FAILED";
+    error.details = result.details || null;
+    error.fieldErrors = result.details?.fields || result.fieldErrors || [];
+    throw error;
   }
 
   return result;

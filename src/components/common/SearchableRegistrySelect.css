@@ -1,0 +1,7 @@
+.chris-searchable-select { position: relative; min-width: 0; }
+.chris-searchable-select > input { box-sizing: border-box; width: 100%; min-height: 43px; padding: 0 12px; border: 1px solid #315746; border-radius: 9px; background: #0d261b; color: #fff; }
+.chris-searchable-options { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0; display: grid; max-height: 230px; overflow: auto; padding: 5px; border: 1px solid #446b58; border-radius: 9px; background: #071b12; box-shadow: 0 14px 32px rgba(0,0,0,.45); }
+.chris-searchable-options[hidden] { display: none; }
+.chris-searchable-options button { padding: 9px 10px; border: 0; border-radius: 6px; background: transparent; color: #e7f2ec; text-align: left; cursor: pointer; }
+.chris-searchable-options button:hover, .chris-searchable-options button[aria-selected="true"] { background: rgba(212,175,55,.16); color: #f3d46a; }
+.chris-searchable-options span { padding: 10px; color: #aebfb5; font-size: 12px; }

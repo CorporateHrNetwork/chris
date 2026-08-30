@@ -12,8 +12,9 @@ const {
   listEmploymentLevelExceptions,
 } = require("../services/designationEmploymentLevelService");
 const {
-  provisionNewEmployeeEntitlements,
-} = require("../services/leaveEntitlementProvisioningService");
+  createEmployee,
+} = require("../services/employeeCreationService");
+const { assertTenantNinAvailable } = require("../services/employeeIdentityService");
 
 const {
   requireAuth,
@@ -662,6 +663,7 @@ router.put(
         confirmationDate,
         exitDate,
         locationId,
+        nationalIdentificationNumber,
       } = req.body;
 
       if (
@@ -727,6 +729,23 @@ router.put(
           message:
             "Another employee already uses this email address.",
         });
+      }
+
+      let normalizedNin = existingEmployee.nationalIdentificationNumber || null;
+      if (String(nationalIdentificationNumber || "").trim()) {
+        try {
+          normalizedNin = await assertTenantNinAvailable(prisma, {
+            organizationId,
+            employeeId: existingEmployee.id,
+            value: nationalIdentificationNumber,
+          });
+        } catch (identityError) {
+          return res.status(identityError.code === "DUPLICATE_EMPLOYEE_NIN" ? 409 : 400).json({
+            status: "error",
+            code: identityError.code || "INVALID_NIN",
+            message: identityError.message,
+          });
+        }
       }
 
       const normalizedName =
@@ -923,6 +942,8 @@ router.put(
 
                   phone:
                     phone.trim(),
+
+                  nationalIdentificationNumber: normalizedNin,
 
                   gender:
                     normalizeEmployeeGender(gender),
@@ -8591,537 +8612,46 @@ Controlled employee creation:
 
 router.post(
   "/",
-  requirePermission(
-    "employees.create"
-  ),
+  requirePermission("employees.create"),
   async (req, res) => {
     try {
-      const organizationId =
-        req.auth.organizationId;
-
-      const {
-        name,
-        departmentId,
-        designationId,
-        locationId,
-        email,
-        phone,
-        gender,
-        status = "Active",
-      } = req.body || {};
-
-
-      /*
-      ------------------------------------------------------------
-      REQUIRED FIELDS
-      ------------------------------------------------------------
-      */
-
-      if (
-        !name?.trim() ||
-        !departmentId ||
-        !designationId ||
-        !locationId ||
-        !email?.trim() ||
-        !phone?.trim() ||
-        !gender?.trim()
-      ) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_REQUIRED_FIELDS_MISSING",
-
-          message:
-            "Please complete all required employee fields.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      NORMALIZE EMPLOYEE IDENTITY DATA
-      ------------------------------------------------------------
-      */
-
-      const normalizedEmail =
-        email
-          .trim()
-          .toLowerCase();
-
-      const normalizedName =
-        normalizeEmployeeName(
-          name
-        );
-
-      const normalizedGender =
-        String(gender)
-          .trim()
-          .toUpperCase();
-
-      if (
-        !["MALE", "FEMALE", "OTHER", "UNSPECIFIED"]
-          .includes(normalizedGender)
-      ) {
-        return res.status(400).json({
-          status: "error",
-          code: "INVALID_EMPLOYEE_GENDER",
-          message: "Select a valid employee gender.",
-        });
-      }
-
-      if (!normalizedName) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_NAME",
-
-          message:
-            "Please enter at least the employee's first and last name.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      DUPLICATE EMPLOYEE EMAIL
-      ------------------------------------------------------------
-      */
-
-      const duplicateEmail =
-        await prisma.employee.findFirst({
-          where: {
-            organizationId,
-
-            email:
-              normalizedEmail,
-          },
-
-          select: {
-            id:
-              true,
-
-            employeeNumber:
-              true,
-          },
-        });
-
-      if (duplicateEmail) {
-        return res.status(409).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_EMAIL_ALREADY_EXISTS",
-
-          message:
-            "An employee with this email address already exists.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      VALIDATE DEPARTMENT
-      ------------------------------------------------------------
-      */
-
-      const departmentRecord =
-        await prisma.department.findFirst({
-          where: {
-            id:
-              String(
-                departmentId
-              ).trim(),
-
-            organizationId,
-
-            isActive:
-              true,
-          },
-
-          select: {
-            id:
-              true,
-
-            name:
-              true,
-
-            code:
-              true,
-
-            isActive:
-              true,
-          },
-        });
-
-      if (!departmentRecord) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_DEPARTMENT",
-
-          message:
-            "Select an active department from your organization's CHRIS structure.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      VALIDATE DESIGNATION + DEPARTMENT MAPPING
-      ------------------------------------------------------------
-      */
-
-      const designationRecord =
-        await prisma.designation.findFirst({
-          where: {
-            id:
-              String(
-                designationId
-              ).trim(),
-
-            organizationId,
-
-            departmentId:
-              departmentRecord.id,
-
-            isActive:
-              true,
-          },
-
-          select: {
-            id:
-              true,
-
-            name:
-              true,
-
-            code:
-              true,
-
-            departmentId:
-              true,
-
-            careerLevel:
-              true,
-
-            isActive:
-              true,
-          },
-        });
-
-      if (!designationRecord) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_DESIGNATION",
-
-          message:
-            "Select an active designation mapped to the selected department.",
-        });
-      }
-
-      if (!Number.isInteger(designationRecord.careerLevel)) {
-        return res.status(400).json({
-          status: "error",
-          code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
-          message:
-            "Map the selected designation to an Employment Level before creating the employee.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      VALIDATE WORK LOCATION / BRANCH
-      ------------------------------------------------------------
-      */
-
-      const locationRecord =
-        await prisma.organizationLocation.findFirst({
-          where: {
-            id:
-              String(
-                locationId
-              ).trim(),
-
-            organizationId,
-
-            isActive:
-              true,
-          },
-
-          select: {
-            id:
-              true,
-
-            name:
-              true,
-
-            code:
-              true,
-
-            type:
-              true,
-
-            city:
-              true,
-
-            state:
-              true,
-
-            country:
-              true,
-
-            isActive:
-              true,
-          },
-        });
-
-      if (!locationRecord) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_LOCATION",
-
-          message:
-            "Select an active work location from your organization's CHRIS location catalogue.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      PERMANENT EMPLOYEE NUMBER ALLOCATION
-      ------------------------------------------------------------
-
-      The Organization owns a monotonically increasing sequence.
-
-      Once issued:
-      - an Employee ID is never recycled
-      - exit does not release it
-      - reinstatement keeps it
-      - future rehire keeps the employee's permanent ID
-
-      The sequence increment and Employee creation happen in the
-      same database transaction.
-      ------------------------------------------------------------
-      */
-
-      const employee =
-        await prisma.$transaction(
-          async (tx) => {
-            const sequenceOwner =
-              await tx.organization.update({
-                where: {
-                  id:
-                    organizationId,
-                },
-
-                data: {
-                  employeeNumberSequence: {
-                    increment:
-                      1,
-                  },
-                },
-
-                select: {
-                  employeeNumberSequence:
-                    true,
-                },
-              });
-
-            const nextNumber =
-              sequenceOwner
-                .employeeNumberSequence;
-
-            if (
-              nextNumber >
-              999999
-            ) {
-              throw new Error(
-                "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED"
-              );
-            }
-
-            const employeeNumber =
-              `CHR${String(
-                nextNumber
-              ).padStart(
-                6,
-                "0"
-              )}`;
-
-            const createdEmployee =
-              await tx.employee.create({
-                data: {
-                  organizationId,
-
-                  departmentId:
-                    departmentRecord.id,
-
-                  designationId:
-                    designationRecord.id,
-
-                  locationId:
-                    locationRecord.id,
-
-                  employeeNumber,
-
-                  firstName:
-                    normalizedName.firstName,
-
-                  middleName:
-                    normalizedName.middleName,
-
-                  lastName:
-                    normalizedName.lastName,
-
-                  email:
-                    normalizedEmail,
-
-                  phone:
-                    phone.trim(),
-
-                gender:
-                  normalizedGender,
-
-                  status:
-                    STATUS_MAP[status] ||
-                    "ACTIVE",
-                },
-
-                include: {
-                  department:
-                    true,
-
-                  designation:
-                    true,
-
-                  location:
-                    true,
-                },
-              });
-
-
-            /*
-            ------------------------------------------------------
-            EMPLOYMENT EPISODE 1
-
-            A genuine new hire always starts Episode 1.
-            The permanent Employee record stores current state;
-            Employment Episodes store service periods.
-            ------------------------------------------------------
-            */
-
-            await tx.employeeEmploymentEpisode.create({
-              data: {
-                organizationId,
-
-                employeeId:
-                  createdEmployee.id,
-
-                sequenceNumber:
-                  1,
-
-                startDate:
-                  createdEmployee.hireDate ||
-                  createdEmployee.createdAt,
-
-                startStatus:
-                  createdEmployee.status,
-
-                startDepartmentId:
-                  createdEmployee.departmentId,
-
-                startDesignationId:
-                  createdEmployee.designationId,
-
-                startLocationId:
-                  createdEmployee.locationId,
-
-                startReason:
-                  "Initial employment",
-              },
-            });
-
-            await provisionNewEmployeeEntitlements({
-              organizationId,
-              employeeNumber: createdEmployee.employeeNumber,
-              actorUserId: req.auth.userId,
-              tx,
-            });
-
-
-            return createdEmployee;
-          }
-        );
-
+      const employee = await createEmployee({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        input: req.body,
+      });
 
       return res.status(201).json({
-        status:
-          "success",
-
-        message:
-          `Employee created successfully with permanent Employee ID ${employee.employeeNumber}.`,
-
-        data:
-          employee,
+        status: "success",
+        message: `Employee created successfully with permanent Employee ID ${employee.employeeNumber}.`,
+        data: employee,
       });
     } catch (error) {
-      console.error(
-        "Employee creation error:",
-        error
-      );
+      console.error("Employee creation error:", error);
 
-      if (
-        error.message ===
-        "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED"
-      ) {
-        return res.status(409).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED",
-
-          message:
-            "The current CHRIS employee number range has been exhausted. Extend the employee number format before creating another employee.",
+      if (error.isEmployeeCreationError) {
+        return res.status(error.statusCode).json({
+          status: "error",
+          code: error.code,
+          message: error.safeMessage,
         });
       }
 
-      if (
-        error.code ===
-        "P2002"
-      ) {
+      if (error.code === "P2002") {
+        if (Array.isArray(error.meta?.target) && error.meta.target.includes("nationalIdentificationNumber")) {
+          return res.status(409).json({ status: "error", code: "DUPLICATE_EMPLOYEE_NIN", message: "This NIN is already assigned to another employee." });
+        }
         return res.status(409).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_UNIQUE_CONFLICT",
-
+          status: "error",
+          code: "EMPLOYEE_UNIQUE_CONFLICT",
           message:
             "The employee could not be created because a unique employee record already exists.",
         });
       }
 
       return res.status(500).json({
-        status:
-          "error",
-
-        message:
-          "Unable to create employee.",
+        status: "error",
+        message: "Unable to create employee.",
       });
     }
   }

@@ -21,6 +21,8 @@ import EmployeeDashboard from "./pages/EmployeeDashboard";
 import EmployeeAnalytics from "./pages/EmployeeAnalytics";
 import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
 import EmployeeOnboarding from "./pages/EmployeeOnboarding";
+import AddOnboardEmployeeEntry from "./pages/AddOnboardEmployeeEntry";
+import OnboardingTracker from "./pages/OnboardingTracker";
 import EmployeeExits from "./pages/EmployeeExits";
 import LineManagers from "./pages/LineManagers";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
@@ -130,6 +132,15 @@ function App() {
         />
 
         <Route
+          path="/employees/add"
+          element={
+            <PermissionLayout permission="employees.create">
+              <AddOnboardEmployeeEntry />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
           path="/employees/directory"
           element={
             <PermissionLayout
@@ -153,7 +164,25 @@ function App() {
           path="/employees/onboarding"
           element={
             <PermissionLayout permission="employees.view">
+              <OnboardingTracker />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/onboarding/workflows"
+          element={
+            <PermissionLayout permission="employees.view">
               <EmployeeOnboarding />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/:employeeNumber/onboarding"
+          element={
+            <PermissionLayout permission="employees.view">
+              <EmployeeOnboarding initialTab="STATUS" />
             </PermissionLayout>
           }
         />

@@ -11,6 +11,18 @@ const {
   requireAuth,
   requirePermission,
 } = require("../middleware/authMiddleware");
+const {
+  createTasksFromTemplate,
+  listOnboardingTasks,
+  serializeTask,
+  updateOnboardingTask,
+} = require("../services/employeeOnboardingTaskService");
+const {
+  assertTenantNinAvailable,
+} = require("../services/employeeIdentityService");
+const {
+  validateOnboardingSection,
+} = require("../services/onboardingSectionValidationService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -279,6 +291,7 @@ async function applySectionProgress({
   sectionData,
   completedItemKeys,
   userId,
+  finalizeSection = true,
 }) {
   const sectionProgress = {
     ...(onboarding.sectionProgress || {}),
@@ -290,9 +303,9 @@ async function applySectionProgress({
   const completedItems =
     completedItemKeys.length;
 
-  const completed =
-    completedItems >=
-    section.items.length;
+  const completed = finalizeSection
+    ? completedItems >= section.items.length
+    : previous.completed === true;
 
   sectionProgress[sectionKey] = {
     ...previous,
@@ -353,27 +366,29 @@ async function applySectionProgress({
       completionPercent,
       currentStage:
         onboardingCompleted
-          ? "Completed"
+          ? "Ready for Completion"
           : nextSection?.label ||
             onboarding.currentStage,
       status:
         onboardingCompleted
-          ? "COMPLETED"
+          ? "READY_FOR_ACTIVATION"
           : "IN_PROGRESS",
-      completedAt:
-        onboardingCompleted
-          ? new Date()
-          : null,
-      completedByUserId:
-        onboardingCompleted
-          ? userId || null
-          : null,
+      completedAt: null,
+      completedByUserId: null,
     },
     include: {
       employee: true,
       template: true,
     },
   });
+}
+
+function hasMeaningfulSectionInput(value) {
+  if (Array.isArray(value)) return value.some(hasMeaningfulSectionInput);
+  if (value && typeof value === "object") {
+    return Object.values(value).some(hasMeaningfulSectionInput);
+  }
+  return value !== null && value !== undefined && String(value).trim() !== "";
 }
 
 router.get(
@@ -499,7 +514,7 @@ router.get(
   requirePermission("employees.view"),
   async (req, res) => {
     try {
-      const data =
+      const rows =
         await prisma.employeeOnboarding.findMany({
           where: {
             organizationId:
@@ -542,11 +557,166 @@ router.get(
                 email: true,
               },
             },
+            tasks: {
+              include: {
+                owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+                completedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+              },
+              orderBy: { createdAt: "asc" },
+            },
           },
           orderBy: {
             updatedAt: "desc",
           },
         });
+
+      /*
+       * A legacy duplicate may exist where an active onboarding row was
+       * created before the employee's completed onboarding row. That stale
+       * row must never appear as a second current onboarding record.
+       *
+       * Preserve a genuinely later onboarding (for example, a future
+       * employment episode) by comparing its creation time with the latest
+       * completed onboarding boundary instead of blindly hiding all history.
+       */
+      const latestCompletedByEmployee = new Map();
+
+      for (const record of rows) {
+        if (record.status !== "COMPLETED") {
+          continue;
+        }
+
+        const current =
+          latestCompletedByEmployee.get(record.employeeId);
+        const recordBoundary = new Date(
+          record.completedAt ||
+            record.updatedAt ||
+            record.createdAt ||
+            0
+        ).getTime();
+        const currentBoundary = current
+          ? new Date(
+              current.completedAt ||
+                current.updatedAt ||
+                current.createdAt ||
+                0
+            ).getTime()
+          : -1;
+
+        if (!current || recordBoundary > currentBoundary) {
+          latestCompletedByEmployee.set(
+            record.employeeId,
+            record
+          );
+        }
+      }
+
+      const isStaleActiveRecord = (record) => {
+        if (record.status === "COMPLETED") {
+          return false;
+        }
+
+        const completed =
+          latestCompletedByEmployee.get(record.employeeId);
+
+        if (!completed) {
+          return false;
+        }
+
+        const activeCreatedAt =
+          new Date(record.createdAt || 0).getTime();
+        const completedBoundary =
+          new Date(
+            completed.completedAt ||
+              completed.updatedAt ||
+              completed.createdAt ||
+              0
+          ).getTime();
+
+        return (
+          Number.isFinite(activeCreatedAt) &&
+          Number.isFinite(completedBoundary) &&
+          activeCreatedAt <= completedBoundary
+        );
+      };
+
+      const preferredActiveOnboardingByEmployee = new Map();
+
+      for (const record of rows) {
+        if (
+          record.status === "COMPLETED" ||
+          isStaleActiveRecord(record)
+        ) {
+          continue;
+        }
+
+        const key = record.employeeId;
+        const current =
+          preferredActiveOnboardingByEmployee.get(key);
+
+        if (!current) {
+          preferredActiveOnboardingByEmployee.set(
+            key,
+            record
+          );
+          continue;
+        }
+
+        const recordProgress =
+          Number(record.completionPercent || 0);
+        const currentProgress =
+          Number(current.completionPercent || 0);
+
+        const recordUpdatedAt =
+          new Date(record.updatedAt || 0).getTime();
+        const currentUpdatedAt =
+          new Date(current.updatedAt || 0).getTime();
+
+        if (
+          recordProgress > currentProgress ||
+          (
+            recordProgress === currentProgress &&
+            recordUpdatedAt > currentUpdatedAt
+          )
+        ) {
+          preferredActiveOnboardingByEmployee.set(
+            key,
+            record
+          );
+        }
+      }
+
+      const visibleRows = rows.filter((record) => {
+        if (record.status === "COMPLETED") {
+          return true;
+        }
+
+        if (isStaleActiveRecord(record)) {
+          return false;
+        }
+
+        return (
+          preferredActiveOnboardingByEmployee.get(
+            record.employeeId
+          )?.id === record.id
+        );
+      });
+
+      const data = visibleRows.map((record) => {
+        const onboardingCompleted = record.status === "COMPLETED" || Number(record.completionPercent || 0) >= 100;
+        const tasks = (record.tasks || []).map((task) =>
+          serializeTask(task, new Date(), record.sectionProgress, onboardingCompleted)
+        );
+        return {
+          ...record,
+          tasks,
+          taskSummary: {
+            total: tasks.length,
+            outstanding: tasks.filter((task) => !["COMPLETED", "NOT_APPLICABLE"].includes(task.status)).length,
+            overdue: tasks.filter((task) => task.isOverdue).length,
+          },
+        };
+      });
 
       return res.json({
         status: "success",
@@ -867,23 +1037,71 @@ router.post(
         });
       }
 
-      const existing =
-        await prisma.employeeOnboarding.findFirst({
-          where: {
-            organizationId,
-            employeeId:
-              employee.id,
-            status: {
-              not: "COMPLETED",
+      const [existing, latestCompleted] =
+        await Promise.all([
+          prisma.employeeOnboarding.findFirst({
+            where: {
+              organizationId,
+              employeeId: employee.id,
+              status: { not: "COMPLETED" },
             },
-          },
-        });
+            orderBy: [
+              { completionPercent: "desc" },
+              { updatedAt: "desc" },
+            ],
+          }),
+          prisma.employeeOnboarding.findFirst({
+            where: {
+              organizationId,
+              employeeId: employee.id,
+              status: "COMPLETED",
+            },
+            orderBy: [
+              { completedAt: "desc" },
+              { updatedAt: "desc" },
+            ],
+          }),
+        ]);
+
+      if (existing && latestCompleted) {
+        const activeCreatedAt =
+          new Date(existing.createdAt || 0).getTime();
+        const completedBoundary =
+          new Date(
+            latestCompleted.completedAt ||
+              latestCompleted.updatedAt ||
+              latestCompleted.createdAt ||
+              0
+          ).getTime();
+
+        if (activeCreatedAt <= completedBoundary) {
+          return res.json({
+            status: "success",
+            code: "ONBOARDING_ALREADY_COMPLETED",
+            message:
+              "This employee's onboarding is already completed. Review the completed onboarding record.",
+            data: latestCompleted,
+          });
+        }
+      }
 
       if (existing) {
-        return res.status(409).json({
-          status: "error",
+        return res.json({
+          status: "success",
+          code: "ACTIVE_ONBOARDING_REUSED",
           message:
-            "This employee already has an active onboarding process.",
+            "Existing active onboarding opened.",
+          data: existing,
+        });
+      }
+
+      if (latestCompleted) {
+        return res.json({
+          status: "success",
+          code: "ONBOARDING_ALREADY_COMPLETED",
+          message:
+            "This employee's onboarding is already completed. Review the completed onboarding record.",
+          data: latestCompleted,
         });
       }
 
@@ -892,8 +1110,8 @@ router.post(
           template.sections
         );
 
-      const data =
-        await prisma.employeeOnboarding.create({
+      const data = await prisma.$transaction(async (tx) => {
+        const onboarding = await tx.employeeOnboarding.create({
           data: {
             organizationId,
             employeeId:
@@ -916,11 +1134,19 @@ router.post(
             startedAt:
               new Date(),
           },
-          include: {
-            employee: true,
-            template: true,
-          },
+          select: { id: true },
         });
+
+        await createTasksFromTemplate(tx, {
+          organizationId,
+          onboardingId: onboarding.id,
+          sections,
+        });
+        return tx.employeeOnboarding.findUnique({
+          where: { id: onboarding.id },
+          include: { employee: true, template: true, tasks: true },
+        });
+      });
 
       return res.status(201).json({
         status: "success",
@@ -944,6 +1170,64 @@ router.post(
         message:
           "Unable to start employee onboarding.",
       });
+    }
+  }
+);
+
+router.get(
+  "/task-owners",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const data = await prisma.user.findMany({
+        where: { organizationId: req.auth.organizationId, isActive: true },
+        select: { id: true, firstName: true, lastName: true, email: true },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }, { email: "asc" }],
+      });
+      return res.json({ status: "success", data });
+    } catch (error) {
+      console.error("Load onboarding task owners error:", error);
+      return res.status(500).json({ status: "error", message: "Unable to load onboarding task owners." });
+    }
+  }
+);
+
+router.get(
+  "/records/:id/tasks",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const data = await listOnboardingTasks(prisma, {
+        organizationId: req.auth.organizationId,
+        onboardingId: req.params.id,
+      });
+      return res.json({ status: "success", data });
+    } catch (error) {
+      const status = error.code === "ONBOARDING_NOT_FOUND" ? 404 : 500;
+      if (status === 500) console.error("Load onboarding tasks error:", error);
+      return res.status(status).json({ status: "error", message: status === 404 ? error.message : "Unable to load onboarding checklist." });
+    }
+  }
+);
+
+router.patch(
+  "/records/:id/tasks/:taskId",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const data = await updateOnboardingTask(prisma, {
+        organizationId: req.auth.organizationId,
+        onboardingId: req.params.id,
+        taskId: req.params.taskId,
+        actorUserId: req.auth.userId,
+        input: req.body,
+      });
+      return res.json({ status: "success", message: "Onboarding checklist task updated.", data });
+    } catch (error) {
+      const clientCodes = new Set(["INVALID_TASK_STATUS", "NOT_APPLICABLE_REASON_REQUIRED", "INVALID_DUE_DATE", "INVALID_TASK_OWNER"]);
+      const status = error.code === "TASK_NOT_FOUND" ? 404 : clientCodes.has(error.code) ? 400 : 500;
+      if (status === 500) console.error("Update onboarding task error:", error);
+      return res.status(status).json({ status: "error", code: error.code, message: status === 500 ? "Unable to update onboarding checklist task." : error.message });
     }
   }
 );
@@ -1210,6 +1494,7 @@ router.post(
           completedItemKeys,
           userId:
             req.auth.userId,
+          finalizeSection: false,
         });
 
       return res.status(201).json({
@@ -1283,6 +1568,83 @@ async function recalculateDocumentsProgress({
     userId,
   });
 }
+
+router.post(
+  "/records/:id/documents/complete",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const onboarding = await prisma.employeeOnboarding.findFirst({
+        where: {
+          id: req.params.id,
+          organizationId: req.auth.organizationId,
+        },
+        include: { template: true },
+      });
+
+      if (!onboarding) {
+        return res.status(404).json({
+          status: "error",
+          message: "Employee onboarding record not found.",
+        });
+      }
+
+      const sections = normalizeSections(onboarding.template.sections);
+      const section = sections.find((item) => item.key === "documents");
+      if (!section) {
+        return res.status(404).json({
+          status: "error",
+          message: "Documents section is not configured for this workflow.",
+        });
+      }
+
+      const documents = await prisma.employeeDocument.findMany({
+        where: {
+          organizationId: req.auth.organizationId,
+          onboardingId: onboarding.id,
+        },
+      });
+      const completedItemKeys = buildCompletion("documents", {}, documents);
+
+      if (completedItemKeys.length < section.items.length) {
+        return res.status(400).json({
+          status: "error",
+          code: "DOCUMENT_REQUIREMENTS_INCOMPLETE",
+          message: `Upload all required documents before completing this section (${completedItemKeys.length}/${section.items.length}).`,
+        });
+      }
+
+      const sectionData = { ...(onboarding.sectionData || {}) };
+      sectionData.documents = {
+        ...(sectionData.documents || {}),
+        uploadedCount: documents.length,
+        completedAt: new Date().toISOString(),
+      };
+
+      const data = await applySectionProgress({
+        onboarding,
+        section,
+        sectionKey: "documents",
+        sectionData,
+        completedItemKeys,
+        userId: req.auth.userId,
+        finalizeSection: true,
+      });
+
+      return res.json({
+        status: "success",
+        message: "Documents section completed successfully.",
+        data,
+      });
+    } catch (error) {
+      console.error("Complete onboarding documents error:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "Unable to complete the Documents section.",
+      });
+    }
+  }
+);
 
 router.delete(
   "/records/:id/documents/:documentId",
@@ -1538,10 +1900,48 @@ router.patch(
         ...(req.body?.data || {}),
       };
 
+      const submittedSectionIsBlank = buildCompletion(req.params.sectionKey, incomingData).length === 0;
+
+      if (
+        req.params.sectionKey !== "personal-details" &&
+        section.required !== false &&
+        submittedSectionIsBlank &&
+        !hasMeaningfulSectionInput(incomingData)
+      ) {
+        const validation =
+          validateOnboardingSection(
+            req.params.sectionKey,
+            incomingData
+          );
+
+        return res.status(422).json({
+          status: "error",
+          code: "ONBOARDING_SECTION_INCOMPLETE",
+          message:
+            `${section.label} is incomplete. Complete the highlighted fields.`,
+          details: {
+            sectionKey: req.params.sectionKey,
+            fields: validation.fields,
+          },
+        });
+      }
+
       if (
         req.params.sectionKey ===
         "personal-details"
       ) {
+        if (
+          !hasText(incomingData.fullName) ||
+          !hasText(incomingData.email) ||
+          !hasText(incomingData.phone)
+        ) {
+          return res.status(400).json({
+            status: "error",
+            code: "ONBOARDING_SECTION_REQUIRED",
+            message: "Full name, email address and phone number are required.",
+          });
+        }
+
         const personal = {
           ...(
             sectionData[
@@ -1630,6 +2030,81 @@ router.patch(
             personal.gender
           );
 
+        const validation =
+          validateOnboardingSection(
+            "personal-details",
+            personal
+          );
+
+        if (!validation.valid) {
+          return res.status(422).json({
+            status: "error",
+            code: "ONBOARDING_SECTION_INCOMPLETE",
+            message:
+              `${section.label} is incomplete. Complete the highlighted field${validation.fields.length === 1 ? "" : "s"}.`,
+            details: {
+              sectionKey:
+                req.params.sectionKey,
+              fields:
+                validation.fields,
+            },
+          });
+        }
+
+        let normalizedNin = null;
+
+        if (
+          String(personal.idType || "")
+            .trim()
+            .toUpperCase() === "NIN"
+        ) {
+          try {
+            normalizedNin =
+              await assertTenantNinAvailable(
+                prisma,
+                {
+                  organizationId:
+                    req.auth.organizationId,
+                  employeeId:
+                    onboarding.employeeId,
+                  value:
+                    personal.idNumber,
+                }
+              );
+
+            personal.idNumber =
+              normalizedNin;
+          } catch (identityError) {
+            return res.status(
+              identityError.code ===
+                "DUPLICATE_EMPLOYEE_NIN"
+                ? 409
+                : 400
+            ).json({
+              status: "error",
+              code:
+                identityError.code ||
+                "INVALID_NIN",
+              message:
+                identityError.message ||
+                "Unable to validate NIN.",
+              details: {
+                sectionKey:
+                  "personal-details",
+                fields: [
+                  {
+                    field: "idNumber",
+                    label: "ID Number",
+                    message:
+                      identityError.message ||
+                      "Unable to validate NIN.",
+                  },
+                ],
+              },
+            });
+          }
+        }
+
         sectionData[
           "personal-details"
         ] = personal;
@@ -1654,7 +2129,12 @@ router.patch(
                   normalizedPhone,
                 gender:
                   personal.gender,
-              },
+                ...(normalizedNin
+                  ? {
+                      nationalIdentificationNumber:
+                        normalizedNin,
+                    }
+                  : {}),              },
             });
 
             if (
@@ -1695,6 +2175,31 @@ router.patch(
         sectionData[
           req.params.sectionKey
         ] || {};
+
+      if (
+        section.required !== false
+      ) {
+        const validation =
+          validateOnboardingSection(
+            req.params.sectionKey,
+            savedData
+          );
+
+        if (!validation.valid) {
+          return res.status(422).json({
+            status: "error",
+            code: "ONBOARDING_SECTION_INCOMPLETE",
+            message:
+              `${section.label} is incomplete. Complete the highlighted field${validation.fields.length === 1 ? "" : "s"}.`,
+            details: {
+              sectionKey:
+                req.params.sectionKey,
+              fields:
+                validation.fields,
+            },
+          });
+        }
+      }
 
       const completedItemKeys =
         buildCompletion(
@@ -1744,4 +2249,195 @@ router.patch(
   }
 );
 
+router.post(
+  "/records/:id/complete",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const organizationId =
+        req.auth.organizationId;
+
+      const onboarding =
+        await prisma.employeeOnboarding.findFirst({
+          where: {
+            id: req.params.id,
+            organizationId,
+          },
+          include: {
+            template: true,
+          },
+        });
+
+      if (!onboarding) {
+        return res.status(404).json({
+          status: "error",
+          code: "ONBOARDING_NOT_FOUND",
+          message:
+            "Employee onboarding record not found.",
+        });
+      }
+
+      if (
+        onboarding.status === "COMPLETED"
+      ) {
+        return res.json({
+          status: "success",
+          code:
+            "ONBOARDING_ALREADY_COMPLETED",
+          message:
+            "Employee onboarding is already completed.",
+          data: onboarding,
+        });
+      }
+
+      const sections =
+        normalizeSections(
+          onboarding.template.sections
+        );
+
+      const incompleteSections =
+        sections
+          .filter(
+            (section) =>
+              section.required !== false &&
+              onboarding.sectionProgress?.[
+                section.key
+              ]?.completed !== true
+          )
+          .map((section) => ({
+            sectionKey:
+              section.key,
+            sectionLabel:
+              section.label,
+            fields:
+              validateOnboardingSection(
+                section.key,
+                onboarding.sectionData?.[
+                  section.key
+                ] || {}
+              ).fields,
+          }));
+
+      const tasks =
+        await listOnboardingTasks(
+          prisma,
+          {
+            organizationId,
+            onboardingId:
+              onboarding.id,
+          }
+        );
+
+      /*
+       * completionTaskProjection:
+       * Completion must evaluate the same effective task state
+       * shown by the onboarding tracker. Pristine checklist
+       * items belonging to an already completed section must
+       * not block final onboarding completion.
+       */
+      const completionTaskProjection =
+        tasks.map((task) =>
+          serializeTask(
+            task,
+            new Date(),
+            onboarding.sectionProgress,
+            onboarding.status === "COMPLETED" ||
+              Number(
+                onboarding.completionPercent || 0
+              ) >= 100
+          )
+        );
+
+      const blockingTasks =
+        completionTaskProjection
+          .filter(
+            (task) =>
+              task.isRequired &&
+              ![
+                "COMPLETED",
+                "NOT_APPLICABLE",
+              ].includes(task.status)
+          )
+          .map((task) => ({
+            id: task.id,
+            title: task.title,
+            category: task.category,
+          }));
+
+      if (
+        incompleteSections.length ||
+        blockingTasks.length
+      ) {
+        return res.status(422).json({
+          status: "error",
+          code:
+            "ONBOARDING_COMPLETION_BLOCKED",
+          message:
+            incompleteSections.length
+              ? `${incompleteSections[0].sectionLabel} is incomplete${
+                  incompleteSections[0].fields?.[0]?.label
+                    ? `: ${incompleteSections[0].fields[0].label}`
+                    : ""
+                }.`
+              : blockingTasks.length
+                ? `Outstanding onboarding task: ${blockingTasks[0].title}.`
+                : "Onboarding cannot yet be completed.",
+          details: {
+            incompleteSections,
+            blockingTasks,
+          },
+        });
+      }
+
+      const data =
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.employeeOnboarding.updateMany({
+              where: {
+                id: onboarding.id,
+                organizationId,
+                status: { not: "COMPLETED" },
+              },
+              data: {
+                status: "COMPLETED",
+                completionPercent: 100,
+                currentStage: "Completed",
+                completedAt: new Date(),
+                completedByUserId: req.auth.userId,
+              },
+            });
+
+            return tx.employeeOnboarding.findFirst({
+              where: {
+                id: onboarding.id,
+                organizationId,
+              },
+              include: {
+                employee: true,
+                template: true,
+              },
+            });
+          }
+        );
+
+      return res.json({
+        status: "success",
+        message:
+          "Employee onboarding completed successfully.",
+        data,
+      });
+    } catch (error) {
+      console.error(
+        "Complete employee onboarding error:",
+        error
+      );
+
+      return res.status(500).json({
+        status: "error",
+        message:
+          "Unable to complete employee onboarding.",
+      });
+    }
+  }
+);
 module.exports = router;

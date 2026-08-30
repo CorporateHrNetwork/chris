@@ -12,10 +12,12 @@ import AddEmployee from "../components/employees/AddEmployee";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 
-function Employees() {
+function Employees({
+  initialAddEmployee = false,
+}) {
   const navigate = useNavigate();
   const [showAddEmployee, setShowAddEmployee] =
-    useState(false);
+    useState(initialAddEmployee);
   const [createdEmployee, setCreatedEmployee] = useState(null);
   const successTimer = useRef(null);
 
@@ -214,7 +216,7 @@ function Employees() {
           </div>
           <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
             <button type="button" style={successSecondaryButton} onClick={() => followCreationAction(`/employees/${createdEmployee.employeeNumber}`)}>View Employee Profile</button>
-            <button type="button" style={successPrimaryButton} onClick={() => followCreationAction(`/employees/onboarding?employeeNumber=${encodeURIComponent(createdEmployee.employeeNumber)}`)}>Continue Onboarding</button>
+            <button type="button" style={successPrimaryButton} onClick={() => followCreationAction(`/employees/${encodeURIComponent(createdEmployee.employeeNumber)}/onboarding`)}>Continue Onboarding</button>
             <button type="button" aria-label="Dismiss employee creation confirmation" style={successDismissButton} onClick={() => setCreatedEmployee(null)}>×</button>
           </div>
         </section>
