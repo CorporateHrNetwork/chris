@@ -2,12 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-
 const repoRoot = path.resolve(__dirname, "..", "..");
-function read(relativePath) { return fs.readFileSync(path.resolve(repoRoot, relativePath), "utf8"); }
-function requireText(source, values, label) {
-  for (const value of values) assert.ok(source.includes(value), `${label} must include: ${value}`);
-}
+const read = (relativePath) => fs.readFileSync(path.resolve(repoRoot, relativePath), "utf8");
+const requireText = (source, values, label) => values.forEach((value) => assert.ok(source.includes(value), `${label} must include: ${value}`));
 
 test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   const foundationMigration = read("backend/prisma/migrations/20260904201500_activate_payroll_release1/migration.sql");
