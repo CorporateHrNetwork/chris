@@ -266,7 +266,7 @@ model UserLocation {
   // User and assigned location must belong to the
   // same organization.
 
-  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User                 @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
   location OrganizationLocation @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
@@ -297,6 +297,7 @@ model Role {
   @@index([organizationId])
   @@map("roles")
 }
+
 model Permission {
   id          String  @id @default(uuid())
   key         String  @unique
@@ -598,6 +599,7 @@ model EmployeeEmploymentEpisode {
 
   startStatus EmployeeStatus
   endStatus   EmployeeStatus?
+
   startDepartmentId String?
   endDepartmentId   String?
 
@@ -1497,6 +1499,7 @@ model DesignationLifecycleEvent {
   notes  String?
 
   performedByUserId String?
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   designation Designation @relation(fields: [organizationId, designationId], references: [organizationId, id], onDelete: Restrict)
