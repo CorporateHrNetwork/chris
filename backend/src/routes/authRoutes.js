@@ -279,17 +279,29 @@ router.post(
         }
       );
 
-      return res.status(200).json({
+      const responseBody = {
         ...genericResponse,
+      };
 
-        /*
-          DEVELOPMENT ONLY.
-        */
-        data: {
+      /*
+        Local development keeps the existing browser-assisted
+        reset flow. Production never returns the raw reset token
+        through the API response; delivery must happen through an
+        approved out-of-band channel.
+      */
+      if (
+        (process.env.NODE_ENV || "development") !==
+        "production"
+      ) {
+        responseBody.data = {
           resetToken: rawToken,
           expiresAt,
-        },
-      });
+        };
+      }
+
+      return res
+        .status(200)
+        .json(responseBody);
     } catch (error) {
       console.error(
         "Forgot password error:",
