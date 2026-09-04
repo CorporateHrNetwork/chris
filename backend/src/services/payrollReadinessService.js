@@ -53,9 +53,25 @@ async function activeSalaryRates(prismaClient, organizationId) {
     );
     return new Map(rows.map((row) => [row.employeeId, row]));
   } catch (error) {
-    // Before the Release-1 payroll migration is deployed, preserve the
-    // historical safe posture instead of crashing the readiness dashboard.
     if (String(error?.message || "").includes("payroll_salary_rates")) return new Map();
+    throw error;
+  }
+}
+
+async function activePayrollPolicy(prismaClient, organizationId) {
+  try {
+    const rows = await prismaClient.$queryRawUnsafe(
+      `SELECT "id","code","versionNumber","jurisdiction"
+         FROM "payroll_policy_versions"
+        WHERE "organizationId"=$1 AND "status"='ACTIVE'
+          AND "effectiveFrom" <= CURRENT_DATE
+          AND ("effectiveTo" IS NULL OR "effectiveTo" >= CURRENT_DATE)
+        ORDER BY "effectiveFrom" DESC,"versionNumber" DESC LIMIT 1`,
+      organizationId
+    );
+    return rows[0] || null;
+  } catch (error) {
+    if (String(error?.message || "").includes("payroll_policy_versions")) return null;
     throw error;
   }
 }
@@ -77,7 +93,7 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   });
 
   const employeeIds = employees.map((employee) => employee.id);
-  const [onboardings, attendanceSetting, salaryRateByEmployee] = await Promise.all([
+  const [onboardings, attendanceSetting, salaryRateByEmployee, payrollPolicy] = await Promise.all([
     employeeIds.length
       ? prismaClient.employeeOnboarding.findMany({
           where: { organizationId, employeeId: { in: employeeIds } },
@@ -97,6 +113,7 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       select: { basis: true },
     }),
     activeSalaryRates(prismaClient, organizationId),
+    activePayrollPolicy(prismaClient, organizationId),
   ]);
 
   const latestOnboardingByEmployee = new Map();
@@ -171,6 +188,9 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
     ? Math.round((completedDimensions / readinessDimensions) * 100)
     : 0;
   summary.attendanceBasis = attendanceSetting?.basis || "SYSTEM";
+  summary.statutoryPolicyConfigured = Boolean(payrollPolicy);
+  summary.statutoryPolicyCode = payrollPolicy?.code || null;
+  summary.statutoryPolicyVersion = payrollPolicy?.versionNumber || null;
 
   const missingCompensation = summary.currentEmployees - summary.compensationReady;
   const systemBlockers = [];
@@ -180,20 +200,37 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       message: `${missingCompensation} current employee(s) still require an effective salary rate.`,
     });
   }
+  if (!payrollPolicy) {
+    systemBlockers.push({
+      code: "PAYROLL_STATUTORY_POLICY_NOT_CONFIGURED",
+      message: "An effective Nigeria payroll policy must be configured before statutory payroll calculation.",
+    });
+  }
+
+  const executionEnabled =
+    summary.currentEmployees > 0 &&
+    summary.readyForExecution === summary.currentEmployees;
 
   return {
     generatedAt: new Date().toISOString(),
-    executionEnabled:
-      summary.currentEmployees > 0 && summary.readyForExecution === summary.currentEmployees,
-    finalizationEnabled: false,
+    executionEnabled,
+    statutoryCalculationEnabled: executionEnabled && Boolean(payrollPolicy),
+    finalizationEnabled: executionEnabled && Boolean(payrollPolicy),
+    paymentTransmissionEnabled: false,
     systemBlockers,
-    finalizationBlockers: [
-      {
-        code: "STATUTORY_AUTOMATION_NOT_ENABLED",
-        message:
-          "Release-1 can calculate and approve controlled payroll previews, but PAYE/pension statutory calculations and payment transmission are not automated. Approval requires explicit manual statutory review.",
-      },
-    ],
+    finalizationBlockers: payrollPolicy
+      ? [
+          {
+            code: "PAYMENT_TRANSMISSION_SEPARATE_CONTROL",
+            message: "PAYE and pension are calculated by CHRiS, but payroll approval does not itself transmit bank/payment instructions or statutory remittances.",
+          },
+        ]
+      : [
+          {
+            code: "PAYROLL_STATUTORY_POLICY_NOT_CONFIGURED",
+            message: "Apply/configure the effective Nigeria payroll policy before payroll finalization.",
+          },
+        ],
     summary,
     employees: rows,
   };
