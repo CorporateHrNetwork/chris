@@ -368,6 +368,25 @@ router.get("/runs/:id/lines", requirePermission("payroll.view"), async (req, res
 
 router.post("/runs/draft", requirePermission("payroll.process"), async (req, res) => {
   try {
+    const readiness = await getPayrollReadiness({
+      organizationId: req.auth.organizationId,
+    });
+    if (!readiness.executionEnabled) {
+      const incompleteEmployees = (readiness.employees || [])
+        .filter((employee) => !employee.readyForExecution)
+        .slice(0, 25)
+        .map((employee) => ({
+          employeeNumber: employee.employeeNumber,
+          blockers: employee.blockers,
+        }));
+      throw payroll.operationalError(
+        "PAYROLL_EXECUTION_READINESS_INCOMPLETE",
+        `${Math.max(0, Number(readiness.summary?.currentEmployees || 0) - Number(readiness.summary?.readyForExecution || 0))} current employee(s) are not ready for draft payroll execution.`,
+        409,
+        { employees: incompleteEmployees }
+      );
+    }
+
     const data = await payroll.executeDraftPayroll({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
