@@ -322,16 +322,20 @@ function AttendanceDashboard() {
           <QuickActionCard
             key="schedule"
             title="Shift Schedule"
-            subtitle="Planned scheduling workspace"
+            subtitle="Review employee shift assignments"
             icon={<FaCalendarAlt />}
-            onClick={() => {}}
+            onClick={() =>
+              navigate("/attendance/shift-schedule")
+            }
           />,
           <QuickActionCard
             key="overtime"
             title="Overtime"
-            subtitle="Planned overtime analytics"
+            subtitle="Review overtime analytics"
             icon={<FaClock />}
-            onClick={() => {}}
+            onClick={() =>
+              navigate("/attendance/overtime")
+            }
           />,
         ]}
       />
