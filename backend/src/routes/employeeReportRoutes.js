@@ -28,7 +28,8 @@ router.get(
   "/workforce",
 
   requirePermission(
-    "employees.view"
+    "employees.view",
+    "reports.view"
   ),
 
   async (req, res) => {
@@ -109,7 +110,8 @@ router.get(
   "/employees/:employeeNumber/lifecycle",
 
   requirePermission(
-    "employees.view"
+    "employees.view",
+    "reports.view"
   ),
 
   async (req, res) => {
