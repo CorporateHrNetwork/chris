@@ -15,10 +15,10 @@ export default function EmployeeDataOperationsLauncher({
       >
         <header style={headerStyle}>
           <div>
-            <div style={eyebrowStyle}>EMPLOYEE ENTRY</div>
-            <h2 id="employee-data-operations-title" style={titleStyle}>Add Employee</h2>
+            <div style={eyebrowStyle}>EMPLOYEE DATA OPERATIONS</div>
+            <h2 id="employee-data-operations-title" style={titleStyle}>Employee Entry & Assignment</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close Add Employee options" style={closeStyle}>×</button>
+          <button type="button" onClick={onClose} aria-label="Close employee data options" style={closeStyle}>×</button>
         </header>
 
         <div style={optionListStyle}>
@@ -30,8 +30,8 @@ export default function EmployeeDataOperationsLauncher({
           />
           <Option
             icon="⇧"
-            title="Bulk upload employees"
-            description="Validate and import multiple employees from the CHRiS Excel template."
+            title="Bulk upload / assign employees"
+            description="Create employees from Excel or assign Employment Type and Cost Centre to existing employees individually or in bulk."
             onClick={onBulk}
           />
           <Option
