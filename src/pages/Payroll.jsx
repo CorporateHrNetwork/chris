@@ -28,6 +28,7 @@ import {
 } from "../components/dashboard";
 import PayrollWorkspace from "./payroll/PayrollWorkspace";
 import NigeriaPayrollWorkspace from "./payroll/NigeriaPayrollWorkspace";
+import NigeriaPayrollSupplementWorkspace from "./payroll/NigeriaPayrollSupplementWorkspace";
 import { apiRequest } from "../services/api";
 
 const WORKSPACES = new Set([
@@ -43,7 +44,8 @@ const WORKSPACES = new Set([
   "statutory",
   "rent-relief",
 ]);
-const NIGERIA_WORKSPACES = new Set(["execute", "statutory", "rent-relief"]);
+const NIGERIA_CORE_WORKSPACES = new Set(["execute", "statutory", "rent-relief"]);
+const NIGERIA_SUPPLEMENT_WORKSPACES = new Set(["allowances", "deductions", "payslips", "approvals"]);
 
 function ratioPercent(value, total) {
   if (!total) return 0;
@@ -85,9 +87,9 @@ function Payroll() {
   }, [workspace]);
 
   if (WORKSPACES.has(workspace)) {
-    return NIGERIA_WORKSPACES.has(workspace)
-      ? <NigeriaPayrollWorkspace mode={workspace} />
-      : <PayrollWorkspace mode={workspace} />;
+    if (NIGERIA_CORE_WORKSPACES.has(workspace)) return <NigeriaPayrollWorkspace mode={workspace} />;
+    if (NIGERIA_SUPPLEMENT_WORKSPACES.has(workspace)) return <NigeriaPayrollSupplementWorkspace mode={workspace} />;
+    return <PayrollWorkspace mode={workspace} />;
   }
 
   const summary = readiness?.summary || {};
