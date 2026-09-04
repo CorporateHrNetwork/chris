@@ -18,6 +18,7 @@ import {
 
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
+import { API_BASE_URL } from "../services/api";
 
 /*
   CHRIS_TENANT_AWARE_LOGIN
@@ -168,7 +169,7 @@ function Login() {
       setNotice("");
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/login",
+        `${API_BASE_URL}/api/auth/login`,
         {
           method: "POST",
 
@@ -281,7 +282,7 @@ function Login() {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/auth/forgot-password",
+          `${API_BASE_URL}/api/auth/forgot-password`,
           {
             method: "POST",
 
