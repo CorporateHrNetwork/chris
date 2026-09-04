@@ -9,6 +9,31 @@ const STATUS_MAP = {
   Inactive: "INACTIVE",
 };
 
+const EMPLOYMENT_TYPES = [
+  "Full-Time",
+  "Part-Time",
+  "Expatriate",
+  "NYSC / Internship",
+  "Domestic Staff - Housekeeper",
+];
+
+const EMPLOYMENT_TYPE_ALIASES = new Map([
+  ["full-time", "Full-Time"],
+  ["full time", "Full-Time"],
+  ["full-time-employment", "Full-Time"],
+  ["full time employment", "Full-Time"],
+  ["part-time", "Part-Time"],
+  ["part time", "Part-Time"],
+  ["part-time-employment", "Part-Time"],
+  ["part time employment", "Part-Time"],
+  ["expatriate", "Expatriate"],
+  ["nysc / internship", "NYSC / Internship"],
+  ["nysc/internship", "NYSC / Internship"],
+  ["nysc internship", "NYSC / Internship"],
+  ["internship", "NYSC / Internship"],
+  ["domestic staff - housekeeper", "Domestic Staff - Housekeeper"],
+]);
+
 const ERROR_DEFINITIONS = {
   EMPLOYEE_REQUIRED_FIELDS_MISSING: [
     400,
@@ -41,6 +66,14 @@ const ERROR_DEFINITIONS = {
     400,
     "Select an active work location from your organization's CHRIS location catalogue.",
   ],
+  INVALID_EMPLOYEE_EMPLOYMENT_TYPE: [
+    400,
+    "Select a valid Employment Type from the CHRIS employment catalogue.",
+  ],
+  INVALID_EMPLOYEE_COST_CENTRE: [
+    400,
+    "Select an active Cost Centre / Operating Unit from your organization's CHRIS structure.",
+  ],
   INVALID_EMPLOYEE_HIRE_DATE: [
     400,
     "Enter a valid Hire Date in YYYY-MM-DD format.",
@@ -71,6 +104,12 @@ function normalizeEmployeeName(value) {
   };
 }
 
+function normalizeEmploymentType(value) {
+  const raw = String(value || "").trim().replace(/\s+/g, " ");
+  if (!raw) return null;
+  return EMPLOYMENT_TYPE_ALIASES.get(raw.toLowerCase()) || null;
+}
+
 function normalizeCreationPayload(input = {}) {
   const requiredValues = [
     input.name,
@@ -88,6 +127,12 @@ function normalizeCreationPayload(input = {}) {
     throw employeeCreationError("INVALID_EMPLOYEE_GENDER");
   }
   if (!name) throw employeeCreationError("INVALID_EMPLOYEE_NAME");
+
+  const rawEmploymentType = String(input.employmentType || "").trim();
+  const employmentType = normalizeEmploymentType(rawEmploymentType);
+  if (rawEmploymentType && !employmentType) {
+    throw employeeCreationError("INVALID_EMPLOYEE_EMPLOYMENT_TYPE");
+  }
 
   const hireDateValue = String(input.hireDate || "").trim();
   let hireDate = null;
@@ -109,6 +154,8 @@ function normalizeCreationPayload(input = {}) {
     departmentId: String(input.departmentId).trim(),
     designationId: String(input.designationId).trim(),
     locationId: String(input.locationId).trim(),
+    costCentreId: String(input.costCentreId || "").trim() || null,
+    employmentType,
     email: String(input.email || "").trim().toLowerCase() || null,
     phone: String(input.phone || "").trim() || null,
     gender,
@@ -218,6 +265,29 @@ async function createEmployeeWithDependencies(
   });
   if (!location) throw employeeCreationError("INVALID_EMPLOYEE_LOCATION");
 
+  let costCentre = null;
+  if (payload.costCentreId) {
+    const now = new Date();
+    costCentre = await prisma.costCentre.findFirst({
+      where: {
+        id: payload.costCentreId,
+        organizationId,
+        status: "ACTIVE",
+        effectiveFrom: { lte: now },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }],
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        status: true,
+        effectiveFrom: true,
+        effectiveTo: true,
+      },
+    });
+    if (!costCentre) throw employeeCreationError("INVALID_EMPLOYEE_COST_CENTRE");
+  }
+
   return prisma.$transaction(async (tx) => {
     const sequenceOwner = await tx.organization.update({
       where: { id: organizationId },
@@ -239,6 +309,8 @@ async function createEmployeeWithDependencies(
         departmentId: department.id,
         designationId: designation.id,
         locationId: location.id,
+        costCentreId: costCentre?.id || null,
+        employmentType: payload.employmentType,
         employeeNumber,
         firstName: payload.firstName,
         middleName: payload.middleName,
@@ -250,7 +322,7 @@ async function createEmployeeWithDependencies(
         status: payload.status,
         ...(payload.hireDate ? { hireDate: payload.hireDate } : {}),
       },
-      include: { department: true, designation: true, location: true },
+      include: { department: true, designation: true, location: true, costCentre: true },
     });
 
     await tx.employeeEmploymentEpisode.create({
@@ -283,7 +355,9 @@ function createEmployee(args) {
 }
 
 module.exports = {
+  EMPLOYMENT_TYPES,
   createEmployee,
   createEmployeeWithDependencies,
   normalizeCreationPayload,
+  normalizeEmploymentType,
 };
