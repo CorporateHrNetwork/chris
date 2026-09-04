@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../services/api";
+import DisciplinaryProcessControls from "../components/employees/DisciplinaryProcessControls";
 
 const tabs = [
   ["CONTRACTS", "Employment Contract Lifecycle"],
@@ -92,6 +93,7 @@ function EmployeeGovernance() {
       {tab === "DISCIPLINE" && (
         <DisciplinePanel
           records={cases}
+          catalog={catalog}
           busy={busy}
           setBusy={setBusy}
           reload={load}
@@ -184,7 +186,7 @@ function ContractPanel({ records, catalog, busy, setBusy, reload, announce, setE
   );
 }
 
-function DisciplinePanel({ records, busy, setBusy, reload, announce, setError }) {
+function DisciplinePanel({ records, catalog, busy, setBusy, reload, announce, setError }) {
   const [form, setForm] = useState({ employeeNumber: "", incidentSummary: "", allegation: "", policyReference: "", policyVersion: "" });
   const [external, setExternal] = useState({ caseId: "", proceedingType: "CRIMINAL", authority: "", referenceNumber: "", status: "OPEN", outcome: "" });
 
@@ -219,6 +221,16 @@ function DisciplinePanel({ records, busy, setBusy, reload, announce, setError })
         <Field label="Policy Version"><input value={form.policyVersion} onChange={(e) => setForm({ ...form, policyVersion: e.target.value })} style={inputStyle} /></Field>
         <div><button disabled={busy} style={primaryButton}>Open Internal Case</button></div>
       </form>
+
+      <DisciplinaryProcessControls
+        records={records}
+        catalog={catalog}
+        busy={busy}
+        setBusy={setBusy}
+        reload={reload}
+        announce={announce}
+        setError={setError}
+      />
 
       <div style={dividerStyle} />
       <form onSubmit={linkExternal} style={formGridStyle}>
