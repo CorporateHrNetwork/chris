@@ -63,6 +63,7 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
       '"rentReliefRate":20',
       '"rentReliefCap":500000',
       '"minimumWageMonthly":70000',
+      '"bands":[{"limit":800000,"rate":0},{"limit":2200000,"rate":15},{"limit":9000000,"rate":18},{"limit":13000000,"rate":21},{"limit":25000000,"rate":23},{"limit":null,"rate":25}]',
       '"employerRate":1',
       '"employeeDeduction":false',
     ],
