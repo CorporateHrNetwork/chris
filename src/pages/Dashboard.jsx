@@ -17,6 +17,91 @@ import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 
 function Dashboard() {
+  /*
+    CHRIS_TENANT_SCOPED_DASHBOARD_KPIS
+
+    Attendance and leave use authenticated APIs whose server-side
+    queries resolve organizationId from the signed-in tenant context.
+
+    Payroll must not display fabricated financial data.
+  */
+  const [operationalSummary, setOperationalSummary] = useState({
+    attendanceRecords: null,
+    pendingLeave: null,
+    loading: true,
+  });
+
+  useEffect(() => {
+    let live = true;
+
+    const loadOperationalSummary = async () => {
+      const now = new Date();
+      const date =
+        now.getFullYear() + "-" +
+        String(now.getMonth() + 1).padStart(2, "0") + "-" +
+        String(now.getDate()).padStart(2, "0");
+
+      const [attendanceResult, leaveResult] =
+        await Promise.allSettled([
+          apiRequest(
+            "/api/attendance/report?from=" +
+              date +
+              "&to=" +
+              date
+          ),
+          apiRequest("/api/leave/requests"),
+        ]);
+
+      if (!live) return;
+
+      const attendanceRecords =
+        attendanceResult.status === "fulfilled"
+          ? Number(
+              attendanceResult.value?.data?.totals?.records ||
+                0
+            )
+          : null;
+
+      const leaveRows =
+        leaveResult.status === "fulfilled" &&
+        Array.isArray(leaveResult.value?.data)
+          ? leaveResult.value.data
+          : null;
+
+      const pendingLeave =
+        leaveRows === null
+          ? null
+          : leaveRows.filter(
+              (request) =>
+                request.status === "PENDING"
+            ).length;
+
+      setOperationalSummary({
+        attendanceRecords,
+        pendingLeave,
+        loading: false,
+      });
+    };
+
+    loadOperationalSummary().catch((error) => {
+      console.error(
+        "Dashboard operational summary error:",
+        error
+      );
+
+      if (live) {
+        setOperationalSummary({
+          attendanceRecords: null,
+          pendingLeave: null,
+          loading: false,
+        });
+      }
+    });
+
+    return () => {
+      live = false;
+    };
+  }, []);
   const [
     employeeSummary,
     setEmployeeSummary,
@@ -107,7 +192,7 @@ function Dashboard() {
   }, []);
 
   return (
-    <div
+    <div className="chris-dashboard"
       style={{
         position: "relative",
         minHeight: "100%",
@@ -142,30 +227,70 @@ function Dashboard() {
               : `${employeeSummary.active} Active • ${employeeSummary.probation} Probation`
           }
           icon="👥"
-          color="#087A43"
+          color="var(--chris-green, #087A43)"
         />
 
         <KpiCard
           title="Attendance"
-          value="198"
-          subtitle="81% Today"
+          value={
+              operationalSummary.loading
+                ? "..."
+                : operationalSummary.attendanceRecords === null
+                ? "—"
+                : String(
+                    operationalSummary.attendanceRecords
+                  )
+            }
+          subtitle={
+              operationalSummary.loading
+                ? "Loading attendance"
+                : operationalSummary.attendanceRecords === null
+                ? "Attendance unavailable"
+                : "Attendance records today"
+            }
           icon="🕒"
           color="#2563EB"
         />
 
         <KpiCard
           title="Pending Leave"
-          value="12"
-          subtitle="Awaiting Approval"
+          value={
+              operationalSummary.loading
+                ? "..."
+                : operationalSummary.pendingLeave === null
+                ? "—"
+                : String(
+                    operationalSummary.pendingLeave
+                  )
+            }
+          subtitle={
+              operationalSummary.loading
+                ? "Loading leave requests"
+                : operationalSummary.pendingLeave === null
+                ? "Leave data unavailable"
+                : "Awaiting Approval"
+            }
           icon="📅"
-          color="#D4AF37"
+          color="var(--chris-gold, #D4AF37)"
         />
 
         {canViewPayroll && (
           <KpiCard
             title="Payroll"
-            value="₦15.2M"
-            subtitle="Completed"
+            value={
+                employeeLoading
+                  ? "..."
+                  : employeeSummary.total === 0
+                  ? "₦0"
+                  : "—"
+              }
+            subtitle={
+                employeeLoading
+                  ? "Loading workforce"
+                  : employeeSummary.total === 0
+                  ? "No payroll records"
+                  : "Awaiting authoritative payroll-run data"
+              }
             icon="💰"
             color="#8B5CF6"
           />
@@ -233,12 +358,11 @@ function MiniStat({
   value,
 }) {
   return (
-    <div
+    <div className="chris-mini-stat"
       style={{
         background:
           "radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, #063722, #02170f)",
-        border:
-          "1px solid rgba(212,175,55,0.72)",
+        border: "1px solid var(--tenant-border, var(--chris-border-gold, rgba(212,175,55,.20)))",
         borderRadius: "16px",
         padding: "18px",
         boxShadow:

@@ -120,7 +120,7 @@ function MainLayout({
         </main>
       </div>
     </div>
-  );
+);
 }
 
 export default MainLayout;

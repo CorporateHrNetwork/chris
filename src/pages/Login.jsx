@@ -19,7 +19,20 @@ import {
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
 
+/*
+  CHRIS_TENANT_AWARE_LOGIN
+
+  Tenant is resolved from:
+    /login?organization=<organization-slug>
+
+  CorporateHr Network remains the safe development fallback.
+*/
 function Login() {
+  const organizationSlug =
+    new URLSearchParams(
+      window.location.search
+    ).get("organization") ||
+    "corporatehr-network";
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
@@ -170,8 +183,7 @@ function Login() {
 
             password,
 
-            organizationSlug:
-              "corporatehr-network",
+            organizationSlug,
           }),
         }
       );
@@ -281,8 +293,7 @@ function Login() {
             body: JSON.stringify({
               email: normalizedEmail,
 
-              organizationSlug:
-                "corporatehr-network",
+              organizationSlug,
             }),
           }
         );

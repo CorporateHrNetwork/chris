@@ -1896,8 +1896,7 @@ function Sidebar() {
         flexDirection:
           "column",
 
-        background:
-          "linear-gradient(180deg, #030705 0%, #06110C 42%, #081A11 100%)",
+        background: "var(--tenant-sidebar-gradient, var(--tenant-shell-gradient, linear-gradient(180deg, #06110C 0%, #030705 100%)))",
 
         color:
           "#FFFFFF",
@@ -1920,7 +1919,7 @@ function Sidebar() {
     >
       {/* CHRIS AMBIENT SIDEBAR DESIGN */}
 
-      <div
+      <div className="chris-sidebar"
         aria-hidden="true"
 
         style={{
@@ -2183,7 +2182,7 @@ function Sidebar() {
               "4px",
 
             color:
-              "#087A43",
+              "var(--chris-green, #087A43)",
 
             textAlign:
               "center",
@@ -2214,8 +2213,7 @@ function Sidebar() {
             marginTop:
               "5px",
 
-            color:
-              "#D4AF37",
+            color: "var(--tenant-accent, var(--chris-gold, #D4AF37))",
 
             textAlign:
               "center",
@@ -2303,8 +2301,7 @@ function Sidebar() {
             padding:
               "5px 12px 9px",
 
-            color:
-              "#D4AF37",
+            color: "var(--tenant-accent, var(--chris-gold, #D4AF37))",
 
             fontSize:
               "9px",
@@ -2661,7 +2658,7 @@ function Sidebar() {
 
                                     background:
                                       isActive
-                                        ? "#D4AF37"
+                                        ? "var(--chris-gold, #D4AF37)"
                                         : "rgba(255,255,255,0.35)",
                                   }}
                                 />

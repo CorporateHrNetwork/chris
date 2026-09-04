@@ -42,16 +42,14 @@ function Topbar() {
   const organizationName =
     organization?.name ||
     "CHRIS";
-
-  return (
+return (
     <header
       style={{
         height: "78px",
         minHeight: "78px",
         flexShrink: 0,
 
-        background:
-          "linear-gradient(90deg, #030705 0%, #06110C 48%, #081A11 100%)",
+        background: "linear-gradient(90deg, #030705 0%, #06110C 48%, #081A11 100%)",
 
         display: "flex",
         alignItems: "center",
@@ -76,7 +74,7 @@ function Topbar() {
     >
       {/* AMBIENT TOPBAR DESIGN */}
 
-      <div
+      <div className="chris-topbar"
         aria-hidden="true"
         style={{
           position: "absolute",
@@ -131,6 +129,7 @@ function Topbar() {
 
       <div
         style={{
+          minHeight: "50px",
           display: "flex",
           alignItems: "center",
           gap: "14px",
@@ -174,7 +173,7 @@ function Topbar() {
         >
           <div
             style={{
-              color: "#087A43",
+color: "#087A43",
               fontSize: "18px",
               fontWeight: "900",
               whiteSpace: "nowrap",
@@ -182,8 +181,7 @@ function Topbar() {
               textOverflow:
                 "ellipsis",
 
-              textShadow:
-                "0 0 8px rgba(8,122,67,0.20)",
+              textShadow: "none",
             }}
           >
             {organizationName}

@@ -1,7 +1,7 @@
 function KpiCard({ title, value, subtitle, icon, color }) {
   const accentColor = color === "#D4AF37" ? "#F2CF57" : "#2EE98B";
   return (
-    <div style={{
+    <div className="chris-kpi-card" style={{
       background:"radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, #063722, #02170f)",
       border:"1px solid rgba(212,175,55,0.88)", borderRadius:"20px", padding:"24px",
       boxShadow:"0 18px 42px rgba(0,0,0,0.34)", position:"relative", overflow:"hidden", minHeight:"155px"

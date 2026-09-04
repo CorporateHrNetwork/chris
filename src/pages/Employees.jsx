@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 
 import EmployeeTable from "../components/employees/EmployeeTable";
 import AddEmployee from "../components/employees/AddEmployee";
+import EmployeeDataOperationsLauncher from "../components/employees/EmployeeDataOperationsLauncher";
+import EmployeeExportModal from "../components/employees/EmployeeExportModal";
 
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
@@ -18,6 +20,9 @@ function Employees({
   const navigate = useNavigate();
   const [showAddEmployee, setShowAddEmployee] =
     useState(initialAddEmployee);
+  const [showEntryLauncher, setShowEntryLauncher] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
   const [createdEmployee, setCreatedEmployee] = useState(null);
   const successTimer = useRef(null);
 
@@ -44,6 +49,9 @@ function Employees({
 
   const canCreateEmployee =
     hasPermission("employees.create");
+
+  const canExportEmployees =
+    hasPermission("employees.update");
 
   const loadEmployeeSummary = useCallback(
     async () => {
@@ -271,15 +279,41 @@ function Employees({
           canCreateEmployee && (
             <button
               type="button"
-              onClick={() =>
-                setShowAddEmployee(true)
-              }
+              onClick={() => setShowEntryLauncher(true)}
               style={addButtonStyle}
             >
               + Add Employee
             </button>
           )}
+        {!authorizationLoading && canExportEmployees && (
+          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+            <button type="button" style={exportButtonStyle} onClick={() => setShowExportModal(true)}>Export</button>
+            <button type="button" style={exportButtonStyle} onClick={() => navigate("/employees/export-queue")}>Export Queue</button>
+            <button type="button" style={exportButtonStyle} onClick={() => navigate("/employees/governance")}>Employment Governance</button>
+          </div>
+        )}
       </div>
+
+      {exportNotice && <div role="status" style={successNoticeStyle}>{exportNotice}</div>}
+
+      {showEntryLauncher && (
+        <EmployeeDataOperationsLauncher
+          onClose={() => setShowEntryLauncher(false)}
+          onSingle={() => navigate("/employees/add?mode=quick")}
+          onBulk={() => navigate("/employees/bulk-upload")}
+          onInvite={() => navigate("/employees/invitations")}
+        />
+      )}
+
+      {showExportModal && (
+        <EmployeeExportModal
+          onClose={() => setShowExportModal(false)}
+          onCreated={() => {
+            setExportNotice("Employee export completed and added to the Export Queue.");
+            window.setTimeout(() => setExportNotice(""), 5000);
+          }}
+        />
+      )}
 
       {summaryError && (
         <div style={errorStyle}>
@@ -427,6 +461,8 @@ const addButtonStyle = {
   boxShadow:
     "0 6px 15px rgba(11,94,59,0.18)",
 };
+
+const exportButtonStyle = { ...addButtonStyle, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.65)", boxShadow: "none" };
 
 const backButtonStyle = {
   border: "none",

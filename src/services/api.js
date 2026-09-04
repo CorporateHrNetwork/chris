@@ -359,3 +359,56 @@ export async function apiRequest(
 
   return result;
 }
+
+
+export async function apiDownload(endpoint, options = {}) {
+  const token = getAuthToken();
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Cache-Control": "no-cache",
+        ...(options.headers || {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error("CHRIS cannot connect to the server. Check your connection and try again.");
+  }
+
+  if (response.status === 401) {
+    clearAuthSession();
+    if (window.location.pathname !== "/login") window.location.replace("/login");
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  if (!response.ok) {
+    let message = "Unable to download the requested file.";
+    try {
+      const result = await response.json();
+      message = result.message || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  return {
+    blob,
+    fileName: match?.[1] || "download.xlsx",
+  };
+}
+
+export function saveDownloadedBlob({ blob, fileName }) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName || "download";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

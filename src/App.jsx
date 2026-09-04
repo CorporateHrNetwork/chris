@@ -23,6 +23,11 @@ import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
 import EmployeeOnboarding from "./pages/EmployeeOnboarding";
 import AddOnboardEmployeeEntry from "./pages/AddOnboardEmployeeEntry";
 import OnboardingTracker from "./pages/OnboardingTracker";
+import BulkEmployeeImport from "./pages/BulkEmployeeImport";
+import EmployeeInvitations from "./pages/EmployeeInvitations";
+import EmployeeExportQueue from "./pages/EmployeeExportQueue";
+import EmployeeSelfOnboardingPublic from "./pages/EmployeeSelfOnboardingPublic";
+import EmployeeGovernance from "./pages/EmployeeGovernance";
 import EmployeeExits from "./pages/EmployeeExits";
 import LineManagers from "./pages/LineManagers";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
@@ -105,6 +110,11 @@ function App() {
           }
         />
 
+        <Route
+          path="/employee-invite/:token"
+          element={<EmployeeSelfOnboardingPublic />}
+        />
+
         {/* DASHBOARD */}
 
         <Route
@@ -136,6 +146,42 @@ function App() {
           element={
             <PermissionLayout permission="employees.create">
               <AddOnboardEmployeeEntry />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/bulk-upload"
+          element={
+            <PermissionLayout permission="employees.create">
+              <BulkEmployeeImport />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/invitations"
+          element={
+            <PermissionLayout permission="employees.create">
+              <EmployeeInvitations />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/export-queue"
+          element={
+            <PermissionLayout permission="employees.update">
+              <EmployeeExportQueue />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/employees/governance"
+          element={
+            <PermissionLayout permission="employees.update">
+              <EmployeeGovernance />
             </PermissionLayout>
           }
         />

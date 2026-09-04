@@ -77,16 +77,13 @@ function normalizeCreationPayload(input = {}) {
     input.departmentId,
     input.designationId,
     input.locationId,
-    input.email,
-    input.phone,
-    input.gender,
   ];
   if (requiredValues.some((value) => !String(value || "").trim())) {
     throw employeeCreationError("EMPLOYEE_REQUIRED_FIELDS_MISSING");
   }
 
   const name = normalizeEmployeeName(input.name);
-  const gender = String(input.gender).trim().toUpperCase();
+  const gender = String(input.gender || "UNSPECIFIED").trim().toUpperCase();
   if (!["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(gender)) {
     throw employeeCreationError("INVALID_EMPLOYEE_GENDER");
   }
@@ -112,8 +109,8 @@ function normalizeCreationPayload(input = {}) {
     departmentId: String(input.departmentId).trim(),
     designationId: String(input.designationId).trim(),
     locationId: String(input.locationId).trim(),
-    email: String(input.email).trim().toLowerCase(),
-    phone: String(input.phone).trim(),
+    email: String(input.email || "").trim().toLowerCase() || null,
+    phone: String(input.phone || "").trim() || null,
     gender,
     status: STATUS_MAP[input.status || "Active"] || "ACTIVE",
     hireDate,
@@ -147,12 +144,14 @@ async function createEmployeeWithDependencies(
   } = dependencies;
   const payload = normalizeCreationPayload(input);
 
-  const duplicateEmail = await prisma.employee.findFirst({
-    where: { organizationId, email: payload.email },
-    select: { id: true, employeeNumber: true },
-  });
-  if (duplicateEmail) {
-    throw employeeCreationError("EMPLOYEE_EMAIL_ALREADY_EXISTS");
+  if (payload.email) {
+    const duplicateEmail = await prisma.employee.findFirst({
+      where: { organizationId, email: payload.email },
+      select: { id: true, employeeNumber: true },
+    });
+    if (duplicateEmail) {
+      throw employeeCreationError("EMPLOYEE_EMAIL_ALREADY_EXISTS");
+    }
   }
 
   let normalizedNin = null;
@@ -223,14 +222,17 @@ async function createEmployeeWithDependencies(
     const sequenceOwner = await tx.organization.update({
       where: { id: organizationId },
       data: { employeeNumberSequence: { increment: 1 } },
-      select: { employeeNumberSequence: true },
+      select: { employeeNumberSequence: true, slug: true },
     });
     const nextNumber = sequenceOwner.employeeNumberSequence;
     if (nextNumber > 999999) {
       throw employeeCreationError("EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED");
     }
 
-    const employeeNumber = `CHR${String(nextNumber).padStart(6, "0")}`;
+    const employeeNumberPrefix =
+      sequenceOwner.slug === "zermatt-liquor-limited" ? "ZLL" : "CHR";
+    const employeeNumber =
+      `${employeeNumberPrefix}${String(nextNumber).padStart(6, "0")}`;
     const employee = await tx.employee.create({
       data: {
         organizationId,

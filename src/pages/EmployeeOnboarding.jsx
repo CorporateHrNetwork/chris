@@ -1,4 +1,4 @@
-﻿import {
+import {
   useEffect,
   useMemo,
   useRef,
@@ -97,14 +97,11 @@ function normalizeGenderValue(value) {
 
 
 const EMPLOYMENT_TYPES = [
-  "Permanent",
-  "Contract",
-  "Temporary",
-  "Probation",
-  "Intern / Trainee",
+  "Full-Time",
+  "Part-Time",
   "Expatriate",
-  "Casual",
-  "Custom",
+  "NYSC / Internship",
+  "Domestic Staff - Housekeeper",
 ];
 
 const WORKFLOW_NAME_OPTIONS = [
@@ -202,7 +199,6 @@ const DEFAULT_SECTIONS = [
       "Name",
       "Relationship",
       "Phone Number",
-      "Alternative Phone",
     ],
   },
   {
@@ -928,6 +924,8 @@ function EmployeeOnboarding({
   function handleSectionFormChange(
     event
   ) {
+    setError("");
+    setFieldErrors([]);
     const {
       name,
       value,
@@ -1129,14 +1127,41 @@ function EmployeeOnboarding({
       setRecords((current) => current.map((record) =>
         record.id === updatedRecord.id ? { ...record, ...updatedRecord } : record
       ));
+      const savedSectionCompleted =
+        updatedRecord?.sectionProgress?.[
+          activeSection.key
+        ]?.completed === true;
 
-      setMessage(
-        result?.message || "Onboarding section updated successfully."
+      /*
+      Refresh/advance first, then publish feedback so a reload cannot
+      erase the confirmation message.
+      */
+      await advanceAfterSuccessfulSectionSave(
+        updatedRecord,
+        activeSection.key
       );
 
-      await advanceAfterSuccessfulSectionSave(updatedRecord, activeSection.key);
-
       await load();
+
+      setMessage(
+        savedSectionCompleted
+          ? (
+              result?.message ||
+              `${activeSection.label} saved successfully.`
+            )
+          : `${activeSection.label} saved successfully. This section is still incomplete; complete the remaining required fields to continue.`
+      );
+
+      window.setTimeout(() => {
+        document
+          .getElementById(
+            "chris-onboarding-editor-feedback"
+          )
+          ?.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+          });
+      }, 80);
     } catch (err) {
       console.error(
         "Onboarding save error:",
@@ -1855,8 +1880,8 @@ function EmployeeOnboarding({
                             " "
                           )}
                         {employee.designation?.name
-                          ? ` â€” ${employee.designation.name}`
-                          : " â€” Designation required"}
+                          ? ` - ${employee.designation.name}`
+                          : " - Designation required"}
                       </option>
                     )
                   )}
@@ -1871,7 +1896,7 @@ function EmployeeOnboarding({
               <Field label="Designation / Employment Level">
                 <input
                   value={selectedEmployee
-                    ? `${selectedEmployee.designation?.name || "Not configured"} â€” ${selectedEmployee.designation?.employmentLevel?.name || (Number.isInteger(selectedEmployee.designation?.careerLevel) ? `Level ${selectedEmployee.designation.careerLevel}` : "Employment Level required")}`
+                    ? `${selectedEmployee.designation?.name || "Not configured"} - ${selectedEmployee.designation?.employmentLevel?.name || (Number.isInteger(selectedEmployee.designation?.careerLevel) ? `Level ${selectedEmployee.designation.careerLevel}` : "Employment Level required")}`
                     : "Select employee first"}
                   disabled
                   style={readOnlyInputStyle}

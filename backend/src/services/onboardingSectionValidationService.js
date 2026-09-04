@@ -39,7 +39,6 @@ const REQUIREMENTS = {
     ["name", "Emergency Contact Name", (data) => hasText(data.name)],
     ["relationship", "Relationship", (data) => hasText(data.relationship)],
     ["phoneNumber", "Phone Number", (data) => hasText(data.phoneNumber)],
-    ["alternativePhone", "Alternative Phone", (data) => hasText(data.alternativePhone)],
   ],
   legal: [
     ["employmentContractStatus", "Employment Contract", (data) => completeStatus(data.employmentContractStatus)],

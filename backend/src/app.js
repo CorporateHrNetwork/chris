@@ -18,6 +18,9 @@ const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
+const employeeDataOperationsRoutes = require("./routes/employeeDataOperationsRoutes");
+const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPublicRoutes");
+const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
 
 const app = express();
 
@@ -100,6 +103,21 @@ app.use(
 app.use(
   "/api/employees",
   employeeRoutes
+);
+
+app.use(
+  "/api/employee-data",
+  employeeDataOperationsRoutes
+);
+
+app.use(
+  "/api/public/employee-invitations",
+  employeeInvitationPublicRoutes
+);
+
+app.use(
+  "/api/employment-governance",
+  employmentGovernanceRoutes
 );
 
 app.use(

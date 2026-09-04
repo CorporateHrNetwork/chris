@@ -64,6 +64,8 @@ model Organization {
   lineManagerAssignments      EmployeeLineManagerAssignment[]
   workforceSnapshots          WorkforceSnapshot[]
   organizationAudits          OrganizationAudit[]
+  employeeExportJobs          EmployeeExportJob[]
+  employeeSelfOnboardingInvites EmployeeSelfOnboardingInvite[]
   costCentres                 CostCentre[]
 
   createdAt DateTime @default(now())
@@ -238,6 +240,8 @@ model User {
   employeeExitProcessesCancelled      EmployeeExitProcess[]           @relation("EmployeeExitCancelledBy")
   lineManagerAssignmentsPerformed     EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentPerformedBy")
   organizationAuditsPerformed         OrganizationAudit[]             @relation("OrganizationAuditActor")
+  employeeExportJobsRequested          EmployeeExportJob[]              @relation("EmployeeExportRequestedBy")
+  employeeSelfOnboardingInvitesCreated EmployeeSelfOnboardingInvite[]    @relation("EmployeeInviteCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1311,6 +1315,66 @@ enum AttendanceSource {
   INTEGRATION
 }
 
+
+model EmployeeExportJob {
+  id                String   @id @default(uuid())
+  organizationId    String
+  requestedByUserId String
+  status            String   @default("QUEUED")
+  format            String   @default("XLSX")
+  filters           Json     @default("{}")
+  columns           Json     @default("[]")
+  rowCount          Int?
+  fileName          String?
+  storagePath       String?
+  errorMessage      String?
+  completedAt       DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User         @relation("EmployeeExportRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([requestedByUserId])
+  @@map("employee_export_jobs")
+}
+
+model EmployeeSelfOnboardingInvite {
+  id                String         @id @default(uuid())
+  organizationId    String
+  createdByUserId   String
+  employeeId        String?
+  tokenHash         String         @unique
+  recipientEmail    String
+  departmentId      String
+  designationId     String
+  locationId        String
+  employmentStatus  EmployeeStatus @default(PROBATION)
+  hireDate          DateTime?
+  status            String         @default("PENDING")
+  expiresAt         DateTime
+  openedAt          DateTime?
+  submittedAt       DateTime?
+  completedAt       DateTime?
+  revokedAt         DateTime?
+  submittedData     Json           @default("{}")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("EmployeeInviteCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([recipientEmail])
+  @@index([expiresAt])
+  @@map("employee_self_onboarding_invites")
+}
+
 model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String
@@ -1656,4 +1720,211 @@ model EmployeeDocument {
   @@index([category])
   @@index([uploadedByUserId])
   @@map("employee_documents")
+}
+
+// ============================================================
+// EMPLOYMENT GOVERNANCE & EMPLOYEE RELATIONS
+// 31 AUGUST 2026 Nigeria HR judicial/compliance architecture
+// ============================================================
+
+model EmploymentContractLifecycle {
+  id                       String   @id @default(uuid())
+  organizationId           String
+  employeeId               String?
+  referenceCode            String
+  firstName                String
+  lastName                 String
+  email                     String?
+  currentState              String   @default("APPLICANT")
+  effectiveEmploymentDate  DateTime?
+  createdByUserId           String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  transitions EmploymentContractTransition[]
+  documents   EmploymentContractDocument[]
+
+  @@unique([organizationId, referenceCode])
+  @@index([organizationId, currentState])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, email])
+  @@map("employment_contract_lifecycles")
+}
+
+model EmploymentContractTransition {
+  id                String   @id @default(uuid())
+  organizationId    String
+  lifecycleId       String
+  fromState         String?
+  toState           String
+  effectiveDate     DateTime
+  actorUserId       String?
+  authority         String
+  reason            String?
+  documentReference String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  lifecycle EmploymentContractLifecycle @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, lifecycleId, effectiveDate])
+  @@index([organizationId, toState])
+  @@map("employment_contract_transitions")
+}
+
+model EmploymentContractDocument {
+  id                String   @id @default(uuid())
+  organizationId    String
+  lifecycleId       String
+  documentType      String
+  documentReference String
+  templateName      String?
+  templateVersion   String?
+  contentHash       String?
+  createdByUserId   String?
+  createdAt         DateTime @default(now())
+
+  lifecycle EmploymentContractLifecycle      @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+  events    EmploymentContractDocumentEvent[]
+
+  @@index([organizationId, lifecycleId])
+  @@index([organizationId, documentType])
+  @@map("employment_contract_documents")
+}
+
+model EmploymentContractDocumentEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  documentId     String
+  eventType      String
+  eventAt        DateTime
+  actorUserId    String?
+  authority      String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  document EmploymentContractDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, documentId, eventAt])
+  @@index([organizationId, eventType])
+  @@map("employment_contract_document_events")
+}
+
+model DisciplinaryCase {
+  id              String   @id @default(uuid())
+  organizationId  String
+  employeeId      String
+  employeeNumber  String
+  caseNumber      String
+  incidentSummary String
+  allegation      String
+  policyReference String?
+  policyVersion   String?
+  status          String   @default("OPEN")
+  outcome         String?
+  openedAt        DateTime
+  decidedAt       DateTime?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  evidenceVersions   DisciplinaryEvidenceVersion[]
+  processEvents      DisciplinaryProcessEvent[]
+  externalProceedings DisciplinaryExternalProceeding[]
+
+  @@unique([organizationId, caseNumber])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, employeeNumber])
+  @@index([organizationId, status])
+  @@map("disciplinary_cases")
+}
+
+model DisciplinaryEvidenceVersion {
+  id                   String   @id @default(uuid())
+  organizationId       String
+  disciplinaryCaseId   String
+  logicalEvidenceKey   String
+  category             String
+  versionNumber        Int
+  title                 String
+  content               Json?
+  documentReference     String?
+  contentHash           String
+  finalizedAt           DateTime?
+  createdByUserId       String?
+  createdAt             DateTime @default(now())
+
+  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([disciplinaryCaseId, logicalEvidenceKey, versionNumber])
+  @@index([organizationId, disciplinaryCaseId])
+  @@index([organizationId, category])
+  @@map("disciplinary_evidence_versions")
+}
+
+model DisciplinaryProcessEvent {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  disciplinaryCaseId String
+  eventType          String
+  occurredAt         DateTime
+  participant        String?
+  actorUserId        String?
+  notes              String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, disciplinaryCaseId, occurredAt])
+  @@index([organizationId, eventType])
+  @@map("disciplinary_process_events")
+}
+
+model DisciplinaryExternalProceeding {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  disciplinaryCaseId String
+  proceedingType     String
+  authority          String
+  referenceNumber    String?
+  status             String
+  outcome            String?
+  openedAt           DateTime?
+  closedAt           DateTime?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, disciplinaryCaseId])
+  @@index([organizationId, status])
+  @@map("disciplinary_external_proceedings")
+}
+
+model ExternalVerificationRecord {
+  id               String   @id @default(uuid())
+  organizationId   String
+  employeeId       String?
+  subjectReference String?
+  identifierType   String
+  maskedIdentifier String
+  provider         String
+  status           String
+  attemptedAt      DateTime
+  verifiedAt       DateTime?
+  nextRetryAt      DateTime?
+  errorCode        String?
+  errorMessage     String?
+  responseMetadata Json?
+  createdByUserId  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([organizationId, employeeId])
+  @@index([organizationId, identifierType])
+  @@index([organizationId, status])
+  @@index([organizationId, nextRetryAt])
+  @@map("external_verification_records")
 }

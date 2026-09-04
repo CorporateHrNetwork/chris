@@ -33,7 +33,7 @@ const DEFAULT_SECTIONS = [
   { key: "payment-details", label: "Payment Details", required: true, items: ["Bank Name", "Account Name", "Account Number", "Payroll Currency", "Payment Method"] },
   { key: "documents", label: "Documents", required: true, items: ["CV / Resume", "Offer / Appointment Letter", "Valid ID", "Certificates", "Passport Photograph", "Other Required Documents"] },
   { key: "next-of-kin", label: "Next of Kin", required: true, items: ["Name", "Relationship", "Phone Number", "Address"] },
-  { key: "emergency-contact", label: "Emergency Contact", required: true, items: ["Name", "Relationship", "Phone Number", "Alternative Phone"] },
+  { key: "emergency-contact", label: "Emergency Contact", required: true, items: ["Name", "Relationship", "Phone Number"] },
   { key: "legal", label: "Legal", required: true, items: ["Employment Contract", "Confidentiality / NDA", "Policy Acknowledgements", "Data Privacy Consent"] },
   { key: "assets", label: "Assets", required: false, items: ["Laptop / Computer", "Phone", "ID / Access Card", "PPE", "Other Assigned Assets"] },
 ];
@@ -203,7 +203,7 @@ function buildCompletion(sectionKey, data, documents) {
       if (hasText(data.name)) keys.push("Name");
       if (hasText(data.relationship)) keys.push("Relationship");
       if (hasText(data.phoneNumber)) keys.push("Phone Number");
-      if (hasText(data.alternativePhone)) keys.push("Alternative Phone");
+      keys.push("Alternative Phone"); // Optional; treated as satisfied for legacy 4-item workflow definitions.
       return keys;
     }
 
@@ -1931,14 +1931,21 @@ router.patch(
         "personal-details"
       ) {
         if (
-          !hasText(incomingData.fullName) ||
-          !hasText(incomingData.email) ||
-          !hasText(incomingData.phone)
+          !hasText(incomingData.fullName)
         ) {
-          return res.status(400).json({
+          return res.status(422).json({
             status: "error",
-            code: "ONBOARDING_SECTION_REQUIRED",
-            message: "Full name, email address and phone number are required.",
+            code: "ONBOARDING_SECTION_INCOMPLETE",
+            message: "Full name is required before Personal Details can be saved.",
+            details: {
+              sectionKey: "personal-details",
+              fields: [
+                {
+                  field: "fullName",
+                  message: "Full name is required.",
+                },
+              ],
+            },
           });
         }
 
@@ -1976,16 +1983,6 @@ router.patch(
             personal.phone || ""
           ).trim();
 
-        if (
-          !normalizedEmail ||
-          !normalizedPhone
-        ) {
-          return res.status(400).json({
-            status: "error",
-            message:
-              "Email address and phone number are required.",
-          });
-        }
 
         const duplicateEmail =
           await prisma.employee.findFirst({
@@ -2030,26 +2027,16 @@ router.patch(
             personal.gender
           );
 
-        const validation =
-          validateOnboardingSection(
-            "personal-details",
-            personal
-          );
-
-        if (!validation.valid) {
-          return res.status(422).json({
-            status: "error",
-            code: "ONBOARDING_SECTION_INCOMPLETE",
-            message:
-              `${section.label} is incomplete. Complete the highlighted field${validation.fields.length === 1 ? "" : "s"}.`,
-            details: {
-              sectionKey:
-                req.params.sectionKey,
-              fields:
-                validation.fields,
-            },
-          });
-        }
+        /*
+         * Progressive existing-workforce maintenance:
+         * saving Personal Details must persist valid supplied fields even when
+         * the section is not yet complete. Section completeness is calculated
+         * below by buildCompletion/applySectionProgress and is what controls
+         * progression. Final onboarding completion remains authoritative.
+         *
+         * Full name is still required before this section can be saved, and
+         * field-level identity validation (including NIN rules) still applies.
+         */
 
         let normalizedNin = null;
 
@@ -2124,9 +2111,13 @@ router.patch(
                 lastName:
                   normalizedName.lastName,
                 email:
-                  normalizedEmail,
+                  normalizedEmail ||
+                  onboarding.employee.email ||
+                  null,
                 phone:
-                  normalizedPhone,
+                  normalizedPhone ||
+                  onboarding.employee.phone ||
+                  null,
                 gender:
                   personal.gender,
                 ...(normalizedNin
@@ -2152,7 +2143,9 @@ router.patch(
                   lastName:
                     normalizedName.lastName,
                   email:
-                    normalizedEmail,
+                  normalizedEmail ||
+                  onboarding.employee.email ||
+                  null,
                 },
               });
             }
@@ -2177,7 +2170,8 @@ router.patch(
         ] || {};
 
       if (
-        section.required !== false
+        section.required !== false &&
+        req.params.sectionKey !== "personal-details"
       ) {
         const validation =
           validateOnboardingSection(
