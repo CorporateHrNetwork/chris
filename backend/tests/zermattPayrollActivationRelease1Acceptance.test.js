@@ -21,6 +21,7 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   const routes = read("backend/src/routes/payrollRoutes.js");
   const operations = read("backend/src/services/payrollOperationsService.js");
   const statutory = read("backend/src/services/nigeriaPayrollComplianceService.js");
+  const approvalCompliance = read("backend/src/services/payrollApprovalComplianceService.js");
   const readiness = read("backend/src/services/payrollReadinessService.js");
   const payrollPage = read("src/pages/Payroll.jsx");
   const nigeriaWorkspace = read("src/pages/payroll/NigeriaPayrollWorkspace.jsx");
@@ -96,6 +97,21 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   assert.equal(/itfEmployeeDeduction:\s*[1-9]/.test(statutory), false, "ITF must never become an employee deduction.");
 
   requireText(
+    approvalCompliance,
+    [
+      "validateNigeriaPayrollApproval",
+      "NIGERIA_STATUTORY_IDENTIFIERS_INCOMPLETE",
+      "taxIdentificationNumber",
+      "payeState",
+      "pensionPfa",
+      "pensionPin",
+      "missingTaxCount",
+      "missingPensionCount",
+    ],
+    "Nigeria payroll approval compliance"
+  );
+
+  requireText(
     routes,
     [
       '"/compliance-policy"',
@@ -121,6 +137,7 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
       'requirePermission("payroll.manage")',
       'PAYROLL_EXECUTION_READINESS_INCOMPLETE',
       'executeNigeriaDraftPayroll',
+      'validateNigeriaPayrollApproval',
       'Nigeria PAYE/pension policy',
     ],
     "Payroll routes"
