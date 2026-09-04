@@ -43,95 +43,50 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
     'CREATE TABLE "payroll_policy_versions"',
     'CREATE TABLE "payroll_tax_reliefs"',
     'zermatt-liquor-limited',
-    '"basic":57',
-    '"housing":11',
-    '"transport":10',
-    '"meal":9',
-    '"medical":8',
-    '"utility":5',
-    '"Full-Time":26',
-    '"Part-Time":16',
+    '"basic":57', '"housing":11', '"transport":10', '"meal":9', '"medical":8', '"utility":5',
+    '"Full-Time":26', '"Part-Time":16',
     '["basic","housing","transport"]',
-    '"rentReliefRate":20',
-    '"rentReliefCap":500000',
-    '"minimumWageMonthly":70000',
+    '"rentReliefRate":20', '"rentReliefCap":500000', '"minimumWageMonthly":70000',
     '"bands":[{"limit":800000,"rate":0},{"limit":2200000,"rate":15},{"limit":9000000,"rate":18},{"limit":13000000,"rate":21},{"limit":25000000,"rate":23},{"limit":null,"rate":25}]',
     '"employeeDeduction":false',
   ], "ZERMATT Nigeria compliance migration");
   assert.equal(complianceMigration.includes('ALTER TABLE "employees"'), false, "Compliance policy must not rewrite Employee authority.");
 
   requireText(statutory, [
-    "calculateAnnualPaye",
-    "calculateStructure",
-    "PAYROLL_STANDARD_DAYS_NOT_CONFIGURED",
-    "PAYROLL_SALARY_RATES_INCOMPLETE",
-    "attendancePayrollInput.findMany",
-    "STANDARD_DAYS_DEFAULT",
-    "ATTENDANCE_PAYROLL_INPUT",
-    "pensionableBase",
-    "employeePension",
-    "employerPension",
-    "payeTax",
-    "rentReliefAnnual",
-    "nsitfEmployeeDeduction: 0",
-    "itfEmployeeDeduction: 0",
+    "calculateAnnualPaye", "calculateStructure", "PAYROLL_STANDARD_DAYS_NOT_CONFIGURED",
+    "PAYROLL_SALARY_RATES_INCOMPLETE", "attendancePayrollInput.findMany", "STANDARD_DAYS_DEFAULT",
+    "ATTENDANCE_PAYROLL_INPUT", "pensionableBase", "employeePension", "employerPension",
+    "payeTax", "rentReliefAnnual", "nsitfEmployeeDeduction: 0", "itfEmployeeDeduction: 0",
     "CALCULATED_NIGERIA_2026",
   ], "Nigeria payroll calculation service");
   assert.equal(/nsitfEmployeeDeduction:\s*[1-9]/.test(statutory), false, "NSITF must never become an employee deduction.");
   assert.equal(/itfEmployeeDeduction:\s*[1-9]/.test(statutory), false, "ITF must never become an employee deduction.");
 
   requireText(approvalCompliance, [
-    "validateNigeriaPayrollApproval",
-    "NIGERIA_STATUTORY_IDENTIFIERS_INCOMPLETE",
-    "taxIdentificationNumber",
-    "payeState",
-    "pensionPfa",
-    "pensionPin",
+    "validateNigeriaPayrollApproval", "NIGERIA_STATUTORY_IDENTIFIERS_INCOMPLETE",
+    "taxIdentificationNumber", "payeState", "pensionPfa", "pensionPin",
   ], "Nigeria payroll approval compliance");
 
   requireText(routes, [
-    '"/compliance-policy"',
-    '"/tax-reliefs"',
-    '"/tax-reliefs/rent"',
-    '"/tax-reliefs/:id/decision"',
-    '"/periods"',
-    '"/salary-rates"',
-    '"/salary-rates/template"',
-    '"/salary-rates/bulk/preview"',
-    '"/salary-rates/bulk/import"',
-    '["allowances", "ALLOWANCE"]',
-    '["deductions", "DEDUCTION"]',
-    '"/salary-advances"',
-    '"/paid-leave"',
-    '"/runs/draft"',
-    '"/runs/:id/submit"',
-    '"/runs/:id/decision"',
-    '"/approvals"',
-    '"/payslips"',
-    'requirePermission("payroll.view")',
-    'requirePermission("payroll.process")',
-    'requirePermission("payroll.manage")',
-    "PAYROLL_EXECUTION_READINESS_INCOMPLETE",
-    "executeNigeriaDraftPayroll",
-    "validateNigeriaPayrollApproval",
+    '"/compliance-policy"', '"/tax-reliefs"', '"/tax-reliefs/rent"', '"/tax-reliefs/:id/decision"',
+    '"/periods"', '"/salary-rates"', '"/salary-rates/template"', '"/salary-rates/bulk/preview"',
+    '"/salary-rates/bulk/import"', '["allowances", "ALLOWANCE"]', '["deductions", "DEDUCTION"]',
+    '"/salary-advances"', '"/paid-leave"', '"/runs/draft"', '"/runs/:id/submit"',
+    '"/runs/:id/decision"', '"/approvals"', '"/payslips"',
+    'requirePermission("payroll.view")', 'requirePermission("payroll.process")', 'requirePermission("payroll.manage")',
+    "PAYROLL_EXECUTION_READINESS_INCOMPLETE", "executeNigeriaDraftPayroll", "validateNigeriaPayrollApproval",
   ], "Payroll routes");
 
   requireText(operations, [
-    "PAYROLL_PERIOD_OVERLAP",
-    "SALARY_RATE_OVERLAP",
-    "salaryAdvanceRecoveries",
-    "paymentPosted: false",
-    'leaveType: { isPaid: true }',
+    "PAYROLL_PERIOD_OVERLAP", "SALARY_RATE_OVERLAP", "salaryAdvanceRecoveries",
+    "paymentPosted: false", 'leaveType: { isPaid: true }',
   ], "Payroll operations");
   assert.equal(/paymentPosted:\s*true/.test(operations), false, "Payroll approval must not claim that bank payment was posted.");
 
   requireText(readiness, [
-    'FROM "payroll_salary_rates"',
-    'FROM "payroll_policy_versions"',
+    'FROM "payroll_salary_rates"', 'FROM "payroll_policy_versions"',
     "readyForExecution: employmentReady && paymentReady && compensationReady",
-    "statutoryCalculationEnabled",
-    "paymentTransmissionEnabled: false",
-    "PAYMENT_TRANSMISSION_SEPARATE_CONTROL",
+    "statutoryCalculationEnabled", "paymentTransmissionEnabled: false", "PAYMENT_TRANSMISSION_SEPARATE_CONTROL",
   ], "Payroll readiness");
   assert.equal(readiness.includes("STATUTORY_AUTOMATION_NOT_ENABLED"), false, "Readiness must not claim Nigeria PAYE/pension automation is unavailable after activation.");
 
@@ -145,24 +100,16 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   ], "Payroll dashboard");
 
   requireText(nigeriaWorkspace, [
-    "Nigeria-Compliant Draft Payroll",
-    "26/16",
-    "Tax Rent Relief",
-    "20% of annual rent paid",
-    "Save for Verification",
-    "/api/payroll/tax-reliefs/rent",
-    "/api/payroll/compliance-policy",
+    "Nigeria-Compliant Draft Payroll", "26/16", "Tax Rent Relief", "20% of annual rent paid",
+    "Save for Verification", "/api/payroll/tax-reliefs/rent", "/api/payroll/compliance-policy",
   ], "Nigeria payroll workspaces");
 
   requireText(supplementWorkspace, [
-    "Other Allowances",
-    "Other Deductions",
-    "Taxable earning (default)",
+    "Other Allowances", "Other Deductions", "Taxable earning (default)",
     "PAYE and pension are statutory calculations and should not be recreated here",
     "I confirm I reviewed CHRiS-calculated PAYE/pension",
     'const path = kind === "ALLOWANCE" ? "allowances" : "deductions"',
-    "/api/payroll/payslips",
-    "/api/payroll/approvals",
+    "/api/payroll/payslips", "/api/payroll/approvals",
   ], "Nigeria payroll supplement workspaces");
 
   const payrollBlockStart = sidebar.indexOf('id:\n            "payroll"');
@@ -170,16 +117,10 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   assert.ok(payrollBlockStart >= 0 && payrollBlockEnd > payrollBlockStart, "Payroll sidebar block must exist.");
   const payrollSidebar = sidebar.slice(payrollBlockStart, payrollBlockEnd);
   requireText(payrollSidebar, [
-    '"/payroll?workspace=execute"',
-    '"/payroll?workspace=periods"',
-    '"/payroll?workspace=rates"',
-    '"/payroll?workspace=allowances"',
-    '"/payroll?workspace=deductions"',
-    '"/payroll?workspace=payslips"',
-    '"/payroll?workspace=salary-advances"',
-    '"/payroll?workspace=paid-leave"',
-    '"/payroll?workspace=approvals"',
-    '"/loans"',
+    '"/payroll?workspace=execute"', '"/payroll?workspace=periods"', '"/payroll?workspace=rates"',
+    '"/payroll?workspace=allowances"', '"/payroll?workspace=deductions"', '"/payroll?workspace=payslips"',
+    '"/payroll?workspace=salary-advances"', '"/payroll?workspace=paid-leave"',
+    '"/payroll?workspace=approvals"', '"/loans"',
   ], "Payroll sidebar");
   assert.equal(payrollSidebar.includes("planned:"), false, "Activated Payroll sidebar items must not remain planned.");
 
