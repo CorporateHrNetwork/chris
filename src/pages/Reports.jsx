@@ -52,32 +52,33 @@ function Reports() {
       icon: <FaUsers />,
       title: "Workforce Reports",
       description:
-        "Tenant-scoped workforce reporting and CSV export are available from the reporting engine.",
-      time: "Live",
+        "Employee workforce reporting is already available from the reporting engine.",
+      time: "Available",
     },
     {
       id: "lifecycle",
       icon: <FaFileAlt />,
       title: "Lifecycle Reports",
       description:
-        "Employee lifecycle history is available from the employee record and reporting engine.",
-      time: "Live",
+        "Employee lifecycle reporting is available per employee.",
+      time: "Available",
     },
     {
       id: "attendance",
       icon: <FaClock />,
       title: "Attendance Reports",
       description:
-        "Attendance register, worked-hours, overtime and exception analytics are operational.",
-      time: "Live",
+        "Attendance reporting will expand as more operational analytics are connected.",
+      time: "Partial",
+      tone: "warning",
     },
     {
       id: "payroll",
       icon: <FaMoneyBillWave />,
-      title: "Payroll Reporting",
+      title: "Payroll Reports",
       description:
-        "Payroll readiness reporting is live; payroll-result reporting activates with the payroll execution engine.",
-      time: "Readiness",
+        "Payroll analytics will activate with the payroll engine.",
+      time: "Planned",
       tone: "warning",
     },
   ];
@@ -104,13 +105,13 @@ function Reports() {
       <ModuleDashboardShell
         eyebrow="REPORTING & INSIGHTS"
         title="Reports & Analytics Dashboard"
-        description="Access workforce, lifecycle, attendance, leave, payroll-readiness and management reporting from one analytical home."
+        description="Access workforce, lifecycle, attendance, leave, payroll and management reporting from one analytical home."
         metrics={[
           <DashboardCard
             key="workforce"
             title="Workforce Reports"
             value="Live"
-            subtitle="Tenant-scoped workforce reporting"
+            subtitle="Employee workforce reporting"
             icon={<FaUsers />}
             tone="green"
           />,
@@ -125,24 +126,24 @@ function Reports() {
           <DashboardCard
             key="attendance"
             title="Attendance Reports"
-            value="Live"
-            subtitle="Operational attendance analytics"
+            value="Partial"
+            subtitle="Operational attendance reporting"
             icon={<FaClock />}
             tone="green"
           />,
           <DashboardCard
             key="payroll"
             title="Payroll Reports"
-            value="Readiness"
-            subtitle="Execution reporting remains gated"
+            value="—"
+            subtitle="Activates with payroll engine"
             icon={<FaMoneyBillWave />}
             tone="gold"
           />,
         ]}
         analytics={
           <AnalyticsPanel
-            title="Release-1 Reporting Coverage"
-            subtitle="Operational reporting surfaces available for the ZERMATT Release-1 scope."
+            title="Reporting Coverage"
+            subtitle="Current CHRIS reporting coverage across core modules."
             icon={<FaChartPie />}
           >
             <div
@@ -154,9 +155,11 @@ function Reports() {
               {[
                 ["Workforce", 100],
                 ["Employee Lifecycle", 100],
-                ["Attendance", 100],
-                ["Leave", 100],
-                ["Payroll Readiness", 100],
+                ["Attendance", 45],
+                ["Leave", 30],
+                ["Payroll", 0],
+                ["Performance", 0],
+                ["Training", 0],
               ].map(([label, progress]) => (
                 <div
                   key={label}
@@ -215,12 +218,12 @@ function Reports() {
         quickActions={[
           <QuickActionCard
             key="workforce"
-            title={
+            title="Workforce Report"
+            subtitle={
               downloading
-                ? "Preparing Workforce CSV"
-                : "Workforce Report"
+                ? "Preparing workforce CSV..."
+                : "Download workforce CSV"
             }
-            subtitle="Download tenant workforce CSV"
             icon={<FaUsers />}
             disabled={downloading}
             onClick={downloadWorkforceReport}
@@ -228,7 +231,7 @@ function Reports() {
           <QuickActionCard
             key="lifecycle"
             title="Lifecycle Report"
-            subtitle="Select an employee for lifecycle reporting"
+            subtitle="Open employee lifecycle reporting"
             icon={<FaFileAlt />}
             onClick={() =>
               navigate("/employees/directory")
@@ -237,7 +240,7 @@ function Reports() {
           <QuickActionCard
             key="attendance"
             title="Attendance Report"
-            subtitle="Open attendance analytics"
+            subtitle="Review attendance analytics"
             icon={<FaClock />}
             onClick={() =>
               navigate("/attendance")
@@ -246,7 +249,7 @@ function Reports() {
           <QuickActionCard
             key="leave"
             title="Leave Report"
-            subtitle="Open leave analytics and registers"
+            subtitle="Review leave analytics"
             icon={<FaUmbrellaBeach />}
             onClick={() =>
               navigate("/leave")
@@ -255,7 +258,7 @@ function Reports() {
           <QuickActionCard
             key="export"
             title="Export Centre"
-            subtitle="Open employee export queue"
+            subtitle="CSV and report exports"
             icon={<FaDownload />}
             onClick={() =>
               navigate("/employees/export-queue")
