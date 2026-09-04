@@ -452,48 +452,48 @@ function Sidebar() {
               label:
                 "Execute Payroll",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=execute",
             },
 
             {
               label:
                 "Payroll Periods",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=periods",
             },
 
             {
               label:
                 "Salary Rates",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=rates",
             },
 
             {
               label:
                 "Allowances",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=allowances",
             },
 
             {
               label:
                 "Deductions",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=deductions",
             },
 
             {
               label:
                 "Payslips",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=payslips",
             },
 
             {
@@ -508,24 +508,24 @@ function Sidebar() {
               label:
                 "Salary Advances",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=salary-advances",
             },
 
             {
               label:
                 "Paid Leave",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=paid-leave",
             },
 
             {
               label:
                 "Payroll Approvals",
 
-              planned:
-                true,
+              path:
+                "/payroll?workspace=approvals",
             },
           ],
         },
