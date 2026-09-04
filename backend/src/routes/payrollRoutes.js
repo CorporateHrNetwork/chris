@@ -11,6 +11,7 @@ const {
   getPayrollReadiness,
 } = require("../services/payrollReadinessService");
 const payroll = require("../services/payrollOperationsService");
+const nigeriaPayroll = require("../services/nigeriaPayrollComplianceService");
 
 const router = express.Router();
 const upload = multer({
@@ -37,7 +38,7 @@ function sendError(res, error, fallback = "Payroll operation failed.") {
     });
   }
   console.error("Payroll operation error:", error);
-  return res.status(500).json({ status: "error", message: fallback });
+  return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
 
 router.get(
@@ -52,6 +53,59 @@ router.get(
     }
   }
 );
+
+router.get("/compliance-policy", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    return res.json({
+      status: "success",
+      data: await nigeriaPayroll.getCompliancePolicy({ organizationId: req.auth.organizationId }),
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to load payroll compliance policy.");
+  }
+});
+
+router.get("/tax-reliefs", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    return res.json({
+      status: "success",
+      data: await nigeriaPayroll.listTaxReliefs({
+        organizationId: req.auth.organizationId,
+        taxYear: req.query?.taxYear || null,
+      }),
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to load payroll tax reliefs.");
+  }
+});
+
+router.post("/tax-reliefs/rent", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    const data = await nigeriaPayroll.declareRentRelief({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      input: req.body || {},
+    });
+    return res.status(201).json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to record rent relief declaration.");
+  }
+});
+
+router.patch("/tax-reliefs/:id/decision", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    const data = await nigeriaPayroll.decideRentRelief({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reliefId: req.params.id,
+      decision: req.body?.decision,
+      notes: req.body?.notes,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to decide rent relief declaration.");
+  }
+});
 
 router.get("/periods", requirePermission("payroll.view"), async (req, res) => {
   try {
@@ -133,6 +187,7 @@ function salaryTemplateBuffer() {
       ["CHRiS Salary Rates Bulk Import"],
       ["One employee per row. Employee Number must already exist in CHRiS."],
       ["Monthly Gross Salary is the authoritative monthly gross compensation amount."],
+      ["For ZERMATT, CHRiS splits gross into Basic 57%, Housing 11%, Transport 10%, Meal 9%, Medical 8%, Utility 5%."],
       ["Effective From must use YYYY-MM-DD. Effective To is optional."],
       ["Existing overlapping active rates are rejected rather than silently overwritten."],
     ]),
@@ -368,17 +423,12 @@ router.get("/runs/:id/lines", requirePermission("payroll.view"), async (req, res
 
 router.post("/runs/draft", requirePermission("payroll.process"), async (req, res) => {
   try {
-    const readiness = await getPayrollReadiness({
-      organizationId: req.auth.organizationId,
-    });
+    const readiness = await getPayrollReadiness({ organizationId: req.auth.organizationId });
     if (!readiness.executionEnabled) {
       const incompleteEmployees = (readiness.employees || [])
         .filter((employee) => !employee.readyForExecution)
         .slice(0, 25)
-        .map((employee) => ({
-          employeeNumber: employee.employeeNumber,
-          blockers: employee.blockers,
-        }));
+        .map((employee) => ({ employeeNumber: employee.employeeNumber, blockers: employee.blockers }));
       throw payroll.operationalError(
         "PAYROLL_EXECUTION_READINESS_INCOMPLETE",
         `${Math.max(0, Number(readiness.summary?.currentEmployees || 0) - Number(readiness.summary?.readyForExecution || 0))} current employee(s) are not ready for draft payroll execution.`,
@@ -387,14 +437,28 @@ router.post("/runs/draft", requirePermission("payroll.process"), async (req, res
       );
     }
 
-    const data = await payroll.executeDraftPayroll({
-      organizationId: req.auth.organizationId,
-      actorUserId: req.auth.userId,
-      periodId: req.body?.periodId,
+    const organization = await prisma.organization.findUnique({
+      where: { id: req.auth.organizationId },
+      select: { country: true, slug: true },
     });
+    const isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
+    const data = isNigeriaPayroll
+      ? await nigeriaPayroll.executeNigeriaDraftPayroll({
+          organizationId: req.auth.organizationId,
+          actorUserId: req.auth.userId,
+          periodId: req.body?.periodId,
+        })
+      : await payroll.executeDraftPayroll({
+          organizationId: req.auth.organizationId,
+          actorUserId: req.auth.userId,
+          periodId: req.body?.periodId,
+        });
+
     return res.status(201).json({
       status: "success",
-      message: "Draft payroll calculated. No payment instruction has been posted.",
+      message: isNigeriaPayroll
+        ? "Draft payroll calculated with the effective Nigeria PAYE/pension policy. No payment instruction has been posted."
+        : "Draft payroll calculated. No payment instruction has been posted.",
       data,
     });
   } catch (error) {
@@ -449,7 +513,7 @@ router.get("/payslips", requirePermission("payroll.view"), async (req, res) => {
     return res.json({
       status: "success",
       data: await payroll.listRunLines({ organizationId: req.auth.organizationId, runId: req.query?.runId || null }),
-      control: "Release-1 payslips are payroll run previews/approved records. Payment transmission and statutory automation are separate controls.",
+      control: "Payslips reflect the payroll-run calculation and approval state. Bank/payment transmission remains a separate controlled process.",
     });
   } catch (error) {
     return sendError(res, error, "Unable to load payslips.");
