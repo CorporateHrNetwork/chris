@@ -3,6 +3,7 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
+const employeeCareerCatalogRoutes = require("./routes/employeeCareerCatalogRoutes");
 const onboardingRoutes = require("./routes/onboardingRoutes");
 const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
@@ -98,6 +99,11 @@ app.use(
 app.use(
   "/api/employees/onboarding",
   onboardingRoutes
+);
+
+app.use(
+  "/api/employees",
+  employeeCareerCatalogRoutes
 );
 
 app.use(
