@@ -21,6 +21,7 @@ const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
 const employeeDataOperationsRoutes = require("./routes/employeeDataOperationsRoutes");
+const employeeEmploymentAssignmentRoutes = require("./routes/employeeEmploymentAssignmentRoutes");
 const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPublicRoutes");
 const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
 const {
@@ -120,6 +121,11 @@ app.use(
 app.use(
   "/api/employee-data",
   employeeDataOperationsRoutes
+);
+
+app.use(
+  "/api/employee-assignments",
+  employeeEmploymentAssignmentRoutes
 );
 
 app.use(
