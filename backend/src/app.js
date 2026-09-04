@@ -23,6 +23,10 @@ const organizationRoutes = require("./routes/organizationRoutes");
 const employeeDataOperationsRoutes = require("./routes/employeeDataOperationsRoutes");
 const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPublicRoutes");
 const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
+const {
+  corsOptionsDelegate,
+  applySecurityHeaders,
+} = require("./middleware/securityMiddleware");
 
 const app = express();
 
@@ -32,8 +36,9 @@ CORE MIDDLEWARE
 ============================================================
 */
 
-app.use(cors());
-
+app.disable("x-powered-by");
+app.use(cors(corsOptionsDelegate));
+app.use(applySecurityHeaders);
 app.use(express.json());
 
 /*
