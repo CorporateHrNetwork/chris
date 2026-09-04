@@ -34,6 +34,23 @@ const EMPLOYMENT_TYPE_ALIASES = new Map([
   ["domestic staff - housekeeper", "Domestic Staff - Housekeeper"],
 ]);
 
+const ZERMATT_SLUG = "zermatt-liquor-limited";
+const ZERMATT_EMPLOYMENT_TYPE_ALIASES = new Map([
+  ["full-time", "Full-Time"],
+  ["full time", "Full-Time"],
+  ["full-time-employment", "Full-Time"],
+  ["full time employment", "Full-Time"],
+  ["part-time", "Part-time"],
+  ["part time", "Part-time"],
+  ["part-time-employment", "Part-time"],
+  ["part time employment", "Part-time"],
+  ["expatriate", "Expatriate"],
+  ["nysc / internship", "NYSC/Internship"],
+  ["nysc/internship", "NYSC/Internship"],
+  ["nysc internship", "NYSC/Internship"],
+  ["internship", "NYSC/Internship"],
+]);
+
 const ERROR_DEFINITIONS = {
   EMPLOYEE_REQUIRED_FIELDS_MISSING: [
     400,
@@ -108,6 +125,12 @@ function normalizeEmploymentType(value) {
   const raw = String(value || "").trim().replace(/\s+/g, " ");
   if (!raw) return null;
   return EMPLOYMENT_TYPE_ALIASES.get(raw.toLowerCase()) || null;
+}
+
+function normalizeZermattEmploymentType(value) {
+  const raw = String(value || "").trim().replace(/\s+/g, " ");
+  if (!raw) return null;
+  return ZERMATT_EMPLOYMENT_TYPE_ALIASES.get(raw.toLowerCase()) || null;
 }
 
 function normalizeCreationPayload(input = {}) {
@@ -299,8 +322,19 @@ async function createEmployeeWithDependencies(
       throw employeeCreationError("EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED");
     }
 
+    let persistedEmploymentType = payload.employmentType;
+    if (
+      sequenceOwner.slug === ZERMATT_SLUG &&
+      String(input.employmentType || "").trim()
+    ) {
+      persistedEmploymentType = normalizeZermattEmploymentType(input.employmentType);
+      if (!persistedEmploymentType) {
+        throw employeeCreationError("INVALID_EMPLOYEE_EMPLOYMENT_TYPE");
+      }
+    }
+
     const employeeNumberPrefix =
-      sequenceOwner.slug === "zermatt-liquor-limited" ? "ZLL" : "CHR";
+      sequenceOwner.slug === ZERMATT_SLUG ? "ZLL" : "CHR";
     const employeeNumber =
       `${employeeNumberPrefix}${String(nextNumber).padStart(6, "0")}`;
     const employee = await tx.employee.create({
@@ -310,7 +344,7 @@ async function createEmployeeWithDependencies(
         designationId: designation.id,
         locationId: location.id,
         costCentreId: costCentre?.id || null,
-        employmentType: payload.employmentType,
+        employmentType: persistedEmploymentType,
         employeeNumber,
         firstName: payload.firstName,
         middleName: payload.middleName,
@@ -360,4 +394,5 @@ module.exports = {
   createEmployeeWithDependencies,
   normalizeCreationPayload,
   normalizeEmploymentType,
+  normalizeZermattEmploymentType,
 };
