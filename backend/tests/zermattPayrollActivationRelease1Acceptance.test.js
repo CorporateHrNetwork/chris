@@ -5,7 +5,6 @@ const path = require("node:path");
 const repoRoot = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.resolve(repoRoot, relativePath), "utf8");
 const requireText = (source, values, label) => values.forEach((value) => assert.ok(source.includes(value), `${label} must include: ${value}`));
-
 test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   const foundationMigration = read("backend/prisma/migrations/20260904201500_activate_payroll_release1/migration.sql");
   const complianceMigration = read("backend/prisma/migrations/20260904233000_add_zermatt_nigeria_payroll_compliance/migration.sql");
@@ -18,7 +17,6 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   const nigeriaWorkspace = read("src/pages/payroll/NigeriaPayrollWorkspace.jsx");
   const supplementWorkspace = read("src/pages/payroll/NigeriaPayrollSupplementWorkspace.jsx");
   const sidebar = read("src/components/layout/Sidebar/Sidebar.jsx");
-
   requireText(foundationMigration, ['CREATE TABLE "payroll_periods"','CREATE TABLE "payroll_salary_rates"','CREATE TABLE "payroll_components"','CREATE TABLE "payroll_salary_advances"','CREATE TABLE "payroll_runs"','CREATE TABLE "payroll_run_lines"','CREATE TABLE "payroll_approvals"'], "Payroll foundation migration");
   assert.equal(foundationMigration.includes('ALTER TABLE "employees"'), false);
   requireText(complianceMigration, ['CREATE TABLE "payroll_policy_versions"','CREATE TABLE "payroll_tax_reliefs"','zermatt-liquor-limited','"basic":57','"housing":11','"transport":10','"meal":9','"medical":8','"utility":5','"Full-Time":26','"Part-Time":16','["basic","housing","transport"]','"rentReliefRate":20','"rentReliefCap":500000','"minimumWageMonthly":70000','"bands":[{"limit":800000,"rate":0},{"limit":2200000,"rate":15},{"limit":9000000,"rate":18},{"limit":13000000,"rate":21},{"limit":25000000,"rate":23},{"limit":null,"rate":25}]','"employeeDeduction":false'], "ZERMATT Nigeria compliance migration");
