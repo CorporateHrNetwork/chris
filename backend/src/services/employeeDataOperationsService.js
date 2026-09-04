@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
+const { normalizeEmploymentType } = require("./employeeCreationService");
 
 const EXPORT_COLUMN_CATALOG = [
   { key: "employeeNumber", label: "Employee No" },
@@ -50,9 +51,11 @@ const IMPORT_HEADERS = [
   "Gender",
   "Status",
   "Hire Date",
+  "Employment Type",
   "Department",
   "Designation",
   "Location",
+  "Cost Centre / Operating Unit",
   "NIN",
 ];
 
@@ -117,8 +120,10 @@ function buildTemplateWorkbook() {
   const instructions = [
     ["CHRiS Bulk Employee Import"],
     ["One employee per row. Do not change the column headings."],
-    ["Department, Designation and Location may use the CHRiS name or code."],
+    ["Department, Designation, Location and Cost Centre / Operating Unit may use the CHRiS name or code."],
     ["Required: Employee Name, Department, Designation and Location. Email and Phone may be completed later by authorized HR."],
+    ["Employment Type: Full-Time, Part-Time, Expatriate, NYSC / Internship, or Domestic Staff - Housekeeper."],
+    ["Cost Centre / Operating Unit is validated independently from Department when supplied."],
     ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED."],
     ["Status: Active, Probation, Leave or Suspended. Blank defaults to Probation."],
     ["Hire Date: YYYY-MM-DD."],
@@ -140,9 +145,11 @@ function buildTemplateWorkbook() {
         "FEMALE",
         "Probation",
         "2026-08-30",
+        "Full-Time",
         "Human Resources",
         "HR Officer",
         "Abuja",
+        "HEAD OFFICE",
         "",
       ],
     ]),
@@ -164,7 +171,8 @@ function findCatalogRow(rows, value) {
 
 async function prepareBulkRows(prisma, { organizationId, buffer }) {
   const sourceRows = parseWorkbook(buffer);
-  const [departments, designations, locations, existingEmployees] = await Promise.all([
+  const now = new Date();
+  const [departments, designations, locations, costCentres, existingEmployees] = await Promise.all([
     prisma.department.findMany({
       where: { organizationId, isActive: true },
       select: { id: true, name: true, code: true },
@@ -175,6 +183,15 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     }),
     prisma.organizationLocation.findMany({
       where: { organizationId, isActive: true },
+      select: { id: true, name: true, code: true },
+    }),
+    prisma.costCentre.findMany({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        effectiveFrom: { lte: now },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }],
+      },
       select: { id: true, name: true, code: true },
     }),
     prisma.employee.findMany({
@@ -200,12 +217,21 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const gender = (getCell(row, ["Gender"]) || "UNSPECIFIED").toUpperCase();
     const status = mapStatus(getCell(row, ["Status"]) || "Active");
     const hireDate = getCell(row, ["Hire Date", "Employment Date", "Start Date"]);
+    const employmentTypeInput = getCell(row, ["Employment Type", "EmploymentType"]);
+    const employmentType = normalizeEmploymentType(employmentTypeInput);
     const idType = getCell(row, ["ID Type"]);
     const directNin = getCell(row, ["NIN", "National Identification Number"]);
     const idNumber = getCell(row, ["ID Number", "Identification Number"]);
     const nin = directNin || (String(idType || "").trim().toUpperCase() === "NIN" ? idNumber : "");
     const departmentInput = getCell(row, ["Department", "Department Code"]);
     const designationInput = getCell(row, ["Designation", "Designation Code"]);
+    const costCentreInput = getCell(row, [
+      "Cost Centre / Operating Unit",
+      "Cost Centre",
+      "Cost Center",
+      "Operating Unit",
+      "Cost Centre Code",
+    ]);
     const rawLocationInput = getCell(row, ["Location", "Company Branch", "Branch", "Branch / Location", "Location Code"]);
     const locationAliases = {
       "ABUJA": "ABJ",
@@ -225,11 +251,13 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const department = findCatalogRow(departments, departmentInput);
     const designation = findCatalogRow(designations, designationInput);
     const location = findCatalogRow(locations, locationInput);
+    const costCentre = findCatalogRow(costCentres, costCentreInput);
     const errors = [];
 
     if (!name || name.trim().split(/\s+/).length < 2) errors.push("Employee Name must contain at least first and last name.");
-if (!["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(gender)) errors.push("Gender must be MALE, FEMALE, OTHER or UNSPECIFIED.");
+    if (!["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(gender)) errors.push("Gender must be MALE, FEMALE, OTHER or UNSPECIFIED.");
     if (!status) errors.push("Status is invalid.");
+    if (employmentTypeInput && !employmentType) errors.push("Employment Type is not in the authoritative CHRiS catalogue.");
     if (!department) errors.push("Department was not found in the active CHRiS structure.");
     if (!designation) errors.push("Designation was not found in the active CHRiS structure.");
     if (designation && department && designation.departmentId !== department.id) {
@@ -239,6 +267,7 @@ if (!["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(gender)) errors.push("G
       errors.push("Designation must be mapped to an Employment Level.");
     }
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
+    if (costCentreInput && !costCentre) errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
     if (hireDate && !/^\d{4}-\d{2}-\d{2}$/.test(hireDate)) errors.push("Hire Date must use YYYY-MM-DD.");
     if (nin && !/^\d{11}$/.test(nin.replace(/\D/g, ""))) errors.push("NIN must contain 11 digits.");
     if (email && (existingEmails.has(email) || seenEmails.has(email))) errors.push("Work Email already exists or is duplicated in this file.");
@@ -264,18 +293,22 @@ if (!["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(gender)) errors.push("G
               gender,
               status,
               hireDate,
+              employmentType,
               departmentId: department.id,
               designationId: designation.id,
               locationId: location.id,
+              costCentreId: costCentre?.id || null,
               nationalIdentificationNumber: normalizedNin || "",
             }
           : null,
       display: {
         name,
         email,
+        employmentType: employmentType || employmentTypeInput,
         department: department?.name || departmentInput,
         designation: designation?.name || designationInput,
         location: location?.name || locationInput,
+        costCentre: costCentre?.name || costCentreInput,
       },
     };
   });
