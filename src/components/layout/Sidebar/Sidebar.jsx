@@ -1766,8 +1766,10 @@ function Sidebar() {
                 return false;
               }
 
+              const childPathname = child.path.split("?")[0];
+
               if (
-                child.path ===
+                childPathname ===
                 "/"
               ) {
                 return (
@@ -1778,9 +1780,9 @@ function Sidebar() {
 
               return (
                 currentPath ===
-                  child.path ||
+                  childPathname ||
                 currentPath.startsWith(
-                  `${child.path}/`
+                  `${childPathname}/`
                 )
               );
             }
@@ -1869,6 +1871,30 @@ function Sidebar() {
     (label) => {
       window.alert(
         `${label} is part of the approved CHRIS architecture and will be activated during its implementation stage.`
+      );
+    };
+
+  const isChildActive =
+    (childPath, routerActive) => {
+      if (!childPath) return false;
+
+      const queryIndex = childPath.indexOf("?");
+      if (queryIndex === -1) {
+        if (
+          childPath === "/payroll" &&
+          location.pathname === "/payroll" &&
+          location.search
+        ) {
+          return false;
+        }
+        return routerActive;
+      }
+
+      const pathname = childPath.slice(0, queryIndex);
+      const search = childPath.slice(queryIndex);
+      return (
+        location.pathname === pathname &&
+        location.search === search
       );
     };
 
@@ -2416,8 +2442,10 @@ function Sidebar() {
                     return false;
                   }
 
+                  const childPathname = child.path.split("?")[0];
+
                   if (
-                    child.path ===
+                    childPathname ===
                       "/" &&
                     location.pathname ===
                       "/"
@@ -2426,7 +2454,7 @@ function Sidebar() {
                   }
 
                   if (
-                    child.path ===
+                    childPathname ===
                     "/"
                   ) {
                     return false;
@@ -2434,9 +2462,9 @@ function Sidebar() {
 
                   return (
                     location.pathname ===
-                      child.path ||
+                      childPathname ||
                     location.pathname.startsWith(
-                      `${child.path}/`
+                      `${childPathname}/`
                     )
                   );
                 }
@@ -2629,47 +2657,53 @@ function Sidebar() {
 
                             style={({
                               isActive,
-                            }) => ({
-                              ...childLinkStyle,
+                            }) => {
+                              const active = isChildActive(child.path, isActive);
+                              return {
+                                ...childLinkStyle,
 
-                              background:
-                                isActive
-                                  ? "linear-gradient(90deg, rgba(212,175,55,0.13), rgba(0,122,67,0.16))"
-                                  : "rgba(8,122,67,0.045)",
+                                background:
+                                  active
+                                    ? "linear-gradient(90deg, rgba(212,175,55,0.13), rgba(0,122,67,0.16))"
+                                    : "rgba(8,122,67,0.045)",
 
-                              color:
-                                isActive
-                                  ? "#FFFFFF"
-                                  : "#BFD5CA",
+                                color:
+                                  active
+                                    ? "#FFFFFF"
+                                    : "#BFD5CA",
 
-                              fontWeight:
-                                isActive
-                                  ? "800"
-                                  : "500",
-                            })}
+                                fontWeight:
+                                  active
+                                    ? "800"
+                                    : "500",
+                              };
+                            }}
                           >
                             {({
                               isActive,
-                            }) => (
-                              <>
-                                <span
-                                  style={{
-                                    ...childDotStyle,
+                            }) => {
+                              const active = isChildActive(child.path, isActive);
+                              return (
+                                <>
+                                  <span
+                                    style={{
+                                      ...childDotStyle,
 
-                                    background:
-                                      isActive
-                                        ? "var(--chris-gold, #D4AF37)"
-                                        : "rgba(255,255,255,0.35)",
-                                  }}
-                                />
+                                      background:
+                                        active
+                                          ? "var(--chris-gold, #D4AF37)"
+                                          : "rgba(255,255,255,0.35)",
+                                    }}
+                                  />
 
-                                <span>
-                                  {
-                                    child.label
-                                  }
-                                </span>
-                              </>
-                            )}
+                                  <span>
+                                    {
+                                      child.label
+                                    }
+                                  </span>
+                                </>
+                              );
+                            }}
                           </NavLink>
                         );
                       }
