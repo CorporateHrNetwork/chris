@@ -14,10 +14,13 @@ const {
   appendDisciplinaryEvidence,
   addDisciplinaryProcessEvent,
   addExternalProceeding,
-  updateDisciplinaryCase,
   buildEmploymentDecisionEvidencePack,
   recordVerification,
 } = require("../services/employmentGovernanceService");
+const {
+  DISCIPLINARY_TRANSITIONS,
+  transitionDisciplinaryCase,
+} = require("../services/disciplinaryGovernanceControlService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -37,6 +40,7 @@ router.get("/catalog", requirePermission("employees.view"), async (req, res) => 
       contractStates: CONTRACT_STATES,
       contractTransitions: CONTRACT_TRANSITIONS,
       disciplinaryStatuses: DISCIPLINARY_STATUSES,
+      disciplinaryTransitions: DISCIPLINARY_TRANSITIONS,
       verificationStatuses: VERIFICATION_STATUSES,
     },
   });
@@ -163,14 +167,17 @@ router.post("/disciplinary-cases", requirePermission("employees.update"), async 
 
 router.patch("/disciplinary-cases/:id", requirePermission("employees.update"), async (req, res) => {
   try {
-    const data = await updateDisciplinaryCase(prisma, {
+    const data = await transitionDisciplinaryCase(prisma, {
       organizationId: req.auth.organizationId,
       caseId: req.params.id,
-      ...req.body,
+      actorUserId: req.auth.userId,
+      status: req.body?.status,
+      outcome: req.body?.outcome,
+      reason: req.body?.reason,
     });
     return res.json({ status: "success", data });
   } catch (error) {
-    return safeError(res, error, "Unable to update disciplinary case.");
+    return safeError(res, error, "Unable to transition disciplinary case.");
   }
 });
 
