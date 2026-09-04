@@ -79,7 +79,7 @@ test("ZERMATT Release-1 Payroll activation gate", () => {
       "paymentPosted: false",
       'leaveType: { isPaid: true }',
       "salaryAdvanceRecoveries",
-      "No payment instruction",
+      "does not transmit payment instructions",
     ],
     "Payroll operations service"
   );
