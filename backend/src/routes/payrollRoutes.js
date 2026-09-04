@@ -12,6 +12,9 @@ const {
 } = require("../services/payrollReadinessService");
 const payroll = require("../services/payrollOperationsService");
 const nigeriaPayroll = require("../services/nigeriaPayrollComplianceService");
+const {
+  validateNigeriaPayrollApproval,
+} = require("../services/payrollApprovalComplianceService");
 
 const router = express.Router();
 const upload = multer({
@@ -484,6 +487,21 @@ router.post("/runs/:id/submit", requirePermission("payroll.process"), async (req
 
 router.post("/runs/:id/decision", requirePermission("payroll.manage"), async (req, res) => {
   try {
+    const decision = String(req.body?.decision || "").trim().toUpperCase();
+    if (decision === "APPROVE") {
+      const organization = await prisma.organization.findUnique({
+        where: { id: req.auth.organizationId },
+        select: { country: true, slug: true },
+      });
+      const isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
+      if (isNigeriaPayroll) {
+        await validateNigeriaPayrollApproval({
+          organizationId: req.auth.organizationId,
+          runId: req.params.id,
+        });
+      }
+    }
+
     return res.json({
       status: "success",
       data: await payroll.decidePayrollRun({
