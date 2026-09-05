@@ -1,7 +1,9 @@
 const express = require("express");
+const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const { updateSalaryAdvance, updateLoan } = require("../services/payrollLiabilityEditService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+const { validateLoanPurpose } = require("../services/loanPolicyService");
 const payrollDraftFreshnessRoutes = require("./payrollDraftFreshnessRoutes");
 
 const router = express.Router();
@@ -42,11 +44,19 @@ router.patch("/payroll/salary-advances/:id", requirePermission("payroll.manage")
 
 router.patch("/loans/:id", requirePermission("payroll.manage"), async (req, res) => {
   try {
+    const input = { ...(req.body || {}) };
+    if (input.purpose !== undefined) {
+      input.purpose = await validateLoanPurpose({
+        organizationId: req.auth.organizationId,
+        purpose: input.purpose,
+        prismaClient: prisma,
+      });
+    }
     const data = await updateLoan({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
       loanId: req.params.id,
-      input: req.body || {},
+      input,
     });
     return res.json({ status: "success", data });
   } catch (error) {
