@@ -1,7 +1,11 @@
 const express = require("express");
 
+const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const loans = require("../services/loanService");
+const { getLoanPolicies } = require("../services/loanPolicyService");
+const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileService");
+const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -19,12 +23,42 @@ function sendError(res, error, fallback = "Loan operation failed.") {
   return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
 
+function exportFormat(value) {
+  const format = String(value || "").trim().toLowerCase();
+  if (!["xlsx", "csv", "pdf"].includes(format)) {
+    const error = new Error("Export format must be xlsx, csv or pdf.");
+    error.code = "INVALID_LOAN_EXPORT_FORMAT";
+    error.statusCode = 400;
+    throw error;
+  }
+  return format;
+}
+
+function sendExport(res, file) {
+  res.setHeader("Content-Type", file.contentType);
+  res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);
+  res.setHeader("Cache-Control", "no-store");
+  return res.send(file.buffer);
+}
+
 router.get("/summary", requirePermission("payroll.view"), async (req, res) => {
   try {
     const data = await loans.getLoanSummary({ organizationId: req.auth.organizationId });
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan summary.");
+  }
+});
+
+router.get("/policies", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    const data = await getLoanPolicies({
+      organizationId: req.auth.organizationId,
+      prismaClient: prisma,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to load loan policies.");
   }
 });
 
@@ -37,6 +71,41 @@ router.get("/recoveries", requirePermission("payroll.view"), async (req, res) =>
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan recoveries.");
+  }
+});
+
+router.get("/reports/export", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    const format = exportFormat(req.query?.format);
+    const rows = await getBulkLoanReport({ organizationId: req.auth.organizationId });
+    return sendExport(res, exportBulkLoans(rows, format));
+  } catch (error) {
+    return sendError(res, error, "Unable to export bulk loan report.");
+  }
+});
+
+router.get("/:id/profile", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    const data = await getLoanProfile({
+      organizationId: req.auth.organizationId,
+      loanId: req.params.id,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to load loan profile.");
+  }
+});
+
+router.get("/:id/export", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    const format = exportFormat(req.query?.format);
+    const profile = await getLoanProfile({
+      organizationId: req.auth.organizationId,
+      loanId: req.params.id,
+    });
+    return sendExport(res, exportIndividualLoan(profile, format));
+  } catch (error) {
+    return sendError(res, error, "Unable to export loan profile.");
   }
 });
 
