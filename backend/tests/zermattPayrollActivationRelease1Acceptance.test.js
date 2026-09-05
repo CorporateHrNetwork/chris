@@ -33,7 +33,7 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   requireText(payrollPage, ['"execute"','"periods"','"rates"','"allowances"','"deductions"','"payslips"','"salary-advances"','"paid-leave"','"approvals"','"statutory"','"rent-relief"',"NigeriaPayrollWorkspace","NigeriaPayrollSupplementWorkspace",'title="Execute Payroll"','title="Payroll Periods"','title="Salary Rates"','title="Nigeria Statutory Setup"','title="Tax Rent Relief"','title="Other Allowances"','title="Other Deductions"','title="Payslips"','title="Payroll Approvals"'], "Payroll dashboard");
   requireText(nigeriaWorkspace, ["Nigeria-Compliant Draft Payroll","26/16","Tax Rent Relief","20% of annual rent paid","Save for Verification","/api/payroll/tax-reliefs/rent","/api/payroll/compliance-policy"], "Nigeria payroll workspaces");
   requireText(supplementWorkspace, ["Other Allowances","Other Deductions","Taxable earning (default)","PAYE and pension are statutory calculations and should not be recreated here","I confirm I reviewed CHRiS-calculated PAYE/pension",'const path = kind === "ALLOWANCE" ? "allowances" : "deductions"',"/api/payroll/payslips","/api/payroll/approvals"], "Nigeria payroll supplement workspaces");
-  const payrollBlockStart = sidebar.indexOf('id:\n            "payroll"');
+  const payrollBlockStart = sidebar.search(/id:\s*"payroll"/);
   const payrollBlockEnd = sidebar.indexOf("COMPENSATION & REWARDS", payrollBlockStart);
   assert.ok(payrollBlockStart >= 0 && payrollBlockEnd > payrollBlockStart);
   const payrollSidebar = sidebar.slice(payrollBlockStart, payrollBlockEnd);
