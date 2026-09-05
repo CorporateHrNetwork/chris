@@ -30,6 +30,7 @@ test("Loans and Salary Advances support controlled editing", () => {
     'FROM "payroll_loan_recoveries"',
     "postedRecoveryCount",
     "approvalReset",
+    'nextStatus = resetApproval ? "PENDING_APPROVAL"',
     "LOAN_CLOSED_RECORD_LOCKED",
   ]) assert.ok(service.includes(value), `loan edit control missing: ${value}`);
 
