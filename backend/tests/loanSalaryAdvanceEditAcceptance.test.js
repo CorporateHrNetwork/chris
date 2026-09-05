@@ -51,6 +51,8 @@ test("Loans and Salary Advances support controlled editing", () => {
 
   assert.equal(service.includes('DELETE FROM "payroll_loan_recoveries"'), false, "editing must never delete posted loan recoveries");
   assert.equal(service.includes('DELETE FROM "payroll_run_lines"'), false, "editing must never rewrite payroll run lines");
+  assert.ok(service.includes("previousValue"), "edits must retain previous values in the audit trail");
+  assert.ok(service.includes("newValue"), "edits must retain new values in the audit trail");
 
   console.log("PASS: controlled Loan + Salary Advance editing gate passed.");
 });
