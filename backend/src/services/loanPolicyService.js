@@ -9,11 +9,15 @@ const ZERMATT_LOAN_POLICIES = Object.freeze([
   "Education Loan",
 ]);
 
-async function getLoanPolicies({ organizationId, prismaClient }) {
-  const organization = await prismaClient.organization.findUnique({
+async function getOrganization(prismaClient, organizationId) {
+  return prismaClient.organization.findUnique({
     where: { id: organizationId },
     select: { slug: true, name: true },
   });
+}
+
+async function getLoanPolicies({ organizationId, prismaClient }) {
+  const organization = await getOrganization(prismaClient, organizationId);
 
   if (organization?.slug === "zermatt-liquor-limited") {
     return {
@@ -25,7 +29,7 @@ async function getLoanPolicies({ organizationId, prismaClient }) {
         name,
         interestRatePercent: 0,
       })),
-      control: "ZERMATT employee loan policies are zero-interest. Loan purpose must be selected from the approved policy list in the CHRiS user interface.",
+      control: "ZERMATT employee loan policies are zero-interest. Loan purpose must be selected from the approved policy list in CHRiS.",
     };
   }
 
@@ -38,7 +42,23 @@ async function getLoanPolicies({ organizationId, prismaClient }) {
   };
 }
 
+async function validateLoanPurpose({ organizationId, purpose, prismaClient }) {
+  const organization = await getOrganization(prismaClient, organizationId);
+  if (organization?.slug !== "zermatt-liquor-limited") return String(purpose || "").trim();
+
+  const normalized = String(purpose || "").trim();
+  if (!ZERMATT_LOAN_POLICIES.includes(normalized)) {
+    const error = new Error("Select an approved ZERMATT loan policy.");
+    error.code = "INVALID_ZERMATT_LOAN_POLICY";
+    error.statusCode = 400;
+    error.details = { allowedPolicies: ZERMATT_LOAN_POLICIES };
+    throw error;
+  }
+  return normalized;
+}
+
 module.exports = {
   ZERMATT_LOAN_POLICIES,
   getLoanPolicies,
+  validateLoanPurpose,
 };
