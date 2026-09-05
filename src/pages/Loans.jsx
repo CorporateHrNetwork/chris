@@ -18,6 +18,7 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
+import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
 import { apiRequest } from "../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -90,6 +91,12 @@ function Loans() {
 
   const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+    setError("");
+    setMessage("");
+  };
+
+  const setEmployee = (employeeNumber) => {
+    setForm((current) => ({ ...current, employeeNumber }));
     setError("");
     setMessage("");
   };
@@ -268,14 +275,21 @@ function Loans() {
           icon={<FaPlusCircle />}
         >
           <form onSubmit={submitLoan} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
-            <label><small>Employee Number</small><input style={inputStyle} value={topUpParent?.employeeNumber || form.employeeNumber} onChange={setField("employeeNumber")} disabled={Boolean(topUpParent)} placeholder="ZLL000001" required /></label>
+            <EmployeeSearchSelect
+              label="Employee"
+              value={topUpParent?.employeeNumber || form.employeeNumber}
+              onChange={setEmployee}
+              disabled={Boolean(topUpParent)}
+              required
+              placeholder="Search employee number or name"
+            />
             <label><small>Principal Amount</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.principalAmount} onChange={setField("principalAmount")} required /></label>
             <label><small>Monthly Installment</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>
             <label><small>Application Date</small><input style={inputStyle} type="date" value={form.applicationDate} onChange={setField("applicationDate")} required /></label>
             <label><small>Purpose</small><input style={inputStyle} value={form.purpose} onChange={setField("purpose")} placeholder="Staff loan" /></label>
             <label><small>Notes</small><input style={inputStyle} value={form.notes} onChange={setField("notes")} /></label>
             <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button style={primaryButton} disabled={busy === "create"}>{busy === "create" ? "Saving…" : topUpParent ? "Create Top-Up" : "Create Loan"}</button>
+              <button style={primaryButton} disabled={busy === "create" || !(topUpParent?.employeeNumber || form.employeeNumber)}>{busy === "create" ? "Saving…" : topUpParent ? "Create Top-Up" : "Create Loan"}</button>
               {topUpParent && <button type="button" style={secondaryButton} onClick={resetForm}>Cancel Top-Up</button>}
             </div>
           </form>
