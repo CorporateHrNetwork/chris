@@ -256,7 +256,13 @@ BEGIN
       "id","organizationId","loanId","employeeId","runId","runLineId","amount","recoveryDate","status"
     )
     SELECT
-      gen_random_uuid()::TEXT,
+      md5(
+        random()::text ||
+        clock_timestamp()::text ||
+        l."id" ||
+        NEW."id" ||
+        recovery.run_line_id
+      ),
       NEW."organizationId",
       l."id",
       recovery.employee_id,
