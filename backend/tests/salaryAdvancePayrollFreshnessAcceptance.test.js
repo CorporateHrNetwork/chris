@@ -14,7 +14,7 @@ test("Salary Advance changes invalidate stale drafts and eligible recoveries flo
 
   for (const expected of [
     'FROM "payroll_salary_advances"',
-    '"status"=\'ACTIVE\'',
+    "\"status\"='ACTIVE'",
     '"outstandingAmount" > 0',
     '"recoveryStartDate" <= $2::date',
     "salaryAdvanceRecoveries: advances",
@@ -30,7 +30,6 @@ test("Salary Advance changes invalidate stale drafts and eligible recoveries flo
     "RECALCULATION_REQUIRED",
     "DRAFT",
     "REJECTED",
-    "RECALCULATION_REQUIRED",
   ]) {
     assert.ok(freshness.includes(expected), `draft freshness control missing: ${expected}`);
   }
