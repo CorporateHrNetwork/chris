@@ -9,6 +9,8 @@ import {
   FaChartLine,
   FaPlusCircle,
   FaHistory,
+  FaDownload,
+  FaIdCard,
 } from "react-icons/fa";
 
 import {
@@ -19,7 +21,8 @@ import {
   RecentActivityList,
 } from "../components/dashboard";
 import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
-import { apiRequest } from "../services/api";
+import LoanProfile from "./LoanProfile";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value) => new Intl.NumberFormat("en-NG", {
@@ -53,6 +56,8 @@ function Loans() {
   const [summary, setSummary] = useState({});
   const [loans, setLoans] = useState([]);
   const [recoveries, setRecoveries] = useState([]);
+  const [loanPolicies, setLoanPolicies] = useState([]);
+  const [selectedLoanProfile, setSelectedLoanProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -74,14 +79,16 @@ function Loans() {
     try {
       setLoading(true);
       setError("");
-      const [summaryResult, loansResult, recoveryResult] = await Promise.all([
+      const [summaryResult, loansResult, recoveryResult, policyResult] = await Promise.all([
         apiRequest("/api/loans/summary"),
         apiRequest("/api/loans"),
         apiRequest("/api/loans/recoveries"),
+        apiRequest("/api/loans/policies"),
       ]);
       setSummary(summaryResult?.data || {});
       setLoans(loansResult?.data || []);
       setRecoveries(recoveryResult?.data || []);
+      setLoanPolicies(policyResult?.data?.policies || []);
     } catch (requestError) {
       setError(requestError?.message || "Unable to load Loans.");
     } finally {
@@ -115,6 +122,18 @@ function Loans() {
       purpose: "",
       notes: "",
     });
+  };
+
+  const exportBulk = async (format) => {
+    try {
+      setBusy(`export-${format}`);
+      setError("");
+      saveDownloadedBlob(await apiDownload(`/api/loans/reports/export?format=${format}`));
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to export loan report.");
+    } finally {
+      setBusy("");
+    }
   };
 
   const submitLoan = async (event) => {
@@ -275,12 +294,16 @@ function Loans() {
     },
   ];
 
+  if (selectedLoanProfile) {
+    return <LoanProfile loanId={selectedLoanProfile} onBack={() => setSelectedLoanProfile(null)} />;
+  }
+
   return (
     <>
       <ModuleDashboardShell
         eyebrow="EMPLOYEE FINANCIAL SUPPORT"
         title="Loans Dashboard"
-        description="Manage employee loan applications, approval, disbursement, payroll installment recovery, top-ups and history. Loans remain separate from Salary Advances."
+        description="Manage ZERMATT zero-interest employee loan applications, approval, disbursement, payroll installment recovery, amortization, top-ups, profiles and reporting."
         metrics={[
           <DashboardCard key="active" title="Active Loans" value={loading ? "—" : Number(summary.activeLoans || 0)} subtitle="Currently recovering through payroll" icon={<FaHandHoldingUsd />} tone="green" />,
           <DashboardCard key="borrowers" title="Borrowers" value={loading ? "—" : Number(summary.borrowers || 0)} subtitle="Employees with active/paused loans" icon={<FaUsers />} tone="gold" />,
@@ -322,7 +345,7 @@ function Loans() {
             ? (editHistoryLocked
                 ? "The loan has been disbursed and may have posted recoveries. Employee, principal and application date are locked; future installment/recovery settings and notes may be adjusted without rewriting history."
                 : "No disbursement has occurred. Permitted corrections are audited; changes to an Approved loan's approval-sensitive terms return it to Pending Approval.")
-            : "Creation does not begin payroll deduction. The loan must be approved and then marked disbursed before recovery starts."}
+            : "Creation does not begin payroll deduction. ZERMATT loan policies are zero-interest; the loan must be approved and then marked disbursed before recovery starts."}
           icon={<FaPlusCircle />}
         >
           <form onSubmit={submitLoan} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
@@ -338,10 +361,14 @@ function Loans() {
             <label><small>Monthly Installment</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>
             <label><small>Application Date</small><input style={{ ...inputStyle, ...(editHistoryLocked ? { opacity: .68 } : {}) }} type="date" value={form.applicationDate} onChange={setField("applicationDate")} disabled={editHistoryLocked} required /></label>
             {editingLoan?.disbursedDate && <label><small>Recovery Start</small><input style={inputStyle} type="date" value={form.recoveryStartDate} onChange={setField("recoveryStartDate")} required /></label>}
-            <label><small>Purpose</small><input style={inputStyle} value={form.purpose} onChange={setField("purpose")} placeholder="Staff loan" /></label>
+            <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required>
+              <option value="">Select ZERMATT loan policy</option>
+              {form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}
+              {loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}
+            </select></label>
             <label><small>Notes</small><input style={inputStyle} value={form.notes} onChange={setField("notes")} /></label>
             <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button style={primaryButton} disabled={Boolean(busy) || !(topUpParent?.employeeNumber || form.employeeNumber)}>{busy ? "Saving…" : editingLoan ? "Save Changes" : topUpParent ? "Create Top-Up" : "Create Loan"}</button>
+              <button style={primaryButton} disabled={Boolean(busy) || !(topUpParent?.employeeNumber || form.employeeNumber) || !form.purpose}>{busy ? "Saving…" : editingLoan ? "Save Changes" : topUpParent ? "Create Top-Up" : "Create Loan"}</button>
               {(editingLoan || topUpParent) && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>{editingLoan ? "Cancel Edit" : "Cancel Top-Up"}</button>}
             </div>
           </form>
@@ -349,18 +376,23 @@ function Loans() {
       </section>
 
       <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
-        <AnalyticsPanel title="Loan Register" subtitle="Outstanding balance changes only when approved payroll recoveries are posted. Editing never rewrites posted recoveries." icon={<FaHandHoldingUsd />}>
+        <AnalyticsPanel title="Loan Register" subtitle="Open an employee loan profile for the full amortization plan and repayment history. Outstanding balance changes only when approved payroll recoveries are posted." icon={<FaHandHoldingUsd />}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <strong style={{ marginRight: "auto", alignSelf: "center" }}>Bulk Loan Report</strong>
+            {[["xlsx", "Excel"], ["csv", "CSV"], ["pdf", "PDF"]].map(([format, label]) => <button key={format} style={secondaryButton} disabled={Boolean(busy)} onClick={() => exportBulk(format)}><FaDownload style={{ marginRight: 6 }} />{busy === `export-${format}` ? "Preparing…" : label}</button>)}
+          </div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}>
-              <thead><tr>{["Loan", "Employee", "Principal", "Outstanding", "Installment", "Status", "Recovery Start", "Actions"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1160 }}>
+              <thead><tr>{["Loan", "Employee", "Policy / Purpose", "Principal", "Outstanding", "Installment", "Status", "Recovery Start", "Actions"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
-                {!loading && !loans.length && <tr><td colSpan="8" style={{ padding: 16 }}>No loans have been recorded.</td></tr>}
+                {!loading && !loans.length && <tr><td colSpan="9" style={{ padding: 16 }}>No loans have been recorded.</td></tr>}
                 {loans.map((loan) => {
                   const draft = disbursementDrafts[loan.id] || { disbursedDate: today(), recoveryStartDate: today() };
                   const canEdit = ["PENDING_APPROVAL", "APPROVED", "ACTIVE", "PAUSED"].includes(loan.status);
                   return <tr key={loan.id}>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{loan.loanNumber}</strong>{loan.parentLoanNumber ? <div><small>Top-up of {loan.parentLoanNumber}</small></div> : null}</td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{loan.employeeNumber}</strong><div><small>{loan.employeeName}</small></div></td>
+                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{loan.purpose || "—"}<div><small>0% interest</small></div></td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(loan.principalAmount)}</td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(loan.outstandingAmount)}</td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(loan.installmentAmount)}</td>
@@ -368,6 +400,7 @@ function Loans() {
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{loan.recoveryStartDate || "—"}</td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        <button style={primaryButton} disabled={Boolean(busy)} onClick={() => setSelectedLoanProfile(loan.id)}><FaIdCard style={{ marginRight: 6 }} />View Profile</button>
                         {canEdit && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => startEdit(loan)}>Edit</button>}
                         {loan.status === "PENDING_APPROVAL" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => decide(loan, "APPROVE")}>Approve</button><button style={secondaryButton} disabled={busy === loan.id} onClick={() => decide(loan, "REJECT")}>Reject</button></>}
                         {loan.status === "APPROVED" && <>
