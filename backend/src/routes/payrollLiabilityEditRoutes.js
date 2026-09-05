@@ -48,7 +48,12 @@ router.patch("/loans/:id", requirePermission("payroll.manage"), async (req, res)
       loanId: req.params.id,
       input: req.body || {},
     });
-    return res.json({ status: "success", data });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Loan ${req.params.id} was edited and open payroll drafts must be recalculated.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
   } catch (error) {
     return sendError(res, error, "Unable to edit loan.");
   }
