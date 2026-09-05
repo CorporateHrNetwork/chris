@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
@@ -289,13 +290,19 @@ function SalaryAdvancesWorkspace() {
     <>
       <Panel title="Record Salary Advance">
         <form style={formGrid} onSubmit={save}>
-          <Input label="Employee Number" value={form.employeeNumber} onChange={(value) => setForm((p) => ({ ...p, employeeNumber: value }))} placeholder="ZLL000001" required />
+          <EmployeeSearchSelect
+            label="Employee"
+            value={form.employeeNumber}
+            onChange={(employeeNumber) => setForm((p) => ({ ...p, employeeNumber }))}
+            required
+            placeholder="Search employee number or name"
+          />
           <Input type="number" label="Advance Amount" value={form.amount} onChange={(value) => setForm((p) => ({ ...p, amount: value }))} min="0" step="0.01" required />
           <Input type="number" label="Installment Amount" value={form.installmentAmount} onChange={(value) => setForm((p) => ({ ...p, installmentAmount: value }))} min="0" step="0.01" required />
           <Input type="date" label="Issued Date" value={form.issuedDate} onChange={(value) => setForm((p) => ({ ...p, issuedDate: value }))} required />
           <Input type="date" label="Recovery Start" value={form.recoveryStartDate} onChange={(value) => setForm((p) => ({ ...p, recoveryStartDate: value }))} required />
           <Input label="Reason" value={form.reason} onChange={(value) => setForm((p) => ({ ...p, reason: value }))} />
-          <div style={buttonCell}><button style={primaryButton} disabled={busy}>{busy ? "Saving…" : "Record Advance"}</button></div>
+          <div style={buttonCell}><button style={primaryButton} disabled={busy || !form.employeeNumber}>{busy ? "Saving…" : "Record Advance"}</button></div>
         </form>
       </Panel>
       <Feedback error={error} />
