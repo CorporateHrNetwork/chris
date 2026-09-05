@@ -17,6 +17,7 @@ test("Loans and Salary Advances support controlled editing", () => {
   for (const value of [
     "updateSalaryAdvance",
     "SALARY_ADVANCE_FINANCIAL_HISTORY_LOCKED",
+    "SALARY_ADVANCE_CLOSED_RECORD_LOCKED",
     "SALARY_ADVANCE_UPDATED",
     "recoveredAmount",
     'UPDATE "payroll_salary_advances"',
