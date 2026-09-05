@@ -29,6 +29,7 @@ test("Loans and Salary Advances support controlled editing", () => {
     'FROM "payroll_loan_recoveries"',
     "postedRecoveryCount",
     "approvalReset",
+    "LOAN_CLOSED_RECORD_LOCKED",
   ]) assert.ok(service.includes(value), `loan edit control missing: ${value}`);
 
   assert.ok(routes.includes('router.patch("/payroll/salary-advances/:id"'), "salary advance edit route missing");
