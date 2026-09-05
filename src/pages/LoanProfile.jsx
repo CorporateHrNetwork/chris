@@ -11,13 +11,15 @@ const money = (value) => new Intl.NumberFormat("en-NG", {
   maximumFractionDigits: 2,
 }).format(Number(value || 0));
 
-function LoanProfile() {
-  const { loanId } = useParams();
+function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
+  const params = useParams();
+  const loanId = loanIdProp || params.loanId;
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const goBack = () => onBack ? onBack() : navigate("/loans");
 
   useEffect(() => {
     let active = true;
@@ -49,7 +51,7 @@ function LoanProfile() {
   };
 
   if (loading) return <div style={pageStyle}>Loading loan profile…</div>;
-  if (error && !profile) return <div style={pageStyle}><button style={backButton} onClick={() => navigate("/loans")}><FaArrowLeft /> Loans</button><div style={errorStyle}>{error}</div></div>;
+  if (error && !profile) return <div style={pageStyle}><button style={backButton} onClick={goBack}><FaArrowLeft /> Loans</button><div style={errorStyle}>{error}</div></div>;
   if (!profile?.loan) return null;
 
   const { loan, recoveries = [], amortizationSchedule = [] } = profile;
@@ -93,7 +95,7 @@ function LoanProfile() {
 
       <main style={pageStyle}>
         <div style={toolbarStyle}>
-          <button style={backButton} onClick={() => navigate("/loans")}><FaArrowLeft /> Back to Loans</button>
+          <button style={backButton} onClick={goBack}><FaArrowLeft /> Back to Loans</button>
           <div style={exportButtons}>
             {[["xlsx", "Excel"], ["csv", "CSV"], ["pdf", "PDF"]].map(([format, label]) => (
               <button key={format} style={exportButton} disabled={Boolean(busy)} onClick={() => exportLoan(format)}><FaDownload /> {busy === format ? "Preparing…" : label}</button>
