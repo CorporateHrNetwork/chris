@@ -31,10 +31,10 @@ test("ZERMATT part-time employees have no employee statutory deductions", () => 
       '"Part-time":16',
       '"statutoryDeductionExemptEmploymentTypes":["Part-time"]',
       '"pensionParticipationExemptEmploymentTypes":["Part-time"]',
-      '"employeePension"',
-      '"nhfEmployee"',
-      '"payeTax"',
-      '"employerPension"',
+      "'employeePension'",
+      "'nhfEmployee'",
+      "'payeTax'",
+      "'employerPension'",
       "ZERMATT_PART_TIME_EMPLOYMENT_POLICY",
       "employeeDeductionsApplied",
       "employerOnlyNsitfItfRemainSeparate",
@@ -66,7 +66,7 @@ test("ZERMATT part-time employees have no employee statutory deductions", () => 
     "Employer pension participation must also be zero for ZERMATT Part-time employees."
   );
 
-  const payrollStart = sidebar.indexOf('id:\n            "payroll"');
+  const payrollStart = sidebar.search(/id:\s*"payroll"/);
   const payrollEnd = sidebar.indexOf("COMPENSATION & REWARDS", payrollStart);
   assert.ok(payrollStart >= 0 && payrollEnd > payrollStart, "Payroll sidebar block must exist.");
   const payrollBlock = sidebar.slice(payrollStart, payrollEnd);
