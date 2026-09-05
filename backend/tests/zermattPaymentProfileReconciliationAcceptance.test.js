@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
+const fs = require("fs");
 const path = require("path");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -15,7 +15,7 @@ function requireText(values, label) {
   }
 }
 
-test("ZERMATT safely reconciles only incomplete payroll payment profiles from the existing workbook", () => {
+test("ZERMATT safely reconciles incomplete payroll payment profiles from the existing workbook", () => {
   requireText([
     "ZERMATT_workforce_source.xlsx",
     "DETERMINISTIC_START_DATE_AND_SOURCE_ROW",
@@ -29,9 +29,12 @@ test("ZERMATT safely reconciles only incomplete payroll payment profiles from th
     "Account Number",
     'payrollCurrency: /^[A-Z]{3}$/.test(sourceCurrency) ? sourceCurrency : "NGN"',
     'paymentMethod: sourcePaymentMethod || "Bank Transfer"',
-    "Existing Account Number is present but invalid; it will not be overwritten automatically.",
+    "Workbook Account Number is not a valid 10-digit account number.",
     "Workbook Account Number is duplicated with",
     "Workbook Account Number is already used by",
+    "correctedInvalidAccountNumber",
+    "sourceAccountNumberDigits",
+    "CORRECTED_INVALID_PAYMENT_ACCOUNT_FROM_WORKBOOK",
     "PREVIEW ONLY: no payment-profile data was changed.",
     "Run again with --apply only when reconciliationBlockers=0 and blockedPaymentRepairs=0.",
     "BACKFILLED_PAYMENT_PROFILE_FROM_WORKBOOK",
@@ -50,8 +53,13 @@ test("ZERMATT safely reconciles only incomplete payroll payment profiles from th
   assert.ok(script.includes("if (!clean(current.accountName))"));
   assert.ok(script.includes("if (!clean(current.payrollCurrency))"));
   assert.ok(script.includes("if (!clean(current.paymentMethod))"));
+  assert.ok(script.includes("if (currentAccountNumber.length !== 10)"));
+  assert.ok(script.includes("if (source.accountNumber.length !== 10)"));
+  assert.ok(script.includes("next.accountNumber = source.accountNumber"));
+  assert.ok(script.includes("currentAccountOwners.get(accountNumber)"), "Replacement account must be checked against existing valid accounts.");
+  assert.ok(script.includes("workbookAccountOwners.get(accountNumber)"), "Replacement account must be checked against workbook duplicates.");
   assert.ok(!script.includes("sectionData = {"), "Script must not replace the entire onboarding section data object.");
-  assert.ok(!script.includes('accountNumber: item.next.accountNumber'), "Audit payload must not duplicate the full bank account number.");
+  assert.ok(!script.includes('accountNumber: item.next.accountNumber'), "Audit payload must not expose the full bank account number.");
 
   console.log("PASS: ZERMATT payment-profile reconciliation gate passed.");
 });
