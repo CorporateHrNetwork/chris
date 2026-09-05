@@ -5,12 +5,15 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath), "utf8");
+const { buildAmortizationSchedule } = require("../src/services/loanProfileService");
+const { exportIndividualLoan, exportBulkLoans } = require("../src/services/loanReportExportService");
 
 test("ZERMATT loans expose zero-interest profiles, amortization and individual/bulk exports", () => {
   const policies = read("backend/src/services/loanPolicyService.js");
   const profile = read("backend/src/services/loanProfileService.js");
   const exportsService = read("backend/src/services/loanReportExportService.js");
   const routes = read("backend/src/routes/loanRoutes.js");
+  const editRoutes = read("backend/src/routes/payrollLiabilityEditRoutes.js");
   const loansUi = read("src/pages/Loans.jsx");
   const profileUi = read("src/pages/LoanProfile.jsx");
 
@@ -27,6 +30,9 @@ test("ZERMATT loans expose zero-interest profiles, amortization and individual/b
     assert.ok(policies.includes(`\"${name}\"`), `missing ZERMATT loan policy: ${name}`);
   }
   assert.ok(policies.includes("interestRatePercent: 0"), "ZERMATT loan policy catalogue must be zero-interest");
+  assert.ok(policies.includes("INVALID_ZERMATT_LOAN_POLICY"), "ZERMATT loan purposes must be server-validated");
+  assert.ok(routes.includes("validateLoanPurpose"), "new and top-up loans must validate ZERMATT loan purpose");
+  assert.ok(editRoutes.includes("validateLoanPurpose"), "loan edits must validate ZERMATT loan purpose");
 
   for (const expected of [
     "buildAmortizationSchedule",
@@ -39,6 +45,18 @@ test("ZERMATT loans expose zero-interest profiles, amortization and individual/b
   ]) {
     assert.ok(profile.includes(expected), `loan profile/amortization control missing: ${expected}`);
   }
+
+  const schedule = buildAmortizationSchedule({
+    principalAmount: 350000,
+    installmentAmount: 50000,
+    recoveryStartDate: "2026-09-01",
+    recoveries: [],
+  });
+  assert.equal(schedule.length, 7, "350,000 at 50,000 monthly must create seven installments");
+  assert.equal(schedule[0].dueDate, "2026-09-30", "first recovery should be due at September month-end");
+  assert.equal(schedule[6].principalAmount, 50000, "final installment should recover the remaining principal only");
+  assert.equal(schedule.reduce((sum, row) => sum + row.interestAmount, 0), 0, "ZERMATT loan schedule must charge zero interest");
+  assert.equal(schedule.reduce((sum, row) => sum + row.totalDeduction, 0), 350000, "planned deductions must equal principal at zero interest");
 
   for (const expected of [
     'router.get("/policies"',
@@ -57,6 +75,43 @@ test("ZERMATT loans expose zero-interest profiles, amortization and individual/b
   assert.ok(exportsService.includes('"Amortization"'), "individual Excel must include Amortization sheet");
   assert.ok(exportsService.includes('"Recoveries"'), "individual Excel must include Recoveries sheet");
   assert.ok(exportsService.includes('"Loan Portfolio"'), "bulk Excel must include Loan Portfolio sheet");
+
+  const sampleProfile = {
+    loan: {
+      loanNumber: "LN-ZLL000001-TEST",
+      employeeNumber: "ZLL000001",
+      employeeName: "Test Employee",
+      principalAmount: 350000,
+      recoveredAmount: 0,
+      outstandingAmount: 350000,
+      installmentAmount: 50000,
+      totalRepayable: 350000,
+      termMonths: 7,
+      status: "ACTIVE",
+      purpose: "Staff Loan",
+      recoveryStartDate: "2026-09-01",
+    },
+    amortizationSchedule: schedule,
+    recoveries: [],
+  };
+  for (const format of ["xlsx", "csv", "pdf"]) {
+    const individual = exportIndividualLoan(sampleProfile, format);
+    assert.ok(Buffer.isBuffer(individual.buffer) && individual.buffer.length > 20, `individual ${format} export must produce file bytes`);
+    const bulk = exportBulkLoans([{
+      loanId: "1",
+      loanNumber: "LN-ZLL000001-TEST",
+      employeeNumber: "ZLL000001",
+      employeeName: "Test Employee",
+      purpose: "Staff Loan",
+      principalAmount: 350000,
+      recoveredAmount: 0,
+      outstandingAmount: 350000,
+      installmentAmount: 50000,
+      termMonths: 7,
+      status: "ACTIVE",
+    }], format);
+    assert.ok(Buffer.isBuffer(bulk.buffer) && bulk.buffer.length > 20, `bulk ${format} export must produce file bytes`);
+  }
 
   assert.ok(loansUi.includes("Loan Policy / Purpose"), "Loans form must expose controlled loan policy selection");
   assert.ok(loansUi.includes("Select ZERMATT loan policy"), "Loans form must not rely on free-typed purpose");
