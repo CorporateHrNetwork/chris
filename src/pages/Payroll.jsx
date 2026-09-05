@@ -31,6 +31,8 @@ import NigeriaPayrollWorkspace from "./payroll/NigeriaPayrollWorkspace";
 import NigeriaPayrollSupplementWorkspace from "./payroll/NigeriaPayrollSupplementWorkspace";
 import SalaryAdvancesManaged from "./payroll/SalaryAdvancesManaged";
 import SalaryRatesManaged from "./payroll/SalaryRatesManaged";
+import PayrollComponentsManaged from "./payroll/PayrollComponentsManaged";
+import RentReliefManaged from "./payroll/RentReliefManaged";
 import { apiRequest } from "../services/api";
 
 const WORKSPACES = new Set([
@@ -46,8 +48,8 @@ const WORKSPACES = new Set([
   "statutory",
   "rent-relief",
 ]);
-const NIGERIA_CORE_WORKSPACES = new Set(["execute", "statutory", "rent-relief"]);
-const NIGERIA_SUPPLEMENT_WORKSPACES = new Set(["allowances", "deductions", "payslips", "approvals"]);
+const NIGERIA_CORE_WORKSPACES = new Set(["execute", "statutory"]);
+const NIGERIA_SUPPLEMENT_WORKSPACES = new Set(["payslips", "approvals"]);
 
 function ratioPercent(value, total) {
   if (!total) return 0;
@@ -91,6 +93,9 @@ function Payroll() {
   if (WORKSPACES.has(workspace)) {
     if (workspace === "salary-advances") return <SalaryAdvancesManaged />;
     if (workspace === "rates") return <SalaryRatesManaged />;
+    if (workspace === "allowances") return <PayrollComponentsManaged kind="ALLOWANCE" />;
+    if (workspace === "deductions") return <PayrollComponentsManaged kind="DEDUCTION" />;
+    if (workspace === "rent-relief") return <RentReliefManaged />;
     if (NIGERIA_CORE_WORKSPACES.has(workspace)) return <NigeriaPayrollWorkspace mode={workspace} />;
     if (NIGERIA_SUPPLEMENT_WORKSPACES.has(workspace)) return <NigeriaPayrollSupplementWorkspace mode={workspace} />;
     return <PayrollWorkspace mode={workspace} />;
