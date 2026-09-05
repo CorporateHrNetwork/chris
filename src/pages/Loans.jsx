@@ -58,11 +58,13 @@ function Loans() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [topUpParent, setTopUpParent] = useState(null);
+  const [editingLoan, setEditingLoan] = useState(null);
   const [form, setForm] = useState({
     employeeNumber: "",
     principalAmount: "",
     installmentAmount: "",
     applicationDate: today(),
+    recoveryStartDate: "",
     purpose: "",
     notes: "",
   });
@@ -103,11 +105,13 @@ function Loans() {
 
   const resetForm = () => {
     setTopUpParent(null);
+    setEditingLoan(null);
     setForm({
       employeeNumber: "",
       principalAmount: "",
       installmentAmount: "",
       applicationDate: today(),
+      recoveryStartDate: "",
       purpose: "",
       notes: "",
     });
@@ -116,22 +120,36 @@ function Loans() {
   const submitLoan = async (event) => {
     event.preventDefault();
     try {
-      setBusy("create");
+      setBusy(editingLoan ? `edit-${editingLoan.id}` : "create");
       setError("");
       setMessage("");
-      const endpoint = topUpParent ? `/api/loans/${topUpParent.id}/top-up` : "/api/loans";
+      const endpoint = editingLoan
+        ? `/api/loans/${editingLoan.id}`
+        : topUpParent
+          ? `/api/loans/${topUpParent.id}/top-up`
+          : "/api/loans";
+      const body = {
+        ...form,
+        employeeNumber: topUpParent?.employeeNumber || form.employeeNumber,
+      };
+      if (!body.recoveryStartDate) delete body.recoveryStartDate;
       await apiRequest(endpoint, {
-        method: "POST",
-        body: JSON.stringify({
-          ...form,
-          employeeNumber: topUpParent?.employeeNumber || form.employeeNumber,
-        }),
+        method: editingLoan ? "PATCH" : "POST",
+        body: JSON.stringify(body),
       });
-      setMessage(topUpParent ? "Top-up loan application created for approval." : "Loan application created for approval.");
+      setMessage(
+        editingLoan
+          ? (editingLoan.status === "APPROVED"
+              ? "Loan changes saved. If approval-sensitive terms changed, CHRiS returned the loan to Pending Approval for re-approval."
+              : "Loan changes saved. Existing disbursement and posted recoveries were preserved.")
+          : topUpParent
+            ? "Top-up loan application created for approval."
+            : "Loan application created for approval."
+      );
       resetForm();
       await load();
     } catch (requestError) {
-      setError(requestError?.message || "Unable to create loan application.");
+      setError(requestError?.message || "Unable to save loan application.");
     } finally {
       setBusy("");
     }
@@ -188,10 +206,39 @@ function Loans() {
   };
 
   const startTopUp = (loan) => {
+    setEditingLoan(null);
     setTopUpParent(loan);
-    setForm((current) => ({ ...current, employeeNumber: loan.employeeNumber }));
+    setForm({
+      employeeNumber: loan.employeeNumber,
+      principalAmount: "",
+      installmentAmount: "",
+      applicationDate: today(),
+      recoveryStartDate: "",
+      purpose: "",
+      notes: "",
+    });
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  const startEdit = (loan) => {
+    setTopUpParent(null);
+    setEditingLoan(loan);
+    setForm({
+      employeeNumber: loan.employeeNumber,
+      principalAmount: String(loan.principalAmount ?? ""),
+      installmentAmount: String(loan.installmentAmount ?? ""),
+      applicationDate: loan.applicationDate || today(),
+      recoveryStartDate: loan.recoveryStartDate || "",
+      purpose: loan.purpose || "",
+      notes: loan.notes || "",
+    });
+    setError("");
+    setMessage("");
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const editHistoryLocked = Boolean(editingLoan && (editingLoan.disbursedDate || ["ACTIVE", "PAUSED", "COMPLETED"].includes(editingLoan.status)));
+  const editEmployeeLocked = Boolean(editHistoryLocked || editingLoan?.parentLoanId);
 
   const portfolio = useMemo(() => ([
     ["Pending Approval", Number(summary.pendingApproval || 0)],
@@ -270,8 +317,12 @@ function Loans() {
         {message && <div style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid var(--chris-dashboard-border)", color: "var(--chris-dashboard-text)" }}>{message}</div>}
 
         <AnalyticsPanel
-          title={topUpParent ? `Top-Up Application · ${topUpParent.loanNumber}` : "New Loan Application"}
-          subtitle="Creation does not begin payroll deduction. The loan must be approved and then marked disbursed before recovery starts."
+          title={editingLoan ? `Edit Loan · ${editingLoan.loanNumber}` : topUpParent ? `Top-Up Application · ${topUpParent.loanNumber}` : "New Loan Application"}
+          subtitle={editingLoan
+            ? (editHistoryLocked
+                ? "The loan has been disbursed and may have posted recoveries. Employee, principal and application date are locked; future installment/recovery settings and notes may be adjusted without rewriting history."
+                : "No disbursement has occurred. Permitted corrections are audited; changes to an Approved loan's approval-sensitive terms return it to Pending Approval.")
+            : "Creation does not begin payroll deduction. The loan must be approved and then marked disbursed before recovery starts."}
           icon={<FaPlusCircle />}
         >
           <form onSubmit={submitLoan} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
@@ -279,25 +330,26 @@ function Loans() {
               label="Employee"
               value={topUpParent?.employeeNumber || form.employeeNumber}
               onChange={setEmployee}
-              disabled={Boolean(topUpParent)}
+              disabled={Boolean(topUpParent) || editEmployeeLocked}
               required
               placeholder="Search employee number or name"
             />
-            <label><small>Principal Amount</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.principalAmount} onChange={setField("principalAmount")} required /></label>
+            <label><small>Principal Amount</small><input style={{ ...inputStyle, ...(editHistoryLocked ? { opacity: .68 } : {}) }} type="number" min="0.01" step="0.01" value={form.principalAmount} onChange={setField("principalAmount")} disabled={editHistoryLocked} required /></label>
             <label><small>Monthly Installment</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>
-            <label><small>Application Date</small><input style={inputStyle} type="date" value={form.applicationDate} onChange={setField("applicationDate")} required /></label>
+            <label><small>Application Date</small><input style={{ ...inputStyle, ...(editHistoryLocked ? { opacity: .68 } : {}) }} type="date" value={form.applicationDate} onChange={setField("applicationDate")} disabled={editHistoryLocked} required /></label>
+            {editingLoan?.disbursedDate && <label><small>Recovery Start</small><input style={inputStyle} type="date" value={form.recoveryStartDate} onChange={setField("recoveryStartDate")} required /></label>}
             <label><small>Purpose</small><input style={inputStyle} value={form.purpose} onChange={setField("purpose")} placeholder="Staff loan" /></label>
             <label><small>Notes</small><input style={inputStyle} value={form.notes} onChange={setField("notes")} /></label>
             <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button style={primaryButton} disabled={busy === "create" || !(topUpParent?.employeeNumber || form.employeeNumber)}>{busy === "create" ? "Saving…" : topUpParent ? "Create Top-Up" : "Create Loan"}</button>
-              {topUpParent && <button type="button" style={secondaryButton} onClick={resetForm}>Cancel Top-Up</button>}
+              <button style={primaryButton} disabled={Boolean(busy) || !(topUpParent?.employeeNumber || form.employeeNumber)}>{busy ? "Saving…" : editingLoan ? "Save Changes" : topUpParent ? "Create Top-Up" : "Create Loan"}</button>
+              {(editingLoan || topUpParent) && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>{editingLoan ? "Cancel Edit" : "Cancel Top-Up"}</button>}
             </div>
           </form>
         </AnalyticsPanel>
       </section>
 
       <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
-        <AnalyticsPanel title="Loan Register" subtitle="Outstanding balance changes only when approved payroll recoveries are posted." icon={<FaHandHoldingUsd />}>
+        <AnalyticsPanel title="Loan Register" subtitle="Outstanding balance changes only when approved payroll recoveries are posted. Editing never rewrites posted recoveries." icon={<FaHandHoldingUsd />}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}>
               <thead><tr>{["Loan", "Employee", "Principal", "Outstanding", "Installment", "Status", "Recovery Start", "Actions"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
@@ -305,6 +357,7 @@ function Loans() {
                 {!loading && !loans.length && <tr><td colSpan="8" style={{ padding: 16 }}>No loans have been recorded.</td></tr>}
                 {loans.map((loan) => {
                   const draft = disbursementDrafts[loan.id] || { disbursedDate: today(), recoveryStartDate: today() };
+                  const canEdit = ["PENDING_APPROVAL", "APPROVED", "ACTIVE", "PAUSED"].includes(loan.status);
                   return <tr key={loan.id}>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{loan.loanNumber}</strong>{loan.parentLoanNumber ? <div><small>Top-up of {loan.parentLoanNumber}</small></div> : null}</td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{loan.employeeNumber}</strong><div><small>{loan.employeeName}</small></div></td>
@@ -315,6 +368,7 @@ function Loans() {
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{loan.recoveryStartDate || "—"}</td>
                     <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {canEdit && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => startEdit(loan)}>Edit</button>}
                         {loan.status === "PENDING_APPROVAL" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => decide(loan, "APPROVE")}>Approve</button><button style={secondaryButton} disabled={busy === loan.id} onClick={() => decide(loan, "REJECT")}>Reject</button></>}
                         {loan.status === "APPROVED" && <>
                           <input aria-label="Disbursed Date" style={{ ...inputStyle, width: 145 }} type="date" value={draft.disbursedDate} onChange={(e) => setDisbursementDrafts((current) => ({ ...current, [loan.id]: { ...draft, disbursedDate: e.target.value } }))} />
@@ -324,6 +378,7 @@ function Loans() {
                         {loan.status === "ACTIVE" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => statusAction(loan, "PAUSE")}>Pause</button><button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button></>}
                         {loan.status === "PAUSED" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => statusAction(loan, "RESUME")}>Resume</button><button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button></>}
                         {["PENDING_APPROVAL", "APPROVED", "ACTIVE", "PAUSED"].includes(loan.status) && <button style={secondaryButton} disabled={busy === loan.id} onClick={() => statusAction(loan, "CANCEL")}>Cancel</button>}
+                        {!canEdit && <small>Historical record</small>}
                       </div>
                     </td>
                   </tr>;
