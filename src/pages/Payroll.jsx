@@ -121,7 +121,7 @@ function Payroll() {
       title: "Payment Profile Readiness",
       description: loading
         ? "Loading payment-profile readiness..."
-        : `${paymentReady} of ${currentEmployees} payroll employees have complete bank, account, currency and payment-method data in onboarding.`,
+        : `${paymentReady} of ${currentEmployees} payroll employees have complete bank, account, currency and payment-method data. Incomplete payment profiles do not block draft payroll calculation, but must be resolved before payment finalization.`,
       time: loading ? "Checking" : "Live",
       tone: paymentReady === currentEmployees && currentEmployees > 0 ? "success" : "warning",
     },
@@ -161,8 +161,8 @@ function Payroll() {
       metrics={[
         <DashboardCard key="employees" title="Payroll Employees" value={loading ? "—" : currentEmployees} subtitle="Current payroll-eligible workforce statuses" icon={<FaUsers />} tone="green" />,
         <DashboardCard key="readiness" title="Data Readiness" value={loading ? "—" : `${dataReadinessPercent}%`} subtitle="Employment, payment and salary readiness" icon={<FaChartLine />} tone="gold" />,
-        <DashboardCard key="payment" title="Payment Ready" value={loading ? "—" : `${paymentReady}/${currentEmployees}`} subtitle="Complete bank and payment profile" icon={<FaUniversity />} tone="green" />,
-        <DashboardCard key="execution" title="Execution Ready" value={loading ? "—" : `${readyForExecution}/${currentEmployees}`} subtitle="Controlled payroll calculation readiness" icon={<FaMoneyBillWave />} tone="gold" />,
+        <DashboardCard key="payment" title="Payment Ready" value={loading ? "—" : `${paymentReady}/${currentEmployees}`} subtitle="Required before payment finalization" icon={<FaUniversity />} tone="green" />,
+        <DashboardCard key="execution" title="Calculation Ready" value={loading ? "—" : `${readyForExecution}/${currentEmployees}`} subtitle="Employment/costing + gross salary authority" icon={<FaMoneyBillWave />} tone="gold" />,
       ]}
       analytics={
         <AnalyticsPanel
@@ -188,7 +188,7 @@ function Payroll() {
       recentActivity={
         <AnalyticsPanel
           title="Payroll Compliance Gate"
-          subtitle="Nigeria statutory calculations are separated from payment transmission and remain subject to payroll approval."
+          subtitle="Payroll calculation, statutory readiness, payment readiness and payment transmission are separate controls."
           icon={<FaFileInvoiceDollar />}
         >
           <RecentActivityList items={activity} />
@@ -197,7 +197,7 @@ function Payroll() {
       quickActions={[
         <QuickActionCard key="run" title="Execute Payroll" subtitle="Calculate gross split, PAYE, pension and net pay" icon={<FaCalculator />} onClick={() => openWorkspace("execute")} />,
         <QuickActionCard key="periods" title="Payroll Periods" subtitle="Create, lock and close periods" icon={<FaCalendarAlt />} onClick={() => openWorkspace("periods")} />,
-        <QuickActionCard key="rates" title="Salary Rates" subtitle="Upload authoritative monthly gross salaries" icon={<FaMoneyBillWave />} onClick={() => openWorkspace("rates")} />,
+        <QuickActionCard key="rates" title="Salary Rates" subtitle="Maintain authoritative monthly gross salaries" icon={<FaMoneyBillWave />} onClick={() => openWorkspace("rates")} />,
         <QuickActionCard key="statutory" title="Nigeria Statutory Setup" subtitle="View PAYE, pension, NSITF and ITF policy" icon={<FaShieldAlt />} onClick={() => openWorkspace("statutory")} />,
         <QuickActionCard key="rent" title="Tax Rent Relief" subtitle="Declare and verify annual rent relief" icon={<FaHome />} onClick={() => openWorkspace("rent-relief")} />,
         <QuickActionCard key="allowances" title="Other Allowances" subtitle="Additional earnings outside the 100% gross structure" icon={<FaPlusCircle />} onClick={() => openWorkspace("allowances")} />,
