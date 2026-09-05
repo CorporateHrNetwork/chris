@@ -44,6 +44,12 @@ export default function SalaryAdvancesManaged() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   const recoveredAmount = useMemo(
     () => editing ? Math.max(0, Number(editing.amount || 0) - Number(editing.outstandingAmount || 0)) : 0,
     [editing]
@@ -66,6 +72,7 @@ export default function SalaryAdvancesManaged() {
     setEditing(null);
     setForm(emptyForm());
     setError("");
+    setMessage("");
   };
 
   const startEdit = (row) => {
