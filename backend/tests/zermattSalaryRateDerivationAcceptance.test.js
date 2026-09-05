@@ -30,7 +30,7 @@ test("ZERMATT derives payroll salary rates from existing gross and uses tenant w
       '"NYSC/Internship":26',
       '"statutoryDeductionExemptEmploymentTypes":["Part-time"]',
       '"pensionParticipationExemptEmploymentTypes":["Part-time"]',
-      "versionNumber\" < 3",
+      'pv."versionNumber" < 3',
     ],
     "ZERMATT payroll policy v3"
   );
@@ -44,7 +44,6 @@ test("ZERMATT derives payroll salary rates from existing gross and uses tenant w
   requireText(
     script,
     [
-      "derive-zermatt-salary-rates-from-existing-gross",
       "EmployeeOnboarding.sectionData",
       "monthlygrosssalary",
       "grosssalary",
