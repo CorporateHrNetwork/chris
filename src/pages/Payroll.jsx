@@ -27,12 +27,12 @@ import {
   RecentActivityList,
 } from "../components/dashboard";
 import PayrollWorkspace from "./payroll/PayrollWorkspace";
-import NigeriaPayrollWorkspace from "./payroll/NigeriaPayrollWorkspace";
 import NigeriaPayrollSupplementWorkspace from "./payroll/NigeriaPayrollSupplementWorkspace";
 import SalaryAdvancesManaged from "./payroll/SalaryAdvancesManaged";
 import SalaryRatesManaged from "./payroll/SalaryRatesManaged";
 import PayrollComponentsManaged from "./payroll/PayrollComponentsManaged";
 import RentReliefManaged from "./payroll/RentReliefManaged";
+import PayrollIntegratedManaged from "./payroll/PayrollIntegratedManaged";
 import { apiRequest } from "../services/api";
 
 const WORKSPACES = new Set([
@@ -48,8 +48,6 @@ const WORKSPACES = new Set([
   "statutory",
   "rent-relief",
 ]);
-const NIGERIA_CORE_WORKSPACES = new Set(["execute", "statutory"]);
-const NIGERIA_SUPPLEMENT_WORKSPACES = new Set(["payslips", "approvals"]);
 
 function ratioPercent(value, total) {
   if (!total) return 0;
@@ -91,13 +89,13 @@ function Payroll() {
   }, [workspace]);
 
   if (WORKSPACES.has(workspace)) {
+    if (["execute", "payslips", "statutory"].includes(workspace)) return <PayrollIntegratedManaged mode={workspace} />;
     if (workspace === "salary-advances") return <SalaryAdvancesManaged />;
     if (workspace === "rates") return <SalaryRatesManaged />;
     if (workspace === "allowances") return <PayrollComponentsManaged kind="ALLOWANCE" />;
     if (workspace === "deductions") return <PayrollComponentsManaged kind="DEDUCTION" />;
     if (workspace === "rent-relief") return <RentReliefManaged />;
-    if (NIGERIA_CORE_WORKSPACES.has(workspace)) return <NigeriaPayrollWorkspace mode={workspace} />;
-    if (NIGERIA_SUPPLEMENT_WORKSPACES.has(workspace)) return <NigeriaPayrollSupplementWorkspace mode={workspace} />;
+    if (workspace === "approvals") return <NigeriaPayrollSupplementWorkspace mode={workspace} />;
     return <PayrollWorkspace mode={workspace} />;
   }
 
@@ -166,7 +164,7 @@ function Payroll() {
     <ModuleDashboardShell
       eyebrow="REWARDS OPERATIONS"
       title="Payroll Dashboard"
-      description="Operate ZERMATT payroll periods, gross salary authority, Nigeria-compliant PAYE and pension calculations, other earnings/deductions, rent relief, advances, paid-leave inputs, payslips and approval controls."
+      description="Operate ZERMATT payroll periods, gross salary authority, Nigeria-compliant PAYE and pension calculations, integrated loans and salary advances, approved-payroll payslips, other earnings/deductions, rent relief and approval controls."
       metrics={[
         <DashboardCard key="employees" title="Payroll Employees" value={loading ? "—" : currentEmployees} subtitle="Current payroll-eligible workforce statuses" icon={<FaUsers />} tone="green" />,
         <DashboardCard key="readiness" title="Data Readiness" value={loading ? "—" : `${dataReadinessPercent}%`} subtitle="Employment, payment and salary readiness" icon={<FaChartLine />} tone="gold" />,
@@ -174,11 +172,7 @@ function Payroll() {
         <DashboardCard key="execution" title="Calculation Ready" value={loading ? "—" : `${readyForExecution}/${currentEmployees}`} subtitle="Employment/costing + gross salary authority" icon={<FaMoneyBillWave />} tone="gold" />,
       ]}
       analytics={
-        <AnalyticsPanel
-          title="Payroll Readiness Composition"
-          subtitle="Live readiness from employee authority, onboarding payment details and effective-dated monthly gross salary rates."
-          icon={<FaChartLine />}
-        >
+        <AnalyticsPanel title="Payroll Readiness Composition" subtitle="Live readiness from employee authority, onboarding payment details and effective-dated monthly gross salary rates." icon={<FaChartLine />}>
           {error ? (
             <div style={{ padding: 14, border: "1px solid var(--chris-dashboard-border)", borderRadius: 12, color: "var(--chris-dashboard-text)" }}>{error}</div>
           ) : (
@@ -195,23 +189,19 @@ function Payroll() {
         </AnalyticsPanel>
       }
       recentActivity={
-        <AnalyticsPanel
-          title="Payroll Compliance Gate"
-          subtitle="Payroll calculation, statutory readiness, payment readiness and payment transmission are separate controls."
-          icon={<FaFileInvoiceDollar />}
-        >
+        <AnalyticsPanel title="Payroll Compliance Gate" subtitle="Payroll calculation, statutory readiness, payment readiness and payment transmission are separate controls." icon={<FaFileInvoiceDollar />}>
           <RecentActivityList items={activity} />
         </AnalyticsPanel>
       }
       quickActions={[
-        <QuickActionCard key="run" title="Execute Payroll" subtitle="Calculate gross split, PAYE, pension and net pay" icon={<FaCalculator />} onClick={() => openWorkspace("execute")} />,
+        <QuickActionCard key="run" title="Execute Payroll" subtitle="Calculate PAYE, pension, advances and loan recoveries" icon={<FaCalculator />} onClick={() => openWorkspace("execute")} />,
         <QuickActionCard key="periods" title="Payroll Periods" subtitle="Create, lock and close periods" icon={<FaCalendarAlt />} onClick={() => openWorkspace("periods")} />,
         <QuickActionCard key="rates" title="Salary Rates" subtitle="Maintain authoritative monthly gross salaries" icon={<FaMoneyBillWave />} onClick={() => openWorkspace("rates")} />,
-        <QuickActionCard key="statutory" title="Nigeria Statutory Setup" subtitle="View PAYE, pension, NSITF and ITF policy" icon={<FaShieldAlt />} onClick={() => openWorkspace("statutory")} />,
+        <QuickActionCard key="statutory" title="Nigeria Statutory Review" subtitle="Active deductions, employer costs and activation candidates" icon={<FaShieldAlt />} onClick={() => openWorkspace("statutory")} />,
         <QuickActionCard key="rent" title="Tax Rent Relief" subtitle="Declare and verify annual rent relief" icon={<FaHome />} onClick={() => openWorkspace("rent-relief")} />,
         <QuickActionCard key="allowances" title="Other Allowances" subtitle="Additional earnings outside the 100% gross structure" icon={<FaPlusCircle />} onClick={() => openWorkspace("allowances")} />,
         <QuickActionCard key="deductions" title="Other Deductions" subtitle="Configure non-statutory deductions" icon={<FaPercentage />} onClick={() => openWorkspace("deductions")} />,
-        <QuickActionCard key="payslips" title="Payslips" subtitle="Review employee payroll records" icon={<FaFileInvoiceDollar />} onClick={() => openWorkspace("payslips")} />,
+        <QuickActionCard key="payslips" title="Payslips" subtitle="Generated from approved payroll runs" icon={<FaFileInvoiceDollar />} onClick={() => openWorkspace("payslips")} />,
         <QuickActionCard key="advances" title="Salary Advances" subtitle="Record and recover advances" icon={<FaMoneyBillWave />} onClick={() => openWorkspace("salary-advances")} />,
         <QuickActionCard key="paid-leave" title="Paid Leave" subtitle="Consume paid leave from Leave Management" icon={<FaCalendarAlt />} onClick={() => openWorkspace("paid-leave")} />,
         <QuickActionCard key="approvals" title="Payroll Approvals" subtitle="Review, approve or reject payroll runs" icon={<FaClipboardCheck />} onClick={() => openWorkspace("approvals")} />,
