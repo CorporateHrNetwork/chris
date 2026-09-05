@@ -97,7 +97,11 @@ test("ZERMATT Release-1 Loans and Salary Advances are separate payroll recoverie
     ],
     "Loan routes"
   );
-  assert.ok(app.includes('app.use(\n  "/api/loans",\n  loanRoutes\n);'), "Loan routes must be mounted.");
+  assert.match(
+    app,
+    /app\.use\(\s*"\/api\/loans",\s*loanRoutes\s*\);/,
+    "Loan routes must be mounted."
+  );
 
   requireText(
     loansPage,
