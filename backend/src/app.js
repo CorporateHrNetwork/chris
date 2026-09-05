@@ -16,6 +16,7 @@ const employeeIntegrityRoutes = require("./routes/employeeIntegrityRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
+const loanRoutes = require("./routes/loanRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
@@ -171,6 +172,11 @@ app.use(
 app.use(
   "/api/payroll",
   payrollRoutes
+);
+
+app.use(
+  "/api/loans",
+  loanRoutes
 );
 
 app.use(
