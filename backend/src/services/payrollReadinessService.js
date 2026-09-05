@@ -131,6 +131,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
     const employmentReady = Boolean(hasText(employee.employmentType) && hasText(employee.costCentreId));
     const paymentReady = paymentIsReady(payment);
     const compensationReady = Boolean(salaryRate && Number(salaryRate.amount) > 0);
+    const calculationReady = employmentReady && compensationReady;
+    const paymentFinalizationReady = calculationReady && paymentReady;
     const { taxRecorded, pensionRecorded } = statutorySignals(statutory);
     const blockers = [];
 
@@ -150,13 +152,18 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       employmentReady,
       paymentReady,
       compensationReady,
+      calculationReady,
+      paymentFinalizationReady,
       monthlyGrossSalary: compensationReady ? Number(salaryRate.amount) : null,
       salaryCurrency: compensationReady ? salaryRate.currency : null,
       taxRecorded,
       pensionRecorded,
       onboardingStatus: onboarding?.status || null,
       onboardingCompletionPercent: Number(onboarding?.completionPercent || 0),
-      readyForExecution: employmentReady && paymentReady && compensationReady,
+      // Backward-compatible field consumed by the draft-payroll route/UI.
+      // Draft calculation needs employment/costing + compensation authority;
+      // bank/payment readiness is a separate finalization control.
+      readyForExecution: calculationReady,
       blockers,
     };
   });
@@ -166,6 +173,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       if (row.employmentReady) accumulator.employmentReady += 1;
       if (row.paymentReady) accumulator.paymentReady += 1;
       if (row.compensationReady) accumulator.compensationReady += 1;
+      if (row.calculationReady) accumulator.calculationReady += 1;
+      if (row.paymentFinalizationReady) accumulator.paymentFinalizationReady += 1;
       if (row.taxRecorded) accumulator.taxRecorded += 1;
       if (row.pensionRecorded) accumulator.pensionRecorded += 1;
       if (row.readyForExecution) accumulator.readyForExecution += 1;
@@ -176,6 +185,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       employmentReady: 0,
       paymentReady: 0,
       compensationReady: 0,
+      calculationReady: 0,
+      paymentFinalizationReady: 0,
       taxRecorded: 0,
       pensionRecorded: 0,
       readyForExecution: 0,
@@ -192,8 +203,17 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   summary.statutoryPolicyCode = payrollPolicy?.code || null;
   summary.statutoryPolicyVersion = payrollPolicy?.versionNumber || null;
 
+  const missingEmployment = summary.currentEmployees - summary.employmentReady;
   const missingCompensation = summary.currentEmployees - summary.compensationReady;
+  const missingPayment = summary.currentEmployees - summary.paymentReady;
   const systemBlockers = [];
+
+  if (missingEmployment > 0) {
+    systemBlockers.push({
+      code: "EMPLOYMENT_COSTING_AUTHORITY_INCOMPLETE",
+      message: `${missingEmployment} current employee(s) still require authoritative Employment Type and Cost Centre data.`,
+    });
+  }
   if (missingCompensation > 0) {
     systemBlockers.push({
       code: "AUTHORITATIVE_COMPENSATION_RATES_INCOMPLETE",
@@ -209,28 +229,40 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
 
   const executionEnabled =
     summary.currentEmployees > 0 &&
-    summary.readyForExecution === summary.currentEmployees;
+    summary.calculationReady === summary.currentEmployees;
+
+  const paymentFinalizationEnabled =
+    executionEnabled &&
+    summary.paymentFinalizationReady === summary.currentEmployees;
+
+  const finalizationBlockers = [];
+  if (!payrollPolicy) {
+    finalizationBlockers.push({
+      code: "PAYROLL_STATUTORY_POLICY_NOT_CONFIGURED",
+      message: "Apply/configure the effective Nigeria payroll policy before payroll finalization.",
+    });
+  }
+  if (missingPayment > 0) {
+    finalizationBlockers.push({
+      code: "PAYMENT_PROFILES_INCOMPLETE",
+      message: `${missingPayment} current employee(s) have incomplete/invalid payment profiles. This does not block draft payroll calculation, but it must be resolved before payment finalization.`,
+    });
+  }
+  finalizationBlockers.push({
+    code: "PAYMENT_TRANSMISSION_SEPARATE_CONTROL",
+    message: "PAYE and pension are calculated by CHRiS, but payroll approval does not itself transmit bank/payment instructions or statutory remittances.",
+  });
 
   return {
     generatedAt: new Date().toISOString(),
     executionEnabled,
+    calculationEnabled: executionEnabled,
     statutoryCalculationEnabled: executionEnabled && Boolean(payrollPolicy),
-    finalizationEnabled: executionEnabled && Boolean(payrollPolicy),
+    paymentFinalizationEnabled,
+    finalizationEnabled: paymentFinalizationEnabled && Boolean(payrollPolicy),
     paymentTransmissionEnabled: false,
     systemBlockers,
-    finalizationBlockers: payrollPolicy
-      ? [
-          {
-            code: "PAYMENT_TRANSMISSION_SEPARATE_CONTROL",
-            message: "PAYE and pension are calculated by CHRiS, but payroll approval does not itself transmit bank/payment instructions or statutory remittances.",
-          },
-        ]
-      : [
-          {
-            code: "PAYROLL_STATUTORY_POLICY_NOT_CONFIGURED",
-            message: "Apply/configure the effective Nigeria payroll policy before payroll finalization.",
-          },
-        ],
+    finalizationBlockers,
     summary,
     employees: rows,
   };
