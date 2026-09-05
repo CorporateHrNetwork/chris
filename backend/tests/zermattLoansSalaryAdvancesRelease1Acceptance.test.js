@@ -29,7 +29,7 @@ test("ZERMATT Release-1 Loans and Salary Advances are separate payroll recoverie
       'CREATE TABLE "payroll_loans"',
       'CREATE TABLE "payroll_loan_recoveries"',
       'ADD COLUMN "loanRecovery"',
-      '"PENDING_APPROVAL","APPROVED","ACTIVE","PAUSED","COMPLETED","REJECTED","CANCELLED"',
+      "IN ('PENDING_APPROVAL','APPROVED','ACTIVE','PAUSED','COMPLETED','REJECTED','CANCELLED')",
       'CREATE UNIQUE INDEX "payroll_loan_recoveries_loan_run_key"',
       '"loanId","runId"',
       '"status"=\'ACTIVE\'',
