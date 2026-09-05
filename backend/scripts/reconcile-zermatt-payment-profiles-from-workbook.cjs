@@ -158,6 +158,7 @@ function mergeMissingPaymentFields(current, source) {
   const next = { ...current };
   const changedFields = [];
   const blockers = [];
+  let correctedInvalidAccountNumber = false;
 
   if (!clean(current.bankName)) {
     if (!source.bankName) blockers.push("Workbook Bank Name is missing.");
@@ -169,15 +170,15 @@ function mergeMissingPaymentFields(current, source) {
     else { next.accountName = source.accountName; changedFields.push("accountName"); }
   }
 
+  const currentRawAccountNumber = clean(current.accountNumber);
   const currentAccountNumber = normalizeAccountNumber(current.accountNumber);
   if (currentAccountNumber.length !== 10) {
-    if (clean(current.accountNumber) && currentAccountNumber.length !== 10) {
-      blockers.push("Existing Account Number is present but invalid; it will not be overwritten automatically.");
-    } else if (source.accountNumber.length !== 10) {
+    if (source.accountNumber.length !== 10) {
       blockers.push("Workbook Account Number is not a valid 10-digit account number.");
     } else {
       next.accountNumber = source.accountNumber;
       changedFields.push("accountNumber");
+      correctedInvalidAccountNumber = Boolean(currentRawAccountNumber);
     }
   }
 
@@ -191,7 +192,7 @@ function mergeMissingPaymentFields(current, source) {
     changedFields.push("paymentMethod");
   }
 
-  return { next, changedFields, blockers };
+  return { next, changedFields, blockers, correctedInvalidAccountNumber };
 }
 
 async function main() {
@@ -322,9 +323,12 @@ async function main() {
       onboardingId: onboarding.id,
       missingBefore: paymentMissingFields(current),
       changedFields: merged.changedFields,
+      correctedInvalidAccountNumber: merged.correctedInvalidAccountNumber,
       missingAfter,
       sourceRowNumber: source.sourceRowNumber,
+      existingAccountNumberMasked: maskAccountNumber(current.accountNumber),
       sourceAccountNumberMasked: maskAccountNumber(sourceValues.accountNumber),
+      sourceAccountNumberDigits: sourceValues.accountNumber.length,
       blockers,
     };
 
@@ -358,8 +362,11 @@ async function main() {
       employeeName: item.employeeName,
       missingBefore: item.missingBefore,
       changedFields: item.changedFields,
+      correctedInvalidAccountNumber: item.correctedInvalidAccountNumber,
       missingAfter: item.missingAfter,
+      existingAccountNumberMasked: item.existingAccountNumberMasked,
       sourceAccountNumberMasked: item.sourceAccountNumberMasked,
+      sourceAccountNumberDigits: item.sourceAccountNumberDigits,
     })),
     blockedRepairs: targetBlockers,
     samples: {
@@ -411,7 +418,9 @@ async function main() {
           actorUserId: null,
           entityType: "EmployeeOnboardingPaymentProfile",
           entityId: item.onboarding.id,
-          action: "BACKFILLED_PAYMENT_PROFILE_FROM_WORKBOOK",
+          action: item.correctedInvalidAccountNumber
+            ? "CORRECTED_INVALID_PAYMENT_ACCOUNT_FROM_WORKBOOK"
+            : "BACKFILLED_PAYMENT_PROFILE_FROM_WORKBOOK",
           previousValue: {
             employeeNumber: item.employeeNumber,
             missingFields: item.missingBefore,
@@ -422,7 +431,9 @@ async function main() {
             changedFields: item.changedFields,
             accountNumberMasked: maskAccountNumber(item.next.accountNumber),
           },
-          reason: "Completed missing ZERMATT payroll payment-profile fields from the already supplied workforce migration workbook.",
+          reason: item.correctedInvalidAccountNumber
+            ? "Corrected an invalid stored ZERMATT account number using the exact reconciled 10-digit account number from the already supplied workforce migration workbook after duplicate checks."
+            : "Completed missing ZERMATT payroll payment-profile fields from the already supplied workforce migration workbook.",
         },
       });
       count += 1;
