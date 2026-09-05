@@ -86,10 +86,13 @@ async function updateSalaryAdvance({ organizationId, actorUserId, advanceId, inp
     );
     const existing = rows[0];
     if (!existing) throw error("SALARY_ADVANCE_NOT_FOUND", "Salary advance not found.", 404);
+    if (String(existing.status) === "COMPLETED") {
+      throw error("SALARY_ADVANCE_CLOSED_RECORD_LOCKED", "Completed salary advances are historical records and cannot be edited. Record a new correcting advance if required.", 409);
+    }
 
     const original = mapAdvance(existing);
     const recoveredAmount = Math.max(0, Number(existing.amount || 0) - Number(existing.outstandingAmount || 0));
-    const financialHistoryLocked = recoveredAmount > 0 || String(existing.status) === "COMPLETED";
+    const financialHistoryLocked = recoveredAmount > 0;
 
     const requestedEmployeeNumber = text(input?.employeeNumber || existing.employeeNumber).toUpperCase();
     const requestedAmount = money(input?.amount ?? existing.amount, "Advance Amount");
@@ -122,7 +125,7 @@ async function updateSalaryAdvance({ organizationId, actorUserId, advanceId, inp
       : await employee(tx, organizationId, requestedEmployeeNumber);
 
     const maximumInstallment = financialHistoryLocked ? Number(existing.outstandingAmount || 0) : requestedAmount;
-    if (maximumInstallment > 0 && requestedInstallment > maximumInstallment) {
+    if (requestedInstallment > maximumInstallment) {
       throw error("INVALID_ADVANCE_INSTALLMENT", `Installment Amount cannot exceed ${financialHistoryLocked ? "the outstanding balance" : "the advance amount"}.`);
     }
 
