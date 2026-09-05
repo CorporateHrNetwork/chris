@@ -30,6 +30,7 @@ import PayrollWorkspace from "./payroll/PayrollWorkspace";
 import NigeriaPayrollWorkspace from "./payroll/NigeriaPayrollWorkspace";
 import NigeriaPayrollSupplementWorkspace from "./payroll/NigeriaPayrollSupplementWorkspace";
 import SalaryAdvancesManaged from "./payroll/SalaryAdvancesManaged";
+import SalaryRatesManaged from "./payroll/SalaryRatesManaged";
 import { apiRequest } from "../services/api";
 
 const WORKSPACES = new Set([
@@ -89,6 +90,7 @@ function Payroll() {
 
   if (WORKSPACES.has(workspace)) {
     if (workspace === "salary-advances") return <SalaryAdvancesManaged />;
+    if (workspace === "rates") return <SalaryRatesManaged />;
     if (NIGERIA_CORE_WORKSPACES.has(workspace)) return <NigeriaPayrollWorkspace mode={workspace} />;
     if (NIGERIA_SUPPLEMENT_WORKSPACES.has(workspace)) return <NigeriaPayrollSupplementWorkspace mode={workspace} />;
     return <PayrollWorkspace mode={workspace} />;
