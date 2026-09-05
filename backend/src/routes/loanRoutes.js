@@ -3,7 +3,7 @@ const express = require("express");
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const loans = require("../services/loanService");
-const { getLoanPolicies } = require("../services/loanPolicyService");
+const { getLoanPolicies, validateLoanPurpose } = require("../services/loanPolicyService");
 const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileService");
 const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
 
@@ -124,10 +124,15 @@ router.get("/", requirePermission("payroll.view"), async (req, res) => {
 
 router.post("/", requirePermission("payroll.manage"), async (req, res) => {
   try {
+    const purpose = await validateLoanPurpose({
+      organizationId: req.auth.organizationId,
+      purpose: req.body?.purpose,
+      prismaClient: prisma,
+    });
     const data = await loans.createLoan({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
-      input: req.body || {},
+      input: { ...(req.body || {}), purpose },
     });
     return res.status(201).json({ status: "success", data });
   } catch (error) {
@@ -181,11 +186,16 @@ router.patch("/:id/status", requirePermission("payroll.manage"), async (req, res
 
 router.post("/:id/top-up", requirePermission("payroll.manage"), async (req, res) => {
   try {
+    const purpose = await validateLoanPurpose({
+      organizationId: req.auth.organizationId,
+      purpose: req.body?.purpose,
+      prismaClient: prisma,
+    });
     const data = await loans.createTopUp({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
       loanId: req.params.id,
-      input: req.body || {},
+      input: { ...(req.body || {}), purpose },
     });
     return res.status(201).json({ status: "success", data });
   } catch (error) {
