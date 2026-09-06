@@ -22,6 +22,7 @@ const emptyForm = () => ({
 export default function SalaryAdvancesManaged() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
+  const [capabilities, setCapabilities] = useState({ canCancelDelete: false });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -32,8 +33,12 @@ export default function SalaryAdvancesManaged() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await apiRequest("/api/payroll/salary-advances");
+      const [result, capabilityResult] = await Promise.all([
+        apiRequest("/api/payroll/salary-advances"),
+        apiRequest("/api/payroll/salary-advances/control-capabilities").catch(() => ({ data: { canCancelDelete: false } })),
+      ]);
       setRows(result?.data || []);
+      setCapabilities(capabilityResult?.data || { canCancelDelete: false });
       setError("");
     } catch (requestError) {
       setError(requestError?.message || "Unable to load salary advances.");
@@ -119,12 +124,60 @@ export default function SalaryAdvancesManaged() {
     }
   };
 
+  const cancelAdvance = async (row) => {
+    const reason = window.prompt(`Reason for cancelling the salary advance for ${row.employeeNumber} — ${row.employeeName}:`);
+    if (!reason) return;
+    if (!window.confirm("Cancel this salary advance? Existing financial history will be preserved and no future recovery should be scheduled.")) return;
+    try {
+      setBusy(`cancel-${row.id}`);
+      setError("");
+      await apiRequest(`/api/payroll/salary-advances/${row.id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      setMessage("Salary advance cancelled. Historical recoveries, if any, were preserved and draft payrolls were marked for recalculation.");
+      if (editing?.id === row.id) reset();
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to cancel salary advance.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const deleteAdvance = async (row) => {
+    const recovered = Math.max(0, Number(row.amount || 0) - Number(row.outstandingAmount || 0));
+    if (recovered > 0 || row.status === "COMPLETED") {
+      setError("This advance has financial history and cannot be deleted. Use Cancel instead so the audit and recovery history remain intact.");
+      return;
+    }
+    const reason = window.prompt(`Reason for permanently deleting the unused salary advance for ${row.employeeNumber} — ${row.employeeName}:`);
+    if (!reason) return;
+    if (!window.confirm("Permanently delete this unused salary advance? This action removes the operational record but keeps an audit entry.")) return;
+    try {
+      setBusy(`delete-${row.id}`);
+      setError("");
+      await apiRequest(`/api/payroll/salary-advances/${row.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ reason }),
+      });
+      setMessage("Unused salary advance deleted by Super User. The deletion remains auditable and draft payrolls were marked for recalculation.");
+      if (editing?.id === row.id) reset();
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to delete salary advance.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   return (
     <section style={pageStyle}>
       <button type="button" style={backButton} onClick={() => navigate("/payroll")}>← Payroll Dashboard</button>
       <div style={eyebrow}>PAYROLL OPERATIONS</div>
       <h1 style={titleStyle}>Salary Advances</h1>
       <p style={leadStyle}>Record advances, edit permitted details and control installment recoveries. Outstanding balances reduce only when an approved payroll run contains the recovery.</p>
+      {capabilities.canCancelDelete && <div style={superUserNotice}>ZERMATT Super User control is active: unused advances may be deleted; active/paused advances may be cancelled. Financial history remains immutable.</div>}
 
       <Panel title={editing ? `Edit Salary Advance · ${editing.employeeNumber}` : "Record Salary Advance"}>
         {editing && <p style={controlNote}>
@@ -133,14 +186,7 @@ export default function SalaryAdvancesManaged() {
             : "No posted payroll recovery exists. The employee, amount, dates, installment and reason may still be corrected."}
         </p>}
         <form style={formGrid} onSubmit={save}>
-          <EmployeeSearchSelect
-            label="Employee"
-            value={form.employeeNumber}
-            onChange={setEmployee}
-            disabled={historyLocked}
-            required
-            placeholder="Search employee number or name"
-          />
+          <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setEmployee} disabled={historyLocked} required placeholder="Search employee number or name" />
           <Input type="number" label="Advance Amount" value={form.amount} onChange={setField("amount")} min="0.01" step="0.01" disabled={historyLocked} required />
           <Input type="number" label="Installment Amount" value={form.installmentAmount} onChange={setField("installmentAmount")} min="0.01" step="0.01" required />
           <Input type="date" label="Issued Date" value={form.issuedDate} onChange={setField("issuedDate")} disabled={historyLocked} required />
@@ -164,10 +210,16 @@ export default function SalaryAdvancesManaged() {
               {!loading && rows.length === 0 && <tr><td colSpan="9" style={tdStyle}>No salary advances have been recorded.</td></tr>}
               {rows.map((row) => {
                 const recovered = Math.max(0, Number(row.amount || 0) - Number(row.outstandingAmount || 0));
-                const editable = !["COMPLETED"].includes(row.status);
+                const editable = !["COMPLETED", "CANCELLED"].includes(row.status);
+                const cancellable = capabilities.canCancelDelete && ["ACTIVE", "PAUSED"].includes(row.status);
+                const deletable = capabilities.canCancelDelete && recovered <= 0 && !["COMPLETED"].includes(row.status);
                 return <tr key={row.id}>
                   <Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{money(row.amount)}</Td><Td>{money(recovered)}</Td><Td>{money(row.outstandingAmount)}</Td><Td>{money(row.installmentAmount)}</Td><Td>{row.recoveryStartDate}</Td><Td><Badge>{row.status}</Badge></Td>
-                  <Td>{editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}</Td>
+                  <Td><div style={actionRow}>
+                    {editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}
+                    {cancellable && <button type="button" style={warningButton} disabled={Boolean(busy)} onClick={() => cancelAdvance(row)}>{busy === `cancel-${row.id}` ? "Cancelling…" : "Cancel"}</button>}
+                    {deletable && <button type="button" style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteAdvance(row)}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}
+                  </div></Td>
                 </tr>;
               })}
             </tbody>
@@ -198,7 +250,10 @@ const disabledStyle = { opacity: .68, cursor: "not-allowed" };
 const primaryButton = { border: 0, borderRadius: 9, padding: "11px 16px", background: "#D4AF37", color: "#07140D", fontWeight: 900, cursor: "pointer" };
 const secondaryButton = { ...primaryButton, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.6)" };
 const smallButton = { ...secondaryButton, padding: "6px 10px", fontSize: 11 };
+const warningButton = { ...smallButton, color: "#F8D56B", border: "1px solid rgba(248,213,107,.65)" };
+const dangerButton = { ...smallButton, color: "#FCA5A5", border: "1px solid rgba(248,113,113,.6)" };
 const buttonRow = { display: "flex", alignItems: "end", gap: 10, flexWrap: "wrap" };
+const actionRow = { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" };
 const tableWrap = { overflowX: "auto", minHeight: 50 };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 1050 };
 const thStyle = { textAlign: "left", padding: "10px 9px", color: "#D4AF37", fontSize: 11, borderBottom: "1px solid rgba(255,255,255,.09)", whiteSpace: "nowrap" };
@@ -206,5 +261,6 @@ const tdStyle = { padding: "10px 9px", color: "#C7D3CC", fontSize: 12, borderBot
 const badgeStyle = { display: "inline-block", borderRadius: 999, padding: "4px 8px", border: "1px solid rgba(212,175,55,.4)", color: "#D4AF37", background: "rgba(212,175,55,.08)", fontSize: 10, fontWeight: 900 };
 const errorStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(248,113,113,.45)", background: "rgba(185,28,28,.14)", color: "#FCA5A5" };
 const successStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.45)", background: "rgba(212,175,55,.08)", color: "#F7FAF8" };
+const superUserNotice = { margin: "0 0 16px", padding: 11, borderRadius: 10, border: "1px solid rgba(212,175,55,.45)", background: "rgba(212,175,55,.08)", color: "#F7FAF8", fontSize: 12 };
 const controlNote = { margin: "0 0 14px", color: "#C7D3CC", lineHeight: 1.55, fontSize: 12 };
 const mutedStyle = { color: "#9FB7AA", fontSize: 11 };
