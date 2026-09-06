@@ -1,9 +1,8 @@
 import Sidebar from "../components/layout/Sidebar/Sidebar";
 import Topbar from "../components/layout/Topbar/Topbar";
+import BranchContextSelector from "../components/BranchContextSelector";
 
-function MainLayout({
-  children,
-}) {
+function MainLayout({ children }) {
   return (
     <div
       style={{
@@ -14,10 +13,8 @@ function MainLayout({
         background: "#050A07",
       }}
     >
-      {/* LEFT PANE */}
       <Sidebar />
 
-      {/* RIGHT PANE */}
       <div
         style={{
           flex: 1,
@@ -41,14 +38,12 @@ function MainLayout({
             padding: "28px 30px 36px",
             boxSizing: "border-box",
             scrollbarWidth: "thin",
-            scrollbarColor:
-              "rgba(212,175,55,0.35) rgba(255,255,255,0.03)",
+            scrollbarColor: "rgba(212,175,55,0.35) rgba(255,255,255,0.03)",
             position: "relative",
             background:
               "radial-gradient(circle at 8% 5%, rgba(0,145,78,0.14), transparent 25%), radial-gradient(circle at 92% 88%, rgba(212,175,55,0.10), transparent 24%), linear-gradient(135deg, #07110C 0%, #0A1510 48%, #07100B 100%)",
           }}
         >
-          {/* AMBIENT GOLD / GREEN LIGHT DESIGN */}
           <div
             aria-hidden="true"
             style={{
@@ -68,15 +63,11 @@ function MainLayout({
                 bottom: "-80px",
                 transform: "rotate(-12deg)",
                 borderRadius: "50%",
-                borderTop:
-                  "1px solid rgba(212,175,55,0.20)",
-                borderBottom:
-                  "1px solid rgba(0,150,78,0.18)",
-                boxShadow:
-                  "0 -24px 90px rgba(0,145,78,0.06), 0 22px 90px rgba(212,175,55,0.05)",
+                borderTop: "1px solid rgba(212,175,55,0.20)",
+                borderBottom: "1px solid rgba(0,150,78,0.18)",
+                boxShadow: "0 -24px 90px rgba(0,145,78,0.06), 0 22px 90px rgba(212,175,55,0.05)",
               }}
             />
-
             <div
               style={{
                 position: "absolute",
@@ -85,12 +76,10 @@ function MainLayout({
                 left: "-120px",
                 top: "18%",
                 borderRadius: "50%",
-                background:
-                  "radial-gradient(circle, rgba(0,150,78,0.10), transparent 68%)",
+                background: "radial-gradient(circle, rgba(0,150,78,0.10), transparent 68%)",
                 filter: "blur(16px)",
               }}
             />
-
             <div
               style={{
                 position: "absolute",
@@ -99,14 +88,14 @@ function MainLayout({
                 right: "-90px",
                 top: "5%",
                 borderRadius: "50%",
-                background:
-                  "radial-gradient(circle, rgba(212,175,55,0.08), transparent 70%)",
+                background: "radial-gradient(circle, rgba(212,175,55,0.08), transparent 70%)",
                 filter: "blur(18px)",
               }}
             />
           </div>
 
-          <div className="chris-page"
+          <div
+            className="chris-page"
             style={{
               width: "100%",
               maxWidth: "1700px",
@@ -115,12 +104,13 @@ function MainLayout({
               zIndex: 1,
             }}
           >
+            <BranchContextSelector />
             {children}
           </div>
         </main>
       </div>
     </div>
-);
+  );
 }
 
 export default MainLayout;
