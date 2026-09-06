@@ -18,12 +18,17 @@ async function main() {
     select: { id: true, email: true },
   });
 
-  const result = await prisma.$transaction((tx) => provisionAllCurrentFullTimeEmployees({
+  // Intentionally do not wrap the whole tenant-wide provisioning run in one
+  // Prisma interactive transaction. The operation is idempotent and may touch
+  // hundreds of employees; a single 5-second transaction can expire before the
+  // matrix and employee allocations finish. Validation occurs before employee
+  // balances are changed, and reruns safely reuse the configured policy/rules.
+  const result = await provisionAllCurrentFullTimeEmployees({
     organizationId: organization.id,
     actorUserId: actor?.id || null,
     leaveYear: 2026,
-    tx,
-  }), { isolationLevel: "Serializable" });
+    tx: prisma,
+  });
 
   console.log(JSON.stringify({
     organization: organization.name,
@@ -44,6 +49,7 @@ async function main() {
 
 main().catch((error) => {
   console.error(error);
+  if (error?.details) console.error("Details:", JSON.stringify(error.details, null, 2));
   process.exitCode = 1;
 }).finally(async () => {
   await prisma.$disconnect();
