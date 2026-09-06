@@ -5,6 +5,11 @@ const { provisionAllCurrentFullTimeEmployees } = require("../services/zermattLea
 const { getEmployeeLeaveProfile } = require("../services/employeeLeaveProfileService");
 const { createManualPayrollInput } = require("../services/attendancePayrollService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+const {
+  previewAnnualCarryover,
+  applyAnnualCarryover,
+  forfeitExpiredCarryover,
+} = require("../services/zermattAnnualLeaveCarryoverService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -109,6 +114,74 @@ router.post("/leave-entitlements/apply", requirePermission("leave.manage"), requ
     });
   } catch (error) {
     return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to apply ZERMATT leave entitlements." });
+  }
+});
+
+router.get("/leave-carryover/preview", requirePermission("leave.view"), requireZermattSuperUser, async (req, res) => {
+  try {
+    const sourceYear = Number(req.query.sourceYear || new Date().getFullYear());
+    const data = await previewAnnualCarryover({
+      organizationId: req.auth.organizationId,
+      sourceYear,
+      targetYear: sourceYear + 1,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to preview Annual Leave carryover.", details: error.details || null });
+  }
+});
+
+router.post("/leave-carryover/apply", requirePermission("leave.manage"), requireZermattSuperUser, async (req, res) => {
+  try {
+    const sourceYear = Number(req.body?.sourceYear);
+    const data = await applyAnnualCarryover({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      sourceYear,
+      targetYear: sourceYear + 1,
+    });
+    return res.json({
+      status: "success",
+      message: `${data.appliedCount} employee Annual Leave carryover balance(s) moved from ${data.sourceYear} to ${data.targetYear}. Carryover must be used by 31 March ${data.targetYear} or forfeited.`,
+      data,
+    });
+  } catch (error) {
+    const messageByCode = {
+      CARRYOVER_SOURCE_YEAR_NOT_CLOSED: "Annual Leave carryover can only be applied after the source operational year has closed.",
+      CARRYOVER_PENDING_ANNUAL_REQUESTS: "Resolve all pending Annual Leave requests in the source year before carrying balances forward.",
+      CARRYOVER_TARGET_YEAR_ALREADY_IN_USE: "The target-year Annual Leave balance is already in use and cannot be silently rewritten.",
+    };
+    return res.status(409).json({
+      status: "error",
+      code: error.code || error.message,
+      message: messageByCode[error.message] || error.message || "Unable to apply Annual Leave carryover.",
+      details: error.details || null,
+    });
+  }
+});
+
+router.post("/leave-carryover/forfeit-expired", requirePermission("leave.manage"), requireZermattSuperUser, async (req, res) => {
+  try {
+    const leaveYear = Number(req.body?.leaveYear || new Date().getFullYear());
+    const data = await forfeitExpiredCarryover({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      leaveYear,
+    });
+    return res.json({
+      status: "success",
+      message: `Expired Annual Leave carryover processed for ${leaveYear}. ${data.forfeitedEmployees} employee(s) forfeited ${data.totalForfeited} unused day(s).`,
+      data,
+    });
+  } catch (error) {
+    return res.status(409).json({
+      status: "error",
+      code: error.code || error.message,
+      message: error.message === "CARRYOVER_Q1_NOT_EXPIRED"
+        ? "Carryover cannot be forfeited before the end of 31 March."
+        : error.message || "Unable to forfeit expired Annual Leave carryover.",
+      details: error.details || null,
+    });
   }
 });
 
