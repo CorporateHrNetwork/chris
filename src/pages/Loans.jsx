@@ -11,6 +11,7 @@ import {
   FaHistory,
   FaDownload,
   FaIdCard,
+  FaFileUpload,
 } from "react-icons/fa";
 
 import {
@@ -22,6 +23,7 @@ import {
 } from "../components/dashboard";
 import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
 import LoanProfile from "./LoanProfile";
+import LoanBulkUpload from "./LoanBulkUpload";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -58,6 +60,7 @@ function Loans() {
   const [recoveries, setRecoveries] = useState([]);
   const [loanPolicies, setLoanPolicies] = useState([]);
   const [selectedLoanProfile, setSelectedLoanProfile] = useState(null);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -298,6 +301,10 @@ function Loans() {
     return <LoanProfile loanId={selectedLoanProfile} onBack={() => setSelectedLoanProfile(null)} />;
   }
 
+  if (showBulkUpload) {
+    return <LoanBulkUpload onBack={() => setShowBulkUpload(false)} onImported={async () => { await load(); setShowBulkUpload(false); }} />;
+  }
+
   return (
     <>
       <ModuleDashboardShell
@@ -330,6 +337,7 @@ function Loans() {
         }
         quickActions={[
           <QuickActionCard key="new-loan" title="New Loan" subtitle="Create application for approval" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
+          <QuickActionCard key="bulk-upload" title="Bulk Loan Upload" subtitle="Validate and migrate existing Excel loan balances" icon={<FaFileUpload />} onClick={() => setShowBulkUpload(true)} />,
           <QuickActionCard key="advances" title="Salary Advances" subtitle="Open advance installment register" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
           <QuickActionCard key="history" title="Recovery History" subtitle="Review posted payroll loan deductions" icon={<FaHistory />} onClick={() => document.getElementById("loan-recovery-history")?.scrollIntoView({ behavior: "smooth" })} />,
         ]}
