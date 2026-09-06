@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import EmployeeBatchSelector from "../../components/EmployeeBatchSelector";
 import { apiRequest } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
   try {
-    return new Intl.NumberFormat("en-NG", {
-      style: "currency",
-      currency: currency || "NGN",
-      maximumFractionDigits: 2,
-    }).format(amount);
+    return new Intl.NumberFormat("en-NG", { style: "currency", currency: currency || "NGN", maximumFractionDigits: 2 }).format(amount);
   } catch {
     return `${currency || "NGN"} ${amount.toLocaleString()}`;
   }
@@ -74,10 +71,7 @@ function ExecuteIntegrated() {
   const calculate = async () => {
     try {
       setBusy("calculate"); setError(""); setMessage("");
-      const response = await apiRequest("/api/payroll/runs/draft", {
-        method: "POST",
-        body: JSON.stringify({ periodId }),
-      });
+      const response = await apiRequest("/api/payroll/runs/draft", { method: "POST", body: JSON.stringify({ periodId }) });
       const runId = response?.data?.run?.id;
       if (runId) await fetchIntegratedLines(runId);
       setMessage("Payroll recalculated. Review all employee lines before submission.");
@@ -121,10 +115,7 @@ function ExecuteIntegrated() {
     if (!reason?.trim()) return;
     try {
       setBusy(`reopen-${run.id}`); setError(""); setMessage("");
-      const response = await apiRequest(`/api/payroll/runs/${run.id}/reopen`, {
-        method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
-      });
+      const response = await apiRequest(`/api/payroll/runs/${run.id}/reopen`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) });
       setPeriodId(run.periodId || "");
       await fetchIntegratedLines(run.id);
       setMessage(response?.message || "Approved payroll reopened to Draft. Recalculate before resubmission.");
@@ -155,13 +146,11 @@ function ExecuteIntegrated() {
             <tr key={run.id}>
               <Td strong>{run.periodCode}</Td><Td><Badge>{run.status}</Badge></Td><Td><Badge>{run.statutoryStatus}</Badge></Td><Td>{run.employeeCount}</Td>
               <Td>{money(run.grossTotal)}</Td><Td>{money(run.deductionTotal)}</Td><Td>{money(run.netPreviewTotal)}</Td>
-              <Td>
-                <div style={buttonRow}>
-                  <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
-                  {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
-                  {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
-                </div>
-              </Td>
+              <Td><div style={buttonRow}>
+                <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
+                {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
+                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
+              </div></Td>
             </tr>
           ))}
         </DataTable>
@@ -173,59 +162,91 @@ function ExecuteIntegrated() {
 }
 
 function PayrollLines({ rows }) {
+  const getSearchText = useCallback((row) => [
+    row.employeeNumber,
+    row.employeeName,
+    row.details?.employmentType,
+    row.details?.costCentre,
+  ].filter(Boolean).join(" "), []);
+
   return (
-    <DataTable columns={["Employee", "Days", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Gross", "Net"]}>
-      {(rows || []).map((row) => {
-        const details = row.details || {};
-        const statutory = details.statutory || {};
-        const structure = details.salaryStructure || {};
-        const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-        const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-        return (
-          <tr key={row.id}>
-            <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
-            <Td>{details.attendance ? `${details.attendance.payableDays}/${details.attendance.standardDays}` : "—"}</Td>
-            <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
-            <Td>{money(customAllowances, row.currency)}</Td>
-            <Td>{money(statutory.payeTax, row.currency)}</Td>
-            <Td>{money(statutory.employeePension, row.currency)}</Td>
-            <Td>{money(customDeductions, row.currency)}</Td>
-            <Td>{money(row.advanceRecovery, row.currency)}</Td>
-            <Td>{money(row.loanRecovery, row.currency)}</Td>
-            <Td>{money(row.grossPay, row.currency)}</Td>
-            <Td strong>{money(row.netPreview, row.currency)}</Td>
-          </tr>
-        );
-      })}
-    </DataTable>
+    <EmployeeBatchSelector
+      rows={rows || []}
+      getId={(row) => row.id}
+      getSearchText={getSearchText}
+      searchPlaceholder="Search employee number, name, employment type or cost centre"
+      selectionLabel="payroll employee(s)"
+      renderActions={({ selectedRows }) => selectedRows.length ? (
+        <div style={batchSummaryStyle}>
+          <strong>Selected batch:</strong> {selectedRows.length} employee(s) · Gross {money(selectedRows.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} · Net {money(selectedRows.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))}
+        </div>
+      ) : null}
+    >
+      {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
+        <DataTable columns={["Select", "Employee", "Days", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Gross", "Net"]}>
+          <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
+          {displayRows.map((row) => {
+            const details = row.details || {};
+            const statutory = details.statutory || {};
+            const structure = details.salaryStructure || {};
+            const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+            const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+            return (
+              <tr key={row.id}>
+                <Td><input type="checkbox" aria-label={`Select ${row.employeeNumber} ${row.employeeName}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
+                <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
+                <Td>{details.attendance ? `${details.attendance.payableDays}/${details.attendance.standardDays}` : "—"}</Td>
+                <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
+                <Td>{money(customAllowances, row.currency)}</Td>
+                <Td>{money(statutory.payeTax, row.currency)}</Td>
+                <Td>{money(statutory.employeePension, row.currency)}</Td>
+                <Td>{money(customDeductions, row.currency)}</Td>
+                <Td>{money(row.advanceRecovery, row.currency)}</Td>
+                <Td>{money(row.loanRecovery, row.currency)}</Td>
+                <Td>{money(row.grossPay, row.currency)}</Td>
+                <Td strong>{money(row.netPreview, row.currency)}</Td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      )}
+    </EmployeeBatchSelector>
   );
 }
 
 function ApprovedPayslips() {
   const { data: rows, loading, error } = useLoad("/api/payroll/payslips");
-  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return rows || [];
-    return (rows || []).filter((row) => [row.employeeNumber, row.employeeName, row.periodCode, row.periodName].filter(Boolean).join(" ").toLowerCase().includes(term));
-  }, [rows, query]);
+  const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
 
   return (
     <>
       <Panel title="Approved Payroll Payslips">
-        <Input label="Search Employee / Period" value={query} onChange={setQuery} placeholder="ZLL000043, employee name or SEP-2026" />
         <p style={controlNote}>Only APPROVED payroll runs appear here. If an approved payroll is reopened for correction, its payslips stop appearing until the replacement draft is recalculated, submitted and approved again.</p>
-        <DataTable loading={loading} columns={["Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Net", "Action"]}>
-          {filtered.map((row) => {
-            const statutory = row.details?.statutory || {};
-            return <tr key={row.id}>
-              <Td strong>{row.periodCode}</Td><Td>{row.employeeNumber} — {row.employeeName}</Td><Td>{money(row.grossPay, row.currency)}</Td>
-              <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.loanRecovery, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
-              <Td><button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button></Td>
-            </tr>;
-          })}
-        </DataTable>
+        <EmployeeBatchSelector
+          rows={rows || []}
+          getId={(row) => row.id}
+          getSearchText={getSearchText}
+          searchPlaceholder="Search employee number, employee name or payroll period"
+          selectionLabel="payslip(s)"
+          renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? (
+            <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected Payslips</button>
+          ) : null}
+        >
+          {({ displayRows, isSelected, toggleOne }) => (
+            <DataTable loading={loading} columns={["Select", "Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Net", "Action"]}>
+              {displayRows.map((row) => {
+                const statutory = row.details?.statutory || {};
+                return <tr key={row.id}>
+                  <Td><input type="checkbox" aria-label={`Select payslip ${row.employeeNumber} ${row.periodCode}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
+                  <Td strong>{row.periodCode}</Td><Td>{row.employeeNumber} — {row.employeeName}</Td><Td>{money(row.grossPay, row.currency)}</Td>
+                  <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.loanRecovery, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
+                  <Td><button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button></Td>
+                </tr>;
+              })}
+            </DataTable>
+          )}
+        </EmployeeBatchSelector>
       </Panel>
       <Feedback error={error} />
       {selected && <PayslipCard row={selected} onClose={() => setSelected(null)} />}
@@ -274,9 +295,7 @@ function StatutoryCatalogue() {
       <Panel title={`Statutory Catalogue${data?.policyCode ? ` · ${data.policyCode} v${data.policyVersion}` : ""}`}>
         <p style={controlNote}>CHRiS distinguishes employee deductions from employer-only obligations. Items marked REVIEW BEFORE ACTIVATION are visible for governance but are not deducted until ZERMATT explicitly activates them and required employee/applicability data exists.</p>
         <DataTable loading={loading} columns={["Item", "Category", "Frequency", "Status", "Configured Basis", "Payroll Effect"]}>
-          {items.map((item) => <tr key={item.code}>
-            <Td strong>{item.name}</Td><Td>{item.category}</Td><Td>{item.payrollFrequency}</Td><Td><Badge>{item.status}</Badge></Td><Td>{item.basis}</Td><Td>{item.employeeEffect}</Td>
-          </tr>)}
+          {items.map((item) => <tr key={item.code}><Td strong>{item.name}</Td><Td>{item.category}</Td><Td>{item.payrollFrequency}</Td><Td><Badge>{item.status}</Badge></Td><Td>{item.basis}</Td><Td>{item.employeeEffect}</Td></tr>)}
         </DataTable>
       </Panel>
       <Feedback error={error} />
@@ -288,7 +307,6 @@ function StatutoryCatalogue() {
 function Summary({ label, value }) { return <div style={summaryCard}><div style={summaryLabel}>{label}</div><strong>{value}</strong></div>; }
 function Panel({ title, children }) { return <section style={panelStyle}><h2 style={panelTitle}>{title}</h2>{children}</section>; }
 function Feedback({ error }) { return error ? <div role="alert" style={errorStyle}>{error}</div> : null; }
-function Input({ label, value, onChange, type = "text", ...props }) { return <label style={fieldLabel}><span>{label}</span><input type={type} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} {...props} /></label>; }
 function Select({ label, value, onChange, options }) { return <label style={fieldLabel}><span>{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle}>{options.map(([key, name]) => <option key={key || "blank"} value={key}>{name}</option>)}</select></label>; }
 function DataTable({ columns, children, loading = false }) { return <div style={tableWrap}>{loading ? <div style={loadingStyle}>Loading…</div> : <table style={tableStyle}><thead><tr>{columns.map((column) => <th key={column} style={thStyle}>{column}</th>)}</tr></thead><tbody>{children}</tbody></table>}</div>; }
 function Td({ children, strong = false }) { return <td style={{ ...tdStyle, ...(strong ? { fontWeight: 900, color: "#F7FAF8" } : {}) }}>{children}</td>; }
@@ -319,3 +337,4 @@ const loadingStyle = { padding: 14, color: "#C7D3CC" };
 const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 };
 const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.25)", borderRadius: 10, background: "rgba(255,255,255,.04)" };
 const summaryLabel = { color: "#9FB7AA", fontSize: 11, marginBottom: 5 };
+const batchSummaryStyle = { display: "flex", alignItems: "center", minHeight: 36, padding: "0 4px", color: "#C7D3CC", fontSize: 12 };
