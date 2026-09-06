@@ -60,7 +60,12 @@ function buildAmortizationSchedule({
     const key = dueDate.toISOString().slice(0, 7);
     const legacyEvent = legacyByMonth.get(key) || null;
     const postedAmount = money(postedByMonth.get(key) || 0);
-    const scheduledPrincipal = money(Math.min(installment, plannedOutstanding));
+    let scheduledPrincipal = money(Math.min(installment, plannedOutstanding));
+
+    // Do not create a separate ₦0.xx installment caused only by currency-rounding residue.
+    // Absorb a residual of ₦1 or less into the current final installment.
+    const microResidual = money(plannedOutstanding - scheduledPrincipal);
+    if (microResidual > 0 && microResidual <= 1) scheduledPrincipal = money(plannedOutstanding);
 
     let status = "PENDING";
     let amountPaid = 0;
@@ -247,6 +252,7 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
       scheduleBasis: "MONTH_END_FROM_RECOVERY_START",
       installmentMode: "FULL_INSTALLMENT_ONLY",
       partialInstallmentsPermitted: false,
+      microResidualTreatment: "ABSORB_UP_TO_ONE_NAIRA_INTO_FINAL_INSTALLMENT",
       historicalRecoveriesImmutable: true,
     },
   };
