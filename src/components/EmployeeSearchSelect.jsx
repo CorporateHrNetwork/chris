@@ -16,6 +16,7 @@ export default function EmployeeSearchSelect({
   disabled = false,
   required = false,
   placeholder = "Search employee number or name",
+  endpoint = "/api/payroll/employee-options",
 }) {
   const [options, setOptions] = useState([]);
   const [query, setQuery] = useState("");
@@ -30,7 +31,7 @@ export default function EmployeeSearchSelect({
       try {
         setLoading(true);
         setError("");
-        const response = await apiRequest("/api/payroll/employee-options");
+        const response = await apiRequest(endpoint);
         if (active) setOptions(response?.data || []);
       } catch (requestError) {
         if (active) {
@@ -42,7 +43,7 @@ export default function EmployeeSearchSelect({
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [endpoint]);
 
   useEffect(() => {
     if (!value && committedValueRef.current) {
@@ -80,6 +81,7 @@ export default function EmployeeSearchSelect({
             option.department,
             option.designation,
             option.employmentType,
+            option.location,
           ]
             .filter(Boolean)
             .join(" ")
@@ -158,6 +160,7 @@ export default function EmployeeSearchSelect({
                   <span>•</span>
                   <span>{option.designation || "No designation"}</span>
                   {option.employmentType && <><span>•</span><span>{option.employmentType}</span></>}
+                  {option.location && <><span>•</span><span>{option.location}</span></>}
                 </div>
               </button>
             ))}
@@ -261,6 +264,6 @@ const errorStyle = {
 };
 
 const selectedStyle = {
-  color: "#9FB7AA",
+  color: "var(--chris-dashboard-muted, #9FB7AA)",
   fontWeight: 600,
 };
