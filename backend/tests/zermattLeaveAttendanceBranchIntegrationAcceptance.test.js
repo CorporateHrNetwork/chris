@@ -45,6 +45,7 @@ test("ZERMATT Full-Time leave, manual worked days and branch context integrate s
   ]) assert.ok(leaveProfile.includes(expected), `leave profile field missing: ${expected}`);
 
   assert.ok(leaveProfileUi.includes("EmployeeSearchSelect"), "leave profile must use searchable employee selection");
+  assert.ok(leaveProfileUi.includes('endpoint="/api/zermatt/employee-options"'), "leave profile search must be branch-scoped and leave-aware");
   assert.ok(leaveProfileUi.includes("Leave Policy"), "leave profile must expose policy dropdown");
   for (const label of ["Entitlement", "Used Days", "Leave Balance", "Maximum Requestable", "Next Leave Date"]) {
     assert.ok(leaveProfileUi.includes(label), `leave profile UI missing ${label}`);
@@ -52,7 +53,8 @@ test("ZERMATT Full-Time leave, manual worked days and branch context integrate s
 
   assert.ok(operationsRoutes.includes('/attendance/worked-days'), "Super User worked-days endpoint missing");
   assert.ok(operationsRoutes.includes("requireZermattSuperUser"), "worked-days entry must remain Super User controlled");
-  assert.ok(workedDaysUi.includes("Manual Worked Days"), "manual worked-days payroll UI missing");
+  assert.ok(operationsRoutes.includes("EMPLOYEE_OUTSIDE_ACTIVE_BRANCH"), "branch operations must reject employees outside active branch");
+  assert.ok(workedDaysUi.includes("MANUAL WORKED DAYS"), "manual worked-days payroll UI missing");
   assert.ok(workedDaysUi.includes("EmployeeSearchSelect"), "manual worked-days UI must use searchable employee selection");
   assert.ok(payrollEngine.includes("attendancePayrollInput.findMany"), "payroll must read exact-period attendance payroll input");
   assert.ok(payrollEngine.includes("payableDays"), "payroll must calculate payable days");
