@@ -30,6 +30,7 @@ const employeeDataOperationsRoutes = require("./routes/employeeDataOperationsRou
 const employeeEmploymentAssignmentRoutes = require("./routes/employeeEmploymentAssignmentRoutes");
 const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPublicRoutes");
 const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
+const zermattOperationsRoutes = require("./routes/zermattOperationsRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
 const app = express();
@@ -69,6 +70,7 @@ app.use("/api/employee-reports", employeeReportRoutes);
 app.use("/api/employee-integrity", employeeIntegrityRoutes);
 app.use("/api/leave", leaveRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/zermatt", zermattOperationsRoutes);
 
 app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
 
