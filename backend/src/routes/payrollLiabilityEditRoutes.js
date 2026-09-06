@@ -26,9 +26,23 @@ function sendError(res, error, fallback) {
 
 function isSuperUser(req) {
   const roles = (req.auth?.roles || []).map((role) => String(role || "").trim().toUpperCase().replace(/[\s_-]+/g, ""));
+  const permissions = new Set(req.auth?.permissions || []);
   const organizationSlug = String(req.auth?.organization?.slug || "").trim().toLowerCase();
-  const superRole = roles.some((role) => ["SUPERUSER", "SUPERADMIN", "ORGANIZATIONSUPERUSER"].includes(role));
-  return organizationSlug === "zermatt-liquor-limited" && superRole;
+  const superRole = roles.some((role) => [
+    "SUPERUSER",
+    "SUPERADMIN",
+    "ORGANIZATIONSUPERUSER",
+    "ORGANIZATIONADMINISTRATOR",
+    "ADMINISTRATOR",
+  ].includes(role));
+  const superPermissionProfile = [
+    "payroll.manage",
+    "users.manage",
+    "roles.manage",
+    "settings.manage",
+  ].every((permission) => permissions.has(permission));
+
+  return organizationSlug === "zermatt-liquor-limited" && (superRole || superPermissionProfile);
 }
 
 function requireZermattSuperUser(req, res, next) {
