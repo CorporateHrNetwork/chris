@@ -1,5 +1,6 @@
 const express = require("express");
-const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
+const prisma = require("../config/prisma");
+const { requireAuth, requireAnyPermission, requirePermission } = require("../middleware/authMiddleware");
 const { provisionAllCurrentFullTimeEmployees } = require("../services/zermattLeaveEntitlementService");
 const { getEmployeeLeaveProfile } = require("../services/employeeLeaveProfileService");
 const { createManualPayrollInput } = require("../services/attendancePayrollService");
@@ -31,6 +32,68 @@ function requireZermattSuperUser(req, res, next) {
   next();
 }
 
+async function assertEmployeeInActiveBranch(req, employeeNumber) {
+  if (!req.auth.activeLocationId) return null;
+  const employee = await prisma.employee.findFirst({
+    where: {
+      organizationId: req.auth.organizationId,
+      employeeNumber: String(employeeNumber || "").trim().toUpperCase(),
+    },
+    select: { id: true, employeeNumber: true, locationId: true },
+  });
+  if (!employee) throw Object.assign(new Error("EMPLOYEE_NOT_FOUND"), { statusCode: 404 });
+  if (employee.locationId !== req.auth.activeLocationId) {
+    throw Object.assign(new Error("EMPLOYEE_OUTSIDE_ACTIVE_BRANCH"), {
+      statusCode: 403,
+      safeMessage: "The selected employee does not belong to the active branch context.",
+    });
+  }
+  return employee;
+}
+
+router.get("/employee-options", requireAnyPermission("leave.view", "attendance.view", "attendance.manage", "payroll.view"), async (req, res) => {
+  try {
+    const employees = await prisma.employee.findMany({
+      where: {
+        organizationId: req.auth.organizationId,
+        status: { in: ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"] },
+        ...(req.auth.activeLocationId ? { locationId: req.auth.activeLocationId } : {}),
+      },
+      select: {
+        id: true,
+        employeeNumber: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        employmentType: true,
+        status: true,
+        location: { select: { id: true, name: true, code: true } },
+        department: { select: { name: true } },
+        designation: { select: { name: true, careerLevel: true } },
+      },
+      orderBy: { employeeNumber: "asc" },
+    });
+    return res.json({
+      status: "success",
+      data: employees.map((employee) => ({
+        id: employee.id,
+        employeeNumber: employee.employeeNumber,
+        employeeName: [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "),
+        employmentType: employee.employmentType,
+        status: employee.status,
+        department: employee.department?.name || null,
+        designation: employee.designation?.name || null,
+        careerLevel: employee.designation?.careerLevel || null,
+        location: employee.location?.name || null,
+        locationId: employee.location?.id || null,
+        locationCode: employee.location?.code || null,
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: "Unable to load ZERMATT employee options." });
+  }
+});
+
 router.post("/leave-entitlements/apply", requirePermission("leave.manage"), requireZermattSuperUser, async (req, res) => {
   try {
     const leaveYear = Number(req.body?.leaveYear || new Date().getFullYear());
@@ -51,6 +114,7 @@ router.post("/leave-entitlements/apply", requirePermission("leave.manage"), requ
 
 router.get("/leave-profile/:employeeNumber", requirePermission("leave.view"), async (req, res) => {
   try {
+    await assertEmployeeInActiveBranch(req, req.params.employeeNumber);
     const data = await getEmployeeLeaveProfile({
       organizationId: req.auth.organizationId,
       employeeNumber: String(req.params.employeeNumber || "").trim().toUpperCase(),
@@ -59,12 +123,13 @@ router.get("/leave-profile/:employeeNumber", requirePermission("leave.view"), as
     });
     return res.json({ status: "success", data });
   } catch (error) {
-    return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to load employee leave profile." });
+    return res.status(error.statusCode || 400).json({ status: "error", code: error.code || error.message, message: error.safeMessage || error.message || "Unable to load employee leave profile." });
   }
 });
 
 router.post("/attendance/worked-days", requirePermission("attendance.manage"), requireZermattSuperUser, async (req, res) => {
   try {
+    await assertEmployeeInActiveBranch(req, req.body?.employeeNumber);
     const data = await createManualPayrollInput({
       organizationId: req.auth.organizationId,
       employeeNumber: req.body?.employeeNumber,
@@ -86,7 +151,7 @@ router.post("/attendance/worked-days", requirePermission("attendance.manage"), r
       data: { attendancePayrollInput: data, payrollDraftFreshness: freshness },
     });
   } catch (error) {
-    return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to save worked days." });
+    return res.status(error.statusCode || 400).json({ status: "error", code: error.code || error.message, message: error.safeMessage || error.message || "Unable to save worked days." });
   }
 });
 
