@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import EmployeeSearchSelect from "../EmployeeSearchSelect";
 import { apiRequest } from "../../services/api";
 
-function value(value, suffix = "") {
-  return value == null ? "—" : `${Number(value).toLocaleString()}${suffix}`;
+function value(value) {
+  return value == null ? "—" : Number(value).toLocaleString();
 }
 
 export default function EmployeeLeaveProfileSelector() {
@@ -55,6 +55,7 @@ export default function EmployeeLeaveProfileSelector() {
       </p>
       <div style={selectorGrid}>
         <EmployeeSearchSelect
+          endpoint="/api/zermatt/employee-options"
           label="Employee"
           value={employeeNumber}
           onChange={(next) => { setEmployeeNumber(next); setError(""); }}
@@ -105,9 +106,7 @@ export default function EmployeeLeaveProfileSelector() {
             <div style={emptyStyle}>Select a leave policy to view entitlement, usage, balance and requestable leave information.</div>
           )}
 
-          {profile.exceptionWarnings?.length ? (
-            <div style={warningStyle}>{profile.exceptionWarnings.join(" · ")}</div>
-          ) : null}
+          {profile.exceptionWarnings?.length ? <div style={warningStyle}>{profile.exceptionWarnings.join(" · ")}</div> : null}
         </>
       )}
     </section>
