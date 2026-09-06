@@ -16,7 +16,7 @@ export default function EmployeeSearchSelect({
   disabled = false,
   required = false,
   placeholder = "Search employee number or name",
-  endpoint = "/api/payroll/employee-options",
+  endpoint = null,
 }) {
   const [options, setOptions] = useState([]);
   const [query, setQuery] = useState("");
@@ -24,6 +24,9 @@ export default function EmployeeSearchSelect({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const committedValueRef = useRef("");
+  const lookupEndpoint = endpoint || (window.location.pathname.startsWith("/loans")
+    ? "/api/loans/employee-options"
+    : "/api/payroll/employee-options");
 
   useEffect(() => {
     let active = true;
@@ -31,7 +34,7 @@ export default function EmployeeSearchSelect({
       try {
         setLoading(true);
         setError("");
-        const response = await apiRequest(endpoint);
+        const response = await apiRequest(lookupEndpoint);
         if (active) setOptions(response?.data || []);
       } catch (requestError) {
         if (active) {
@@ -43,7 +46,7 @@ export default function EmployeeSearchSelect({
       }
     })();
     return () => { active = false; };
-  }, [endpoint]);
+  }, [lookupEndpoint]);
 
   useEffect(() => {
     if (!value && committedValueRef.current) {
