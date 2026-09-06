@@ -347,7 +347,7 @@ async function applyOpeningBalanceCorrections({ organizationId, actorUserId, pla
           entityType: "PayrollLoan",
           entityId: row.loanId,
           action: "LOAN_OPENING_BALANCE_CORRECTED",
-          oldValue: {
+          previousValue: {
             outstandingAmount: money(row.oldOutstanding),
             openingRecoveredAmount: money(row.oldRecovered),
             status: current.status,
