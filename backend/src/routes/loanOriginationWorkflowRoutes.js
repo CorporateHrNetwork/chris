@@ -3,10 +3,19 @@ const multer = require("multer");
 
 const { requireAuth, requireAnyPermission } = require("../middleware/authMiddleware");
 const { getLoanPolicies, validateLoanPurpose } = require("../services/loanPolicyService");
-const loans = require("../services/loanService");
+const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileService");
+const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
+const { updateLoan } = require("../services/payrollLiabilityEditService");
 const prisma = require("../config/prisma");
 const workflow = require("../services/loanOriginationWorkflowService");
-const { deliverNotification } = require("../services/loanWorkflowNotificationService");
+const { deliverNotification, resolveRoleRecipients } = require("../services/loanWorkflowNotificationService");
+const {
+  assertLoanLocationAccess,
+  listLoanEmployeeOptions,
+  listVisibleLoans,
+  getVisibleLoanSummary,
+  listVisibleRecoveries,
+} = require("../services/loanWorkflowAccessService");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -20,17 +29,40 @@ function sendError(res, error, fallback = "Loan workflow operation failed.") {
   return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
 
+function exportFormat(value) {
+  const format = String(value || "").trim().toLowerCase();
+  if (!["xlsx", "csv", "pdf"].includes(format)) {
+    const error = new Error("Export format must be xlsx, csv or pdf.");
+    error.code = "INVALID_LOAN_EXPORT_FORMAT";
+    error.statusCode = 400;
+    throw error;
+  }
+  return format;
+}
+function sendExport(res, file) {
+  res.setHeader("Content-Type", file.contentType);
+  res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);
+  res.setHeader("Cache-Control", "no-store");
+  return res.send(file.buffer);
+}
+
 const mayApply = requireAnyPermission("loans.apply", "payroll.manage");
 const mayVerify = requireAnyPermission("loans.verify", "payroll.manage");
 const mayApprove = requireAnyPermission("loans.approve", "payroll.manage");
 const mayDisburse = requireAnyPermission("loans.disburse", "payroll.manage");
 const mayView = requireAnyPermission("loans.view", "payroll.view", "loans.apply", "loans.verify", "loans.approve", "loans.disburse", "payroll.manage");
 
-// These read routes intentionally shadow the older payroll.view-only loan routes so branch workflow
-// users can open the same Loans workspace without being granted broad payroll access.
+router.get("/employee-options", mayApply, async (req, res) => {
+  try {
+    return res.json({ status: "success", data: await listLoanEmployeeOptions({ organizationId: req.auth.organizationId, userId: req.auth.userId }) });
+  } catch (error) {
+    return sendError(res, error, "Unable to load employees available for loan application.");
+  }
+});
+
 router.get("/summary", mayView, async (req, res) => {
   try {
-    return res.json({ status: "success", data: await loans.getLoanSummary({ organizationId: req.auth.organizationId }) });
+    return res.json({ status: "success", data: await getVisibleLoanSummary({ organizationId: req.auth.organizationId, userId: req.auth.userId }) });
   } catch (error) {
     return sendError(res, error, "Unable to load loan summary.");
   }
@@ -38,7 +70,7 @@ router.get("/summary", mayView, async (req, res) => {
 
 router.get("/recoveries", mayView, async (req, res) => {
   try {
-    return res.json({ status: "success", data: await loans.listRecoveries({ organizationId: req.auth.organizationId, loanId: req.query?.loanId || null }) });
+    return res.json({ status: "success", data: await listVisibleRecoveries({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.query?.loanId || null }) });
   } catch (error) {
     return sendError(res, error, "Unable to load loan recoveries.");
   }
@@ -52,11 +84,23 @@ router.get("/policies", mayView, async (req, res) => {
   }
 });
 
+router.get("/reports/export", mayView, async (req, res) => {
+  try {
+    const format = exportFormat(req.query?.format);
+    const visibleLoans = await listVisibleLoans({ organizationId: req.auth.organizationId, userId: req.auth.userId });
+    const visibleIds = new Set(visibleLoans.map((loan) => loan.id));
+    const allRows = await getBulkLoanReport({ organizationId: req.auth.organizationId });
+    return sendExport(res, exportBulkLoans(allRows.filter((row) => visibleIds.has(row.loanId)), format));
+  } catch (error) {
+    return sendError(res, error, "Unable to export loan report.");
+  }
+});
+
 router.get("/", mayView, async (req, res) => {
   try {
     return res.json({
       status: "success",
-      data: await loans.listLoans({ organizationId: req.auth.organizationId, status: req.query?.status || null, employeeNumber: req.query?.employeeNumber || null }),
+      data: await listVisibleLoans({ organizationId: req.auth.organizationId, userId: req.auth.userId, status: req.query?.status || null, employeeNumber: req.query?.employeeNumber || null }),
     });
   } catch (error) {
     return sendError(res, error, "Unable to load loans.");
@@ -65,6 +109,13 @@ router.get("/", mayView, async (req, res) => {
 
 router.post("/applications", mayApply, async (req, res) => {
   try {
+    const options = await listLoanEmployeeOptions({ organizationId: req.auth.organizationId, userId: req.auth.userId });
+    if (!options.some((employee) => employee.employeeNumber === String(req.body?.employeeNumber || "").trim().toUpperCase())) {
+      const error = new Error("The selected employee is outside your assigned loan-workflow location scope.");
+      error.code = "LOAN_EMPLOYEE_LOCATION_ACCESS_DENIED";
+      error.statusCode = 403;
+      throw error;
+    }
     const purpose = await validateLoanPurpose({ organizationId: req.auth.organizationId, purpose: req.body?.purpose, prismaClient: prisma });
     const data = await workflow.createDraftApplication({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, input: req.body || {}, purpose });
     return res.status(201).json({ status: "success", message: "Loan application draft created. Attach the completed loan application form before submission for HR verification.", data });
@@ -73,8 +124,31 @@ router.post("/applications", mayApply, async (req, res) => {
   }
 });
 
+router.patch("/:id", requireAnyPermission("loans.apply", "payroll.manage"), async (req, res) => {
+  try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
+    const stateRows = await prisma.$queryRawUnsafe(`SELECT "status" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1`, req.auth.organizationId, req.params.id);
+    const state = stateRows[0]?.status;
+    const isWorkflowEditable = ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(state);
+    const isPayrollAdmin = (req.auth.permissions || []).includes("payroll.manage");
+    if (!isWorkflowEditable && !isPayrollAdmin) {
+      const error = new Error("Branch HR may edit only Draft or Returned for Correction loan applications.");
+      error.code = "LOAN_APPLICATION_FROZEN";
+      error.statusCode = 409;
+      throw error;
+    }
+    const input = { ...(req.body || {}) };
+    if (input.purpose !== undefined) input.purpose = await validateLoanPurpose({ organizationId: req.auth.organizationId, purpose: input.purpose, prismaClient: prisma });
+    const data = await updateLoan({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, loanId: req.params.id, input });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to edit loan application.");
+  }
+});
+
 router.post("/:id/application-form", mayApply, upload.single("file"), async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const data = await workflow.addApplicationForm({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, loanId: req.params.id, file: req.file });
     return res.status(201).json({ status: "success", message: "Loan application form attached.", data });
   } catch (error) {
@@ -82,8 +156,29 @@ router.post("/:id/application-form", mayApply, upload.single("file"), async (req
   }
 });
 
+router.get("/:id/profile", mayView, async (req, res) => {
+  try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
+    return res.json({ status: "success", data: await getLoanProfile({ organizationId: req.auth.organizationId, loanId: req.params.id }) });
+  } catch (error) {
+    return sendError(res, error, "Unable to load loan profile.");
+  }
+});
+
+router.get("/:id/export", mayView, async (req, res) => {
+  try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
+    const format = exportFormat(req.query?.format);
+    const profile = await getLoanProfile({ organizationId: req.auth.organizationId, loanId: req.params.id });
+    return sendExport(res, exportIndividualLoan(profile, format));
+  } catch (error) {
+    return sendError(res, error, "Unable to export loan profile.");
+  }
+});
+
 router.get("/:id/attachments", mayView, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const data = await workflow.listAttachments({ organizationId: req.auth.organizationId, loanId: req.params.id });
     return res.json({ status: "success", data });
   } catch (error) {
@@ -93,6 +188,7 @@ router.get("/:id/attachments", mayView, async (req, res) => {
 
 router.get("/:id/attachments/:attachmentId/download", mayView, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const file = await workflow.getAttachment({ organizationId: req.auth.organizationId, loanId: req.params.id, attachmentId: req.params.attachmentId });
     res.setHeader("Content-Type", file.mimeType || "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${String(file.fileName || "loan-application").replace(/"/g, "")}"`);
@@ -105,6 +201,7 @@ router.get("/:id/attachments/:attachmentId/download", mayView, async (req, res) 
 
 router.post("/:id/submit-for-hr-verification", mayApply, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const data = await workflow.submitForHrVerification({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, loanId: req.params.id, comments: req.body?.comments });
     return res.json({ status: "success", message: "Loan application submitted to Head HR for verification.", data });
   } catch (error) {
@@ -114,6 +211,17 @@ router.post("/:id/submit-for-hr-verification", mayApply, async (req, res) => {
 
 router.post("/:id/hr-verification", mayVerify, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
+    if (String(req.body?.decision || "").toUpperCase() === "VERIFY") {
+      const loanRows = await prisma.$queryRawUnsafe(`SELECT "workflowLocationId" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1`, req.auth.organizationId, req.params.id);
+      const gmRecipients = await resolveRoleRecipients({ organizationId: req.auth.organizationId, locationId: loanRows[0]?.workflowLocationId || null, workflowRoles: ["GM_APPROVER"], prismaClient: prisma });
+      if (!gmRecipients.some((recipient) => recipient.actionAuthority === "GM_APPROVE")) {
+        const error = new Error("No active General Manager recipient is configured. HR verification is blocked until the GM workflow recipient is available.");
+        error.code = "GM_APPROVER_NOT_CONFIGURED";
+        error.statusCode = 409;
+        throw error;
+      }
+    }
     const data = await workflow.hrVerificationDecision({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, loanId: req.params.id, decision: req.body?.decision, comments: req.body?.comments });
     return res.json({ status: "success", message: `Head HR decision recorded: ${String(req.body?.decision || "").toUpperCase()}.`, data });
   } catch (error) {
@@ -124,6 +232,7 @@ router.post("/:id/hr-verification", mayVerify, async (req, res) => {
 router.get("/email-approval/:token", mayApprove, async (req, res) => {
   try {
     const data = await workflow.resolveEmailApprovalToken({ organizationId: req.auth.organizationId, token: req.params.token, actorUserId: req.auth.userId });
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: data.loanId });
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to validate the GM approval link.");
@@ -132,6 +241,7 @@ router.get("/email-approval/:token", mayApprove, async (req, res) => {
 
 router.post("/:id/gm-decision", mayApprove, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const data = await workflow.gmDecision({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, loanId: req.params.id, decision: req.body?.decision, comments: req.body?.comments, token: req.body?.token || null });
     return res.json({ status: "success", message: `General Manager decision recorded: ${String(req.body?.decision || "").toUpperCase()}.`, data });
   } catch (error) {
@@ -141,6 +251,7 @@ router.post("/:id/gm-decision", mayApprove, async (req, res) => {
 
 router.post("/:id/disbursement", mayDisburse, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const data = await workflow.disburseApprovedLoan({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, loanId: req.params.id, input: req.body || {} });
     return res.json({ status: "success", message: "Loan disbursement recorded. The loan is now active for payroll recovery from the configured recovery month.", data });
   } catch (error) {
@@ -150,6 +261,7 @@ router.post("/:id/disbursement", mayDisburse, async (req, res) => {
 
 router.get("/:id/workflow", mayView, async (req, res) => {
   try {
+    await assertLoanLocationAccess({ organizationId: req.auth.organizationId, userId: req.auth.userId, loanId: req.params.id });
     const data = await workflow.getWorkflow({ organizationId: req.auth.organizationId, loanId: req.params.id });
     return res.json({ status: "success", data });
   } catch (error) {
