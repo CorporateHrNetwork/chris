@@ -3,6 +3,7 @@ export default function ModuleDashboardShell({
   title,
   description,
   metrics,
+  metricsColumns,
   analytics,
   recentActivity,
   quickActions,
@@ -15,7 +16,14 @@ export default function ModuleDashboardShell({
         {description ? <p>{description}</p> : null}
       </header>
 
-      {metrics ? <div className="chris-dashboard-grid">{metrics}</div> : null}
+      {metrics ? (
+        <div
+          className="chris-dashboard-grid"
+          style={metricsColumns ? { gridTemplateColumns: `repeat(${metricsColumns}, minmax(0, 1fr))` } : undefined}
+        >
+          {metrics}
+        </div>
+      ) : null}
 
       {analytics || recentActivity ? (
         <div className="chris-dashboard-lower-grid">
