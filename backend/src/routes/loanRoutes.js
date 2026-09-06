@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
@@ -6,8 +7,24 @@ const loans = require("../services/loanService");
 const { getLoanPolicies, validateLoanPurpose } = require("../services/loanPolicyService");
 const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileService");
 const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
+const {
+  templateBuffer: loanBulkTemplateBuffer,
+  prepareLoanWorkbook,
+  importOpeningLoans,
+} = require("../services/loanBulkImportService");
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter(req, file, callback) {
+    const name = String(file.originalname || "").toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
+      return callback(new Error("Upload an Excel .xlsx or .xls file."));
+    }
+    callback(null, true);
+  },
+});
 router.use(requireAuth);
 
 function sendError(res, error, fallback = "Loan operation failed.") {
@@ -71,6 +88,58 @@ router.get("/recoveries", requirePermission("payroll.view"), async (req, res) =>
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan recoveries.");
+  }
+});
+
+router.get("/bulk/template", requirePermission("payroll.manage"), async (req, res) => {
+  res.setHeader("Content-Disposition", 'attachment; filename="CHRiS_ZERMATT_Loan_Bulk_Upload_Template.xlsx"');
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return res.send(loanBulkTemplateBuffer());
+});
+
+router.post("/bulk/preview", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
+  try {
+    const rows = await prepareLoanWorkbook({
+      organizationId: req.auth.organizationId,
+      buffer: req.file?.buffer,
+    });
+    return res.json({
+      status: "success",
+      data: {
+        rows,
+        totalRows: rows.length,
+        validRows: rows.filter((row) => row.valid).length,
+        invalidRows: rows.filter((row) => !row.valid).length,
+        warningRows: rows.filter((row) => row.warnings?.length).length,
+        importAllowed: rows.length > 0 && rows.every((row) => row.valid),
+      },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to validate loan workbook.");
+  }
+});
+
+router.post("/bulk/import", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
+  try {
+    const rows = await prepareLoanWorkbook({
+      organizationId: req.auth.organizationId,
+      buffer: req.file?.buffer,
+    });
+    const created = await importOpeningLoans({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      rows,
+    });
+    return res.status(201).json({
+      status: "success",
+      message: `${created.length} loan record(s) imported successfully.`,
+      data: {
+        created,
+        total: created.length,
+      },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to import loan workbook.");
   }
 });
 
