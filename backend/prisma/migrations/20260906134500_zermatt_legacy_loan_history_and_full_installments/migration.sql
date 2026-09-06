@@ -85,6 +85,7 @@ ON CONFLICT ("organizationId","loanId","periodStart") DO UPDATE
 -- A payroll draft may schedule the installment, but CHRiS must never create a partial loan deduction.
 -- If the remaining net pay cannot fund a full installment, the loan allocation for that line is zero
 -- and the shortfall is exposed in line details for review.
+-- A residual of ₦1 or less is absorbed into the preceding final installment so no ₦0.xx payroll deduction is created.
 CREATE OR REPLACE FUNCTION "chris_apply_active_loan_recovery"()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -107,19 +108,27 @@ BEGIN
 
   v_available := GREATEST(0, COALESCE(NEW."grossPay",0) - COALESCE(NEW."deductions",0) - COALESCE(NEW."advanceRecovery",0));
 
-  WITH scheduled AS (
+  WITH base AS (
     SELECT l."id", l."loanNumber", l."recoveryStartDate", l."disbursedDate",
-           LEAST(l."outstandingAmount", l."installmentAmount")::NUMERIC AS scheduled_amount,
-           COALESCE(SUM(LEAST(l."outstandingAmount", l."installmentAmount")) OVER (
-             ORDER BY l."recoveryStartDate", l."disbursedDate", l."id"
-             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-           ),0)::NUMERIC AS prior_scheduled
+           CASE
+             WHEN l."outstandingAmount" > l."installmentAmount"
+              AND (l."outstandingAmount" - l."installmentAmount") <= 1
+               THEN l."outstandingAmount"
+             ELSE LEAST(l."outstandingAmount", l."installmentAmount")
+           END::NUMERIC AS scheduled_amount
       FROM "payroll_loans" l
      WHERE l."organizationId"=NEW."organizationId"
        AND l."employeeId"=NEW."employeeId"
        AND l."status"='ACTIVE'
        AND l."outstandingAmount" > 0
        AND DATE_TRUNC('month', l."recoveryStartDate") <= DATE_TRUNC('month', v_period_start)
+  ), scheduled AS (
+    SELECT b.*,
+           COALESCE(SUM(b.scheduled_amount) OVER (
+             ORDER BY b."recoveryStartDate", b."disbursedDate", b."id"
+             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+           ),0)::NUMERIC AS prior_scheduled
+      FROM base b
   ), allocated AS (
     SELECT "id","loanNumber","recoveryStartDate","disbursedDate",scheduled_amount,
            CASE
@@ -143,6 +152,7 @@ BEGIN
     'loanScheduledTotal', COALESCE(v_scheduled_total,0),
     'loanRecoveryShortfall', GREATEST(0, COALESCE(v_scheduled_total,0) - COALESCE(v_loan_recovery,0)),
     'loanRecoveryMode', 'FULL_INSTALLMENT_ONLY',
+    'loanMicroResidualRule', 'ABSORB_UP_TO_ONE_NAIRA_INTO_FINAL_INSTALLMENT',
     'recoveryPriority', 'STATUTORY_AND_CUSTOM_DEDUCTIONS_THEN_SALARY_ADVANCE_THEN_LOAN',
     'loanRecoveryEffectiveRule', 'RECOVERY_START_MONTH_FROM_BEGINNING_OF_MONTH'
   );
