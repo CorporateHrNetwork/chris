@@ -19,6 +19,7 @@ test("ZERMATT Full-Time leave, manual worked days and branch context integrate s
   const leaveProfileUi = read("src/components/leave/EmployeeLeaveProfileSelector.jsx");
   const payrollUi = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
   const workedDaysUi = read("src/components/payroll/ManualWorkedDaysPanel.jsx");
+  const provisioningScript = read("backend/scripts/configure-zermatt-leave-entitlements.cjs");
 
   for (const expected of [
     "if (level === 11) return 30",
@@ -33,6 +34,11 @@ test("ZERMATT Full-Time leave, manual worked days and branch context integrate s
     'employmentTypes: ["Full-Time"]',
     "FULL_TIME_ONLY",
   ]) assert.ok(leavePolicy.includes(expected), `missing ZERMATT leave control: ${expected}`);
+
+  assert.ok(leavePolicy.includes("configuredPolicies = null"), "employee provisioning must support reuse of the preconfigured policy catalogue");
+  assert.ok(leavePolicy.includes("provisionEmployeeWithConfigured"), "tenant-wide provisioning must not rebuild policy rules for every employee");
+  assert.ok(leavePolicy.includes("invalidLevels"), "employment-level exceptions must be validated before employee balances are changed");
+  assert.ok(!provisioningScript.includes("prisma.$transaction((tx) => provisionAllCurrentFullTimeEmployees"), "tenant-wide provisioning must not be wrapped in Prisma's default 5-second interactive transaction");
 
   for (const expected of [
     "policyOptions",
