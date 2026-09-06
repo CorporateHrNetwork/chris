@@ -1,8 +1,8 @@
 const { forfeitExpiredCarryover, carryoverExpiryDate } = require("./zermattAnnualLeaveCarryoverService");
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 
-function createZermattAnnualCarryoverScheduler({ prisma, intervalMs = DAY_MS }) {
+function createZermattAnnualCarryoverScheduler({ prisma, intervalMs = HOUR_MS }) {
   let timer = null;
   let running = false;
 
