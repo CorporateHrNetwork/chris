@@ -12,6 +12,11 @@ const {
   prepareLoanWorkbook,
   importOpeningLoans,
 } = require("../services/loanBulkImportService");
+const {
+  parseCorrectionWorkbook,
+  prepareOpeningBalanceCorrections,
+  applyOpeningBalanceCorrections,
+} = require("../services/loanOpeningBalanceCorrectionService");
 
 const router = express.Router();
 const upload = multer({
@@ -56,6 +61,20 @@ function sendExport(res, file) {
   res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);
   res.setHeader("Cache-Control", "no-store");
   return res.send(file.buffer);
+}
+
+function correctionPreviewData(plan) {
+  return {
+    rows: plan,
+    totalRows: plan.length,
+    correctionRows: plan.filter((row) => row.action === "CORRECT").length,
+    unchangedRows: plan.filter((row) => row.action === "NO_CHANGE").length,
+    blockedRows: plan.filter((row) => row.action === "BLOCKED").length,
+    validRows: plan.filter((row) => row.valid).length,
+    invalidRows: plan.filter((row) => !row.valid).length,
+    warningRows: plan.filter((row) => row.warnings?.length).length,
+    importAllowed: plan.length > 0 && plan.every((row) => row.valid),
+  };
 }
 
 router.get("/summary", requirePermission("payroll.view"), async (req, res) => {
@@ -140,6 +159,47 @@ router.post("/bulk/import", requirePermission("payroll.manage"), upload.single("
     });
   } catch (error) {
     return sendError(res, error, "Unable to import loan workbook.");
+  }
+});
+
+router.post("/bulk/correction/preview", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
+  try {
+    const rows = await parseCorrectionWorkbook({
+      organizationId: req.auth.organizationId,
+      buffer: req.file?.buffer,
+    });
+    const plan = await prepareOpeningBalanceCorrections({
+      organizationId: req.auth.organizationId,
+      rows,
+    });
+    return res.json({ status: "success", data: correctionPreviewData(plan) });
+  } catch (error) {
+    return sendError(res, error, "Unable to validate the opening-balance correction workbook.");
+  }
+});
+
+router.post("/bulk/correction/import", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
+  try {
+    const rows = await parseCorrectionWorkbook({
+      organizationId: req.auth.organizationId,
+      buffer: req.file?.buffer,
+    });
+    const plan = await prepareOpeningBalanceCorrections({
+      organizationId: req.auth.organizationId,
+      rows,
+    });
+    const data = await applyOpeningBalanceCorrections({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      plan,
+    });
+    return res.json({
+      status: "success",
+      message: `${data.corrected} opening loan balance correction(s) applied; ${data.unchanged} row(s) already matched.`,
+      data,
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to apply opening loan balance corrections.");
   }
 });
 
