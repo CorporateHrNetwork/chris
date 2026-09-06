@@ -71,21 +71,19 @@ async function ensurePolicyDefinition({ organizationId, actorUserId, definition,
     },
   });
 
-  // Reuse the tenant's current authoritative policy for this leave type when one
-  // already exists. This prevents duplicate active Annual/Sick/Unpaid policies
-  // and preserves historical request references instead of fabricating a second policy.
   const existingByCode = await tx.leavePolicy.findFirst({
     where: { organizationId, code: definition.policyCode },
     orderBy: [{ versionNumber: "desc" }, { effectiveFrom: "desc" }],
   });
+  const now = new Date();
   const currentForType = await tx.leavePolicy.findFirst({
     where: {
       organizationId,
       leaveTypeId: leaveType.id,
       status: "ACTIVE",
       isActive: true,
-      effectiveFrom: { lte: new Date() },
-      OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+      effectiveFrom: { lte: now },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }],
     },
     orderBy: [{ versionNumber: "desc" }, { effectiveFrom: "desc" }],
   });
@@ -158,15 +156,13 @@ async function configureZermattLeavePolicies({ organizationId, actorUserId, tx =
   return configured;
 }
 
-async function provisionZermattEmployeeLeaveProfile({ organizationId, employeeNumber, actorUserId, leaveYear = new Date().getFullYear(), tx = prisma }) {
-  await assertZermatt(organizationId, tx);
+async function provisionEmployeeWithConfigured({ organizationId, employeeNumber, actorUserId, leaveYear, configured, tx }) {
   const employee = await tx.employee.findFirst({ where: { organizationId, employeeNumber }, include: { designation: true } });
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
   if (!isFullTime(employee.employmentType)) return { employeeNumber, eligible: false, reason: "FULL_TIME_ONLY", allocations: [] };
   const levelNumber = Number(employee.designation?.careerLevel || 0);
-  if (!Number.isInteger(levelNumber) || levelNumber < 1 || levelNumber > 11) throw new Error("EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
+  if (!Number.isInteger(levelNumber) || levelNumber < 1 || levelNumber > 11) throw new Error(`EMPLOYMENT_LEVEL_MAPPING_REQUIRED:${employeeNumber}`);
 
-  const configured = await configureZermattLeavePolicies({ organizationId, actorUserId, tx });
   const allocations = [];
   for (const item of configured) {
     if (item.definition.femaleOnly && String(employee.gender) !== "FEMALE") continue;
@@ -201,18 +197,41 @@ async function provisionZermattEmployeeLeaveProfile({ organizationId, employeeNu
   return { employeeNumber, employeeName: employeeName(employee), eligible: true, levelNumber, allocations };
 }
 
+async function provisionZermattEmployeeLeaveProfile({ organizationId, employeeNumber, actorUserId, leaveYear = new Date().getFullYear(), tx = prisma, configuredPolicies = null }) {
+  await assertZermatt(organizationId, tx);
+  const configured = configuredPolicies || await configureZermattLeavePolicies({ organizationId, actorUserId, tx });
+  return provisionEmployeeWithConfigured({ organizationId, employeeNumber, actorUserId, leaveYear, configured, tx });
+}
+
 async function provisionAllCurrentFullTimeEmployees({ organizationId, actorUserId, leaveYear = new Date().getFullYear(), tx = prisma }) {
   await assertZermatt(organizationId, tx);
-  await configureZermattLeavePolicies({ organizationId, actorUserId, tx });
+  const configured = await configureZermattLeavePolicies({ organizationId, actorUserId, tx });
   const employees = await tx.employee.findMany({
     where: { organizationId, status: { in: CURRENT_STATUSES } },
-    select: { employeeNumber: true, employmentType: true },
+    select: { employeeNumber: true, employmentType: true, designation: { select: { careerLevel: true } } },
     orderBy: { employeeNumber: "asc" },
   });
   const currentFullTime = employees.filter((employee) => isFullTime(employee.employmentType));
+  const invalidLevels = currentFullTime.filter((employee) => {
+    const level = Number(employee.designation?.careerLevel || 0);
+    return !Number.isInteger(level) || level < 1 || level > 11;
+  });
+  if (invalidLevels.length) {
+    const error = new Error("EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
+    error.details = { employees: invalidLevels.map((employee) => employee.employeeNumber), total: invalidLevels.length };
+    throw error;
+  }
+
   const results = [];
   for (const employee of currentFullTime) {
-    results.push(await provisionZermattEmployeeLeaveProfile({ organizationId, employeeNumber: employee.employeeNumber, actorUserId, leaveYear, tx }));
+    results.push(await provisionEmployeeWithConfigured({
+      organizationId,
+      employeeNumber: employee.employeeNumber,
+      actorUserId,
+      leaveYear,
+      configured,
+      tx,
+    }));
   }
   return { leaveYear, currentEmployees: employees.length, fullTimeEmployees: currentFullTime.length, results };
 }
