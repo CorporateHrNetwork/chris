@@ -14,11 +14,18 @@ test("ZERMATT Super User can cancel or delete salary advances under financial-hi
   for (const expected of [
     'organizationSlug === "zermatt-liquor-limited"',
     "SUPERUSER",
+    "SUPERADMIN",
+    "ORGANIZATIONADMINISTRATOR",
+    '"users.manage"',
+    '"roles.manage"',
+    '"settings.manage"',
     'router.post("/payroll/salary-advances/:id/cancel"',
     'router.delete("/payroll/salary-advances/:id"',
     "ZERMATT_SUPER_USER_REQUIRED",
     "control-capabilities",
   ]) assert.ok(routes.includes(expected), `missing Super User route/control: ${expected}`);
+
+  assert.ok(routes.includes("superRole || superPermissionProfile"), "ZERMATT Super User detection must support both canonical admin roles and the full tenant-admin permission profile");
 
   for (const expected of [
     "SALARY_ADVANCE_CANCELLED_BY_SUPER_USER",
