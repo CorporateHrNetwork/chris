@@ -10,7 +10,7 @@ function monthEnd(dateValue, monthOffset = 0) {
   return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + monthOffset + 1, 0));
 }
 
-function buildAmortizationSchedule({ principalAmount, installmentAmount, recoveryStartDate, recoveries = [] }) {
+function buildAmortizationSchedule({ principalAmount, installmentAmount, recoveryStartDate, recoveries = [], openingRecoveredAmount = 0 }) {
   const principal = Number(principalAmount || 0);
   const installment = Number(installmentAmount || 0);
   if (!principal || !installment || !recoveryStartDate) return [];
@@ -19,7 +19,7 @@ function buildAmortizationSchedule({ principalAmount, installmentAmount, recover
   const postedRecoveries = recoveries
     .filter((row) => row.status === "POSTED")
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  let remainingPaid = postedRecoveries;
+  let remainingPaid = Math.max(0, Number(openingRecoveredAmount || 0)) + postedRecoveries;
   let outstandingBefore = principal;
 
   return Array.from({ length: termMonths }, (_, index) => {
@@ -95,11 +95,16 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
   const outstandingAmount = Number(loan.outstandingAmount || 0);
   const installmentAmount = Number(loan.installmentAmount || 0);
   const recoveredAmount = Math.max(0, Math.round((principalAmount - outstandingAmount) * 100) / 100);
+  const payrollRecoveredAmount = Math.round(recoveries
+    .filter((row) => row.status === "POSTED")
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0) * 100) / 100;
+  const openingRecoveredAmount = Math.max(0, Math.round((recoveredAmount - payrollRecoveredAmount) * 100) / 100);
   const schedule = buildAmortizationSchedule({
     principalAmount,
     installmentAmount,
     recoveryStartDate: dateText(loan.recoveryStartDate),
     recoveries,
+    openingRecoveredAmount,
   });
   const nextPending = schedule.find((row) => row.status !== "PAID") || null;
 
@@ -115,6 +120,8 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
       principalAmount,
       outstandingAmount,
       recoveredAmount,
+      openingRecoveredAmount,
+      payrollRecoveredAmount,
       installmentAmount,
       interestRatePercent: 0,
       totalInterest: 0,
@@ -138,6 +145,7 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     controls: {
       interestTreatment: "ZERO_INTEREST",
       recoverySource: "APPROVED_PAYROLL_ONLY",
+      openingRecoveryTreatment: "LEGACY_OPENING_BALANCE_NOT_PAYROLL_HISTORY",
       scheduleBasis: "MONTH_END_FROM_RECOVERY_START",
       historicalRecoveriesImmutable: true,
     },
