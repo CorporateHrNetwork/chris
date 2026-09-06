@@ -158,9 +158,15 @@ test("ZERMATT loan origination, email approval, disbursement and reversible payr
   ], "reapproval repost control");
 
   includesAll(app, [
-    'app.use(\n  "/api/payroll",\n  payrollReopenRoutes',
-    'app.use(\n  "/api/loans",\n  loanOriginationWorkflowRoutes',
+    'app.use("/api/loans", loanOriginationWorkflowRoutes);',
+    'app.use("/api", payrollLiabilityEditRoutes);',
+    'app.use("/api/payroll", payrollReopenRoutes);',
+    'app.use("/api/loans", loanRoutes);',
   ], "route mounting");
+  assert.ok(
+    app.indexOf('app.use("/api/loans", loanOriginationWorkflowRoutes);') < app.indexOf('app.use("/api", payrollLiabilityEditRoutes);'),
+    "loan workflow router must precede the generic liability editor so loans.apply users are not intercepted by payroll.manage"
+  );
 
   includesAll(employeePicker, [
     'window.location.pathname.startsWith("/loans")',
