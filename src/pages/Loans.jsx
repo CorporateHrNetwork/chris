@@ -85,6 +85,7 @@ function Loans() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [loanSearch, setLoanSearch] = useState("");
   const [topUpParent, setTopUpParent] = useState(null);
   const [editingLoan, setEditingLoan] = useState(null);
   const [applicationFormFile, setApplicationFormFile] = useState(null);
@@ -414,6 +415,19 @@ function Loans() {
     awaitingDisbursement: loans.filter((loan) => ["GM_APPROVED", "AWAITING_DISBURSEMENT"].includes(loan.status)).length,
   }), [loans]);
 
+  const filteredLoans = useMemo(() => {
+    const term = loanSearch.trim().toLowerCase();
+    if (!term) return loans;
+    return loans.filter((loan) => [
+      loan.employeeNumber,
+      loan.employeeName,
+      loan.loanNumber,
+      loan.purpose,
+      loan.status,
+      loan.locationName,
+    ].filter(Boolean).join(" ").toLowerCase().includes(term));
+  }, [loans, loanSearch]);
+
   const portfolio = useMemo(() => ([
     ["HR Verification", workflowMetrics.pendingHr],
     ["GM Approval", workflowMetrics.pendingGm],
@@ -543,17 +557,28 @@ function Loans() {
       </section>
 
       <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
-        <AnalyticsPanel title="Loan Register" subtitle="Employee Number and Full Name are shown together. Application workflow status, disbursement and payroll recovery remain visible in one register." icon={<FaHandHoldingUsd />}>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-            <strong style={{ marginRight: "auto", alignSelf: "center" }}>Bulk Loan Report</strong>
+        <AnalyticsPanel title="Loan Register" subtitle="Search by employee number/name, loan number, policy or status. Employee Number and Full Name are shown together." icon={<FaHandHoldingUsd />}>
+          <div style={{ display: "flex", alignItems: "end", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <label style={{ flex: "1 1 340px", maxWidth: 460 }}>
+              <small>Search Loan / Employee</small>
+              <input
+                aria-label="Search Loan Register"
+                style={inputStyle}
+                value={loanSearch}
+                onChange={(event) => setLoanSearch(event.target.value)}
+                placeholder="Employee number, employee name, loan number, policy or status"
+              />
+              <small style={{ color: "var(--chris-dashboard-muted)" }}>Showing {filteredLoans.length} of {loans.length} loan(s)</small>
+            </label>
+            <strong style={{ marginLeft: "auto", alignSelf: "center" }}>Bulk Loan Report</strong>
             {[["xlsx", "Excel"], ["csv", "CSV"], ["pdf", "PDF"]].map(([format, label]) => <button key={format} style={secondaryButton} disabled={Boolean(busy)} onClick={() => exportBulk(format)}><FaDownload style={{ marginRight: 6 }} />{busy === `export-${format}` ? "Preparing…" : label}</button>)}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1320 }}>
               <thead><tr>{["Loan", "Employee", "Policy / Purpose", "Principal", "Outstanding", "Installment", "Workflow / Status", "Recovery Start", "Actions"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
-                {!loading && !loans.length && <tr><td colSpan="9" style={{ padding: 16 }}>No loans have been recorded.</td></tr>}
-                {loans.map((loan) => {
+                {!loading && !filteredLoans.length && <tr><td colSpan="9" style={{ padding: 16 }}>{loans.length ? "No loans match the current search." : "No loans have been recorded."}</td></tr>}
+                {filteredLoans.map((loan) => {
                   const draft = disbursementDrafts[loan.id] || { disbursedDate: today(), recoveryStartMonth: currentMonth(), disbursementReference: "" };
                   const canEdit = ["DRAFT", "RETURNED_FOR_CORRECTION", "PENDING_APPROVAL", "APPROVED", "ACTIVE", "PAUSED"].includes(loan.status);
                   const isWorkflowDisbursement = ["GM_APPROVED", "AWAITING_DISBURSEMENT"].includes(loan.status);
