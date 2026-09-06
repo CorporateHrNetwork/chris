@@ -1,0 +1,107 @@
+const express = require("express");
+const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
+const { provisionAllCurrentFullTimeEmployees } = require("../services/zermattLeaveEntitlementService");
+const { getEmployeeLeaveProfile } = require("../services/employeeLeaveProfileService");
+const { createManualPayrollInput } = require("../services/attendancePayrollService");
+const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+
+const router = express.Router();
+router.use(requireAuth);
+
+function normalizedRole(value) {
+  return String(value || "").trim().toUpperCase().replace(/[\s_-]+/g, "");
+}
+
+function isZermattSuperUser(req) {
+  if (req.auth?.organization?.slug !== "zermatt-liquor-limited") return false;
+  const roles = (req.auth?.roles || []).map(normalizedRole);
+  if (roles.some((role) => ["SUPERUSER", "SUPERADMIN", "ORGANIZATIONSUPERUSER"].includes(role))) return true;
+  const permissions = new Set(req.auth?.permissions || []);
+  return ["payroll.manage", "users.manage", "roles.manage", "settings.manage"].every((permission) => permissions.has(permission));
+}
+
+function requireZermattSuperUser(req, res, next) {
+  if (!isZermattSuperUser(req)) {
+    return res.status(403).json({
+      status: "error",
+      code: "ZERMATT_SUPER_USER_REQUIRED",
+      message: "Only the ZERMATT Super User can perform this operation.",
+    });
+  }
+  next();
+}
+
+router.post("/leave-entitlements/apply", requirePermission("leave.manage"), requireZermattSuperUser, async (req, res) => {
+  try {
+    const leaveYear = Number(req.body?.leaveYear || new Date().getFullYear());
+    const data = await provisionAllCurrentFullTimeEmployees({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      leaveYear,
+    });
+    return res.json({
+      status: "success",
+      message: `ZERMATT Full-Time leave entitlements applied for ${data.fullTimeEmployees} current employee(s).`,
+      data,
+    });
+  } catch (error) {
+    return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to apply ZERMATT leave entitlements." });
+  }
+});
+
+router.get("/leave-profile/:employeeNumber", requirePermission("leave.view"), async (req, res) => {
+  try {
+    const data = await getEmployeeLeaveProfile({
+      organizationId: req.auth.organizationId,
+      employeeNumber: String(req.params.employeeNumber || "").trim().toUpperCase(),
+      selectedPolicyId: req.query.policyId || null,
+      actorUserId: req.auth.userId,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to load employee leave profile." });
+  }
+});
+
+router.post("/attendance/worked-days", requirePermission("attendance.manage"), requireZermattSuperUser, async (req, res) => {
+  try {
+    const data = await createManualPayrollInput({
+      organizationId: req.auth.organizationId,
+      employeeNumber: req.body?.employeeNumber,
+      periodStart: req.body?.periodStart,
+      periodEnd: req.body?.periodEnd,
+      workedDays: req.body?.workedDays,
+      workedHours: req.body?.workedHours,
+      notes: req.body?.notes || "Manual worked days entered by ZERMATT Super User because clocking is not configured/complete.",
+      recordedByUserId: req.auth.userId,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Manual worked days for ${req.body?.employeeNumber || "employee"} were updated; payroll must be recalculated.`,
+    });
+    return res.json({
+      status: "success",
+      message: "Worked days saved. Payroll drafts were marked for recalculation; the next payroll calculation and payslip will reflect the manual attendance basis.",
+      data: { attendancePayrollInput: data, payrollDraftFreshness: freshness },
+    });
+  } catch (error) {
+    return res.status(400).json({ status: "error", code: error.code || error.message, message: error.message || "Unable to save worked days." });
+  }
+});
+
+router.get("/branch-context", requireZermattSuperUser, (req, res) => {
+  return res.json({
+    status: "success",
+    data: {
+      organizationId: req.auth.organizationId,
+      locationScope: req.auth.locationScope,
+      activeLocationId: req.auth.activeLocationId,
+      consolidatedHeadOffice: req.auth.consolidatedHeadOffice,
+      availableLocations: req.auth.availableLocations || [],
+      instruction: "Use X-CHRiS-Location-Id for a branch-specific session context; omit it for consolidated Head Office context.",
+    },
+  });
+});
+
+module.exports = router;
