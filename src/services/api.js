@@ -1,407 +1,152 @@
 export const API_BASE_URL = String(
-  import.meta.env.VITE_API_BASE_URL ||
-    "http://localhost:5000"
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
 
-/*
-============================================================
-AUTH STORAGE
-============================================================
-*/
-
 export function getAuthToken() {
-  const localToken =
-    localStorage.getItem(
-      "chris_token"
-    );
-
-  const sessionToken =
-    sessionStorage.getItem(
-      "chris_token"
-    );
-
-  return (
-    localToken ||
-    sessionToken ||
-    null
-  );
+  return localStorage.getItem("chris_token") || sessionStorage.getItem("chris_token") || null;
 }
 
-export function getStoredUser() {
-  const value =
-    localStorage.getItem(
-      "chris_user"
-    ) ||
-    sessionStorage.getItem(
-      "chris_user"
-    );
-
-  if (!value) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(
-      value
-    );
-  } catch {
-    return null;
-  }
+function readStoredJson(key) {
+  const value = localStorage.getItem(key) || sessionStorage.getItem(key);
+  if (!value) return null;
+  try { return JSON.parse(value); } catch { return null; }
 }
 
-export function getStoredOrganization() {
-  const value =
-    localStorage.getItem(
-      "chris_organization"
-    ) ||
-    sessionStorage.getItem(
-      "chris_organization"
-    );
+export function getStoredUser() { return readStoredJson("chris_user"); }
+export function getStoredOrganization() { return readStoredJson("chris_organization"); }
 
-  if (!value) {
-    return null;
-  }
+export function getActiveLocationId() {
+  return localStorage.getItem("chris_active_location_id") || sessionStorage.getItem("chris_active_location_id") || null;
+}
 
-  try {
-    return JSON.parse(
-      value
-    );
-  } catch {
-    return null;
-  }
+export function setActiveLocationId(locationId, { sessionOnly = false } = {}) {
+  const storage = sessionOnly ? sessionStorage : localStorage;
+  const other = sessionOnly ? localStorage : sessionStorage;
+  other.removeItem("chris_active_location_id");
+  if (locationId) storage.setItem("chris_active_location_id", String(locationId));
+  else storage.removeItem("chris_active_location_id");
+  window.dispatchEvent(new CustomEvent("chris:location-context-changed", { detail: { locationId: locationId || null } }));
 }
 
 export function clearAuthSession() {
-  localStorage.removeItem(
-    "chris_token"
-  );
-
-  localStorage.removeItem(
-    "chris_user"
-  );
-
-  localStorage.removeItem(
-    "chris_organization"
-  );
-
-  sessionStorage.removeItem(
-    "chris_token"
-  );
-
-  sessionStorage.removeItem(
-    "chris_user"
-  );
-
-  sessionStorage.removeItem(
-    "chris_organization"
-  );
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem("chris_token");
+    storage.removeItem("chris_user");
+    storage.removeItem("chris_organization");
+    storage.removeItem("chris_active_location_id");
+  }
 }
 
-/*
-============================================================
-VERIFY STORED SESSION AGAINST BACKEND
-============================================================
-
-A token existing in browser storage does NOT itself prove
-that the user is authenticated.
-
-ProtectedRoute calls this before rendering CHRIS.
-============================================================
-*/
+function authHeaders(extra = {}) {
+  const token = getAuthToken();
+  const activeLocationId = getActiveLocationId();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(activeLocationId ? { "X-CHRiS-Location-Id": activeLocationId } : {}),
+    "Cache-Control": "no-cache",
+    ...extra,
+  };
+}
 
 export async function verifyAuthSession() {
-  const token =
-    getAuthToken();
-
+  const token = getAuthToken();
   if (!token) {
-    const error =
-      new Error(
-        "Authentication required."
-      );
-
-    error.code =
-      "AUTH_INVALID";
-
+    const error = new Error("Authentication required.");
+    error.code = "AUTH_INVALID";
     throw error;
   }
-
   let response;
-
   try {
-    response =
-      await fetch(
-        `${API_BASE_URL}/api/auth/me`,
-        {
-          method:
-            "GET",
-
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-
-            "Cache-Control":
-              "no-cache",
-          },
-
-          cache:
-            "no-store",
-        }
-      );
+    response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      method: "GET",
+      headers: authHeaders(),
+      cache: "no-store",
+    });
   } catch {
-    const error =
-      new Error(
-        "Unable to connect to the CHRIS server."
-      );
-
-    error.code =
-      "NETWORK_UNAVAILABLE";
-
+    const error = new Error("Unable to connect to the CHRIS server.");
+    error.code = "NETWORK_UNAVAILABLE";
     throw error;
   }
-
   let result;
-
-  try {
-    result =
-      await response.json();
-  } catch {
-    result = {
-      status:
-        "error",
-
-      message:
-        "Invalid server response.",
-    };
-  }
-
-  if (
-    response.status ===
-      401 ||
-    response.status ===
-      403
-  ) {
-    const error =
-      new Error(
-        result.message ||
-          "Your CHRIS session is no longer valid."
-      );
-
-    error.code =
-      "AUTH_INVALID";
-
+  try { result = await response.json(); } catch { result = { status: "error", message: "Invalid server response." }; }
+  if (response.status === 401 || response.status === 403) {
+    const error = new Error(result.message || "Your CHRIS session is no longer valid.");
+    error.code = response.status === 403 ? (result.code || "ACCESS_FORBIDDEN") : "AUTH_INVALID";
     throw error;
   }
-
   if (!response.ok) {
-    const error =
-      new Error(
-        result.message ||
-          "Unable to verify CHRIS session."
-      );
-
-    error.code =
-      "SERVER_UNAVAILABLE";
-
+    const error = new Error(result.message || "Unable to verify CHRIS session.");
+    error.code = "SERVER_UNAVAILABLE";
     throw error;
   }
-
   return result;
 }
 
-/*
-============================================================
-STANDARD API REQUEST
-============================================================
-*/
-
-export async function apiRequest(
-  endpoint,
-  options = {}
-) {
-  const token =
-    getAuthToken();
-
-  const rawBody =
-    options.body;
-
-  const isFormData =
-    typeof FormData !== "undefined" &&
-    rawBody instanceof FormData;
-
-  const isBlob =
-    typeof Blob !== "undefined" &&
-    rawBody instanceof Blob;
-
-  const isUrlSearchParams =
-    typeof URLSearchParams !== "undefined" &&
-    rawBody instanceof URLSearchParams;
-
-  const shouldSerializeJson =
-    rawBody !== undefined &&
-    rawBody !== null &&
-    typeof rawBody === "object" &&
-    !isFormData &&
-    !isBlob &&
-    !isUrlSearchParams;
-
-  const requestBody =
-    shouldSerializeJson
-      ? JSON.stringify(rawBody)
-      : rawBody;
-  const headers = {
-    ...(shouldSerializeJson ||
-    typeof rawBody === "string"
-      ? {
-          "Content-Type":
-            "application/json",
-        }
-      : {}),
-
-    ...(token
-      ? {
-          Authorization:
-            `Bearer ${token}`,
-        }
-      : {}),
-
-    "Cache-Control":
-      "no-cache",
-
-    ...(options.headers ||
-      {}),
-  };
+export async function apiRequest(endpoint, options = {}) {
+  const rawBody = options.body;
+  const isFormData = typeof FormData !== "undefined" && rawBody instanceof FormData;
+  const isBlob = typeof Blob !== "undefined" && rawBody instanceof Blob;
+  const isUrlSearchParams = typeof URLSearchParams !== "undefined" && rawBody instanceof URLSearchParams;
+  const shouldSerializeJson = rawBody !== undefined && rawBody !== null && typeof rawBody === "object" && !isFormData && !isBlob && !isUrlSearchParams;
+  const requestBody = shouldSerializeJson ? JSON.stringify(rawBody) : rawBody;
+  const headers = authHeaders({
+    ...((shouldSerializeJson || typeof rawBody === "string") ? { "Content-Type": "application/json" } : {}),
+    ...(options.headers || {}),
+  });
 
   let response;
-
   try {
-    response =
-      await fetch(
-        `${API_BASE_URL}${endpoint}`,
-        {
-          ...options,
-
-          body:
-            requestBody,
-
-          headers,
-
-          /*
-          Protected HR information
-          should always come from the
-          backend, not browser HTTP cache.
-          */
-          cache:
-            "no-store",
-        }
-      );
+    response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, body: requestBody, headers, cache: "no-store" });
   } catch {
-    const error =
-      new Error(
-        "CHRIS cannot connect to the server. Check your connection and try again."
-      );
-
-    error.code =
-      "NETWORK_UNAVAILABLE";
-
+    const error = new Error("CHRIS cannot connect to the server. Check your connection and try again.");
+    error.code = "NETWORK_UNAVAILABLE";
     throw error;
   }
 
   let result;
-
-  try {
-    result =
-      await response.json();
-  } catch {
-    result = {
-      status:
-        "error",
-
-      message:
-        "Invalid server response.",
-    };
-  }
-
-  if (
-    response.status ===
-    401
-  ) {
+  try { result = await response.json(); } catch { result = { status: "error", message: "Invalid server response." }; }
+  if (response.status === 401) {
     clearAuthSession();
-
-    if (
-      window.location.pathname !==
-      "/login"
-    ) {
-      window.location.replace(
-        "/login"
-      );
-    }
-
-    const error =
-      new Error(
-        result.message ||
-          "Your session has expired. Please sign in again."
-      );
-
-    error.code =
-      "AUTH_INVALID";
-
+    if (window.location.pathname !== "/login") window.location.replace("/login");
+    const error = new Error(result.message || "Your session has expired. Please sign in again.");
+    error.code = "AUTH_INVALID";
     throw error;
   }
-
   if (!response.ok) {
-    const error = new Error(
-      result.message ||
-        "Unable to complete request."
-    );
+    const error = new Error(result.message || "Unable to complete request.");
     error.code = result.code || "REQUEST_FAILED";
     error.details = result.details || null;
     error.fieldErrors = result.details?.fields || result.fieldErrors || [];
     throw error;
   }
-
   return result;
 }
 
-
 export async function apiDownload(endpoint, options = {}) {
-  const token = getAuthToken();
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        "Cache-Control": "no-cache",
-        ...(options.headers || {}),
-      },
+      headers: authHeaders(options.headers || {}),
       cache: "no-store",
     });
   } catch {
     throw new Error("CHRIS cannot connect to the server. Check your connection and try again.");
   }
-
   if (response.status === 401) {
     clearAuthSession();
     if (window.location.pathname !== "/login") window.location.replace("/login");
     throw new Error("Your session has expired. Please sign in again.");
   }
-
   if (!response.ok) {
     let message = "Unable to download the requested file.";
-    try {
-      const result = await response.json();
-      message = result.message || message;
-    } catch {}
+    try { const result = await response.json(); message = result.message || message; } catch {}
     throw new Error(message);
   }
-
   const blob = await response.blob();
   const disposition = response.headers.get("content-disposition") || "";
   const match = disposition.match(/filename="?([^"]+)"?/i);
-  return {
-    blob,
-    fileName: match?.[1] || "download.xlsx",
-  };
+  return { blob, fileName: match?.[1] || "download.xlsx" };
 }
 
 export function saveDownloadedBlob({ blob, fileName }) {
