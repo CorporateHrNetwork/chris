@@ -77,6 +77,9 @@ test("ZERMATT opening loan balances can be corrected safely without duplicate lo
     assert.ok(service.includes(control), `missing opening-balance correction control: ${control}`);
   }
 
+  assert.ok(service.includes("previousValue:"), "OrganizationAudit must use the schema field previousValue");
+  assert.ok(!service.includes("oldValue:"), "OrganizationAudit must not use the non-existent oldValue field");
+
   const plan = buildCorrectionPlan({
     rows: [correctedRow(100000)],
     existingLoans: [existingLoan],
