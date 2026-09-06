@@ -183,7 +183,7 @@ test("ZERMATT loan origination, email approval, disbursement and reversible payr
     "Reopen for Correction",
     "recalculated, submitted and approved again",
     "employeeNumber} — {row.employeeName",
-    "Draft calculation does not reduce liability balances",
+    "Draft and Submitted payroll affect Net Pay preview only",
   ], "Payroll UI");
 
   console.log("PASS: ZERMATT loan origination + reversible payroll recovery gate passed.");
