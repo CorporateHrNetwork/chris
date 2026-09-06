@@ -33,6 +33,7 @@ test("ZERMATT August 2026 loan history uses full paid/paused installments and Lo
   assert.ok(service.includes('status = "PAUSED"'), "loan profile must expose explicit paused periods");
   assert.ok(service.includes('schedule.find((row) => row.status === "PENDING")'), "next payment must skip historical PAUSED rows and point to the next pending month");
   assert.ok(service.includes('partialInstallmentsPermitted: false'), "profile controls must state that partial installments are not permitted");
+  assert.ok(service.includes('ABSORB_UP_TO_ONE_NAIRA_INTO_FINAL_INSTALLMENT'), "micro residuals must not create a separate 0.xx installment");
 
   const regular = buildAmortizationSchedule({
     principalAmount: 300000,
@@ -78,6 +79,17 @@ test("ZERMATT August 2026 loan history uses full paid/paused installments and Lo
   });
   assert.equal(michael[0].period, "October 2026");
   assert.equal(michael[0].status, "PENDING");
+
+  const roundingCase = buildAmortizationSchedule({
+    principalAmount: 3499999.92,
+    installmentAmount: 145833.32,
+    recoveryStartDate: "2025-02-01",
+    openingRecoveredAmount: 0,
+    legacyPeriodEvents: [],
+  });
+  assert.equal(roundingCase.length, 24, "a 24-installment loan must not create a 25th ₦0.24 residual row");
+  assert.equal(roundingCase[23].principalAmount, 145833.56, "the ₦0.24 currency residue should be absorbed into the final installment");
+  assert.equal(roundingCase.some((row) => row.principalAmount > 0 && row.principalAmount < 1), false, "micro installment rows are not permitted");
 
   for (const expected of [
     "Search Loan / Employee",
