@@ -14,9 +14,11 @@ const {
 } = require("../services/loanBulkImportService");
 const {
   parseCorrectionWorkbook,
-  prepareOpeningBalanceCorrections,
   applyOpeningBalanceCorrections,
 } = require("../services/loanOpeningBalanceCorrectionService");
+const {
+  prepareOpeningBalanceCorrections,
+} = require("../services/loanOpeningBalanceReconciliationService");
 
 const router = express.Router();
 const upload = multer({
@@ -73,6 +75,7 @@ function correctionPreviewData(plan) {
     validRows: plan.filter((row) => row.valid).length,
     invalidRows: plan.filter((row) => !row.valid).length,
     warningRows: plan.filter((row) => row.warnings?.length).length,
+    legacyIdentityMatches: plan.filter((row) => row.matchMethod === "EXACT_LEGACY_IDENTITY").length,
     importAllowed: plan.length > 0 && plan.every((row) => row.valid),
   };
 }
