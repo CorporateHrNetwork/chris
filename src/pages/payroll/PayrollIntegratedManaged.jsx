@@ -63,6 +63,7 @@ function ExecuteIntegrated() {
   const [periodId, setPeriodId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
   const selectablePeriods = (periods || []).filter((period) => period.status !== "CLOSED");
 
   const fetchIntegratedLines = async (runId) => {
@@ -72,13 +73,14 @@ function ExecuteIntegrated() {
 
   const calculate = async () => {
     try {
-      setBusy("calculate"); setError("");
+      setBusy("calculate"); setError(""); setMessage("");
       const response = await apiRequest("/api/payroll/runs/draft", {
         method: "POST",
         body: JSON.stringify({ periodId }),
       });
       const runId = response?.data?.run?.id;
       if (runId) await fetchIntegratedLines(runId);
+      setMessage("Payroll recalculated. Review all employee lines before submission.");
       await load();
     } catch (err) {
       setError(err.message || "Unable to calculate payroll.");
@@ -100,14 +102,35 @@ function ExecuteIntegrated() {
 
   const submit = async (runId) => {
     try {
-      setBusy(`submit-${runId}`); setError("");
+      setBusy(`submit-${runId}`); setError(""); setMessage("");
       await apiRequest(`/api/payroll/runs/${runId}/submit`, {
         method: "POST",
         body: JSON.stringify({ notes: "Submitted after integrated payroll review including statutory, Salary Advance and Loan recoveries." }),
       });
+      setMessage("Payroll submitted for approval. Loan and Salary Advance balances remain unchanged until approval.");
       await load();
     } catch (err) {
       setError(err.message || "Unable to submit payroll.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const reopen = async (run) => {
+    const reason = window.prompt(`Reason for reopening approved payroll ${run.periodCode}:`);
+    if (!reason?.trim()) return;
+    try {
+      setBusy(`reopen-${run.id}`); setError(""); setMessage("");
+      const response = await apiRequest(`/api/payroll/runs/${run.id}/reopen`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setPeriodId(run.periodId || "");
+      await fetchIntegratedLines(run.id);
+      setMessage(response?.message || "Approved payroll reopened to Draft. Recalculate before resubmission.");
+      await load();
+    } catch (err) {
+      setError(err.message || "Unable to reopen approved payroll.");
     } finally {
       setBusy("");
     }
@@ -120,10 +143,11 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || !policyData?.configured} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>Calculation sequence: structured gross and other earnings → PAYE/pension/other deductions → Salary Advance recovery → Loan recovery. Loan recovery is limited to available net pay and cannot create negative net pay. Draft calculation does not reduce liability balances; balances post only on approved payroll.</p>
+        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
       </Panel>
 
       <Feedback error={periodsError || error || (!policyData?.configured ? "Nigeria payroll policy is not configured." : "")} />
+      {message && <div style={infoStyle}>{message}</div>}
 
       <Panel title="Payroll Runs">
         <DataTable loading={loading} columns={["Period", "Status", "Statutory", "Employees", "Gross", "Deductions", "Net", "Action"]}>
@@ -131,7 +155,13 @@ function ExecuteIntegrated() {
             <tr key={run.id}>
               <Td strong>{run.periodCode}</Td><Td><Badge>{run.status}</Badge></Td><Td><Badge>{run.statutoryStatus}</Badge></Td><Td>{run.employeeCount}</Td>
               <Td>{money(run.grossTotal)}</Td><Td>{money(run.deductionTotal)}</Td><Td>{money(run.netPreviewTotal)}</Td>
-              <Td><div style={buttonRow}><button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>{(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}</div></Td>
+              <Td>
+                <div style={buttonRow}>
+                  <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
+                  {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
+                  {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
+                </div>
+              </Td>
             </tr>
           ))}
         </DataTable>
@@ -153,7 +183,7 @@ function PayrollLines({ rows }) {
         const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
         return (
           <tr key={row.id}>
-            <Td strong>{row.employeeNumber}</Td>
+            <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
             <Td>{details.attendance ? `${details.attendance.payableDays}/${details.attendance.standardDays}` : "—"}</Td>
             <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
             <Td>{money(customAllowances, row.currency)}</Td>
@@ -185,12 +215,12 @@ function ApprovedPayslips() {
     <>
       <Panel title="Approved Payroll Payslips">
         <Input label="Search Employee / Period" value={query} onChange={setQuery} placeholder="ZLL000043, employee name or SEP-2026" />
-        <p style={controlNote}>Only APPROVED payroll runs appear here. The payslip is therefore a payroll output, not a separately keyed record.</p>
+        <p style={controlNote}>Only APPROVED payroll runs appear here. If an approved payroll is reopened for correction, its payslips stop appearing until the replacement draft is recalculated, submitted and approved again.</p>
         <DataTable loading={loading} columns={["Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Net", "Action"]}>
           {filtered.map((row) => {
             const statutory = row.details?.statutory || {};
             return <tr key={row.id}>
-              <Td strong>{row.periodCode}</Td><Td>{row.employeeNumber} · {row.employeeName}</Td><Td>{money(row.grossPay, row.currency)}</Td>
+              <Td strong>{row.periodCode}</Td><Td>{row.employeeNumber} — {row.employeeName}</Td><Td>{money(row.grossPay, row.currency)}</Td>
               <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.loanRecovery, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
               <Td><button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button></Td>
             </tr>;
@@ -210,9 +240,9 @@ function PayslipCard({ row, onClose }) {
   const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   return (
-    <Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber}`}>
+    <Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber} — ${row.employeeName}`}>
       <div style={summaryGrid}>
-        <Summary label="Employee" value={row.employeeName} />
+        <Summary label="Employee" value={`${row.employeeNumber} — ${row.employeeName}`} />
         <Summary label="Payroll Period" value={`${row.periodStart} → ${row.periodEnd}`} />
         <Summary label="Pay Date" value={row.payDate || "—"} />
         <Summary label="Status" value="Approved Payroll" />
