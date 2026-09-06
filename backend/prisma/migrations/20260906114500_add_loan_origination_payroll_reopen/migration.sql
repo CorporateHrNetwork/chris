@@ -49,6 +49,16 @@ DO $$ BEGIN
     FOREIGN KEY ("gmDecisionByUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- Existing opening/legacy loans inherit the employee's current authoritative location so branch-scoped
+-- workflow users do not lose access to previously imported loans after this feature is activated.
+UPDATE "payroll_loans" l
+   SET "workflowLocationId"=e."locationId"
+  FROM "employees" e
+ WHERE e."organizationId"=l."organizationId"
+   AND e."id"=l."employeeId"
+   AND l."workflowLocationId" IS NULL
+   AND e."locationId" IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS "payroll_loans_org_workflow_location_idx"
   ON "payroll_loans"("organizationId","workflowLocationId","status");
 
