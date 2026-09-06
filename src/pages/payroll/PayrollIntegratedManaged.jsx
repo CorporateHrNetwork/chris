@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeBatchSelector from "../../components/EmployeeBatchSelector";
+import ManualWorkedDaysPanel from "../../components/payroll/ManualWorkedDaysPanel";
 import { apiRequest } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
@@ -71,7 +72,7 @@ function ExecuteIntegrated() {
   const calculate = async () => {
     try {
       setBusy("calculate"); setError(""); setMessage("");
-      const response = await apiRequest("/api/payroll/runs/draft", { method: "POST", body: JSON.stringify({ periodId }) });
+      const response = await apiRequest("/api/payroll/runs/draft", { method: "POST", body: { periodId } });
       const runId = response?.data?.run?.id;
       if (runId) await fetchIntegratedLines(runId);
       setMessage("Payroll recalculated. Review all employee lines before submission.");
@@ -99,7 +100,7 @@ function ExecuteIntegrated() {
       setBusy(`submit-${runId}`); setError(""); setMessage("");
       await apiRequest(`/api/payroll/runs/${runId}/submit`, {
         method: "POST",
-        body: JSON.stringify({ notes: "Submitted after integrated payroll review including statutory, Salary Advance and Loan recoveries." }),
+        body: { notes: "Submitted after integrated payroll review including statutory, Salary Advance and Loan recoveries." },
       });
       setMessage("Payroll submitted for approval. Loan and Salary Advance balances remain unchanged until approval.");
       await load();
@@ -115,7 +116,7 @@ function ExecuteIntegrated() {
     if (!reason?.trim()) return;
     try {
       setBusy(`reopen-${run.id}`); setError(""); setMessage("");
-      const response = await apiRequest(`/api/payroll/runs/${run.id}/reopen`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) });
+      const response = await apiRequest(`/api/payroll/runs/${run.id}/reopen`, { method: "POST", body: { reason: reason.trim() } });
       setPeriodId(run.periodId || "");
       await fetchIntegratedLines(run.id);
       setMessage(response?.message || "Approved payroll reopened to Draft. Recalculate before resubmission.");
@@ -134,7 +135,8 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || !policyData?.configured} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
+        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. Manual Worked Days entered for the exact payroll period override standard attendance days for that employee. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
+        <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
       <Feedback error={periodsError || error || (!policyData?.configured ? "Nigeria payroll policy is not configured." : "")} />
@@ -162,13 +164,7 @@ function ExecuteIntegrated() {
 }
 
 function PayrollLines({ rows }) {
-  const getSearchText = useCallback((row) => [
-    row.employeeNumber,
-    row.employeeName,
-    row.details?.employmentType,
-    row.details?.costCentre,
-  ].filter(Boolean).join(" "), []);
-
+  const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
   return (
     <EmployeeBatchSelector
       rows={rows || []}
@@ -177,9 +173,7 @@ function PayrollLines({ rows }) {
       searchPlaceholder="Search employee number, name, employment type or cost centre"
       selectionLabel="payroll employee(s)"
       renderActions={({ selectedRows }) => selectedRows.length ? (
-        <div style={batchSummaryStyle}>
-          <strong>Selected batch:</strong> {selectedRows.length} employee(s) · Gross {money(selectedRows.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} · Net {money(selectedRows.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))}
-        </div>
+        <div style={batchSummaryStyle}><strong>Selected batch:</strong> {selectedRows.length} employee(s) · Gross {money(selectedRows.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} · Net {money(selectedRows.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))}</div>
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
@@ -218,7 +212,6 @@ function ApprovedPayslips() {
   const { data: rows, loading, error } = useLoad("/api/payroll/payslips");
   const [selected, setSelected] = useState(null);
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
-
   return (
     <>
       <Panel title="Approved Payroll Payslips">
@@ -229,9 +222,7 @@ function ApprovedPayslips() {
           getSearchText={getSearchText}
           searchPlaceholder="Search employee number, employee name or payroll period"
           selectionLabel="payslip(s)"
-          renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? (
-            <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected Payslips</button>
-          ) : null}
+          renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected Payslips</button> : null}
         >
           {({ displayRows, isSelected, toggleOne }) => (
             <DataTable loading={loading} columns={["Select", "Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Net", "Action"]}>
@@ -258,6 +249,7 @@ function PayslipCard({ row, onClose }) {
   const details = row.details || {};
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
+  const attendance = details.attendance || {};
   const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   return (
@@ -266,6 +258,8 @@ function PayslipCard({ row, onClose }) {
         <Summary label="Employee" value={`${row.employeeNumber} — ${row.employeeName}`} />
         <Summary label="Payroll Period" value={`${row.periodStart} → ${row.periodEnd}`} />
         <Summary label="Pay Date" value={row.payDate || "—"} />
+        <Summary label="Worked Days" value={attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"} />
+        <Summary label="Attendance Source" value={attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"} />
         <Summary label="Status" value="Approved Payroll" />
       </div>
       <div style={{ marginTop: 16 }}>
