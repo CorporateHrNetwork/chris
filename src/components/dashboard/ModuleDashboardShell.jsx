@@ -8,6 +8,10 @@ export default function ModuleDashboardShell({
   recentActivity,
   quickActions,
 }) {
+  const metricGridClass = metricsColumns
+    ? `chris-dashboard-grid chris-dashboard-grid--columns-${metricsColumns}`
+    : "chris-dashboard-grid";
+
   return (
     <div className="chris-module-dashboard">
       <header className="chris-module-dashboard__header">
@@ -17,12 +21,26 @@ export default function ModuleDashboardShell({
       </header>
 
       {metrics ? (
-        <div
-          className="chris-dashboard-grid"
-          style={metricsColumns ? { gridTemplateColumns: `repeat(${metricsColumns}, minmax(0, 1fr))` } : undefined}
-        >
-          {metrics}
-        </div>
+        <>
+          {metricsColumns ? (
+            <style>{`
+              .chris-dashboard-grid--columns-${metricsColumns} {
+                grid-template-columns: repeat(${metricsColumns}, minmax(0, 1fr));
+              }
+              @media (max-width: 1000px) {
+                .chris-dashboard-grid--columns-${metricsColumns} {
+                  grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+              }
+              @media (max-width: 680px) {
+                .chris-dashboard-grid--columns-${metricsColumns} {
+                  grid-template-columns: 1fr;
+                }
+              }
+            `}</style>
+          ) : null}
+          <div className={metricGridClass}>{metrics}</div>
+        </>
       ) : null}
 
       {analytics || recentActivity ? (
