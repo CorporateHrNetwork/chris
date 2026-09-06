@@ -419,15 +419,24 @@ function Loans() {
   const dashboardMetrics = useMemo(() => {
     const activeLoans = loans.filter((loan) => loan.status === "ACTIVE");
     const pausedLoans = loans.filter((loan) => loan.status === "PAUSED");
+    const completedLoans = loans.filter((loan) => loan.status === "COMPLETED");
     const pendingLoans = loans.filter((loan) => ["PENDING_HR_VERIFICATION", "PENDING_GM_APPROVAL"].includes(loan.status));
     const awaitingLoans = loans.filter((loan) => ["GM_APPROVED", "AWAITING_DISBURSEMENT"].includes(loan.status));
-    const activeAmount = activeLoans.reduce((total, loan) => total + Number(loan.outstandingAmount || 0), 0);
-    const pausedAmount = pausedLoans.reduce((total, loan) => total + Number(loan.outstandingAmount || 0), 0);
+
+    const activeAmount = activeLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
+    const pausedAmount = pausedLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
     const pendingAmount = pendingLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
     const awaitingAmount = awaitingLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
-    const liveBalance = activeAmount + pausedAmount;
-    const recoveredAmount = Number(summary.recoveredAmount || 0);
-    const outstandingBalance = Number(summary.outstandingBalance || 0);
+    const livePrincipal = activeAmount + pausedAmount;
+
+    const financiallyDisbursedLoans = [...activeLoans, ...pausedLoans, ...completedLoans];
+    const recoveredAmount = financiallyDisbursedLoans.reduce((total, loan) => {
+      const principal = Number(loan.principalAmount || 0);
+      const outstanding = Math.max(0, Number(loan.outstandingAmount || 0));
+      return total + Math.max(0, principal - outstanding);
+    }, 0);
+    const outstandingBalance = activeLoans.concat(pausedLoans)
+      .reduce((total, loan) => total + Math.max(0, Number(loan.outstandingAmount || 0)), 0);
     const recoveryBase = recoveredAmount + outstandingBalance;
 
     return {
@@ -437,12 +446,12 @@ function Loans() {
       awaitingAmount,
       recoveredAmount,
       outstandingBalance,
-      activePercentage: percentage(activeAmount, liveBalance),
-      pausedPercentage: percentage(pausedAmount, liveBalance),
+      activePercentage: percentage(activeAmount, livePrincipal),
+      pausedPercentage: percentage(pausedAmount, livePrincipal),
       recoveredPercentage: percentage(recoveredAmount, recoveryBase),
       outstandingPercentage: percentage(outstandingBalance, recoveryBase),
     };
-  }, [loans, summary]);
+  }, [loans]);
 
   const filteredLoans = useMemo(() => {
     const term = loanSearch.trim().toLowerCase();
@@ -503,10 +512,10 @@ function Loans() {
         description="Branch HR creates and submits ZERMATT zero-interest loan applications; Head HR verifies; the GM approves; the Chief Accountant disburses; payroll then recovers installments from the configured recovery month."
         metricsColumns={3}
         metrics={[
-          <DashboardCard key="active" title="Active Loans" value={loading ? "—" : Number(summary.activeLoans || 0)} subtitle={loading ? "Calculating active exposure…" : `${money(dashboardMetrics.activeAmount)} · ${dashboardMetrics.activePercentage}% of live loan balance`} icon={<FaHandHoldingUsd />} tone="green" />,
-          <DashboardCard key="paused" title="Paused Loans" value={loading ? "—" : Number(summary.pausedLoans || 0)} subtitle={loading ? "Calculating paused exposure…" : `${money(dashboardMetrics.pausedAmount)} · ${dashboardMetrics.pausedPercentage}% of live loan balance`} icon={<FaUsers />} tone="gold" />,
-          <DashboardCard key="recovered" title="Recovered Loans" value={loading ? "—" : money(dashboardMetrics.recoveredAmount)} subtitle={loading ? "Calculating recovery rate…" : `${dashboardMetrics.recoveredPercentage}% of recovered + outstanding exposure`} icon={<FaMoneyCheckAlt />} tone="green" />,
-          <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstandingBalance)} subtitle={loading ? "Calculating outstanding rate…" : `${dashboardMetrics.outstandingPercentage}% remains outstanding`} icon={<FaBalanceScale />} tone="gold" />,
+          <DashboardCard key="active" title="Active Loans" value={loading ? "—" : Number(summary.activeLoans || 0)} subtitle={loading ? "Calculating active exposure…" : `${money(dashboardMetrics.activeAmount)} · ${dashboardMetrics.activePercentage}% of active + paused principal`} icon={<FaHandHoldingUsd />} tone="green" />,
+          <DashboardCard key="paused" title="Paused Loans" value={loading ? "—" : Number(summary.pausedLoans || 0)} subtitle={loading ? "Calculating paused exposure…" : `${money(dashboardMetrics.pausedAmount)} · ${dashboardMetrics.pausedPercentage}% of active + paused principal`} icon={<FaUsers />} tone="gold" />,
+          <DashboardCard key="recovered" title="Recovered Loans" value={loading ? "—" : money(dashboardMetrics.recoveredAmount)} subtitle={loading ? "Calculating recovery rate…" : `${dashboardMetrics.recoveredPercentage}% recovered from disbursed loan exposure`} icon={<FaMoneyCheckAlt />} tone="green" />,
+          <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstandingBalance)} subtitle={loading ? "Calculating outstanding rate…" : `${dashboardMetrics.outstandingPercentage}% of disbursed loan exposure remains outstanding`} icon={<FaBalanceScale />} tone="gold" />,
           <DashboardCard key="pending" title="Pending Workflow" value={loading ? "—" : workflowMetrics.pendingHr + workflowMetrics.pendingGm} subtitle={loading ? "Checking workflow…" : `${money(dashboardMetrics.pendingAmount)} · HR ${workflowMetrics.pendingHr} · GM ${workflowMetrics.pendingGm}`} icon={<FaCheckCircle />} tone="gold" />,
           <DashboardCard key="disbursement" title="Awaiting Disbursement" value={loading ? "—" : workflowMetrics.awaitingDisbursement} subtitle={loading ? "Checking approved loans…" : `${money(dashboardMetrics.awaitingAmount)} approved and awaiting Chief Accountant action`} icon={<FaFileInvoiceDollar />} tone="green" />,
         ]}
