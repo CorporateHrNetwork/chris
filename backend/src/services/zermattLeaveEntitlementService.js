@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { ZERMATT_EMPLOYMENT_LEVELS } = require("../config/zermattEmploymentLevels");
 
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
@@ -51,11 +52,17 @@ async function assertZermatt(organizationId, tx = prisma) {
 }
 
 async function ensureEmploymentLevels({ organizationId, tx = prisma }) {
-  for (let levelNumber = 1; levelNumber <= 11; levelNumber += 1) {
+  for (const level of ZERMATT_EMPLOYMENT_LEVELS) {
     await tx.organizationEmploymentLevel.upsert({
-      where: { organizationId_levelNumber: { organizationId, levelNumber } },
-      update: { name: `Level ${levelNumber}`, code: `L${levelNumber}`, isActive: true, displayOrder: levelNumber },
-      create: { organizationId, levelNumber, name: `Level ${levelNumber}`, code: `L${levelNumber}`, displayOrder: levelNumber, isActive: true },
+      where: { organizationId_levelNumber: { organizationId, levelNumber: level.levelNumber } },
+      update: {
+        name: level.name,
+        code: level.code,
+        description: level.description,
+        displayOrder: level.displayOrder,
+        isActive: true,
+      },
+      create: { organizationId, ...level },
     });
   }
 }
