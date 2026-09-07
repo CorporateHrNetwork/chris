@@ -46,7 +46,12 @@ function corsOptionsDelegate(req, callback) {
     origin: allowed,
     credentials: false,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type", "Cache-Control"],
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "Cache-Control",
+      "X-CHRiS-Location-Id",
+    ],
     exposedHeaders: ["Content-Disposition"],
     maxAge: 600,
   });
