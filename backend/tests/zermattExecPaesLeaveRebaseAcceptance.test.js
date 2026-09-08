@@ -16,6 +16,12 @@ test("ZERMATT EXEC-PAES 2026 annual rebase is narrow, guarded and auditable", ()
   assert.match(script, /EXPECTED_LEVEL = 7/);
   assert.match(script, /EXPECTED_FROM_ENTITLEMENT = 30/);
   assert.match(script, /EXPECTED_TO_ENTITLEMENT = 21/);
+  assert.match(script, /ACTOR_EMAIL = "corporatehr\.crn@gmail\.com"/);
+  assert.match(script, /ACTOR_ROLE = "Head of HR & Admin"/);
+  assert.match(script, /email: ACTOR_EMAIL/);
+  assert.match(script, /name: ACTOR_ROLE/);
+  assert.match(script, /ZERMATT_CHRIS_ADMINISTRATOR_REQUIRED/);
+  assert.doesNotMatch(script, /ZERMATT_SUPER_USER_REQUIRED/);
   assert.match(script, /row\.status, "REBASE_READY"/);
   assert.match(script, /row\.retainedUsed\), 0/);
   assert.match(script, /row\.retainedPending\), 0/);
