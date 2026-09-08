@@ -33,40 +33,41 @@ model Organization {
 
   status OrganizationStatus @default(ACTIVE)
 
-  users                       User[]
-  roles                       Role[]
-  departments                 Department[]
-  designations                Designation[]
-  employmentLevels            OrganizationEmploymentLevel[]
-  employees                   Employee[]
-  locations                   OrganizationLocation[]
-  employmentEpisodes          EmployeeEmploymentEpisode[]
-  employeeLifecycleEvents     EmployeeLifecycleEvent[]
-  attendancePayrollSetting    AttendancePayrollSetting?
-  attendancePayrollInputs     AttendancePayrollInput[]
-  designationLifecycleEvents  DesignationLifecycleEvent[]
-  leaveTypes                  LeaveType[]
-  leavePolicies               LeavePolicy[]
-  leavePolicyAudits           LeavePolicyAudit[]
-  leaveBalances               LeaveBalance[]
-  leaveRequests               LeaveRequest[]
-  leaveEntitlementAdjustments LeaveEntitlementAdjustment[]
-  leaveEntitlementMatrixRules LeaveEntitlementMatrixRule[]
-  leaveEntitlementAllocations LeaveEntitlementAllocation[]
-  workShifts                  WorkShift[]
-  employeeShiftAssignments    EmployeeShiftAssignment[]
-  attendanceRecords           AttendanceRecord[]
-  onboardingWorkflowTemplates OnboardingWorkflowTemplate[]
-  employeeOnboardings         EmployeeOnboarding[]
-  employeeOnboardingTasks     EmployeeOnboardingTask[]
-  employeeDocuments           EmployeeDocument[]
-  employeeExitProcesses       EmployeeExitProcess[]
-  lineManagerAssignments      EmployeeLineManagerAssignment[]
-  workforceSnapshots          WorkforceSnapshot[]
-  organizationAudits          OrganizationAudit[]
-  employeeExportJobs          EmployeeExportJob[]
-  employeeSelfOnboardingInvites EmployeeSelfOnboardingInvite[]
-  costCentres                 CostCentre[]
+  users                              User[]
+  roles                              Role[]
+  departments                        Department[]
+  designations                       Designation[]
+  employmentLevels                   OrganizationEmploymentLevel[]
+  employees                          Employee[]
+  locations                          OrganizationLocation[]
+  employmentEpisodes                 EmployeeEmploymentEpisode[]
+  employeeLifecycleEvents            EmployeeLifecycleEvent[]
+  attendancePayrollSetting           AttendancePayrollSetting?
+  attendancePayrollInputs            AttendancePayrollInput[]
+  designationLifecycleEvents         DesignationLifecycleEvent[]
+  leaveTypes                         LeaveType[]
+  leavePolicies                      LeavePolicy[]
+  leavePolicyAudits                  LeavePolicyAudit[]
+  leaveBalances                      LeaveBalance[]
+  leaveRequests                      LeaveRequest[]
+  leaveEntitlementAdjustments        LeaveEntitlementAdjustment[]
+  leaveEntitlementMatrixRules        LeaveEntitlementMatrixRule[]
+  leaveEntitlementAllocations        LeaveEntitlementAllocation[]
+  workShifts                         WorkShift[]
+  employeeShiftAssignments           EmployeeShiftAssignment[]
+  attendanceRecords                  AttendanceRecord[]
+  onboardingWorkflowTemplates        OnboardingWorkflowTemplate[]
+  employeeOnboardings                EmployeeOnboarding[]
+  employeeOnboardingTasks            EmployeeOnboardingTask[]
+  employeeDocuments                  EmployeeDocument[]
+  employeeExitProcesses              EmployeeExitProcess[]
+  lineManagerAssignments             EmployeeLineManagerAssignment[]
+  employeeEmploymentLevelAssignments EmployeeEmploymentLevelAssignment[]
+  workforceSnapshots                 WorkforceSnapshot[]
+  organizationAudits                 OrganizationAudit[]
+  employeeExportJobs                 EmployeeExportJob[]
+  employeeSelfOnboardingInvites      EmployeeSelfOnboardingInvite[]
+  costCentres                        CostCentre[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -213,35 +214,36 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
 
-  performedLifecycleEvents            EmployeeLifecycleEvent[]        @relation("LifecyclePerformedBy")
-  performedDesignationLifecycleEvents DesignationLifecycleEvent[]     @relation("DesignationLifecyclePerformedBy")
-  attendancePayrollSettingsUpdated    AttendancePayrollSetting[]      @relation("AttendancePayrollSettingUpdatedBy")
-  attendancePayrollInputsRecorded     AttendancePayrollInput[]        @relation("AttendancePayrollInputRecordedBy")
-  createdLeaveRequests                LeaveRequest[]                  @relation("LeaveRequestCreatedBy")
-  reviewedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReviewedBy")
-  leavePoliciesCreated                LeavePolicy[]                   @relation("LeavePolicyCreatedBy")
-  leavePoliciesApproved               LeavePolicy[]                   @relation("LeavePolicyApprovedBy")
-  leavePolicyAudits                   LeavePolicyAudit[]
-  leaveEntitlementAdjustmentsCreated  LeaveEntitlementAdjustment[]    @relation("LeaveEntitlementAdjustmentCreatedBy")
-  leaveEntitlementMatrixRulesCreated  LeaveEntitlementMatrixRule[]    @relation("LeaveEntitlementMatrixRuleCreatedBy")
-  leaveEntitlementAllocationsCreated  LeaveEntitlementAllocation[]    @relation("LeaveEntitlementAllocationCreatedBy")
-  commencedLeaveRequests              LeaveRequest[]                  @relation("LeaveRequestCommencedBy")
-  returnedLeaveRequests               LeaveRequest[]                  @relation("LeaveRequestReturnedBy")
-  recordedAttendanceRecords           AttendanceRecord[]              @relation("AttendanceRecordedBy")
-  onboardingTemplatesCreated          OnboardingWorkflowTemplate[]    @relation("OnboardingTemplateCreatedBy")
-  employeeOnboardingsAssigned         EmployeeOnboarding[]            @relation("EmployeeOnboardingAssignedTo")
-  employeeOnboardingsCreated          EmployeeOnboarding[]            @relation("EmployeeOnboardingCreatedBy")
-  employeeOnboardingsCompleted        EmployeeOnboarding[]            @relation("EmployeeOnboardingCompletedBy")
-  employeeDocumentsUploaded           EmployeeDocument[]              @relation("EmployeeDocumentUploadedBy")
-  onboardingTasksOwned                EmployeeOnboardingTask[]        @relation("EmployeeOnboardingTaskOwner")
-  onboardingTasksCompleted            EmployeeOnboardingTask[]        @relation("EmployeeOnboardingTaskCompletedBy")
-  employeeExitProcessesInitiated      EmployeeExitProcess[]           @relation("EmployeeExitInitiatedBy")
-  employeeExitProcessesCompleted      EmployeeExitProcess[]           @relation("EmployeeExitCompletedBy")
-  employeeExitProcessesCancelled      EmployeeExitProcess[]           @relation("EmployeeExitCancelledBy")
-  lineManagerAssignmentsPerformed     EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentPerformedBy")
-  organizationAuditsPerformed         OrganizationAudit[]             @relation("OrganizationAuditActor")
-  employeeExportJobsRequested          EmployeeExportJob[]              @relation("EmployeeExportRequestedBy")
-  employeeSelfOnboardingInvitesCreated EmployeeSelfOnboardingInvite[]    @relation("EmployeeInviteCreatedBy")
+  performedLifecycleEvents             EmployeeLifecycleEvent[]           @relation("LifecyclePerformedBy")
+  performedDesignationLifecycleEvents  DesignationLifecycleEvent[]        @relation("DesignationLifecyclePerformedBy")
+  attendancePayrollSettingsUpdated     AttendancePayrollSetting[]         @relation("AttendancePayrollSettingUpdatedBy")
+  attendancePayrollInputsRecorded      AttendancePayrollInput[]           @relation("AttendancePayrollInputRecordedBy")
+  createdLeaveRequests                 LeaveRequest[]                     @relation("LeaveRequestCreatedBy")
+  reviewedLeaveRequests                LeaveRequest[]                     @relation("LeaveRequestReviewedBy")
+  leavePoliciesCreated                 LeavePolicy[]                      @relation("LeavePolicyCreatedBy")
+  leavePoliciesApproved                LeavePolicy[]                      @relation("LeavePolicyApprovedBy")
+  leavePolicyAudits                    LeavePolicyAudit[]
+  leaveEntitlementAdjustmentsCreated   LeaveEntitlementAdjustment[]       @relation("LeaveEntitlementAdjustmentCreatedBy")
+  leaveEntitlementMatrixRulesCreated   LeaveEntitlementMatrixRule[]       @relation("LeaveEntitlementMatrixRuleCreatedBy")
+  leaveEntitlementAllocationsCreated   LeaveEntitlementAllocation[]       @relation("LeaveEntitlementAllocationCreatedBy")
+  commencedLeaveRequests               LeaveRequest[]                     @relation("LeaveRequestCommencedBy")
+  returnedLeaveRequests                LeaveRequest[]                     @relation("LeaveRequestReturnedBy")
+  recordedAttendanceRecords            AttendanceRecord[]                 @relation("AttendanceRecordedBy")
+  onboardingTemplatesCreated           OnboardingWorkflowTemplate[]       @relation("OnboardingTemplateCreatedBy")
+  employeeOnboardingsAssigned          EmployeeOnboarding[]               @relation("EmployeeOnboardingAssignedTo")
+  employeeOnboardingsCreated           EmployeeOnboarding[]               @relation("EmployeeOnboardingCreatedBy")
+  employeeOnboardingsCompleted         EmployeeOnboarding[]               @relation("EmployeeOnboardingCompletedBy")
+  employeeDocumentsUploaded            EmployeeDocument[]                 @relation("EmployeeDocumentUploadedBy")
+  onboardingTasksOwned                 EmployeeOnboardingTask[]           @relation("EmployeeOnboardingTaskOwner")
+  onboardingTasksCompleted             EmployeeOnboardingTask[]           @relation("EmployeeOnboardingTaskCompletedBy")
+  employeeExitProcessesInitiated       EmployeeExitProcess[]              @relation("EmployeeExitInitiatedBy")
+  employeeExitProcessesCompleted       EmployeeExitProcess[]              @relation("EmployeeExitCompletedBy")
+  employeeExitProcessesCancelled       EmployeeExitProcess[]              @relation("EmployeeExitCancelledBy")
+  lineManagerAssignmentsPerformed      EmployeeLineManagerAssignment[]    @relation("LineManagerAssignmentPerformedBy")
+  employmentLevelAssignmentsPerformed  EmployeeEmploymentLevelAssignment[] @relation("EmploymentLevelAssignmentPerformedBy")
+  organizationAuditsPerformed          OrganizationAudit[]                @relation("OrganizationAuditActor")
+  employeeExportJobsRequested          EmployeeExportJob[]                @relation("EmployeeExportRequestedBy")
+  employeeSelfOnboardingInvitesCreated EmployeeSelfOnboardingInvite[]     @relation("EmployeeInviteCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -338,10 +340,10 @@ model RolePermission {
 
   createdAt DateTime @default(now())
 
-  @@unique([roleId, permissionId])
+  @@unique([userId, roleId])
+  @@index([userId])
   @@index([roleId])
-  @@index([permissionId])
-  @@map("role_permissions")
+  @@map("user_roles")
 }
 
 model Department {
@@ -448,8 +450,9 @@ model Designation {
   @@map("designations")
 }
 
-/// Tenant-owned metadata for the numeric Designation.careerLevel hierarchy.
-/// Designation.careerLevel remains the authoritative employee-level mapping.
+/// Tenant-owned metadata for the configured Employment Level hierarchy.
+/// Designation.careerLevel is the employee's default level; an active
+/// EmployeeEmploymentLevelAssignment is authoritative for an individual override.
 model OrganizationEmploymentLevel {
   organizationId String
   levelNumber    Int
@@ -459,10 +462,11 @@ model OrganizationEmploymentLevel {
   displayOrder   Int     @default(0)
   isActive       Boolean @default(true)
 
-  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  designations Designation[]
-  matrixRules  LeaveEntitlementMatrixRule[]
-  allocations  LeaveEntitlementAllocation[]
+  organization      Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  designations      Designation[]
+  employeeAssignments EmployeeEmploymentLevelAssignment[]
+  matrixRules       LeaveEntitlementMatrixRule[]
+  allocations       LeaveEntitlementAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -536,6 +540,7 @@ model Employee {
   exitProcesses               EmployeeExitProcess[]
   lineManagerAssignments      EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentEmployee")
   managedEmployeeAssignments  EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentManager")
+  employmentLevelAssignments  EmployeeEmploymentLevelAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -553,6 +558,32 @@ model Employee {
   @@index([employmentType])
   @@index([status])
   @@map("employees")
+}
+
+model EmployeeEmploymentLevelAssignment {
+  id                String   @id @default(uuid())
+  organizationId    String
+  employeeId        String
+  levelNumber       Int
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  reason            String
+  notes             String?
+  performedByUserId String?
+
+  organization    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee        Employee                    @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
+  performedBy     User?                       @relation("EmploymentLevelAssignmentPerformedBy", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, employeeId, effectiveFrom])
+  @@index([organizationId, levelNumber])
+  @@index([employeeId, effectiveTo])
+  @@index([performedByUserId])
+  @@map("employee_employment_level_assignments")
 }
 
 model EmployeeLineManagerAssignment {
@@ -676,7 +707,7 @@ model EmployeeLifecycleEvent {
   // Location movement information.
   //
   // These fields allow the same history table to record
-  // Head Office ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Lagos ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Port Harcourt transfers.
+  // Head Office — Lagos — Port Harcourt transfers.
 
   fromLocationId String?
   toLocationId   String?
@@ -1317,7 +1348,6 @@ enum AttendanceSource {
   INTEGRATION
 }
 
-
 model EmployeeExportJob {
   id                String   @id @default(uuid())
   organizationId    String
@@ -1546,8 +1576,8 @@ model AttendancePayrollSetting {
   organizationId  String                 @unique
   basis           AttendancePayrollBasis @default(SYSTEM)
   updatedByUserId String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   updatedBy    User?        @relation("AttendancePayrollSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
@@ -1574,7 +1604,6 @@ model AttendancePayrollInput {
   recordedBy   User?        @relation("AttendancePayrollInputRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, employeeId, periodStart, periodEnd])
-  @@index([organizationId, periodStart, periodEnd])
   @@index([employeeId])
   @@index([recordedByUserId])
   @@map("attendance_payroll_inputs")
@@ -1730,18 +1759,18 @@ model EmployeeDocument {
 // ============================================================
 
 model EmploymentContractLifecycle {
-  id                       String   @id @default(uuid())
-  organizationId           String
-  employeeId               String?
-  referenceCode            String
-  firstName                String
-  lastName                 String
-  email                     String?
-  currentState              String   @default("APPLICANT")
-  effectiveEmploymentDate  DateTime?
-  createdByUserId           String?
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                      String   @id @default(uuid())
+  organizationId          String
+  employeeId              String?
+  referenceCode           String
+  firstName               String
+  lastName                String
+  email                   String?
+  currentState             String   @default("APPLICANT")
+  effectiveEmploymentDate DateTime?
+  createdByUserId          String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   transitions EmploymentContractTransition[]
   documents   EmploymentContractDocument[]
@@ -1807,7 +1836,7 @@ model EmploymentContractDocumentEvent {
 
   document EmploymentContractDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, documentId, eventAt])
+  @@index([organizationId, documentId])
   @@index([organizationId, eventType])
   @@map("employment_contract_document_events")
 }
@@ -1830,8 +1859,8 @@ model DisciplinaryCase {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  evidenceVersions   DisciplinaryEvidenceVersion[]
-  processEvents      DisciplinaryProcessEvent[]
+  evidenceVersions    DisciplinaryEvidenceVersion[]
+  processEvents       DisciplinaryProcessEvent[]
   externalProceedings DisciplinaryExternalProceeding[]
 
   @@unique([organizationId, caseNumber])
@@ -1842,19 +1871,19 @@ model DisciplinaryCase {
 }
 
 model DisciplinaryEvidenceVersion {
-  id                   String   @id @default(uuid())
-  organizationId       String
-  disciplinaryCaseId   String
-  logicalEvidenceKey   String
-  category             String
-  versionNumber        Int
-  title                 String
-  content               Json?
-  documentReference     String?
-  contentHash           String
-  finalizedAt           DateTime?
-  createdByUserId       String?
-  createdAt             DateTime @default(now())
+  id                 String   @id @default(uuid())
+  organizationId     String
+  disciplinaryCaseId String
+  logicalEvidenceKey String
+  category           String
+  versionNumber      Int
+  title              String
+  content            Json?
+  documentReference  String?
+  contentHash        String
+  finalizedAt        DateTime?
+  createdByUserId    String?
+  createdAt          DateTime @default(now())
 
   disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
 
