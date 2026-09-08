@@ -5,6 +5,9 @@ const {
   resolveZermattV2Level,
   isZermattV2InternalLevel,
 } = require("../config/zermattEmploymentLevelsV2");
+const {
+  resolveEffectiveEmploymentLevel,
+} = require("./employeeEmploymentLevelAssignmentService");
 
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
@@ -391,7 +394,11 @@ async function provisionEmployeeWithConfigured({
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
 
   const hierarchyVersion = configured[0]?.hierarchyVersion || "V1";
-  const levelNumber = Number(employee.designation?.careerLevel || 0);
+  const effectiveLevel = await resolveEffectiveEmploymentLevel(tx, {
+    organizationId,
+    employeeId: employee.id,
+  });
+  const levelNumber = Number(effectiveLevel.levelNumber || 0);
   const validLevel =
     hierarchyVersion === "V2"
       ? isZermattV2InternalLevel(levelNumber)
@@ -434,6 +441,35 @@ async function provisionEmployeeWithConfigured({
       hierarchyVersion
     );
     if (entitlement == null) continue;
+
+    const existingBalance = await tx.leaveBalance.findUnique({
+      where: {
+        organizationId_employeeId_leaveTypeId_leaveYear: {
+          organizationId,
+          employeeId: employee.id,
+          leaveTypeId: item.leaveType.id,
+          leaveYear,
+        },
+      },
+      select: { id: true, openingBalance: true, used: true },
+    });
+
+    if (
+      item.definition.key === "ANNUAL" &&
+      existingBalance &&
+      Number(existingBalance.used) > Number(entitlement)
+    ) {
+      const error = new Error("ANNUAL_ENTITLEMENT_BELOW_USED");
+      error.details = {
+        employeeNumber,
+        leaveYear,
+        levelNumber,
+        levelSource: effectiveLevel.source,
+        used: Number(existingBalance.used),
+        proposedEntitlement: Number(entitlement),
+      };
+      throw error;
+    }
 
     const balance = await tx.leaveBalance.upsert({
       where: {
@@ -481,12 +517,18 @@ async function provisionEmployeeWithConfigured({
           leaveYear,
           baseEntitlement: entitlement,
           allocatedEntitlement: entitlement,
-          method: "LEVEL_DEFAULT",
-          effectiveDate: new Date(),
+          method:
+            effectiveLevel.source === "EMPLOYEE_OVERRIDE"
+              ? "MANUAL_OVERRIDE"
+              : "LEVEL_DEFAULT",
+          effectiveDate:
+            effectiveLevel.override?.effectiveFrom || new Date(),
           reason:
-            hierarchyVersion === "V2"
-              ? "ZERMATT V2 employment-level leave entitlement mapping"
-              : "ZERMATT Full-Time leave entitlement mapping",
+            effectiveLevel.source === "EMPLOYEE_OVERRIDE"
+              ? "Employee-specific Employment Level override applied to ZERMATT leave entitlement"
+              : hierarchyVersion === "V2"
+                ? "ZERMATT V2 designation-default Employment Level leave entitlement mapping"
+                : "ZERMATT Full-Time leave entitlement mapping",
           createdByUserId: actorUserId || null,
         },
       });
@@ -497,6 +539,7 @@ async function provisionEmployeeWithConfigured({
       policyCode: item.policy.code,
       policyName: item.policy.name,
       entitlement,
+      levelSource: effectiveLevel.source,
       balanceId: balance.id,
       allocationId: allocation?.id || null,
     });
@@ -508,6 +551,7 @@ async function provisionEmployeeWithConfigured({
     eligible: allocations.length > 0,
     hierarchyVersion,
     levelNumber,
+    levelSource: effectiveLevel.source,
     allocations,
     skippedPolicies,
   };
@@ -552,9 +596,9 @@ async function provisionAllCurrentFullTimeEmployees({
   const employees = await tx.employee.findMany({
     where: { organizationId, status: { in: CURRENT_STATUSES } },
     select: {
+      id: true,
       employeeNumber: true,
       employmentType: true,
-      designation: { select: { careerLevel: true } },
     },
     orderBy: { employeeNumber: "asc" },
   });
@@ -562,17 +606,35 @@ async function provisionAllCurrentFullTimeEmployees({
   const eligibleEmployees = employees.filter((employee) =>
     isAnnualEligibleEmploymentType(employee.employmentType, hierarchyVersion)
   );
-  const invalidLevels = eligibleEmployees.filter((employee) => {
-    const level = Number(employee.designation?.careerLevel || 0);
-    return hierarchyVersion === "V2"
-      ? !isZermattV2InternalLevel(level)
-      : !Number.isInteger(level) || level < 1 || level > 11;
-  });
+
+  const invalidLevels = [];
+  for (const employee of eligibleEmployees) {
+    try {
+      const effectiveLevel = await resolveEffectiveEmploymentLevel(tx, {
+        organizationId,
+        employeeId: employee.id,
+      });
+      const level = Number(effectiveLevel.levelNumber || 0);
+      const valid = hierarchyVersion === "V2"
+        ? isZermattV2InternalLevel(level)
+        : Number.isInteger(level) && level >= 1 && level <= 11;
+      if (!valid) invalidLevels.push(employee.employeeNumber);
+    } catch (error) {
+      if (
+        error.message === "EMPLOYMENT_LEVEL_MAPPING_REQUIRED" ||
+        error.message === "EMPLOYEE_LEVEL_OVERRIDE_INACTIVE"
+      ) {
+        invalidLevels.push(employee.employeeNumber);
+        continue;
+      }
+      throw error;
+    }
+  }
 
   if (invalidLevels.length) {
     const error = new Error("EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
     error.details = {
-      employees: invalidLevels.map((employee) => employee.employeeNumber),
+      employees: invalidLevels,
       total: invalidLevels.length,
     };
     throw error;
