@@ -43,8 +43,12 @@ test("ZERMATT Super User can cancel or delete salary advances under financial-hi
     "canCancelDelete",
     "cancelAdvance",
     "deleteAdvance",
-    ">Cancel</button>",
-    ">Delete</button>",
+    "cancellable && <button",
+    "deletable && <button",
+    "onClick={() => cancelAdvance(row)}",
+    "onClick={() => deleteAdvance(row)}",
+    ': "Cancel"',
+    ': "Delete"',
     "Financial history remains immutable",
   ]) assert.ok(ui.includes(expected), `missing Super User salary advance UI control: ${expected}`);
 
