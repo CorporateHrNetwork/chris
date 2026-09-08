@@ -9,6 +9,7 @@ const {
   prepareAssignmentRows,
   assignEmployee,
 } = require("../services/employeeEmploymentAssignmentService");
+const employmentLevelService = require("../services/employeeEmploymentLevelAssignmentService");
 
 const router = express.Router();
 const upload = multer({
@@ -26,11 +27,35 @@ const upload = multer({
 router.use(requireAuth);
 
 function sendError(res, error, fallback) {
-  const status = ["EMPLOYEE_NOT_FOUND"].includes(error?.code) ? 404 : 400;
+  const code = error?.code || error?.message;
+  const status = ["EMPLOYEE_NOT_FOUND", "CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND"].includes(code)
+    ? 404
+    : [
+        "EMPLOYEE_NOT_CURRENT",
+        "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+        "EMPLOYEE_LEVEL_OVERRIDE_INACTIVE",
+        "FUTURE_EFFECTIVE_DATE",
+        "INVALID_EFFECTIVE_DATE",
+      ].includes(code)
+      ? 409
+      : 400;
+  const messages = {
+    EMPLOYEE_NOT_FOUND: "Employee not found in this organization.",
+    EMPLOYEE_NOT_CURRENT: "Employment Level changes can only be made for a current employee.",
+    INVALID_EMPLOYMENT_LEVEL: "Select a valid Employment Level.",
+    EMPLOYMENT_LEVEL_NOT_ACTIVE: "Select an active Employment Level from the tenant catalogue.",
+    EMPLOYMENT_LEVEL_MAPPING_REQUIRED: "The employee's designation must have a valid default Employment Level before an override can be managed.",
+    EMPLOYEE_LEVEL_OVERRIDE_INACTIVE: "The employee's active override points to an inactive Employment Level and requires HR review.",
+    EMPLOYMENT_LEVEL_REASON_REQUIRED: "A reason is required for an employee-specific Employment Level change.",
+    INVALID_EFFECTIVE_DATE: "The effective date would corrupt Employment Level history.",
+    FUTURE_EFFECTIVE_DATE: "Future-dated Employment Level changes are not yet supported.",
+    CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND: "This employee has no current Employment Level override to remove.",
+    DESIGNATION_REQUIRED: "Assign a controlled designation before managing the employee's Employment Level.",
+  };
   return res.status(status).json({
     status: "error",
-    code: error?.code || "EMPLOYMENT_ASSIGNMENT_FAILED",
-    message: error?.message || fallback,
+    code: code || "EMPLOYMENT_ASSIGNMENT_FAILED",
+    message: messages[code] || error?.message || fallback,
   });
 }
 
@@ -45,6 +70,87 @@ router.get(
       });
     } catch (error) {
       return sendError(res, error, "Unable to load employment assignment catalogue.");
+    }
+  }
+);
+
+router.get(
+  "/employment-level/:employeeNumber",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const data = await employmentLevelService.getEmploymentLevelState(prisma, {
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.params.employeeNumber,
+      });
+      return res.json({ status: "success", data });
+    } catch (error) {
+      return sendError(res, error, "Unable to load employee Employment Level state.");
+    }
+  }
+);
+
+router.put(
+  "/employment-level/:employeeNumber",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const effectiveFrom = employmentLevelService.parseEffectiveDate(req.body?.effectiveFrom);
+      if (!effectiveFrom) {
+        return res.status(400).json({
+          status: "error",
+          code: "INVALID_EFFECTIVE_DATE",
+          message: "A valid effective date is required.",
+        });
+      }
+      const data = await employmentLevelService.setEmploymentLevelOverride(prisma, {
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.params.employeeNumber,
+        levelNumber: req.body?.levelNumber,
+        effectiveFrom,
+        reason: req.body?.reason,
+        notes: req.body?.notes,
+        performedByUserId: req.auth.userId,
+      });
+      return res.json({
+        status: "success",
+        message: "Employee-specific Employment Level assignment saved.",
+        data,
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to save employee Employment Level assignment.");
+    }
+  }
+);
+
+router.delete(
+  "/employment-level/:employeeNumber",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const effectiveTo = employmentLevelService.parseEffectiveDate(req.body?.effectiveTo);
+      if (!effectiveTo) {
+        return res.status(400).json({
+          status: "error",
+          code: "INVALID_EFFECTIVE_DATE",
+          message: "A valid effective date is required.",
+        });
+      }
+      const data = await employmentLevelService.removeEmploymentLevelOverride(prisma, {
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.params.employeeNumber,
+        effectiveTo,
+        reason: req.body?.reason,
+        notes: req.body?.notes,
+        performedByUserId: req.auth.userId,
+      });
+      return res.json({
+        status: "success",
+        message: "Employment Level override removed; designation default is effective again.",
+        data,
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to remove employee Employment Level override.");
     }
   }
 );
