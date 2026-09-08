@@ -32,15 +32,17 @@ async function ensureEmploymentLevels({ organizationId, tx = prisma }) {
   }
 
   return tx.organizationEmploymentLevel.findMany({
-    where: { organizationId },
+    where: { organizationId, isActive: true },
     orderBy: [{ displayOrder: "asc" }, { levelNumber: "asc" }],
   });
 }
 
 async function listEmploymentLevels({ organizationId }) {
   await ensureEmploymentLevels({ organizationId });
+  // Current selectors and designation configuration must expose only the active
+  // hierarchy. Inactive rows remain in the database for historical/audit joins.
   return prisma.organizationEmploymentLevel.findMany({
-    where: { organizationId },
+    where: { organizationId, isActive: true },
     include: { _count: { select: { designations: true } } },
     orderBy: [{ displayOrder: "asc" }, { levelNumber: "asc" }],
   });
