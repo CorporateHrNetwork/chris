@@ -5,6 +5,8 @@ const path = require("node:path");
 
 const {
   ZERMATT_EMPLOYMENT_LEVELS,
+  ZERMATT_BASE_DESIGNATION_LEVELS,
+  ZERMATT_VALIDATED_DESIGNATION_EXTENSIONS,
   ZERMATT_DESIGNATION_LEVELS,
   resolveZermattDesignationLevel,
 } = require("../src/config/zermattEmploymentLevels");
@@ -35,16 +37,26 @@ test("ZERMATT authoritative designations map safely to one coherent L1-L11 hiera
     ]
   );
 
-  assert.equal(ZERMATT_DESIGNATION_LEVELS.length, 117);
+  assert.equal(
+    ZERMATT_BASE_DESIGNATION_LEVELS.length,
+    117,
+    "original workforce migration catalogue must remain intact"
+  );
+  assert.equal(
+    ZERMATT_VALIDATED_DESIGNATION_EXTENSIONS.length,
+    3,
+    "reserved8 validated tenant extensions must be explicit"
+  );
+  assert.equal(ZERMATT_DESIGNATION_LEVELS.length, 120);
   assert.equal(
     new Set(ZERMATT_DESIGNATION_LEVELS.map((item) => item.name.toLowerCase())).size,
     ZERMATT_DESIGNATION_LEVELS.length,
-    "designation names must be unique"
+    "designation names must be unique across base catalogue and extensions"
   );
   assert.equal(
     new Set(ZERMATT_DESIGNATION_LEVELS.map((item) => item.code)).size,
     ZERMATT_DESIGNATION_LEVELS.length,
-    "designation codes must be unique"
+    "designation codes must be unique across base catalogue and extensions"
   );
 
   const expectedMappings = [
@@ -60,6 +72,9 @@ test("ZERMATT authoritative designations map safely to one coherent L1-L11 hiera
     ["Head of HR & Admin", "HRA-HOD", 10],
     ["Managing Director", "EXEC-MD", 11],
     ["Personal Assistant / Executive Secretary", "EXEC-PAES", 7],
+    ["Inventory Systems & Stock Control Officer", "PROC-ISSC", 6],
+    ["Procurement Cost Control Officer", "PROC-CCO", 6],
+    ["Facilities Maintenance Officer", "FAC-MO", 6],
   ];
 
   for (const [name, code, levelNumber] of expectedMappings) {
@@ -68,6 +83,15 @@ test("ZERMATT authoritative designations map safely to one coherent L1-L11 hiera
       levelNumber,
       `${name} must map to L${levelNumber}`
     );
+  }
+
+  for (const code of ["PROC-ISSC", "PROC-CCO", "FAC-MO"]) {
+    const extension = ZERMATT_VALIDATED_DESIGNATION_EXTENSIONS.find(
+      (item) => item.code === code
+    );
+    assert.ok(extension, `${code} must be registered as a validated tenant extension`);
+    assert.equal(extension.levelNumber, 6);
+    assert.equal(extension.source, "ZERMATT_RESERVED8");
   }
 
   assert.equal(

@@ -13,13 +13,16 @@ const ZERMATT_EMPLOYMENT_LEVELS = [
 ].map((level) => ({ ...level, displayOrder: level.levelNumber, isActive: true }));
 
 /*
- * Authoritative ZERMATT Designation -> Employment Level catalogue.
+ * Authoritative ZERMATT Designation -> Employment Level base catalogue.
  *
  * Source: ZERMATT CHRiS workforce migration reference data. Employment Level
  * is designation-driven; employees must never be graded independently of their
  * selected tenant-owned designation.
+ *
+ * Keep this 117-row base catalogue intact. Later validated ZERMATT-specific
+ * structure changes are registered separately below as tenant extensions.
  */
-const ZERMATT_DESIGNATION_LEVELS = [
+const ZERMATT_BASE_DESIGNATION_LEVELS = [
   { name: "Managing Director", code: "EXEC-MD", careerTrack: "EXECUTIVE_MANAGEMENT", levelNumber: 11 },
   { name: "General Manager", code: "EXEC-GM", careerTrack: "EXECUTIVE_MANAGEMENT", levelNumber: 11 },
   { name: "Deputy General Manager", code: "EXEC-DGM", careerTrack: "EXECUTIVE_MANAGEMENT", levelNumber: 10 },
@@ -139,6 +142,23 @@ const ZERMATT_DESIGNATION_LEVELS = [
   { name: "Personal Assistant / Executive Secretary", code: "EXEC-PAES", careerTrack: "EXECUTIVE_SUPPORT", levelNumber: 7 },
 ];
 
+/*
+ * Validated ZERMATT tenant extensions introduced by the approved reserved8
+ * employment/cost-centre structure deployment. Their exact names/codes and
+ * employee assignments are evidenced in the reserved8 policy/apply outputs.
+ * They remain separate from the original 117-row workforce migration catalogue.
+ */
+const ZERMATT_VALIDATED_DESIGNATION_EXTENSIONS = [
+  { name: "Inventory Systems & Stock Control Officer", code: "PROC-ISSC", careerTrack: "SUPPLY_CHAIN", levelNumber: 6, source: "ZERMATT_RESERVED8" },
+  { name: "Procurement Cost Control Officer", code: "PROC-CCO", careerTrack: "SUPPLY_CHAIN", levelNumber: 6, source: "ZERMATT_RESERVED8" },
+  { name: "Facilities Maintenance Officer", code: "FAC-MO", careerTrack: "HOUSEKEEPING_FACILITIES", levelNumber: 6, source: "ZERMATT_RESERVED8" },
+];
+
+const ZERMATT_DESIGNATION_LEVELS = [
+  ...ZERMATT_BASE_DESIGNATION_LEVELS,
+  ...ZERMATT_VALIDATED_DESIGNATION_EXTENSIONS,
+];
+
 function normalizeDesignationName(value) {
   return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -194,6 +214,8 @@ function resolveZermattDesignationLevel(designation) {
 
 module.exports = {
   ZERMATT_EMPLOYMENT_LEVELS,
+  ZERMATT_BASE_DESIGNATION_LEVELS,
+  ZERMATT_VALIDATED_DESIGNATION_EXTENSIONS,
   ZERMATT_DESIGNATION_LEVELS,
   resolveZermattDesignationLevel,
 };
