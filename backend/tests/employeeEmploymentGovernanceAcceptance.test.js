@@ -39,6 +39,13 @@ const careerRoutes = read(
   "routes",
   "employeeCareerCatalogRoutes.js"
 );
+const governedProfileRoutes = read(
+  backendRoot,
+  "src",
+  "routes",
+  "employeeProfileGovernanceRoutes.js"
+);
+const appSource = read(backendRoot, "src", "app.js");
 const zermattLeave = read(
   backendRoot,
   "src",
@@ -52,6 +59,20 @@ const governancePanel = read(
   "components",
   "employees",
   "EmployeeEmploymentGovernancePanel.jsx"
+);
+const profileBoundary = read(
+  repoRoot,
+  "src",
+  "components",
+  "employees",
+  "EmployeeProfileErrorBoundary.jsx"
+);
+const employeeProfile = read(
+  repoRoot,
+  "src",
+  "components",
+  "employees",
+  "EmployeeProfile.jsx"
 );
 
 // Schema and migration: tenant-safe, effective-dated individual Employment Levels.
@@ -83,6 +104,20 @@ expect(assignmentRoutes, "removeEmploymentLevelOverride", "Employment Level rest
 expect(careerRoutes, '"/career/designations"', "Controlled designation catalogue endpoint missing.");
 expect(careerRoutes, '"/career/employment-levels"', "Controlled Employment Level catalogue endpoint missing.");
 
+// Governed profile: effective employee level is shown without mutating the designation default.
+expect(governedProfileRoutes, "resolveEffectiveEmploymentLevel", "Governed employee profile is not using the effective-level resolver.");
+expect(governedProfileRoutes, "defaultEmploymentLevel: designationDefault", "Designation default is not preserved separately on the governed profile.");
+expect(governedProfileRoutes, "employmentLevel: effectiveEmploymentLevel", "Employee profile is not exposing the effective Employment Level through its established display field.");
+expect(governedProfileRoutes, "effectiveEmploymentLevel: effectiveSummary", "Explicit effective Employment Level profile metadata missing.");
+expect(governedProfileRoutes, "STRUCTURE_CHANGE_REQUIRES_CONTROLLED_JOB_CHANGE", "Legacy free-text Department/Designation structural-change guard missing.");
+expect(employeeProfile, "employee.designation?.employmentLevel?.name", "Employee Profile no longer consumes its established Employment Level display field.");
+
+const governedMount = appSource.indexOf('app.use("/api/employees", employeeProfileGovernanceRoutes);');
+const legacyEmployeeMount = appSource.indexOf('app.use("/api/employees", employeeRoutes);');
+assert(governedMount >= 0, "Governed employee profile router is not mounted.");
+assert(legacyEmployeeMount >= 0, "Legacy employee router mount missing.");
+assert(governedMount < legacyEmployeeMount, "Governed employee profile router must run before the legacy employee router.");
+
 // ZERMATT leave must consume the effective employee level.
 expect(zermattLeave, "resolveEffectiveEmploymentLevel", "ZERMATT leave is not wired to the effective employee level resolver.");
 expect(zermattLeave, "effectiveLevel.levelNumber", "ZERMATT leave does not consume the resolved effective level.");
@@ -99,5 +134,11 @@ expect(governancePanel, "Save Designation", "Controlled Designation workflow mis
 expect(governancePanel, "Save Level Override", "Employee-specific Employment Level workflow missing.");
 expect(governancePanel, "Use Designation Default", "Designation-default restoration control missing.");
 expect(governancePanel, "/api/employee-assignments/employment-level/", "Employee Employment Level API wiring missing from governance panel.");
+
+// The live Employee Profile route must actually mount the governance controls and refresh after changes.
+expect(profileBoundary, 'import EmployeeEmploymentGovernancePanel from "./EmployeeEmploymentGovernancePanel"', "Employee governance panel is not imported by the live Employee Profile boundary.");
+expect(profileBoundary, "<EmployeeEmploymentGovernancePanel", "Employee governance panel is not mounted on the live Employee Profile route.");
+expect(profileBoundary, "employeeNumber={employeeNumber}", "Live Employee Profile is not passing the authoritative employee number into governance controls.");
+expect(profileBoundary, "onChanged={() => setProfileVersion", "Employee Profile does not refresh after a governance change.");
 
 console.log("PASS: Employee Employment Governance acceptance checks.");
