@@ -12,6 +12,8 @@ const LEAVE_YEAR = 2026;
 const EXPECTED_LEVEL = 7;
 const EXPECTED_FROM_ENTITLEMENT = 30;
 const EXPECTED_TO_ENTITLEMENT = 21;
+const ACTOR_EMAIL = "corporatehr.crn@gmail.com";
+const ACTOR_ROLE = "Head of HR & Admin";
 
 function number(value) {
   return Number(value || 0);
@@ -50,20 +52,19 @@ async function main() {
   const actor = await prisma.user.findFirst({
     where: {
       organizationId: organization.id,
+      email: ACTOR_EMAIL,
       isActive: true,
       userRoles: {
         some: {
           role: {
-            name: {
-              in: ["Super User", "SuperUser", "Super Admin", "SuperAdmin", "Organization Super User"],
-            },
+            name: ACTOR_ROLE,
           },
         },
       },
     },
-    select: { id: true, email: true },
+    select: { id: true, email: true, firstName: true, lastName: true },
   });
-  if (!actor) throw new Error("ZERMATT_SUPER_USER_REQUIRED");
+  if (!actor) throw new Error("ZERMATT_CHRIS_ADMINISTRATOR_REQUIRED");
 
   const result = await prisma.$transaction(async (tx) => {
     const employee = await tx.employee.findFirst({
@@ -296,7 +297,15 @@ async function main() {
     timeout: 30000,
   });
 
-  console.log(JSON.stringify({ organization: organization.name, actor: actor.email, ...result }, null, 2));
+  console.log(JSON.stringify({
+    organization: organization.name,
+    actor: {
+      id: actor.id,
+      email: actor.email,
+      role: ACTOR_ROLE,
+    },
+    ...result,
+  }, null, 2));
 }
 
 if (require.main === module) {
