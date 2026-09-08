@@ -110,7 +110,7 @@ test("ZERMATT Release-1 Loans and Salary Advances are separate payroll recoverie
       'apiRequest("/api/loans")',
       'apiRequest("/api/loans/recoveries")',
       'title="Loans Dashboard"',
-      'title="New Loan"',
+      'title="New Loan Application"',
       'title="Salary Advances"',
       '"/payroll?workspace=salary-advances"',
       'New Loan Application',
