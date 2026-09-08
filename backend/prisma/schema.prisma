@@ -214,36 +214,36 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
 
-  performedLifecycleEvents             EmployeeLifecycleEvent[]           @relation("LifecyclePerformedBy")
-  performedDesignationLifecycleEvents  DesignationLifecycleEvent[]        @relation("DesignationLifecyclePerformedBy")
-  attendancePayrollSettingsUpdated     AttendancePayrollSetting[]         @relation("AttendancePayrollSettingUpdatedBy")
-  attendancePayrollInputsRecorded      AttendancePayrollInput[]           @relation("AttendancePayrollInputRecordedBy")
-  createdLeaveRequests                 LeaveRequest[]                     @relation("LeaveRequestCreatedBy")
-  reviewedLeaveRequests                LeaveRequest[]                     @relation("LeaveRequestReviewedBy")
-  leavePoliciesCreated                 LeavePolicy[]                      @relation("LeavePolicyCreatedBy")
-  leavePoliciesApproved                LeavePolicy[]                      @relation("LeavePolicyApprovedBy")
+  performedLifecycleEvents             EmployeeLifecycleEvent[]            @relation("LifecyclePerformedBy")
+  performedDesignationLifecycleEvents  DesignationLifecycleEvent[]         @relation("DesignationLifecyclePerformedBy")
+  attendancePayrollSettingsUpdated     AttendancePayrollSetting[]          @relation("AttendancePayrollSettingUpdatedBy")
+  attendancePayrollInputsRecorded      AttendancePayrollInput[]            @relation("AttendancePayrollInputRecordedBy")
+  createdLeaveRequests                 LeaveRequest[]                      @relation("LeaveRequestCreatedBy")
+  reviewedLeaveRequests                LeaveRequest[]                      @relation("LeaveRequestReviewedBy")
+  leavePoliciesCreated                 LeavePolicy[]                       @relation("LeavePolicyCreatedBy")
+  leavePoliciesApproved                LeavePolicy[]                       @relation("LeavePolicyApprovedBy")
   leavePolicyAudits                    LeavePolicyAudit[]
-  leaveEntitlementAdjustmentsCreated   LeaveEntitlementAdjustment[]       @relation("LeaveEntitlementAdjustmentCreatedBy")
-  leaveEntitlementMatrixRulesCreated   LeaveEntitlementMatrixRule[]       @relation("LeaveEntitlementMatrixRuleCreatedBy")
-  leaveEntitlementAllocationsCreated   LeaveEntitlementAllocation[]       @relation("LeaveEntitlementAllocationCreatedBy")
-  commencedLeaveRequests               LeaveRequest[]                     @relation("LeaveRequestCommencedBy")
-  returnedLeaveRequests                LeaveRequest[]                     @relation("LeaveRequestReturnedBy")
-  recordedAttendanceRecords            AttendanceRecord[]                 @relation("AttendanceRecordedBy")
-  onboardingTemplatesCreated           OnboardingWorkflowTemplate[]       @relation("OnboardingTemplateCreatedBy")
-  employeeOnboardingsAssigned          EmployeeOnboarding[]               @relation("EmployeeOnboardingAssignedTo")
-  employeeOnboardingsCreated           EmployeeOnboarding[]               @relation("EmployeeOnboardingCreatedBy")
-  employeeOnboardingsCompleted         EmployeeOnboarding[]               @relation("EmployeeOnboardingCompletedBy")
-  employeeDocumentsUploaded            EmployeeDocument[]                 @relation("EmployeeDocumentUploadedBy")
-  onboardingTasksOwned                 EmployeeOnboardingTask[]           @relation("EmployeeOnboardingTaskOwner")
-  onboardingTasksCompleted             EmployeeOnboardingTask[]           @relation("EmployeeOnboardingTaskCompletedBy")
-  employeeExitProcessesInitiated       EmployeeExitProcess[]              @relation("EmployeeExitInitiatedBy")
-  employeeExitProcessesCompleted       EmployeeExitProcess[]              @relation("EmployeeExitCompletedBy")
-  employeeExitProcessesCancelled       EmployeeExitProcess[]              @relation("EmployeeExitCancelledBy")
-  lineManagerAssignmentsPerformed      EmployeeLineManagerAssignment[]    @relation("LineManagerAssignmentPerformedBy")
+  leaveEntitlementAdjustmentsCreated   LeaveEntitlementAdjustment[]        @relation("LeaveEntitlementAdjustmentCreatedBy")
+  leaveEntitlementMatrixRulesCreated   LeaveEntitlementMatrixRule[]        @relation("LeaveEntitlementMatrixRuleCreatedBy")
+  leaveEntitlementAllocationsCreated   LeaveEntitlementAllocation[]        @relation("LeaveEntitlementAllocationCreatedBy")
+  commencedLeaveRequests               LeaveRequest[]                      @relation("LeaveRequestCommencedBy")
+  returnedLeaveRequests                LeaveRequest[]                      @relation("LeaveRequestReturnedBy")
+  recordedAttendanceRecords            AttendanceRecord[]                  @relation("AttendanceRecordedBy")
+  onboardingTemplatesCreated           OnboardingWorkflowTemplate[]        @relation("OnboardingTemplateCreatedBy")
+  employeeOnboardingsAssigned          EmployeeOnboarding[]                @relation("EmployeeOnboardingAssignedTo")
+  employeeOnboardingsCreated           EmployeeOnboarding[]                @relation("EmployeeOnboardingCreatedBy")
+  employeeOnboardingsCompleted         EmployeeOnboarding[]                @relation("EmployeeOnboardingCompletedBy")
+  employeeDocumentsUploaded            EmployeeDocument[]                  @relation("EmployeeDocumentUploadedBy")
+  onboardingTasksOwned                 EmployeeOnboardingTask[]            @relation("EmployeeOnboardingTaskOwner")
+  onboardingTasksCompleted             EmployeeOnboardingTask[]            @relation("EmployeeOnboardingTaskCompletedBy")
+  employeeExitProcessesInitiated       EmployeeExitProcess[]               @relation("EmployeeExitInitiatedBy")
+  employeeExitProcessesCompleted       EmployeeExitProcess[]               @relation("EmployeeExitCompletedBy")
+  employeeExitProcessesCancelled       EmployeeExitProcess[]               @relation("EmployeeExitCancelledBy")
+  lineManagerAssignmentsPerformed      EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentPerformedBy")
   employmentLevelAssignmentsPerformed  EmployeeEmploymentLevelAssignment[] @relation("EmploymentLevelAssignmentPerformedBy")
-  organizationAuditsPerformed          OrganizationAudit[]                @relation("OrganizationAuditActor")
-  employeeExportJobsRequested          EmployeeExportJob[]                @relation("EmployeeExportRequestedBy")
-  employeeSelfOnboardingInvitesCreated EmployeeSelfOnboardingInvite[]     @relation("EmployeeInviteCreatedBy")
+  organizationAuditsPerformed          OrganizationAudit[]                 @relation("OrganizationAuditActor")
+  employeeExportJobsRequested          EmployeeExportJob[]                 @relation("EmployeeExportRequestedBy")
+  employeeSelfOnboardingInvitesCreated EmployeeSelfOnboardingInvite[]      @relation("EmployeeInviteCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -340,10 +340,10 @@ model RolePermission {
 
   createdAt DateTime @default(now())
 
-  @@unique([userId, roleId])
-  @@index([userId])
+  @@unique([roleId, permissionId])
   @@index([roleId])
-  @@map("user_roles")
+  @@index([permissionId])
+  @@map("role_permissions")
 }
 
 model Department {
@@ -462,11 +462,11 @@ model OrganizationEmploymentLevel {
   displayOrder   Int     @default(0)
   isActive       Boolean @default(true)
 
-  organization      Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  designations      Designation[]
+  organization        Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  designations        Designation[]
   employeeAssignments EmployeeEmploymentLevelAssignment[]
-  matrixRules       LeaveEntitlementMatrixRule[]
-  allocations       LeaveEntitlementAllocation[]
+  matrixRules         LeaveEntitlementMatrixRule[]
+  allocations         LeaveEntitlementAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1576,8 +1576,8 @@ model AttendancePayrollSetting {
   organizationId  String                 @unique
   basis           AttendancePayrollBasis @default(SYSTEM)
   updatedByUserId String?
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   updatedBy    User?        @relation("AttendancePayrollSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
@@ -1604,6 +1604,7 @@ model AttendancePayrollInput {
   recordedBy   User?        @relation("AttendancePayrollInputRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, employeeId, periodStart, periodEnd])
+  @@index([organizationId, periodStart, periodEnd])
   @@index([employeeId])
   @@index([recordedByUserId])
   @@map("attendance_payroll_inputs")
