@@ -17,10 +17,15 @@ function knownError(res, error) {
   const map = {
     EMPLOYEE_NOT_FOUND: [404, "Employee not found."],
     EMPLOYEE_NOT_CURRENT: [409, "Line managers can only be assigned to current employees."],
+    EMPLOYEE_DESIGNATION_REQUIRED: [409, "Assign a controlled designation before selecting a line manager."],
     MANAGER_NOT_FOUND: [400, "Select a valid manager from your organization."],
     SELF_MANAGER: [409, "An employee cannot be their own line manager."],
     MANAGER_NOT_CURRENT: [409, "Exited or inactive employees cannot be assigned as line managers."],
     MANAGEMENT_CYCLE: [409, "This assignment would create a reporting-line cycle."],
+    DESIGNATION_HIERARCHY_CYCLE: [409, "The designation reporting hierarchy contains a cycle and must be corrected first."],
+    REPORTING_DESIGNATION_NOT_FOUND: [409, "The designation hierarchy points to an invalid supervisory designation."],
+    MANAGER_OUTSIDE_DESIGNATION_HIERARCHY: [409, "The selected manager is outside the employee's resolved designation hierarchy."],
+    HIERARCHY_OVERRIDE_REASON_REQUIRED: [400, "A hierarchy override reason is required."],
     INVALID_EFFECTIVE_DATE: [409, "The effective date would corrupt manager history."],
     FUTURE_EFFECTIVE_DATE: [409, "Future-dated manager changes are not yet supported."],
     CHANGE_REASON_REQUIRED: [400, "A reason is required when changing line manager."],
@@ -39,7 +44,7 @@ router.get("/eligible", requirePermission("employees.view"), async (req, res) =>
       status: { in: service.CURRENT_STATUSES },
       exitDate: null,
     },
-    include: { department: true, designation: true },
+    include: { department: true, designation: true, location: true },
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   });
   res.json({ status: "success", data });
@@ -78,6 +83,35 @@ router.get("/managers/:managerEmployeeNumber/reports", requirePermission("employ
   return res.json({ status: "success", manager, data: assignments.map((item) => item.employee) });
 });
 
+router.get("/employees/:employeeNumber/candidates", requirePermission("employees.view"), async (req, res) => {
+  try {
+    const employee = await employeeForTenant(req.auth.organizationId, req.params.employeeNumber);
+    if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
+    const hierarchy = await service.resolveManagerCandidates(prisma, {
+      organizationId: req.auth.organizationId,
+      employeeId: employee.id,
+    });
+    return res.json({
+      status: "success",
+      data: {
+        employee: hierarchy.employee,
+        hierarchyStatus: hierarchy.hierarchyStatus,
+        directReportsToDesignation: hierarchy.directReportsToDesignation,
+        resolvedManagerDesignation: hierarchy.resolvedManagerDesignation,
+        hierarchyHops: hierarchy.hierarchyHops,
+        chain: hierarchy.chain,
+        candidates: hierarchy.candidates,
+        topCandidates: hierarchy.topCandidates,
+        requiresManualSelection: hierarchy.requiresManualSelection,
+      },
+    });
+  } catch (error) {
+    if (knownError(res, error)) return;
+    console.error("Resolve line manager candidates error:", error);
+    return res.status(500).json({ status: "error", message: "Unable to resolve hierarchy-approved manager candidates." });
+  }
+});
+
 router.get("/employees/:employeeNumber", requirePermission("employees.view"), async (req, res) => {
   const employee = await employeeForTenant(req.auth.organizationId, req.params.employeeNumber);
   if (!employee) return res.status(404).json({ status: "error", message: "Employee not found." });
@@ -108,6 +142,8 @@ router.put("/employees/:employeeNumber", requirePermission("employees.update"), 
       effectiveFrom,
       reason: req.body?.reason,
       notes: req.body?.notes,
+      hierarchyOverride: req.body?.hierarchyOverride === true,
+      hierarchyOverrideReason: req.body?.hierarchyOverrideReason,
       performedByUserId: req.auth.userId,
     });
     return res.json({ status: "success", message: "Line manager assignment saved.", data });
