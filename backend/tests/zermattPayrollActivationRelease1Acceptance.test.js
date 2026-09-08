@@ -14,6 +14,7 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   const approvalCompliance = read("backend/src/services/payrollApprovalComplianceService.js");
   const readiness = read("backend/src/services/payrollReadinessService.js");
   const payrollPage = read("src/pages/Payroll.jsx");
+  const integratedWorkspace = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
   const nigeriaWorkspace = read("src/pages/payroll/NigeriaPayrollWorkspace.jsx");
   const supplementWorkspace = read("src/pages/payroll/NigeriaPayrollSupplementWorkspace.jsx");
   const sidebar = read("src/components/layout/Sidebar/Sidebar.jsx");
@@ -31,7 +32,8 @@ test("ZERMATT Release-1 Payroll activation and Nigeria compliance gate", () => {
   requireText(readiness, ['FROM "payroll_salary_rates"','FROM "payroll_policy_versions"',"const calculationReady = employmentReady && compensationReady;","const paymentFinalizationReady = calculationReady && paymentReady;","readyForExecution: calculationReady","summary.calculationReady === summary.currentEmployees","paymentFinalizationEnabled","statutoryCalculationEnabled","paymentTransmissionEnabled: false","PAYMENT_PROFILES_INCOMPLETE","PAYMENT_TRANSMISSION_SEPARATE_CONTROL"], "Payroll readiness");
   assert.equal(readiness.includes("readyForExecution: employmentReady && paymentReady && compensationReady"), false, "Payment profile completeness must not block draft payroll calculation.");
   assert.equal(readiness.includes("STATUTORY_AUTOMATION_NOT_ENABLED"), false);
-  requireText(payrollPage, ['"execute"','"periods"','"rates"','"allowances"','"deductions"','"payslips"','"salary-advances"','"paid-leave"','"approvals"','"statutory"','"rent-relief"',"NigeriaPayrollWorkspace","NigeriaPayrollSupplementWorkspace",'title="Execute Payroll"','title="Payroll Periods"','title="Salary Rates"','title="Nigeria Statutory Setup"','title="Tax Rent Relief"','title="Other Allowances"','title="Other Deductions"','title="Payslips"','title="Payroll Approvals"'], "Payroll dashboard");
+  requireText(payrollPage, ['"execute"','"periods"','"rates"','"allowances"','"deductions"','"payslips"','"salary-advances"','"paid-leave"','"approvals"','"statutory"','"rent-relief' ,"PayrollIntegratedManaged","NigeriaPayrollSupplementWorkspace",'title="Execute Payroll"','title="Payroll Periods"','title="Salary Rates"','title="Nigeria Statutory Review"','title="Tax Rent Relief"','title="Other Allowances"','title="Other Deductions"','title="Payslips"','title="Payroll Approvals"'], "Payroll dashboard");
+  requireText(integratedWorkspace, ["Integrated Draft Payroll","Calculate Payroll","Salary Advance recovery","Loan recovery","Approved Payroll Payslips","Nigeria Statutory Review","/api/payroll/runs/draft","/api/payroll/payslips"], "Integrated payroll workspace");
   requireText(nigeriaWorkspace, ["Nigeria-Compliant Draft Payroll","26/16","Tax Rent Relief","20% of annual rent paid","Save for Verification","/api/payroll/tax-reliefs/rent","/api/payroll/compliance-policy"], "Nigeria payroll workspaces");
   requireText(supplementWorkspace, ["Other Allowances","Other Deductions","Taxable earning (default)","PAYE and pension are statutory calculations and should not be recreated here","I confirm I reviewed CHRiS-calculated PAYE/pension",'const path = kind === "ALLOWANCE" ? "allowances" : "deductions"',"/api/payroll/payslips","/api/payroll/approvals"], "Nigeria payroll supplement workspaces");
   const payrollBlockStart = sidebar.search(/id:\s*"payroll"/);
