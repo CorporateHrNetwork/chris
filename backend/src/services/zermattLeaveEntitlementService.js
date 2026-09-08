@@ -1,16 +1,31 @@
 const prisma = require("../config/prisma");
 const { ZERMATT_EMPLOYMENT_LEVELS } = require("../config/zermattEmploymentLevels");
+const {
+  ZERMATT_EMPLOYMENT_LEVELS_V2,
+  resolveZermattV2Level,
+  isZermattV2InternalLevel,
+} = require("../config/zermattEmploymentLevelsV2");
 
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 const EFFECTIVE_FROM = new Date("2026-01-01T00:00:00.000Z");
+const V2_SENTINEL_LEVEL_NUMBER = 101;
 
 const POLICY_DEFINITIONS = [
   {
-    key: "ANNUAL", typeCode: "ANNUAL", typeName: "Annual Leave",
-    policyCode: "ZLL-ANNUAL-FT", policyName: "ZERMATT Full-Time Annual Leave",
-    isPaid: true, entitlementDays: 30, femaleOnly: false,
-    entitlementForLevel(level) {
+    key: "ANNUAL",
+    typeCode: "ANNUAL",
+    typeName: "Annual Leave",
+    policyCode: "ZLL-ANNUAL-FT",
+    policyName: "ZERMATT Full-Time Annual Leave",
+    v2PolicyName: "ZERMATT Standard Annual Leave",
+    isPaid: true,
+    entitlementDays: 30,
+    femaleOnly: false,
+    entitlementForLevel(level, hierarchyVersion = "V1") {
+      if (hierarchyVersion === "V2") {
+        return resolveZermattV2Level(level)?.annualLeaveDays ?? null;
+      }
       if (level === 11) return 30;
       if (level >= 9 && level <= 10) return 28;
       if (level >= 5 && level <= 8) return 21;
@@ -19,42 +34,133 @@ const POLICY_DEFINITIONS = [
     },
   },
   {
-    key: "SICK", typeCode: "SICK", typeName: "Sick Leave",
-    policyCode: "ZLL-SICK-FT", policyName: "ZERMATT Full-Time Sick Leave",
-    isPaid: true, entitlementDays: 12, femaleOnly: false, entitlementForLevel: () => 12,
+    key: "SICK",
+    typeCode: "SICK",
+    typeName: "Sick Leave",
+    policyCode: "ZLL-SICK-FT",
+    policyName: "ZERMATT Full-Time Sick Leave",
+    isPaid: true,
+    entitlementDays: 12,
+    femaleOnly: false,
+    entitlementForLevel: () => 12,
   },
   {
-    key: "UNPAID_CASUAL", typeCode: "UNPAID", typeName: "Unpaid/Casual Leave",
-    policyCode: "ZLL-UNPAID-CASUAL-FT", policyName: "ZERMATT Full-Time Unpaid/Casual Leave",
-    isPaid: false, entitlementDays: 5, femaleOnly: false, entitlementForLevel: () => 5,
+    key: "UNPAID_CASUAL",
+    typeCode: "UNPAID",
+    typeName: "Unpaid/Casual Leave",
+    policyCode: "ZLL-UNPAID-CASUAL-FT",
+    policyName: "ZERMATT Full-Time Unpaid/Casual Leave",
+    isPaid: false,
+    entitlementDays: 5,
+    femaleOnly: false,
+    entitlementForLevel: () => 5,
   },
   {
-    key: "COMPASSIONATE", typeCode: "COMPASSIONATE", typeName: "Compassionate Leave",
-    policyCode: "ZLL-COMPASSIONATE-FT", policyName: "ZERMATT Full-Time Compassionate Leave",
-    isPaid: true, entitlementDays: 6, femaleOnly: false, entitlementForLevel: () => 6,
+    key: "COMPASSIONATE",
+    typeCode: "COMPASSIONATE",
+    typeName: "Compassionate Leave",
+    policyCode: "ZLL-COMPASSIONATE-FT",
+    policyName: "ZERMATT Full-Time Compassionate Leave",
+    isPaid: true,
+    entitlementDays: 6,
+    femaleOnly: false,
+    entitlementForLevel: () => 6,
   },
   {
-    key: "MATERNITY", typeCode: "MATERNITY", typeName: "Maternity Leave",
-    policyCode: "ZLL-MATERNITY-FT-FEMALE", policyName: "ZERMATT Full-Time Maternity Leave",
-    isPaid: true, entitlementDays: 90, femaleOnly: true, entitlementForLevel: () => 90,
+    key: "MATERNITY",
+    typeCode: "MATERNITY",
+    typeName: "Maternity Leave",
+    policyCode: "ZLL-MATERNITY-FT-FEMALE",
+    policyName: "ZERMATT Full-Time Maternity Leave",
+    isPaid: true,
+    entitlementDays: 90,
+    femaleOnly: true,
+    entitlementForLevel: () => 90,
   },
 ];
 
-function isFullTime(value) {
-  return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "") === "fulltime";
+function normalizeEmploymentType(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
 }
-function employeeName(employee) { return [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "); }
+
+function isFullTime(value) {
+  return normalizeEmploymentType(value) === "fulltime";
+}
+
+function isExpatriate(value) {
+  return normalizeEmploymentType(value) === "expatriate";
+}
+
+function isAnnualEligibleEmploymentType(value, hierarchyVersion = "V1") {
+  return isFullTime(value) || (hierarchyVersion === "V2" && isExpatriate(value));
+}
+
+function eligibleEmploymentTypesForDefinition(definition, hierarchyVersion) {
+  if (definition.key === "ANNUAL" && hierarchyVersion === "V2") {
+    return ["Full-Time", "Expatriate"];
+  }
+  return ["Full-Time"];
+}
+
+function isEligibleForDefinition(employmentType, definition, hierarchyVersion) {
+  if (definition.key === "ANNUAL") {
+    return isAnnualEligibleEmploymentType(employmentType, hierarchyVersion);
+  }
+  return isFullTime(employmentType);
+}
+
+function employeeName(employee) {
+  return [employee.firstName, employee.middleName, employee.lastName]
+    .filter(Boolean)
+    .join(" ");
+}
 
 async function assertZermatt(organizationId, tx = prisma) {
-  const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { id: true, slug: true, name: true } });
-  if (!organization || organization.slug !== ZERMATT_SLUG) throw new Error("ZERMATT_TENANT_REQUIRED");
+  const organization = await tx.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, slug: true, name: true },
+  });
+  if (!organization || organization.slug !== ZERMATT_SLUG) {
+    throw new Error("ZERMATT_TENANT_REQUIRED");
+  }
   return organization;
 }
 
-async function ensureEmploymentLevels({ organizationId, tx = prisma }) {
-  for (const level of ZERMATT_EMPLOYMENT_LEVELS) {
+async function isZermattV2Active({ organizationId, tx = prisma }) {
+  const sentinel = await tx.organizationEmploymentLevel.findUnique({
+    where: {
+      organizationId_levelNumber: {
+        organizationId,
+        levelNumber: V2_SENTINEL_LEVEL_NUMBER,
+      },
+    },
+    select: { code: true, isActive: true },
+  });
+  return Boolean(sentinel?.isActive && sentinel.code === "L1");
+}
+
+async function resolveHierarchy({ organizationId, tx = prisma }) {
+  const v2 = await isZermattV2Active({ organizationId, tx });
+  return v2
+    ? { version: "V2", levels: ZERMATT_EMPLOYMENT_LEVELS_V2 }
+    : { version: "V1", levels: ZERMATT_EMPLOYMENT_LEVELS };
+}
+
+async function ensureEmploymentLevels({ organizationId, tx = prisma, hierarchy = null }) {
+  const resolvedHierarchy =
+    hierarchy || (await resolveHierarchy({ organizationId, tx }));
+
+  for (const level of resolvedHierarchy.levels) {
     await tx.organizationEmploymentLevel.upsert({
-      where: { organizationId_levelNumber: { organizationId, levelNumber: level.levelNumber } },
+      where: {
+        organizationId_levelNumber: {
+          organizationId,
+          levelNumber: level.levelNumber,
+        },
+      },
       update: {
         name: level.name,
         code: level.code,
@@ -62,19 +168,39 @@ async function ensureEmploymentLevels({ organizationId, tx = prisma }) {
         displayOrder: level.displayOrder,
         isActive: true,
       },
-      create: { organizationId, ...level },
+      create: {
+        organizationId,
+        levelNumber: level.levelNumber,
+        code: level.code,
+        name: level.name,
+        description: level.description,
+        displayOrder: level.displayOrder,
+        isActive: true,
+      },
     });
   }
+
+  return resolvedHierarchy;
 }
 
-async function ensurePolicyDefinition({ organizationId, actorUserId, definition, tx = prisma }) {
+async function ensurePolicyDefinition({
+  organizationId,
+  actorUserId,
+  definition,
+  hierarchy,
+  tx = prisma,
+}) {
   const leaveType = await tx.leaveType.upsert({
     where: { organizationId_code: { organizationId, code: definition.typeCode } },
     update: { name: definition.typeName, isPaid: definition.isPaid, isActive: true },
     create: {
-      organizationId, code: definition.typeCode, name: definition.typeName,
-      description: `${definition.typeName} configured for ZERMATT full-time employees.`,
-      unit: "DAYS", isPaid: definition.isPaid, isActive: true,
+      organizationId,
+      code: definition.typeCode,
+      name: definition.typeName,
+      description: `${definition.typeName} configured for ZERMATT eligible employees.`,
+      unit: "DAYS",
+      isPaid: definition.isPaid,
+      isActive: true,
     },
   });
 
@@ -96,11 +222,27 @@ async function ensurePolicyDefinition({ organizationId, actorUserId, definition,
   });
   const existing = existingByCode || currentForType;
   const annualCarryover = definition.key === "ANNUAL";
+  const eligibleEmploymentTypes = eligibleEmploymentTypesForDefinition(
+    definition,
+    hierarchy.version
+  );
+  const policyName =
+    hierarchy.version === "V2" && definition.v2PolicyName
+      ? definition.v2PolicyName
+      : definition.policyName;
+  const eligibilityDescription = eligibleEmploymentTypes.join(" and ");
+
   const policyData = {
     leaveTypeId: leaveType.id,
-    name: definition.policyName,
+    name: policyName,
     code: definition.policyCode,
-    description: `${definition.policyName}. Full-Time employment only${definition.femaleOnly ? "; female employees only" : ""}${annualCarryover ? "; unused annual leave may carry to the next operational year and must be used by 31 March or forfeited" : ""}.`,
+    description: `${policyName}. Eligible employment types: ${eligibilityDescription}${
+      definition.femaleOnly ? "; female employees only" : ""
+    }${
+      annualCarryover
+        ? "; unused annual leave may carry to the next operational year and must be used by 31 March or forfeited"
+        : ""
+    }.`,
     category: "ZERMATT_TENANT_POLICY",
     jurisdiction: "Nigeria",
     status: "ACTIVE",
@@ -108,19 +250,25 @@ async function ensurePolicyDefinition({ organizationId, actorUserId, definition,
     complianceStatus: "CUSTOM_NOT_ASSESSED",
     eligibilityRules: {
       requiredForAll: false,
-      employmentTypes: ["Full-Time"],
+      employmentTypes: eligibleEmploymentTypes,
       ...(definition.femaleOnly ? { genders: ["FEMALE"] } : {}),
     },
-    entitlementRules: { unit: "WORKING_DAYS", allocationBasis: "EMPLOYMENT_LEVEL" },
+    entitlementRules: {
+      unit: "WORKING_DAYS",
+      allocationBasis: "EMPLOYMENT_LEVEL",
+      hierarchyVersion: hierarchy.version,
+    },
     balanceRules: {
       allowNegativeBalance: false,
-      ...(annualCarryover ? {
-        carryForwardAllowed: true,
-        carryForwardSource: "UNUSED_YEAR_END_BALANCE",
-        carryForwardUsePriority: "CARRYOVER_FIRST",
-        carryForwardExpiry: "03-31",
-        carryForwardExpiryAction: "FORFEIT_UNUSED",
-      } : {}),
+      ...(annualCarryover
+        ? {
+            carryForwardAllowed: true,
+            carryForwardSource: "UNUSED_YEAR_END_BALANCE",
+            carryForwardUsePriority: "CARRYOVER_FIRST",
+            carryForwardExpiry: "03-31",
+            carryForwardExpiryAction: "FORFEIT_UNUSED",
+          }
+        : {}),
     },
     requestRules: { maximumRequestable: "AVAILABLE_BALANCE" },
     payrollRules: { paidLeave: definition.isPaid },
@@ -137,124 +285,337 @@ async function ensurePolicyDefinition({ organizationId, actorUserId, definition,
     isActive: true,
     createdByUserId: actorUserId || existing?.createdByUserId || null,
   };
+
   const policy = existing
     ? await tx.leavePolicy.update({ where: { id: existing.id }, data: policyData })
-    : await tx.leavePolicy.create({ data: { organizationId, versionNumber: 1, ...policyData } });
+    : await tx.leavePolicy.create({
+        data: { organizationId, versionNumber: 1, ...policyData },
+      });
 
-  for (let levelNumber = 1; levelNumber <= 11; levelNumber += 1) {
-    const entitlement = definition.entitlementForLevel(levelNumber);
+  const activeLevelNumbers = hierarchy.levels.map((level) => level.levelNumber);
+  await tx.leaveEntitlementMatrixRule.updateMany({
+    where: {
+      organizationId,
+      leavePolicyId: policy.id,
+      isActive: true,
+      levelNumber: { notIn: activeLevelNumbers },
+    },
+    data: { isActive: false },
+  });
+
+  for (const level of hierarchy.levels) {
+    const levelNumber = level.levelNumber;
+    const entitlement = definition.entitlementForLevel(
+      levelNumber,
+      hierarchy.version
+    );
     if (entitlement == null) continue;
+
     const activeRule = await tx.leaveEntitlementMatrixRule.findFirst({
-      where: { organizationId, levelNumber, leavePolicyId: policy.id, isActive: true },
+      where: {
+        organizationId,
+        levelNumber,
+        leavePolicyId: policy.id,
+        isActive: true,
+      },
       orderBy: { effectiveFrom: "desc" },
     });
+
     if (activeRule) {
       await tx.leaveEntitlementMatrixRule.update({
         where: { id: activeRule.id },
-        data: { defaultEntitlement: entitlement, unit: "WORKING_DAYS", newHireTreatment: "FULL", isActive: true },
+        data: {
+          defaultEntitlement: entitlement,
+          unit: "WORKING_DAYS",
+          newHireTreatment: "FULL",
+          isActive: true,
+        },
       });
     } else {
       await tx.leaveEntitlementMatrixRule.create({
         data: {
-          organizationId, levelNumber, leavePolicyId: policy.id, leaveTypeId: leaveType.id,
-          defaultEntitlement: entitlement, unit: "WORKING_DAYS", newHireTreatment: "FULL",
-          effectiveFrom: EFFECTIVE_FROM, isActive: true, createdByUserId: actorUserId || null,
+          organizationId,
+          levelNumber,
+          leavePolicyId: policy.id,
+          leaveTypeId: leaveType.id,
+          defaultEntitlement: entitlement,
+          unit: "WORKING_DAYS",
+          newHireTreatment: "FULL",
+          effectiveFrom: EFFECTIVE_FROM,
+          isActive: true,
+          createdByUserId: actorUserId || null,
         },
       });
     }
   }
-  return { definition, leaveType, policy };
+
+  return { definition, leaveType, policy, hierarchyVersion: hierarchy.version };
 }
 
-async function configureZermattLeavePolicies({ organizationId, actorUserId, tx = prisma }) {
+async function configureZermattLeavePolicies({
+  organizationId,
+  actorUserId,
+  tx = prisma,
+}) {
   await assertZermatt(organizationId, tx);
-  await ensureEmploymentLevels({ organizationId, tx });
+  const hierarchy = await resolveHierarchy({ organizationId, tx });
+  await ensureEmploymentLevels({ organizationId, tx, hierarchy });
+
   const configured = [];
-  for (const definition of POLICY_DEFINITIONS) configured.push(await ensurePolicyDefinition({ organizationId, actorUserId, definition, tx }));
+  for (const definition of POLICY_DEFINITIONS) {
+    configured.push(
+      await ensurePolicyDefinition({
+        organizationId,
+        actorUserId,
+        definition,
+        hierarchy,
+        tx,
+      })
+    );
+  }
   return configured;
 }
 
-async function provisionEmployeeWithConfigured({ organizationId, employeeNumber, actorUserId, leaveYear, configured, tx }) {
-  const employee = await tx.employee.findFirst({ where: { organizationId, employeeNumber }, include: { designation: true } });
+async function provisionEmployeeWithConfigured({
+  organizationId,
+  employeeNumber,
+  actorUserId,
+  leaveYear,
+  configured,
+  tx,
+}) {
+  const employee = await tx.employee.findFirst({
+    where: { organizationId, employeeNumber },
+    include: { designation: true },
+  });
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
-  if (!isFullTime(employee.employmentType)) return { employeeNumber, eligible: false, reason: "FULL_TIME_ONLY", allocations: [] };
+
+  const hierarchyVersion = configured[0]?.hierarchyVersion || "V1";
   const levelNumber = Number(employee.designation?.careerLevel || 0);
-  if (!Number.isInteger(levelNumber) || levelNumber < 1 || levelNumber > 11) throw new Error(`EMPLOYMENT_LEVEL_MAPPING_REQUIRED:${employeeNumber}`);
+  const validLevel =
+    hierarchyVersion === "V2"
+      ? isZermattV2InternalLevel(levelNumber)
+      : Number.isInteger(levelNumber) && levelNumber >= 1 && levelNumber <= 11;
+
+  if (!validLevel) {
+    throw new Error(`EMPLOYMENT_LEVEL_MAPPING_REQUIRED:${employeeNumber}`);
+  }
 
   const allocations = [];
+  const skippedPolicies = [];
+
   for (const item of configured) {
-    if (item.definition.femaleOnly && String(employee.gender) !== "FEMALE") continue;
-    const entitlement = item.definition.entitlementForLevel(levelNumber);
+    if (
+      !isEligibleForDefinition(
+        employee.employmentType,
+        item.definition,
+        hierarchyVersion
+      )
+    ) {
+      skippedPolicies.push({
+        policyCode: item.policy.code,
+        reason:
+          item.definition.key === "ANNUAL" && hierarchyVersion === "V2"
+            ? "ANNUAL_ELIGIBLE_EMPLOYMENT_TYPES_FULL_TIME_OR_EXPATRIATE"
+            : "FULL_TIME_ONLY",
+      });
+      continue;
+    }
+    if (item.definition.femaleOnly && String(employee.gender) !== "FEMALE") {
+      skippedPolicies.push({
+        policyCode: item.policy.code,
+        reason: "FEMALE_ONLY",
+      });
+      continue;
+    }
+
+    const entitlement = item.definition.entitlementForLevel(
+      levelNumber,
+      hierarchyVersion
+    );
     if (entitlement == null) continue;
+
     const balance = await tx.leaveBalance.upsert({
-      where: { organizationId_employeeId_leaveTypeId_leaveYear: { organizationId, employeeId: employee.id, leaveTypeId: item.leaveType.id, leaveYear } },
+      where: {
+        organizationId_employeeId_leaveTypeId_leaveYear: {
+          organizationId,
+          employeeId: employee.id,
+          leaveTypeId: item.leaveType.id,
+          leaveYear,
+        },
+      },
       update: { openingBalance: entitlement },
-      create: { organizationId, employeeId: employee.id, leaveTypeId: item.leaveType.id, leaveYear, openingBalance: entitlement },
+      create: {
+        organizationId,
+        employeeId: employee.id,
+        leaveTypeId: item.leaveType.id,
+        leaveYear,
+        openingBalance: entitlement,
+      },
     });
+
     const latest = await tx.leaveEntitlementAllocation.findFirst({
-      where: { organizationId, employeeId: employee.id, leavePolicyId: item.policy.id, leaveYear },
+      where: {
+        organizationId,
+        employeeId: employee.id,
+        leavePolicyId: item.policy.id,
+        leaveYear,
+      },
       orderBy: { createdAt: "desc" },
     });
+
     let allocation = latest;
-    if (!latest || Number(latest.allocatedEntitlement) !== Number(entitlement) || Number(latest.levelNumber) !== levelNumber) {
+    if (
+      !latest ||
+      Number(latest.allocatedEntitlement) !== Number(entitlement) ||
+      Number(latest.levelNumber) !== levelNumber
+    ) {
       allocation = await tx.leaveEntitlementAllocation.create({
         data: {
-          organizationId, employeeId: employee.id, leaveBalanceId: balance.id,
-          leavePolicyId: item.policy.id, leaveTypeId: item.leaveType.id,
-          levelNumber, leaveYear, baseEntitlement: entitlement, allocatedEntitlement: entitlement,
-          method: "LEVEL_DEFAULT", effectiveDate: new Date(),
-          reason: "ZERMATT Full-Time leave entitlement mapping", createdByUserId: actorUserId || null,
+          organizationId,
+          employeeId: employee.id,
+          leaveBalanceId: balance.id,
+          leavePolicyId: item.policy.id,
+          leaveTypeId: item.leaveType.id,
+          levelNumber,
+          leaveYear,
+          baseEntitlement: entitlement,
+          allocatedEntitlement: entitlement,
+          method: "LEVEL_DEFAULT",
+          effectiveDate: new Date(),
+          reason:
+            hierarchyVersion === "V2"
+              ? "ZERMATT V2 employment-level leave entitlement mapping"
+              : "ZERMATT Full-Time leave entitlement mapping",
+          createdByUserId: actorUserId || null,
         },
       });
     }
+
     allocations.push({
-      policyId: item.policy.id, policyCode: item.policy.code, policyName: item.policy.name,
-      entitlement, balanceId: balance.id, allocationId: allocation?.id || null,
+      policyId: item.policy.id,
+      policyCode: item.policy.code,
+      policyName: item.policy.name,
+      entitlement,
+      balanceId: balance.id,
+      allocationId: allocation?.id || null,
     });
   }
-  return { employeeNumber, employeeName: employeeName(employee), eligible: true, levelNumber, allocations };
+
+  return {
+    employeeNumber,
+    employeeName: employeeName(employee),
+    eligible: allocations.length > 0,
+    hierarchyVersion,
+    levelNumber,
+    allocations,
+    skippedPolicies,
+  };
 }
 
-async function provisionZermattEmployeeLeaveProfile({ organizationId, employeeNumber, actorUserId, leaveYear = new Date().getFullYear(), tx = prisma, configuredPolicies = null }) {
+async function provisionZermattEmployeeLeaveProfile({
+  organizationId,
+  employeeNumber,
+  actorUserId,
+  leaveYear = new Date().getFullYear(),
+  tx = prisma,
+  configuredPolicies = null,
+}) {
   await assertZermatt(organizationId, tx);
-  const configured = configuredPolicies || await configureZermattLeavePolicies({ organizationId, actorUserId, tx });
-  return provisionEmployeeWithConfigured({ organizationId, employeeNumber, actorUserId, leaveYear, configured, tx });
+  const configured =
+    configuredPolicies ||
+    (await configureZermattLeavePolicies({ organizationId, actorUserId, tx }));
+  return provisionEmployeeWithConfigured({
+    organizationId,
+    employeeNumber,
+    actorUserId,
+    leaveYear,
+    configured,
+    tx,
+  });
 }
 
-async function provisionAllCurrentFullTimeEmployees({ organizationId, actorUserId, leaveYear = new Date().getFullYear(), tx = prisma }) {
+async function provisionAllCurrentFullTimeEmployees({
+  organizationId,
+  actorUserId,
+  leaveYear = new Date().getFullYear(),
+  tx = prisma,
+}) {
   await assertZermatt(organizationId, tx);
-  const configured = await configureZermattLeavePolicies({ organizationId, actorUserId, tx });
+  const configured = await configureZermattLeavePolicies({
+    organizationId,
+    actorUserId,
+    tx,
+  });
+  const hierarchyVersion = configured[0]?.hierarchyVersion || "V1";
+
   const employees = await tx.employee.findMany({
     where: { organizationId, status: { in: CURRENT_STATUSES } },
-    select: { employeeNumber: true, employmentType: true, designation: { select: { careerLevel: true } } },
+    select: {
+      employeeNumber: true,
+      employmentType: true,
+      designation: { select: { careerLevel: true } },
+    },
     orderBy: { employeeNumber: "asc" },
   });
-  const currentFullTime = employees.filter((employee) => isFullTime(employee.employmentType));
-  const invalidLevels = currentFullTime.filter((employee) => {
+
+  const eligibleEmployees = employees.filter((employee) =>
+    isAnnualEligibleEmploymentType(employee.employmentType, hierarchyVersion)
+  );
+  const invalidLevels = eligibleEmployees.filter((employee) => {
     const level = Number(employee.designation?.careerLevel || 0);
-    return !Number.isInteger(level) || level < 1 || level > 11;
+    return hierarchyVersion === "V2"
+      ? !isZermattV2InternalLevel(level)
+      : !Number.isInteger(level) || level < 1 || level > 11;
   });
+
   if (invalidLevels.length) {
     const error = new Error("EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
-    error.details = { employees: invalidLevels.map((employee) => employee.employeeNumber), total: invalidLevels.length };
+    error.details = {
+      employees: invalidLevels.map((employee) => employee.employeeNumber),
+      total: invalidLevels.length,
+    };
     throw error;
   }
 
   const results = [];
-  for (const employee of currentFullTime) {
-    results.push(await provisionEmployeeWithConfigured({
-      organizationId,
-      employeeNumber: employee.employeeNumber,
-      actorUserId,
-      leaveYear,
-      configured,
-      tx,
-    }));
+  for (const employee of eligibleEmployees) {
+    results.push(
+      await provisionEmployeeWithConfigured({
+        organizationId,
+        employeeNumber: employee.employeeNumber,
+        actorUserId,
+        leaveYear,
+        configured,
+        tx,
+      })
+    );
   }
-  return { leaveYear, currentEmployees: employees.length, fullTimeEmployees: currentFullTime.length, results };
+
+  return {
+    leaveYear,
+    hierarchyVersion,
+    currentEmployees: employees.length,
+    fullTimeEmployees: employees.filter((employee) =>
+      isFullTime(employee.employmentType)
+    ).length,
+    expatriateEmployees: employees.filter((employee) =>
+      isExpatriate(employee.employmentType)
+    ).length,
+    annualEligibleEmployees: eligibleEmployees.length,
+    results,
+  };
 }
 
 module.exports = {
-  ZERMATT_SLUG, POLICY_DEFINITIONS, isFullTime,
-  configureZermattLeavePolicies, provisionZermattEmployeeLeaveProfile, provisionAllCurrentFullTimeEmployees,
+  ZERMATT_SLUG,
+  POLICY_DEFINITIONS,
+  isFullTime,
+  isExpatriate,
+  isAnnualEligibleEmploymentType,
+  isZermattV2Active,
+  resolveHierarchy,
+  configureZermattLeavePolicies,
+  provisionZermattEmployeeLeaveProfile,
+  provisionAllCurrentFullTimeEmployees,
 };
