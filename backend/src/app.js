@@ -4,6 +4,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const employeeCareerCatalogRoutes = require("./routes/employeeCareerCatalogRoutes");
+const employeeProfileGovernanceRoutes = require("./routes/employeeProfileGovernanceRoutes");
 const onboardingRoutes = require("./routes/onboardingRoutes");
 const userRoutes = require("./routes/userRoutes");
 const roleRoutes = require("./routes/roleRoutes");
@@ -59,6 +60,10 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/employees/onboarding", onboardingRoutes);
 app.use("/api/employees", employeeCareerCatalogRoutes);
+// Effective employee Employment Level and structural-edit guards must run before
+// the legacy employee router so individual overrides are reflected on profiles
+// without changing Designation.careerLevel for the whole organization.
+app.use("/api/employees", employeeProfileGovernanceRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/employee-data", employeeDataOperationsRoutes);
 app.use("/api/employee-assignments", employeeEmploymentAssignmentRoutes);
