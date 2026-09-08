@@ -89,7 +89,11 @@ const serviceSource = fs.readFileSync(
   path.join(__dirname, "../src/services/zermattLeaveEntitlementService.js"),
   "utf8"
 );
-assert.match(serviceSource, /employmentTypes:\s*\["Full-Time",\s*"Expatriate"\]/);
+// V2 Annual eligibility is resolved through a helper before being assigned to
+// policyData. Assert the approved values and the assignment separately rather
+// than requiring the array to be inlined beside the employmentTypes property.
+assert.match(serviceSource, /return \["Full-Time", "Expatriate"\];/);
+assert.match(serviceSource, /employmentTypes:\s*eligibleEmploymentTypes/);
 assert.match(serviceSource, /hierarchyVersion === "V2" && isExpatriate/);
 assert.match(serviceSource, /V2_SENTINEL_LEVEL_NUMBER = 101/);
 assert.match(serviceSource, /isZermattV2InternalLevel/);
