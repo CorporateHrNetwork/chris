@@ -76,9 +76,17 @@ async function activePayrollPolicy(prismaClient, organizationId) {
   }
 }
 
-async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
+async function getPayrollReadiness({
+  organizationId,
+  locationId = null,
+  prismaClient = prisma,
+}) {
   const employees = await prismaClient.employee.findMany({
-    where: { organizationId, status: { in: CURRENT_PAYROLL_STATUSES } },
+    where: {
+      organizationId,
+      status: { in: CURRENT_PAYROLL_STATUSES },
+      ...(locationId ? { locationId } : {}),
+    },
     select: {
       id: true,
       employeeNumber: true,
@@ -88,33 +96,35 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       status: true,
       employmentType: true,
       costCentreId: true,
+      locationId: true,
     },
     orderBy: { employeeNumber: "asc" },
   });
 
   const employeeIds = employees.map((employee) => employee.id);
-  const [onboardings, attendanceSetting, salaryRateByEmployee, payrollPolicy] = await Promise.all([
-    employeeIds.length
-      ? prismaClient.employeeOnboarding.findMany({
-          where: { organizationId, employeeId: { in: employeeIds } },
-          select: {
-            employeeId: true,
-            sectionData: true,
-            status: true,
-            completionPercent: true,
-            updatedAt: true,
-            createdAt: true,
-          },
-          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        })
-      : Promise.resolve([]),
-    prismaClient.attendancePayrollSetting.findUnique({
-      where: { organizationId },
-      select: { basis: true },
-    }),
-    activeSalaryRates(prismaClient, organizationId),
-    activePayrollPolicy(prismaClient, organizationId),
-  ]);
+  const [onboardings, attendanceSetting, salaryRateByEmployee, payrollPolicy] =
+    await Promise.all([
+      employeeIds.length
+        ? prismaClient.employeeOnboarding.findMany({
+            where: { organizationId, employeeId: { in: employeeIds } },
+            select: {
+              employeeId: true,
+              sectionData: true,
+              status: true,
+              completionPercent: true,
+              updatedAt: true,
+              createdAt: true,
+            },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          })
+        : Promise.resolve([]),
+      prismaClient.attendancePayrollSetting.findUnique({
+        where: { organizationId },
+        select: { basis: true },
+      }),
+      activeSalaryRates(prismaClient, organizationId),
+      activePayrollPolicy(prismaClient, organizationId),
+    ]);
 
   const latestOnboardingByEmployee = new Map();
   for (const onboarding of onboardings) {
@@ -126,9 +136,15 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   const rows = employees.map((employee) => {
     const onboarding = latestOnboardingByEmployee.get(employee.id);
     const payment = sectionDataFor(onboarding, "payment-details", "paymentDetails");
-    const statutory = sectionDataFor(onboarding, "statutory-details", "statutoryDetails");
+    const statutory = sectionDataFor(
+      onboarding,
+      "statutory-details",
+      "statutoryDetails"
+    );
     const salaryRate = salaryRateByEmployee.get(employee.id);
-    const employmentReady = Boolean(hasText(employee.employmentType) && hasText(employee.costCentreId));
+    const employmentReady = Boolean(
+      hasText(employee.employmentType) && hasText(employee.costCentreId)
+    );
     const paymentReady = paymentIsReady(payment);
     const compensationReady = Boolean(salaryRate && Number(salaryRate.amount) > 0);
     const calculationReady = employmentReady && compensationReady;
@@ -139,7 +155,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
     if (!hasText(employee.employmentType)) blockers.push("EMPLOYMENT_TYPE_MISSING");
     if (!hasText(employee.costCentreId)) blockers.push("COST_CENTRE_MISSING");
     if (!paymentReady) blockers.push("PAYMENT_PROFILE_INCOMPLETE");
-    if (!compensationReady) blockers.push("AUTHORITATIVE_COMPENSATION_RATE_NOT_CONFIGURED");
+    if (!compensationReady)
+      blockers.push("AUTHORITATIVE_COMPENSATION_RATE_NOT_CONFIGURED");
 
     return {
       employeeId: employee.id,
@@ -148,6 +165,7 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
         .filter(Boolean)
         .join(" "),
       status: employee.status,
+      locationId: employee.locationId,
       employmentType: employee.employmentType,
       employmentReady,
       paymentReady,
@@ -160,9 +178,6 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       pensionRecorded,
       onboardingStatus: onboarding?.status || null,
       onboardingCompletionPercent: Number(onboarding?.completionPercent || 0),
-      // Backward-compatible field consumed by the draft-payroll route/UI.
-      // Draft calculation needs employment/costing + compensation authority;
-      // bank/payment readiness is a separate finalization control.
       readyForExecution: calculationReady,
       blockers,
     };
@@ -174,7 +189,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
       if (row.paymentReady) accumulator.paymentReady += 1;
       if (row.compensationReady) accumulator.compensationReady += 1;
       if (row.calculationReady) accumulator.calculationReady += 1;
-      if (row.paymentFinalizationReady) accumulator.paymentFinalizationReady += 1;
+      if (row.paymentFinalizationReady)
+        accumulator.paymentFinalizationReady += 1;
       if (row.taxRecorded) accumulator.taxRecorded += 1;
       if (row.pensionRecorded) accumulator.pensionRecorded += 1;
       if (row.readyForExecution) accumulator.readyForExecution += 1;
@@ -193,8 +209,10 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
     }
   );
 
-  const readinessDimensions = summary.currentEmployees > 0 ? summary.currentEmployees * 3 : 0;
-  const completedDimensions = summary.employmentReady + summary.paymentReady + summary.compensationReady;
+  const readinessDimensions =
+    summary.currentEmployees > 0 ? summary.currentEmployees * 3 : 0;
+  const completedDimensions =
+    summary.employmentReady + summary.paymentReady + summary.compensationReady;
   summary.dataReadinessPercent = readinessDimensions
     ? Math.round((completedDimensions / readinessDimensions) * 100)
     : 0;
@@ -202,6 +220,9 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   summary.statutoryPolicyConfigured = Boolean(payrollPolicy);
   summary.statutoryPolicyCode = payrollPolicy?.code || null;
   summary.statutoryPolicyVersion = payrollPolicy?.versionNumber || null;
+  summary.locationContext = locationId
+    ? { mode: "BRANCH", locationId }
+    : { mode: "HEAD_OFFICE_CONSOLIDATED", locationId: null };
 
   const missingEmployment = summary.currentEmployees - summary.employmentReady;
   const missingCompensation = summary.currentEmployees - summary.compensationReady;
@@ -223,7 +244,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   if (!payrollPolicy) {
     systemBlockers.push({
       code: "PAYROLL_STATUTORY_POLICY_NOT_CONFIGURED",
-      message: "An effective Nigeria payroll policy must be configured before statutory payroll calculation.",
+      message:
+        "An effective Nigeria payroll policy must be configured before statutory payroll calculation.",
     });
   }
 
@@ -239,7 +261,8 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   if (!payrollPolicy) {
     finalizationBlockers.push({
       code: "PAYROLL_STATUTORY_POLICY_NOT_CONFIGURED",
-      message: "Apply/configure the effective Nigeria payroll policy before payroll finalization.",
+      message:
+        "Apply/configure the effective Nigeria payroll policy before payroll finalization.",
     });
   }
   if (missingPayment > 0) {
@@ -250,11 +273,13 @@ async function getPayrollReadiness({ organizationId, prismaClient = prisma }) {
   }
   finalizationBlockers.push({
     code: "PAYMENT_TRANSMISSION_SEPARATE_CONTROL",
-    message: "PAYE and pension are calculated by CHRiS, but payroll approval does not itself transmit bank/payment instructions or statutory remittances.",
+    message:
+      "PAYE and pension are calculated by CHRiS, but payroll approval does not itself transmit bank/payment instructions or statutory remittances.",
   });
 
   return {
     generatedAt: new Date().toISOString(),
+    locationContext: summary.locationContext,
     executionEnabled,
     calculationEnabled: executionEnabled,
     statutoryCalculationEnabled: executionEnabled && Boolean(payrollPolicy),
