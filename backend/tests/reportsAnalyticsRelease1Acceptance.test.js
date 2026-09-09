@@ -17,6 +17,7 @@ const app = read(backendRoot, "src", "app.js");
 const route = read(backendRoot, "src", "routes", "reportsRelease1Routes.js");
 const service = read(backendRoot, "src", "services", "reportsRelease1Service.js");
 const page = read(repoRoot, "src", "pages", "Reports.jsx");
+const sidebar = read(repoRoot, "src", "components", "layout", "Sidebar", "Sidebar.jsx");
 
 expect(app, 'app.use("/api/reports", reportsRelease1Routes);', "Reports Release-1 router is not mounted.");
 expect(route, 'requirePermission("reports.view")', "Report reads are not permission protected.");
@@ -32,12 +33,20 @@ expect(service, 'mode: "HEAD_OFFICE_CONSOLIDATED"', "Head Office consolidated re
 expect(service, "financialDataIncluded: false", "Release-1 workforce reports must not silently expose payroll financial data.");
 
 expect(page, 'apiRequest("/api/reports/release1")', "Reports Dashboard is not wired to the Release-1 API.");
-expect(page, '"Workforce Analytics"', "Workforce Analytics is not active in the Reports workspace.");
-expect(page, '"Employee Reports"', "Employee Reports is not active in the Reports workspace.");
-expect(page, '"Headcount Reports"', "Headcount Reports is not active in the Reports workspace.");
-expect(page, '"Branch Reports"', "Branch Reports is not active in the Reports workspace.");
+for (const label of ["Workforce Analytics", "Employee Reports", "Headcount Reports", "Branch Reports"]) {
+  expect(page, `label: "${label}"`, `${label} is not active in the Reports workspace.`);
+}
 expect(page, '/api/reports/release1/export.xlsx?view=', "Reports Excel export is not wired.");
 expect(page, "window.print()", "Print / Save PDF workflow is not wired.");
-expect(page, 'report?.controls?.branchScoped', "Reports UI does not expose branch-scoped operating context.");
+expect(page, "chris:location-context-changed", "Reports UI does not refresh when the global branch context changes.");
+
+for (const [label, view] of [
+  ["Workforce Analytics", "workforce"],
+  ["Employee Reports", "employees"],
+  ["Headcount Reports", "headcount"],
+  ["Branch Reports", "branches"],
+]) {
+  expect(sidebar, `{ label: "${label}", path: "/reports?view=${view}" }`, `${label} is not active in the sidebar.`);
+}
 
 console.log("PASS: Reports & Analytics Release-1 acceptance checks.");
