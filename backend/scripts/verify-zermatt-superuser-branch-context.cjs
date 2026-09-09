@@ -8,6 +8,14 @@ const prisma = require("../src/config/prisma");
 const ORGANIZATION_SLUG = "zermatt-liquor-limited";
 const ADMIN_EMAIL = "corporatehr.crn@gmail.com";
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
+const EXPECTED_RELEASE1 = {
+  consolidated: 312,
+  branches: {
+    ABJ: 144,
+    LAG: 74,
+    PHC: 94,
+  },
+};
 
 async function requestJson(baseUrl, path, token, locationId = null) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -31,7 +39,7 @@ function assertSuccess(result) {
   assert.equal(
     result.ok,
     true,
-    `${result.path} (${result.locationId || "consolidated"}) returned HTTP ${result.status}: ${JSON.stringify(result.body)}`
+    `${result.path} (${result.locationId || "HEAD OFFICE"}) returned HTTP ${result.status}: ${JSON.stringify(result.body)}`
   );
   assert.notEqual(result.body?.status, "error", `${result.path} returned an application error.`);
 }
@@ -81,7 +89,20 @@ async function main() {
     "ALL_LOCATIONS",
     "ZERMATT Super User must have ALL_LOCATIONS scope to switch freely between branches."
   );
-  assert.ok(locations.length >= 2, "At least two active ZERMATT locations are required to verify branch switching.");
+
+  const headOffice = locations.find(
+    (location) => String(location.type || "").toUpperCase() === "HEAD_OFFICE"
+  );
+  const branches = locations.filter(
+    (location) => String(location.type || "").toUpperCase() === "BRANCH"
+  );
+
+  assert.ok(headOffice, "ZERMATT Head Office location metadata was not found.");
+  assert.equal(branches.length, 3, "ZERMATT must expose exactly three operating branches in Release-1.");
+  assert.equal(allEmployees, EXPECTED_RELEASE1.consolidated, "Head Office consolidated headcount must be 312 for this Release-1 gate.");
+
+  const branchCodes = branches.map((location) => location.code).sort();
+  assert.deepEqual(branchCodes, ["ABJ", "LAG", "PHC"], "Only Abuja, Lagos and PHC should be selectable branches.");
 
   const token = jwt.sign(
     { userId: actor.id, organizationId: organization.id },
@@ -98,33 +119,54 @@ async function main() {
     const address = server.address();
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const consolidatedContext = await requestJson(
+    // HEAD OFFICE is the consolidated company context and carries no location header.
+    const headOfficeContext = await requestJson(
       baseUrl,
       "/api/zermatt/branch-context",
       token
     );
-    assertSuccess(consolidatedContext);
+    assertSuccess(headOfficeContext);
     assert.equal(
-      consolidatedContext.body?.data?.activeLocationId,
+      headOfficeContext.body?.data?.activeLocationId,
       null,
-      "Consolidated context must not carry a branch location ID."
-    );
-    assert.equal(
-      consolidatedContext.body?.data?.availableLocations?.length,
-      locations.length,
-      "Super User branch selector must expose every active ZERMATT location."
+      "HEAD OFFICE consolidated context must not carry a branch location ID."
     );
 
     const consolidatedEmployees = await requestJson(baseUrl, "/api/employees", token);
+    const consolidatedWorkforce = await requestJson(baseUrl, "/api/analytics/workforce", token);
     assertSuccess(consolidatedEmployees);
+    assertSuccess(consolidatedWorkforce);
     assert.equal(
       consolidatedEmployees.body?.results,
-      allEmployees,
-      "Consolidated Employee Directory must include all ZERMATT employees."
+      EXPECTED_RELEASE1.consolidated,
+      "HEAD OFFICE must show all 312 ZERMATT employees."
+    );
+    assert.equal(
+      consolidatedWorkforce.body?.data?.headcount?.historicalIdentities,
+      EXPECTED_RELEASE1.consolidated,
+      "HEAD OFFICE dashboard headcount KPI must be 312."
+    );
+
+    // A stale/manual request for the physical Head Office location row must
+    // normalize back to the same 312-person consolidated operating context.
+    const physicalHeadOffice = await requestJson(
+      baseUrl,
+      "/api/employees",
+      token,
+      headOffice.id
+    );
+    assertSuccess(physicalHeadOffice);
+    assert.equal(
+      physicalHeadOffice.body?.results,
+      EXPECTED_RELEASE1.consolidated,
+      "Physical Head Office location ID must normalize to consolidated 312-person context."
     );
 
     const branchResults = [];
-    for (const location of locations) {
+    for (const location of branches) {
+      const expectedHeadcount = EXPECTED_RELEASE1.branches[location.code];
+      assert.ok(expectedHeadcount, `Unexpected ZERMATT branch code ${location.code}.`);
+
       const [
         expectedAllEmployees,
         expectedCurrentWithNoExit,
@@ -164,15 +206,21 @@ async function main() {
 
       [context, employeeDirectory, lineManagerEmployees, payrollEmployees, zermattEmployees, workforce].forEach(assertSuccess);
 
+      assert.equal(expectedAllEmployees, expectedHeadcount, `${location.name}: database headcount does not match the accepted Release-1 baseline.`);
       assert.equal(
         context.body?.data?.activeLocationId,
         location.id,
-        `${location.name}: branch-context endpoint did not preserve the selected location.`
+        `${location.name}: branch-context endpoint did not preserve the selected branch.`
       );
       assert.equal(
         employeeDirectory.body?.results,
-        expectedAllEmployees,
+        expectedHeadcount,
         `${location.name}: Employee Directory is not branch-scoped.`
+      );
+      assert.equal(
+        workforce.body?.data?.headcount?.historicalIdentities,
+        expectedHeadcount,
+        `${location.name}: dashboard workforce headcount KPI is not branch-scoped.`
       );
       assert.equal(
         lineManagerEmployees.body?.data?.length,
@@ -199,7 +247,6 @@ async function main() {
         locationId: location.id,
         location: location.name,
         code: location.code,
-        type: location.type,
         employees: expectedAllEmployees,
         currentEmployees: expectedCurrentByStatus,
       });
@@ -226,11 +273,16 @@ async function main() {
       organization: organization.name,
       actor: actor.email,
       locationScope: actor.locationScope,
-      consolidatedEmployees: allEmployees,
-      activeLocations: locations.length,
-      branches: branchResults,
+      headOffice: {
+        mode: "CONSOLIDATED_COMPANY",
+        employees: allEmployees,
+      },
+      selectableBranches: branchResults,
+      expectedContexts: 4,
       checkedSurfaces: [
+        "Head Office consolidated context",
         "Branch Context",
+        "Dashboard workforce KPIs",
         "Employee Directory",
         "Line Managers",
         "Payroll Employee Selection",
