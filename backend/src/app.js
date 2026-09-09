@@ -17,6 +17,7 @@ const employmentEligibilityRoutes = require("./routes/employmentEligibilityRoute
 const employeeReportRoutes = require("./routes/employeeReportRoutes");
 const reportsRelease1Routes = require("./routes/reportsRelease1Routes");
 const reportsOperationalRoutes = require("./routes/reportsOperationalRoutes");
+const recruitmentRoutes = require("./routes/recruitmentRoutes");
 const employeeIntegrityRoutes = require("./routes/employeeIntegrityRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
@@ -85,6 +86,7 @@ app.use("/api/employment-eligibility", employmentEligibilityRoutes);
 app.use("/api/employee-reports", employeeReportRoutes);
 app.use("/api/reports", reportsRelease1Routes);
 app.use("/api/reports", reportsOperationalRoutes);
+app.use("/api/recruitment", recruitmentRoutes);
 app.use("/api/employee-integrity", employeeIntegrityRoutes);
 app.use("/api/leave", leaveRoutes);
 app.use("/api/attendance", attendanceRoutes);
