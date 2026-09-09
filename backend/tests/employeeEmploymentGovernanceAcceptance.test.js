@@ -129,7 +129,13 @@ expect(liveService, 'action: "ZERMATT_EMPLOYEE_EMPLOYMENT_LEVEL_LIVE_ACTIVATED"'
 
 // Controlled searchable catalogues for Designation and Employment Level.
 expect(careerRoutes, '"/career/designations"', "Controlled designation catalogue endpoint missing.");
-expect(careerRoutes, '"/career/employment-levels"', "Controlled Employment Level catalogue endpoint missing.");
+expect(careerRoutes, '"/career/employment-levels"', "Controlled Employment Level selector endpoint missing.");
+expect(careerRoutes, '"/career/levels"', "Employment Level administration endpoint missing.");
+expect(careerRoutes, "ZERMATT_V2_LEVEL_NUMBERS", "ZERMATT administration must expose only the live V2 hierarchy.");
+expect(careerRoutes, "HEAD_OFFICE_REQUIRED_FOR_EMPLOYMENT_LEVEL_CONFIGURATION", "Organization-wide level edits must require HEAD OFFICE.");
+expect(careerRoutes, "EMPLOYMENT_LEVEL_IN_USE", "Level deactivation must fail closed while the level is in use.");
+expect(careerRoutes, 'action:\n              existing.isActive !== next.isActive', "Level activation/deactivation audit lifecycle missing.");
+expect(careerRoutes, "code: zermatt\n          ? existing.code", "ZERMATT public L1-L7 codes must remain stable during metadata edits.");
 
 // Governed profile: effective employee level is shown without mutating the designation default.
 expect(governedProfileRoutes, "resolveEffectiveEmploymentLevel", "Governed employee profile is not using the effective-level resolver.");
