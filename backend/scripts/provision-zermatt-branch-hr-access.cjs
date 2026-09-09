@@ -12,10 +12,31 @@ const ROLE_ALIASES = [ROLE_NAME, "Branch HR & Admin Officer"];
 const APPLY = process.argv.includes("--apply");
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
+// Employee numbers are the authoritative identifiers confirmed by the
+// read-only ZERMATT target diagnostic. Names are retained only as human-readable
+// evidence and are not used to guess identity.
 const ASSIGNMENTS = [
-  { fullName: "Ann Favour Joseph", branchCode: "ABJ", branchName: "ABUJA BRANCH" },
-  { fullName: "Angel Williams", branchCode: "PHC", branchName: "PHC BRANCH" },
-  { fullName: "Augustina Anienwe", branchCode: "LAG", branchName: "LAGOS BRANCH" },
+  {
+    employeeNumber: "ZLL000117",
+    requestedName: "Ann Favour Joseph",
+    canonicalName: "Ann Favour Joseph",
+    branchCode: "ABJ",
+    branchName: "ABUJA BRANCH",
+  },
+  {
+    employeeNumber: "ZLL000064",
+    requestedName: "Angel Williams",
+    canonicalName: "Williams Angel",
+    branchCode: "PHC",
+    branchName: "PHC BRANCH",
+  },
+  {
+    employeeNumber: "ZLL000223",
+    requestedName: "Augustina Anienwe",
+    canonicalName: "Augustina Obiajuru Anienwe",
+    branchCode: "LAG",
+    branchName: "LAGOS BRANCH",
+  },
 ];
 
 // Branch HR can operate the HR lifecycle for the assigned branch, see branch
@@ -46,16 +67,6 @@ const ROLE_PERMISSION_KEYS = [
   "reports.view",
   "reports.export",
 ];
-
-function normalizeName(value) {
-  return String(value || "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9]+/g, " ")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-}
 
 function employeeName(employee) {
   return [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ");
@@ -137,7 +148,11 @@ async function resolveFoundation() {
 
 async function resolveTargets(organization, branchByCode) {
   const rows = await prisma.employee.findMany({
-    where: { organizationId: organization.id, status: { in: CURRENT_STATUSES } },
+    where: {
+      organizationId: organization.id,
+      employeeNumber: { in: ASSIGNMENTS.map((assignment) => assignment.employeeNumber) },
+      status: { in: CURRENT_STATUSES },
+    },
     select: {
       id: true,
       employeeNumber: true,
@@ -163,21 +178,37 @@ async function resolveTargets(organization, branchByCode) {
     orderBy: { employeeNumber: "asc" },
   });
 
+  const employeeByNumber = new Map(rows.map((employee) => [employee.employeeNumber, employee]));
+
   return ASSIGNMENTS.map((assignment) => {
     const expectedLocation = branchByCode.get(assignment.branchCode);
-    const matches = rows.filter(
-      (employee) =>
-        employee.locationId === expectedLocation.id &&
-        normalizeName(employeeName(employee)) === normalizeName(assignment.fullName)
+    const employee = employeeByNumber.get(assignment.employeeNumber);
+
+    assert.ok(
+      employee,
+      `${assignment.requestedName} (${assignment.employeeNumber}) was not found as a current ZERMATT employee.`
     );
     assert.equal(
-      matches.length,
-      1,
-      `${assignment.fullName} must resolve to exactly one current employee in ${assignment.branchName}; found ${matches.length}.`
+      employeeName(employee),
+      assignment.canonicalName,
+      `${assignment.employeeNumber} name changed from the verified target. Expected ${assignment.canonicalName}; found ${employeeName(employee)}. Review before provisioning.`
     );
-    const employee = matches[0];
-    assert.ok(employee.email?.trim(), `${assignment.fullName} does not have an employee email address.`);
-    assert.equal(String(employee.location?.code || "").toUpperCase(), assignment.branchCode, `${assignment.fullName} is not assigned to ${assignment.branchCode}.`);
+    assert.ok(employee.email?.trim(), `${assignment.canonicalName} does not have an employee email address.`);
+    assert.equal(
+      employee.locationId,
+      expectedLocation.id,
+      `${assignment.canonicalName} (${assignment.employeeNumber}) is not currently assigned to ${assignment.branchName}.`
+    );
+    assert.equal(
+      String(employee.location?.code || "").toUpperCase(),
+      assignment.branchCode,
+      `${assignment.canonicalName} (${assignment.employeeNumber}) branch code does not match ${assignment.branchCode}.`
+    );
+    assert.equal(
+      employee.designation?.code,
+      "HRA-OFF",
+      `${assignment.canonicalName} (${assignment.employeeNumber}) is no longer mapped to the HR & Admin Officer designation. Review before provisioning.`
+    );
 
     const allowedExistingRoles = new Set(["Employee", ...ROLE_ALIASES]);
     const privilegedExistingRoles = (employee.user?.userRoles || [])
@@ -186,7 +217,7 @@ async function resolveTargets(organization, branchByCode) {
     assert.deepEqual(
       privilegedExistingRoles,
       [],
-      `${assignment.fullName} already has other CHRIS role(s): ${privilegedExistingRoles.join(", ")}. Review manually before replacing access.`
+      `${assignment.canonicalName} already has other CHRIS role(s): ${privilegedExistingRoles.join(", ")}. Review manually before replacing access.`
     );
 
     return { assignment, employee, location: expectedLocation };
@@ -209,6 +240,7 @@ function assertExistingRoleUsageIsSafe(existingRole, targets) {
 function previewTarget(target) {
   const user = target.employee.user;
   return {
+    requestedName: target.assignment.requestedName,
     employeeNumber: target.employee.employeeNumber,
     employeeName: employeeName(target.employee),
     designation: target.employee.designation?.name || null,
@@ -439,7 +471,7 @@ async function main() {
 
   if (!APPLY) {
     console.log("PREVIEW PASS: no database writes performed.");
-    console.log("Run again with --apply only after reviewing the three resolved employees and branches.");
+    console.log("Run again with --apply only after reviewing the three verified employee-number targets and branches.");
     return;
   }
 
