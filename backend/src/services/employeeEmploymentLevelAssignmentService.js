@@ -227,6 +227,12 @@ async function setEmploymentLevelOverride(prisma, input) {
       return getEmploymentLevelState(tx, { organizationId, employeeNumber });
     }
 
+    // Do not create a redundant employee override when HR selects the
+    // designation's already-effective default level.
+    if (!current && Number(employee.designation.careerLevel) === levelNumber) {
+      return getEmploymentLevelState(tx, { organizationId, employeeNumber });
+    }
+
     const previousEffective = current
       ? {
           source: "EMPLOYEE_OVERRIDE",
@@ -326,14 +332,12 @@ async function removeEmploymentLevelOverride(prisma, input) {
     if (!current) throw new Error("CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND");
     if (effectiveTo < current.effectiveFrom) throw new Error("INVALID_EFFECTIVE_DATE");
 
+    // Closing an override must not rewrite why it was originally assigned or
+    // who assigned it. The removal reason, actor and destination default are
+    // preserved in OrganizationAudit below.
     await tx.employeeEmploymentLevelAssignment.update({
       where: { id: current.id },
-      data: {
-        effectiveTo,
-        reason,
-        notes: String(input.notes || "").trim() || current.notes,
-        performedByUserId: input.performedByUserId || null,
-      },
+      data: { effectiveTo },
     });
 
     await tx.organizationAudit.create({
@@ -348,6 +352,9 @@ async function removeEmploymentLevelOverride(prisma, input) {
           levelNumber: current.levelNumber,
           code: current.employmentLevel?.code || null,
           name: current.employmentLevel?.name || null,
+          originalReason: current.reason,
+          originalNotes: current.notes,
+          originallyPerformedByUserId: current.performedByUserId,
         },
         newValue: {
           source: "DESIGNATION_DEFAULT",
@@ -358,6 +365,7 @@ async function removeEmploymentLevelOverride(prisma, input) {
           designationCode: employee.designation.code,
           designationName: employee.designation.name,
           effectiveFrom: effectiveTo,
+          removalNotes: String(input.notes || "").trim() || null,
         },
         reason,
       },
