@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
+const activeBranchScopeRoutes = require("./routes/activeBranchScopeRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const employeeCareerCatalogRoutes = require("./routes/employeeCareerCatalogRoutes");
 const employeeProfileGovernanceRoutes = require("./routes/employeeProfileGovernanceRoutes");
@@ -58,6 +59,12 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+
+// Active branch scope is a cross-module operating context. It must run before
+// employee/leave/attendance/payroll/loan/report routers so branch-scoped reads
+// and mutation guards cannot be bypassed by entering a module directly.
+app.use("/api", activeBranchScopeRoutes);
+
 app.use("/api/employees/onboarding", onboardingRoutes);
 app.use("/api/employees", employeeCareerCatalogRoutes);
 // Effective employee Employment Level and structural-edit guards must run before
