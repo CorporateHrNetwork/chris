@@ -18,10 +18,12 @@ import useAuthorization from "../hooks/useAuthorization";
 
 function Dashboard() {
   /*
-    CHRIS_TENANT_SCOPED_DASHBOARD_KPIS
+    CHRIS_BRANCH_SCOPED_DASHBOARD_KPIS
 
-    Attendance and leave use authenticated APIs whose server-side
-    queries resolve organizationId from the signed-in tenant context.
+    The active X-CHRiS-Location-Id is carried automatically by apiRequest.
+    Workforce analytics is therefore the authoritative source for dashboard
+    attendance and leave counts so those KPIs change with the selected branch.
+    Head Office omits the location header and shows the consolidated company.
 
     Payroll must not display fabricated financial data.
   */
@@ -35,60 +37,18 @@ function Dashboard() {
     let live = true;
 
     const loadOperationalSummary = async () => {
-      const now = new Date();
-      const date =
-        now.getFullYear() + "-" +
-        String(now.getMonth() + 1).padStart(2, "0") + "-" +
-        String(now.getDate()).padStart(2, "0");
-
-      const [attendanceResult, leaveResult] =
-        await Promise.allSettled([
-          apiRequest(
-            "/api/attendance/report?from=" +
-              date +
-              "&to=" +
-              date
-          ),
-          apiRequest("/api/leave/requests"),
-        ]);
-
+      const result = await apiRequest("/api/analytics/workforce");
       if (!live) return;
 
-      const attendanceRecords =
-        attendanceResult.status === "fulfilled"
-          ? Number(
-              attendanceResult.value?.data?.totals?.records ||
-                0
-            )
-          : null;
-
-      const leaveRows =
-        leaveResult.status === "fulfilled" &&
-        Array.isArray(leaveResult.value?.data)
-          ? leaveResult.value.data
-          : null;
-
-      const pendingLeave =
-        leaveRows === null
-          ? null
-          : leaveRows.filter(
-              (request) =>
-                request.status === "PENDING"
-            ).length;
-
       setOperationalSummary({
-        attendanceRecords,
-        pendingLeave,
+        attendanceRecords: Number(result?.data?.attendance?.recordsToday || 0),
+        pendingLeave: Number(result?.data?.leave?.pendingRequests || 0),
         loading: false,
       });
     };
 
     loadOperationalSummary().catch((error) => {
-      console.error(
-        "Dashboard operational summary error:",
-        error
-      );
-
+      console.error("Dashboard operational summary error:", error);
       if (live) {
         setOperationalSummary({
           attendanceRecords: null,
@@ -102,10 +62,8 @@ function Dashboard() {
       live = false;
     };
   }, []);
-  const [
-    employeeSummary,
-    setEmployeeSummary,
-  ] = useState({
+
+  const [employeeSummary, setEmployeeSummary] = useState({
     total: 0,
     active: 0,
     leave: 0,
@@ -115,10 +73,7 @@ function Dashboard() {
     genderPending: 0,
   });
 
-  const [
-    employeeLoading,
-    setEmployeeLoading,
-  ] = useState(true);
+  const [employeeLoading, setEmployeeLoading] = useState(true);
 
   const {
     hasPermission,
@@ -126,73 +81,40 @@ function Dashboard() {
   } = useAuthorization();
 
   const canViewPayroll =
-    !authorizationLoading &&
-    hasPermission("payroll.view");
+    !authorizationLoading && hasPermission("payroll.view");
 
   useEffect(() => {
-    const loadEmployeeSummary =
-      async () => {
-        try {
-          setEmployeeLoading(true);
+    const loadEmployeeSummary = async () => {
+      try {
+        setEmployeeLoading(true);
 
-          const result =
-            await apiRequest(
-              "/api/employees"
-            );
+        const result = await apiRequest("/api/employees");
+        const employees = result.data || [];
 
-          const employees =
-            result.data || [];
-
-          setEmployeeSummary({
-            total:
-              employees.length,
-
-            active:
-              employees.filter(
-                (employee) =>
-                  employee.status ===
-                  "ACTIVE"
-              ).length,
-
-            leave:
-              employees.filter(
-                (employee) =>
-                  employee.status ===
-                  "LEAVE"
-              ).length,
-
-            probation:
-              employees.filter(
-                (employee) =>
-                  employee.status ===
-                  "PROBATION"
-              ).length,
-            male:
-              employees.filter((employee) => employee.gender === "MALE").length,
-
-            female:
-              employees.filter((employee) => employee.gender === "FEMALE").length,
-
-            genderPending:
-              employees.filter(
-                (employee) => !employee.gender || employee.gender === "UNSPECIFIED"
-              ).length,
-          });
-        } catch (error) {
-          console.error(
-            "Dashboard employee summary error:",
-            error
-          );
-        } finally {
-          setEmployeeLoading(false);
-        }
-      };
+        setEmployeeSummary({
+          total: employees.length,
+          active: employees.filter((employee) => employee.status === "ACTIVE").length,
+          leave: employees.filter((employee) => employee.status === "LEAVE").length,
+          probation: employees.filter((employee) => employee.status === "PROBATION").length,
+          male: employees.filter((employee) => employee.gender === "MALE").length,
+          female: employees.filter((employee) => employee.gender === "FEMALE").length,
+          genderPending: employees.filter(
+            (employee) => !employee.gender || employee.gender === "UNSPECIFIED"
+          ).length,
+        });
+      } catch (error) {
+        console.error("Dashboard employee summary error:", error);
+      } finally {
+        setEmployeeLoading(false);
+      }
+    };
 
     loadEmployeeSummary();
   }, []);
 
   return (
-    <div className="chris-dashboard"
+    <div
+      className="chris-dashboard"
       style={{
         position: "relative",
         minHeight: "100%",
@@ -202,25 +124,17 @@ function Dashboard() {
 
       <WorkforceKpis />
 
-      {/* KPI CARDS */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(240px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: "24px",
           marginTop: "30px",
         }}
       >
         <KpiCard
           title="Employees"
-          value={
-            employeeLoading
-              ? "..."
-              : String(
-                  employeeSummary.total
-                )
-          }
+          value={employeeLoading ? "..." : String(employeeSummary.total)}
           subtitle={
             employeeLoading
               ? "Loading employee data"
@@ -233,21 +147,19 @@ function Dashboard() {
         <KpiCard
           title="Attendance"
           value={
-              operationalSummary.loading
-                ? "..."
-                : operationalSummary.attendanceRecords === null
-                ? "—"
-                : String(
-                    operationalSummary.attendanceRecords
-                  )
-            }
+            operationalSummary.loading
+              ? "..."
+              : operationalSummary.attendanceRecords === null
+              ? "—"
+              : String(operationalSummary.attendanceRecords)
+          }
           subtitle={
-              operationalSummary.loading
-                ? "Loading attendance"
-                : operationalSummary.attendanceRecords === null
-                ? "Attendance unavailable"
-                : "Attendance records today"
-            }
+            operationalSummary.loading
+              ? "Loading attendance"
+              : operationalSummary.attendanceRecords === null
+              ? "Attendance unavailable"
+              : "Attendance records today"
+          }
           icon="🕒"
           color="#2563EB"
         />
@@ -255,21 +167,19 @@ function Dashboard() {
         <KpiCard
           title="Pending Leave"
           value={
-              operationalSummary.loading
-                ? "..."
-                : operationalSummary.pendingLeave === null
-                ? "—"
-                : String(
-                    operationalSummary.pendingLeave
-                  )
-            }
+            operationalSummary.loading
+              ? "..."
+              : operationalSummary.pendingLeave === null
+              ? "—"
+              : String(operationalSummary.pendingLeave)
+          }
           subtitle={
-              operationalSummary.loading
-                ? "Loading leave requests"
-                : operationalSummary.pendingLeave === null
-                ? "Leave data unavailable"
-                : "Awaiting Approval"
-            }
+            operationalSummary.loading
+              ? "Loading leave requests"
+              : operationalSummary.pendingLeave === null
+              ? "Leave data unavailable"
+              : "Awaiting Approval"
+          }
           icon="📅"
           color="var(--chris-gold, #D4AF37)"
         />
@@ -278,39 +188,60 @@ function Dashboard() {
           <KpiCard
             title="Payroll"
             value={
-                employeeLoading
-                  ? "..."
-                  : employeeSummary.total === 0
-                  ? "₦0"
-                  : "—"
-              }
+              employeeLoading
+                ? "..."
+                : employeeSummary.total === 0
+                ? "₦0"
+                : "—"
+            }
             subtitle={
-                employeeLoading
-                  ? "Loading workforce"
-                  : employeeSummary.total === 0
-                  ? "No payroll records"
-                  : "Awaiting authoritative payroll-run data"
-              }
+              employeeLoading
+                ? "Loading workforce"
+                : employeeSummary.total === 0
+                ? "No payroll records"
+                : "Awaiting authoritative payroll-run data"
+            }
             icon="💰"
             color="#8B5CF6"
           />
         )}
       </div>
 
-      {/* EMPLOYEE DEMOGRAPHICS */}
-      <h2 style={{ margin: "28px 0 0", color: "#F7FAF8", fontSize: "17px" }}>Employee Demographics</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginTop: "12px" }}>
-        <MiniStat title="Male Employees" value={employeeLoading ? "..." : employeeSummary.male} />
-        <MiniStat title="Female Employees" value={employeeLoading ? "..." : employeeSummary.female} />
-        <MiniStat title="Gender Data Pending" value={employeeLoading ? "..." : employeeSummary.genderPending} />
-      </div>
-
-      {/* DASHBOARD CONTENT */}
+      <h2
+        style={{
+          margin: "28px 0 0",
+          color: "#F7FAF8",
+          fontSize: "17px",
+        }}
+      >
+        Employee Demographics
+      </h2>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(360px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "16px",
+          marginTop: "12px",
+        }}
+      >
+        <MiniStat
+          title="Male Employees"
+          value={employeeLoading ? "..." : employeeSummary.male}
+        />
+        <MiniStat
+          title="Female Employees"
+          value={employeeLoading ? "..." : employeeSummary.female}
+        />
+        <MiniStat
+          title="Gender Data Pending"
+          value={employeeLoading ? "..." : employeeSummary.genderPending}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
           gap: "20px",
           marginTop: "35px",
         }}
@@ -322,8 +253,7 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(360px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
           gap: "20px",
           marginTop: "20px",
         }}
@@ -335,34 +265,29 @@ function Dashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            canViewPayroll
-              ? "repeat(auto-fit, minmax(360px, 1fr))"
-              : "1fr",
+          gridTemplateColumns: canViewPayroll
+            ? "repeat(auto-fit, minmax(360px, 1fr))"
+            : "1fr",
           gap: "20px",
           marginTop: "20px",
         }}
       >
         <QuickActions />
-
-        {canViewPayroll && (
-          <PayrollSummary />
-        )}
+        {canViewPayroll && <PayrollSummary />}
       </div>
     </div>
   );
 }
 
-function MiniStat({
-  title,
-  value,
-}) {
+function MiniStat({ title, value }) {
   return (
-    <div className="chris-mini-stat"
+    <div
+      className="chris-mini-stat"
       style={{
         background:
           "radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, #063722, #02170f)",
-        border: "1px solid var(--tenant-border, var(--chris-border-gold, rgba(212,175,55,.20)))",
+        border:
+          "1px solid var(--tenant-border, var(--chris-border-gold, rgba(212,175,55,.20)))",
         borderRadius: "16px",
         padding: "18px",
         boxShadow:
@@ -390,10 +315,8 @@ function MiniStat({
           color: "#F7FAF8",
           fontSize: "12px",
           fontWeight: "700",
-          textTransform:
-            "uppercase",
-          letterSpacing:
-            "0.03em",
+          textTransform: "uppercase",
+          letterSpacing: "0.03em",
           position: "relative",
         }}
       >
