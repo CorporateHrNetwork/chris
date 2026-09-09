@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 import SearchableRegistrySelect from "../components/common/SearchableRegistrySelect";
@@ -18,6 +19,8 @@ function employeeLabel(employee) {
 export default function LineManagers() {
   const { hasPermission } = useAuthorization();
   const canUpdate = hasPermission("employees.update");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedEmployeeNumber = String(searchParams.get("employeeNumber") || "").trim().toUpperCase();
   const [employees, setEmployees] = useState([]);
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -70,6 +73,16 @@ export default function LineManagers() {
       .then((result) => setEmployees(result.data || []))
       .catch((error) => showMessage(error.message));
   }, []);
+
+  useEffect(() => {
+    if (!requestedEmployeeNumber || !employees.length) return;
+    const employee = employees.find(
+      (item) => String(item.employeeNumber || "").toUpperCase() === requestedEmployeeNumber
+    );
+    if (!employee || employeeNumber === employee.employeeNumber) return;
+    setEmployeeNumber(employee.employeeNumber);
+    setEmployeeSearch(employeeLabel(employee));
+  }, [employees, requestedEmployeeNumber, employeeNumber]);
 
   useEffect(() => {
     loadRecord(employeeNumber).catch((error) => showMessage(error.message));
@@ -167,8 +180,13 @@ export default function LineManagers() {
           onChange={(label, option) => {
             setMessage("");
             setEmployeeSearch(label);
-            if (option) setEmployeeNumber(option.value);
-            else if (!label) setEmployeeNumber("");
+            if (option) {
+              setEmployeeNumber(option.value);
+              setSearchParams({ employeeNumber: option.value }, { replace: true });
+            } else if (!label) {
+              setEmployeeNumber("");
+              setSearchParams({}, { replace: true });
+            }
           }}
         />
 
