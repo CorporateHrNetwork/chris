@@ -43,9 +43,11 @@ includes(topbar, 'import BranchContextSelector from "../../BranchContextSelector
 includes(topbar, "<BranchContextSelector compact />", "Topbar must render the branch selector on every protected page.");
 assert.ok(!layout.includes("BranchContextSelector"), "Branch selector must not be duplicated inside individual page content.");
 
-// Employee directory/profile: branch selection scopes browsing and direct URL access.
+// Employee directory/profile: branch selection scopes browsing, direct URLs and
+// employee-specific subroutes such as lifecycle, job-change and employment history.
 includes(employeeProfile, 'router.get(\n  "/",', "Governed employee directory route must run before the legacy organization-wide list.");
 includes(employeeProfile, '? { locationId: req.auth.activeLocationId }', "Employee directory must filter to the active branch.");
+includes(employeeProfile, 'router.use("/:employeeNumber"', "Every employee-specific subroute must inherit the active branch guard.");
 includes(employeeProfile, 'code: "EMPLOYEE_OUTSIDE_ACTIVE_BRANCH"', "Direct employee profile/update access outside the active branch must be blocked.");
 
 // Line Managers: target employee population is branch-scoped, but hierarchy resolution
