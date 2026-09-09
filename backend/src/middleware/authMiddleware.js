@@ -40,7 +40,7 @@ async function requireAuth(req, res, next) {
       }
     }
 
-    const requestedLocationId = String(req.headers["x-chris-location-id"] || "").trim() || null;
+    let requestedLocationId = String(req.headers["x-chris-location-id"] || "").trim() || null;
     const activeLocations = user.userLocations
       .map((item) => item.location)
       .filter((location) => location && location.isActive !== false);
@@ -51,12 +51,30 @@ async function requireAuth(req, res, next) {
         orderBy: [{ type: "asc" }, { name: "asc" }],
       });
     }
-    if (requestedLocationId && !availableLocations.some((location) => location.id === requestedLocationId)) {
+
+    const requestedLocation = requestedLocationId
+      ? availableLocations.find((location) => location.id === requestedLocationId) || null
+      : null;
+
+    if (requestedLocationId && !requestedLocation) {
       return res.status(403).json({
         status: "error",
         code: "LOCATION_SCOPE_FORBIDDEN",
         message: "You do not have access to the selected CHRiS branch/location.",
       });
+    }
+
+    // ZERMATT operating semantics:
+    // HEAD OFFICE means the consolidated company view (312 employees at the
+    // current Release-1 baseline). The physical HEAD_OFFICE location row is
+    // retained as organization metadata, but it is not a separate zero-headcount
+    // operating context. A stale/manual HEAD_OFFICE location header therefore
+    // normalizes safely to the consolidated context.
+    if (
+      user.organization?.slug === "zermatt-liquor-limited" &&
+      String(requestedLocation?.type || "").toUpperCase() === "HEAD_OFFICE"
+    ) {
+      requestedLocationId = null;
     }
 
     const consolidatedOrganization =
@@ -79,11 +97,9 @@ async function requireAuth(req, res, next) {
         state: location.state,
       })),
       activeLocationId: requestedLocationId,
-      // Null activeLocationId means organization-wide consolidated context.
-      // Head Office is a real selectable OrganizationLocation, not the same thing
-      // as the consolidated All Branches view.
+      // Null activeLocationId is the organization-wide consolidated operating
+      // context. For ZERMATT the business label for this context is HEAD OFFICE.
       consolidatedOrganization,
-      // Backward-compatible alias retained until older consumers are migrated.
       consolidatedHeadOffice: consolidatedOrganization,
     };
 
