@@ -26,6 +26,19 @@ function normalizeStructureName(value) {
   return String(value || "").trim().toLocaleLowerCase();
 }
 
+function employeeOutsideActiveBranch(req, employee) {
+  return Boolean(
+    req.auth?.activeLocationId &&
+      employee?.locationId !== req.auth.activeLocationId
+  );
+}
+
+function activeLocationContext(req) {
+  return req.auth?.activeLocationId
+    ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
+    : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null };
+}
+
 async function loadEmployeeProfile(organizationId, employeeNumber) {
   return prisma.employee.findFirst({
     where: {
@@ -56,6 +69,65 @@ async function loadEmployeeProfile(organizationId, employeeNumber) {
 
 /*
 ============================================================
+EMPLOYEE DIRECTORY — ACTIVE BRANCH CONTEXT
+============================================================
+
+The authenticated CHRiS operating context is authoritative for
+employee browsing. Super Users may switch between branches or
+clear the branch header for the consolidated organization view.
+============================================================
+*/
+router.get(
+  "/",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const employees = await prisma.employee.findMany({
+        where: {
+          organizationId: req.auth.organizationId,
+          ...(req.auth.activeLocationId
+            ? { locationId: req.auth.activeLocationId }
+            : {}),
+        },
+        include: {
+          department: true,
+          designation: { include: { employmentLevel: true } },
+          location: true,
+          lineManagerAssignments: {
+            where: { effectiveTo: null },
+            take: 1,
+            include: {
+              manager: { include: { department: true, designation: true } },
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              isActive: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return res.status(200).json({
+        status: "success",
+        results: employees.length,
+        locationContext: activeLocationContext(req),
+        data: employees,
+      });
+    } catch (error) {
+      console.error("Branch-scoped employee directory fetch error:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "Unable to fetch employees.",
+      });
+    }
+  }
+);
+
+/*
+============================================================
 EMPLOYEE PROFILE — EFFECTIVE EMPLOYMENT LEVEL
 ============================================================
 
@@ -70,8 +142,8 @@ The designation's configured default is preserved separately as
 `designation.defaultEmploymentLevel`, so structural configuration
 is never lost or rewritten for an individual employee.
 
-If a non-employee one-segment route reaches this router, `next()`
-allows the existing employee router to resolve it normally.
+When a branch is active, an employee from another branch cannot be
+opened through direct URL manipulation.
 ============================================================
 */
 router.get(
@@ -84,6 +156,15 @@ router.get(
       const employee = await loadEmployeeProfile(organizationId, employeeNumber);
 
       if (!employee) return next();
+
+      if (employeeOutsideActiveBranch(req, employee)) {
+        return res.status(403).json({
+          status: "error",
+          code: "EMPLOYEE_OUTSIDE_ACTIVE_BRANCH",
+          message:
+            "The selected employee does not belong to the active CHRiS branch context.",
+        });
+      }
 
       const designationDefault = employee.designation?.employmentLevel || null;
       let effective = null;
@@ -121,6 +202,7 @@ router.get(
         effectiveEmploymentLevel: effectiveSummary,
         employmentLevelSource: effective?.source || null,
         employmentLevelWarning,
+        locationContext: activeLocationContext(req),
       };
 
       return res.status(200).json({
@@ -146,6 +228,9 @@ The legacy Edit Employee form can continue to update ordinary
 master data, but Department and Designation may no longer be
 changed through free text. Structural movement must use the
 controlled Designation / Job Change workflow.
+
+The same branch-context guard applies to updates so a branch-scoped
+session cannot mutate an employee in another branch.
 ============================================================
 */
 router.put(
@@ -159,12 +244,22 @@ router.put(
         where: { organizationId, employeeNumber },
         select: {
           id: true,
+          locationId: true,
           department: { select: { id: true, name: true } },
           designation: { select: { id: true, name: true } },
         },
       });
 
       if (!employee) return next();
+
+      if (employeeOutsideActiveBranch(req, employee)) {
+        return res.status(403).json({
+          status: "error",
+          code: "EMPLOYEE_OUTSIDE_ACTIVE_BRANCH",
+          message:
+            "The selected employee does not belong to the active CHRiS branch context.",
+        });
+      }
 
       const submittedDepartment = req.body?.department;
       const submittedDesignation = req.body?.designation;
