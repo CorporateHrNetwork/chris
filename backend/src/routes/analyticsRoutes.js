@@ -31,7 +31,7 @@ router.get("/workforce/metrics", requirePermission("employees.view"), async (req
         ...data,
         locationContext: req.auth.activeLocationId
           ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
-          : { mode: "HEAD_OFFICE_CONSOLIDATED", locationId: null },
+          : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null },
       },
     });
   } catch (error) {
@@ -79,7 +79,7 @@ router.get("/workforce", requirePermission("employees.view"), async (req, res) =
         ...data,
         locationContext: req.auth.activeLocationId
           ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
-          : { mode: "HEAD_OFFICE_CONSOLIDATED", locationId: null },
+          : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null },
       },
     });
   } catch (error) {
