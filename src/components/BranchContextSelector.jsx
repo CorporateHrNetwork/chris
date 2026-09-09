@@ -1,21 +1,78 @@
-import { useEffect, useState } from "react";
-import { apiRequest, getActiveLocationId, setActiveLocationId } from "../services/api";
+import { useEffect, useMemo, useState } from "react";
+import {
+  apiRequest,
+  getActiveLocationId,
+  setActiveLocationId,
+} from "../services/api";
 
-export default function BranchContextSelector() {
+function locationLabel(location) {
+  const name = String(location?.name || "Location").trim();
+  const code = String(location?.code || "").trim();
+  const type = String(location?.type || "").trim().toUpperCase();
+
+  if (type === "HEAD_OFFICE") {
+    return `${name}${code ? ` · ${code}` : ""}`;
+  }
+
+  return `${name}${code ? ` · ${code}` : ""}`;
+}
+
+export default function BranchContextSelector({ compact = false }) {
   const [context, setContext] = useState(null);
   const [value, setValue] = useState(getActiveLocationId() || "");
 
   useEffect(() => {
     let cancelled = false;
-    apiRequest("/api/zermatt/branch-context")
-      .then((result) => {
-        if (!cancelled) setContext(result?.data || null);
-      })
-      .catch(() => {
+
+    async function loadContext({ allowRecovery = true } = {}) {
+      try {
+        const result = await apiRequest("/api/zermatt/branch-context");
+        if (cancelled) return;
+
+        const nextContext = result?.data || null;
+        setContext(nextContext);
+
+        const storedLocationId = getActiveLocationId() || "";
+        const stillAvailable =
+          !storedLocationId ||
+          nextContext?.availableLocations?.some(
+            (location) => location.id === storedLocationId
+          );
+
+        if (!stillAvailable) {
+          setActiveLocationId(null);
+          setValue("");
+        } else {
+          setValue(storedLocationId);
+        }
+      } catch (error) {
+        if (
+          allowRecovery &&
+          error?.code === "LOCATION_SCOPE_FORBIDDEN" &&
+          getActiveLocationId()
+        ) {
+          setActiveLocationId(null);
+          setValue("");
+          await loadContext({ allowRecovery: false });
+          return;
+        }
+
         if (!cancelled) setContext(null);
-      });
-    return () => { cancelled = true; };
+      }
+    }
+
+    loadContext();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const activeLocation = useMemo(
+    () =>
+      context?.availableLocations?.find((location) => location.id === value) ||
+      null,
+    [context, value]
+  );
 
   if (!context?.availableLocations?.length) return null;
 
@@ -26,25 +83,43 @@ export default function BranchContextSelector() {
     window.location.reload();
   };
 
+  const wrapStyle = compact ? compactWrapStyle : pageWrapStyle;
+  const selectStyle = compact ? compactSelectStyle : pageSelectStyle;
+
   return (
-    <div style={wrapStyle}>
-      <span style={labelStyle}>WORKFORCE VIEW</span>
-      <select aria-label="CHRiS branch context" value={value} onChange={change} style={selectStyle}>
-        <option value="">Head Office · Consolidated All Branches</option>
+    <div style={wrapStyle} data-chris-branch-context>
+      <span style={labelStyle}>{compact ? "BRANCH" : "OPERATING CONTEXT"}</span>
+      <select
+        aria-label="CHRiS branch context"
+        value={value}
+        onChange={change}
+        style={selectStyle}
+      >
+        <option value="">ALL BRANCHES · Consolidated</option>
         {context.availableLocations.map((location) => (
           <option key={location.id} value={location.id}>
-            {location.name}{location.code ? ` · ${location.code}` : ""}
+            {locationLabel(location)}
           </option>
         ))}
       </select>
-      <span style={helperStyle}>
-        {value ? "Branch-specific operational context" : "Consolidated organization-wide staff strength"}
+      <span style={compact ? compactScopeStyle : helperStyle}>
+        {activeLocation
+          ? `Operating in ${activeLocation.name}`
+          : "Organization-wide consolidated context"}
       </span>
     </div>
   );
 }
 
-const wrapStyle = {
+const labelStyle = {
+  color: "#D4AF37",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: ".12em",
+  whiteSpace: "nowrap",
+};
+
+const pageWrapStyle = {
   display: "flex",
   alignItems: "center",
   gap: 8,
@@ -55,8 +130,21 @@ const wrapStyle = {
   borderRadius: 10,
   background: "rgba(4,46,28,.58)",
 };
-const labelStyle = { color: "#D4AF37", fontSize: 10, fontWeight: 900, letterSpacing: ".12em" };
-const selectStyle = {
+
+const compactWrapStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  minWidth: 0,
+  maxWidth: 360,
+  padding: "6px 8px",
+  border: "1px solid rgba(212,175,55,.34)",
+  borderRadius: 9,
+  background: "rgba(2,10,7,.62)",
+  boxShadow: "inset 0 0 12px rgba(8,122,67,.04)",
+};
+
+const pageSelectStyle = {
   minWidth: 260,
   border: "1px solid rgba(212,175,55,.4)",
   borderRadius: 8,
@@ -65,4 +153,28 @@ const selectStyle = {
   color: "#F7FAF8",
   fontWeight: 800,
 };
+
+const compactSelectStyle = {
+  minWidth: 190,
+  maxWidth: 235,
+  height: 32,
+  border: "1px solid rgba(212,175,55,.36)",
+  borderRadius: 7,
+  padding: "0 7px",
+  background: "#05291A",
+  color: "#F7FAF8",
+  fontSize: 11,
+  fontWeight: 800,
+  outline: "none",
+};
+
 const helperStyle = { color: "#AFC0B6", fontSize: 11 };
+
+const compactScopeStyle = {
+  color: "#9DB8AA",
+  fontSize: 9,
+  maxWidth: 105,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
