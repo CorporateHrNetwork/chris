@@ -6,7 +6,10 @@ const backendRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(backendRoot, "..");
 
 function read(...parts) {
-  return fs.readFileSync(path.join(...parts), "utf8");
+  return fs
+    .readFileSync(path.join(...parts), "utf8")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
 }
 
 function expect(source, fragment, message) {
@@ -26,6 +29,12 @@ const service = read(
   "src",
   "services",
   "employeeEmploymentLevelAssignmentService.js"
+);
+const liveService = read(
+  backendRoot,
+  "src",
+  "services",
+  "zermattEmployeeLevelLiveService.js"
 );
 const assignmentRoutes = read(
   backendRoot,
@@ -95,13 +104,28 @@ expect(service, 'action: "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_REMOVED"', "Overrid
 expect(service, "data: { effectiveTo }", "Closing an Employment Level override must preserve the original assignment evidence.");
 expect(service, "originalReason: current.reason", "Override-removal audit must retain the original assignment reason.");
 expect(service, "originallyPerformedByUserId: current.performedByUserId", "Override-removal audit must retain the original assigning actor.");
+expect(service, "applyEmploymentLevelOverride", "Transaction-level Employment Level activation function missing.");
+expect(service, "applyRemoveEmploymentLevelOverride", "Transaction-level default restoration function missing.");
 
-// API controls: reads require employees.view; writes require employees.update.
+// API controls: branch-safe reads and atomic live writes.
 expect(assignmentRoutes, '"/employment-level/:employeeNumber"', "Employee Employment Level endpoint missing.");
 expect(assignmentRoutes, 'requirePermission("employees.view")', "Employment Level read permission missing.");
 expect(assignmentRoutes, 'requirePermission("employees.update")', "Employment Level write permission missing.");
-expect(assignmentRoutes, "setEmploymentLevelOverride", "Employment Level save route missing.");
-expect(assignmentRoutes, "removeEmploymentLevelOverride", "Employment Level restore-default route missing.");
+expect(assignmentRoutes, "assertEmployeeInActiveBranch", "Employment Level workflow is not protected by active branch context.");
+expect(assignmentRoutes, "prisma.$transaction", "Live Employment Level activation must be atomic.");
+expect(assignmentRoutes, "applyEmploymentLevelOverride", "Atomic Employment Level save route missing.");
+expect(assignmentRoutes, "applyRemoveEmploymentLevelOverride", "Atomic designation-default restoration route missing.");
+expect(assignmentRoutes, "synchronizeZermattEmployeeLevelLive", "ZERMATT live activation synchronizer missing from route.");
+expect(assignmentRoutes, "liveActivation", "Employment Level API does not expose live activation result.");
+
+// ZERMATT live activation synchronizes current-year Annual Leave in the same transaction.
+expect(liveService, "resolveEffectiveEmploymentLevel", "Live activation does not resolve the authoritative employee level.");
+expect(liveService, "isZermattV2InternalLevel", "Live activation is not constrained to ZERMATT V2 levels.");
+expect(liveService, "resolveZermattV2Level", "Live activation cannot resolve the public ZERMATT level/leave entitlement.");
+expect(liveService, "leaveBalance.upsert", "Live activation does not update the current-year Annual Leave balance.");
+expect(liveService, "leaveEntitlementAllocation.create", "Live activation does not append leave allocation evidence.");
+expect(liveService, "ANNUAL_ENTITLEMENT_BELOW_USED", "Live activation lacks the used-leave safety guard.");
+expect(liveService, 'action: "ZERMATT_EMPLOYEE_EMPLOYMENT_LEVEL_LIVE_ACTIVATED"', "Live activation audit action missing.");
 
 // Controlled searchable catalogues for Designation and Employment Level.
 expect(careerRoutes, '"/career/designations"', "Controlled designation catalogue endpoint missing.");
@@ -121,7 +145,7 @@ assert(governedMount >= 0, "Governed employee profile router is not mounted.");
 assert(legacyEmployeeMount >= 0, "Legacy employee router mount missing.");
 assert(governedMount < legacyEmployeeMount, "Governed employee profile router must run before the legacy employee router.");
 
-// ZERMATT leave must consume the effective employee level.
+// ZERMATT leave provisioning continues to consume the effective employee level.
 expect(zermattLeave, "resolveEffectiveEmploymentLevel", "ZERMATT leave is not wired to the effective employee level resolver.");
 expect(zermattLeave, "effectiveLevel.levelNumber", "ZERMATT leave does not consume the resolved effective level.");
 
