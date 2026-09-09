@@ -71,7 +71,7 @@ router.get("/", requirePermission("payroll.view"), async (req, res) => {
       }),
       locationContext: req.auth.activeLocationId
         ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
-        : { mode: "HEAD_OFFICE_CONSOLIDATED", locationId: null },
+        : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null },
     });
   } catch (error) {
     console.error("Payroll employee option lookup error:", error);
