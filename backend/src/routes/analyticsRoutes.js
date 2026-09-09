@@ -12,6 +12,12 @@ function scopedLocation(req) {
   return req.auth?.activeLocationId || req.query.locationId || undefined;
 }
 
+function locationContext(req) {
+  return req.auth.activeLocationId
+    ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
+    : { mode: "HEAD_OFFICE_CONSOLIDATED", locationId: null };
+}
+
 router.get("/workforce/metrics", requirePermission("employees.view"), async (req, res) => {
   try {
     const data = await getWorkforceMetrics(prisma, {
@@ -29,9 +35,7 @@ router.get("/workforce/metrics", requirePermission("employees.view"), async (req
       status: "success",
       data: {
         ...data,
-        locationContext: req.auth.activeLocationId
-          ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
-          : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null },
+        locationContext: locationContext(req),
       },
     });
   } catch (error) {
@@ -77,9 +81,7 @@ router.get("/workforce", requirePermission("employees.view"), async (req, res) =
       status: "success",
       data: {
         ...data,
-        locationContext: req.auth.activeLocationId
-          ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
-          : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null },
+        locationContext: locationContext(req),
       },
     });
   } catch (error) {
