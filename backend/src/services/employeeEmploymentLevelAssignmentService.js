@@ -176,203 +176,215 @@ async function getEmploymentLevelState(prisma, {
   };
 }
 
-async function setEmploymentLevelOverride(prisma, input) {
-  const organizationId = input.organizationId;
-  const employeeNumber = String(input.employeeNumber || "").trim().toUpperCase();
-  const levelNumber = Number(input.levelNumber);
-  const effectiveFrom = input.effectiveFrom;
-  const reason = String(input.reason || "").trim();
-  const notes = String(input.notes || "").trim() || null;
+function normalizeSetInput(input) {
+  const normalized = {
+    ...input,
+    organizationId: input.organizationId,
+    employeeNumber: String(input.employeeNumber || "").trim().toUpperCase(),
+    levelNumber: Number(input.levelNumber),
+    reason: String(input.reason || "").trim(),
+    notes: String(input.notes || "").trim() || null,
+  };
 
-  if (!employeeNumber) throw new Error("EMPLOYEE_NUMBER_REQUIRED");
-  if (!Number.isInteger(levelNumber)) throw new Error("INVALID_EMPLOYMENT_LEVEL");
-  if (!(effectiveFrom instanceof Date) || Number.isNaN(effectiveFrom.getTime())) {
+  if (!normalized.employeeNumber) throw new Error("EMPLOYEE_NUMBER_REQUIRED");
+  if (!Number.isInteger(normalized.levelNumber)) throw new Error("INVALID_EMPLOYMENT_LEVEL");
+  if (!(normalized.effectiveFrom instanceof Date) || Number.isNaN(normalized.effectiveFrom.getTime())) {
     throw new Error("INVALID_EFFECTIVE_DATE");
   }
-  if (effectiveFrom > new Date()) throw new Error("FUTURE_EFFECTIVE_DATE");
-  if (!reason) throw new Error("EMPLOYMENT_LEVEL_REASON_REQUIRED");
+  if (normalized.effectiveFrom > new Date()) throw new Error("FUTURE_EFFECTIVE_DATE");
+  if (!normalized.reason) throw new Error("EMPLOYMENT_LEVEL_REASON_REQUIRED");
+  return normalized;
+}
 
-  return prisma.$transaction(async (tx) => {
-    const [employee, targetLevel] = await Promise.all([
-      resolveEmployee(tx, organizationId, employeeNumber),
-      tx.organizationEmploymentLevel.findUnique({
-        where: {
-          organizationId_levelNumber: { organizationId, levelNumber },
-        },
-      }),
-    ]);
+async function applyEmploymentLevelOverride(tx, rawInput) {
+  const input = normalizeSetInput(rawInput);
+  const { organizationId, employeeNumber, levelNumber, effectiveFrom, reason, notes } = input;
 
-    if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
-    if (!CURRENT_STATUSES.includes(employee.status) || employee.exitDate) {
-      throw new Error("EMPLOYEE_NOT_CURRENT");
-    }
-    if (!targetLevel || !targetLevel.isActive) throw new Error("EMPLOYMENT_LEVEL_NOT_ACTIVE");
-    if (!employee.designation) throw new Error("DESIGNATION_REQUIRED");
-
-    const current = await tx.employeeEmploymentLevelAssignment.findFirst({
+  const [employee, targetLevel] = await Promise.all([
+    resolveEmployee(tx, organizationId, employeeNumber),
+    tx.organizationEmploymentLevel.findUnique({
       where: {
-        organizationId,
-        employeeId: employee.id,
-        effectiveTo: null,
+        organizationId_levelNumber: { organizationId, levelNumber },
       },
-      include: { employmentLevel: true },
-      orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-    });
+    }),
+  ]);
 
-    if (current && effectiveFrom < current.effectiveFrom) {
-      throw new Error("INVALID_EFFECTIVE_DATE");
-    }
+  if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
+  if (!CURRENT_STATUSES.includes(employee.status) || employee.exitDate) {
+    throw new Error("EMPLOYEE_NOT_CURRENT");
+  }
+  if (!targetLevel || !targetLevel.isActive) throw new Error("EMPLOYMENT_LEVEL_NOT_ACTIVE");
+  if (!employee.designation) throw new Error("DESIGNATION_REQUIRED");
 
-    if (current?.levelNumber === levelNumber) {
-      return getEmploymentLevelState(tx, { organizationId, employeeNumber });
-    }
-
-    // Do not create a redundant employee override when HR selects the
-    // designation's already-effective default level.
-    if (!current && Number(employee.designation.careerLevel) === levelNumber) {
-      return getEmploymentLevelState(tx, { organizationId, employeeNumber });
-    }
-
-    const previousEffective = current
-      ? {
-          source: "EMPLOYEE_OVERRIDE",
-          levelNumber: current.levelNumber,
-          code: current.employmentLevel?.code || null,
-          name: current.employmentLevel?.name || null,
-        }
-      : {
-          source: "DESIGNATION_DEFAULT",
-          levelNumber: employee.designation.careerLevel ?? null,
-          code: employee.designation.employmentLevel?.code || null,
-          name: employee.designation.employmentLevel?.name || null,
-        };
-
-    if (current) {
-      await tx.employeeEmploymentLevelAssignment.update({
-        where: { id: current.id },
-        data: { effectiveTo: effectiveFrom },
-      });
-    }
-
-    const created = await tx.employeeEmploymentLevelAssignment.create({
-      data: {
-        organizationId,
-        employeeId: employee.id,
-        levelNumber,
-        effectiveFrom,
-        reason,
-        notes,
-        performedByUserId: input.performedByUserId || null,
-      },
-      include: { employmentLevel: true },
-    });
-
-    await tx.organizationAudit.create({
-      data: {
-        organizationId,
-        actorUserId: input.performedByUserId || null,
-        entityType: "EmployeeEmploymentLevelAssignment",
-        entityId: created.id,
-        action: current
-          ? "EMPLOYEE_EMPLOYMENT_LEVEL_CHANGED"
-          : "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_ASSIGNED",
-        previousValue: {
-          ...previousEffective,
-          designationId: employee.designation.id,
-          designationCode: employee.designation.code,
-          designationName: employee.designation.name,
-        },
-        newValue: {
-          source: "EMPLOYEE_OVERRIDE",
-          levelNumber: targetLevel.levelNumber,
-          code: targetLevel.code,
-          name: targetLevel.name,
-          designationId: employee.designation.id,
-          designationCode: employee.designation.code,
-          designationName: employee.designation.name,
-          effectiveFrom,
-        },
-        reason,
-      },
-    });
-
-    return getEmploymentLevelState(tx, { organizationId, employeeNumber });
+  const current = await tx.employeeEmploymentLevelAssignment.findFirst({
+    where: {
+      organizationId,
+      employeeId: employee.id,
+      effectiveTo: null,
+    },
+    include: { employmentLevel: true },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
   });
+
+  if (current && effectiveFrom < current.effectiveFrom) {
+    throw new Error("INVALID_EFFECTIVE_DATE");
+  }
+
+  if (current?.levelNumber === levelNumber) {
+    return getEmploymentLevelState(tx, { organizationId, employeeNumber });
+  }
+
+  if (!current && Number(employee.designation.careerLevel) === levelNumber) {
+    return getEmploymentLevelState(tx, { organizationId, employeeNumber });
+  }
+
+  const previousEffective = current
+    ? {
+        source: "EMPLOYEE_OVERRIDE",
+        levelNumber: current.levelNumber,
+        code: current.employmentLevel?.code || null,
+        name: current.employmentLevel?.name || null,
+      }
+    : {
+        source: "DESIGNATION_DEFAULT",
+        levelNumber: employee.designation.careerLevel ?? null,
+        code: employee.designation.employmentLevel?.code || null,
+        name: employee.designation.employmentLevel?.name || null,
+      };
+
+  if (current) {
+    await tx.employeeEmploymentLevelAssignment.update({
+      where: { id: current.id },
+      data: { effectiveTo: effectiveFrom },
+    });
+  }
+
+  const created = await tx.employeeEmploymentLevelAssignment.create({
+    data: {
+      organizationId,
+      employeeId: employee.id,
+      levelNumber,
+      effectiveFrom,
+      reason,
+      notes,
+      performedByUserId: input.performedByUserId || null,
+    },
+    include: { employmentLevel: true },
+  });
+
+  await tx.organizationAudit.create({
+    data: {
+      organizationId,
+      actorUserId: input.performedByUserId || null,
+      entityType: "EmployeeEmploymentLevelAssignment",
+      entityId: created.id,
+      action: current
+        ? "EMPLOYEE_EMPLOYMENT_LEVEL_CHANGED"
+        : "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_ASSIGNED",
+      previousValue: {
+        ...previousEffective,
+        designationId: employee.designation.id,
+        designationCode: employee.designation.code,
+        designationName: employee.designation.name,
+      },
+      newValue: {
+        source: "EMPLOYEE_OVERRIDE",
+        levelNumber: targetLevel.levelNumber,
+        code: targetLevel.code,
+        name: targetLevel.name,
+        designationId: employee.designation.id,
+        designationCode: employee.designation.code,
+        designationName: employee.designation.name,
+        effectiveFrom,
+      },
+      reason,
+    },
+  });
+
+  return getEmploymentLevelState(tx, { organizationId, employeeNumber });
+}
+
+async function setEmploymentLevelOverride(prisma, input) {
+  return prisma.$transaction((tx) => applyEmploymentLevelOverride(tx, input));
+}
+
+function normalizeRemoveInput(input) {
+  const normalized = {
+    ...input,
+    employeeNumber: String(input.employeeNumber || "").trim().toUpperCase(),
+    reason: String(input.reason || "").trim(),
+  };
+  if (!(normalized.effectiveTo instanceof Date) || Number.isNaN(normalized.effectiveTo.getTime())) {
+    throw new Error("INVALID_EFFECTIVE_DATE");
+  }
+  if (normalized.effectiveTo > new Date()) throw new Error("FUTURE_EFFECTIVE_DATE");
+  if (!normalized.reason) throw new Error("EMPLOYMENT_LEVEL_REASON_REQUIRED");
+  return normalized;
+}
+
+async function applyRemoveEmploymentLevelOverride(tx, rawInput) {
+  const input = normalizeRemoveInput(rawInput);
+  const { organizationId, employeeNumber, effectiveTo, reason } = input;
+  const employee = await resolveEmployee(tx, organizationId, employeeNumber);
+  if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
+  if (
+    !employee.designation ||
+    employee.designation.careerLevel == null ||
+    !employee.designation.employmentLevel ||
+    !employee.designation.employmentLevel.isActive
+  ) {
+    throw new Error("EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
+  }
+
+  const current = await tx.employeeEmploymentLevelAssignment.findFirst({
+    where: { organizationId, employeeId: employee.id, effectiveTo: null },
+    include: { employmentLevel: true },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+  });
+  if (!current) throw new Error("CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND");
+  if (effectiveTo < current.effectiveFrom) throw new Error("INVALID_EFFECTIVE_DATE");
+
+  await tx.employeeEmploymentLevelAssignment.update({
+    where: { id: current.id },
+    data: { effectiveTo },
+  });
+
+  await tx.organizationAudit.create({
+    data: {
+      organizationId,
+      actorUserId: input.performedByUserId || null,
+      entityType: "EmployeeEmploymentLevelAssignment",
+      entityId: current.id,
+      action: "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_REMOVED",
+      previousValue: {
+        source: "EMPLOYEE_OVERRIDE",
+        levelNumber: current.levelNumber,
+        code: current.employmentLevel?.code || null,
+        name: current.employmentLevel?.name || null,
+        originalReason: current.reason,
+        originalNotes: current.notes,
+        originallyPerformedByUserId: current.performedByUserId,
+      },
+      newValue: {
+        source: "DESIGNATION_DEFAULT",
+        levelNumber: employee.designation.careerLevel,
+        code: employee.designation.employmentLevel.code,
+        name: employee.designation.employmentLevel.name,
+        designationId: employee.designation.id,
+        designationCode: employee.designation.code,
+        designationName: employee.designation.name,
+        effectiveFrom: effectiveTo,
+        removalNotes: String(input.notes || "").trim() || null,
+      },
+      reason,
+    },
+  });
+
+  return getEmploymentLevelState(tx, { organizationId, employeeNumber });
 }
 
 async function removeEmploymentLevelOverride(prisma, input) {
-  const organizationId = input.organizationId;
-  const employeeNumber = String(input.employeeNumber || "").trim().toUpperCase();
-  const effectiveTo = input.effectiveTo;
-  const reason = String(input.reason || "").trim();
-
-  if (!(effectiveTo instanceof Date) || Number.isNaN(effectiveTo.getTime())) {
-    throw new Error("INVALID_EFFECTIVE_DATE");
-  }
-  if (effectiveTo > new Date()) throw new Error("FUTURE_EFFECTIVE_DATE");
-  if (!reason) throw new Error("EMPLOYMENT_LEVEL_REASON_REQUIRED");
-
-  return prisma.$transaction(async (tx) => {
-    const employee = await resolveEmployee(tx, organizationId, employeeNumber);
-    if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
-    if (
-      !employee.designation ||
-      employee.designation.careerLevel == null ||
-      !employee.designation.employmentLevel ||
-      !employee.designation.employmentLevel.isActive
-    ) {
-      throw new Error("EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
-    }
-
-    const current = await tx.employeeEmploymentLevelAssignment.findFirst({
-      where: { organizationId, employeeId: employee.id, effectiveTo: null },
-      include: { employmentLevel: true },
-      orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-    });
-    if (!current) throw new Error("CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND");
-    if (effectiveTo < current.effectiveFrom) throw new Error("INVALID_EFFECTIVE_DATE");
-
-    // Closing an override must not rewrite why it was originally assigned or
-    // who assigned it. The removal reason, actor and destination default are
-    // preserved in OrganizationAudit below.
-    await tx.employeeEmploymentLevelAssignment.update({
-      where: { id: current.id },
-      data: { effectiveTo },
-    });
-
-    await tx.organizationAudit.create({
-      data: {
-        organizationId,
-        actorUserId: input.performedByUserId || null,
-        entityType: "EmployeeEmploymentLevelAssignment",
-        entityId: current.id,
-        action: "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_REMOVED",
-        previousValue: {
-          source: "EMPLOYEE_OVERRIDE",
-          levelNumber: current.levelNumber,
-          code: current.employmentLevel?.code || null,
-          name: current.employmentLevel?.name || null,
-          originalReason: current.reason,
-          originalNotes: current.notes,
-          originallyPerformedByUserId: current.performedByUserId,
-        },
-        newValue: {
-          source: "DESIGNATION_DEFAULT",
-          levelNumber: employee.designation.careerLevel,
-          code: employee.designation.employmentLevel.code,
-          name: employee.designation.employmentLevel.name,
-          designationId: employee.designation.id,
-          designationCode: employee.designation.code,
-          designationName: employee.designation.name,
-          effectiveFrom: effectiveTo,
-          removalNotes: String(input.notes || "").trim() || null,
-        },
-        reason,
-      },
-    });
-
-    return getEmploymentLevelState(tx, { organizationId, employeeNumber });
-  });
+  return prisma.$transaction((tx) => applyRemoveEmploymentLevelOverride(tx, input));
 }
 
 module.exports = {
@@ -381,6 +393,8 @@ module.exports = {
   levelSummary,
   resolveEffectiveEmploymentLevel,
   getEmploymentLevelState,
+  applyEmploymentLevelOverride,
   setEmploymentLevelOverride,
+  applyRemoveEmploymentLevelOverride,
   removeEmploymentLevelOverride,
 };
