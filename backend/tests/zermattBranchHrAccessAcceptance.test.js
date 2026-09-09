@@ -41,12 +41,18 @@ expect(editUser, "locationScope", "User access UI does not expose location scope
 expect(editUser, "selectedLocationIds", "User access UI does not expose assigned locations.");
 expect(editUser, '"ASSIGNED_LOCATIONS"', "Restricted-location option is missing from User access UI.");
 
-for (const name of ["Ann Favour Joseph", "Angel Williams", "Augustina Anienwe"]) {
-  expect(provisioner, name, `${name} is missing from the controlled ZERMATT access plan.`);
+for (const target of [
+  ["ZLL000117", "Ann Favour Joseph", "ABJ"],
+  ["ZLL000064", "Williams Angel", "PHC"],
+  ["ZLL000223", "Augustina Obiajuru Anienwe", "LAG"],
+]) {
+  const [employeeNumber, canonicalName, branchCode] = target;
+  expect(provisioner, `employeeNumber: "${employeeNumber}"`, `${employeeNumber} is missing from the controlled ZERMATT access plan.`);
+  expect(provisioner, `canonicalName: "${canonicalName}"`, `${canonicalName} is missing from the verified ZERMATT access plan.`);
+  expect(provisioner, `branchCode: "${branchCode}"`, `${branchCode} branch mapping is missing.`);
 }
-for (const code of ["ABJ", "PHC", "LAG"]) {
-  expect(provisioner, `branchCode: "${code}"`, `${code} branch mapping is missing.`);
-}
+expect(provisioner, "employeeNumber: { in: ASSIGNMENTS.map", "Provisioner must resolve users by verified employee number rather than fuzzy name matching.");
+expect(provisioner, 'employee.designation?.code,\n      "HRA-OFF"', "Provisioner must fail closed if a verified target is no longer an HR & Admin Officer.");
 expect(provisioner, 'const ROLE_NAME = "HR & Admin Officer - Branch"', "Existing ZERMATT Branch HR role is not the provisioning authority.");
 expect(provisioner, '"Branch HR & Admin Officer"', "Branch HR role alias compatibility is missing.");
 expect(provisioner, "assertExistingRoleUsageIsSafe", "Shared role usage is not protected before permission changes.");
