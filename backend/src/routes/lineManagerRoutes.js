@@ -6,16 +6,37 @@ const service = require("../services/lineManagerService");
 const router = express.Router();
 router.use(requireAuth);
 
-async function employeeForTenant(organizationId, employeeNumber) {
+function locationContext(req) {
+  return req.auth?.activeLocationId
+    ? { mode: "BRANCH", locationId: req.auth.activeLocationId }
+    : { mode: "ALL_BRANCHES_CONSOLIDATED", locationId: null };
+}
+
+async function employeeForTenant(
+  organizationId,
+  employeeNumber,
+  activeLocationId = null
+) {
   return prisma.employee.findFirst({
-    where: { organizationId, employeeNumber },
-    select: { id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true },
+    where: {
+      organizationId,
+      employeeNumber,
+      ...(activeLocationId ? { locationId: activeLocationId } : {}),
+    },
+    select: {
+      id: true,
+      employeeNumber: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      locationId: true,
+    },
   });
 }
 
 function knownError(res, error) {
   const map = {
-    EMPLOYEE_NOT_FOUND: [404, "Employee not found."],
+    EMPLOYEE_NOT_FOUND: [404, "Employee not found in the active branch context."],
     EMPLOYEE_NOT_CURRENT: [409, "Line managers can only be assigned to current employees."],
     EMPLOYEE_DESIGNATION_REQUIRED: [409, "Assign a controlled designation before selecting a line manager."],
     MANAGER_NOT_FOUND: [400, "Select a valid manager from your organization."],
@@ -43,11 +64,18 @@ router.get("/eligible", requirePermission("employees.view"), async (req, res) =>
       organizationId: req.auth.organizationId,
       status: { in: service.CURRENT_STATUSES },
       exitDate: null,
+      ...(req.auth.activeLocationId
+        ? { locationId: req.auth.activeLocationId }
+        : {}),
     },
     include: { department: true, designation: true, location: true },
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   });
-  res.json({ status: "success", data });
+  res.json({
+    status: "success",
+    locationContext: locationContext(req),
+    data,
+  });
 });
 
 router.get("/my-team", requirePermission("employees.view"), async (req, res) => {
@@ -63,29 +91,51 @@ router.get("/my-team", requirePermission("employees.view"), async (req, res) => 
       organizationId: req.auth.organizationId,
       managerEmployeeId: user.employeeId,
       effectiveTo: null,
+      ...(req.auth.activeLocationId
+        ? { employee: { locationId: req.auth.activeLocationId } }
+        : {}),
     },
     include: service.assignmentInclude,
   });
-  return res.json({ status: "success", data: assignments.map((item) => item.employee) });
+  return res.json({
+    status: "success",
+    locationContext: locationContext(req),
+    data: assignments.map((item) => item.employee),
+  });
 });
 
 router.get("/managers/:managerEmployeeNumber/reports", requirePermission("employees.view"), async (req, res) => {
-  const manager = await employeeForTenant(req.auth.organizationId, req.params.managerEmployeeNumber);
+  const manager = await employeeForTenant(
+    req.auth.organizationId,
+    req.params.managerEmployeeNumber
+  );
   if (!manager) return res.status(404).json({ status: "error", message: "Manager not found." });
   const assignments = await prisma.employeeLineManagerAssignment.findMany({
     where: {
       organizationId: req.auth.organizationId,
       managerEmployeeId: manager.id,
       effectiveTo: null,
+      ...(req.auth.activeLocationId
+        ? { employee: { locationId: req.auth.activeLocationId } }
+        : {}),
     },
     include: service.assignmentInclude,
   });
-  return res.json({ status: "success", manager, data: assignments.map((item) => item.employee) });
+  return res.json({
+    status: "success",
+    manager,
+    locationContext: locationContext(req),
+    data: assignments.map((item) => item.employee),
+  });
 });
 
 router.get("/employees/:employeeNumber/candidates", requirePermission("employees.view"), async (req, res) => {
   try {
-    const employee = await employeeForTenant(req.auth.organizationId, req.params.employeeNumber);
+    const employee = await employeeForTenant(
+      req.auth.organizationId,
+      req.params.employeeNumber,
+      req.auth.activeLocationId
+    );
     if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
     const hierarchy = await service.resolveManagerCandidates(prisma, {
       organizationId: req.auth.organizationId,
@@ -103,6 +153,7 @@ router.get("/employees/:employeeNumber/candidates", requirePermission("employees
         candidates: hierarchy.candidates,
         topCandidates: hierarchy.topCandidates,
         requiresManualSelection: hierarchy.requiresManualSelection,
+        locationContext: locationContext(req),
       },
     });
   } catch (error) {
@@ -113,8 +164,18 @@ router.get("/employees/:employeeNumber/candidates", requirePermission("employees
 });
 
 router.get("/employees/:employeeNumber", requirePermission("employees.view"), async (req, res) => {
-  const employee = await employeeForTenant(req.auth.organizationId, req.params.employeeNumber);
-  if (!employee) return res.status(404).json({ status: "error", message: "Employee not found." });
+  const employee = await employeeForTenant(
+    req.auth.organizationId,
+    req.params.employeeNumber,
+    req.auth.activeLocationId
+  );
+  if (!employee) {
+    return res.status(404).json({
+      status: "error",
+      code: "EMPLOYEE_NOT_FOUND",
+      message: "Employee not found in the active branch context.",
+    });
+  }
   const history = await prisma.employeeLineManagerAssignment.findMany({
     where: { organizationId: req.auth.organizationId, employeeId: employee.id },
     include: service.assignmentInclude,
@@ -125,13 +186,18 @@ router.get("/employees/:employeeNumber", requirePermission("employees.view"), as
     employee,
     current: history.find((item) => item.effectiveTo === null) || null,
     history,
+    locationContext: locationContext(req),
   });
 });
 
 router.put("/employees/:employeeNumber", requirePermission("employees.update"), async (req, res) => {
   try {
     const organizationId = req.auth.organizationId;
-    const employee = await employeeForTenant(organizationId, req.params.employeeNumber);
+    const employee = await employeeForTenant(
+      organizationId,
+      req.params.employeeNumber,
+      req.auth.activeLocationId
+    );
     if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
     const effectiveFrom = service.parseEffectiveDate(req.body?.effectiveFrom);
     if (!effectiveFrom) return res.status(400).json({ status: "error", message: "A valid effective date is required." });
@@ -157,7 +223,11 @@ router.put("/employees/:employeeNumber", requirePermission("employees.update"), 
 router.delete("/employees/:employeeNumber", requirePermission("employees.update"), async (req, res) => {
   try {
     const organizationId = req.auth.organizationId;
-    const employee = await employeeForTenant(organizationId, req.params.employeeNumber);
+    const employee = await employeeForTenant(
+      organizationId,
+      req.params.employeeNumber,
+      req.auth.activeLocationId
+    );
     if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
     const effectiveTo = service.parseEffectiveDate(req.body?.effectiveTo);
     const reason = String(req.body?.reason || "").trim();
