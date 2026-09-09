@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  FaChartBar,
-  FaUsers,
   FaBuilding,
+  FaCalendarAlt,
+  FaChartBar,
+  FaClock,
   FaDownload,
+  FaMoneyBillWave,
   FaPrint,
   FaSyncAlt,
+  FaUmbrellaBeach,
   FaUserCheck,
   FaUserClock,
-  FaUmbrellaBeach,
+  FaUsers,
   FaUserSlash,
 } from "react-icons/fa";
 
@@ -20,12 +23,27 @@ import {
 } from "../services/api";
 
 const VIEWS = [
-  { key: "overview", label: "Reports Dashboard" },
-  { key: "workforce", label: "Workforce Analytics" },
-  { key: "employees", label: "Employee Reports" },
-  { key: "headcount", label: "Headcount Reports" },
-  { key: "branches", label: "Branch Reports" },
+  { key: "overview", label: "Reports Dashboard", permission: "reports.view" },
+  { key: "workforce", label: "Workforce Analytics", permission: "reports.view" },
+  { key: "employees", label: "Employee Reports", permission: "reports.view" },
+  { key: "headcount", label: "Headcount Reports", permission: "reports.view" },
+  { key: "branches", label: "Branch Reports", permission: "reports.view" },
+  { key: "attendance", label: "Attendance Reports", permission: "attendance.view" },
+  { key: "leave", label: "Leave Reports", permission: "leave.view" },
+  { key: "payroll", label: "Payroll Reports", permission: "payroll.view" },
 ];
+
+const CORE_VIEWS = new Set(["overview", "workforce", "employees", "headcount", "branches"]);
+
+function localIsoDate(date) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+function monthStartIso() {
+  const now = new Date();
+  return localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+}
 
 function Reports() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,27 +53,57 @@ function Reports() {
     : "overview";
 
   const [report, setReport] = useState(null);
+  const [operational, setOperational] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [operationalError, setOperationalError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [attendanceFrom, setAttendanceFrom] = useState(monthStartIso);
+  const [attendanceTo, setAttendanceTo] = useState(() => localIsoDate(new Date()));
+  const [leaveYear, setLeaveYear] = useState(() => new Date().getFullYear());
 
-  const loadReport = async () => {
+  const loadReport = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const result = await apiRequest("/api/reports/release1");
-      setReport(result?.data || null);
+      setOperationalError("");
+
+      const core = await apiRequest("/api/reports/release1");
+      setReport(core?.data || null);
+      setOperational(null);
+
+      try {
+        if (activeView === "attendance") {
+          const result = await apiRequest(
+            `/api/reports/operational/attendance?from=${encodeURIComponent(attendanceFrom)}&to=${encodeURIComponent(attendanceTo)}`
+          );
+          setOperational(result?.data || null);
+        } else if (activeView === "leave") {
+          const result = await apiRequest(
+            `/api/reports/operational/leave?leaveYear=${encodeURIComponent(leaveYear)}`
+          );
+          setOperational(result?.data || null);
+        } else if (activeView === "payroll") {
+          const result = await apiRequest("/api/reports/operational/payroll");
+          setOperational(result?.data || null);
+        }
+      } catch (err) {
+        setOperationalError(err?.message || "Unable to load the selected operational report.");
+      }
     } catch (err) {
       setError(err?.message || "Unable to load Reports & Analytics.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeView, attendanceFrom, attendanceTo, leaveYear]);
 
   useEffect(() => {
     loadReport();
-  }, []);
+    const handleLocationChange = () => loadReport();
+    window.addEventListener("chris:location-context-changed", handleLocationChange);
+    return () => window.removeEventListener("chris:location-context-changed", handleLocationChange);
+  }, [loadReport]);
 
   const filteredEmployees = useMemo(() => {
     const rows = report?.employees || [];
@@ -85,9 +133,18 @@ function Reports() {
   const exportExcel = async () => {
     try {
       setExporting(true);
-      const file = await apiDownload(
-        `/api/reports/release1/export.xlsx?view=${encodeURIComponent(activeView)}`
-      );
+      let endpoint;
+      if (CORE_VIEWS.has(activeView)) {
+        endpoint = `/api/reports/release1/export.xlsx?view=${encodeURIComponent(activeView)}`;
+      } else if (activeView === "attendance") {
+        endpoint = `/api/reports/operational/attendance/export.xlsx?from=${encodeURIComponent(attendanceFrom)}&to=${encodeURIComponent(attendanceTo)}`;
+      } else if (activeView === "leave") {
+        endpoint = `/api/reports/operational/leave/export.xlsx?leaveYear=${encodeURIComponent(leaveYear)}`;
+      } else if (activeView === "payroll") {
+        endpoint = "/api/reports/operational/payroll/export.xlsx";
+      }
+      if (!endpoint) return;
+      const file = await apiDownload(endpoint);
       saveDownloadedBlob(file);
     } catch (err) {
       window.alert(err?.message || "Unable to export the report.");
@@ -96,11 +153,10 @@ function Reports() {
     }
   };
 
-  const scopeLabel = report?.scope?.mode === "HEAD_OFFICE_CONSOLIDATED"
+  const scope = operational?.scope || report?.scope;
+  const scopeLabel = scope?.mode === "HEAD_OFFICE_CONSOLIDATED"
     ? "HEAD OFFICE · CONSOLIDATED"
-    : `${report?.scope?.locationName || "BRANCH"}${
-        report?.scope?.locationCode ? ` · ${report.scope.locationCode}` : ""
-      }`;
+    : `${scope?.locationName || "BRANCH"}${scope?.locationCode ? ` · ${scope.locationCode}` : ""}`;
 
   return (
     <div style={pageStyle}>
@@ -109,7 +165,7 @@ function Reports() {
           <div style={eyebrowStyle}>REPORTING & INSIGHTS</div>
           <h1 style={titleStyle}>Reports & Analytics</h1>
           <p style={subtitleStyle}>
-            Release 1 management reporting from authoritative CHRiS employee and organization data.
+            Live management reporting from authoritative CHRiS workforce, attendance, leave and payroll data.
           </p>
         </div>
 
@@ -121,7 +177,7 @@ function Reports() {
           <button type="button" style={secondaryButtonStyle} onClick={() => window.print()}>
             <FaPrint /> Print / Save PDF
           </button>
-          <button type="button" style={primaryButtonStyle} onClick={exportExcel} disabled={exporting || loading || !report}>
+          <button type="button" style={primaryButtonStyle} onClick={exportExcel} disabled={exporting || loading || !report || Boolean(operationalError)}>
             <FaDownload /> {exporting ? "Exporting..." : "Export Excel"}
           </button>
         </div>
@@ -144,7 +200,7 @@ function Reports() {
       {!loading && error && <StatusPanel text={error} error />}
       {!loading && !error && report && (
         <>
-          <KpiGrid summary={report.summary} />
+          {CORE_VIEWS.has(activeView) && <KpiGrid summary={report.summary} />}
 
           {activeView === "overview" && <Overview report={report} />}
           {activeView === "workforce" && <Workforce report={report} />}
@@ -159,11 +215,25 @@ function Reports() {
           {activeView === "headcount" && <HeadcountReport report={report} />}
           {activeView === "branches" && <BranchReport rows={report.branches || []} />}
 
+          {operationalError && <StatusPanel text={operationalError} error />}
+          {!operationalError && activeView === "attendance" && operational && (
+            <AttendanceReport
+              data={operational}
+              from={attendanceFrom}
+              to={attendanceTo}
+              onFrom={setAttendanceFrom}
+              onTo={setAttendanceTo}
+            />
+          )}
+          {!operationalError && activeView === "leave" && operational && (
+            <LeaveReport data={operational} year={leaveYear} onYear={setLeaveYear} />
+          )}
+          {!operationalError && activeView === "payroll" && operational && (
+            <PayrollReport data={operational} />
+          )}
+
           <div style={footerNoteStyle}>
-            Generated {formatDateTime(report.generatedAt)} · Employee tables contain current workforce only.
-            {report?.controls?.branchScoped
-              ? " Branch access is enforced by the active CHRiS operating context."
-              : " Head Office shows the consolidated organization."}
+            Generated {formatDateTime(operational?.generatedAt || report.generatedAt)}. Report scope is enforced by the authenticated CHRiS operating context.
           </div>
         </>
       )}
@@ -180,18 +250,22 @@ function KpiGrid({ summary }) {
     { title: "Suspended", value: summary.suspended, icon: <FaUserSlash />, tone: "gold" },
     { title: "Exited Records", value: summary.exited, icon: <FaChartBar />, tone: "green" },
   ];
+  return <MetricCards cards={cards} />;
+}
 
+function MetricCards({ cards }) {
   return (
     <div style={kpiGridStyle}>
       {cards.map((card) => (
         <div key={card.title} style={kpiCardStyle}>
           <div style={kpiTopStyle}>
             <span style={kpiLabelStyle}>{card.title}</span>
-            <span style={card.tone === "gold" ? iconGoldStyle : iconGreenStyle}>{card.icon}</span>
+            {card.icon && <span style={card.tone === "gold" ? iconGoldStyle : iconGreenStyle}>{card.icon}</span>}
           </div>
           <div style={card.tone === "gold" ? kpiValueGoldStyle : kpiValueGreenStyle}>
-            {Number(card.value || 0).toLocaleString("en-NG")}
+            {card.format === "money" ? formatMoney(card.value) : Number(card.value || 0).toLocaleString("en-NG")}
           </div>
+          {card.subtitle && <div style={metricSubtitleStyle}>{card.subtitle}</div>}
         </div>
       ))}
     </div>
@@ -241,31 +315,11 @@ function EmployeeReport({ rows, totalRows, search, onSearch }) {
     <Panel
       title="Employee Report"
       subtitle={`${rows.length.toLocaleString("en-NG")} of ${totalRows.toLocaleString("en-NG")} current employees shown.`}
-      actions={
-        <input
-          value={search}
-          onChange={(event) => onSearch(event.target.value)}
-          placeholder="Search employee, branch, department..."
-          style={searchStyle}
-        />
-      }
+      actions={<input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search employee, branch, department..." style={searchStyle} />}
     >
       <div style={tableWrapStyle}>
         <table style={tableStyle}>
-          <thead>
-            <tr>
-              {[
-                "Employee No.",
-                "Employee",
-                "Status",
-                "Employment Type",
-                "Department",
-                "Designation",
-                "Branch",
-                "Hire Date",
-              ].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}
-            </tr>
-          </thead>
+          <thead><tr>{["Employee No.", "Employee", "Status", "Employment Type", "Department", "Designation", "Branch", "Hire Date"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
           <tbody>
             {rows.map((employee) => (
               <tr key={employee.employeeNumber}>
@@ -279,9 +333,7 @@ function EmployeeReport({ rows, totalRows, search, onSearch }) {
                 <td style={tdStyle}>{employee.hireDate || "—"}</td>
               </tr>
             ))}
-            {!rows.length && (
-              <tr><td colSpan={8} style={emptyCellStyle}>No employees match the current search.</td></tr>
-            )}
+            {!rows.length && <tr><td colSpan={8} style={emptyCellStyle}>No employees match the current search.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -292,121 +344,140 @@ function EmployeeReport({ rows, totalRows, search, onSearch }) {
 function HeadcountReport({ report }) {
   return (
     <div style={twoColumnStyle}>
-      <Panel title="By Status" subtitle="Current workforce status headcount.">
-        <SimpleBreakdownTable rows={report.headcount?.byStatus || []} />
-      </Panel>
-      <Panel title="By Employment Type" subtitle="Current workforce by employment arrangement.">
-        <SimpleBreakdownTable rows={report.headcount?.byEmploymentType || []} />
-      </Panel>
-      <Panel title="By Department" subtitle="Current workforce by department.">
-        <SimpleBreakdownTable rows={report.headcount?.byDepartment || []} />
-      </Panel>
-      <Panel title="By Designation" subtitle="Current workforce by designation.">
-        <SimpleBreakdownTable rows={report.headcount?.byDesignation || []} />
-      </Panel>
+      <Panel title="By Status" subtitle="Current workforce status headcount."><SimpleBreakdownTable rows={report.headcount?.byStatus || []} /></Panel>
+      <Panel title="By Employment Type" subtitle="Current workforce by employment arrangement."><SimpleBreakdownTable rows={report.headcount?.byEmploymentType || []} /></Panel>
+      <Panel title="By Department" subtitle="Current workforce by department."><SimpleBreakdownTable rows={report.headcount?.byDepartment || []} /></Panel>
+      <Panel title="By Designation" subtitle="Current workforce by designation."><SimpleBreakdownTable rows={report.headcount?.byDesignation || []} /></Panel>
     </div>
   );
 }
 
 function BranchReport({ rows }) {
+  return <Panel title="Branch Report" subtitle="Current workforce distribution within the permitted operating context."><BranchTable rows={rows} /></Panel>;
+}
+
+function AttendanceReport({ data, from, to, onFrom, onTo }) {
+  const byStatus = data.totals?.byStatus || {};
+  const cards = [
+    { title: "Attendance Records", value: data.totals?.records, icon: <FaClock />, tone: "gold" },
+    { title: "Present", value: byStatus.PRESENT, icon: <FaUserCheck />, tone: "green" },
+    { title: "Late", value: byStatus.LATE, icon: <FaUserClock />, tone: "gold" },
+    { title: "Absent", value: byStatus.ABSENT, icon: <FaUserSlash />, tone: "green" },
+    { title: "Late Minutes", value: data.totals?.lateMinutes, tone: "gold" },
+    { title: "Overtime Minutes", value: data.totals?.overtimeMinutes, tone: "green" },
+  ];
   return (
-    <Panel title="Branch Report" subtitle="Current workforce distribution within the permitted operating context.">
-      <BranchTable rows={rows} />
-    </Panel>
+    <>
+      <MetricCards cards={cards} />
+      <Panel
+        title="Attendance Report"
+        subtitle="Attendance records, lateness and overtime within the selected period."
+        actions={
+          <div style={filterRowStyle}>
+            <label style={filterLabelStyle}>From<input type="date" value={from} onChange={(e) => onFrom(e.target.value)} style={dateInputStyle} /></label>
+            <label style={filterLabelStyle}>To<input type="date" value={to} onChange={(e) => onTo(e.target.value)} style={dateInputStyle} /></label>
+          </div>
+        }
+      >
+        <div style={tableWrapStyle}><table style={tableStyle}>
+          <thead><tr>{["Date", "Employee No.", "Employee", "Status", "Shift", "Late Min", "Overtime Min", "Source"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <tbody>
+            {(data.records || []).map((row) => <tr key={row.id}>
+              <td style={tdStyle}>{row.attendanceDate || "—"}</td><td style={tdStrongStyle}>{row.employeeNumber}</td><td style={tdStyle}>{row.employeeName}</td>
+              <td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{row.shift || "—"}</td><td style={tdStyle}>{row.lateMinutes}</td><td style={tdStyle}>{row.overtimeMinutes}</td><td style={tdStyle}>{row.source || "—"}</td>
+            </tr>)}
+            {!data.records?.length && <tr><td colSpan={8} style={emptyCellStyle}>No attendance records exist for the selected period.</td></tr>}
+          </tbody>
+        </table></div>
+      </Panel>
+    </>
+  );
+}
+
+function LeaveReport({ data, year, onYear }) {
+  const o = data.overview || {};
+  const cards = [
+    { title: "Pending Requests", value: o.pendingRequests, icon: <FaUserClock />, tone: "gold" },
+    { title: "Approved Upcoming", value: o.approvedUpcoming, icon: <FaUserCheck />, tone: "green" },
+    { title: "Employees On Leave", value: o.employeesOnLeave, icon: <FaUmbrellaBeach />, tone: "gold" },
+    { title: "Active Leave", value: o.activeLeaveRequests, icon: <FaCalendarAlt />, tone: "green" },
+    { title: "Returns Due", value: o.returnsDue, tone: "gold" },
+    { title: "Exceptions", value: o.leaveExceptions, tone: "green" },
+  ];
+  return (
+    <>
+      <MetricCards cards={cards} />
+      <Panel title="Leave Requests" subtitle={`${data.summary?.requestCount || 0} leave request record(s) in the permitted scope.`} actions={<label style={filterLabelStyle}>Leave year<input type="number" min="2000" max="2100" value={year} onChange={(e) => onYear(Number(e.target.value) || new Date().getFullYear())} style={yearInputStyle} /></label>}>
+        <div style={tableWrapStyle}><table style={tableStyle}>
+          <thead><tr>{["Employee", "Leave Type", "Policy", "Start", "End", "Units", "Status", "Branch"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <tbody>{(data.requests || []).map((row) => <tr key={row.id}>
+            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td><td style={tdStyle}>{row.leaveType || "—"}</td><td style={tdStyle}>{row.policy || "—"}</td><td style={tdStyle}>{row.startDate || "—"}</td><td style={tdStyle}>{row.endDate || "—"}</td><td style={tdStyle}>{row.requestedUnits}</td><td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{row.branch || "—"}</td>
+          </tr>)}{!data.requests?.length && <tr><td colSpan={8} style={emptyCellStyle}>No leave requests are available in this scope.</td></tr>}</tbody>
+        </table></div>
+      </Panel>
+      <Panel title={`${year} Leave Balances`} subtitle="Entitlement, usage, committed requests and available balance.">
+        <div style={tableWrapStyle}><table style={tableStyle}>
+          <thead><tr>{["Employee", "Leave Type", "Entitlement", "Used", "Pending", "Approved", "Available"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <tbody>{(data.balances || []).map((row) => <tr key={row.id}>
+            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td><td style={tdStyle}>{row.leaveType || "—"}</td><td style={tdStyle}>{row.entitlement}</td><td style={tdStyle}>{row.used}</td><td style={tdStyle}>{row.pendingAllocation}</td><td style={tdStyle}>{row.approvedAllocation}</td><td style={tdRightStrongStyle}>{row.available}</td>
+          </tr>)}{!data.balances?.length && <tr><td colSpan={7} style={emptyCellStyle}>No leave balances are available for {year}.</td></tr>}</tbody>
+        </table></div>
+      </Panel>
+    </>
+  );
+}
+
+function PayrollReport({ data }) {
+  const latest = data.latest;
+  const cards = [
+    { title: "Employees", value: data.totals?.latestEmployeeCount, icon: <FaUsers />, tone: "gold" },
+    { title: "Gross Payroll", value: data.totals?.latestGrossPayroll, icon: <FaMoneyBillWave />, tone: "green", format: "money" },
+    { title: "Deductions", value: data.totals?.latestDeductions, icon: <FaMoneyBillWave />, tone: "gold", format: "money" },
+    { title: "Net Payroll", value: data.totals?.latestNetPayroll, icon: <FaMoneyBillWave />, tone: "green", format: "money" },
+  ];
+  return (
+    <>
+      <MetricCards cards={cards} />
+      <Panel title="Payroll Run History" subtitle={latest ? `Latest: ${latest.periodName || latest.periodCode || "Payroll period"} · ${friendlyLabel(latest.status)}` : "No payroll run has been calculated yet."}>
+        <div style={controlNoteStyle}>{data.control}</div>
+        <div style={tableWrapStyle}><table style={tableStyle}>
+          <thead><tr>{["Period", "Status", "Statutory", "Employees", "Gross", "Deductions", "Net", "Pay Date"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <tbody>{(data.runs || []).map((row) => <tr key={row.id}>
+            <td style={tdStrongStyle}>{row.periodName || row.periodCode || "—"}</td><td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{friendlyLabel(row.statutoryStatus || "Pending")}</td><td style={tdStyle}>{row.employeeCount}</td><td style={tdStyle}>{formatMoney(row.grossTotal)}</td><td style={tdStyle}>{formatMoney(row.deductionTotal)}</td><td style={tdRightStrongStyle}>{formatMoney(row.netPreviewTotal)}</td><td style={tdStyle}>{formatDate(row.payDate)}</td>
+          </tr>)}{!data.runs?.length && <tr><td colSpan={8} style={emptyCellStyle}>No payroll runs are available in this scope.</td></tr>}</tbody>
+        </table></div>
+      </Panel>
+    </>
   );
 }
 
 function BranchTable({ rows, compact = false }) {
   return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            {["Branch", "Code", "Current", "Active", "Probation", "On Leave", "Suspended", "Male", "Female"].map((heading) => (
-              <th key={heading} style={thStyle}>{heading}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.locationId || row.code}>
-              <td style={tdStrongStyle}>{row.branch}</td>
-              <td style={tdStyle}>{row.code}</td>
-              <td style={tdStrongStyle}>{row.currentWorkforce}</td>
-              <td style={tdStyle}>{row.active}</td>
-              <td style={tdStyle}>{row.probation}</td>
-              <td style={tdStyle}>{row.onLeave}</td>
-              <td style={tdStyle}>{row.suspended}</td>
-              <td style={tdStyle}>{row.male}</td>
-              <td style={tdStyle}>{row.female}</td>
-            </tr>
-          ))}
-          {!rows.length && (
-            <tr><td colSpan={9} style={emptyCellStyle}>No active branch records are available.</td></tr>
-          )}
-        </tbody>
-      </table>
-      {!compact && <div style={tableNoteStyle}>Head Office shows all active branches. Branch HR users see only their assigned branch.</div>}
-    </div>
+    <div style={tableWrapStyle}><table style={tableStyle}>
+      <thead><tr>{["Branch", "Code", "Current", "Active", "Probation", "On Leave", "Suspended", "Male", "Female"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
+      <tbody>{rows.map((row) => <tr key={row.locationId || row.code}>
+        <td style={tdStrongStyle}>{row.branch}</td><td style={tdStyle}>{row.code}</td><td style={tdStrongStyle}>{row.currentWorkforce}</td><td style={tdStyle}>{row.active}</td><td style={tdStyle}>{row.probation}</td><td style={tdStyle}>{row.onLeave}</td><td style={tdStyle}>{row.suspended}</td><td style={tdStyle}>{row.male}</td><td style={tdStyle}>{row.female}</td>
+      </tr>)}{!rows.length && <tr><td colSpan={9} style={emptyCellStyle}>No active branch records are available.</td></tr>}</tbody>
+    </table>{!compact && <div style={tableNoteStyle}>Head Office shows all active branches. Branch HR users see only their assigned branch.</div>}</div>
   );
 }
 
 function BreakdownBars({ rows, total, maxRows = 12 }) {
   const visible = rows.slice(0, maxRows);
   const maximum = Math.max(1, ...visible.map((row) => Number(row.count || 0)));
-  return (
-    <div style={{ display: "grid", gap: 11 }}>
-      {visible.map((row) => {
-        const count = Number(row.count || 0);
-        const percentage = total ? Math.round((count / total) * 1000) / 10 : 0;
-        return (
-          <div key={row.name}>
-            <div style={barLabelRowStyle}>
-              <span>{friendlyLabel(row.name)}</span>
-              <strong>{count.toLocaleString("en-NG")} · {percentage}%</strong>
-            </div>
-            <div style={barTrackStyle}>
-              <div style={{ ...barFillStyle, width: `${Math.max(2, (count / maximum) * 100)}%` }} />
-            </div>
-          </div>
-        );
-      })}
-      {!visible.length && <div style={emptyTextStyle}>No report data available.</div>}
-    </div>
-  );
+  return <div style={{ display: "grid", gap: 11 }}>{visible.map((row) => {
+    const count = Number(row.count || 0);
+    const percentage = total ? Math.round((count / total) * 1000) / 10 : 0;
+    return <div key={row.name}><div style={barLabelRowStyle}><span>{friendlyLabel(row.name)}</span><strong>{count.toLocaleString("en-NG")} · {percentage}%</strong></div><div style={barTrackStyle}><div style={{ ...barFillStyle, width: `${Math.max(2, (count / maximum) * 100)}%` }} /></div></div>;
+  })}{!visible.length && <div style={emptyTextStyle}>No report data available.</div>}</div>;
 }
 
 function SimpleBreakdownTable({ rows }) {
-  return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead><tr><th style={thStyle}>Category</th><th style={thRightStyle}>Headcount</th></tr></thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.name}>
-              <td style={tdStyle}>{friendlyLabel(row.name)}</td>
-              <td style={tdRightStrongStyle}>{Number(row.count || 0).toLocaleString("en-NG")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <div style={tableWrapStyle}><table style={tableStyle}><thead><tr><th style={thStyle}>Category</th><th style={thRightStyle}>Headcount</th></tr></thead><tbody>{rows.map((row) => <tr key={row.name}><td style={tdStyle}>{friendlyLabel(row.name)}</td><td style={tdRightStrongStyle}>{Number(row.count || 0).toLocaleString("en-NG")}</td></tr>)}</tbody></table></div>;
 }
 
 function Panel({ title, subtitle, actions, children }) {
-  return (
-    <section style={panelStyle}>
-      <div style={panelHeaderStyle}>
-        <div>
-          <h2 style={panelTitleStyle}>{title}</h2>
-          {subtitle && <div style={panelSubtitleStyle}>{subtitle}</div>}
-        </div>
-        {actions}
-      </div>
-      <div style={{ marginTop: 18 }}>{children}</div>
-    </section>
-  );
+  return <section style={panelStyle}><div style={panelHeaderStyle}><div><h2 style={panelTitleStyle}>{title}</h2>{subtitle && <div style={panelSubtitleStyle}>{subtitle}</div>}</div>{actions}</div><div style={{ marginTop: 18 }}>{children}</div></section>;
 }
 
 function StatusBadge({ value }) {
@@ -414,11 +485,7 @@ function StatusBadge({ value }) {
 }
 
 function StatusPanel({ text, error = false }) {
-  return (
-    <div style={{ ...statusPanelStyle, ...(error ? { borderColor: "rgba(239,68,68,.45)", color: "#FCA5A5" } : {}) }}>
-      {text}
-    </div>
-  );
+  return <div style={{ ...statusPanelStyle, ...(error ? { borderColor: "rgba(239,68,68,.45)", color: "#FCA5A5" } : {}) }}>{text}</div>;
 }
 
 function friendlyLabel(value) {
@@ -433,11 +500,22 @@ function formatDateTime(value) {
   return date.toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-NG", { dateStyle: "medium" });
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
 const pageStyle = { padding: "4px 0 32px", color: "#EAF5EF" };
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, flexWrap: "wrap" };
 const eyebrowStyle = { color: "var(--chris-gold, #D4AF37)", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" };
 const titleStyle = { margin: "7px 0 0", fontSize: 30, color: "#F7FAF8" };
-const subtitleStyle = { margin: "7px 0 0", color: "#AFC5B9", fontSize: 13, maxWidth: 720, lineHeight: 1.55 };
+const subtitleStyle = { margin: "7px 0 0", color: "#AFC5B9", fontSize: 13, maxWidth: 760, lineHeight: 1.55 };
 const headerActionsStyle = { display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" };
 const scopePillStyle = { border: "1px solid rgba(212,175,55,.48)", color: "#F6D35D", padding: "9px 12px", borderRadius: 999, fontSize: 10, fontWeight: 900, letterSpacing: ".05em", background: "rgba(212,175,55,.07)" };
 const buttonBaseStyle = { borderRadius: 10, padding: "9px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7 };
@@ -452,29 +530,35 @@ const kpiTopStyle = { display: "flex", justifyContent: "space-between", alignIte
 const kpiLabelStyle = { fontSize: 10, fontWeight: 900, color: "#DDECE4", textTransform: "uppercase", letterSpacing: ".035em" };
 const iconGreenStyle = { color: "#2EE98B", fontSize: 17 };
 const iconGoldStyle = { color: "#F6D35D", fontSize: 17 };
-const kpiValueBaseStyle = { marginTop: 12, fontSize: 29, fontWeight: 900 };
+const kpiValueBaseStyle = { marginTop: 12, fontSize: 27, fontWeight: 900, wordBreak: "break-word" };
 const kpiValueGreenStyle = { ...kpiValueBaseStyle, color: "#2EE98B" };
 const kpiValueGoldStyle = { ...kpiValueBaseStyle, color: "#F6D35D" };
+const metricSubtitleStyle = { marginTop: 5, color: "#91A99C", fontSize: 9 };
 const twoColumnStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(390px,1fr))", gap: 18, marginTop: 20 };
 const panelStyle = { marginTop: 20, border: "1px solid rgba(212,175,55,.20)", borderRadius: 17, padding: 20, background: "linear-gradient(145deg,rgba(6,55,34,.93),rgba(2,23,15,.95))", boxShadow: "0 12px 30px rgba(0,0,0,.18)", overflow: "hidden" };
 const panelHeaderStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" };
 const panelTitleStyle = { margin: 0, color: "#F7FAF8", fontSize: 17 };
 const panelSubtitleStyle = { color: "#9EB7A9", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
-const tableWrapStyle = { width: "100%", overflowX: "auto" };
-const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 620, fontSize: 11 };
-const thStyle = { textAlign: "left", color: "#F6D35D", padding: "10px 11px", borderBottom: "1px solid rgba(212,175,55,.22)", whiteSpace: "nowrap", fontSize: 9, textTransform: "uppercase", letterSpacing: ".045em" };
+const tableWrapStyle = { width: "100%", overflowX: "auto", maxHeight: 620, overflowY: "auto" };
+const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 720, fontSize: 11 };
+const thStyle = { textAlign: "left", color: "#F6D35D", padding: "10px 11px", borderBottom: "1px solid rgba(212,175,55,.22)", whiteSpace: "nowrap", fontSize: 9, textTransform: "uppercase", letterSpacing: ".045em", position: "sticky", top: 0, background: "#06321f", zIndex: 1 };
 const thRightStyle = { ...thStyle, textAlign: "right" };
 const tdStyle = { padding: "10px 11px", borderBottom: "1px solid rgba(255,255,255,.055)", color: "#C9DCD2", verticalAlign: "top" };
 const tdStrongStyle = { ...tdStyle, fontWeight: 800, color: "#F1F8F4" };
 const tdRightStrongStyle = { ...tdStrongStyle, textAlign: "right", color: "#2EE98B" };
 const emptyCellStyle = { ...tdStyle, textAlign: "center", padding: 24, color: "#91A99C" };
 const searchStyle = { minWidth: 280, padding: "9px 11px", borderRadius: 9, border: "1px solid rgba(212,175,55,.28)", background: "rgba(0,0,0,.22)", color: "#F7FAF8", outline: "none" };
+const filterRowStyle = { display: "flex", gap: 8, flexWrap: "wrap" };
+const filterLabelStyle = { display: "flex", alignItems: "center", gap: 7, color: "#AFC5B9", fontSize: 10, fontWeight: 800 };
+const dateInputStyle = { padding: "7px 9px", borderRadius: 8, border: "1px solid rgba(212,175,55,.24)", background: "#052719", color: "#F7FAF8" };
+const yearInputStyle = { ...dateInputStyle, width: 82 };
 const barLabelRowStyle = { display: "flex", justifyContent: "space-between", gap: 12, color: "#C9DCD2", fontSize: 11, marginBottom: 5 };
 const barTrackStyle = { height: 7, borderRadius: 999, background: "rgba(255,255,255,.07)", overflow: "hidden" };
 const barFillStyle = { height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#087A43,#D4AF37)" };
 const emptyTextStyle = { color: "#91A99C", fontSize: 12 };
-const statusBadgeStyle = { display: "inline-flex", padding: "4px 8px", borderRadius: 999, background: "rgba(46,233,139,.10)", color: "#76F3B2", fontSize: 9, fontWeight: 900 };
+const statusBadgeStyle = { display: "inline-flex", padding: "4px 8px", borderRadius: 999, background: "rgba(46,233,139,.10)", color: "#76F3B2", fontSize: 9, fontWeight: 900, whiteSpace: "nowrap" };
 const tableNoteStyle = { marginTop: 12, color: "#91A99C", fontSize: 10 };
+const controlNoteStyle = { marginBottom: 14, padding: "9px 11px", borderLeft: "3px solid #D4AF37", background: "rgba(212,175,55,.06)", color: "#AFC5B9", fontSize: 10, lineHeight: 1.5 };
 const footerNoteStyle = { marginTop: 18, color: "#829A8D", fontSize: 10, lineHeight: 1.5 };
 const statusPanelStyle = { marginTop: 22, padding: 18, border: "1px solid rgba(212,175,55,.25)", borderRadius: 14, color: "#C9DCD2", background: "rgba(6,55,34,.62)" };
 
