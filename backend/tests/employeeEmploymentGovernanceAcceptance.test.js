@@ -92,6 +92,9 @@ expect(service, "EMPLOYMENT_LEVEL_REASON_REQUIRED", "Reason control missing.");
 expect(service, "FUTURE_EFFECTIVE_DATE", "Future-effective-date guard missing.");
 expect(service, "organizationAudit.create", "Employment Level organization audit missing.");
 expect(service, 'action: "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_REMOVED"', "Override removal audit action missing.");
+expect(service, "data: { effectiveTo }", "Closing an Employment Level override must preserve the original assignment evidence.");
+expect(service, "originalReason: current.reason", "Override-removal audit must retain the original assignment reason.");
+expect(service, "originallyPerformedByUserId: current.performedByUserId", "Override-removal audit must retain the original assigning actor.");
 
 // API controls: reads require employees.view; writes require employees.update.
 expect(assignmentRoutes, '"/employment-level/:employeeNumber"', "Employee Employment Level endpoint missing.");
@@ -127,6 +130,8 @@ expect(lineManagers, "hierarchyOverride", "Line Manager hierarchy override contr
 expect(lineManagers, "hierarchyOverrideReason", "Line Manager hierarchy override reason missing.");
 expect(lineManagers, "hierarchyCandidates", "Hierarchy-approved manager candidates missing.");
 expect(lineManagers, "requiresManualSelection", "Ambiguous hierarchy manual-selection control missing.");
+expect(lineManagers, "useSearchParams", "Line Manager workflow does not support employee deep linking.");
+expect(lineManagers, 'searchParams.get("employeeNumber")', "Line Manager workflow does not read the employee profile deep link.");
 
 // Reusable individual employee governance UI uses controlled searchable selectors.
 expect(governancePanel, "SearchableRegistrySelect", "Searchable registry selector missing from employee governance panel.");
@@ -140,5 +145,7 @@ expect(profileBoundary, 'import EmployeeEmploymentGovernancePanel from "./Employ
 expect(profileBoundary, "<EmployeeEmploymentGovernancePanel", "Employee governance panel is not mounted on the live Employee Profile route.");
 expect(profileBoundary, "employeeNumber={employeeNumber}", "Live Employee Profile is not passing the authoritative employee number into governance controls.");
 expect(profileBoundary, "onChanged={() => setProfileVersion", "Employee Profile does not refresh after a governance change.");
+expect(profileBoundary, "Manage Line Manager", "Employee Profile does not expose the hierarchy-aware Line Manager workflow.");
+expect(profileBoundary, "/employees/line-managers?employeeNumber=", "Employee Profile Line Manager action does not preserve employee context.");
 
 console.log("PASS: Employee Employment Governance acceptance checks.");
