@@ -1,6 +1,5 @@
 import Sidebar from "../components/layout/Sidebar/Sidebar";
 import Topbar from "../components/layout/Topbar/Topbar";
-import BranchContextSelector from "../components/BranchContextSelector";
 
 function MainLayout({ children }) {
   return (
@@ -104,7 +103,6 @@ function MainLayout({ children }) {
               zIndex: 1,
             }}
           >
-            <BranchContextSelector />
             {children}
           </div>
         </main>
