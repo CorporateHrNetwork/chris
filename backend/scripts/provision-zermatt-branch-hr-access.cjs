@@ -7,7 +7,8 @@ const prisma = require("../src/config/prisma");
 
 const ORGANIZATION_SLUG = "zermatt-liquor-limited";
 const ACTOR_EMAIL = "corporatehr.crn@gmail.com";
-const ROLE_NAME = "Branch HR & Admin Officer";
+const ROLE_NAME = "HR & Admin Officer - Branch";
+const ROLE_ALIASES = [ROLE_NAME, "Branch HR & Admin Officer"];
 const APPLY = process.argv.includes("--apply");
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
@@ -61,7 +62,6 @@ function employeeName(employee) {
 }
 
 function randomTemporaryPassword() {
-  // 24 URL-safe characters, generated only at apply time and printed once.
   return crypto.randomBytes(18).toString("base64url");
 }
 
@@ -99,7 +99,40 @@ async function resolveFoundation() {
   const missingPermissions = ROLE_PERMISSION_KEYS.filter((key) => !permissionByKey.has(key));
   assert.deepEqual(missingPermissions, [], `Missing CHRIS permissions: ${missingPermissions.join(", ")}`);
 
-  return { organization, actor, branchByCode, permissionByKey };
+  const existingRoles = await prisma.role.findMany({
+    where: { organizationId: organization.id, name: { in: ROLE_ALIASES } },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      userRoles: {
+        select: {
+          user: {
+            select: {
+              id: true,
+              employeeId: true,
+              email: true,
+              isActive: true,
+              locationScope: true,
+            },
+          },
+        },
+      },
+      rolePermissions: { select: { permission: { select: { key: true } } } },
+    },
+  });
+  assert.ok(
+    existingRoles.length <= 1,
+    `Both Branch HR role aliases exist (${existingRoles.map((role) => role.name).join(", ")}). Merge them manually before provisioning.`
+  );
+
+  return {
+    organization,
+    actor,
+    branchByCode,
+    permissionByKey,
+    existingRole: existingRoles[0] || null,
+  };
 }
 
 async function resolveTargets(organization, branchByCode) {
@@ -146,9 +179,10 @@ async function resolveTargets(organization, branchByCode) {
     assert.ok(employee.email?.trim(), `${assignment.fullName} does not have an employee email address.`);
     assert.equal(String(employee.location?.code || "").toUpperCase(), assignment.branchCode, `${assignment.fullName} is not assigned to ${assignment.branchCode}.`);
 
+    const allowedExistingRoles = new Set(["Employee", ...ROLE_ALIASES]);
     const privilegedExistingRoles = (employee.user?.userRoles || [])
       .map((item) => item.role?.name)
-      .filter((name) => name && !["Employee", ROLE_NAME].includes(name));
+      .filter((name) => name && !allowedExistingRoles.has(name));
     assert.deepEqual(
       privilegedExistingRoles,
       [],
@@ -157,6 +191,19 @@ async function resolveTargets(organization, branchByCode) {
 
     return { assignment, employee, location: expectedLocation };
   });
+}
+
+function assertExistingRoleUsageIsSafe(existingRole, targets) {
+  if (!existingRole) return;
+  const targetEmployeeIds = new Set(targets.map((target) => target.employee.id));
+  const unrelatedUsers = (existingRole.userRoles || [])
+    .map((item) => item.user)
+    .filter((user) => user && (!user.employeeId || !targetEmployeeIds.has(user.employeeId)));
+  assert.deepEqual(
+    unrelatedUsers.map((user) => ({ email: user.email, employeeId: user.employeeId })),
+    [],
+    `${existingRole.name} is assigned to CHRIS users outside the three approved branch HR targets. Review those users before changing this shared role.`
+  );
 }
 
 function previewTarget(target) {
@@ -178,14 +225,27 @@ function previewTarget(target) {
   };
 }
 
-async function applyProvisioning({ organization, actor, permissionByKey }, targets) {
+function rolePreview(existingRole) {
+  if (!existingRole) {
+    return { existingRole: false, targetRoleName: ROLE_NAME, currentUserCount: 0, currentPermissions: [] };
+  }
+  return {
+    existingRole: true,
+    existingRoleName: existingRole.name,
+    targetRoleName: existingRole.name,
+    currentUserCount: existingRole.userRoles.length,
+    currentPermissions: existingRole.rolePermissions.map((item) => item.permission.key).sort(),
+  };
+}
+
+async function applyProvisioning({ organization, actor, permissionByKey, existingRole }, targets) {
   const generatedCredentials = [];
 
   const result = await prisma.$transaction(async (tx) => {
-    let role = await tx.role.findFirst({
-      where: { organizationId: organization.id, name: ROLE_NAME },
-      select: { id: true, name: true, description: true },
-    });
+    let role = existingRole
+      ? await tx.role.findUnique({ where: { id: existingRole.id }, select: { id: true, name: true, description: true } })
+      : null;
+
     if (!role) {
       role = await tx.role.create({
         data: {
@@ -282,7 +342,7 @@ async function applyProvisioning({ organization, actor, permissionByKey }, targe
           },
           newValue: {
             employeeNumber: employee.employeeNumber,
-            role: ROLE_NAME,
+            role: role.name,
             locationScope: "ASSIGNED_LOCATIONS",
             assignedBranch: target.location.code,
             isActive: true,
@@ -296,7 +356,7 @@ async function applyProvisioning({ organization, actor, permissionByKey }, targe
         employeeName: employeeName(employee),
         email: normalizedEmail,
         branch: target.location.code,
-        role: ROLE_NAME,
+        role: role.name,
         locationScope: "ASSIGNED_LOCATIONS",
         accountCreated: !employee.user,
         isActive: true,
@@ -310,8 +370,13 @@ async function applyProvisioning({ organization, actor, permissionByKey }, targe
         entityType: "Role",
         entityId: role.id,
         action: "ZERMATT_BRANCH_HR_ROLE_CONFIGURED",
-        previousValue: null,
-        newValue: { role: ROLE_NAME, permissions: ROLE_PERMISSION_KEYS },
+        previousValue: existingRole
+          ? {
+              name: existingRole.name,
+              permissions: existingRole.rolePermissions.map((item) => item.permission.key).sort(),
+            }
+          : null,
+        newValue: { role: role.name, permissions: ROLE_PERMISSION_KEYS },
         reason: "Controlled least-privilege branch HR operating role",
       },
     });
@@ -322,7 +387,7 @@ async function applyProvisioning({ organization, actor, permissionByKey }, targe
   return { ...result, generatedCredentials };
 }
 
-async function verifyPersisted(organizationId, targets) {
+async function verifyPersisted(organizationId, targets, expectedRoleName) {
   const rows = [];
   for (const target of targets) {
     const user = await prisma.user.findFirst({
@@ -339,14 +404,14 @@ async function verifyPersisted(organizationId, targets) {
     assert.ok(user, `${employeeName(target.employee)} CHRIS user was not persisted.`);
     assert.equal(user.isActive, true, `${employeeName(target.employee)} CHRIS user must be active.`);
     assert.equal(user.locationScope, "ASSIGNED_LOCATIONS", `${employeeName(target.employee)} must be branch restricted.`);
-    assert.deepEqual(user.userRoles.map((item) => item.role.name), [ROLE_NAME], `${employeeName(target.employee)} role mismatch.`);
+    assert.deepEqual(user.userRoles.map((item) => item.role.name), [expectedRoleName], `${employeeName(target.employee)} role mismatch.`);
     assert.deepEqual(user.userLocations.map((item) => item.location.code), [target.location.code], `${employeeName(target.employee)} branch assignment mismatch.`);
     rows.push({
       employeeNumber: target.employee.employeeNumber,
       employeeName: employeeName(target.employee),
       email: user.email,
       branch: target.location.code,
-      role: ROLE_NAME,
+      role: expectedRoleName,
       locationScope: user.locationScope,
       isActive: user.isActive,
     });
@@ -357,6 +422,7 @@ async function verifyPersisted(organizationId, targets) {
 async function main() {
   const foundation = await resolveFoundation();
   const targets = await resolveTargets(foundation.organization, foundation.branchByCode);
+  assertExistingRoleUsageIsSafe(foundation.existingRole, targets);
 
   console.log("\n============================================================");
   console.log("ZERMATT BRANCH HR & ADMIN ACCESS");
@@ -365,7 +431,7 @@ async function main() {
     mode: APPLY ? "APPLY" : "PREVIEW_ONLY",
     organization: foundation.organization.name,
     actor: foundation.actor.email,
-    role: ROLE_NAME,
+    role: rolePreview(foundation.existingRole),
     permissionCount: ROLE_PERMISSION_KEYS.length,
     targets: targets.map(previewTarget),
     plannedDatabaseWrites: APPLY ? "CONTROLLED_TRANSACTION" : 0,
@@ -378,7 +444,7 @@ async function main() {
   }
 
   const applied = await applyProvisioning(foundation, targets);
-  const verification = await verifyPersisted(foundation.organization.id, targets);
+  const verification = await verifyPersisted(foundation.organization.id, targets, applied.role.name);
 
   console.log("\nAPPLIED AND VERIFIED");
   console.log(JSON.stringify({
