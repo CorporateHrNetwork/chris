@@ -16,6 +16,16 @@ import WorkforceKpis from "../components/dashboard/WorkforceKpis";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 
+function formatNaira(value) {
+  const amount = Number(value || 0);
+
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
 function Dashboard() {
   /*
     CHRIS_BRANCH_SCOPED_DASHBOARD_KPIS
@@ -25,7 +35,9 @@ function Dashboard() {
     attendance and leave counts so those KPIs change with the selected branch.
     Head Office omits the location header and shows the consolidated company.
 
-    Payroll must not display fabricated financial data.
+    Payroll uses /api/payroll/runs as the authoritative calculated-payroll
+    source. In branch context that route returns only the active branch totals;
+    in Head Office it returns the consolidated organization payroll run.
   */
   const [operationalSummary, setOperationalSummary] = useState({
     attendanceRecords: null,
@@ -83,6 +95,12 @@ function Dashboard() {
   const canViewPayroll =
     !authorizationLoading && hasPermission("payroll.view");
 
+  const [payrollSummary, setPayrollSummary] = useState({
+    latestRun: null,
+    loading: false,
+    error: false,
+  });
+
   useEffect(() => {
     const loadEmployeeSummary = async () => {
       try {
@@ -111,6 +129,75 @@ function Dashboard() {
 
     loadEmployeeSummary();
   }, []);
+
+  useEffect(() => {
+    if (!canViewPayroll) {
+      setPayrollSummary({
+        latestRun: null,
+        loading: false,
+        error: false,
+      });
+      return undefined;
+    }
+
+    let live = true;
+
+    const loadPayrollSummary = async () => {
+      try {
+        setPayrollSummary((current) => ({
+          ...current,
+          loading: true,
+          error: false,
+        }));
+
+        const result = await apiRequest("/api/payroll/runs");
+        if (!live) return;
+
+        const runs = Array.isArray(result?.data) ? result.data : [];
+
+        setPayrollSummary({
+          latestRun: runs[0] || null,
+          loading: false,
+          error: false,
+        });
+      } catch (error) {
+        console.error("Dashboard payroll summary error:", error);
+        if (live) {
+          setPayrollSummary({
+            latestRun: null,
+            loading: false,
+            error: true,
+          });
+        }
+      }
+    };
+
+    loadPayrollSummary();
+
+    return () => {
+      live = false;
+    };
+  }, [canViewPayroll]);
+
+  const latestPayrollRun = payrollSummary.latestRun;
+
+  const payrollValue = payrollSummary.loading
+    ? "..."
+    : payrollSummary.error
+    ? "—"
+    : latestPayrollRun
+    ? formatNaira(latestPayrollRun.netPreviewTotal)
+    : "₦0";
+
+  const payrollSubtitle = payrollSummary.loading
+    ? "Loading payroll"
+    : payrollSummary.error
+    ? "Payroll data unavailable"
+    : !latestPayrollRun
+    ? "No payroll run available"
+    : `${latestPayrollRun.periodName || latestPayrollRun.periodCode || "Latest payroll"} · ${
+        latestPayrollRun.status || "UNKNOWN"
+      } · Net payroll`;
 
   return (
     <div
@@ -187,20 +274,8 @@ function Dashboard() {
         {canViewPayroll && (
           <KpiCard
             title="Payroll"
-            value={
-              employeeLoading
-                ? "..."
-                : employeeSummary.total === 0
-                ? "₦0"
-                : "—"
-            }
-            subtitle={
-              employeeLoading
-                ? "Loading workforce"
-                : employeeSummary.total === 0
-                ? "No payroll records"
-                : "Awaiting authoritative payroll-run data"
-            }
+            value={payrollValue}
+            subtitle={payrollSubtitle}
             icon="💰"
             color="#8B5CF6"
           />
@@ -273,7 +348,7 @@ function Dashboard() {
         }}
       >
         <QuickActions />
-        {canViewPayroll && <PayrollSummary />}
+        {canViewPayroll && <PayrollSummary summary={payrollSummary} />}
       </div>
     </div>
   );
