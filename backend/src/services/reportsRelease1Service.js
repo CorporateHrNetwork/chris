@@ -18,8 +18,8 @@ function label(value, fallback = "Unassigned") {
   return clean || fallback;
 }
 
-function increment(map, key) {
-  const normalized = label(key);
+function increment(map, key, fallback = "Unassigned") {
+  const normalized = label(key, fallback);
   map[normalized] = (map[normalized] || 0) + 1;
 }
 
@@ -58,7 +58,7 @@ function buildHeadcount(currentEmployees) {
   const byGender = {};
 
   for (const employee of currentEmployees) {
-    increment(byStatus, employee.status, "Unknown");
+    increment(byStatus, employee.status, "UNKNOWN");
     increment(byDepartment, employee.department?.name);
     increment(byDesignation, employee.designation?.name);
     increment(byEmploymentType, employee.employmentType);
