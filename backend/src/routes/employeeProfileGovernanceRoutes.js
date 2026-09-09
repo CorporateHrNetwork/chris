@@ -128,6 +128,58 @@ router.get(
 
 /*
 ============================================================
+EMPLOYEE SUBROUTE — ACTIVE BRANCH SECURITY GUARD
+============================================================
+
+Every employee-specific route mounted after this router inherits
+the selected branch context. This prevents direct navigation to
+lifecycle, employment-history, job-change or other employee URLs
+outside the active branch. Non-employee route prefixes simply fall
+through to their owning router.
+============================================================
+*/
+router.use("/:employeeNumber", async (req, res, next) => {
+  if (!req.auth.activeLocationId) return next();
+
+  try {
+    const employeeNumber = String(req.params.employeeNumber || "")
+      .trim()
+      .toUpperCase();
+
+    const employee = await prisma.employee.findFirst({
+      where: {
+        organizationId: req.auth.organizationId,
+        employeeNumber,
+      },
+      select: {
+        id: true,
+        locationId: true,
+      },
+    });
+
+    if (!employee) return next();
+
+    if (employee.locationId !== req.auth.activeLocationId) {
+      return res.status(403).json({
+        status: "error",
+        code: "EMPLOYEE_OUTSIDE_ACTIVE_BRANCH",
+        message:
+          "The selected employee does not belong to the active CHRiS branch context.",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error("Employee active-branch guard error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Unable to validate the active branch context.",
+    });
+  }
+});
+
+/*
+============================================================
 EMPLOYEE PROFILE — EFFECTIVE EMPLOYMENT LEVEL
 ============================================================
 
@@ -141,9 +193,6 @@ CURRENT EFFECTIVE level:
 The designation's configured default is preserved separately as
 `designation.defaultEmploymentLevel`, so structural configuration
 is never lost or rewritten for an individual employee.
-
-When a branch is active, an employee from another branch cannot be
-opened through direct URL manipulation.
 ============================================================
 */
 router.get(
@@ -228,9 +277,6 @@ The legacy Edit Employee form can continue to update ordinary
 master data, but Department and Designation may no longer be
 changed through free text. Structural movement must use the
 controlled Designation / Job Change workflow.
-
-The same branch-context guard applies to updates so a branch-scoped
-session cannot mutate an employee in another branch.
 ============================================================
 */
 router.put(
