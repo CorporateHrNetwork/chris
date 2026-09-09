@@ -80,7 +80,9 @@ function EmployeeProfileErrorBoundary({ children }) {
 }
 
 const governanceWrapStyle = {
-  marginTop: 22,
+  width: "100%",
+  maxWidth: "1200px",
+  margin: "22px auto 0",
 };
 const panelStyle = {
   padding: 24,
