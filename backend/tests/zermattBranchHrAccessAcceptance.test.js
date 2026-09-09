@@ -27,7 +27,11 @@ expect(auth, 'code: "LOCATION_SCOPE_FORBIDDEN"', "Unauthorized branch guard is m
 expect(users, "locationScope: true", "User Management does not return location scope.");
 expect(users, "assignedLocations:", "User Management does not return assigned locations.");
 expect(users, "validateLocationAccess", "User Management does not validate location assignments.");
-expect(users, 'locationScope: "ASSIGNED_LOCATIONS"', "New employee users are not safely branch-restricted by default.");
+expect(
+  users,
+  'req.body.locationScope : "ASSIGNED_LOCATIONS"',
+  "New employee users are not safely branch-restricted by default."
+);
 expect(users, "userLocation.deleteMany", "User location replacements are not controlled.");
 expect(users, "userLocation.createMany", "User location assignments are not persisted.");
 expect(users, "CHRIS_USER_ACCESS_UPDATED", "User role/location changes are not audited.");
@@ -43,7 +47,9 @@ for (const name of ["Ann Favour Joseph", "Angel Williams", "Augustina Anienwe"])
 for (const code of ["ABJ", "PHC", "LAG"]) {
   expect(provisioner, `branchCode: "${code}"`, `${code} branch mapping is missing.`);
 }
-expect(provisioner, 'const ROLE_NAME = "Branch HR & Admin Officer"', "Dedicated branch HR role is missing.");
+expect(provisioner, 'const ROLE_NAME = "HR & Admin Officer - Branch"', "Existing ZERMATT Branch HR role is not the provisioning authority.");
+expect(provisioner, '"Branch HR & Admin Officer"', "Branch HR role alias compatibility is missing.");
+expect(provisioner, "assertExistingRoleUsageIsSafe", "Shared role usage is not protected before permission changes.");
 expect(provisioner, 'targetLocationScope: "ASSIGNED_LOCATIONS"', "Branch HR provisioning is not restricted to assigned locations.");
 expect(provisioner, "ZERMATT_BRANCH_HR_ACCESS_PROVISIONED", "Branch HR provisioning audit is missing.");
 expect(provisioner, 'const APPLY = process.argv.includes("--apply")', "Provisioner must default to preview and require --apply for writes.");
