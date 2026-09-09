@@ -8,12 +8,6 @@ import {
 function locationLabel(location) {
   const name = String(location?.name || "Location").trim();
   const code = String(location?.code || "").trim();
-  const type = String(location?.type || "").trim().toUpperCase();
-
-  if (type === "HEAD_OFFICE") {
-    return `${name}${code ? ` · ${code}` : ""}`;
-  }
-
   return `${name}${code ? ` · ${code}` : ""}`;
 }
 
@@ -32,12 +26,18 @@ export default function BranchContextSelector({ compact = false }) {
         const nextContext = result?.data || null;
         setContext(nextContext);
 
+        // ZERMATT Head Office is the consolidated 312-employee operating view.
+        // The physical HEAD_OFFICE location row is therefore not a selectable
+        // workforce branch. Only actual BRANCH locations receive a location ID.
+        const selectableBranchIds = new Set(
+          (nextContext?.availableLocations || [])
+            .filter((location) => String(location?.type || "").toUpperCase() === "BRANCH")
+            .map((location) => location.id)
+        );
+
         const storedLocationId = getActiveLocationId() || "";
         const stillAvailable =
-          !storedLocationId ||
-          nextContext?.availableLocations?.some(
-            (location) => location.id === storedLocationId
-          );
+          !storedLocationId || selectableBranchIds.has(storedLocationId);
 
         if (!stillAvailable) {
           setActiveLocationId(null);
@@ -67,14 +67,23 @@ export default function BranchContextSelector({ compact = false }) {
     };
   }, []);
 
-  const activeLocation = useMemo(
+  const branchLocations = useMemo(
     () =>
-      context?.availableLocations?.find((location) => location.id === value) ||
-      null,
-    [context, value]
+      (context?.availableLocations || [])
+        .filter(
+          (location) =>
+            String(location?.type || "").toUpperCase() === "BRANCH"
+        )
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))),
+    [context]
   );
 
-  if (!context?.availableLocations?.length) return null;
+  const activeLocation = useMemo(
+    () => branchLocations.find((location) => location.id === value) || null,
+    [branchLocations, value]
+  );
+
+  if (!branchLocations.length) return null;
 
   const change = (event) => {
     const next = event.target.value;
@@ -95,8 +104,8 @@ export default function BranchContextSelector({ compact = false }) {
         onChange={change}
         style={selectStyle}
       >
-        <option value="">ALL BRANCHES · Consolidated</option>
-        {context.availableLocations.map((location) => (
+        <option value="">HEAD OFFICE</option>
+        {branchLocations.map((location) => (
           <option key={location.id} value={location.id}>
             {locationLabel(location)}
           </option>
@@ -105,7 +114,7 @@ export default function BranchContextSelector({ compact = false }) {
       <span style={compact ? compactScopeStyle : helperStyle}>
         {activeLocation
           ? `Operating in ${activeLocation.name}`
-          : "Organization-wide consolidated context"}
+          : "Consolidated organization-wide view"}
       </span>
     </div>
   );
