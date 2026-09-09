@@ -127,7 +127,8 @@ async function main() {
     for (const location of locations) {
       const [
         expectedAllEmployees,
-        expectedCurrentEmployees,
+        expectedCurrentWithNoExit,
+        expectedCurrentByStatus,
         context,
         employeeDirectory,
         lineManagerEmployees,
@@ -144,6 +145,13 @@ async function main() {
             locationId: location.id,
             status: { in: CURRENT_STATUSES },
             exitDate: null,
+          },
+        }),
+        prisma.employee.count({
+          where: {
+            organizationId: organization.id,
+            locationId: location.id,
+            status: { in: CURRENT_STATUSES },
           },
         }),
         requestJson(baseUrl, "/api/zermatt/branch-context", token, location.id),
@@ -168,17 +176,17 @@ async function main() {
       );
       assert.equal(
         lineManagerEmployees.body?.data?.length,
-        expectedCurrentEmployees,
+        expectedCurrentWithNoExit,
         `${location.name}: Line Manager employee selector is not branch-scoped.`
       );
       assert.equal(
         payrollEmployees.body?.data?.length,
-        expectedCurrentEmployees,
+        expectedCurrentByStatus,
         `${location.name}: Payroll employee selector is not branch-scoped.`
       );
       assert.equal(
         zermattEmployees.body?.data?.length,
-        expectedCurrentEmployees,
+        expectedCurrentByStatus,
         `${location.name}: ZERMATT operational employee selector is not branch-scoped.`
       );
       assert.equal(
@@ -193,7 +201,7 @@ async function main() {
         code: location.code,
         type: location.type,
         employees: expectedAllEmployees,
-        currentEmployees: expectedCurrentEmployees,
+        currentEmployees: expectedCurrentByStatus,
       });
     }
 
