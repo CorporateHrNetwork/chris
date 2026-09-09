@@ -59,6 +59,9 @@ async function requireAuth(req, res, next) {
       });
     }
 
+    const consolidatedOrganization =
+      user.locationScope === "ALL_LOCATIONS" && !requestedLocationId;
+
     req.auth = {
       userId: user.id,
       organizationId: user.organizationId,
@@ -76,13 +79,17 @@ async function requireAuth(req, res, next) {
         state: location.state,
       })),
       activeLocationId: requestedLocationId,
-      // Null activeLocationId means consolidated Head Office / organization-wide context
-      // and is only valid for ALL_LOCATIONS users.
-      consolidatedHeadOffice: user.locationScope === "ALL_LOCATIONS" && !requestedLocationId,
+      // Null activeLocationId means organization-wide consolidated context.
+      // Head Office is a real selectable OrganizationLocation, not the same thing
+      // as the consolidated All Branches view.
+      consolidatedOrganization,
+      // Backward-compatible alias retained until older consumers are migrated.
+      consolidatedHeadOffice: consolidatedOrganization,
     };
 
     if (user.locationScope === "ASSIGNED_LOCATIONS" && !requestedLocationId && availableLocations.length === 1) {
       req.auth.activeLocationId = availableLocations[0].id;
+      req.auth.consolidatedOrganization = false;
       req.auth.consolidatedHeadOffice = false;
     }
 
