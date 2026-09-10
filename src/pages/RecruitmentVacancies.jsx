@@ -88,10 +88,7 @@ function RecruitmentVacancies() {
       setSaving(true);
       setError("");
       setMessage("");
-      const payload = {
-        ...form,
-        openings: Number(form.openings),
-      };
+      const payload = { ...form, openings: Number(form.openings) };
       const result = await apiRequest(
         editingId ? `/api/recruitment/vacancies/${editingId}` : "/api/recruitment/vacancies",
         {
@@ -113,7 +110,10 @@ function RecruitmentVacancies() {
     try {
       let body = {};
       if (action === "close" || action === "cancel") {
-        const reason = window.prompt(`${action === "close" ? "Closure" : "Cancellation"} reason:`, "");
+        const reason = window.prompt(
+          `${action === "close" ? "Closure" : "Cancellation"} reason:`,
+          ""
+        );
         if (reason === null) return;
         body = { reason };
       }
@@ -134,7 +134,30 @@ function RecruitmentVacancies() {
   };
 
   return (
-    <div style={pageStyle}>
+    <div className="chris-vacancy-workspace" style={pageStyle}>
+      <style>{`
+        .chris-vacancy-workspace :is(input, select, textarea):focus-visible {
+          outline: 2px solid var(--chris-gold) !important;
+          outline-offset: 1px;
+          border-color: var(--chris-gold) !important;
+        }
+        .chris-vacancy-workspace input::placeholder,
+        .chris-vacancy-workspace textarea::placeholder {
+          color: var(--chris-text-muted);
+        }
+        .chris-vacancy-workspace select option {
+          background: var(--chris-green-darker);
+          color: var(--chris-text-main);
+        }
+        .chris-vacancy-workspace button:disabled {
+          opacity: .55;
+          cursor: not-allowed !important;
+        }
+        @media (max-width: 720px) {
+          .chris-vacancy-workspace { padding: 18px !important; }
+        }
+      `}</style>
+
       <div style={headerStyle}>
         <div>
           <button type="button" style={linkButtonStyle} onClick={() => navigate("/recruitment")}>
@@ -173,7 +196,9 @@ function RecruitmentVacancies() {
           <div style={panelHeaderStyle}>
             <div>
               <div style={eyebrowStyle}>{editingId ? "EDIT DRAFT" : "CREATE VACANCY"}</div>
-              <h2 style={sectionTitleStyle}>{editingId ? "Update Draft Vacancy" : "Create from Approved Requisition"}</h2>
+              <h2 style={sectionTitleStyle}>
+                {editingId ? "Update Draft Vacancy" : "Create from Approved Requisition"}
+              </h2>
             </div>
             {editingId && (
               <button type="button" style={secondaryButtonStyle} onClick={resetForm}>
@@ -185,7 +210,7 @@ function RecruitmentVacancies() {
           <div style={formGridStyle}>
             {!editingId && (
               <label style={labelStyle}>
-                Approved Job Requisition
+                <span>Approved Job Requisition</span>
                 <select
                   value={form.requisitionId}
                   onChange={(event) => {
@@ -212,47 +237,79 @@ function RecruitmentVacancies() {
             )}
 
             <label style={labelStyle}>
-              Vacancy Title
-              <input value={form.title} onChange={(e) => setField("title", e.target.value)} required style={inputStyle} />
-            </label>
-
-            <label style={labelStyle}>
-              Openings
+              <span>Vacancy Title</span>
               <input
-                type="number"
-                min="1"
-                max={selectedRequisition?.requestedHeadcount || undefined}
-                value={form.openings}
-                onChange={(e) => setField("openings", e.target.value)}
+                value={form.title}
+                onChange={(event) => setField("title", event.target.value)}
                 required
                 style={inputStyle}
               />
             </label>
 
             <label style={labelStyle}>
-              Opening Date
-              <input type="date" value={form.openingDate} onChange={(e) => setField("openingDate", e.target.value)} style={inputStyle} />
+              <span>Openings</span>
+              <input
+                type="number"
+                min="1"
+                max={selectedRequisition?.requestedHeadcount || undefined}
+                value={form.openings}
+                onChange={(event) => setField("openings", event.target.value)}
+                required
+                style={inputStyle}
+              />
             </label>
 
             <label style={labelStyle}>
-              Closing Date
-              <input type="date" value={form.closingDate} onChange={(e) => setField("closingDate", e.target.value)} style={inputStyle} />
+              <span>Opening Date</span>
+              <input
+                type="date"
+                value={form.openingDate}
+                onChange={(event) => setField("openingDate", event.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={labelStyle}>
+              <span>Closing Date</span>
+              <input
+                type="date"
+                value={form.closingDate}
+                onChange={(event) => setField("closingDate", event.target.value)}
+                style={inputStyle}
+              />
             </label>
           </div>
 
           <label style={labelStyle}>
-            Vacancy Summary
-            <textarea value={form.summary} onChange={(e) => setField("summary", e.target.value)} required rows={3} style={textareaStyle} />
+            <span>Vacancy Summary</span>
+            <textarea
+              value={form.summary}
+              onChange={(event) => setField("summary", event.target.value)}
+              required
+              rows={3}
+              style={textareaStyle}
+            />
           </label>
 
           <label style={labelStyle}>
-            Responsibilities
-            <textarea value={form.responsibilities} onChange={(e) => setField("responsibilities", e.target.value)} rows={4} style={textareaStyle} />
+            <span>Responsibilities</span>
+            <textarea
+              value={form.responsibilities}
+              onChange={(event) => setField("responsibilities", event.target.value)}
+              rows={4}
+              style={textareaStyle}
+            />
           </label>
 
           <label style={labelStyle}>
-            Requirements
-            <textarea value={form.requirements} onChange={(e) => setField("requirements", e.target.value)} required rows={4} style={textareaStyle} />
+            <span>Requirements</span>
+            <textarea
+              value={form.requirements}
+              onChange={(event) => setField("requirements", event.target.value)}
+              required
+              rows={4}
+              style={textareaStyle}
+            />
           </label>
 
           <button type="submit" style={primaryButtonStyle} disabled={saving}>
@@ -284,7 +341,12 @@ function RecruitmentVacancies() {
             </thead>
             <tbody>
               {!loading && vacancies.length === 0 && (
-                <tr><td colSpan="7" style={emptyCellStyle}>No vacancies in this operating context.</td></tr>
+                <tr>
+                  <td colSpan="7" style={emptyCellStyle}>
+                    <FaBriefcase style={{ marginRight: 8 }} />
+                    No vacancies in this operating context.
+                  </td>
+                </tr>
               )}
               {vacancies.map((row) => (
                 <tr key={row.id}>
@@ -355,10 +417,11 @@ function RecruitmentVacancies() {
 }
 
 function Metric({ label, value }) {
+  const displayValue = typeof value === "number" ? value.toLocaleString("en-NG") : value;
   return (
     <div style={metricStyle}>
       <div style={metricLabelStyle}>{label}</div>
-      <div style={metricValueStyle}>{Number(value || 0).toLocaleString("en-NG")}</div>
+      <div style={metricValueStyle}>{displayValue ?? 0}</div>
     </div>
   );
 }
@@ -367,45 +430,247 @@ function Status({ status }) {
   return <span style={statusStyle(status)}>{String(status || "").replaceAll("_", " ")}</span>;
 }
 
-const pageStyle = { padding: 24, display: "grid", gap: 18, color: "var(--chris-dashboard-text, #10231A)" };
-const headerStyle = { display: "flex", justifyContent: "space-between", gap: 18, alignItems: "flex-start", flexWrap: "wrap" };
+const pageStyle = {
+  padding: 24,
+  display: "grid",
+  gap: 18,
+  color: "var(--chris-text-main)",
+  fontFamily: "var(--chris-font-family)",
+};
+const headerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 18,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+};
 const headerActionsStyle = { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" };
-const linkButtonStyle = { border: "none", background: "transparent", color: "var(--chris-green, #087A43)", fontWeight: 800, cursor: "pointer", padding: 0, display: "inline-flex", alignItems: "center", gap: 7 };
-const eyebrowStyle = { marginTop: 10, color: "var(--chris-green, #087A43)", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" };
-const titleStyle = { margin: "6px 0", fontSize: 30 };
-const subtitleStyle = { margin: 0, maxWidth: 760, color: "#617168" };
-const scopePillStyle = { padding: "8px 11px", borderRadius: 999, background: "rgba(8,122,67,.10)", color: "#087A43", fontSize: 11, fontWeight: 900 };
-const metricsStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 };
-const metricStyle = { background: "#fff", border: "1px solid #E4EBE7", borderRadius: 12, padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,.04)" };
-const metricLabelStyle = { fontSize: 11, fontWeight: 800, color: "#728078", textTransform: "uppercase" };
-const metricValueStyle = { marginTop: 8, fontSize: 26, fontWeight: 900 };
-const panelStyle = { background: "#fff", border: "1px solid #E4EBE7", borderRadius: 14, padding: 18, boxShadow: "0 6px 20px rgba(0,0,0,.04)", display: "grid", gap: 14 };
-const panelHeaderStyle = { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", flexWrap: "wrap" };
-const sectionTitleStyle = { margin: "4px 0 0", fontSize: 20 };
-const formGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
-const labelStyle = { display: "grid", gap: 6, fontSize: 12, fontWeight: 800 };
-const inputStyle = { width: "100%", boxSizing: "border-box", border: "1px solid #CBD8D1", borderRadius: 8, padding: "10px 11px", font: "inherit", background: "#fff" };
-const textareaStyle = { ...inputStyle, resize: "vertical" };
-const primaryButtonStyle = { justifySelf: "start", border: "none", borderRadius: 8, padding: "10px 14px", background: "#087A43", color: "#fff", fontWeight: 900, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 };
-const secondaryButtonStyle = { border: "1px solid #CBD8D1", borderRadius: 8, padding: "9px 12px", background: "#fff", color: "#264437", fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7 };
-const errorStyle = { padding: 12, borderRadius: 8, background: "#FFF1F1", color: "#9A2626", fontWeight: 700 };
-const successStyle = { padding: 12, borderRadius: 8, background: "#EDF9F2", color: "#176B3A", fontWeight: 700 };
-const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 900 };
-const thStyle = { padding: "10px 9px", textAlign: "left", borderBottom: "1px solid #DDE7E1", fontSize: 11, color: "#6F7F76", textTransform: "uppercase" };
-const tdStyle = { padding: "11px 9px", borderBottom: "1px solid #EEF3F0", verticalAlign: "top", fontSize: 12 };
-const subtleStyle = { marginTop: 4, color: "#7D8A83", fontSize: 11 };
-const emptyCellStyle = { ...tdStyle, textAlign: "center", padding: 28, color: "#7D8A83" };
+const linkButtonStyle = {
+  border: "none",
+  background: "transparent",
+  color: "var(--chris-gold)",
+  fontWeight: 800,
+  cursor: "pointer",
+  padding: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+};
+const eyebrowStyle = {
+  marginTop: 10,
+  color: "var(--chris-green-bright)",
+  fontSize: "var(--chris-font-xs)",
+  fontWeight: 900,
+  letterSpacing: ".12em",
+};
+const titleStyle = {
+  margin: "6px 0",
+  fontSize: "var(--chris-font-2xl)",
+  color: "var(--chris-text-main)",
+  fontWeight: 900,
+};
+const subtitleStyle = {
+  margin: 0,
+  maxWidth: 760,
+  color: "var(--chris-text-secondary)",
+  lineHeight: 1.55,
+};
+const scopePillStyle = {
+  padding: "8px 11px",
+  borderRadius: "var(--chris-radius-pill)",
+  background: "rgba(212,175,55,.08)",
+  border: "1px solid var(--chris-border-gold)",
+  color: "var(--chris-gold-bright)",
+  fontSize: "var(--chris-font-xs)",
+  fontWeight: 900,
+};
+const metricsStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+  gap: 12,
+};
+const metricStyle = {
+  background: "linear-gradient(145deg, var(--chris-panel-bg), var(--chris-panel-bg-soft))",
+  border: "1px solid var(--chris-border-gold)",
+  borderRadius: "var(--chris-radius-card)",
+  padding: 16,
+  boxShadow: "var(--chris-shadow-soft)",
+};
+const metricLabelStyle = {
+  fontSize: "var(--chris-font-xs)",
+  fontWeight: 900,
+  color: "var(--chris-text-secondary)",
+  textTransform: "uppercase",
+  letterSpacing: ".06em",
+};
+const metricValueStyle = {
+  marginTop: 8,
+  fontSize: 26,
+  fontWeight: 900,
+  color: "var(--chris-gold-bright)",
+};
+const panelStyle = {
+  background: "linear-gradient(145deg, var(--chris-panel-bg), var(--chris-panel-bg-soft))",
+  border: "1px solid var(--chris-border-gold)",
+  borderRadius: "var(--chris-radius-card)",
+  padding: 18,
+  boxShadow: "var(--chris-shadow-card)",
+  display: "grid",
+  gap: 14,
+};
+const panelHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 14,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+const sectionTitleStyle = {
+  margin: "4px 0 0",
+  fontSize: "var(--chris-font-xl)",
+  color: "var(--chris-text-main)",
+  fontWeight: 900,
+};
+const formGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+const labelStyle = {
+  display: "grid",
+  gap: 7,
+  fontSize: "var(--chris-font-sm)",
+  fontWeight: 800,
+  color: "var(--chris-text-secondary)",
+};
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid var(--chris-border-soft)",
+  borderRadius: "var(--chris-radius-md)",
+  padding: "10px 11px",
+  font: "inherit",
+  background: "var(--chris-input-bg)",
+  color: "var(--chris-text-main)",
+  colorScheme: "dark",
+  minHeight: 42,
+};
+const textareaStyle = {
+  ...inputStyle,
+  resize: "vertical",
+  minHeight: 92,
+  lineHeight: 1.5,
+};
+const primaryButtonStyle = {
+  justifySelf: "start",
+  border: "1px solid rgba(255,255,255,.10)",
+  borderRadius: "var(--chris-radius-md)",
+  padding: "10px 15px",
+  background: "linear-gradient(135deg, var(--chris-gold), var(--chris-gold-bright))",
+  color: "var(--chris-green-darker)",
+  fontWeight: 900,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  boxShadow: "0 8px 22px rgba(212,175,55,.16)",
+};
+const secondaryButtonStyle = {
+  border: "1px solid var(--chris-border-green)",
+  borderRadius: "var(--chris-radius-md)",
+  padding: "9px 12px",
+  background: "rgba(8,122,67,.12)",
+  color: "var(--chris-text-main)",
+  fontWeight: 800,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 7,
+};
+const errorStyle = {
+  padding: 12,
+  borderRadius: "var(--chris-radius-md)",
+  border: "1px solid rgba(251,113,133,.25)",
+  background: "rgba(251,113,133,.08)",
+  color: "var(--chris-danger)",
+  fontWeight: 700,
+};
+const successStyle = {
+  padding: 12,
+  borderRadius: "var(--chris-radius-md)",
+  border: "1px solid rgba(52,211,153,.25)",
+  background: "rgba(52,211,153,.08)",
+  color: "var(--chris-success)",
+  fontWeight: 700,
+};
+const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 900, color: "var(--chris-text-main)" };
+const thStyle = {
+  padding: "10px 9px",
+  textAlign: "left",
+  borderBottom: "1px solid var(--chris-border-gold)",
+  fontSize: "var(--chris-font-xs)",
+  color: "var(--chris-gold-soft)",
+  textTransform: "uppercase",
+  letterSpacing: ".05em",
+};
+const tdStyle = {
+  padding: "11px 9px",
+  borderBottom: "1px solid var(--chris-border-soft)",
+  verticalAlign: "top",
+  fontSize: "var(--chris-font-sm)",
+  color: "var(--chris-text-main)",
+};
+const subtleStyle = { marginTop: 4, color: "var(--chris-text-muted)", fontSize: "var(--chris-font-xs)" };
+const emptyCellStyle = {
+  ...tdStyle,
+  textAlign: "center",
+  padding: 28,
+  color: "var(--chris-text-muted)",
+};
 const actionWrapStyle = { display: "flex", flexWrap: "wrap", gap: 6 };
-const miniButtonStyle = { border: "1px solid #C7D6CE", borderRadius: 7, padding: "6px 8px", background: "#fff", color: "#21513A", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 };
-const miniDangerButtonStyle = { ...miniButtonStyle, color: "#8D2B2B", borderColor: "#E7C6C6" };
+const miniButtonStyle = {
+  border: "1px solid var(--chris-border-green)",
+  borderRadius: "var(--chris-radius-sm)",
+  padding: "6px 8px",
+  background: "rgba(8,122,67,.12)",
+  color: "var(--chris-text-main)",
+  fontSize: "var(--chris-font-xs)",
+  fontWeight: 800,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+};
+const miniDangerButtonStyle = {
+  ...miniButtonStyle,
+  color: "var(--chris-danger)",
+  borderColor: "rgba(251,113,133,.28)",
+  background: "rgba(251,113,133,.07)",
+};
 const statusStyle = (status) => ({
   display: "inline-block",
   padding: "5px 8px",
-  borderRadius: 999,
+  borderRadius: "var(--chris-radius-pill)",
   fontSize: 10,
   fontWeight: 900,
-  background: status === "PUBLISHED" ? "#E7F6ED" : status === "DRAFT" ? "#FFF7DB" : "#EEF2F0",
-  color: status === "PUBLISHED" ? "#176B3A" : status === "DRAFT" ? "#80630B" : "#59665F",
+  border:
+    status === "PUBLISHED"
+      ? "1px solid rgba(52,211,153,.30)"
+      : status === "DRAFT"
+        ? "1px solid rgba(246,211,101,.30)"
+        : "1px solid var(--chris-border-soft)",
+  background:
+    status === "PUBLISHED"
+      ? "rgba(52,211,153,.10)"
+      : status === "DRAFT"
+        ? "rgba(246,211,101,.10)"
+        : "rgba(255,255,255,.05)",
+  color:
+    status === "PUBLISHED"
+      ? "var(--chris-success)"
+      : status === "DRAFT"
+        ? "var(--chris-warning)"
+        : "var(--chris-text-secondary)",
 });
 
 export default RecruitmentVacancies;
