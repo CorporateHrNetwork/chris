@@ -55,6 +55,18 @@ expect(page, 'Select approved/open requisition', "Vacancy creation is not requis
 expect(page, 'headOffice && row.status === "DRAFT"', "Publish control is not Head Office isolated in the UI.");
 expect(page, 'window.addEventListener("chris:location-context-changed"', "Vacancies do not reload when branch context changes.");
 
+// CHRiS Visual Standard: recruitment workspaces must use the premium dark
+// operational language rather than standalone white/light form surfaces.
+expect(page, 'className="chris-vacancy-workspace"', "Vacancy workspace is not visually scoped.");
+expect(page, 'var(--chris-panel-bg)', "Vacancy panels are not using CHRiS global panel tokens.");
+expect(page, 'var(--chris-input-bg)', "Vacancy inputs are not using CHRiS global input tokens.");
+expect(page, 'var(--chris-text-main)', "Vacancy workspace is not using CHRiS dark-surface typography tokens.");
+expect(page, 'var(--chris-gold)', "Vacancy workspace is missing CHRiS gold action language.");
+assert.ok(
+  !page.includes('background: "#fff"') && !page.includes('background: "#FFFFFF"'),
+  "Vacancy workspace must not regress to standalone white panel/input surfaces."
+);
+
 expect(frontendApp, 'import RecruitmentVacancies from "./pages/RecruitmentVacancies";', "Vacancies page is not imported.");
 expect(frontendApp, 'path="/recruitment/vacancies"', "Vacancies route is not active.");
 expect(frontendApp, '<RecruitmentVacancies />', "Vacancies route is still a placeholder.");
