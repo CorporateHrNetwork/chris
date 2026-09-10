@@ -33,6 +33,7 @@ import LineManagers from "./pages/LineManagers";
 import EmployeeProfile from "./components/employees/EmployeeProfile";
 import EmployeeProfileErrorBoundary from "./components/employees/EmployeeProfileErrorBoundary";
 import Recruitment from "./pages/Recruitment";
+import RecruitmentVacancies from "./pages/RecruitmentVacancies";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
 import AttendanceRegister from "./pages/AttendanceRegister";
 import ShiftManagement from "./pages/ShiftManagement";
@@ -299,6 +300,15 @@ function App() {
               permission="recruitment.view"
             >
               <Recruitment />
+            </PermissionLayout>
+          }
+        />
+
+        <Route
+          path="/recruitment/vacancies"
+          element={
+            <PermissionLayout permission="recruitment.view">
+              <RecruitmentVacancies />
             </PermissionLayout>
           }
         />
@@ -573,8 +583,7 @@ function App() {
         <Route path="/billing" element={<ProtectedLayout><ModuleDashboard moduleKey="billing" /></ProtectedLayout>} />
 
         {/* CHRIS PLANNED WORKSPACE ROUTES */}
-        <Route path="/recruitment/job-requisitions" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/recruitment/vacancies" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
         <Route path="/recruitment/candidates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/recruitment/interviews" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/recruitment/offers" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
