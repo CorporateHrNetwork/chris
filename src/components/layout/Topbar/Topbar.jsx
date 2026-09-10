@@ -29,8 +29,13 @@ function Topbar() {
 
   const organizationName = organization?.name || "CHRIS";
 
+  const toggleMobileNavigation = () => {
+    window.dispatchEvent(new CustomEvent("chris:toggle-mobile-nav"));
+  };
+
   return (
     <header
+      className="chris-topbar-shell"
       style={{
         height: "78px",
         minHeight: "78px",
@@ -51,6 +56,66 @@ function Topbar() {
         overflow: "hidden",
       }}
     >
+      <style>{`
+        @media (max-width: 860px) {
+          .chris-topbar-shell {
+            height: 68px !important;
+            min-height: 68px !important;
+            padding: 0 12px !important;
+            gap: 8px !important;
+            overflow: visible !important;
+          }
+
+          .chris-mobile-menu-button {
+            display: flex !important;
+            flex: 0 0 auto;
+          }
+
+          .chris-topbar-brand {
+            flex: 1 1 auto;
+            min-width: 0 !important;
+          }
+
+          .chris-topbar-brand-name {
+            font-size: 13px !important;
+            max-width: 34vw;
+          }
+
+          .chris-topbar-date {
+            display: none !important;
+          }
+
+          .chris-topbar-actions {
+            flex: 0 1 auto !important;
+            gap: 7px !important;
+          }
+
+          .chris-topbar-search,
+          .chris-topbar-notifications {
+            display: none !important;
+          }
+
+          .chris-topbar-user {
+            gap: 6px !important;
+            padding-left: 0 !important;
+            max-width: 42vw;
+          }
+
+          .chris-topbar-user img {
+            width: 34px !important;
+            height: 34px !important;
+          }
+
+          .chris-topbar-user-copy {
+            max-width: 24vw !important;
+          }
+
+          .chris-topbar-user-name {
+            font-size: 11px !important;
+          }
+        }
+      `}</style>
+
       <div
         className="chris-topbar"
         aria-hidden="true"
@@ -102,6 +167,7 @@ function Topbar() {
       </div>
 
       <div
+        className="chris-topbar-brand"
         style={{
           minHeight: "50px",
           display: "flex",
@@ -114,6 +180,8 @@ function Topbar() {
       >
         <button
           type="button"
+          className="chris-mobile-menu-button"
+          onClick={toggleMobileNavigation}
           style={{
             display: "none",
             alignItems: "center",
@@ -126,6 +194,7 @@ function Topbar() {
               "linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.10))",
             color: "#D4AF37",
             boxShadow: "inset 0 0 12px rgba(8,122,67,0.05)",
+            cursor: "pointer",
           }}
           aria-label="Open navigation"
         >
@@ -134,6 +203,7 @@ function Topbar() {
 
         <div style={{ minWidth: 0 }}>
           <div
+            className="chris-topbar-brand-name"
             style={{
               color: "#087A43",
               fontSize: "18px",
@@ -147,6 +217,7 @@ function Topbar() {
             {organizationName}
           </div>
           <div
+            className="chris-topbar-date"
             style={{
               marginTop: "3px",
               color: "#D4AF37",
@@ -161,6 +232,7 @@ function Topbar() {
       </div>
 
       <div
+        className="chris-topbar-actions"
         style={{
           display: "flex",
           alignItems: "center",
@@ -175,6 +247,7 @@ function Topbar() {
         <BranchContextSelector compact />
 
         <div
+          className="chris-topbar-search"
           style={{
             width: "220px",
             maxWidth: "22vw",
@@ -207,6 +280,7 @@ function Topbar() {
         <button
           type="button"
           title="Notifications"
+          className="chris-topbar-notifications"
           style={{
             width: "38px",
             height: "38px",
@@ -226,6 +300,7 @@ function Topbar() {
         </button>
 
         <div
+          className="chris-topbar-user"
           style={{
             display: "flex",
             alignItems: "center",
@@ -246,8 +321,9 @@ function Topbar() {
                 "0 0 12px rgba(212,175,55,0.16), 0 0 14px rgba(8,122,67,0.12)",
             }}
           />
-          <div style={{ maxWidth: "140px" }}>
+          <div className="chris-topbar-user-copy" style={{ maxWidth: "140px" }}>
             <div
+              className="chris-topbar-user-name"
               style={{
                 color: "#087A43",
                 fontSize: "12px",
