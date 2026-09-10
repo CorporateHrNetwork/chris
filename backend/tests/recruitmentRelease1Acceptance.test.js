@@ -57,36 +57,17 @@ expect(page, 'Approve & Open', "Head Office approve/open control is missing from
 expect(page, 'canManage && headOffice', "Head Office-only UI controls are not isolated.");
 expect(page, 'Select controlled designation', "Requisition UI is not using the controlled Designation registry.");
 
-expect(
-  sidebar,
-  '{ label: "Job Requisitions", path: "/recruitment?workspace=requisitions" }',
-  "Job Requisitions is implemented but still marked planned in the sidebar."
-);
-assert.ok(
-  !sidebar.includes('{ label: "Job Requisitions", planned: true }'),
-  "Job Requisitions must not display a planned badge after Release-1 activation."
-);
-expect(
-  sidebar,
-  '{ label: "Vacancies", path: "/recruitment/vacancies" }',
-  "Vacancies is implemented but still marked planned in the sidebar."
-);
-assert.ok(
-  !sidebar.includes('{ label: "Vacancies", planned: true }'),
-  "Vacancies must not display a planned badge after Vacancies Release-1 activation."
-);
-for (const plannedLabel of [
-  "Candidates",
-  "Interviews",
-  "Offers",
-  "Applicant Tracking System",
-  "Talent Pool",
+for (const [label, activePath] of [
+  ["Job Requisitions", "/recruitment?workspace=requisitions"],
+  ["Vacancies", "/recruitment/vacancies"],
+  ["Candidates", "/recruitment/candidates"],
+  ["Interviews", "/recruitment/interviews"],
+  ["Offers", "/recruitment/offers"],
+  ["Applicant Tracking System", "/recruitment/ats"],
+  ["Talent Pool", "/recruitment/talent-pool"],
 ]) {
-  expect(
-    sidebar,
-    `{ label: "${plannedLabel}", planned: true }`,
-    `${plannedLabel} must remain planned until its own authoritative workflow is implemented.`
-  );
+  expect(sidebar, `{ label: "${label}", path: "${activePath}" }`, `${label} is not wired to its active Recruitment workspace.`);
+  assert.ok(!sidebar.includes(`{ label: "${label}", planned: true }`), `${label} must not display a planned badge after activation.`);
 }
 
 console.log("PASS: Recruitment requisition Release-1 acceptance checks.");
