@@ -63,7 +63,7 @@ const MENU_GROUPS = [
     permission: "recruitment.view",
     children: [
       { label: "Recruitment Dashboard", path: "/recruitment" },
-      { label: "Job Requisitions", planned: true },
+      { label: "Job Requisitions", path: "/recruitment?workspace=requisitions" },
       { label: "Vacancies", planned: true },
       { label: "Candidates", planned: true },
       { label: "Interviews", planned: true },
