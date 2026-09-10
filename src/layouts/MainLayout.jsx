@@ -1,9 +1,27 @@
+import { useEffect, useState } from "react";
+
 import Sidebar from "../components/layout/Sidebar/Sidebar";
 import Topbar from "../components/layout/Topbar/Topbar";
 
 function MainLayout({ children }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    const toggleMobileNav = () => setMobileNavOpen((current) => !current);
+    const closeMobileNav = () => setMobileNavOpen(false);
+
+    window.addEventListener("chris:toggle-mobile-nav", toggleMobileNav);
+    window.addEventListener("chris:close-mobile-nav", closeMobileNav);
+
+    return () => {
+      window.removeEventListener("chris:toggle-mobile-nav", toggleMobileNav);
+      window.removeEventListener("chris:close-mobile-nav", closeMobileNav);
+    };
+  }, []);
+
   return (
     <div
+      className="chris-shell"
       style={{
         display: "flex",
         width: "100%",
@@ -12,9 +30,109 @@ function MainLayout({ children }) {
         background: "#050A07",
       }}
     >
-      <Sidebar />
+      <style>{`
+        .chris-mobile-sidebar-wrap {
+          flex: 0 0 276px;
+          min-width: 276px;
+          position: relative;
+          z-index: 30;
+        }
+
+        .chris-mobile-nav-backdrop {
+          display: none;
+        }
+
+        @media (max-width: 860px) {
+          .chris-shell {
+            display: block !important;
+            min-width: 0 !important;
+          }
+
+          .chris-mobile-sidebar-wrap {
+            position: fixed !important;
+            inset: 0 auto 0 0;
+            width: min(82vw, 300px) !important;
+            min-width: 0 !important;
+            transform: translateX(-105%);
+            transition: transform 180ms ease;
+            z-index: 80;
+            box-shadow: 18px 0 55px rgba(0,0,0,.46);
+          }
+
+          .chris-mobile-sidebar-wrap[data-open="true"] {
+            transform: translateX(0);
+          }
+
+          .chris-mobile-sidebar-wrap > aside {
+            width: 100% !important;
+            min-width: 100% !important;
+          }
+
+          .chris-mobile-nav-backdrop[data-open="true"] {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.58);
+            z-index: 70;
+            border: 0;
+            padding: 0;
+          }
+
+          .chris-main-column {
+            width: 100% !important;
+            height: 100dvh !important;
+          }
+
+          .chris-main-content {
+            padding: 18px 16px 28px !important;
+          }
+
+          .chris-shell-ambient {
+            inset: 68px 0 0 0 !important;
+          }
+
+          .chris-page,
+          .chris-dashboard {
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+
+          .chris-dashboard > div[style*="minmax(240px"] {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+
+          .chris-dashboard > div[style*="minmax(180px"] {
+            grid-template-columns: 1fr !important;
+          }
+
+          .chris-dashboard > div[style*="minmax(360px"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+            gap: 14px !important;
+          }
+        }
+      `}</style>
 
       <div
+        className="chris-mobile-sidebar-wrap"
+        data-open={mobileNavOpen ? "true" : "false"}
+        onClick={(event) => {
+          if (event.target.closest("a")) setMobileNavOpen(false);
+        }}
+      >
+        <Sidebar />
+      </div>
+
+      <button
+        type="button"
+        aria-label="Close navigation"
+        className="chris-mobile-nav-backdrop"
+        data-open={mobileNavOpen ? "true" : "false"}
+        onClick={() => setMobileNavOpen(false)}
+      />
+
+      <div
+        className="chris-main-column"
         style={{
           flex: 1,
           minWidth: 0,
@@ -29,6 +147,7 @@ function MainLayout({ children }) {
         <Topbar />
 
         <main
+          className="chris-main-content"
           style={{
             flex: 1,
             minHeight: 0,
@@ -45,6 +164,7 @@ function MainLayout({ children }) {
         >
           <div
             aria-hidden="true"
+            className="chris-shell-ambient"
             style={{
               position: "fixed",
               inset: "72px 0 0 276px",
