@@ -54,6 +54,11 @@ expect(page, 'apiRequest("/api/recruitment/vacancies/options")', "Vacancy creati
 expect(page, 'Select approved/open requisition', "Vacancy creation is not requisition-led in the UI.");
 expect(page, 'headOffice && row.status === "DRAFT"', "Publish control is not Head Office isolated in the UI.");
 expect(page, 'window.addEventListener("chris:location-context-changed"', "Vacancies do not reload when branch context changes.");
+expect(page, 'noEligibleRequisitions', "Vacancies does not detect an empty approved-requisition selector.");
+expect(page, 'No approved/open job requisitions are available in this operating context.', "Empty requisition guidance is missing.");
+expect(page, 'No approved/open requisitions available', "Empty requisition select does not explain why it has no options.");
+expect(page, 'Open Job Requisitions', "Vacancies does not link the user back to the upstream requisition workflow.");
+expect(page, 'disabled={noEligibleRequisitions}', "Empty approved-requisition selector must be disabled rather than appearing broken.");
 
 // CHRiS Visual Standard: recruitment workspaces must use the premium dark
 // operational language rather than standalone white/light form surfaces.
