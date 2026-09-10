@@ -26,9 +26,6 @@ export default function BranchContextSelector({ compact = false }) {
         const nextContext = result?.data || null;
         setContext(nextContext);
 
-        // ZERMATT Head Office is the consolidated 312-employee operating view.
-        // The physical HEAD_OFFICE location row is therefore not a selectable
-        // workforce branch. Only actual BRANCH locations receive a location ID.
         const selectableBranchIds = new Set(
           (nextContext?.availableLocations || [])
             .filter((location) => String(location?.type || "").toUpperCase() === "BRANCH")
@@ -96,27 +93,69 @@ export default function BranchContextSelector({ compact = false }) {
   const selectStyle = compact ? compactSelectStyle : pageSelectStyle;
 
   return (
-    <div style={wrapStyle} data-chris-branch-context>
-      <span style={labelStyle}>{compact ? "BRANCH" : "OPERATING CONTEXT"}</span>
-      <select
-        aria-label="CHRiS branch context"
-        value={value}
-        onChange={change}
-        style={selectStyle}
+    <>
+      {compact && (
+        <style>{`
+          @media (max-width: 860px) {
+            [data-chris-branch-context="compact"] {
+              padding: 4px 5px !important;
+              gap: 0 !important;
+              max-width: 116px !important;
+              border-radius: 8px !important;
+            }
+
+            [data-chris-branch-context="compact"] > span {
+              display: none !important;
+            }
+
+            [data-chris-branch-context="compact"] select {
+              min-width: 0 !important;
+              width: 104px !important;
+              max-width: 104px !important;
+              height: 30px !important;
+              font-size: 10px !important;
+              padding: 0 4px !important;
+            }
+          }
+
+          @media (max-width: 420px) {
+            [data-chris-branch-context="compact"] {
+              max-width: 96px !important;
+            }
+
+            [data-chris-branch-context="compact"] select {
+              width: 84px !important;
+              max-width: 84px !important;
+            }
+          }
+        `}</style>
+      )}
+
+      <div
+        style={wrapStyle}
+        data-chris-branch-context={compact ? "compact" : "page"}
       >
-        <option value="">HEAD OFFICE</option>
-        {branchLocations.map((location) => (
-          <option key={location.id} value={location.id}>
-            {locationLabel(location)}
-          </option>
-        ))}
-      </select>
-      <span style={compact ? compactScopeStyle : helperStyle}>
-        {activeLocation
-          ? `Operating in ${activeLocation.name}`
-          : "Consolidated organization-wide view"}
-      </span>
-    </div>
+        <span style={labelStyle}>{compact ? "BRANCH" : "OPERATING CONTEXT"}</span>
+        <select
+          aria-label="CHRiS branch context"
+          value={value}
+          onChange={change}
+          style={selectStyle}
+        >
+          <option value="">HEAD OFFICE</option>
+          {branchLocations.map((location) => (
+            <option key={location.id} value={location.id}>
+              {locationLabel(location)}
+            </option>
+          ))}
+        </select>
+        <span style={compact ? compactScopeStyle : helperStyle}>
+          {activeLocation
+            ? `Operating in ${activeLocation.name}`
+            : "Consolidated organization-wide view"}
+        </span>
+      </div>
+    </>
   );
 }
 
