@@ -34,6 +34,7 @@ import EmployeeProfile from "./components/employees/EmployeeProfile";
 import EmployeeProfileErrorBoundary from "./components/employees/EmployeeProfileErrorBoundary";
 import Recruitment from "./pages/Recruitment";
 import RecruitmentVacancies from "./pages/RecruitmentVacancies";
+import RecruitmentTalentWorkspace from "./pages/RecruitmentTalentWorkspace";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
 import AttendanceRegister from "./pages/AttendanceRegister";
 import ShiftManagement from "./pages/ShiftManagement";
@@ -313,6 +314,12 @@ function App() {
           }
         />
 
+        <Route path="/recruitment/candidates" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="candidates" /></PermissionLayout>} />
+        <Route path="/recruitment/interviews" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="interviews" /></PermissionLayout>} />
+        <Route path="/recruitment/offers" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="offers" /></PermissionLayout>} />
+        <Route path="/recruitment/ats" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="ats" /></PermissionLayout>} />
+        <Route path="/recruitment/talent-pool" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="talent-pool" /></PermissionLayout>} />
+
         {/* TIME & ATTENDANCE */}
 
         <Route
@@ -584,11 +591,6 @@ function App() {
 
         {/* CHRIS PLANNED WORKSPACE ROUTES */}
         <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
-        <Route path="/recruitment/candidates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/recruitment/interviews" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/recruitment/offers" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/recruitment/ats" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/recruitment/talent-pool" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/periods" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/salary-rates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
