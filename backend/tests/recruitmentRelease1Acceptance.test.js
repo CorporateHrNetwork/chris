@@ -66,8 +66,16 @@ assert.ok(
   !sidebar.includes('{ label: "Job Requisitions", planned: true }'),
   "Job Requisitions must not display a planned badge after Release-1 activation."
 );
+expect(
+  sidebar,
+  '{ label: "Vacancies", path: "/recruitment/vacancies" }',
+  "Vacancies is implemented but still marked planned in the sidebar."
+);
+assert.ok(
+  !sidebar.includes('{ label: "Vacancies", planned: true }'),
+  "Vacancies must not display a planned badge after Vacancies Release-1 activation."
+);
 for (const plannedLabel of [
-  "Vacancies",
   "Candidates",
   "Interviews",
   "Offers",
