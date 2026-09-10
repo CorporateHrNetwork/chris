@@ -1,5 +1,5 @@
 export const API_BASE_URL = String(
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"
+  import.meta.env.VITE_API_BASE_URL || ""
 ).replace(/\/+$/, "");
 
 export function getAuthToken() {
@@ -145,7 +145,7 @@ export async function apiDownload(endpoint, options = {}) {
   }
   const blob = await response.blob();
   const disposition = response.headers.get("content-disposition") || "";
-  const match = disposition.match(/filename="?([^"]+)"?/i);
+  const match = disposition.match(/filename="?([^\"]+)"?/i);
   return { blob, fileName: match?.[1] || "download.xlsx" };
 }
 
