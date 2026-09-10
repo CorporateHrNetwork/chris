@@ -24,6 +24,7 @@ const service = read(backendRoot, "src", "services", "recruitmentService.js");
 const route = read(backendRoot, "src", "routes", "recruitmentRoutes.js");
 const app = read(backendRoot, "src", "app.js");
 const page = read(repoRoot, "src", "pages", "Recruitment.jsx");
+const sidebar = read(repoRoot, "src", "components", "layout", "Sidebar", "Sidebar.jsx");
 
 expect(migration, 'CREATE TABLE "recruitment_job_requisitions"', "Recruitment requisition table is missing.");
 expect(migration, 'CREATE TABLE "recruitment_requisition_counters"', "Race-safe requisition numbering counter is missing.");
@@ -55,5 +56,29 @@ expect(page, 'window.addEventListener("chris:location-context-changed"', "Recrui
 expect(page, 'Approve & Open', "Head Office approve/open control is missing from Recruitment UI.");
 expect(page, 'canManage && headOffice', "Head Office-only UI controls are not isolated.");
 expect(page, 'Select controlled designation', "Requisition UI is not using the controlled Designation registry.");
+
+expect(
+  sidebar,
+  '{ label: "Job Requisitions", path: "/recruitment?workspace=requisitions" }',
+  "Job Requisitions is implemented but still marked planned in the sidebar."
+);
+assert.ok(
+  !sidebar.includes('{ label: "Job Requisitions", planned: true }'),
+  "Job Requisitions must not display a planned badge after Release-1 activation."
+);
+for (const plannedLabel of [
+  "Vacancies",
+  "Candidates",
+  "Interviews",
+  "Offers",
+  "Applicant Tracking System",
+  "Talent Pool",
+]) {
+  expect(
+    sidebar,
+    `{ label: "${plannedLabel}", planned: true }`,
+    `${plannedLabel} must remain planned until its own authoritative workflow is implemented.`
+  );
+}
 
 console.log("PASS: Recruitment requisition Release-1 acceptance checks.");
