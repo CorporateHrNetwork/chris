@@ -72,6 +72,7 @@ function RecruitmentVacancies() {
     () => options.requisitions?.find((row) => row.id === form.requisitionId) || null,
     [options.requisitions, form.requisitionId]
   );
+  const noEligibleRequisitions = !loading && (options.requisitions || []).length === 0;
 
   const setField = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -149,7 +150,8 @@ function RecruitmentVacancies() {
           background: var(--chris-green-darker);
           color: var(--chris-text-main);
         }
-        .chris-vacancy-workspace button:disabled {
+        .chris-vacancy-workspace button:disabled,
+        .chris-vacancy-workspace select:disabled {
           opacity: .55;
           cursor: not-allowed !important;
         }
@@ -207,6 +209,24 @@ function RecruitmentVacancies() {
             )}
           </div>
 
+          {!editingId && noEligibleRequisitions && (
+            <div style={warningStyle}>
+              <div>
+                <strong>No approved/open job requisitions are available in this operating context.</strong>
+                <div style={{ marginTop: 4 }}>
+                  A vacancy can only be created after a Job Requisition has been submitted and approved/opened by Head Office.
+                </div>
+              </div>
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={() => navigate("/recruitment?workspace=requisitions")}
+              >
+                Open Job Requisitions
+              </button>
+            </div>
+          )}
+
           <div style={formGridStyle}>
             {!editingId && (
               <label style={labelStyle}>
@@ -224,9 +244,12 @@ function RecruitmentVacancies() {
                     }));
                   }}
                   required
+                  disabled={noEligibleRequisitions}
                   style={inputStyle}
                 >
-                  <option value="">Select approved/open requisition</option>
+                  <option value="">
+                    {noEligibleRequisitions ? "No approved/open requisitions available" : "Select approved/open requisition"}
+                  </option>
                   {(options.requisitions || []).map((row) => (
                     <option key={row.id} value={row.id}>
                       {row.requisitionNumber} · {row.title} · {row.locationCode || row.locationName} · {row.requestedHeadcount} opening{row.requestedHeadcount === 1 ? "" : "s"}
@@ -312,7 +335,7 @@ function RecruitmentVacancies() {
             />
           </label>
 
-          <button type="submit" style={primaryButtonStyle} disabled={saving}>
+          <button type="submit" style={primaryButtonStyle} disabled={saving || (!editingId && noEligibleRequisitions)}>
             {editingId ? <FaCheck /> : <FaPlus />} {saving ? "Saving…" : editingId ? "Save Changes" : "Create Draft Vacancy"}
           </button>
         </form>
@@ -586,6 +609,19 @@ const secondaryButtonStyle = {
   display: "inline-flex",
   alignItems: "center",
   gap: 7,
+};
+const warningStyle = {
+  padding: 13,
+  borderRadius: "var(--chris-radius-md)",
+  border: "1px solid rgba(246,211,101,.28)",
+  background: "rgba(246,211,101,.07)",
+  color: "var(--chris-warning)",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+  fontSize: "var(--chris-font-sm)",
 };
 const errorStyle = {
   padding: 12,
