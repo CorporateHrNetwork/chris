@@ -2,6 +2,8 @@ export const API_BASE_URL = String(
   import.meta.env.VITE_API_BASE_URL || ""
 ).replace(/\/+$/, "");
 
+const LAST_ORGANIZATION_SLUG_KEY = "chris_last_organization_slug";
+
 export function getAuthToken() {
   return localStorage.getItem("chris_token") || sessionStorage.getItem("chris_token") || null;
 }
@@ -14,6 +16,10 @@ function readStoredJson(key) {
 
 export function getStoredUser() { return readStoredJson("chris_user"); }
 export function getStoredOrganization() { return readStoredJson("chris_organization"); }
+
+export function getLastOrganizationSlug() {
+  return localStorage.getItem(LAST_ORGANIZATION_SLUG_KEY) || null;
+}
 
 export function getActiveLocationId() {
   return localStorage.getItem("chris_active_location_id") || sessionStorage.getItem("chris_active_location_id") || null;
@@ -29,6 +35,13 @@ export function setActiveLocationId(locationId, { sessionOnly = false } = {}) {
 }
 
 export function clearAuthSession() {
+  const organization = getStoredOrganization();
+  const organizationSlug = organization?.slug ? String(organization.slug).trim() : "";
+
+  if (organizationSlug) {
+    localStorage.setItem(LAST_ORGANIZATION_SLUG_KEY, organizationSlug);
+  }
+
   for (const storage of [localStorage, sessionStorage]) {
     storage.removeItem("chris_token");
     storage.removeItem("chris_user");
