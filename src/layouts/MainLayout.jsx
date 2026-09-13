@@ -1,7 +1,82 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/layout/Sidebar/Sidebar";
 import Topbar from "../components/layout/Topbar/Topbar";
+
+const MODULE_ROOTS = new Set([
+  "/",
+  "/employees",
+  "/recruitment",
+  "/attendance",
+  "/leave",
+  "/payroll",
+  "/loans",
+  "/performance",
+  "/training",
+  "/reports",
+  "/settings",
+  "/designations",
+  "/compensation",
+  "/benefits",
+  "/organization",
+]);
+
+function fallbackForPath(pathname) {
+  const moduleFallbacks = [
+    ["/employees", "/employees"],
+    ["/recruitment", "/recruitment"],
+    ["/attendance", "/attendance"],
+    ["/leave", "/leave"],
+    ["/payroll", "/payroll"],
+    ["/loans", "/loans"],
+    ["/performance", "/performance"],
+    ["/training", "/training"],
+    ["/reports", "/reports"],
+    ["/settings", "/settings"],
+    ["/designations", "/designations"],
+    ["/compensation", "/compensation"],
+    ["/benefits", "/benefits"],
+    ["/organization", "/organization"],
+  ];
+
+  return (
+    moduleFallbacks.find(([prefix]) =>
+      pathname === prefix || pathname.startsWith(`${prefix}/`)
+    )?.[1] || "/"
+  );
+}
+
+function StandaloneBackButton() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const pathname = location.pathname.replace(/\/+$/, "") || "/";
+
+  if (MODULE_ROOTS.has(pathname)) return null;
+
+  const goBack = () => {
+    const routerHistoryIndex = Number(window.history.state?.idx);
+    if (Number.isFinite(routerHistoryIndex) && routerHistoryIndex > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate(fallbackForPath(pathname));
+  };
+
+  return (
+    <div className="chris-standalone-back-wrap">
+      <button
+        type="button"
+        className="chris-standalone-back"
+        onClick={goBack}
+        aria-label="Back to previous screen"
+      >
+        <span aria-hidden="true">←</span>
+        <span>Back</span>
+      </button>
+    </div>
+  );
+}
 
 function MainLayout({ children }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -40,6 +115,38 @@ function MainLayout({ children }) {
 
         .chris-mobile-nav-backdrop {
           display: none;
+        }
+
+        .chris-standalone-back-wrap {
+          margin: 0 0 14px;
+        }
+
+        .chris-standalone-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 38px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          border: 1px solid rgba(212, 175, 55, 0.48);
+          background: rgba(8, 31, 21, 0.94);
+          color: #f3d56a;
+          font: inherit;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+          transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+        }
+
+        .chris-standalone-back:hover {
+          border-color: rgba(212, 175, 55, 0.82);
+          background: rgba(10, 48, 31, 0.98);
+          transform: translateY(-1px);
+        }
+
+        .chris-standalone-back:focus-visible {
+          outline: 2px solid #d4af37;
+          outline-offset: 2px;
         }
 
         @media (max-width: 860px) {
@@ -223,6 +330,7 @@ function MainLayout({ children }) {
               zIndex: 1,
             }}
           >
+            <StandaloneBackButton />
             {children}
           </div>
         </main>
