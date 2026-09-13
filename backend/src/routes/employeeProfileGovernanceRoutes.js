@@ -69,6 +69,109 @@ async function loadEmployeeProfile(organizationId, employeeNumber) {
 
 /*
 ============================================================
+EMPLOYEE DIRECTORY — EFFECTIVE EMPLOYMENT LEVEL ENRICHMENT
+============================================================
+
+Directory rows and employee profiles must resolve Employment Level
+from the same authoritative effective-dated source:
+
+  employee-specific override -> designation default
+
+This bulk resolver mirrors the profile resolver semantics without
+performing one database lookup per employee. Designation defaults
+remain preserved as configuration and are never mutated to satisfy
+an individual employee display.
+============================================================
+*/
+async function applyEffectiveEmploymentLevelsToDirectory(
+  organizationId,
+  employees,
+  asOf = new Date()
+) {
+  if (!employees.length) return employees;
+
+  const employeeIds = employees.map((employee) => employee.id);
+  const assignments = await prisma.employeeEmploymentLevelAssignment.findMany({
+    where: {
+      organizationId,
+      employeeId: { in: employeeIds },
+      effectiveFrom: { lte: asOf },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+    },
+    include: { employmentLevel: true },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+  });
+
+  const currentAssignmentByEmployeeId = new Map();
+  for (const assignment of assignments) {
+    if (!currentAssignmentByEmployeeId.has(assignment.employeeId)) {
+      currentAssignmentByEmployeeId.set(assignment.employeeId, assignment);
+    }
+  }
+
+  return employees.map((employee) => {
+    const designationDefault = employee.designation?.employmentLevel || null;
+    const override = currentAssignmentByEmployeeId.get(employee.id) || null;
+
+    let source = null;
+    let effectiveEmploymentLevel = null;
+    let employmentLevelWarning = null;
+
+    if (override) {
+      source = "EMPLOYEE_OVERRIDE";
+      if (override.employmentLevel?.isActive) {
+        effectiveEmploymentLevel = override.employmentLevel;
+      } else {
+        employmentLevelWarning = "EMPLOYEE_LEVEL_OVERRIDE_INACTIVE";
+      }
+    } else if (
+      employee.designation &&
+      employee.designation.careerLevel != null &&
+      designationDefault?.isActive
+    ) {
+      source = "DESIGNATION_DEFAULT";
+      effectiveEmploymentLevel = designationDefault;
+    } else {
+      employmentLevelWarning = "EMPLOYMENT_LEVEL_MAPPING_REQUIRED";
+    }
+
+    const effectiveSummary = effectiveEmploymentLevel
+      ? {
+          ...levelSummary(effectiveEmploymentLevel),
+          source,
+          override: override
+            ? {
+                id: override.id,
+                levelNumber: override.levelNumber,
+                effectiveFrom: override.effectiveFrom,
+                effectiveTo: override.effectiveTo,
+                reason: override.reason,
+                notes: override.notes,
+                performedByUserId: override.performedByUserId,
+                createdAt: override.createdAt,
+              }
+            : null,
+        }
+      : null;
+
+    return {
+      ...employee,
+      designation: employee.designation
+        ? {
+            ...employee.designation,
+            defaultEmploymentLevel: designationDefault,
+            employmentLevel: effectiveEmploymentLevel,
+          }
+        : null,
+      effectiveEmploymentLevel: effectiveSummary,
+      employmentLevelSource: source,
+      employmentLevelWarning,
+    };
+  });
+}
+
+/*
+============================================================
 EMPLOYEE DIRECTORY — ACTIVE BRANCH CONTEXT
 ============================================================
 
@@ -110,11 +213,16 @@ router.get(
         orderBy: { createdAt: "desc" },
       });
 
+      const governedEmployees = await applyEffectiveEmploymentLevelsToDirectory(
+        req.auth.organizationId,
+        employees
+      );
+
       return res.status(200).json({
         status: "success",
-        results: employees.length,
+        results: governedEmployees.length,
         locationContext: activeLocationContext(req),
-        data: employees,
+        data: governedEmployees,
       });
     } catch (error) {
       console.error("Branch-scoped employee directory fetch error:", error);
