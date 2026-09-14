@@ -13,8 +13,18 @@ const { listLoanEmployeeOptions } = require("../services/loanWorkflowAccessServi
 const router = express.Router();
 
 function isHeadOfHr(req) {
-  const roles = (req.auth?.roles || []).map((role) => String(role || "").trim().toLowerCase());
-  return roles.includes("head of hr & admin") || roles.includes("head hr & admin") || roles.includes("head of hr and admin");
+  const roles = (req.auth?.roles || []).map((role) =>
+    String(role || "").trim().toLowerCase().replace(/\s+/g, " ")
+  );
+  const accepted = new Set([
+    "head hr/admin",
+    "head of hr/admin",
+    "head hr & admin",
+    "head of hr & admin",
+    "head hr and admin",
+    "head of hr and admin",
+  ]);
+  return roles.some((role) => accepted.has(role));
 }
 
 function requireHeadOfHr(req, res, next) {
