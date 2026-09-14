@@ -8,13 +8,11 @@ import {
 import MainLayout from "./layouts/MainLayout";
 import PlannedWorkspace from "./pages/shared/PlannedWorkspace";
 import ModuleDashboard from "./components/dashboard/ModuleDashboard";
-
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
-
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
@@ -38,6 +36,10 @@ import RecruitmentTalentWorkspace from "./pages/RecruitmentTalentWorkspace";
 import AttendanceDashboard from "./pages/AttendanceDashboard";
 import AttendanceRegister from "./pages/AttendanceRegister";
 import ShiftManagement from "./pages/ShiftManagement";
+import ShiftSchedule from "./pages/ShiftSchedule";
+import AttendanceAnalyticsPage from "./pages/AttendanceAnalyticsPage";
+import WorkedHours from "./pages/WorkedHours";
+import PublicHolidays from "./pages/PublicHolidays";
 import LeaveDashboard from "./pages/LeaveDashboard";
 import LeaveRequests from "./pages/LeaveRequests";
 import LeaveBalances from "./pages/LeaveBalances";
@@ -60,34 +62,21 @@ import OrganizationProfile from "./pages/OrganizationProfile";
 import OrganizationChart from "./pages/OrganizationChart";
 import ReportingLines from "./pages/ReportingLines";
 import CostCentres from "./pages/CostCentres";
+import MySupportRequests from "./pages/MySupportRequests";
+import SupportDesk from "./pages/SupportDesk";
 
-import ShiftSchedule from "./pages/ShiftSchedule";
-import AttendanceAnalyticsPage from "./pages/AttendanceAnalyticsPage";
-import WorkedHours from "./pages/WorkedHours";
-import PublicHolidays from "./pages/PublicHolidays";
-function ProtectedLayout({
-  children,
-}) {
+function ProtectedLayout({ children }) {
   return (
     <ProtectedRoute>
-      <MainLayout>
-        {children}
-      </MainLayout>
+      <MainLayout>{children}</MainLayout>
     </ProtectedRoute>
   );
 }
 
-function PermissionLayout({
-  permission,
-  children,
-}) {
+function PermissionLayout({ permission, children }) {
   return (
     <ProtectedLayout>
-      <PermissionRoute
-        permission={permission}
-      >
-        {children}
-      </PermissionRoute>
+      <PermissionRoute permission={permission}>{children}</PermissionRoute>
     </ProtectedLayout>
   );
 }
@@ -96,491 +85,85 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC AUTHENTICATION */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/employee-invite/:token" element={<EmployeeSelfOnboardingPublic />} />
 
-        <Route
-          path="/login"
-          element={
-            <Login />
-          }
-        />
+        <Route path="/" element={<PermissionLayout permission="dashboard.view"><Dashboard /></PermissionLayout>} />
 
-        <Route
-          path="/reset-password"
-          element={
-            <ResetPassword />
-          }
-        />
+        <Route path="/employees" element={<PermissionLayout permission="employees.view"><EmployeeDashboard /></PermissionLayout>} />
+        <Route path="/employees/add" element={<PermissionLayout permission="employees.create"><AddOnboardEmployeeEntry /></PermissionLayout>} />
+        <Route path="/employees/bulk-upload" element={<PermissionLayout permission="employees.create"><BulkEmployeeImport /></PermissionLayout>} />
+        <Route path="/employees/invitations" element={<PermissionLayout permission="employees.create"><EmployeeInvitations /></PermissionLayout>} />
+        <Route path="/employees/export-queue" element={<PermissionLayout permission="employees.update"><EmployeeExportQueue /></PermissionLayout>} />
+        <Route path="/employees/governance" element={<PermissionLayout permission="employees.update"><EmployeeGovernance /></PermissionLayout>} />
+        <Route path="/employees/directory" element={<PermissionLayout permission="employees.view"><Employees /></PermissionLayout>} />
+        <Route path="/employees/profiles" element={<PermissionLayout permission="employees.view"><EmployeeModuleWorkspace mode="profiles" /></PermissionLayout>} />
+        <Route path="/employees/onboarding" element={<PermissionLayout permission="employees.view"><OnboardingTracker /></PermissionLayout>} />
+        <Route path="/employees/onboarding/workflows" element={<PermissionLayout permission="employees.view"><EmployeeOnboarding /></PermissionLayout>} />
+        <Route path="/employees/:employeeNumber/onboarding" element={<PermissionLayout permission="employees.view"><EmployeeOnboarding initialTab="STATUS" /></PermissionLayout>} />
+        <Route path="/employees/analytics" element={<PermissionLayout permission="employees.view"><EmployeeAnalytics /></PermissionLayout>} />
+        <Route path="/employees/transfers" element={<PermissionLayout permission="employees.view"><EmployeeModuleWorkspace mode="transfers" /></PermissionLayout>} />
+        <Route path="/employees/promotions" element={<PermissionLayout permission="employees.view"><EmployeeModuleWorkspace mode="promotions" /></PermissionLayout>} />
+        <Route path="/employees/exits" element={<PermissionLayout permission="employees.view"><EmployeeExits /></PermissionLayout>} />
+        <Route path="/employees/line-managers" element={<PermissionLayout permission="employees.view"><LineManagers /></PermissionLayout>} />
+        <Route path="/employees/:employeeNumber" element={<PermissionLayout permission="employees.view"><EmployeeProfileErrorBoundary><EmployeeProfile /></EmployeeProfileErrorBoundary></PermissionLayout>} />
 
-        <Route
-          path="/employee-invite/:token"
-          element={<EmployeeSelfOnboardingPublic />}
-        />
-
-        {/* DASHBOARD */}
-
-        <Route
-          path="/"
-          element={
-            <PermissionLayout
-              permission="dashboard.view"
-            >
-              <Dashboard />
-            </PermissionLayout>
-          }
-        />
-
-        {/* EMPLOYEES */}
-
-                <Route
-          path="/employees"
-          element={
-            <PermissionLayout
-              permission="employees.view"
-            >
-              <EmployeeDashboard />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/add"
-          element={
-            <PermissionLayout permission="employees.create">
-              <AddOnboardEmployeeEntry />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/bulk-upload"
-          element={
-            <PermissionLayout permission="employees.create">
-              <BulkEmployeeImport />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/invitations"
-          element={
-            <PermissionLayout permission="employees.create">
-              <EmployeeInvitations />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/export-queue"
-          element={
-            <PermissionLayout permission="employees.update">
-              <EmployeeExportQueue />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/governance"
-          element={
-            <PermissionLayout permission="employees.update">
-              <EmployeeGovernance />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/directory"
-          element={
-            <PermissionLayout
-              permission="employees.view"
-            >
-              <Employees />
-            </PermissionLayout>
-          }
-        />
-
-                <Route
-          path="/employees/profiles"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeModuleWorkspace mode="profiles" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/onboarding"
-          element={
-            <PermissionLayout permission="employees.view">
-              <OnboardingTracker />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/onboarding/workflows"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeOnboarding />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/:employeeNumber/onboarding"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeOnboarding initialTab="STATUS" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/analytics"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeAnalytics />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/transfers"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeModuleWorkspace mode="transfers" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/promotions"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeModuleWorkspace mode="promotions" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/exits"
-          element={
-            <PermissionLayout permission="employees.view">
-              <EmployeeExits />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/employees/line-managers"
-          element={
-            <PermissionLayout permission="employees.view">
-              <LineManagers />
-            </PermissionLayout>
-          }
-        />
-<Route
-          path="/employees/:employeeNumber"
-          element={
-            <PermissionLayout
-              permission="employees.view"
-            >
-              <EmployeeProfileErrorBoundary>
-                <EmployeeProfile />
-              </EmployeeProfileErrorBoundary>
-            </PermissionLayout>
-          }
-        />
-
-        {/* RECRUITMENT */}
-
-        <Route
-          path="/recruitment"
-          element={
-            <PermissionLayout
-              permission="recruitment.view"
-            >
-              <Recruitment />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/recruitment/vacancies"
-          element={
-            <PermissionLayout permission="recruitment.view">
-              <RecruitmentVacancies />
-            </PermissionLayout>
-          }
-        />
-
+        <Route path="/recruitment" element={<PermissionLayout permission="recruitment.view"><Recruitment /></PermissionLayout>} />
+        <Route path="/recruitment/vacancies" element={<PermissionLayout permission="recruitment.view"><RecruitmentVacancies /></PermissionLayout>} />
         <Route path="/recruitment/candidates" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="candidates" /></PermissionLayout>} />
         <Route path="/recruitment/interviews" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="interviews" /></PermissionLayout>} />
         <Route path="/recruitment/offers" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="offers" /></PermissionLayout>} />
         <Route path="/recruitment/ats" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="ats" /></PermissionLayout>} />
         <Route path="/recruitment/talent-pool" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="talent-pool" /></PermissionLayout>} />
 
-        {/* TIME & ATTENDANCE */}
+        <Route path="/attendance" element={<PermissionLayout permission="attendance.view"><AttendanceDashboard /></PermissionLayout>} />
+        <Route path="/attendance/register" element={<PermissionLayout permission="attendance.view"><AttendanceRegister /></PermissionLayout>} />
+        <Route path="/attendance/shifts" element={<PermissionLayout permission="attendance.view"><ShiftManagement /></PermissionLayout>} />
+        <Route path="/attendance/shift-schedule" element={<PermissionLayout permission="attendance.view"><ShiftSchedule /></PermissionLayout>} />
+        <Route path="/attendance/worked-hours" element={<PermissionLayout permission="attendance.view"><WorkedHours /></PermissionLayout>} />
+        <Route path="/attendance/worked-days" element={<PermissionLayout permission="attendance.view"><AttendanceAnalyticsPage mode="worked-days" /></PermissionLayout>} />
+        <Route path="/attendance/off-days" element={<PermissionLayout permission="attendance.view"><AttendanceAnalyticsPage mode="off-days" /></PermissionLayout>} />
+        <Route path="/attendance/overtime" element={<PermissionLayout permission="attendance.view"><AttendanceAnalyticsPage mode="overtime" /></PermissionLayout>} />
+        <Route path="/attendance/public-holidays" element={<PermissionLayout permission="attendance.view"><PublicHolidays /></PermissionLayout>} />
+        <Route path="/attendance/lateness-absence" element={<PermissionLayout permission="attendance.view"><AttendanceAnalyticsPage mode="lateness-absence" /></PermissionLayout>} />
 
-        <Route
-          path="/attendance"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <AttendanceDashboard />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/register"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <AttendanceRegister />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/shifts"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <ShiftManagement />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/shift-schedule"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <ShiftSchedule />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/worked-hours"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <WorkedHours />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/worked-days"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <AttendanceAnalyticsPage mode="worked-days" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/off-days"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <AttendanceAnalyticsPage mode="off-days" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/overtime"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <AttendanceAnalyticsPage mode="overtime" />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/public-holidays"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <PublicHolidays />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/attendance/lateness-absence"
-          element={
-            <PermissionLayout permission="attendance.view">
-              <AttendanceAnalyticsPage mode="lateness-absence" />
-            </PermissionLayout>
-          }
-        />
-
-        {/* LEAVE */}
-
-        <Route
-          path="/leave"
-          element={
-            <PermissionLayout
-              permission="leave.view"
-            >
-              <LeaveDashboard />
-            </PermissionLayout>
-          }
-        />
-
-        <Route
-          path="/leave/requests"
-          element={
-            <PermissionLayout
-              permission="leave.view"
-            >
-              <LeaveRequests />
-            </PermissionLayout>
-          }
-        />
-
+        <Route path="/leave" element={<PermissionLayout permission="leave.view"><LeaveDashboard /></PermissionLayout>} />
+        <Route path="/leave/requests" element={<PermissionLayout permission="leave.view"><LeaveRequests /></PermissionLayout>} />
         <Route path="/leave/active" element={<PermissionLayout permission="leave.view"><LeaveActive /></PermissionLayout>} />
         <Route path="/leave/returns" element={<PermissionLayout permission="leave.view"><LeaveReturns /></PermissionLayout>} />
         <Route path="/leave/calendar" element={<PermissionLayout permission="leave.view"><LeaveCalendarPage /></PermissionLayout>} />
         <Route path="/leave/entitlements" element={<PermissionLayout permission="leave.view"><LeaveEntitlements /></PermissionLayout>} />
         <Route path="/leave/exceptions" element={<PermissionLayout permission="leave.view"><LeaveExceptions /></PermissionLayout>} />
+        <Route path="/leave/balances" element={<PermissionLayout permission="leave.view"><LeaveBalances /></PermissionLayout>} />
+        <Route path="/leave/policies" element={<PermissionLayout permission="leave.view"><LeavePolicies /></PermissionLayout>} />
 
-        <Route
-          path="/leave/balances"
-          element={
-            <PermissionLayout
-              permission="leave.view"
-            >
-              <LeaveBalances />
-            </PermissionLayout>
-          }
-        />
+        <Route path="/payroll" element={<PermissionLayout permission="payroll.view"><Payroll /></PermissionLayout>} />
+        <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans /></PermissionLayout>} />
+        <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
+        <Route path="/training" element={<PermissionLayout permission="training.view"><Training /></PermissionLayout>} />
+        <Route path="/reports" element={<PermissionLayout permission="reports.view"><Reports /></PermissionLayout>} />
+        <Route path="/settings" element={<PermissionLayout permission="settings.view"><Settings /></PermissionLayout>} />
+        <Route path="/designations" element={<PermissionLayout permission="settings.view"><Designations /></PermissionLayout>} />
 
-        <Route
-          path="/leave/policies"
-          element={
-            <PermissionLayout
-              permission="leave.view"
-            >
-              <LeavePolicies />
-            </PermissionLayout>
-          }
-        />
+        {/* Client support is available to every authenticated tenant user. */}
+        <Route path="/support" element={<ProtectedLayout><MySupportRequests /></ProtectedLayout>} />
+        {/* Internal Support Desk requires platform support permissions in the API and UI. */}
+        <Route path="/support-desk" element={<PermissionLayout permission="support.internal.view"><SupportDesk /></PermissionLayout>} />
 
-        {/* PAYROLL */}
-
-        <Route
-          path="/payroll"
-          element={
-            <PermissionLayout
-              permission="payroll.view"
-            >
-              <Payroll />
-            </PermissionLayout>
-          }
-        />
-
-        {/* LOANS */}
-
-        <Route
-          path="/loans"
-          element={
-            <PermissionLayout
-              permission="loans.view"
-            >
-              <Loans />
-            </PermissionLayout>
-          }
-        />
-
-        {/* PERFORMANCE */}
-
-        <Route
-          path="/performance"
-          element={
-            <PermissionLayout
-              permission="performance.view"
-            >
-              <Performance />
-            </PermissionLayout>
-          }
-        />
-
-        {/* TRAINING */}
-
-        <Route
-          path="/training"
-          element={
-            <PermissionLayout
-              permission="training.view"
-            >
-              <Training />
-            </PermissionLayout>
-          }
-        />
-
-        {/* REPORTS */}
-
-        <Route
-          path="/reports"
-          element={
-            <PermissionLayout
-              permission="reports.view"
-            >
-              <Reports />
-            </PermissionLayout>
-          }
-        />
-
-        {/* SETTINGS */}
-
-        <Route
-          path="/settings"
-          element={
-            <PermissionLayout
-              permission="settings.view"
-            >
-              <Settings />
-            </PermissionLayout>
-          }
-        />
-
-        {/* DESIGNATIONS & CAREER STRUCTURE */}
-
-        <Route
-          path="/designations"
-          element={
-            <PermissionLayout
-              permission="settings.view"
-            >
-              <Designations />
-            </PermissionLayout>
-          }
-        />
-        {/* UNKNOWN ROUTES */}
-
-        
-        {/* CHRIS PARENT MODULE DASHBOARDS */}
         <Route path="/compensation" element={<ProtectedLayout><ModuleDashboard moduleKey="compensation" /></ProtectedLayout>} />
         <Route path="/benefits" element={<ProtectedLayout><Benefits /></ProtectedLayout>} />
-        {/* CHRIS BENEFITS CHILD ROUTES */}
-
         <Route path="/benefits/pension" element={<ProtectedLayout><BenefitChildPage title="Pension" description="Manage pension-related employee benefits, participation and contribution readiness." metricLabels={["Eligible Employees","Enrolled Employees","Employer Contribution","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/gratuity" element={<ProtectedLayout><BenefitChildPage title="Gratuity" description="Manage gratuity eligibility, service-based benefit rules and accrued obligations." metricLabels={["Eligible Employees","Accrued Liability","Upcoming Eligibility","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/health-insurance" element={<ProtectedLayout><BenefitChildPage title="Health Insurance" description="Manage employee health-insurance coverage, dependants, eligibility and plan participation." metricLabels={["Active Plans","Covered Employees","Dependants","Coverage Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/life-insurance" element={<ProtectedLayout><BenefitChildPage title="Life Insurance" description="Manage employee life-insurance participation, coverage levels and eligibility." metricLabels={["Covered Employees","Active Policies","Coverage Value","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/medical" element={<ProtectedLayout><BenefitChildPage title="Medical Benefits" description="Manage medical-benefit programmes, utilization readiness and employee coverage." metricLabels={["Eligible Employees","Active Coverage","Claims / Usage","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/housing" element={<ProtectedLayout><BenefitChildPage title="Housing / Rent" description="Manage housing and rent-related employee benefit programmes and eligibility." metricLabels={["Eligible Employees","Active Beneficiaries","Employer Cost","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/transport" element={<ProtectedLayout><BenefitChildPage title="Transport Benefits" description="Manage transport benefit programmes, employee eligibility and employer support." metricLabels={["Eligible Employees","Active Beneficiaries","Employer Cost","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/meals" element={<ProtectedLayout><BenefitChildPage title="Meal Benefits" description="Manage meal benefit programmes, eligibility, participation and employer support." metricLabels={["Eligible Employees","Active Beneficiaries","Employer Cost","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/other" element={<ProtectedLayout><BenefitChildPage title="Other Benefits" description="Manage additional employee benefit programmes outside the standard benefit categories." metricLabels={["Benefit Types","Eligible Employees","Active Beneficiaries","Exceptions"]} /></ProtectedLayout>} />
-
         <Route path="/benefits/enrolments" element={<ProtectedLayout><BenefitChildPage title="Benefit Enrolments" description="Manage employee benefit enrolments, status, eligibility and participation workflows." metricLabels={["Eligible Employees","Enrolled Employees","Pending Enrolments","Exceptions"]} activityTitle="Enrolment Activity" /></ProtectedLayout>} />
+
         <Route path="/statutories" element={<ProtectedLayout><ModuleDashboard moduleKey="statutories" /></ProtectedLayout>} />
         <Route path="/assets" element={<ProtectedLayout><ModuleDashboard moduleKey="assets" /></ProtectedLayout>} />
         <Route path="/documents" element={<ProtectedLayout><ModuleDashboard moduleKey="documents" /></ProtectedLayout>} />
@@ -589,7 +172,6 @@ function App() {
         <Route path="/employment-types" element={<ProtectedLayout><ModuleDashboard moduleKey="employmentTypes" /></ProtectedLayout>} />
         <Route path="/billing" element={<ProtectedLayout><ModuleDashboard moduleKey="billing" /></ProtectedLayout>} />
 
-        {/* CHRIS PLANNED WORKSPACE ROUTES */}
         <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/periods" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -684,15 +266,8 @@ function App() {
         <Route path="/billing/details" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/billing/history" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/billing/invoices" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-<Route
-          path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
-        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
