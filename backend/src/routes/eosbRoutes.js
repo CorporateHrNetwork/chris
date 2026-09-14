@@ -8,6 +8,7 @@ const {
   listEosbAccounts,
   assessLoanCollateral,
 } = require("../services/eosbService");
+const { listLoanEmployeeOptions } = require("../services/loanWorkflowAccessService");
 
 const router = express.Router();
 
@@ -43,12 +44,34 @@ function csvEscape(value) {
   return `"${string.replace(/"/g, '""')}"`;
 }
 
+async function requireLoanEmployeeScope(req, res, next) {
+  try {
+    const normalized = String(req.params.employeeNumber || "").trim().toUpperCase();
+    const options = await listLoanEmployeeOptions({
+      organizationId: req.auth.organizationId,
+      userId: req.auth.userId,
+    });
+    if (!options.some((employee) => employee.employeeNumber === normalized)) {
+      return res.status(403).json({
+        status: "error",
+        code: "LOAN_EMPLOYEE_LOCATION_ACCESS_DENIED",
+        message: "The selected employee is outside your assigned loan-workflow location scope.",
+      });
+    }
+    return next();
+  } catch (error) {
+    return handleError(res, error, "Unable to validate loan employee location scope.");
+  }
+}
+
 router.use(requireAuth);
 
-// Loan users need a selected employee's collateral decision, not the organization-wide EoSB register.
+// Loan users receive only the selected employee collateral decision and only
+// where that employee is inside the user's existing loan-workflow location scope.
 router.get(
   "/collateral/:employeeNumber",
   requireAnyPermission("loans.apply", "loans.verify", "loans.approve", "payroll.manage"),
+  requireLoanEmployeeScope,
   async (req, res) => {
     try {
       const requestedAmount = Number(req.query.requestedAmount || 0);
