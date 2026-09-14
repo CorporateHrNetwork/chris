@@ -14,6 +14,7 @@ import {
   FaFolderOpen,
   FaGift,
   FaGraduationCap,
+  FaHeadset,
   FaLaptop,
   FaMoneyBillWave,
   FaMoneyCheckAlt,
@@ -36,6 +37,22 @@ const MENU_GROUPS = [
     icon: <FaTachometerAlt />,
     permission: "dashboard.view",
     path: "/",
+    exact: true,
+  },
+  {
+    id: "client-support",
+    label: "Support",
+    icon: <FaHeadset />,
+    authenticated: true,
+    path: "/support",
+    exact: true,
+  },
+  {
+    id: "internal-support-desk",
+    label: "CHRiS Support Desk",
+    icon: <FaHeadset />,
+    permission: "support.internal.view",
+    path: "/support-desk",
     exact: true,
   },
   {
@@ -350,6 +367,7 @@ function Sidebar() {
     if (authorizationLoading) return [];
     return MENU_GROUPS
       .filter((group) => {
+        if (group.authenticated) return true;
         if (group.adminOnly) return canViewSettings;
         if (group.permission) return hasPermission(group.permission);
         return false;
@@ -430,12 +448,7 @@ function Sidebar() {
       `}</style>
 
       <div style={brandHeaderStyle}>
-        <img
-          className="chris-sidebar-logo"
-          src={chrisLogo}
-          alt="CHRIS"
-          style={logoStyle}
-        />
+        <img className="chris-sidebar-logo" src={chrisLogo} alt="CHRIS" style={logoStyle} />
         <div style={brandNameStyle}>CorporateHR Network</div>
         <div style={brandSubtitleStyle}>Information System</div>
         <div style={brandDividerStyle} />
@@ -466,19 +479,12 @@ function Sidebar() {
             <div key={group.id} style={{ marginBottom: 2 }}>
               <button
                 type="button"
-                onClick={() =>
-                  setOpenGroups((current) => ({
-                    ...current,
-                    [group.id]: !current[group.id],
-                  }))
-                }
+                onClick={() => setOpenGroups((current) => ({ ...current, [group.id]: !current[group.id] }))}
                 style={groupButtonVisual(groupActive)}
               >
                 <span style={iconStyle}>{group.icon}</span>
                 <span style={{ flex: 1, textAlign: "left" }}>{group.label}</span>
-                <span style={{ fontSize: 10, opacity: .9 }}>
-                  {isOpen ? <FaChevronDown /> : <FaChevronRight />}
-                </span>
+                <span style={{ fontSize: 10, opacity: .9 }}>{isOpen ? <FaChevronDown /> : <FaChevronRight />}</span>
               </button>
 
               {isOpen && (
@@ -504,22 +510,13 @@ function Sidebar() {
                         key={`${group.id}-${index}`}
                         to={child.path}
                         end
-                        style={({ isActive }) =>
-                          childLinkVisual(isChildActive(child.path, isActive))
-                        }
+                        style={({ isActive }) => childLinkVisual(isChildActive(child.path, isActive))}
                       >
                         {({ isActive }) => {
                           const active = isChildActive(child.path, isActive);
                           return (
                             <>
-                              <span
-                                style={{
-                                  ...childDotStyle,
-                                  background: active
-                                    ? "var(--chris-gold, #D4AF37)"
-                                    : "rgba(255,255,255,.35)",
-                                }}
-                              />
+                              <span style={{ ...childDotStyle, background: active ? "var(--chris-gold, #D4AF37)" : "rgba(255,255,255,.35)" }} />
                               <span>{child.label}</span>
                             </>
                           );
@@ -551,20 +548,7 @@ function Sidebar() {
   );
 }
 
-const sidebarStyle = {
-  width: 276,
-  minWidth: 276,
-  height: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  background: "var(--tenant-sidebar-gradient, var(--tenant-shell-gradient, linear-gradient(180deg, #06110C 0%, #030705 100%)))",
-  color: "#FFFFFF",
-  boxShadow: "8px 0 28px rgba(0,0,0,.34)",
-  overflow: "hidden",
-  boxSizing: "border-box",
-  position: "relative",
-  zIndex: 30,
-};
+const sidebarStyle = { width: 276, minWidth: 276, height: "100vh", display: "flex", flexDirection: "column", background: "var(--tenant-sidebar-gradient, var(--tenant-shell-gradient, linear-gradient(180deg, #06110C 0%, #030705 100%)))", color: "#FFFFFF", boxShadow: "8px 0 28px rgba(0,0,0,.34)", overflow: "hidden", boxSizing: "border-box", position: "relative", zIndex: 30 };
 const ambientStyle = { position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 };
 const greenGlowStyle = { position: "absolute", width: 260, height: 260, top: -85, left: -90, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,150,78,.24) 0%, rgba(0,120,65,.10) 38%, transparent 72%)", filter: "blur(8px)" };
 const goldGlowStyle = { position: "absolute", width: 220, height: 220, right: -125, top: "34%", borderRadius: "50%", background: "radial-gradient(circle, rgba(212,175,55,.16) 0%, rgba(212,175,55,.06) 40%, transparent 74%)", filter: "blur(10px)" };
