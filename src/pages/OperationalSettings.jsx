@@ -160,7 +160,14 @@ export default function OperationalSettings({ section }) {
     return () => { active = false; };
   }, [section]);
 
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   const dirty = useMemo(() => JSON.stringify(values) !== JSON.stringify(defaults) || Boolean(meta.updatedAt), [values, defaults, meta.updatedAt]);
+  void dirty;
 
   if (!definition) return <div>Unknown settings section.</div>;
 
@@ -198,9 +205,7 @@ export default function OperationalSettings({ section }) {
         <h1 style={title}>{definition.title}</h1>
         <p style={muted}>{definition.description}</p>
         <div style={metaLine}>
-          <span>Audited tenant configuration</span>
-          <span>•</span>
-          <span>{formatTimestamp(meta.updatedAt)}</span>
+          <span>Audited tenant configuration</span><span>•</span><span>{formatTimestamp(meta.updatedAt)}</span>
           {meta.updatedBy ? <><span>•</span><span>{meta.updatedBy}</span></> : null}
         </div>
       </section>
@@ -212,20 +217,10 @@ export default function OperationalSettings({ section }) {
         {loading ? <div style={muted}>Loading {definition.title.toLowerCase()}…</div> : (
           <div style={grid}>
             {definition.fields.map(([key, label, type, options]) => (
-              <SettingField
-                key={key}
-                settingKey={key}
-                label={label}
-                type={type}
-                options={options}
-                value={values[key]}
-                onChange={change}
-                disabled={!canManage || saving}
-              />
+              <SettingField key={key} settingKey={key} label={label} type={type} options={options} value={values[key]} onChange={change} disabled={!canManage || saving} />
             ))}
           </div>
         )}
-
         <div style={footer}>
           <div style={helper}>{canManage ? "Changes are recorded in the CHRiS audit trail." : "You have view-only access to this configuration."}</div>
           <button type="submit" style={{ ...saveButton, opacity: (!canManage || saving || loading) ? .55 : 1 }} disabled={!canManage || saving || loading}>
@@ -241,21 +236,11 @@ function SettingField({ settingKey, label, type, options, value, onChange, disab
   if (type === "boolean") {
     return (
       <label style={toggleCard}>
-        <div>
-          <strong style={fieldLabel}>{label}</strong>
-          <div style={fieldHint}>{value ? "Enabled" : "Disabled"}</div>
-        </div>
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          disabled={disabled}
-          onChange={(event) => onChange(settingKey, event.target.checked)}
-          style={{ width: 20, height: 20, accentColor: "#19D477" }}
-        />
+        <div><strong style={fieldLabel}>{label}</strong><div style={fieldHint}>{value ? "Enabled" : "Disabled"}</div></div>
+        <input type="checkbox" checked={Boolean(value)} disabled={disabled} onChange={(event) => onChange(settingKey, event.target.checked)} style={{ width: 20, height: 20, accentColor: "#19D477" }} />
       </label>
     );
   }
-
   return (
     <label style={fieldCard}>
       <span style={fieldLabel}>{label}</span>
@@ -264,15 +249,7 @@ function SettingField({ settingKey, label, type, options, value, onChange, disab
           {(options || []).map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       ) : (
-        <input
-          style={input}
-          type={type === "number" ? "number" : "text"}
-          value={value ?? ""}
-          min={type === "number" ? options?.min : undefined}
-          max={type === "number" ? options?.max : undefined}
-          disabled={disabled}
-          onChange={(event) => onChange(settingKey, type === "number" ? Number(event.target.value) : event.target.value)}
-        />
+        <input style={input} type={type === "number" ? "number" : "text"} value={value ?? ""} min={type === "number" ? options?.min : undefined} max={type === "number" ? options?.max : undefined} disabled={disabled} onChange={(event) => onChange(settingKey, type === "number" ? Number(event.target.value) : event.target.value)} />
       )}
     </label>
   );
