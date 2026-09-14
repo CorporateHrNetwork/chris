@@ -73,6 +73,17 @@ const workflowLabel = (status) => ({
   CANCELLED: "Cancelled",
 }[status] || status || "—");
 
+const emptyLoanForm = () => ({
+  employeeNumber: "",
+  principalAmount: "",
+  installmentAmount: "",
+  applicationDate: today(),
+  recoveryStartDate: "",
+  purpose: "",
+  notes: "",
+  suretyEmployeeNumber: "",
+});
+
 function Loans() {
   const navigate = useNavigate();
   const formRef = useRef(null);
@@ -92,15 +103,9 @@ function Loans() {
   const [applicationFormFile, setApplicationFormFile] = useState(null);
   const [approvalToken, setApprovalToken] = useState("");
   const [approvalTarget, setApprovalTarget] = useState(null);
-  const [form, setForm] = useState({
-    employeeNumber: "",
-    principalAmount: "",
-    installmentAmount: "",
-    applicationDate: today(),
-    recoveryStartDate: "",
-    purpose: "",
-    notes: "",
-  });
+  const [form, setForm] = useState(emptyLoanForm());
+  const [collateral, setCollateral] = useState(null);
+  const [collateralLoading, setCollateralLoading] = useState(false);
   const [disbursementDrafts, setDisbursementDrafts] = useState({});
 
   const load = async () => {
@@ -144,6 +149,31 @@ function Loans() {
     })();
   }, []);
 
+  useEffect(() => {
+    const employeeNumber = topUpParent?.employeeNumber || form.employeeNumber;
+    if (!employeeNumber || editingLoan || topUpParent) {
+      setCollateral(null);
+      setCollateralLoading(false);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        setCollateralLoading(true);
+        const result = await apiRequest(`/api/eosb/collateral/${encodeURIComponent(employeeNumber)}`);
+        if (active) setCollateral(result?.data?.statement || null);
+      } catch (requestError) {
+        if (active) {
+          setCollateral(null);
+          setError(requestError?.message || "Unable to assess the employee's EoSB loan collateral.");
+        }
+      } finally {
+        if (active) setCollateralLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [form.employeeNumber, editingLoan, topUpParent]);
+
   const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
     setError("");
@@ -151,7 +181,14 @@ function Loans() {
   };
 
   const setEmployee = (employeeNumber) => {
-    setForm((current) => ({ ...current, employeeNumber }));
+    setForm((current) => ({ ...current, employeeNumber, suretyEmployeeNumber: "" }));
+    setCollateral(null);
+    setError("");
+    setMessage("");
+  };
+
+  const setSurety = (suretyEmployeeNumber) => {
+    setForm((current) => ({ ...current, suretyEmployeeNumber }));
     setError("");
     setMessage("");
   };
@@ -160,15 +197,8 @@ function Loans() {
     setTopUpParent(null);
     setEditingLoan(null);
     setApplicationFormFile(null);
-    setForm({
-      employeeNumber: "",
-      principalAmount: "",
-      installmentAmount: "",
-      applicationDate: today(),
-      recoveryStartDate: "",
-      purpose: "",
-      notes: "",
-    });
+    setCollateral(null);
+    setForm(emptyLoanForm());
   };
 
   const exportBulk = async (format) => {
@@ -197,6 +227,10 @@ function Loans() {
       setError("Attach the completed loan application form before creating and submitting the application.");
       return;
     }
+    if (newWorkflowApplication && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && !form.suretyEmployeeNumber) {
+      setError("This employee requires an internal employee surety. Select the surety before submitting the loan application.");
+      return;
+    }
     try {
       setBusy(editingLoan ? `edit-${editingLoan.id}` : "create");
       setError("");
@@ -211,6 +245,7 @@ function Loans() {
         employeeNumber: topUpParent?.employeeNumber || form.employeeNumber,
       };
       if (!body.recoveryStartDate) delete body.recoveryStartDate;
+      if (!body.suretyEmployeeNumber) delete body.suretyEmployeeNumber;
       const result = await apiRequest(endpoint, {
         method: editingLoan ? "PATCH" : "POST",
         body: JSON.stringify(body),
@@ -226,7 +261,7 @@ function Loans() {
           method: "POST",
           body: JSON.stringify({ comments: form.notes || "Submitted by Branch HR & Admin Officer for Head HR verification." }),
         });
-        setMessage("Loan application created, form attached and submitted to Head HR for verification. CHRiS has queued the workflow notification automatically.");
+        setMessage("Loan application created, collateral validated, form attached and submitted to Head HR for verification. CHRiS has queued the workflow notification automatically.");
       } else if (editingLoan) {
         setMessage("Loan changes saved. If this application was returned, submit it again for Head HR verification from the Loan Register.");
       } else {
@@ -385,7 +420,8 @@ function Loans() {
     setEditingLoan(null);
     setTopUpParent(loan);
     setApplicationFormFile(null);
-    setForm({ employeeNumber: loan.employeeNumber, principalAmount: "", installmentAmount: "", applicationDate: today(), recoveryStartDate: "", purpose: "", notes: "" });
+    setCollateral(null);
+    setForm({ employeeNumber: loan.employeeNumber, principalAmount: "", installmentAmount: "", applicationDate: today(), recoveryStartDate: "", purpose: "", notes: "", suretyEmployeeNumber: "" });
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -393,6 +429,7 @@ function Loans() {
     setTopUpParent(null);
     setEditingLoan(loan);
     setApplicationFormFile(null);
+    setCollateral(null);
     setForm({
       employeeNumber: loan.employeeNumber,
       principalAmount: String(loan.principalAmount ?? ""),
@@ -401,6 +438,7 @@ function Loans() {
       recoveryStartDate: loan.recoveryStartDate || "",
       purpose: loan.purpose || "",
       notes: loan.notes || "",
+      suretyEmployeeNumber: "",
     });
     setError("");
     setMessage("");
@@ -571,7 +609,7 @@ function Loans() {
             ? (editHistoryLocked
                 ? "The loan has financial history. Historical identity remains locked; permitted future settings may be adjusted without rewriting posted recoveries."
                 : "Draft/returned applications can be corrected before resubmission. Applications pending verification/approval are frozen.")
-            : "Branch HR & Admin selects the employee, completes the terms and attaches the signed/filled loan application form. CHRiS then sends it to Head HR for verification before GM approval."}
+            : "Branch HR & Admin selects the employee, completes the terms and attaches the signed/filled loan application form. CHRiS validates EoSB collateral or internal surety before Head HR verification."}
           icon={<FaPlusCircle />}
         >
           <form onSubmit={submitLoan} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
@@ -585,12 +623,38 @@ function Loans() {
               {form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}
               {loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}
             </select></label>
+
+            {!editingLoan && !topUpParent && collateralLoading && (
+              <div style={collateralCard}><strong>Checking EoSB / loan collateral…</strong></div>
+            )}
+            {!editingLoan && !topUpParent && collateral && (
+              <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
+                <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Loan Collateral Assessment</strong>
+                <div style={collateralGrid}>
+                  <span>Service: <strong>{collateral.service?.serviceDays || 0} days</strong></span>
+                  <span>EoSB: <strong>{money(collateral.eosb?.accruedValue)}</strong></span>
+                  <span>Existing exposure: <strong>{money(collateral.loanCollateral?.existingLoanExposure)}</strong></span>
+                  <span>Available collateral: <strong>{money(collateral.loanCollateral?.availableCollateral)}</strong></span>
+                  <span>Basis: <strong>{collateral.loanCollateral?.mode === "EOSB" ? "EoSB-backed" : "Internal surety required"}</strong></span>
+                </div>
+                {collateral.eosb?.missingReason ? <small style={{ color: "#F4D66B" }}>{collateral.eosb.missingReason}</small> : null}
+                {collateral.loanCollateral?.reason ? <small style={{ color: "var(--chris-dashboard-muted)" }}>{collateral.loanCollateral.reason}</small> : null}
+              </div>
+            )}
+            {!editingLoan && !topUpParent && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && (
+              <div style={{ gridColumn: "1 / -1", padding: 12, border: "1px solid rgba(212,175,55,.28)", borderRadius: 10 }}>
+                <strong style={{ display: "block", marginBottom: 8 }}>Internal Surety</strong>
+                <EmployeeSearchSelect label="Surety Employee" value={form.suretyEmployeeNumber} onChange={setSurety} required placeholder="Search current employee acting as surety" />
+                <small style={{ color: "var(--chris-dashboard-muted)" }}>The surety covers the requested loan amount. The applicant cannot act as their own surety, and inactive/exited employees cannot be selected as valid sureties.</small>
+              </div>
+            )}
+
             {!topUpParent && (!editingLoan || ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(editingLoan.status)) && (
               <label><small>Completed Loan Application Form {editingLoan ? "(optional replacement)" : "*"}</small><input style={inputStyle} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => setApplicationFormFile(e.target.files?.[0] || null)} required={!editingLoan} /></label>
             )}
             <label><small>Notes</small><input style={inputStyle} value={form.notes} onChange={setField("notes")} /></label>
             <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button style={primaryButton} disabled={Boolean(busy) || !(topUpParent?.employeeNumber || form.employeeNumber) || !form.purpose}>{busy ? "Saving…" : editingLoan ? "Save Changes" : topUpParent ? "Create Top-Up" : "Create & Submit to Head HR"}</button>
+              <button style={primaryButton} disabled={Boolean(busy) || collateralLoading || !(topUpParent?.employeeNumber || form.employeeNumber) || !form.purpose || (!editingLoan && !topUpParent && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && !form.suretyEmployeeNumber)}>{busy ? "Saving…" : editingLoan ? "Save Changes" : topUpParent ? "Create Top-Up" : "Create & Submit to Head HR"}</button>
               {(editingLoan || topUpParent) && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>{editingLoan ? "Cancel Edit" : "Cancel Top-Up"}</button>}
             </div>
           </form>
@@ -602,13 +666,7 @@ function Loans() {
           <div style={{ display: "flex", alignItems: "end", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
             <label style={{ flex: "1 1 340px", maxWidth: 460 }}>
               <small>Search Loan / Employee</small>
-              <input
-                aria-label="Search Loan Register"
-                style={inputStyle}
-                value={loanSearch}
-                onChange={(event) => setLoanSearch(event.target.value)}
-                placeholder="Employee number, employee name, loan number, policy or status"
-              />
+              <input aria-label="Search Loan Register" style={inputStyle} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Employee number, employee name, loan number, policy or status" />
               <small style={{ color: "var(--chris-dashboard-muted)" }}>Showing {filteredLoans.length} of {loans.length} loan(s)</small>
             </label>
             <strong style={{ marginLeft: "auto", alignSelf: "center" }}>Bulk Loan Report</strong>
@@ -695,5 +753,8 @@ function Loans() {
     </>
   );
 }
+
+const collateralCard = { padding: 13, borderRadius: 10, border: "1px solid rgba(212,175,55,.28)", background: "rgba(212,175,55,.055)", display: "grid", gap: 8 };
+const collateralGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 8, color: "var(--chris-dashboard-text)", fontSize: 12 };
 
 export default Loans;
