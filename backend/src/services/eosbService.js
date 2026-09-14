@@ -3,7 +3,6 @@ const prisma = require("../config/prisma");
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const GRATUITY_FACTOR = 0.075;
 const FIXED_MONTH_DAYS = 30;
-const LOAN_SERVICE_THRESHOLD_DAYS = 12 * FIXED_MONTH_DAYS;
 const CURRENT_STATUSES = new Set(["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"]);
 const NON_EXPOSURE_LOAN_STATUSES = new Set(["COMPLETED", "CANCELLED", "REJECTED"]);
 
@@ -15,30 +14,17 @@ function eosbError(code, message, statusCode = 400, details) {
   return error;
 }
 
-function text(value) {
-  return String(value ?? "").trim();
-}
+function text(value) { return String(value ?? "").trim(); }
 
 function normalizeEmploymentType(value) {
-  return text(value)
-    .toUpperCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
+  return text(value).toUpperCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 
-function isFullTime(value) {
-  return normalizeEmploymentType(value) === "FULL TIME";
-}
+function isFullTime(value) { return normalizeEmploymentType(value) === "FULL TIME"; }
 
 function isSuretyOnlyType(value) {
   const type = normalizeEmploymentType(value);
-  return (
-    type === "INTERNSHIP" ||
-    type === "INTERN" ||
-    type === "INTERN TRAINEE" ||
-    type === "EXPATRIATE" ||
-    type === "PART TIME"
-  );
+  return ["INTERNSHIP", "INTERN", "INTERN TRAINEE", "EXPATRIATE", "PART TIME"].includes(type);
 }
 
 function dateOnly(value) {
@@ -58,6 +44,15 @@ function serviceDaysBetween(startDate, endDate) {
   return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
 }
 
+function hasTwelveCalendarMonths(startDate, asOf) {
+  const start = utcDate(startDate);
+  const end = utcDate(asOf);
+  if (!start || !end || end < start) return false;
+  const anniversary = new Date(start.getTime());
+  anniversary.setUTCFullYear(anniversary.getUTCFullYear() + 1);
+  return end >= anniversary;
+}
+
 function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
@@ -66,15 +61,12 @@ function calculateEosbValue(grossMonthlySalary, serviceDays) {
   return roundMoney(Number(grossMonthlySalary || 0) * (Number(serviceDays || 0) / FIXED_MONTH_DAYS) * GRATUITY_FACTOR);
 }
 
-function employeeName(row) {
-  return [row.firstName, row.middleName, row.lastName].filter(Boolean).join(" ");
-}
+function employeeName(row) { return [row.firstName, row.middleName, row.lastName].filter(Boolean).join(" "); }
 
 function effectiveAsOf(employee, requestedAsOf = new Date()) {
   const requested = utcDate(requestedAsOf) || utcDate(new Date());
   const exit = utcDate(employee.exitDate);
-  if (exit && exit < requested) return exit;
-  return requested;
+  return exit && exit < requested ? exit : requested;
 }
 
 async function resolveOrganization(client, organizationId) {
@@ -89,64 +81,77 @@ async function resolveOrganization(client, organizationId) {
   return organization;
 }
 
+const employeeSelect = {
+  id: true,
+  employeeNumber: true,
+  firstName: true,
+  middleName: true,
+  lastName: true,
+  employmentType: true,
+  status: true,
+  hireDate: true,
+  exitDate: true,
+  department: { select: { id: true, name: true } },
+  designation: { select: { id: true, name: true } },
+  location: { select: { id: true, name: true, code: true } },
+  employmentEpisodes: {
+    orderBy: [{ sequenceNumber: "desc" }],
+    take: 1,
+    select: { startDate: true, endDate: true, sequenceNumber: true },
+  },
+};
+
 async function resolveEmployee(client, organizationId, employeeNumber) {
   const normalized = text(employeeNumber).toUpperCase();
   if (!normalized) throw eosbError("EMPLOYEE_REQUIRED", "Employee Number is required.");
   const employee = await client.employee.findFirst({
     where: { organizationId, employeeNumber: normalized },
-    select: {
-      id: true,
-      employeeNumber: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
-      employmentType: true,
-      status: true,
-      hireDate: true,
-      exitDate: true,
-      department: { select: { id: true, name: true } },
-      designation: { select: { id: true, name: true } },
-      location: { select: { id: true, name: true, code: true } },
-      employmentEpisodes: {
-        orderBy: [{ sequenceNumber: "desc" }],
-        take: 1,
-        select: { startDate: true, endDate: true, sequenceNumber: true },
-      },
-    },
+    select: employeeSelect,
   });
   if (!employee) throw eosbError("EMPLOYEE_NOT_FOUND", `Employee ${normalized} was not found.`, 404);
   return employee;
 }
 
-async function activeGrossSalary(client, organizationId, employeeId, asOf) {
-  const asOfDate = dateOnly(asOf);
-  const rows = await client.$queryRawUnsafe(
-    `SELECT "amount","currency","effectiveFrom","effectiveTo"
+async function grossSalaryRates(client, organizationId, employeeId = null) {
+  const employeeClause = employeeId ? ` AND "employeeId"=$2` : "";
+  const params = employeeId ? [organizationId, employeeId] : [organizationId];
+  return client.$queryRawUnsafe(
+    `SELECT "employeeId","amount","currency","effectiveFrom","effectiveTo","status","createdAt"
        FROM "payroll_salary_rates"
-      WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status"='ACTIVE'
-        AND "effectiveFrom" <= $3::date
-        AND ("effectiveTo" IS NULL OR "effectiveTo" >= $3::date)
-      ORDER BY "effectiveFrom" DESC, "createdAt" DESC
-      LIMIT 1`,
-    organizationId,
-    employeeId,
-    asOfDate
+      WHERE "organizationId"=$1${employeeClause}
+        AND "status" IN ('ACTIVE','RETIRED')
+      ORDER BY "employeeId" ASC,"effectiveFrom" DESC,"createdAt" DESC`,
+    ...params
   );
-  return rows[0] || null;
 }
 
-async function loanExposure(client, organizationId, employeeId) {
-  const rows = await client.$queryRawUnsafe(
-    `SELECT "status","outstandingAmount","principalAmount"
+function salaryRateForDate(rates, employeeId, asOf) {
+  const target = utcDate(asOf);
+  if (!target) return null;
+  return (rates || []).find((rate) => {
+    if (rate.employeeId !== employeeId) return false;
+    const start = utcDate(rate.effectiveFrom);
+    const end = utcDate(rate.effectiveTo);
+    return start && start <= target && (!end || end >= target);
+  }) || null;
+}
+
+async function loanExposureRows(client, organizationId, employeeId = null) {
+  const employeeClause = employeeId ? ` AND "employeeId"=$2` : "";
+  const params = employeeId ? [organizationId, employeeId] : [organizationId];
+  return client.$queryRawUnsafe(
+    `SELECT "employeeId","status","outstandingAmount","principalAmount"
        FROM "payroll_loans"
-      WHERE "organizationId"=$1 AND "employeeId"=$2`,
-    organizationId,
-    employeeId
+      WHERE "organizationId"=$1${employeeClause}`,
+    ...params
   );
-  return roundMoney(rows.reduce((sum, row) => {
+}
+
+function exposureFor(rows, employeeId) {
+  return roundMoney((rows || []).reduce((sum, row) => {
+    if (row.employeeId !== employeeId) return sum;
     if (NON_EXPOSURE_LOAN_STATUSES.has(String(row.status || "").toUpperCase())) return sum;
-    const outstanding = Number(row.outstandingAmount ?? row.principalAmount ?? 0);
-    return sum + Math.max(outstanding, 0);
+    return sum + Math.max(Number(row.outstandingAmount ?? row.principalAmount ?? 0), 0);
   }, 0));
 }
 
@@ -154,7 +159,7 @@ function serviceStartFor(employee) {
   return employee.employmentEpisodes?.[0]?.startDate || employee.hireDate || null;
 }
 
-function eligibilityFor(employee, serviceDays) {
+function eligibilityFor(employee, startDate, calculationDate) {
   const type = normalizeEmploymentType(employee.employmentType);
   if (!isFullTime(type)) {
     return {
@@ -165,25 +170,21 @@ function eligibilityFor(employee, serviceDays) {
         : "Only Full-Time employees accrue Zermatt EoSB.",
     };
   }
-  if (serviceDays < LOAN_SERVICE_THRESHOLD_DAYS) {
+  if (!hasTwelveCalendarMonths(startDate, calculationDate)) {
     return {
       eosbEligible: true,
       loanCollateralMode: "SURETY_REQUIRED",
-      reason: "Full-Time employees below 12 months of service require internal surety for loan access.",
+      reason: "Full-Time employees below 12 calendar months of service require internal surety for loan access.",
     };
   }
   return { eosbEligible: true, loanCollateralMode: "EOSB", reason: null };
 }
 
-async function getEosbStatement({ organizationId, employeeNumber, asOf = new Date(), prismaClient = prisma }) {
-  const organization = await resolveOrganization(prismaClient, organizationId);
-  const employee = await resolveEmployee(prismaClient, organizationId, employeeNumber);
+function buildStatement({ organization, employee, asOf, salaryRate, exposure }) {
   const calculationDate = effectiveAsOf(employee, asOf);
   const startDate = serviceStartFor(employee);
   const serviceDays = serviceDaysBetween(startDate, calculationDate);
-  const eligibility = eligibilityFor(employee, serviceDays);
-  const salaryRate = await activeGrossSalary(prismaClient, organizationId, employee.id, calculationDate);
-  const exposure = await loanExposure(prismaClient, organizationId, employee.id);
+  const eligibility = eligibilityFor(employee, startDate, calculationDate);
   const grossMonthlySalary = salaryRate ? Number(salaryRate.amount || 0) : null;
   const calculationReady = Boolean(startDate && salaryRate && grossMonthlySalary > 0);
   const accruedEosb = calculationReady && eligibility.eosbEligible
@@ -200,7 +201,7 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
       factorRate: GRATUITY_FACTOR,
       factorPercent: 7.5,
       fixedMonthDays: FIXED_MONTH_DAYS,
-      loanServiceThresholdDays: LOAN_SERVICE_THRESHOLD_DAYS,
+      loanServiceThreshold: "12_CALENDAR_MONTHS",
       formula: "Gross Monthly Salary × (Actual Service Days ÷ 30) × 7.5%",
     },
     organization: { id: organization.id, name: organization.name },
@@ -221,15 +222,14 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
       exitDate: dateOnly(employee.exitDate),
       serviceDays,
       equivalentMonths: Math.round((serviceDays / FIXED_MONTH_DAYS) * 10000) / 10000,
+      twelveCalendarMonthsCompleted: hasTwelveCalendarMonths(startDate, calculationDate),
     },
-    salary: salaryRate
-      ? {
-          grossMonthlySalary,
-          currency: salaryRate.currency || "NGN",
-          effectiveFrom: dateOnly(salaryRate.effectiveFrom),
-          effectiveTo: dateOnly(salaryRate.effectiveTo),
-        }
-      : null,
+    salary: salaryRate ? {
+      grossMonthlySalary,
+      currency: salaryRate.currency || "NGN",
+      effectiveFrom: dateOnly(salaryRate.effectiveFrom),
+      effectiveTo: dateOnly(salaryRate.effectiveTo),
+    } : null,
     eosb: {
       eligible: eligibility.eosbEligible,
       calculationReady,
@@ -237,7 +237,7 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
       missingReason: !startDate
         ? "Employment service start date is unavailable."
         : !salaryRate
-          ? "No active effective-dated Monthly Gross Salary is available for the calculation date."
+          ? "No effective-dated Monthly Gross Salary is available for the calculation date."
           : null,
     },
     loanCollateral: {
@@ -250,18 +250,40 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
   };
 }
 
-async function listEosbAccounts({ organizationId, asOf = new Date(), prismaClient = prisma }) {
-  await resolveOrganization(prismaClient, organizationId);
-  const employees = await prismaClient.employee.findMany({
-    where: { organizationId },
-    select: { employeeNumber: true },
-    orderBy: { employeeNumber: "asc" },
+async function getEosbStatement({ organizationId, employeeNumber, asOf = new Date(), prismaClient = prisma }) {
+  const organization = await resolveOrganization(prismaClient, organizationId);
+  const employee = await resolveEmployee(prismaClient, organizationId, employeeNumber);
+  const calculationDate = effectiveAsOf(employee, asOf);
+  const [rates, loans] = await Promise.all([
+    grossSalaryRates(prismaClient, organizationId, employee.id),
+    loanExposureRows(prismaClient, organizationId, employee.id),
+  ]);
+  return buildStatement({
+    organization,
+    employee,
+    asOf,
+    salaryRate: salaryRateForDate(rates, employee.id, calculationDate),
+    exposure: exposureFor(loans, employee.id),
   });
-  const rows = [];
-  for (const employee of employees) {
-    rows.push(await getEosbStatement({ organizationId, employeeNumber: employee.employeeNumber, asOf, prismaClient }));
-  }
-  return rows;
+}
+
+async function listEosbAccounts({ organizationId, asOf = new Date(), prismaClient = prisma }) {
+  const organization = await resolveOrganization(prismaClient, organizationId);
+  const [employees, rates, loans] = await Promise.all([
+    prismaClient.employee.findMany({ where: { organizationId }, select: employeeSelect, orderBy: { employeeNumber: "asc" } }),
+    grossSalaryRates(prismaClient, organizationId),
+    loanExposureRows(prismaClient, organizationId),
+  ]);
+  return employees.map((employee) => {
+    const calculationDate = effectiveAsOf(employee, asOf);
+    return buildStatement({
+      organization,
+      employee,
+      asOf,
+      salaryRate: salaryRateForDate(rates, employee.id, calculationDate),
+      exposure: exposureFor(loans, employee.id),
+    });
+  });
 }
 
 async function assessLoanCollateral({ organizationId, employeeNumber, requestedAmount, suretyEmployeeNumber, asOf = new Date(), prismaClient = prisma }) {
@@ -312,7 +334,6 @@ async function assessLoanCollateral({ organizationId, employeeNumber, requestedA
 module.exports = {
   GRATUITY_FACTOR,
   FIXED_MONTH_DAYS,
-  LOAN_SERVICE_THRESHOLD_DAYS,
   serviceDaysBetween,
   calculateEosbValue,
   getEosbStatement,
