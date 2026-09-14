@@ -41,6 +41,7 @@ const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes"
 const zermattOperationsRoutes = require("./routes/zermattOperationsRoutes");
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
+const eosbRoutes = require("./routes/eosbRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
 const app = express();
@@ -73,6 +74,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
+app.use("/api/eosb", eosbRoutes);
 
 // Active branch scope is a cross-module operating context. It must run before
 // employee/leave/attendance/payroll/loan/report routers so branch-scoped reads
