@@ -701,6 +701,9 @@ function OrganizationLocationsSettings() {
                   location={
                     location
                   }
+                  organizationEmployeeCount={
+                    totals.employees
+                  }
                   canManage={
                     canManage
                   }
@@ -1057,6 +1060,7 @@ function LocationForm({
 
 function LocationCard({
   location,
+  organizationEmployeeCount,
   canManage,
   statusUpdating,
   onEdit,
@@ -1066,6 +1070,15 @@ function LocationCard({
     formatType(
       location.type
     );
+
+  const isHeadOffice =
+    location.type ===
+    "HEAD_OFFICE";
+
+  const displayedEmployeeCount =
+    isHeadOffice
+      ? organizationEmployeeCount
+      : location.employeeCount || 0;
 
   return (
     <div
@@ -1165,10 +1178,13 @@ function LocationCard({
         }}
       >
         <MetricBox
-          label="Employees"
+          label={
+            isHeadOffice
+              ? "Organization Employees"
+              : "Employees"
+          }
           value={
-            location.employeeCount ||
-            0
+            displayedEmployeeCount
           }
         />
 
@@ -1180,6 +1196,20 @@ function LocationCard({
           }
         />
       </div>
+
+      {isHeadOffice && (
+        <div
+          style={{
+            marginTop: "9px",
+            color: "#64748B",
+            fontSize: "10px",
+            fontWeight: "700",
+            lineHeight: 1.5,
+          }}
+        >
+          Consolidated Head Office view · {location.employeeCount || 0} employee{(location.employeeCount || 0) === 1 ? "" : "s"} directly assigned to the physical Head Office location.
+        </div>
+      )}
 
       <div
         style={{
