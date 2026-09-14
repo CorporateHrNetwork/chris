@@ -7,6 +7,7 @@ const loans = require("../services/loanService");
 const { getLoanPolicies, validateLoanPurpose } = require("../services/loanPolicyService");
 const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileService");
 const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
+const { assessLoanCollateral } = require("../services/eosbService");
 const {
   templateBuffer: loanBulkTemplateBuffer,
   prepareLoanWorkbook,
@@ -45,6 +46,20 @@ function sendError(res, error, fallback = "Loan operation failed.") {
   }
   console.error("Loan operation error:", error);
   return res.status(500).json({ status: "error", message: error?.message || fallback });
+}
+
+async function recordCollateral({ organizationId, actorUserId, loanId, assessment, reason }) {
+  await prisma.organizationAudit.create({
+    data: {
+      organizationId,
+      actorUserId: actorUserId || null,
+      entityType: "LoanCollateral",
+      entityId: loanId,
+      action: "LOAN_COLLATERAL_ASSESSED",
+      newValue: { ...assessment, assessedAt: new Date().toISOString() },
+      reason,
+    },
+  });
 }
 
 function exportFormat(value) {
@@ -91,10 +106,7 @@ router.get("/summary", requirePermission("payroll.view"), async (req, res) => {
 
 router.get("/policies", requirePermission("payroll.view"), async (req, res) => {
   try {
-    const data = await getLoanPolicies({
-      organizationId: req.auth.organizationId,
-      prismaClient: prisma,
-    });
+    const data = await getLoanPolicies({ organizationId: req.auth.organizationId, prismaClient: prisma });
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan policies.");
@@ -103,10 +115,7 @@ router.get("/policies", requirePermission("payroll.view"), async (req, res) => {
 
 router.get("/recoveries", requirePermission("payroll.view"), async (req, res) => {
   try {
-    const data = await loans.listRecoveries({
-      organizationId: req.auth.organizationId,
-      loanId: req.query?.loanId || null,
-    });
+    const data = await loans.listRecoveries({ organizationId: req.auth.organizationId, loanId: req.query?.loanId || null });
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan recoveries.");
@@ -121,10 +130,7 @@ router.get("/bulk/template", requirePermission("payroll.manage"), async (req, re
 
 router.post("/bulk/preview", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
   try {
-    const rows = await prepareLoanWorkbook({
-      organizationId: req.auth.organizationId,
-      buffer: req.file?.buffer,
-    });
+    const rows = await prepareLoanWorkbook({ organizationId: req.auth.organizationId, buffer: req.file?.buffer });
     return res.json({
       status: "success",
       data: {
@@ -143,22 +149,12 @@ router.post("/bulk/preview", requirePermission("payroll.manage"), upload.single(
 
 router.post("/bulk/import", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
   try {
-    const rows = await prepareLoanWorkbook({
-      organizationId: req.auth.organizationId,
-      buffer: req.file?.buffer,
-    });
-    const created = await importOpeningLoans({
-      organizationId: req.auth.organizationId,
-      actorUserId: req.auth.userId,
-      rows,
-    });
+    const rows = await prepareLoanWorkbook({ organizationId: req.auth.organizationId, buffer: req.file?.buffer });
+    const created = await importOpeningLoans({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, rows });
     return res.status(201).json({
       status: "success",
       message: `${created.length} loan record(s) imported successfully.`,
-      data: {
-        created,
-        total: created.length,
-      },
+      data: { created, total: created.length },
     });
   } catch (error) {
     return sendError(res, error, "Unable to import loan workbook.");
@@ -167,14 +163,8 @@ router.post("/bulk/import", requirePermission("payroll.manage"), upload.single("
 
 router.post("/bulk/correction/preview", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
   try {
-    const rows = await parseCorrectionWorkbook({
-      organizationId: req.auth.organizationId,
-      buffer: req.file?.buffer,
-    });
-    const plan = await prepareOpeningBalanceCorrections({
-      organizationId: req.auth.organizationId,
-      rows,
-    });
+    const rows = await parseCorrectionWorkbook({ organizationId: req.auth.organizationId, buffer: req.file?.buffer });
+    const plan = await prepareOpeningBalanceCorrections({ organizationId: req.auth.organizationId, rows });
     return res.json({ status: "success", data: correctionPreviewData(plan) });
   } catch (error) {
     return sendError(res, error, "Unable to validate the opening-balance correction workbook.");
@@ -183,19 +173,9 @@ router.post("/bulk/correction/preview", requirePermission("payroll.manage"), upl
 
 router.post("/bulk/correction/import", requirePermission("payroll.manage"), upload.single("file"), async (req, res) => {
   try {
-    const rows = await parseCorrectionWorkbook({
-      organizationId: req.auth.organizationId,
-      buffer: req.file?.buffer,
-    });
-    const plan = await prepareOpeningBalanceCorrections({
-      organizationId: req.auth.organizationId,
-      rows,
-    });
-    const data = await applyOpeningBalanceCorrections({
-      organizationId: req.auth.organizationId,
-      actorUserId: req.auth.userId,
-      plan,
-    });
+    const rows = await parseCorrectionWorkbook({ organizationId: req.auth.organizationId, buffer: req.file?.buffer });
+    const plan = await prepareOpeningBalanceCorrections({ organizationId: req.auth.organizationId, rows });
+    const data = await applyOpeningBalanceCorrections({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, plan });
     return res.json({
       status: "success",
       message: `${data.corrected} opening loan balance correction(s) applied; ${data.unchanged} row(s) already matched.`,
@@ -218,10 +198,7 @@ router.get("/reports/export", requirePermission("payroll.view"), async (req, res
 
 router.get("/:id/profile", requirePermission("payroll.view"), async (req, res) => {
   try {
-    const data = await getLoanProfile({
-      organizationId: req.auth.organizationId,
-      loanId: req.params.id,
-    });
+    const data = await getLoanProfile({ organizationId: req.auth.organizationId, loanId: req.params.id });
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan profile.");
@@ -231,10 +208,7 @@ router.get("/:id/profile", requirePermission("payroll.view"), async (req, res) =
 router.get("/:id/export", requirePermission("payroll.view"), async (req, res) => {
   try {
     const format = exportFormat(req.query?.format);
-    const profile = await getLoanProfile({
-      organizationId: req.auth.organizationId,
-      loanId: req.params.id,
-    });
+    const profile = await getLoanProfile({ organizationId: req.auth.organizationId, loanId: req.params.id });
     return sendExport(res, exportIndividualLoan(profile, format));
   } catch (error) {
     return sendError(res, error, "Unable to export loan profile.");
@@ -254,11 +228,16 @@ router.get("/", requirePermission("payroll.view"), async (req, res) => {
   }
 });
 
+// Compatibility create remains available to payroll administrators, but new
+// Zermatt loan grants cannot bypass EoSB/surety collateral policy.
 router.post("/", requirePermission("payroll.manage"), async (req, res) => {
   try {
-    const purpose = await validateLoanPurpose({
+    const purpose = await validateLoanPurpose({ organizationId: req.auth.organizationId, purpose: req.body?.purpose, prismaClient: prisma });
+    const assessment = await assessLoanCollateral({
       organizationId: req.auth.organizationId,
-      purpose: req.body?.purpose,
+      employeeNumber: req.body?.employeeNumber,
+      requestedAmount: req.body?.principalAmount,
+      suretyEmployeeNumber: req.body?.suretyEmployeeNumber,
       prismaClient: prisma,
     });
     const data = await loans.createLoan({
@@ -266,7 +245,14 @@ router.post("/", requirePermission("payroll.manage"), async (req, res) => {
       actorUserId: req.auth.userId,
       input: { ...(req.body || {}), purpose },
     });
-    return res.status(201).json({ status: "success", data });
+    await recordCollateral({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: data.id,
+      assessment,
+      reason: assessment.mode === "EOSB" ? "EoSB collateral validated for compatibility loan creation" : "Internal surety validated for compatibility loan creation",
+    });
+    return res.status(201).json({ status: "success", data: { ...data, collateral: assessment } });
   } catch (error) {
     return sendError(res, error, "Unable to create loan application.");
   }
@@ -316,11 +302,30 @@ router.patch("/:id/status", requirePermission("payroll.manage"), async (req, res
   }
 });
 
+// A top-up is additional exposure: the parent loan remains live, so the requested
+// top-up must fit inside the EoSB collateral remaining after the parent/other loans.
 router.post("/:id/top-up", requirePermission("payroll.manage"), async (req, res) => {
   try {
-    const purpose = await validateLoanPurpose({
+    const parentRows = await prisma.$queryRawUnsafe(
+      `SELECT e."employeeNumber"
+         FROM "payroll_loans" l
+         JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
+        WHERE l."organizationId"=$1 AND l."id"=$2 LIMIT 1`,
+      req.auth.organizationId,
+      req.params.id
+    );
+    if (!parentRows[0]) {
+      const error = new Error("Parent loan not found.");
+      error.code = "LOAN_NOT_FOUND";
+      error.statusCode = 404;
+      throw error;
+    }
+    const purpose = await validateLoanPurpose({ organizationId: req.auth.organizationId, purpose: req.body?.purpose, prismaClient: prisma });
+    const assessment = await assessLoanCollateral({
       organizationId: req.auth.organizationId,
-      purpose: req.body?.purpose,
+      employeeNumber: parentRows[0].employeeNumber,
+      requestedAmount: req.body?.principalAmount,
+      suretyEmployeeNumber: req.body?.suretyEmployeeNumber,
       prismaClient: prisma,
     });
     const data = await loans.createTopUp({
@@ -329,7 +334,14 @@ router.post("/:id/top-up", requirePermission("payroll.manage"), async (req, res)
       loanId: req.params.id,
       input: { ...(req.body || {}), purpose },
     });
-    return res.status(201).json({ status: "success", data });
+    await recordCollateral({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: data.id,
+      assessment,
+      reason: assessment.mode === "EOSB" ? "Top-up validated against remaining EoSB collateral" : "Top-up internal surety validated",
+    });
+    return res.status(201).json({ status: "success", data: { ...data, collateral: assessment } });
   } catch (error) {
     return sendError(res, error, "Unable to create top-up loan application.");
   }
