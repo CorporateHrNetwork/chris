@@ -283,7 +283,7 @@ const MENU_GROUPS = [
     adminOnly: true,
     children: [
       { label: "Organization Profile", path: "/organization/profile" },
-      { label: "Head Office & Branches", path: "/settings" },
+      { label: "Head Office & Branches", path: "/settings?workspace=locations" },
       { label: "Departments & Designations", path: "/designations" },
       { label: "Organization Chart", path: "/organization/chart" },
       { label: "Reporting Lines", path: "/organization/reporting-lines" },
@@ -328,16 +328,16 @@ const MENU_GROUPS = [
     children: [
       { label: "Users & Roles", path: "/settings" },
       { label: "Roles & Permissions", path: "/settings" },
-      { label: "Location Access", path: "/settings" },
-      { label: "Employee Settings", planned: true },
-      { label: "Payroll Settings", planned: true },
-      { label: "Attendance Settings", planned: true },
-      { label: "Leave Settings", planned: true },
-      { label: "Benefits Settings", planned: true },
-      { label: "Recruitment Settings", planned: true },
-      { label: "Notifications", planned: true },
-      { label: "Security", planned: true },
-      { label: "System Settings", planned: true },
+      { label: "Location Access", path: "/settings?workspace=locations" },
+      { label: "Employee Settings", path: "/settings?workspace=employees" },
+      { label: "Payroll Settings", path: "/settings?workspace=payroll" },
+      { label: "Attendance Settings", path: "/settings?workspace=attendance" },
+      { label: "Leave Settings", path: "/settings?workspace=leave" },
+      { label: "Benefits Settings", path: "/settings?workspace=benefits" },
+      { label: "Recruitment Settings", path: "/settings?workspace=recruitment" },
+      { label: "Notifications", path: "/settings?workspace=notifications" },
+      { label: "Security", path: "/settings?workspace=security" },
+      { label: "System Settings", path: "/settings?workspace=system" },
     ],
   },
   {
@@ -414,7 +414,7 @@ function Sidebar() {
       );
     }
     if (
-      (childPath === "/payroll" || childPath === "/reports") &&
+      (childPath === "/payroll" || childPath === "/reports" || childPath === "/settings") &&
       location.pathname === childPath &&
       location.search
     ) {
