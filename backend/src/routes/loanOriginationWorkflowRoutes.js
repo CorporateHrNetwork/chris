@@ -7,7 +7,7 @@ const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileSe
 const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
 const { updateLoan } = require("../services/payrollLiabilityEditService");
 const prisma = require("../config/prisma");
-const workflow = require("../services/loanOriginationWorkflowService");
+const workflow = require("../services/loanCollateralWorkflowService");
 const { deliverNotification, resolveRoleRecipients } = require("../services/loanWorkflowNotificationService");
 const {
   assertLoanLocationAccess,
