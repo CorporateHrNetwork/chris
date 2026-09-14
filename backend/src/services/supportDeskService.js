@@ -261,6 +261,13 @@ async function createGitHubIssue(ticket) {
   const [owner, repo] = repository.split("/");
   if (!owner || !repo) throw new Error("INVALID_GITHUB_SUPPORT_REPO");
   const brief = engineeringLiaisonAgent(ticket);
+  const configuredLabels = normalize(process.env.GITHUB_SUPPORT_LABELS)
+    .split(",")
+    .map((label) => label.trim())
+    .filter(Boolean);
+  const payload = { title: brief.title, body: brief.body };
+  if (configuredLabels.length) payload.labels = configuredLabels;
+
   const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
     method: "POST",
     headers: {
@@ -270,11 +277,7 @@ async function createGitHubIssue(ticket) {
       "Content-Type": "application/json",
       "User-Agent": "CHRiS-Support-Desk",
     },
-    body: JSON.stringify({
-      title: brief.title,
-      body: brief.body,
-      labels: ["chris-support-desk", `severity:${String(ticket.severity || "").toLowerCase()}`],
-    }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const detail = await response.text();
@@ -310,8 +313,11 @@ async function escalateToEngineering(prisma, input) {
 async function sendWhatsAppText({ to, body }) {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  if (!token || !phoneNumberId) return { configured: false, reason: "WHATSAPP_OUTBOUND_NOT_CONFIGURED" };
-  const response = await fetch(`https://graph.facebook.com/v22.0/${phoneNumberId}/messages`, {
+  const graphVersion = normalize(process.env.WHATSAPP_GRAPH_VERSION);
+  if (!token || !phoneNumberId || !graphVersion) {
+    return { configured: false, reason: "WHATSAPP_OUTBOUND_NOT_CONFIGURED" };
+  }
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
