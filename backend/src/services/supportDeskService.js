@@ -54,6 +54,7 @@ function ticketFromCreatedEvent(event) {
   return {
     ...(event.newValue || {}),
     ticketNumber: event.entityId,
+    organizationId: event.organizationId,
     createdAt: event.createdAt,
     updatedAt: event.createdAt,
   };
@@ -66,8 +67,22 @@ function applyTicketEvent(ticket, event) {
     ...ticket,
     ...next,
     ticketNumber: event.entityId,
+    organizationId: event.organizationId,
     updatedAt: event.createdAt,
   };
+}
+
+function reconstructTickets(events) {
+  const tickets = new Map();
+  for (const event of [...events].reverse()) {
+    const key = `${event.organizationId}:${event.entityId}`;
+    if (!tickets.has(key)) {
+      tickets.set(key, ticketFromCreatedEvent(event));
+    } else {
+      tickets.set(key, applyTicketEvent(tickets.get(key), event));
+    }
+  }
+  return [...tickets.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
 
 async function getTicket(prisma, { organizationId, ticketNumber }) {
@@ -91,19 +106,27 @@ async function listTickets(prisma, { organizationId, limit = 100 }) {
     orderBy: { createdAt: "desc" },
     take: Math.min(Math.max(Number(limit) || 100, 1), 1000),
   });
-
-  const tickets = new Map();
-  for (const event of events.reverse()) {
-    if (!tickets.has(event.entityId)) {
-      tickets.set(event.entityId, ticketFromCreatedEvent(event));
-    } else {
-      tickets.set(event.entityId, applyTicketEvent(tickets.get(event.entityId), event));
-    }
-  }
-  return [...tickets.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  return reconstructTickets(events);
 }
 
-async function getMessages(prisma, { organizationId, ticketNumber }) {
+async function listAllTickets(prisma, { limit = 2000, organizationId } = {}) {
+  const events = await prisma.organizationAudit.findMany({
+    where: {
+      entityType: ENTITY_TICKET,
+      ...(organizationId ? { organizationId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(Math.max(Number(limit) || 2000, 1), 10000),
+  });
+  return reconstructTickets(events);
+}
+
+async function listRequesterTickets(prisma, { organizationId, requesterUserId, limit = 500 }) {
+  const tickets = await listTickets(prisma, { organizationId, limit });
+  return tickets.filter((ticket) => ticket.requesterUserId === requesterUserId);
+}
+
+async function getMessages(prisma, { organizationId, ticketNumber, clientVisibleOnly = false }) {
   const rows = await prisma.organizationAudit.findMany({
     where: {
       organizationId,
@@ -112,11 +135,13 @@ async function getMessages(prisma, { organizationId, ticketNumber }) {
     },
     orderBy: { createdAt: "asc" },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    ...(row.newValue || {}),
-    createdAt: row.createdAt,
-  }));
+  return rows
+    .map((row) => ({
+      id: row.id,
+      ...(row.newValue || {}),
+      createdAt: row.createdAt,
+    }))
+    .filter((message) => !clientVisibleOnly || message.visibility !== "INTERNAL");
 }
 
 async function createTicket(prisma, input) {
@@ -136,6 +161,7 @@ async function createTicket(prisma, input) {
     organizationId: organization.id,
     organizationName: organization.name,
     organizationSlug: organization.slug,
+    requesterUserId: normalize(input.requesterUserId) || null,
     channel: input.channel || "CHRIS",
     contactName: normalize(input.contactName) || null,
     contactPhone: normalize(input.contactPhone) || null,
@@ -180,10 +206,11 @@ async function createTicket(prisma, input) {
       ticketNumber,
       direction: "INBOUND",
       channel: ticket.channel,
-      sender: input.contactName || input.contactPhone || "Client",
+      sender: input.contactName || input.contactEmail || input.contactPhone || "Client",
       body: description,
       sourceMessageId: input.sourceMessageId,
       actorUserId: input.actorUserId,
+      visibility: "CLIENT",
     });
   }
 
@@ -203,6 +230,7 @@ async function addMessage(prisma, input) {
       sender: normalize(input.sender) || null,
       body: normalize(input.body),
       sourceMessageId: normalize(input.sourceMessageId) || null,
+      visibility: input.visibility === "INTERNAL" ? "INTERNAL" : "CLIENT",
     },
   });
 }
@@ -340,6 +368,8 @@ module.exports = {
   ENTITY_KNOWLEDGE,
   createTicket,
   listTickets,
+  listAllTickets,
+  listRequesterTickets,
   getTicket,
   getMessages,
   addMessage,
