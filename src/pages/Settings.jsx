@@ -1,82 +1,67 @@
 import {
   useState,
 } from "react";
-import { useSearchParams } from "react-router-dom";
 
 import UsersRolesSettings from "../components/settings/UsersRolesSettings";
 import OrganizationLocationsSettings from "../components/settings/OrganizationLocationsSettings";
-import SupportDesk from "./SupportDesk";
 
 function Settings() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedWorkspace = searchParams.get("workspace");
   const [
     activeSection,
     setActiveSection,
   ] = useState(
-    requestedWorkspace === "support-desk" ? "support-desk" : "users-roles"
+    "users-roles"
   );
-
-  const selectSection = (section) => {
-    setActiveSection(section);
-    if (section === "support-desk") {
-      setSearchParams({ workspace: "support-desk" }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
-  };
 
   return (
     <div className="chris-settings-skin">
-      {activeSection !== "support-desk" ? (
-        <div
+      <div
+        style={{
+          marginBottom: "20px",
+        }}
+      >
+        <p
           style={{
-            marginBottom: "20px",
+            margin: "0 0 6px",
+            color:
+              "var(--chris-dashboard-gold-bright)",
+            fontSize: "12px",
+            fontWeight: "900",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
           }}
         >
-          <p
-            style={{
-              margin: "0 0 6px",
-              color:
-                "var(--chris-dashboard-gold-bright)",
-              fontSize: "12px",
-              fontWeight: "900",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-            }}
-          >
-            System Administration
-          </p>
+          System Administration
+        </p>
 
-          <h1
-            style={{
-              margin: 0,
-              color:
-                "var(--chris-dashboard-text)",
-              fontSize: "30px",
-              fontWeight: "850",
-            }}
-          >
-            Settings
-          </h1>
+        <h1
+          style={{
+            margin: 0,
+            color:
+              "var(--chris-dashboard-text)",
+            fontSize: "30px",
+            fontWeight: "850",
+          }}
+        >
+          Settings
+        </h1>
 
-          <p
-            style={{
-              margin: "8px 0 0",
-              color:
-                "var(--chris-dashboard-muted)",
-              fontSize: "14px",
-            }}
-          >
-            Manage users, roles, permissions, organization locations and CHRiS Support Desk.
-          </p>
-        </div>
-      ) : null}
+        <p
+          style={{
+            margin: "8px 0 0",
+            color:
+              "var(--chris-dashboard-muted)",
+            fontSize: "14px",
+          }}
+        >
+          Manage users, roles, permissions and organization locations.
+        </p>
+      </div>
 
       <div className="chris-settings-tabs" style={{ marginBottom: 18 }}>
         <button
           type="button"
-          onClick={() => selectSection("users-roles")}
+          onClick={() => setActiveSection("users-roles")}
           className={[
             "chris-settings-tab",
             activeSection === "users-roles"
@@ -89,7 +74,7 @@ function Settings() {
 
         <button
           type="button"
-          onClick={() => selectSection("locations")}
+          onClick={() => setActiveSection("locations")}
           className={[
             "chris-settings-tab",
             activeSection === "locations"
@@ -99,19 +84,6 @@ function Settings() {
         >
           Organization Locations
         </button>
-
-        <button
-          type="button"
-          onClick={() => selectSection("support-desk")}
-          className={[
-            "chris-settings-tab",
-            activeSection === "support-desk"
-              ? "chris-settings-tab--active"
-              : "chris-settings-tab--inactive",
-          ].join(" ")}
-        >
-          CHRiS Support Desk
-        </button>
       </div>
 
       {activeSection === "users-roles" && (
@@ -120,10 +92,6 @@ function Settings() {
 
       {activeSection === "locations" && (
         <OrganizationLocationsSettings />
-      )}
-
-      {activeSection === "support-desk" && (
-        <SupportDesk />
       )}
     </div>
   );
