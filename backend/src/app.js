@@ -39,6 +39,7 @@ const employeeEmploymentAssignmentRoutes = require("./routes/employeeEmploymentA
 const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPublicRoutes");
 const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
 const zermattOperationsRoutes = require("./routes/zermattOperationsRoutes");
+const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
 const app = express();
@@ -46,7 +47,11 @@ const app = express();
 app.disable("x-powered-by");
 app.use(cors(corsOptionsDelegate));
 app.use(applySecurityHeaders);
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buffer) => {
+    if (req.path.includes("/support-desk/whatsapp/webhook")) req.rawBody = Buffer.from(buffer);
+  },
+}));
 
 app.use((req, res, next) => {
   if (req.path.startsWith("/api/")) {
@@ -65,6 +70,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/support-desk", supportDeskRoutes);
 
 // Active branch scope is a cross-module operating context. It must run before
 // employee/leave/attendance/payroll/loan/report routers so branch-scoped reads
