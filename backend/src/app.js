@@ -43,6 +43,7 @@ const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPubli
 const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
 const zermattOperationsRoutes = require("./routes/zermattOperationsRoutes");
 const supportDeskCancellationRoutes = require("./routes/supportDeskCancellationRoutes");
+const supportDeskClientLifecycleGuardRoutes = require("./routes/supportDeskClientLifecycleGuardRoutes");
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
 const eosbRoutes = require("./routes/eosbRoutes");
@@ -80,6 +81,10 @@ app.use("/api/auth", authRoutes);
 // general Support Desk router so the dedicated ownership/attendance checks are
 // authoritative for /client/tickets/:ticketNumber/cancel.
 app.use("/api/support-desk", supportDeskCancellationRoutes);
+// Prevent stale clients/direct API calls from adding new requester messages to
+// cancelled/resolved/closed cases. The main Support Desk router remains the
+// authoritative writer after this lifecycle guard calls next().
+app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/eosb", eosbRoutes);
