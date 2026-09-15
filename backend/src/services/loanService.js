@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { markDraftRunsRecalculationRequired } = require("./payrollDraftFreshnessService");
 
 function loanError(code, message, statusCode = 400, details) {
   const error = new Error(message);
@@ -40,10 +41,12 @@ function mapLoan(row) {
     principalAmount: Number(row.principalAmount || 0),
     outstandingAmount: Number(row.outstandingAmount || 0),
     installmentAmount: Number(row.installmentAmount || 0),
+    externalSettlementAmount: row.externalSettlementAmount == null ? null : Number(row.externalSettlementAmount || 0),
     applicationDate: row.applicationDate ? new Date(row.applicationDate).toISOString().slice(0, 10) : null,
     approvedDate: row.approvedDate ? new Date(row.approvedDate).toISOString().slice(0, 10) : null,
     disbursedDate: row.disbursedDate ? new Date(row.disbursedDate).toISOString().slice(0, 10) : null,
     recoveryStartDate: row.recoveryStartDate ? new Date(row.recoveryStartDate).toISOString().slice(0, 10) : null,
+    externalSettlementDate: row.externalSettlementDate ? new Date(row.externalSettlementDate).toISOString().slice(0, 10) : null,
   };
 }
 
@@ -300,8 +303,101 @@ async function disburseLoan({ organizationId, actorUserId, loanId, input, prisma
   return updated;
 }
 
+async function completeLoanFromExternalSettlement({ organizationId, actorUserId, loanId, reason, prismaClient = prisma }) {
+  const settlementReason = text(reason);
+  if (!settlementReason) {
+    throw loanError(
+      "EXTERNAL_SETTLEMENT_REASON_REQUIRED",
+      "Enter the external repayment source/reference and reason before marking this loan completed."
+    );
+  }
+  const settlementDate = new Date().toISOString().slice(0, 10);
+
+  return prismaClient.$transaction(async (tx) => {
+    const existingRows = await tx.$queryRawUnsafe(
+      `SELECT * FROM "payroll_loans"
+        WHERE "organizationId"=$1 AND "id"=$2
+        FOR UPDATE`,
+      organizationId,
+      loanId
+    );
+    const existing = existingRows[0];
+    if (!existing) throw loanError("LOAN_NOT_FOUND", "Loan not found.", 404);
+    if (!["ACTIVE", "PAUSED"].includes(String(existing.status || "").toUpperCase())) {
+      throw loanError(
+        "INVALID_EXTERNAL_SETTLEMENT_STATE",
+        "Only an Active or Paused loan with an outstanding balance can be completed from an external repayment source.",
+        409
+      );
+    }
+    const settlementAmount = Math.round(Number(existing.outstandingAmount || 0) * 100) / 100;
+    if (!Number.isFinite(settlementAmount) || settlementAmount <= 0) {
+      throw loanError("NO_OUTSTANDING_LOAN_BALANCE", "This loan has no outstanding balance to clear externally.", 409);
+    }
+
+    const updatedRows = await tx.$queryRawUnsafe(
+      `UPDATE "payroll_loans"
+          SET "status"='COMPLETED',
+              "outstandingAmount"=0,
+              "externalSettlementAmount"=$3,
+              "externalSettlementDate"=$4::date,
+              "externalSettlementSource"='OTHER_EXTERNAL_SOURCE',
+              "externalSettlementReference"=NULL,
+              "externalSettlementReason"=$5,
+              "notes"=CONCAT_WS(' | ',NULLIF("notes",''),$5),
+              "updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1 AND "id"=$2
+        RETURNING *`,
+      organizationId,
+      loanId,
+      settlementAmount,
+      settlementDate,
+      settlementReason
+    );
+    const updated = mapLoan(updatedRows[0]);
+
+    await writeAudit(tx, {
+      organizationId,
+      actorUserId,
+      entityId: loanId,
+      action: "LOAN_COMPLETED_EXTERNAL_SETTLEMENT",
+      previousValue: mapLoan(existing),
+      newValue: {
+        ...updated,
+        externalSettlement: {
+          amount: settlementAmount,
+          date: settlementDate,
+          source: "OTHER_EXTERNAL_SOURCE",
+          reason: settlementReason,
+          payrollRecoveryCreated: false,
+        },
+      },
+      reason: settlementReason,
+    });
+
+    await markDraftRunsRecalculationRequired({
+      organizationId,
+      actorUserId,
+      reason: `Loan ${existing.loanNumber} was completed from an external repayment source; remaining payroll recovery must be removed.`,
+      prismaClient: tx,
+    });
+
+    return updated;
+  });
+}
+
 async function updateLoanStatus({ organizationId, actorUserId, loanId, action, reason, prismaClient = prisma }) {
   const command = text(action).toUpperCase();
+  if (command === "COMPLETE_EXTERNAL") {
+    return completeLoanFromExternalSettlement({
+      organizationId,
+      actorUserId,
+      loanId,
+      reason,
+      prismaClient,
+    });
+  }
+
   const existingRows = await prismaClient.$queryRawUnsafe(
     `SELECT * FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1`,
     organizationId,
@@ -397,6 +493,7 @@ module.exports = {
   createLoan,
   decideLoan,
   disburseLoan,
+  completeLoanFromExternalSettlement,
   updateLoanStatus,
   createTopUp,
   listRecoveries,
