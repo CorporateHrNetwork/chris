@@ -7,7 +7,9 @@ import {
   FaChartPie,
   FaClipboardCheck,
   FaPlusCircle,
+  FaCalendarAlt,
 } from "react-icons/fa";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   AnalyticsPanel,
@@ -16,15 +18,31 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
+import ZermattLeaveAllowance from "./benefits/ZermattLeaveAllowance";
 
 function Benefits() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const workspace = searchParams.get("workspace") || "";
+
+  if (workspace === "leave-allowance") return <ZermattLeaveAllowance />;
+
   const activity = [
+    {
+      id: "leave-allowance",
+      icon: <FaCalendarAlt />,
+      title: "Zermatt Leave Allowance",
+      description:
+        "Annual Leave Allowance is connected to employee entry month, payroll and approved payslips.",
+      time: "Active",
+      tone: "success",
+    },
     {
       id: "enrolment",
       icon: <FaUsers />,
       title: "Benefit Enrolment",
       description:
-        "Employee enrolment activity will appear when benefit plans are connected.",
+        "Employee enrolment activity will appear when additional benefit plans are connected.",
       time: "Planned",
       tone: "warning",
     },
@@ -46,52 +64,43 @@ function Benefits() {
       time: "Planned",
       tone: "warning",
     },
-    {
-      id: "cost",
-      icon: <FaMoneyBillWave />,
-      title: "Benefit Cost",
-      description:
-        "Employer and employee benefit-cost analytics will activate with plan data.",
-      time: "Planned",
-      tone: "warning",
-    },
   ];
 
   return (
     <ModuleDashboardShell
       eyebrow="EMPLOYEE REWARDS"
       title="Benefits Dashboard"
-      description="Monitor benefit plans, employee enrolment, coverage, eligibility and employer cost from one analytical home."
+      description="Monitor benefit plans, employee eligibility, payroll-connected benefits, coverage and employer cost from one analytical home."
       metrics={[
         <DashboardCard
           key="plans"
           title="Active Plans"
-          value={"\u2014"}
-          subtitle="Configured benefit plans"
+          value={"1+"}
+          subtitle="Leave Allowance active; other benefit plans expand here"
           icon={<FaGift />}
           tone="gold"
         />,
         <DashboardCard
           key="employees"
-          title="Enrolled Employees"
-          value={"\u2014"}
-          subtitle="Employees with active benefits"
-          icon={<FaUsers />}
+          title="Leave Allowance"
+          value={"Annual"}
+          subtitle="Entry-month cycle after first completed service year"
+          icon={<FaCalendarAlt />}
           tone="green"
         />,
         <DashboardCard
           key="coverage"
-          title="Coverage Rate"
-          value={"\u2014"}
-          subtitle="Eligible employees covered"
+          title="Payroll Connected"
+          value={"Yes"}
+          subtitle="Eligible benefit is calculated with payroll"
           icon={<FaShieldAlt />}
           tone="gold"
         />,
         <DashboardCard
           key="cost"
-          title="Employer Cost"
-          value={"\u2014"}
-          subtitle="Total employer benefit cost"
+          title="Payslip Element"
+          value={"Separate"}
+          subtitle="Leave Allowance is separately identified"
           icon={<FaMoneyBillWave />}
           tone="green"
         />,
@@ -99,23 +108,22 @@ function Benefits() {
       analytics={
         <AnalyticsPanel
           title="Benefits Composition"
-          subtitle="Benefit-category distribution will activate when plan and enrolment records are connected."
+          subtitle="Zermatt Leave Allowance is the first fully payroll-connected Benefits workspace."
           icon={<FaChartPie />}
         >
           <div style={{ display: "grid", gap: 14 }}>
             {[
-              "Health / Medical",
-              "Life Insurance",
-              "Pension Support",
-              "Wellness",
-              "Allowances",
-              "Other Benefits",
-            ].map((item) => (
+              ["Leave Allowance", "Active"],
+              ["Health / Medical", "Planned"],
+              ["Life Insurance", "Planned"],
+              ["Pension Support", "Planned"],
+              ["Other Benefits", "Planned"],
+            ].map(([item, status]) => (
               <div
                 key={item}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "150px 1fr 50px",
+                  gridTemplateColumns: "150px 1fr 70px",
                   gap: 12,
                   alignItems: "center",
                 }}
@@ -132,7 +140,7 @@ function Benefits() {
                 <div className="chris-progress">
                   <div
                     className="chris-progress__bar"
-                    style={{ width: "0%" }}
+                    style={{ width: status === "Active" ? "100%" : "0%" }}
                   />
                 </div>
 
@@ -141,7 +149,7 @@ function Benefits() {
                     color: "var(--chris-dashboard-gold-bright)",
                     textAlign: "right",
                   }}
-                >{"\u2014"}</strong>
+                >{status}</strong>
               </div>
             ))}
           </div>
@@ -150,7 +158,7 @@ function Benefits() {
       recentActivity={
         <AnalyticsPanel
           title="Benefits Intelligence"
-          subtitle="Plan readiness, coverage and enrolment indicators."
+          subtitle="Plan readiness, eligibility and payroll integration indicators."
           icon={<FaClipboardCheck />}
         >
           <RecentActivityList items={activity} />
@@ -158,9 +166,16 @@ function Benefits() {
       }
       quickActions={[
         <QuickActionCard
+          key="leave-allowance"
+          title="Leave Allowance"
+          subtitle="Eligibility, projected amount and approved payment history"
+          icon={<FaCalendarAlt />}
+          onClick={() => navigate("/benefits?workspace=leave-allowance")}
+        />,
+        <QuickActionCard
           key="plans"
           title="Benefit Plans"
-          subtitle="Configure employee benefit plans"
+          subtitle="Configure additional employee benefit plans"
           icon={<FaGift />}
           disabled
           onClick={() => {}}
