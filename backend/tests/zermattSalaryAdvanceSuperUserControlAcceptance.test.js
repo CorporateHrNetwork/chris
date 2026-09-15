@@ -6,30 +6,30 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath), "utf8");
 
-test("ZERMATT Super User can cancel or delete salary advances under financial-history controls", () => {
+test("ZERMATT Head HR can cancel or delete salary advances under financial-history controls", () => {
   const routes = read("backend/src/routes/payrollLiabilityEditRoutes.js");
+  const access = read("backend/src/services/zermattHrFinancialAccessService.js");
   const service = read("backend/src/services/salaryAdvanceControlService.js");
   const ui = read("src/pages/payroll/SalaryAdvancesManaged.jsx");
 
   for (const expected of [
-    'organizationSlug === "zermatt-liquor-limited"',
-    "SUPERUSER",
-    "SUPERADMIN",
-    "ORGANIZATIONADMINISTRATOR",
-    '"users.manage"',
-    '"roles.manage"',
-    '"settings.manage"',
+    "requireHeadHrFinancialControl",
     'router.post("/payroll/salary-advances/:id/cancel"',
     'router.delete("/payroll/salary-advances/:id"',
-    "ZERMATT_SUPER_USER_REQUIRED",
     "control-capabilities",
-  ]) assert.ok(routes.includes(expected), `missing Super User route/control: ${expected}`);
-
-  assert.ok(routes.includes("superRole || superPermissionProfile"), "ZERMATT Super User detection must support both canonical admin roles and the full tenant-admin permission profile");
+    "canDeleteEmployeeFinancialInputs",
+  ]) assert.ok(routes.includes(expected) || access.includes(expected), `missing Head HR route/control: ${expected}`);
 
   for (const expected of [
-    "SALARY_ADVANCE_CANCELLED_BY_SUPER_USER",
-    "SALARY_ADVANCE_DELETED_BY_SUPER_USER",
+    "HEAD_HR_ROLES",
+    "HEAD OF HR",
+    "canDeleteEmployeeFinancialInputs",
+    "HEAD_HR_FINANCIAL_CONTROL_REQUIRED",
+  ]) assert.ok(access.includes(expected), `missing Head HR authority control: ${expected}`);
+
+  for (const expected of [
+    "SALARY_ADVANCE_CANCELLED_BY_HEAD_HR_CONTROL",
+    "SALARY_ADVANCE_DELETED_BY_HEAD_HR",
     "SALARY_ADVANCE_FINANCIAL_HISTORY_DELETE_BLOCKED",
     'SET "status"=\'CANCELLED\'',
     'DELETE FROM "payroll_salary_advances"',
@@ -49,8 +49,9 @@ test("ZERMATT Super User can cancel or delete salary advances under financial-hi
     "onClick={() => deleteAdvance(row)}",
     ': "Cancel"',
     ': "Delete"',
+    "Head HR correction/delete control",
     "Financial history remains immutable",
-  ]) assert.ok(ui.includes(expected), `missing Super User salary advance UI control: ${expected}`);
+  ]) assert.ok(ui.includes(expected), `missing Head HR salary advance UI control: ${expected}`);
 
-  console.log("PASS: ZERMATT Super User salary advance cancel/delete gate passed.");
+  console.log("PASS: ZERMATT Head HR salary advance cancel/delete gate passed.");
 });
