@@ -36,6 +36,7 @@ const SUPPORT_STATUSES = new Set([
   "CLIENT_VALIDATION",
   "RESOLVED",
   "CLOSED",
+  "CANCELLED",
   "ESCALATED",
   "BLOCKED",
   "REOPENED",
@@ -191,6 +192,7 @@ function resolutionAgent({ ticketNumber, status, resolutionSummary }) {
     CLIENT_VALIDATION: `CHRiS Support Desk case ${ticketNumber} is awaiting your validation.`,
     RESOLVED: `CHRiS Support Desk case ${ticketNumber} has been resolved${resolutionSummary ? `: ${resolutionSummary}` : "."}`,
     CLOSED: `CHRiS Support Desk case ${ticketNumber} is now closed. Thank you for confirming the resolution.`,
+    CANCELLED: `CHRiS Support Desk case ${ticketNumber} was cancelled before Support attendance.`,
   };
   return messages[status] || `CHRiS Support Desk case ${ticketNumber} has been updated to ${status}.`;
 }
