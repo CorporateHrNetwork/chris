@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { apiRequest } from "../../services/api";
 
+const MAX_REPAYMENT_MONTHS = 600;
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 const money = (value) => new Intl.NumberFormat("en-NG", {
@@ -25,20 +26,34 @@ const emptyForm = () => ({
 
 function addMonths(month, offset) {
   if (!/^\d{4}-\d{2}$/.test(month || "")) return "";
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset >= MAX_REPAYMENT_MONTHS) return "";
   const [year, monthNumber] = month.split("-").map(Number);
-  return new Date(Date.UTC(year, monthNumber - 1 + offset, 1)).toISOString().slice(0, 7);
+  const timestamp = Date.UTC(year, monthNumber - 1 + offset, 1);
+  if (!Number.isFinite(timestamp)) return "";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return date.toISOString().slice(0, 7);
+  } catch {
+    return "";
+  }
 }
 
 function repaymentPlan(balanceValue, installmentValue, startMonth) {
-  const balance = Math.max(0, Number(balanceValue || 0));
-  const installment = Math.max(0, Number(installmentValue || 0));
-  if (!balance || !installment || !/^\d{4}-\d{2}$/.test(startMonth || "")) return null;
+  const balance = Number(balanceValue);
+  const installment = Number(installmentValue);
+  if (!Number.isFinite(balance) || balance <= 0 || !Number.isFinite(installment) || installment <= 0 || !/^\d{4}-\d{2}$/.test(startMonth || "")) return null;
   const installmentCount = Math.ceil(balance / installment);
+  if (!Number.isSafeInteger(installmentCount) || installmentCount < 1 || installmentCount > MAX_REPAYMENT_MONTHS) {
+    return { invalidReason: `The installment is too small for this balance. Increase it so recovery completes within ${MAX_REPAYMENT_MONTHS} months.` };
+  }
+  const endMonth = addMonths(startMonth, installmentCount - 1);
+  if (!endMonth) return { invalidReason: "CHRiS could not calculate a safe repayment end month. Review the installment and recovery start month." };
   const finalInstallment = Math.round((balance - installment * Math.max(0, installmentCount - 1)) * 100) / 100;
   return {
     installmentCount,
     startMonth,
-    endMonth: addMonths(startMonth, installmentCount - 1),
+    endMonth,
     finalInstallment: finalInstallment || installment,
   };
 }
@@ -46,7 +61,7 @@ function repaymentPlan(balanceValue, installmentValue, startMonth) {
 export default function SalaryAdvancesManaged() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
-  const [capabilities, setCapabilities] = useState({ canCancelDelete: false });
+  const [capabilities, setCapabilities] = useState({ canEdit: false, canCancelDelete: false, isBranchHr: false, isHeadHr: false });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -59,10 +74,10 @@ export default function SalaryAdvancesManaged() {
       setLoading(true);
       const [result, capabilityResult] = await Promise.all([
         apiRequest("/api/payroll/salary-advances"),
-        apiRequest("/api/payroll/salary-advances/control-capabilities").catch(() => ({ data: { canCancelDelete: false } })),
+        apiRequest("/api/payroll/salary-advances/control-capabilities").catch(() => ({ data: { canEdit: false, canCancelDelete: false } })),
       ]);
       setRows(result?.data || []);
-      setCapabilities(capabilityResult?.data || { canCancelDelete: false });
+      setCapabilities(capabilityResult?.data || { canEdit: false, canCancelDelete: false });
       setError("");
     } catch (requestError) {
       setError(requestError?.message || "Unable to load salary advances.");
@@ -85,6 +100,7 @@ export default function SalaryAdvancesManaged() {
   const historyLocked = Boolean(editing && (recoveredAmount > 0 || editing.status === "COMPLETED"));
   const scheduleBalance = editing ? Math.max(0, Number(editing.outstandingAmount || 0)) : Math.max(0, Number(form.amount || 0));
   const plan = repaymentPlan(scheduleBalance, form.installmentAmount, form.recoveryStartMonth);
+  const validPlan = Boolean(plan && !plan.invalidReason);
 
   const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -125,6 +141,10 @@ export default function SalaryAdvancesManaged() {
 
   const save = async (event) => {
     event.preventDefault();
+    if (!validPlan) {
+      setError(plan?.invalidReason || "Enter a valid amount, installment and payroll recovery month.");
+      return;
+    }
     try {
       setBusy(editing ? `edit-${editing.id}` : "create");
       setError("");
@@ -223,14 +243,14 @@ export default function SalaryAdvancesManaged() {
       <button type="button" style={backButton} onClick={() => navigate("/payroll")}>← Payroll Dashboard</button>
       <div style={eyebrow}>PAYROLL OPERATIONS</div>
       <h1 style={titleStyle}>Salary Advances</h1>
-      <p style={leadStyle}>ZERMATT salary advances are approved manually by the GM and paid outside CHRiS by Accounts. Head HR records the already approved and paid amount here only so CHRiS can recover it through payroll.</p>
-      <div style={policyNotice}><strong>Control:</strong> CHRiS does not approve or pay the salary advance. Recording confirms that external GM approval and Accounts payment have already occurred.</div>
-      {capabilities.canCancelDelete && <div style={superUserNotice}>ZERMATT Super User control remains available for correcting unused records or cancelling future recovery. Financial history remains immutable.</div>}
+      <p style={leadStyle}>ZERMATT salary advances are approved manually by the GM and paid outside CHRiS by Accounts. Branch HR & Admin Officers record and edit employees in their assigned branch; Head HR manages the organization-wide register. CHRiS then recovers the recorded advance through payroll.</p>
+      <div style={policyNotice}><strong>Control:</strong> CHRiS does not approve or pay the salary advance. Recording confirms that external GM approval and Accounts payment have already occurred. Branch entries use the same authoritative records displayed at HEAD OFFICE.</div>
+      {capabilities.canCancelDelete && <div style={headHrNotice}>Head HR correction/delete control is available for unused records and future recovery cancellation. Financial history remains immutable and every change is audited.</div>}
 
       <Panel title={editing ? `Edit Salary Advance · ${editing.employeeNumber}` : "Record Approved & Paid Salary Advance"}>
         {editing && <p style={controlNote}>{historyLocked ? `This advance has ${money(recoveredAmount)} in posted payroll recovery. Employee, original amount and payment date are locked; future installment and recovery start may be adjusted without rewriting history.` : "No posted payroll recovery exists. Permitted record details may still be corrected."}</p>}
         <form style={formGrid} onSubmit={save}>
-          <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setEmployee} disabled={historyLocked} required placeholder="Search employee number or name" />
+          <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setEmployee} disabled={historyLocked || Boolean(editing)} required placeholder="Search employee number or name" />
           <Input type="number" label="Amount Approved by GM" value={form.amount} onChange={setField("amount")} min="0.01" step="0.01" disabled={historyLocked} required />
           <Input type="number" label="Monthly Installment" value={form.installmentAmount} onChange={setField("installmentAmount")} min="0.01" step="0.01" required />
           {!editing && <Input type="date" label="GM Approval Date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required />}
@@ -240,7 +260,8 @@ export default function SalaryAdvancesManaged() {
           {!editing && <Input label="Accounts Payment Reference" value={form.accountsPaymentReference} onChange={setField("accountsPaymentReference")} placeholder="Optional transfer/payment reference" />}
           <Input label="Reason / Notes" value={form.reason} onChange={setField("reason")} />
 
-          {plan && <div style={{ ...scheduleCard, gridColumn: "1 / -1" }}>
+          {plan?.invalidReason && <div role="alert" style={{ ...scheduleCard, gridColumn: "1 / -1", borderColor: "rgba(248,113,113,.6)", color: "#FCA5A5" }}><strong>{plan.invalidReason}</strong></div>}
+          {validPlan && <div style={{ ...scheduleCard, gridColumn: "1 / -1" }}>
             <strong>Payroll Recovery Schedule</strong>
             <div style={scheduleGrid}>
               <span>Balance: <strong>{money(scheduleBalance)}</strong></span>
@@ -253,7 +274,7 @@ export default function SalaryAdvancesManaged() {
           </div>}
 
           <div style={buttonRow}>
-            <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber || !plan}>{busy ? "Saving…" : editing ? "Save Changes" : "Record Approved & Paid Advance"}</button>
+            <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber || !validPlan}>{busy ? "Saving…" : editing ? "Save Changes" : "Record Approved & Paid Advance"}</button>
             {editing && <button type="button" style={secondaryButton} onClick={reset} disabled={Boolean(busy)}>Cancel Edit</button>}
           </div>
         </form>
@@ -270,9 +291,9 @@ export default function SalaryAdvancesManaged() {
               {!loading && rows.length === 0 && <tr><td colSpan="9" style={tdStyle}>No salary advances have been recorded.</td></tr>}
               {rows.map((row) => {
                 const recovered = Math.max(0, Number(row.amount || 0) - Number(row.outstandingAmount || 0));
-                const editable = !["COMPLETED", "CANCELLED"].includes(row.status);
+                const editable = capabilities.canEdit && !["COMPLETED", "CANCELLED"].includes(row.status);
                 const cancellable = capabilities.canCancelDelete && ["ACTIVE", "PAUSED"].includes(row.status);
-                const deletable = capabilities.canCancelDelete && recovered <= 0 && !["COMPLETED"].includes(row.status);
+                const deletable = capabilities.canCancelDelete && recovered <= 0 && row.status !== "COMPLETED";
                 return <tr key={row.id}>
                   <Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{money(row.amount)}</Td><Td>{money(recovered)}</Td><Td>{money(row.outstandingAmount)}</Td><Td>{money(row.installmentAmount)}</Td><Td>{row.recoveryStartDate}</Td><Td><Badge>{row.status}</Badge></Td>
                   <Td><div style={actionRow}>{editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}{cancellable && <button type="button" style={warningButton} disabled={Boolean(busy)} onClick={() => cancelAdvance(row)}>{busy === `cancel-${row.id}` ? "Cancelling…" : "Cancel"}</button>}{deletable && <button type="button" style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteAdvance(row)}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}</div></Td>
@@ -298,7 +319,7 @@ const eyebrow = { color: "#D4AF37", fontSize: 11, fontWeight: 900, letterSpacing
 const titleStyle = { margin: "6px 0", fontSize: 32 };
 const leadStyle = { color: "#C7D3CC", lineHeight: 1.65, maxWidth: 1050, marginBottom: 14 };
 const policyNotice = { padding: 13, marginBottom: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.5)", background: "rgba(212,175,55,.08)", color: "#F7FAF8", lineHeight: 1.55 };
-const superUserNotice = { padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid rgba(134,239,172,.35)", color: "#BBF7D0" };
+const headHrNotice = { padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid rgba(134,239,172,.35)", color: "#BBF7D0" };
 const controlNote = { color: "#C7D3CC", lineHeight: 1.55, marginTop: 0 };
 const panelStyle = { marginTop: 18, padding: 20, border: "1px solid rgba(212,175,55,.45)", borderRadius: 15, background: "linear-gradient(145deg,rgba(8,50,33,.94),rgba(3,20,13,.96))", boxShadow: "0 15px 38px rgba(0,0,0,.24)" };
 const panelTitle = { margin: "0 0 15px", fontSize: 18, color: "#D4AF37" };
