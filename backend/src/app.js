@@ -33,6 +33,7 @@ const loanRoutes = require("./routes/loanRoutes");
 const zermattFinancialSupportRoutes = require("./routes/zermattFinancialSupportRoutes");
 const zermattHrLoanOptionRoutes = require("./routes/zermattHrLoanOptionRoutes");
 const zermattHrPayrollInputRoutes = require("./routes/zermattHrPayrollInputRoutes");
+const zermattLeaveAllowanceRoutes = require("./routes/zermattLeaveAllowanceRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
@@ -132,6 +133,11 @@ app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
 // payroll mutation routes while activeBranchScope above remains authoritative.
 app.use("/api", zermattFinancialSupportRoutes);
 app.use("/api", zermattHrPayrollInputRoutes);
+
+// Leave Allowance is owned by Benefits but participates in ZERMATT payroll.
+// This router must precede the generic payroll route so ZERMATT draft execution
+// can add the annual earning before the payroll is submitted/approved.
+app.use("/api", zermattLeaveAllowanceRoutes);
 
 // Loan workflow routes are deliberately mounted before the generic /api liability editor.
 // Existing workflow records remain readable for historical integrity, but ZERMATT
