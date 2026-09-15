@@ -12,7 +12,7 @@ Client Support, Issue Resolution & Product Improvement Centre
 
 ## Release 1 operating chain
 
-Client WhatsApp / manual intake → Client Support Agent → Triage & Incident Agent → Support case → SLA priority → first-line response or Engineering Liaison Agent → GitHub engineering issue → engineer resolution → Resolution & Follow-up Agent → client validation → closure → Knowledge Agent.
+Client portal / WhatsApp / controlled manual intake → Client Support Agent → Triage & Incident Agent → Support case → SLA priority → first-line response or Engineering Liaison Agent → GitHub engineering issue → engineer resolution → Resolution & Follow-up Agent → client validation → closure → Knowledge Agent.
 
 ## Agents
 
@@ -46,7 +46,54 @@ Captures reusable resolutions from successfully resolved/closed cases. Security-
 
 `NEW → TRIAGED → AWAITING_CLIENT → ASSIGNED → IN_PROGRESS → FIX_READY → DEPLOYED → CLIENT_VALIDATION → RESOLVED → CLOSED`
 
-Additional states: `ESCALATED`, `BLOCKED`, `REOPENED`.
+Additional states: `ESCALATED`, `BLOCKED`, `REOPENED`, `CANCELLED`.
+
+`CANCELLED` is requester-controlled only while a case is still unattended. CHRiS permits cancellation of a `NEW` or automatically `TRIAGED` request only when Support has not replied, changed the case, assigned it or escalated it. Cancellation never deletes the case; requester, reason and timestamp remain in the audit trail.
+
+## Client Support workspace
+
+Every authenticated tenant user has access to **My Support Requests** at:
+
+`/support`
+
+The requester can:
+
+- create and track their own requests;
+- open the full client-visible case workspace;
+- read Support responses and case updates;
+- add follow-up information while the case remains active;
+- cancel an unattended request with a recorded reason;
+- confirm a resolution while the case is in `CLIENT_VALIDATION`;
+- reopen a `RESOLVED` or `CLOSED` request with a reason so the existing history remains connected.
+
+Cancelled, resolved and closed requests cannot receive new client messages through stale UI or direct API calls. Resolved/closed cases must first be reopened.
+
+## Internal Corporate Resources Network Support workspace
+
+The cross-client Support Desk is available at:
+
+`/support-desk`
+
+It is platform-only and requires:
+
+- `support.internal.view`
+- `support.internal.manage` for case/status/message management
+- `support.engineering.escalate` for engineering escalation
+
+These permissions are provisioned only for the Corporate Resources Network platform organization (`corporatehr-network`). Tenant Role Management excludes `support.internal.*` and `support.engineering.*`, and authorization middleware rejects platform Support permissions outside the platform organization even if a stale/incorrect database assignment exists.
+
+A dedicated system role, **CHRiS Platform Support**, is provisioned for Corporate Resources Network. Existing CorporateHr Network Administrators are granted platform Support access by the controlled migration so the Support Desk is operable after deployment without granting client administrators cross-tenant access.
+
+Internal Support operators can:
+
+- view the cross-client case queue and metrics;
+- open a client case and review client-visible plus internal history;
+- record client-visible responses;
+- record internal investigation notes hidden from the client;
+- update the support status;
+- save a resolution summary;
+- escalate a validated case to Engineering/GitHub;
+- review cancelled requests without reactivating them.
 
 ## Release 1 persistence
 
@@ -84,31 +131,26 @@ Production inbound webhook traffic is rejected unless the Meta app secret is con
 
 The token should have only the minimum repository issue permission required for the Support Desk integration.
 
-## Console access
-
-The Release 1 Support Desk console is available to CHRiS users with `settings.view`. This is intentionally restrictive for the pilot. Dedicated Support Administrator / Support Agent / Engineer permissions are a subsequent RBAC increment after pilot workflow acceptance.
-
-Current console path:
-
-`/settings?workspace=support-desk`
-
 ## Pilot acceptance
 
-Release 1 is accepted only after the following are demonstrated in the hosted Zermatt environment:
+Release 1 is accepted only after the following are demonstrated in the hosted Zermatt/CHRiS environment:
 
-1. Manual support case intake creates an auditable ticket.
+1. Client support intake creates an auditable ticket.
 2. Triage assigns category, CHRiS module and P1–P4 severity.
-3. Support queue and metrics load correctly.
-4. Status changes append events and preserve ticket history.
-5. Engineering escalation generates the structured brief and creates a GitHub issue once runtime credentials are configured.
-6. WhatsApp webhook verification succeeds with the official Meta configuration.
-7. An inbound WhatsApp text creates a Zermatt support case and returns the CHRiS case reference.
-8. No secret credentials are requested or written into support case content by the agents.
-9. Client validation precedes closure for resolved engineering cases.
+3. Client and internal support queues/metrics load correctly.
+4. Client users can open their own case workspace, send follow-up information and cannot see internal notes.
+5. Unattended cases can be cancelled by the requester with a retained audit trail; attended cases cannot be cancelled by the requester.
+6. Internal Support can send client-visible responses and record internal notes.
+7. Status changes append events and preserve ticket history.
+8. A resolution can be saved, sent for client validation, confirmed by the requester and reopened when necessary.
+9. Engineering escalation generates the structured brief and creates a GitHub issue once runtime credentials are configured.
+10. WhatsApp webhook verification succeeds with the official Meta configuration.
+11. An inbound WhatsApp text creates a Zermatt support case and returns the CHRiS case reference.
+12. No secret credentials are requested or written into support case content by the agents.
+13. Cross-client internal Support access is denied to client-tenant roles and users.
 
-## Next increment after Release 1 acceptance
+## Next increment after current Release 1 workflow acceptance
 
-- Dedicated Support Desk RBAC permissions and roles.
 - Dedicated relational support schema and SLA timer records.
 - Multi-client WhatsApp routing instead of pilot-tenant routing.
 - Attachment/media handling with controlled storage and malware/content safeguards.
