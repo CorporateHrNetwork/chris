@@ -55,6 +55,14 @@ function requireHeadHrRecorder(req, res, next) {
   return next();
 }
 
+function rejectLegacyLoanOrigination(req, res) {
+  return res.status(409).json({
+    status: "error",
+    code: "ZERMATT_MANUAL_GM_APPROVAL_POLICY",
+    message: "Zermatt loans are approved manually by the GM and paid by Accounts outside CHRiS. Head HR should record the already approved/disbursed amount for payroll recovery instead.",
+  });
+}
+
 router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
   return res.json({
     status: "success",
@@ -69,16 +77,11 @@ router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
   });
 });
 
-// Zermatt no longer originates loan approval inside CHRiS. The GM approves
-// manually and Accounts completes payment outside the system before Head HR
-// records the liability for payroll recovery.
-router.post("/loans/applications", zermattOnly, (req, res) => {
-  return res.status(409).json({
-    status: "error",
-    code: "ZERMATT_MANUAL_GM_APPROVAL_POLICY",
-    message: "Zermatt loans are approved manually by the GM and paid by Accounts outside CHRiS. Head HR should record the already approved/disbursed amount for payroll recovery instead.",
-  });
-});
+// Zermatt no longer originates loan approval inside CHRiS. Both historical
+// creation surfaces are blocked so an older client or direct API call cannot
+// bypass the revised manual-GM/external-Accounts policy.
+router.post("/loans", zermattOnly, rejectLegacyLoanOrigination);
+router.post("/loans/applications", zermattOnly, rejectLegacyLoanOrigination);
 
 router.post("/loans/approved-disbursed", zermattOnly, requireHeadHrRecorder, async (req, res) => {
   try {
