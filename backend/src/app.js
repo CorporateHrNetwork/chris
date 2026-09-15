@@ -31,6 +31,7 @@ const payrollReopenRoutes = require("./routes/payrollReopenRoutes");
 const loanOriginationWorkflowRoutes = require("./routes/loanOriginationWorkflowRoutes");
 const loanRoutes = require("./routes/loanRoutes");
 const zermattFinancialSupportRoutes = require("./routes/zermattFinancialSupportRoutes");
+const zermattHrLoanOptionRoutes = require("./routes/zermattHrLoanOptionRoutes");
 const zermattHrPayrollInputRoutes = require("./routes/zermattHrPayrollInputRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
@@ -77,6 +78,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/eosb", eosbRoutes);
+
+// Authorized ZERMATT HR users need the same branch-scoped employee picker even
+// if a legacy role-provisioning refresh removes loans.apply. The service itself
+// scopes results by the user's assigned locations / ALL_LOCATIONS authority.
+app.use("/api", zermattHrLoanOptionRoutes);
 
 // Active branch scope is a cross-module operating context. It must run before
 // employee/leave/attendance/payroll/loan/report routers so branch-scoped reads
