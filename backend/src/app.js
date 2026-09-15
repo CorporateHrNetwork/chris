@@ -30,6 +30,7 @@ const payrollIntegrationRoutes = require("./routes/payrollIntegrationRoutes");
 const payrollReopenRoutes = require("./routes/payrollReopenRoutes");
 const loanOriginationWorkflowRoutes = require("./routes/loanOriginationWorkflowRoutes");
 const loanRoutes = require("./routes/loanRoutes");
+const zermattFinancialSupportRoutes = require("./routes/zermattFinancialSupportRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
@@ -108,8 +109,15 @@ app.use("/api/zermatt", zermattOperationsRoutes);
 
 app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
 
+// ZERMATT revised financial-support policy: the GM approves manually and
+// Accounts pays outside CHRiS. Head HR records the already approved/disbursed
+// loan or salary advance only so payroll can recover it. This router must be
+// mounted before the legacy loan/payroll mutation routes.
+app.use("/api", zermattFinancialSupportRoutes);
+
 // Loan workflow routes are deliberately mounted before the generic /api liability editor.
-// This lets loans.apply/verify/approve/disburse users use loan-scoped actions without broad payroll.manage.
+// Existing workflow records remain readable for historical integrity, but ZERMATT
+// new application creation is intercepted above by the revised policy router.
 app.use("/api/loans", loanOriginationWorkflowRoutes);
 
 app.use("/api", payrollLiabilityEditRoutes);
