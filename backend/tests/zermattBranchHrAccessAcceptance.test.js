@@ -15,9 +15,19 @@ function expect(source, fragment, message) {
 const schema = read(backendRoot, "prisma", "schema.prisma");
 const auth = read(backendRoot, "src", "middleware", "authMiddleware.js");
 const users = read(backendRoot, "src", "routes", "userRoutes.js");
+const app = read(backendRoot, "src", "app.js");
 const financialSupportRoutes = read(backendRoot, "src", "routes", "zermattFinancialSupportRoutes.js");
+const loanOptionsRoutes = read(backendRoot, "src", "routes", "zermattHrLoanOptionRoutes.js");
+const financialAccess = read(backendRoot, "src", "services", "zermattHrFinancialAccessService.js");
 const editUser = read(repoRoot, "src", "components", "settings", "EditUserForm.jsx");
 const provisioner = read(backendRoot, "scripts", "provision-zermatt-branch-hr-access.cjs");
+const financialPermissionMigration = read(
+  backendRoot,
+  "prisma",
+  "migrations",
+  "20260915020500_zermatt_branch_hr_loan_input_access",
+  "migration.sql"
+);
 
 expect(schema, "locationScope UserLocationScope", "User location-scope authority is missing.");
 expect(schema, "userLocations       UserLocation[]", "User-to-location relation is missing.");
@@ -62,6 +72,7 @@ expect(provisioner, "ZERMATT_BRANCH_HR_ACCESS_PROVISIONED", "Branch HR provision
 expect(provisioner, 'const APPLY = process.argv.includes("--apply")', "Provisioner must default to preview and require --apply for writes.");
 expect(provisioner, 'mode: APPLY ? "APPLY" : "PREVIEW_ONLY"', "Provisioner does not clearly report preview/apply mode.");
 
+// Branch HR is deliberately not a payroll processor or an in-system loan approver/disburser.
 for (const forbidden of [
   '"payroll.process"',
   '"payroll.manage"',
@@ -78,10 +89,43 @@ for (const forbidden of [
   assert.ok(!roleBlock.includes(forbidden), `Least-privilege Branch HR role must not include ${forbidden}.`);
 }
 
-expect(financialSupportRoutes, 'permissions.has("loans.verify")', "Zermatt approved/disbursed financial-support recording must remain Head-HR permission controlled.");
-expect(financialSupportRoutes, "HEAD_HR_FINANCIAL_SUPPORT_RECORDING_REQUIRED", "Server must reject non-Head-HR financial-support recording attempts.");
-expect(financialSupportRoutes, 'router.post("/loans/approved-disbursed", zermattOnly, requireHeadHrRecorder', "Approved/disbursed loan recording must require Head HR.");
-expect(financialSupportRoutes, 'router.post("/payroll/salary-advances", zermattOnly, requireHeadHrRecorder', "Approved/paid salary-advance recording must require Head HR.");
-expect(financialSupportRoutes, 'router.post("/loans/:id/top-up", zermattOnly, requireHeadHrRecorder', "Approved loan top-up recording must require Head HR.");
+// The dedicated permission migration grants loan-entry capability to current
+// Branch HR role aliases without granting payroll processing/approval/disbursement.
+for (const expected of [
+  "HR & Admin Officer - Branch",
+  "Branch HR & Admin Officer",
+  "loans.apply",
+]) {
+  expect(financialPermissionMigration, expected, `Branch HR loan-input migration is missing ${expected}.`);
+}
+for (const forbidden of ["payroll.manage", "payroll.process", "loans.approve", "loans.disburse"]) {
+  assert.ok(!financialPermissionMigration.includes(forbidden), `Branch HR financial-input migration must not grant ${forbidden}.`);
+}
+
+// Runtime authority is also role-aware, so future account/role reprovisioning
+// cannot strand Branch HR on the employee picker solely because of legacy loans.apply wiring.
+for (const expected of [
+  "BRANCH_HR_ROLES",
+  "HEAD_HR_ROLES",
+  "canManageEmployeeFinancialInputs",
+  "canManageLoans",
+  "assertLocationWithinAccess",
+]) {
+  expect(financialAccess, expected, `HR financial access control is missing ${expected}.`);
+}
+expect(loanOptionsRoutes, 'router.get("/loans/employee-options"', "Dedicated HR loan employee-options route is missing.");
+expect(loanOptionsRoutes, "canManageLoans(req)", "Loan employee picker must use the scoped HR maintenance authority.");
+expect(loanOptionsRoutes, "listLoanEmployeeOptions", "Loan employee picker must retain tenant/location filtering.");
+
+const loanOptionsMount = app.indexOf('app.use("/api", zermattHrLoanOptionRoutes);');
+const branchScopeMount = app.indexOf('app.use("/api", activeBranchScopeRoutes);');
+assert.ok(loanOptionsMount >= 0 && branchScopeMount > loanOptionsMount, "Role-safe HR loan employee-options route must precede the legacy branch workflow permission guard.");
+
+expect(financialSupportRoutes, 'router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor', "Approved/disbursed loan recording must use scoped HR authority.");
+expect(financialSupportRoutes, 'router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor', "Approved loan top-up recording must use scoped HR authority.");
+expect(financialSupportRoutes, "requireEmployeeFinancialInputEditor", "Salary-advance recording must use scoped HR financial-input authority.");
+expect(financialSupportRoutes, "assertEmployeeNumberAccess", "New financial-support records must verify the employee is within the user's branch/location authority.");
+expect(financialSupportRoutes, "assertLoanRecordAccess", "Loan top-up/status operations must verify loan branch ownership.");
+expect(financialSupportRoutes, "requireHeadHrFinancialControl", "Destructive loan correction must remain Head-HR controlled.");
 
 console.log("PASS: ZERMATT Branch HR & Admin access governance acceptance checks.");
