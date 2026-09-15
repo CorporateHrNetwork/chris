@@ -1,6 +1,7 @@
 const express = require("express");
 
-const { requireAuth } = require("../middleware/authMiddleware");
+const prisma = require("../config/prisma");
+const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const payroll = require("../services/payrollOperationsService");
 const {
   requireEmployeeFinancialInputEditor,
@@ -37,9 +38,107 @@ function sendError(res, error, fallback) {
   return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
 
+function visibleInCurrentHrScope(req, locationId) {
+  const activeLocationId = req.auth?.activeLocationId || null;
+  if (activeLocationId) return locationId === activeLocationId;
+  if (req.auth?.locationScope === "ALL_LOCATIONS") return true;
+  const allowed = new Set((req.auth?.availableLocations || []).map((location) => location.id).filter(Boolean));
+  return Boolean(locationId && allowed.has(locationId));
+}
+
+function dateValue(value) {
+  return value ? new Date(value).toISOString().slice(0, 10) : null;
+}
+
+function mapScopedSalaryRate(row) {
+  const { employeeLocationId, ...rest } = row;
+  return {
+    ...rest,
+    amount: Number(row.amount || 0),
+    effectiveFrom: dateValue(row.effectiveFrom),
+    effectiveTo: dateValue(row.effectiveTo),
+  };
+}
+
+function mapScopedSalaryAdvance(row) {
+  const { employeeLocationId, ...rest } = row;
+  return {
+    ...rest,
+    amount: Number(row.amount || 0),
+    outstandingAmount: Number(row.outstandingAmount || 0),
+    installmentAmount: Number(row.installmentAmount || 0),
+    issuedDate: dateValue(row.issuedDate),
+    recoveryStartDate: dateValue(row.recoveryStartDate),
+  };
+}
+
+async function listScopedSalaryRates(req) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT sr."id",sr."employeeId",e."employeeNumber",
+            CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
+            e."locationId" AS "employeeLocationId",
+            sr."amount",sr."currency",sr."frequency",sr."effectiveFrom",sr."effectiveTo",
+            sr."status",sr."reason",sr."createdAt",sr."updatedAt"
+       FROM "payroll_salary_rates" sr
+       JOIN "employees" e ON e."id"=sr."employeeId" AND e."organizationId"=sr."organizationId"
+      WHERE sr."organizationId"=$1
+      ORDER BY e."employeeNumber" ASC,sr."effectiveFrom" DESC`,
+    req.auth.organizationId
+  );
+  return rows.filter((row) => visibleInCurrentHrScope(req, row.employeeLocationId)).map(mapScopedSalaryRate);
+}
+
+async function listScopedSalaryAdvances(req) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT pa."id",pa."employeeId",e."employeeNumber",
+            CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
+            e."locationId" AS "employeeLocationId",
+            pa."amount",pa."outstandingAmount",pa."installmentAmount",pa."issuedDate",pa."recoveryStartDate",
+            pa."status",pa."reason",pa."createdAt",pa."updatedAt"
+       FROM "payroll_salary_advances" pa
+       JOIN "employees" e ON e."id"=pa."employeeId" AND e."organizationId"=pa."organizationId"
+      WHERE pa."organizationId"=$1
+      ORDER BY pa."createdAt" DESC`,
+    req.auth.organizationId
+  );
+  return rows.filter((row) => visibleInCurrentHrScope(req, row.employeeLocationId)).map(mapScopedSalaryAdvance);
+}
+
 router.get("/payroll/hr-input-capabilities", zermattOnly, (req, res) => {
   return res.json({ status: "success", data: capabilitySnapshot(req) });
 });
+
+// Branch HR reads the same authoritative salary-rate records, restricted to the
+// active/assigned branch. Head HR sees all branches in the consolidated HEAD OFFICE
+// context and can still switch to a single branch through the global branch selector.
+router.get(
+  "/payroll/salary-rates",
+  zermattOnly,
+  requirePermission("payroll.view"),
+  async (req, res) => {
+    try {
+      return res.json({ status: "success", data: await listScopedSalaryRates(req) });
+    } catch (error) {
+      return sendError(res, error, "Unable to load salary rates.");
+    }
+  }
+);
+
+// Salary Advances follow the same visibility rule: branch entry is immediately
+// reflected in the organization-wide HEAD OFFICE register because there is only
+// one underlying tenant record, not a branch copy and a head-office copy.
+router.get(
+  "/payroll/salary-advances",
+  zermattOnly,
+  requirePermission("payroll.view"),
+  async (req, res) => {
+    try {
+      return res.json({ status: "success", data: await listScopedSalaryAdvances(req) });
+    } catch (error) {
+      return sendError(res, error, "Unable to load salary advances.");
+    }
+  }
+);
 
 // Individual salary-rate maintenance is employee master/payroll-input data, not
 // payroll execution authority. Branch HR may maintain assigned-branch employees;
