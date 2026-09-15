@@ -203,8 +203,8 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
     );
     const postedRecoveryCount = Number(recoveryRows[0]?.postedRecoveryCount || 0);
     const postedRecoveryAmount = Number(recoveryRows[0]?.postedRecoveryAmount || 0);
+    const financialHistoryLocked = postedRecoveryCount > 0;
     const disbursed = Boolean(existing.disbursedDate) || ["ACTIVE", "PAUSED", "COMPLETED"].includes(String(existing.status));
-    const financialHistoryLocked = disbursed || postedRecoveryCount > 0;
 
     if (["REJECTED", "CANCELLED", "COMPLETED"].includes(String(existing.status))) {
       const onlyNotesChanged = ["employeeNumber", "principalAmount", "installmentAmount", "applicationDate", "recoveryStartDate", "purpose"]
@@ -226,19 +226,33 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
     const requestedPurpose = input?.purpose === undefined ? text(existing.purpose) : text(input.purpose);
     const requestedNotes = input?.notes === undefined ? text(existing.notes) : text(input.notes);
 
-    if (financialHistoryLocked) {
-      const changesHistoricalIdentity =
-        requestedEmployeeNumber !== String(existing.employeeNumber).toUpperCase() ||
-        requestedPrincipal !== Number(existing.principalAmount) ||
-        requestedApplicationDate !== new Date(existing.applicationDate).toISOString().slice(0, 10);
-      if (changesHistoricalIdentity) {
-        throw error(
-          "LOAN_FINANCIAL_HISTORY_LOCKED",
-          "Employee, Principal Amount and Application Date cannot be changed after disbursement or posted recoveries.",
-          409,
-          { postedRecoveryCount, postedRecoveryAmount }
-        );
+    // A loan recorded after external payment keeps its borrower and approval date.
+    // Branch HR can correct payroll-recovery terms, while identity/date corrections
+    // require deletion/re-entry by Head HR when no financial history exists.
+    if (disbursed) {
+      if (requestedEmployeeNumber !== String(existing.employeeNumber).toUpperCase()) {
+        throw error("LOAN_EMPLOYEE_LOCKED_AFTER_DISBURSEMENT", "The borrower cannot be changed after external disbursement. Head HR may delete and re-record an unused mistaken record.", 409);
       }
+      if (requestedApplicationDate !== new Date(existing.applicationDate).toISOString().slice(0, 10)) {
+        throw error("LOAN_APPROVAL_DATE_LOCKED_AFTER_DISBURSEMENT", "The recorded approval/application date cannot be changed after external disbursement.", 409);
+      }
+    }
+
+    if (financialHistoryLocked && requestedPrincipal !== Number(existing.principalAmount)) {
+      throw error(
+        "LOAN_FINANCIAL_HISTORY_LOCKED",
+        "Principal Amount cannot be changed after a posted payroll recovery. Historical recoveries are immutable.",
+        409,
+        { postedRecoveryCount, postedRecoveryAmount }
+      );
+    }
+
+    if (!financialHistoryLocked && disbursed && requestedPrincipal > Number(existing.principalAmount)) {
+      throw error(
+        "LOAN_INCREASE_REQUIRES_TOPUP",
+        "Increase the loan through the Top-Up workflow so EoSB/internal-surety collateral is revalidated. Direct edit may only keep or reduce an unrecovered principal.",
+        409
+      );
     }
 
     if (existing.parentLoanId && requestedEmployeeNumber !== String(existing.employeeNumber).toUpperCase()) {
@@ -249,9 +263,10 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       ? { id: existing.employeeId, employeeNumber: existing.employeeNumber, firstName: "", middleName: "", lastName: "" }
       : await employee(tx, organizationId, requestedEmployeeNumber);
 
-    const maximumInstallment = financialHistoryLocked ? Number(existing.outstandingAmount || 0) : requestedPrincipal;
+    const nextOutstanding = financialHistoryLocked ? Number(existing.outstandingAmount) : requestedPrincipal;
+    const maximumInstallment = nextOutstanding;
     if (maximumInstallment > 0 && requestedInstallment > maximumInstallment) {
-      throw error("INVALID_LOAN_INSTALLMENT", `Monthly Installment cannot exceed ${financialHistoryLocked ? "the outstanding balance" : "the principal amount"}.`);
+      throw error("INVALID_LOAN_INSTALLMENT", "Monthly Installment cannot exceed the current recoverable balance.");
     }
 
     if (requestedRecoveryStart && existing.disbursedDate) {
@@ -267,9 +282,8 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       requestedInstallment !== Number(existing.installmentAmount) ||
       requestedApplicationDate !== new Date(existing.applicationDate).toISOString().slice(0, 10) ||
       requestedPurpose !== text(existing.purpose);
-    const resetApproval = existing.status === "APPROVED" && !financialHistoryLocked && approvalSensitiveChange;
+    const resetApproval = existing.status === "APPROVED" && !disbursed && !financialHistoryLocked && approvalSensitiveChange;
     const nextStatus = resetApproval ? "PENDING_APPROVAL" : existing.status;
-    const nextOutstanding = financialHistoryLocked ? Number(existing.outstandingAmount) : requestedPrincipal;
 
     const updatedRows = await tx.$queryRawUnsafe(
       `UPDATE "payroll_loans"
