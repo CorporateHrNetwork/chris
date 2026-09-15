@@ -63,7 +63,6 @@ function canManageLoans(req) {
     permissions.has("payroll.manage") ||
     permissions.has("loans.verify") ||
     permissions.has("loans.apply") ||
-    permissions.has("loans.request") ||
     isHeadHr(req) ||
     isBranchHr(req)
   );
