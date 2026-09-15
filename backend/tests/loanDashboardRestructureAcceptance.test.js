@@ -6,51 +6,42 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath), "utf8");
 
-test("Loans dashboard follows the approved six-card management layout with correct financial summaries", () => {
+test("Loans dashboard reflects the revised Zermatt payroll-recovery operating model", () => {
   const loansUi = read("src/pages/Loans.jsx");
   const dashboardShell = read("src/components/dashboard/ModuleDashboardShell.jsx");
 
   for (const title of [
-    "Active Loans",
-    "Paused Loans",
-    "Recovered Loans",
+    "Active Loan Accounts",
+    "Borrowers",
     "Outstanding Balance",
-    "Pending Workflow",
-    "Awaiting Disbursement",
-    "Loan Workflow",
-    "Loan Intelligence",
+    "Recovered",
+    "Zermatt Loan Control",
+    "Recording Rule",
   ]) {
-    assert.ok(loansUi.includes(`title=\"${title}\"`), `missing loan dashboard section: ${title}`);
+    assert.ok(loansUi.includes(`title=\"${title}\"`), `missing revised loan dashboard section: ${title}`);
   }
 
-  assert.ok(loansUi.includes("metricsColumns={3}"), "desktop loan KPI layout must use three columns");
+  assert.ok(loansUi.includes("metricsColumns={4}"), "revised loan KPI layout must use four management cards");
   assert.ok(dashboardShell.includes("metricsColumns"), "dashboard shell must support route-specific metric columns");
-  assert.ok(dashboardShell.includes("@media (max-width: 1000px)"), "three-column layout must remain responsive on smaller screens");
-  assert.ok(dashboardShell.includes("@media (max-width: 680px)"), "loan KPI layout must collapse to one column on mobile");
+  assert.ok(dashboardShell.includes("@media (max-width: 1000px)"), "dashboard layout must remain responsive on smaller screens");
+  assert.ok(dashboardShell.includes("@media (max-width: 680px)"), "loan KPI layout must collapse on mobile");
 
-  for (const metric of [
-    "activeAmount",
-    "pausedAmount",
-    "recoveredAmount",
-    "outstandingBalance",
-    "pendingAmount",
-    "awaitingAmount",
-    "activePercentage",
-    "pausedPercentage",
-    "recoveredPercentage",
-    "outstandingPercentage",
+  for (const phrase of [
+    "GM approval takes place outside CHRiS",
+    "Accounts processes payment outside CHRiS",
+    "Head HR records the approved/disbursed amount",
+    "CHRiS recovers the configured installment through payroll",
   ]) {
-    assert.ok(loansUi.includes(metric), `loan management metric missing: ${metric}`);
+    assert.ok(loansUi.includes(phrase), `revised operating model missing: ${phrase}`);
   }
 
-  assert.ok(loansUi.includes('loan.status === "ACTIVE"'), "active loan count/exposure must come from authoritative loan status");
-  assert.ok(loansUi.includes('loan.status === "PAUSED"'), "paused loan count/exposure must come from authoritative loan status");
-  assert.ok(loansUi.includes('loan.status === "COMPLETED"'), "completed loans must contribute to historical recovered amount");
-  assert.ok(loansUi.includes("total + Number(loan.principalAmount || 0)"), "active/paused amount must summarize original principal, not outstanding balance");
-  assert.ok(loansUi.includes("Math.max(0, principal - outstanding)"), "recovered amount must include opening recoveries as principal less outstanding");
-  assert.ok(!loansUi.includes("const recoveredAmount = Number(summary.recoveredAmount || 0)"), "dashboard recovered amount must not depend only on CHRiS-posted payroll recovery rows");
-  assert.ok(loansUi.includes("active + paused principal"), "active/paused percentages must clearly state their denominator");
-  assert.ok(loansUi.includes("disbursed loan exposure"), "recovered/outstanding percentages must clearly state their denominator");
+  assert.ok(loansUi.includes('["ACTIVE", "PAUSED", "COMPLETED"]'), "financial history must include active, paused and completed loans");
+  assert.ok(loansUi.includes('Math.max(0, Number(loan.outstandingAmount || 0))'), "outstanding exposure must use authoritative running balance");
+  assert.ok(loansUi.includes("principal - balance"), "recovered amount must remain principal less outstanding so opening recoveries are included");
+  assert.ok(loansUi.includes("Record Approved Loan"), "Head HR recording action must be prominent");
+  assert.ok(loansUi.includes("Same manual GM approval / external payment policy"), "Salary Advances must visibly share the revised policy");
+  assert.ok(!loansUi.includes("Pending Workflow"), "obsolete in-system approval workflow KPI must be removed");
+  assert.ok(!loansUi.includes("Awaiting Disbursement"), "obsolete in-system disbursement KPI must be removed");
 
-  console.log("PASS: Loans dashboard restructuring and summary gate passed.");
+  console.log("PASS: revised Zermatt Loans dashboard gate passed.");
 });
