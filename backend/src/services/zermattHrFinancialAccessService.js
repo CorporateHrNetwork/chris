@@ -181,10 +181,12 @@ async function assertSalaryRateAccess({ req, rateId, prismaClient = prisma }) {
 }
 
 function capabilitySnapshot(req) {
+  const permissions = new Set(req.auth?.permissions || []);
   return {
     canManageEmployeeFinancialInputs: canManageEmployeeFinancialInputs(req),
     canManageLoans: canManageLoans(req),
     canDeleteEmployeeFinancialInputs: canDeleteEmployeeFinancialInputs(req),
+    canBulkPayrollInputs: permissions.has("payroll.manage"),
     isHeadHr: isHeadHr(req),
     isBranchHr: isBranchHr(req),
     locationScope: req.auth?.locationScope || null,
