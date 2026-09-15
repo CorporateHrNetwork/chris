@@ -1,6 +1,19 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
 
+const PLATFORM_ORGANIZATION_SLUG = "corporatehr-network";
+const PLATFORM_ONLY_PERMISSION_PREFIXES = ["support.internal.", "support.engineering."];
+
+function isPlatformOnlyPermission(permission) {
+  const key = String(permission || "");
+  return PLATFORM_ONLY_PERMISSION_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+function permissionAllowedForOrganization(req, permission) {
+  if (!isPlatformOnlyPermission(permission)) return true;
+  return req.auth?.organization?.slug === PLATFORM_ORGANIZATION_SLUG;
+}
+
 async function requireAuth(req, res, next) {
   try {
     const authorization = req.headers.authorization;
@@ -123,7 +136,17 @@ function requirePermission(...requiredPermissions) {
   return (req, res, next) => {
     if (!req.auth) return res.status(401).json({ status: "error", message: "Authentication required." });
     const userPermissions = req.auth.permissions || [];
-    const hasPermission = requiredPermissions.every((permission) => userPermissions.includes(permission));
+    const platformPermissionRequested = requiredPermissions.some(isPlatformOnlyPermission);
+    if (platformPermissionRequested && req.auth.organization?.slug !== PLATFORM_ORGANIZATION_SLUG) {
+      return res.status(403).json({
+        status: "error",
+        code: "PLATFORM_PERMISSION_FORBIDDEN",
+        message: "This action is restricted to Corporate Resources Network platform operations.",
+      });
+    }
+    const hasPermission = requiredPermissions.every(
+      (permission) => permissionAllowedForOrganization(req, permission) && userPermissions.includes(permission)
+    );
     if (!hasPermission) return res.status(403).json({ status: "error", message: "You do not have permission to perform this action." });
     next();
   };
@@ -133,7 +156,9 @@ function requireAnyPermission(...requiredPermissions) {
   return (req, res, next) => {
     if (!req.auth) return res.status(401).json({ status: "error", message: "Authentication required." });
     const userPermissions = req.auth.permissions || [];
-    const hasPermission = requiredPermissions.some((permission) => userPermissions.includes(permission));
+    const hasPermission = requiredPermissions.some(
+      (permission) => permissionAllowedForOrganization(req, permission) && userPermissions.includes(permission)
+    );
     if (!hasPermission) return res.status(403).json({ status: "error", message: "You do not have permission to perform this action." });
     next();
   };
