@@ -100,7 +100,7 @@ test("ZERMATT loan top-up remains render-safe and HR financial inputs preserve b
     "organizationAudit.create",
   ], "Salary Advance delete audit");
   includesAll(salaryRateControl, [
-    "SALARY_RATE_UPDATED_BY_HR",
+    "SALARY_RATE_CORRECTED_BY_HR",
     "SALARY_RATE_DELETED_BY_HEAD_HR",
     "previousValue",
     "organizationAudit.create",
