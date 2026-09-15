@@ -93,7 +93,8 @@ test("ZERMATT August 2026 loan history uses full paid/paused installments and Lo
 
   for (const expected of [
     "loanSearch",
-    "Search employee, loan number, purpose or status",
+    "Search Loan / Employee",
+    "employee number, employee name, loan number, policy or status",
     "filteredLoans.map",
     "loan.employeeName",
     "loan.employeeNumber",
