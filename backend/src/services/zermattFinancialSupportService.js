@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { markDraftRunsRecalculationRequired } = require("./payrollDraftFreshnessService");
 
+const MAX_REPAYMENT_MONTHS = 600;
+
 function policyError(code, message, statusCode = 400, details) {
   const error = new Error(message);
   error.code = code;
@@ -41,26 +43,45 @@ function monthStart(value, label) {
 }
 
 function addMonths(month, offset) {
-  const match = /^(\d{4})-(\d{2})$/.exec(month);
-  if (!match) return null;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + offset, 1));
-  return date.toISOString().slice(0, 7);
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  if (!match || !Number.isSafeInteger(offset) || offset < 0 || offset >= MAX_REPAYMENT_MONTHS) return null;
+  const timestamp = Date.UTC(Number(match[1]), Number(match[2]) - 1 + offset, 1);
+  if (!Number.isFinite(timestamp)) return null;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return date.toISOString().slice(0, 7);
+  } catch {
+    return null;
+  }
 }
 
 function repaymentPlan(balanceValue, installmentValue, recoveryStartDate) {
-  const balance = Math.max(0, Number(balanceValue || 0));
-  const installmentAmount = Math.max(0, Number(installmentValue || 0));
+  const balance = Number(balanceValue);
+  const installmentAmount = Number(installmentValue);
   const startMonth = text(recoveryStartDate).slice(0, 7);
-  if (!balance || !installmentAmount || !/^\d{4}-\d{2}$/.test(startMonth)) {
+  if (!Number.isFinite(balance) || balance <= 0 || !Number.isFinite(installmentAmount) || installmentAmount <= 0 || !/^\d{4}-\d{2}$/.test(startMonth)) {
     return { installmentCount: 0, startMonth: startMonth || null, endMonth: null, finalInstallment: 0 };
   }
   const installmentCount = Math.ceil(balance / installmentAmount);
+  if (!Number.isSafeInteger(installmentCount) || installmentCount < 1 || installmentCount > MAX_REPAYMENT_MONTHS) {
+    throw policyError(
+      "INVALID_REPAYMENT_TERM",
+      `The repayment plan exceeds ${MAX_REPAYMENT_MONTHS} months. Increase the monthly installment before saving.`,
+      400,
+      { balance, installmentAmount, installmentCount, maximumMonths: MAX_REPAYMENT_MONTHS }
+    );
+  }
+  const endMonth = addMonths(startMonth, installmentCount - 1);
+  if (!endMonth) {
+    throw policyError("INVALID_REPAYMENT_TERM", "The repayment end month could not be calculated safely. Increase the monthly installment or review the recovery start month.");
+  }
   const recoveredBeforeFinal = installmentAmount * Math.max(0, installmentCount - 1);
   const finalInstallment = Math.round(Math.max(0, balance - recoveredBeforeFinal) * 100) / 100;
   return {
     installmentCount,
     startMonth,
-    endMonth: addMonths(startMonth, installmentCount - 1),
+    endMonth,
     finalInstallment: finalInstallment || installmentAmount,
   };
 }
@@ -205,9 +226,9 @@ async function recordApprovedDisbursedLoan({
       actorUserId,
       entityType: "PayrollLoan",
       entityId: id,
-      action: "LOAN_APPROVED_DISBURSED_RECORDED_BY_HEAD_HR",
+      action: "LOAN_APPROVED_DISBURSED_RECORDED_BY_HR",
       newValue: value,
-      reason: input?.notes || "GM-approved loan paid externally by Accounts and recorded by Head HR for payroll recovery",
+      reason: input?.notes || "GM-approved loan paid externally by Accounts and recorded by authorized HR for payroll recovery",
     });
     await markDraftRunsRecalculationRequired({
       organizationId,
@@ -316,10 +337,10 @@ async function applyApprovedDisbursedLoanTopUp({
       actorUserId,
       entityType: "PayrollLoan",
       entityId: loanId,
-      action: "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HEAD_HR",
+      action: "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR",
       previousValue,
       newValue,
-      reason: input?.notes || "GM-approved top-up paid externally by Accounts and merged into the existing loan account by Head HR",
+      reason: input?.notes || "GM-approved top-up paid externally by Accounts and merged into the existing loan account by authorized HR",
     });
     await markDraftRunsRecalculationRequired({
       organizationId,
@@ -409,9 +430,9 @@ async function recordApprovedDisbursedSalaryAdvance({
       actorUserId,
       entityType: "PayrollSalaryAdvance",
       entityId: id,
-      action: "SALARY_ADVANCE_APPROVED_DISBURSED_RECORDED_BY_HEAD_HR",
+      action: "SALARY_ADVANCE_APPROVED_DISBURSED_RECORDED_BY_HR",
       newValue: value,
-      reason: input?.reason || input?.notes || "GM-approved salary advance paid externally by Accounts and recorded by Head HR for payroll recovery",
+      reason: input?.reason || input?.notes || "GM-approved salary advance paid externally by Accounts and recorded by authorized HR for payroll recovery",
     });
     await markDraftRunsRecalculationRequired({
       organizationId,
