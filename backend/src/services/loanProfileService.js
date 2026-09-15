@@ -1,5 +1,8 @@
 const prisma = require("../config/prisma");
 
+const ZERMATT_OPENING_HISTORY_PAID_THROUGH = "2026-08";
+const ZERMATT_AUGUST_PAUSE_EMPLOYEES = new Set(["ZLL000055", "ZLL000185"]);
+
 function dateText(value) {
   if (!value) return null;
   return new Date(value).toISOString().slice(0, 10);
@@ -19,6 +22,100 @@ function monthKey(value) {
   return text ? text.slice(0, 7) : "";
 }
 
+function monthLabel(value) {
+  if (!value) return "External settlement";
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return "External settlement";
+  return date.toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+function applyZermattOpeningHistoryPolicy({
+  organizationSlug,
+  employeeNumber,
+  loanNotes,
+  principalAmount,
+  installmentAmount,
+  recoveryStartDate,
+  legacyPeriodEvents = [],
+}) {
+  const existing = Array.isArray(legacyPeriodEvents) ? [...legacyPeriodEvents] : [];
+  const isZermatt = organizationSlug === "zermatt-liquor-limited";
+  const isOpeningLoan = /Source Reference:/i.test(String(loanNotes || ""));
+  const principal = money(principalAmount);
+  const installment = money(installmentAmount);
+  const startText = dateText(recoveryStartDate);
+
+  if (!isZermatt || !isOpeningLoan || !principal || !installment || !startText) return existing;
+  const startMonth = startText.slice(0, 7);
+  if (startMonth > ZERMATT_OPENING_HISTORY_PAID_THROUGH) return existing;
+
+  const byMonth = new Map();
+  for (const event of existing) {
+    const key = monthKey(event.periodStart);
+    if (key) byMonth.set(key, event);
+  }
+
+  const [startYear, startMonthNumber] = startMonth.split("-").map(Number);
+  const termMonths = Math.ceil(principal / installment);
+  for (let offset = 0; offset < termMonths; offset += 1) {
+    const periodStart = new Date(Date.UTC(startYear, startMonthNumber - 1 + offset, 1));
+    const key = periodStart.toISOString().slice(0, 7);
+    if (key > ZERMATT_OPENING_HISTORY_PAID_THROUGH) break;
+    if (byMonth.has(key)) continue;
+
+    const isConfirmedAugustPause = key === "2026-08" && ZERMATT_AUGUST_PAUSE_EMPLOYEES.has(String(employeeNumber || "").toUpperCase());
+    const remainingBeforePeriod = Math.max(0, money(principal - (installment * offset)));
+    const scheduledAmount = money(Math.min(installment, remainingBeforePeriod));
+    if (scheduledAmount <= 0) break;
+
+    byMonth.set(key, {
+      id: `runtime-zermatt-opening-history-${key}`,
+      periodStart: `${key}-01`,
+      status: isConfirmedAugustPause ? "PAUSED" : "PAID",
+      amount: isConfirmedAugustPause ? 0 : scheduledAmount,
+      reason: isConfirmedAugustPause
+        ? "August 2026 deduction is a confirmed ZERMATT opening-history pause."
+        : "ZERMATT opening-loan history is confirmed paid through August 2026.",
+      source: "ZERMATT_OPENING_HISTORY_POLICY",
+      runtimeDerived: true,
+    });
+  }
+
+  return Array.from(byMonth.values()).sort((a, b) => String(a.periodStart).localeCompare(String(b.periodStart)));
+}
+
+function applyExternalSettlementToSchedule(schedule, externalSettlement) {
+  const amount = money(externalSettlement?.amount);
+  const settlementDate = dateText(externalSettlement?.date);
+  if (!amount || !settlementDate) return schedule;
+
+  const settlementMonth = settlementDate.slice(0, 7);
+  const retained = schedule.filter((row) => {
+    const rowMonth = String(row.dueDate || "").slice(0, 7);
+    if (rowMonth < settlementMonth) return true;
+    if (rowMonth > settlementMonth) return false;
+    return ["PAID", "PAUSED"].includes(row.status);
+  });
+
+  retained.push({
+    installmentNumber: retained.length + 1,
+    period: `${monthLabel(settlementDate)} · External settlement`,
+    dueDate: settlementDate,
+    outstandingBalance: amount,
+    principalAmount: amount,
+    interestAmount: 0,
+    totalDeduction: 0,
+    amountPaid: amount,
+    outstandingAfter: 0,
+    status: "SETTLED_EXTERNALLY",
+    paymentSource: externalSettlement?.source || "EXTERNAL_SETTLEMENT",
+    settlementReference: externalSettlement?.reference || null,
+    settlementReason: externalSettlement?.reason || null,
+  });
+
+  return retained;
+}
+
 function buildAmortizationSchedule({
   principalAmount,
   installmentAmount,
@@ -26,6 +123,7 @@ function buildAmortizationSchedule({
   recoveries = [],
   openingRecoveredAmount = 0,
   legacyPeriodEvents = [],
+  externalSettlement = null,
 }) {
   const principal = money(principalAmount);
   const installment = money(installmentAmount);
@@ -49,8 +147,6 @@ function buildAmortizationSchedule({
   // The aggregate opening recovered balance is independent evidence of historical
   // recovery. Reserve the value already represented by explicit PAID events and
   // carry only the unrepresented remainder forward as a compatibility fallback.
-  // This repairs a genuinely missing legacy month (for example August 2026) without
-  // inferring payment merely because a calendar month has passed.
   const explicitLegacyPaidAmount = money(
     Array.from(legacyByMonth.values())
       .filter((event) => event.status === "PAID")
@@ -74,8 +170,6 @@ function buildAmortizationSchedule({
     const postedAmount = money(postedByMonth.get(key) || 0);
     let scheduledPrincipal = money(Math.min(installment, plannedOutstanding));
 
-    // Do not create a separate ₦0.xx installment caused only by currency-rounding residue.
-    // Absorb a residual of ₦1 or less into the current final installment.
     const microResidual = money(plannedOutstanding - scheduledPrincipal);
     if (microResidual > 0 && microResidual <= 1) scheduledPrincipal = money(plannedOutstanding);
 
@@ -99,15 +193,10 @@ function buildAmortizationSchedule({
         amountPaid = scheduledPrincipal;
         status = "PAID";
       } else {
-        // ZERMATT does not permit partial loan installments. Any historic partial posting is an exception,
-        // not a legitimate installment status.
         status = "EXCEPTION";
       }
       paymentSource = "APPROVED_PAYROLL";
     } else if (remainingLegacyPaid > 0) {
-      // Compatibility fallback for an opening-balance amount not yet represented by
-      // an explicit legacy-period event. Currency-rounding residues of up to ₦1 must
-      // never create a false PARTIAL installment.
       if (remainingLegacyPaid + 1 >= scheduledPrincipal) {
         status = "PAID";
         amountPaid = scheduledPrincipal;
@@ -145,7 +234,7 @@ function buildAmortizationSchedule({
     monthOffset += 1;
   }
 
-  return schedule;
+  return applyExternalSettlementToSchedule(schedule, externalSettlement);
 }
 
 async function getLoanProfile({ organizationId, loanId, prismaClient = prisma }) {
@@ -153,8 +242,9 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     `SELECT l.*, e."employeeNumber",
             CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
             d."name" AS "departmentName", des."name" AS "designationName",
-            parent."loanNumber" AS "parentLoanNumber"
+            parent."loanNumber" AS "parentLoanNumber", o."slug" AS "organizationSlug"
        FROM "payroll_loans" l
+       JOIN "organizations" o ON o."id"=l."organizationId"
        JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
        LEFT JOIN "departments" d ON d."id"=e."departmentId"
        LEFT JOIN "designations" des ON des."id"=e."designationId"
@@ -199,7 +289,7 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     amount: money(row.amount),
     recoveryDate: dateText(row.recoveryDate),
   }));
-  const legacyPeriodEvents = legacyRows.map((row) => ({
+  const storedLegacyPeriodEvents = legacyRows.map((row) => ({
     ...row,
     periodStart: dateText(row.periodStart),
     amount: money(row.amount),
@@ -212,7 +302,29 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
   const payrollRecoveredAmount = money(recoveries
     .filter((row) => row.status === "POSTED")
     .reduce((sum, row) => sum + Number(row.amount || 0), 0));
-  const openingRecoveredAmount = Math.max(0, money(recoveredAmount - payrollRecoveredAmount));
+  const externalSettlementAmount = money(loan.externalSettlementAmount);
+  const openingRecoveredAmount = Math.max(
+    0,
+    money(recoveredAmount - payrollRecoveredAmount - externalSettlementAmount)
+  );
+  const legacyPeriodEvents = applyZermattOpeningHistoryPolicy({
+    organizationSlug: loan.organizationSlug,
+    employeeNumber: loan.employeeNumber,
+    loanNotes: loan.notes,
+    principalAmount,
+    installmentAmount,
+    recoveryStartDate: loan.recoveryStartDate,
+    legacyPeriodEvents: storedLegacyPeriodEvents,
+  });
+  const externalSettlement = externalSettlementAmount > 0
+    ? {
+        amount: externalSettlementAmount,
+        date: loan.externalSettlementDate,
+        source: loan.externalSettlementSource,
+        reference: loan.externalSettlementReference,
+        reason: loan.externalSettlementReason,
+      }
+    : null;
   const schedule = buildAmortizationSchedule({
     principalAmount,
     installmentAmount,
@@ -220,6 +332,7 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     recoveries,
     openingRecoveredAmount,
     legacyPeriodEvents,
+    externalSettlement,
   });
   const nextPending = schedule.find((row) => row.status === "PENDING") || null;
 
@@ -237,6 +350,11 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
       recoveredAmount,
       openingRecoveredAmount,
       payrollRecoveredAmount,
+      externalSettlementAmount,
+      externalSettlementDate: dateText(loan.externalSettlementDate),
+      externalSettlementSource: loan.externalSettlementSource || null,
+      externalSettlementReference: loan.externalSettlementReference || null,
+      externalSettlementReason: loan.externalSettlementReason || null,
       installmentAmount,
       interestRatePercent: 0,
       totalInterest: 0,
@@ -260,13 +378,14 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     amortizationSchedule: schedule,
     controls: {
       interestTreatment: "ZERO_INTEREST",
-      recoverySource: "APPROVED_PAYROLL_ONLY_FOR_CHRIS_POSTINGS",
-      openingRecoveryTreatment: "RECONCILED_LEGACY_PERIOD_HISTORY",
+      recoverySource: "APPROVED_PAYROLL_OR_RECORDED_EXTERNAL_SETTLEMENT",
+      openingRecoveryTreatment: "ZERMATT_CONFIRMED_HISTORY_THROUGH_AUGUST_2026",
       scheduleBasis: "MONTH_END_FROM_RECOVERY_START",
       installmentMode: "FULL_INSTALLMENT_ONLY",
       partialInstallmentsPermitted: false,
       microResidualTreatment: "ABSORB_UP_TO_ONE_NAIRA_INTO_FINAL_INSTALLMENT",
       historicalRecoveriesImmutable: true,
+      externalSettlementCreatesPayrollRecovery: false,
     },
   };
 }
@@ -276,7 +395,8 @@ async function getBulkLoanReport({ organizationId, prismaClient = prisma }) {
     `SELECT l."id",l."loanNumber",e."employeeNumber",
             CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
             l."purpose",l."principalAmount",l."outstandingAmount",l."installmentAmount",
-            l."applicationDate",l."approvedDate",l."disbursedDate",l."recoveryStartDate",l."status"
+            l."applicationDate",l."approvedDate",l."disbursedDate",l."recoveryStartDate",l."status",
+            l."externalSettlementAmount",l."externalSettlementDate",l."externalSettlementSource",l."externalSettlementReference"
        FROM "payroll_loans" l
        JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
       WHERE l."organizationId"=$1
@@ -298,6 +418,10 @@ async function getBulkLoanReport({ organizationId, prismaClient = prisma }) {
       recoveredAmount: Math.max(0, money(principalAmount - outstandingAmount)),
       outstandingAmount,
       installmentAmount,
+      externalSettlementAmount: money(row.externalSettlementAmount),
+      externalSettlementDate: dateText(row.externalSettlementDate),
+      externalSettlementSource: row.externalSettlementSource || null,
+      externalSettlementReference: row.externalSettlementReference || null,
       interestRatePercent: 0,
       termMonths: installmentAmount > 0 ? Math.ceil(principalAmount / installmentAmount) : 0,
       applicationDate: dateText(row.applicationDate),
@@ -310,6 +434,9 @@ async function getBulkLoanReport({ organizationId, prismaClient = prisma }) {
 }
 
 module.exports = {
+  ZERMATT_OPENING_HISTORY_PAID_THROUGH,
+  ZERMATT_AUGUST_PAUSE_EMPLOYEES,
+  applyZermattOpeningHistoryPolicy,
   buildAmortizationSchedule,
   getLoanProfile,
   getBulkLoanReport,
