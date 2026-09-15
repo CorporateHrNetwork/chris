@@ -15,6 +15,7 @@ function expect(source, fragment, message) {
 const schema = read(backendRoot, "prisma", "schema.prisma");
 const auth = read(backendRoot, "src", "middleware", "authMiddleware.js");
 const users = read(backendRoot, "src", "routes", "userRoutes.js");
+const financialSupportRoutes = read(backendRoot, "src", "routes", "zermattFinancialSupportRoutes.js");
 const editUser = read(repoRoot, "src", "components", "settings", "EditUserForm.jsx");
 const provisioner = read(backendRoot, "scripts", "provision-zermatt-branch-hr-access.cjs");
 
@@ -64,6 +65,7 @@ expect(provisioner, 'mode: APPLY ? "APPLY" : "PREVIEW_ONLY"', "Provisioner does 
 for (const forbidden of [
   '"payroll.process"',
   '"payroll.manage"',
+  '"loans.verify"',
   '"loans.approve"',
   '"loans.disburse"',
   '"users.manage"',
@@ -75,5 +77,11 @@ for (const forbidden of [
   const roleBlock = provisioner.slice(roleBlockStart, roleBlockEnd + 2);
   assert.ok(!roleBlock.includes(forbidden), `Least-privilege Branch HR role must not include ${forbidden}.`);
 }
+
+expect(financialSupportRoutes, 'permissions.has("loans.verify")', "Zermatt approved/disbursed financial-support recording must remain Head-HR permission controlled.");
+expect(financialSupportRoutes, "HEAD_HR_FINANCIAL_SUPPORT_RECORDING_REQUIRED", "Server must reject non-Head-HR financial-support recording attempts.");
+expect(financialSupportRoutes, 'router.post("/loans/approved-disbursed", zermattOnly, requireHeadHrRecorder', "Approved/disbursed loan recording must require Head HR.");
+expect(financialSupportRoutes, 'router.post("/payroll/salary-advances", zermattOnly, requireHeadHrRecorder', "Approved/paid salary-advance recording must require Head HR.");
+expect(financialSupportRoutes, 'router.post("/loans/:id/top-up", zermattOnly, requireHeadHrRecorder', "Approved loan top-up recording must require Head HR.");
 
 console.log("PASS: ZERMATT Branch HR & Admin access governance acceptance checks.");
