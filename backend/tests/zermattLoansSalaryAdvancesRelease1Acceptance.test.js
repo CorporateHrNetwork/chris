@@ -69,7 +69,7 @@ test("ZERMATT Loans and Salary Advances use external approval/payment with branc
     'router.patch("/loans/:id/disburse", zermattOnly, rejectLegacyLoanWorkflowMutation)',
     'router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor',
     'router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor',
-    'router.post(\n  "/payroll/salary-advances"',
+    '"/payroll/salary-advances"',
     "requireEmployeeFinancialInputEditor",
     "assertEmployeeNumberAccess",
     "assertLoanRecordAccess",
@@ -86,7 +86,8 @@ test("ZERMATT Loans and Salary Advances use external approval/payment with branc
     "canManageLoans",
     "canDeleteEmployeeFinancialInputs",
     "assertLocationWithinAccess",
-    "ASSIGNED_LOCATIONS",
+    "activeLocationId",
+    'locationScope === "ALL_LOCATIONS"',
   ], "HR financial access control");
 
   const revisedMount = app.indexOf('app.use("/api", zermattFinancialSupportRoutes);');
