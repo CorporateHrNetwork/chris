@@ -12,10 +12,11 @@ function requireText(source, values, label) {
   }
 }
 
-test("ZERMATT Loans and Salary Advances use manual GM approval, external payment and payroll-only recording", () => {
+test("ZERMATT Loans and Salary Advances use external approval/payment with branch-scoped HR recording", () => {
   const migration = read("backend/prisma/migrations/20260905014500_activate_loans_payroll_recovery/migration.sql");
   const policyService = read("backend/src/services/zermattFinancialSupportService.js");
   const policyRoutes = read("backend/src/routes/zermattFinancialSupportRoutes.js");
+  const access = read("backend/src/services/zermattHrFinancialAccessService.js");
   const app = read("backend/src/app.js");
   const loansPage = read("src/pages/Loans.jsx");
   const salaryAdvancesPage = read("src/pages/payroll/SalaryAdvancesManaged.jsx");
@@ -44,17 +45,16 @@ test("ZERMATT Loans and Salary Advances use manual GM approval, external payment
     "recordApprovedDisbursedLoan",
     "applyApprovedDisbursedLoanTopUp",
     "recordApprovedDisbursedSalaryAdvance",
-    "LOAN_APPROVED_DISBURSED_RECORDED_BY_HEAD_HR",
-    "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HEAD_HR",
-    "SALARY_ADVANCE_APPROVED_DISBURSED_RECORDED_BY_HEAD_HR",
+    "LOAN_APPROVED_DISBURSED_RECORDED_BY_HR",
+    "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR",
+    "SALARY_ADVANCE_APPROVED_DISBURSED_RECORDED_BY_HR",
     "FOR UPDATE",
     "currentPrincipal + topUpAmount",
     "currentOutstanding + topUpAmount",
     'UPDATE "payroll_loans"',
     "repaymentPlan",
-    "installmentCount",
-    "endMonth",
-    "finalInstallment",
+    "MAX_REPAYMENT_MONTHS",
+    "INVALID_REPAYMENT_TERM",
     "markDraftRunsRecalculationRequired",
   ], "Zermatt financial-support service");
 
@@ -67,16 +67,27 @@ test("ZERMATT Loans and Salary Advances use manual GM approval, external payment
     'router.post("/loans/:id/disbursement", zermattOnly, rejectLegacyLoanWorkflowMutation)',
     'router.patch("/loans/:id/decision", zermattOnly, rejectLegacyLoanWorkflowMutation)',
     'router.patch("/loans/:id/disburse", zermattOnly, rejectLegacyLoanWorkflowMutation)',
-    'router.post("/loans/approved-disbursed"',
-    'router.post("/loans/:id/top-up"',
-    'router.post("/payroll/salary-advances"',
-    "requireHeadHrRecorder",
-    'permissions.has("loans.verify")',
+    'router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor',
+    'router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor',
+    'router.post(\n  "/payroll/salary-advances"',
+    "requireEmployeeFinancialInputEditor",
+    "assertEmployeeNumberAccess",
+    "assertLoanRecordAccess",
     "ZERMATT_MANUAL_GM_APPROVAL_POLICY",
     "ZERMATT_LEGACY_LOAN_WORKFLOW_RETIRED",
     "assessLoanCollateral",
     "No second loan account was created",
   ], "Zermatt financial-support routes");
+
+  requireText(access, [
+    "BRANCH_HR_ROLES",
+    "HEAD_HR_ROLES",
+    "canManageEmployeeFinancialInputs",
+    "canManageLoans",
+    "canDeleteEmployeeFinancialInputs",
+    "assertLocationWithinAccess",
+    "ASSIGNED_LOCATIONS",
+  ], "HR financial access control");
 
   const revisedMount = app.indexOf('app.use("/api", zermattFinancialSupportRoutes);');
   const legacyWorkflowMount = app.indexOf('app.use("/api/loans", loanOriginationWorkflowRoutes);');
@@ -102,6 +113,8 @@ test("ZERMATT Loans and Salary Advances use manual GM approval, external payment
     "No second loan account was created",
     "Internal Surety-backed",
     "Loan Recovery History",
+    "Branch HR",
+    "Head HR",
   ], "Revised Loans UI");
   for (const obsoleteFlow of ["/submit-for-hr-verification", "GM Approve", "Process Disbursement", "Verify & Forward to GM"]) {
     assert.equal(loansPage.includes(obsoleteFlow), false);
@@ -117,6 +130,7 @@ test("ZERMATT Loans and Salary Advances use manual GM approval, external payment
     "Payroll Recovery Schedule",
     "Installments",
     "Final installment",
+    "Branch HR & Admin Officers",
     'apiRequest("/api/payroll/salary-advances"',
   ], "Revised Salary Advance UI");
 
@@ -139,5 +153,5 @@ test("ZERMATT Loans and Salary Advances use manual GM approval, external payment
   ], "Nigeria Salary Advance calculation");
 
   assert.ok(migration.includes('COALESCE(NEW."advanceRecovery",0) -') && migration.includes('COALESCE(NEW."loanRecovery",0)'));
-  console.log("PASS: revised ZERMATT Loans + Salary Advances policy gate passed.");
+  console.log("PASS: ZERMATT branch-scoped HR Loans + Salary Advances policy gate passed.");
 });
