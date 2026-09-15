@@ -3,7 +3,7 @@ import { apiRequest } from "../services/api";
 
 const statusOptions = [
   "NEW", "TRIAGED", "AWAITING_CLIENT", "ASSIGNED", "IN_PROGRESS", "FIX_READY",
-  "DEPLOYED", "CLIENT_VALIDATION", "RESOLVED", "CLOSED", "ESCALATED", "BLOCKED", "REOPENED",
+  "DEPLOYED", "CLIENT_VALIDATION", "RESOLVED", "CLOSED", "CANCELLED", "ESCALATED", "BLOCKED", "REOPENED",
 ];
 
 const severityLabel = {
@@ -47,11 +47,11 @@ export default function SupportDesk() {
     if (filter === "P1P2") return tickets.filter((ticket) => ["P1_CRITICAL", "P2_HIGH"].includes(ticket.severity));
     if (filter === "ENGINEERING") return tickets.filter((ticket) => ["ESCALATED", "IN_PROGRESS", "FIX_READY"].includes(ticket.status));
     if (filter === "RESOLVED") return tickets.filter((ticket) => ["RESOLVED", "CLOSED"].includes(ticket.status));
-    return tickets.filter((ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status));
+    return tickets.filter((ticket) => !["RESOLVED", "CLOSED", "CANCELLED"].includes(ticket.status));
   }, [tickets, filter]);
 
   async function updateStatus(ticket, status) {
-    if (!access?.canManage) return;
+    if (!access?.canManage || ticket.status === "CANCELLED") return;
     try {
       await apiRequest(`/api/support-desk/internal/tickets/${encodeURIComponent(ticket.ticketNumber)}`, {
         method: "PATCH",
@@ -68,7 +68,7 @@ export default function SupportDesk() {
   }
 
   async function escalate(ticket) {
-    if (!access?.canEscalate) return;
+    if (!access?.canEscalate || ticket.status === "CANCELLED") return;
     try {
       const result = await apiRequest(`/api/support-desk/internal/tickets/${encodeURIComponent(ticket.ticketNumber)}/escalate`, {
         method: "POST",
@@ -140,14 +140,16 @@ export default function SupportDesk() {
                     <td><strong>{ticket.subject || ticket.description}</strong><br/><span>{ticket.module || "General"}</span><br/><small>{ticket.contactName || ticket.contactEmail || ticket.contactPhone || ""}</small></td>
                     <td><span style={badge}>{severityLabel[ticket.severity] || ticket.severity}</span><br/><small>{ticket.category}</small></td>
                     <td>
-                      {access?.canManage ? (
+                      {ticket.status === "CANCELLED" ? (
+                        <span style={cancelledBadge} title={ticket.cancellationReason || "Cancelled by requester before Support attendance"}>CANCELLED</span>
+                      ) : access?.canManage ? (
                         <select style={select} value={ticket.status || "NEW"} onChange={(event) => updateStatus(ticket, event.target.value)}>
-                          {statusOptions.map((status) => <option key={status}>{status}</option>)}
+                          {statusOptions.filter((status) => status !== "CANCELLED").map((status) => <option key={status}>{status}</option>)}
                         </select>
                       ) : <span>{String(ticket.status || "NEW").replaceAll("_", " ")}</span>}
                     </td>
                     <td>
-                      {ticket.githubIssueUrl ? <a href={ticket.githubIssueUrl} target="_blank" rel="noreferrer" style={link}>GitHub #{ticket.githubIssueNumber}</a> : access?.canEscalate ? (
+                      {ticket.status === "CANCELLED" ? <span style={muted}>Requester cancelled before attendance</span> : ticket.githubIssueUrl ? <a href={ticket.githubIssueUrl} target="_blank" rel="noreferrer" style={link}>GitHub #{ticket.githubIssueNumber}</a> : access?.canEscalate ? (
                         <button type="button" style={secondaryButton} onClick={() => escalate(ticket)}>Escalate</button>
                       ) : <span style={muted}>—</span>}
                     </td>
@@ -199,6 +201,7 @@ const activeFilter = { ...filterButton, border: "1px solid rgba(212,175,55,.38)"
 const table = { width: "100%", minWidth: 980, borderCollapse: "collapse", color: "#E9F3ED", fontSize: 12 };
 const select = { padding: "7px", borderRadius: 6, background: "#09140E", color: "#FFFFFF", border: "1px solid rgba(255,255,255,.13)" };
 const badge = { display: "inline-block", padding: "4px 7px", borderRadius: 999, background: "rgba(212,175,55,.11)", color: "#F4D66B", fontWeight: 900, fontSize: 10 };
+const cancelledBadge = { display: "inline-block", padding: "5px 8px", borderRadius: 999, background: "rgba(127,29,29,.18)", border: "1px solid rgba(239,68,68,.45)", color: "#FCA5A5", fontWeight: 900, fontSize: 10 };
 const secondaryButton = { border: "1px solid rgba(212,175,55,.42)", borderRadius: 7, padding: "8px 10px", background: "rgba(212,175,55,.08)", color: "#F4D66B", fontWeight: 800, cursor: "pointer" };
 const link = { color: "#F4D66B", fontWeight: 800 };
 const agentGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 };
