@@ -8,12 +8,15 @@ const severityLabel = {
   P4_LOW: "P4 Low",
 };
 
+const requesterCancellableStatuses = new Set(["NEW", "TRIAGED"]);
+
 export default function MySupportRequests() {
   const [summary, setSummary] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [cancelling, setCancelling] = useState("");
   const [form, setForm] = useState({
     subject: "",
     description: "",
@@ -42,7 +45,7 @@ export default function MySupportRequests() {
   useEffect(() => { load(); }, []);
 
   const openTickets = useMemo(
-    () => tickets.filter((ticket) => !["RESOLVED", "CLOSED"].includes(ticket.status)),
+    () => tickets.filter((ticket) => !["RESOLVED", "CLOSED", "CANCELLED"].includes(ticket.status)),
     [tickets]
   );
 
@@ -64,6 +67,32 @@ export default function MySupportRequests() {
       await load();
     } catch (error) {
       setMessage(error.message || "Unable to submit your support request.");
+    }
+  }
+
+  async function cancelRequest(ticket) {
+    if (!requesterCancellableStatuses.has(ticket.status)) return;
+    const reason = window.prompt(
+      `Why are you cancelling support request ${ticket.ticketNumber}? This reason will remain in the Support Desk audit trail.`
+    );
+    if (!reason?.trim()) return;
+    if (!window.confirm(
+      `Cancel support request ${ticket.ticketNumber}? This is available only while Support has not yet attended to the case.`
+    )) return;
+
+    try {
+      setCancelling(ticket.ticketNumber);
+      setMessage("");
+      await apiRequest(`/api/support-desk/client/tickets/${encodeURIComponent(ticket.ticketNumber)}/cancel`, {
+        method: "POST",
+        body: { reason: reason.trim() },
+      });
+      setMessage(`Support request ${ticket.ticketNumber} has been cancelled. The action remains traceable in the Support Desk audit trail.`);
+      await load();
+    } catch (error) {
+      setMessage(error.message || "Unable to cancel this support request.");
+    } finally {
+      setCancelling("");
     }
   }
 
@@ -116,23 +145,39 @@ export default function MySupportRequests() {
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={table}>
-              <thead><tr><th>Case</th><th>Issue</th><th>Priority</th><th>Status</th><th>Updated</th></tr></thead>
+              <thead><tr><th>Case</th><th>Issue</th><th>Priority</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead>
               <tbody>
-                {tickets.map((ticket) => (
-                  <tr key={ticket.ticketNumber}>
-                    <td><strong>{ticket.ticketNumber}</strong><br/><small>{ticket.channel}</small></td>
-                    <td><strong>{ticket.subject || "Support request"}</strong><br/><span>{ticket.module || "General"}</span></td>
-                    <td><span style={badge}>{severityLabel[ticket.severity] || ticket.severity}</span></td>
-                    <td>{formatStatus(ticket.status)}</td>
-                    <td>{formatDate(ticket.updatedAt)}</td>
-                  </tr>
-                ))}
+                {tickets.map((ticket) => {
+                  const canCancel = requesterCancellableStatuses.has(ticket.status);
+                  return (
+                    <tr key={ticket.ticketNumber}>
+                      <td><strong>{ticket.ticketNumber}</strong><br/><small>{ticket.channel}</small></td>
+                      <td><strong>{ticket.subject || "Support request"}</strong><br/><span>{ticket.module || "General"}</span></td>
+                      <td><span style={badge}>{severityLabel[ticket.severity] || ticket.severity}</span></td>
+                      <td>{formatStatus(ticket.status)}</td>
+                      <td>{formatDate(ticket.updatedAt)}</td>
+                      <td>
+                        {canCancel ? (
+                          <button
+                            type="button"
+                            style={cancelButton}
+                            disabled={Boolean(cancelling)}
+                            onClick={() => cancelRequest(ticket)}
+                            title="Available only before Support attends to this request"
+                          >
+                            {cancelling === ticket.ticketNumber ? "Cancelling…" : "Cancel Request"}
+                          </button>
+                        ) : <span style={actionMuted}>{ticket.status === "CANCELLED" ? "Cancelled" : "—"}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        {openTickets.length ? <p style={{ ...muted, marginTop: 14 }}>CHRiS Support Desk will contact you through your recorded support channel when more information or validation is required.</p> : null}
+        {openTickets.length ? <p style={{ ...muted, marginTop: 14 }}>CHRiS Support Desk will contact you through your recorded support channel when more information or validation is required. A request can be cancelled only before Support has attended to it.</p> : null}
       </section>
     </div>
   );
@@ -169,5 +214,7 @@ const twoColumn = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minm
 const field = { width: "100%", boxSizing: "border-box", marginBottom: 10, padding: "11px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,.13)", background: "#09140E", color: "#FFFFFF", fontFamily: "inherit", resize: "vertical" };
 const privacyNote = { color: "#9FB1A7", fontSize: 11, lineHeight: 1.5, margin: "2px 0 12px" };
 const primaryButton = { border: "1px solid rgba(212,175,55,.30)", borderRadius: 8, padding: "10px 14px", background: "#087A43", color: "#FFFFFF", fontWeight: 900, cursor: "pointer" };
-const table = { width: "100%", minWidth: 760, borderCollapse: "collapse", color: "#E9F3ED", fontSize: 12 };
+const cancelButton = { border: "1px solid rgba(239,68,68,.52)", borderRadius: 7, padding: "7px 10px", background: "rgba(127,29,29,.18)", color: "#FCA5A5", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" };
+const actionMuted = { color: "#71867B", fontSize: 11 };
+const table = { width: "100%", minWidth: 860, borderCollapse: "collapse", color: "#E9F3ED", fontSize: 12 };
 const badge = { display: "inline-block", padding: "4px 7px", borderRadius: 999, background: "rgba(212,175,55,.11)", color: "#F4D66B", fontWeight: 900, fontSize: 10 };
