@@ -84,10 +84,10 @@ async function cancelSalaryAdvance({ organizationId, actorUserId, advanceId, rea
       organizationId,
       actorUserId,
       advanceId,
-      action: "SALARY_ADVANCE_CANCELLED_BY_SUPER_USER",
+      action: "SALARY_ADVANCE_CANCELLED_BY_HEAD_HR_CONTROL",
       previousValue: mapAdvance(existing),
       newValue: { ...updated, recoveredAmount },
-      reason: reason || "Salary advance cancelled by Super User",
+      reason: reason || "Salary advance cancelled by Head HR financial control",
     });
 
     return { ...updated, recoveredAmount, historicalRecoveryPreserved: recoveredAmount > 0 };
@@ -113,10 +113,10 @@ async function deleteSalaryAdvance({ organizationId, actorUserId, advanceId, rea
       organizationId,
       actorUserId,
       advanceId,
-      action: "SALARY_ADVANCE_DELETED_BY_SUPER_USER",
+      action: "SALARY_ADVANCE_DELETED_BY_HEAD_HR",
       previousValue,
       newValue: { deleted: true },
-      reason: reason || "Unused salary advance deleted by Super User",
+      reason: reason || "Unused salary advance deleted by Head HR",
     });
 
     await tx.$executeRawUnsafe(
