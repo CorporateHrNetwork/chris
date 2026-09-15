@@ -13,6 +13,7 @@ test("ZERMATT loans expose zero-interest profiles, amortization and individual/b
   const profile = read("backend/src/services/loanProfileService.js");
   const exportsService = read("backend/src/services/loanReportExportService.js");
   const routes = read("backend/src/routes/loanRoutes.js");
+  const revisedRoutes = read("backend/src/routes/zermattFinancialSupportRoutes.js");
   const editRoutes = read("backend/src/routes/payrollLiabilityEditRoutes.js");
   const loansUi = read("src/pages/Loans.jsx");
   const profileUi = read("src/pages/LoanProfile.jsx");
@@ -31,8 +32,8 @@ test("ZERMATT loans expose zero-interest profiles, amortization and individual/b
   }
   assert.ok(policies.includes("interestRatePercent: 0"), "ZERMATT loan policy catalogue must be zero-interest");
   assert.ok(policies.includes("INVALID_ZERMATT_LOAN_POLICY"), "ZERMATT loan purposes must be server-validated");
-  assert.ok(routes.includes("validateLoanPurpose"), "new and top-up loans must validate ZERMATT loan purpose");
-  assert.ok(editRoutes.includes("validateLoanPurpose"), "loan edits must validate ZERMATT loan purpose");
+  assert.ok(revisedRoutes.includes("validateLoanPurpose"), "new approved/disbursed and top-up loan records must validate ZERMATT loan purpose");
+  assert.ok(editRoutes.includes("validateLoanPurpose"), "historical loan edits must validate ZERMATT loan purpose");
 
   for (const expected of [
     "buildAmortizationSchedule",
@@ -114,9 +115,11 @@ test("ZERMATT loans expose zero-interest profiles, amortization and individual/b
   }
 
   assert.ok(loansUi.includes("Loan Policy / Purpose"), "Loans form must expose controlled loan policy selection");
-  assert.ok(loansUi.includes("Select ZERMATT loan policy"), "Loans form must not rely on free-typed purpose");
-  assert.ok(loansUi.includes("View Profile"), "Loan Register must expose a clickable View Profile action");
-  assert.ok(loansUi.includes("Bulk Loan Report"), "Loan Register must expose bulk exports");
+  assert.ok(loansUi.includes("Select loan policy"), "Loans form must not rely on free-typed purpose");
+  assert.ok(loansUi.includes(">Profile<"), "Loan Register must expose a clickable Profile action");
+  assert.ok(loansUi.includes("Export XLSX"), "Loan Register must expose bulk XLSX export");
+  assert.ok(loansUi.includes("Export CSV"), "Loan Register must expose bulk CSV export");
+  assert.ok(loansUi.includes("Export PDF"), "Loan Register must expose bulk PDF export");
   assert.ok(loansUi.includes("apiDownload(`/api/loans/reports/export?format=${format}`)"), "bulk loan report download wiring missing");
 
   assert.ok(profileUi.includes("Loan Amortization Schedule"), "individual profile must display amortization schedule");
