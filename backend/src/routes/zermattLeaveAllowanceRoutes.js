@@ -7,8 +7,10 @@ const nigeriaPayroll = require("../services/nigeriaPayrollComplianceService");
 const { isZermatt } = require("../services/zermattHrFinancialAccessService");
 const {
   applyZermattLeaveAllowanceToDraft,
-  listZermattLeaveAllowanceRegister,
 } = require("../services/zermattLeaveAllowanceService");
+const {
+  listZermattLeaveAllowanceRegister,
+} = require("../services/zermattLeaveAllowanceRegisterService");
 
 const router = express.Router();
 router.use(requireAuth);
