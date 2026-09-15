@@ -9,15 +9,18 @@ const { buildAmortizationSchedule } = require("../src/services/loanProfileServic
 
 const migrationPath = "backend/prisma/migrations/20260915024500_backfill_zermatt_august_opening_loan_history/migration.sql";
 
-test("normal ZERMATT opening loan history remains PAID through August 2026 without making September paid", () => {
+test("missing August legacy event is reconciled from the opening recovered balance without making September paid", () => {
+  // Reproduce the live defect: explicit historical events exist only through July,
+  // but the imported opening balance proves that twelve ₦125,000 installments had
+  // already been recovered through August (₦1,500,000 total).
   const legacyPeriodEvents = [];
-  for (let monthOffset = 0; monthOffset < 12; monthOffset += 1) {
+  for (let monthOffset = 0; monthOffset < 11; monthOffset += 1) {
     const date = new Date(Date.UTC(2025, 8 + monthOffset, 1));
     legacyPeriodEvents.push({
       periodStart: date.toISOString().slice(0, 10),
       status: "PAID",
       amount: 125000,
-      source: "OPENING_HISTORY_RECONCILIATION",
+      source: "OPENING_MIGRATION",
     });
   }
 
@@ -35,12 +38,12 @@ test("normal ZERMATT opening loan history remains PAID through August 2026 witho
 
   assert.ok(august, "August 2026 installment must exist");
   assert.equal(august.installmentNumber, 12);
-  assert.equal(august.status, "PAID", "confirmed opening-loan August history must display PAID");
+  assert.equal(august.status, "PAID", "unrepresented opening recovery must reconcile the missing August installment");
   assert.equal(august.amountPaid, 125000);
-  assert.equal(august.paymentSource, "OPENING_HISTORY_RECONCILIATION");
+  assert.equal(august.paymentSource, "LEGACY_OPENING_BALANCE_FALLBACK");
 
   assert.ok(september, "September 2026 installment must remain in the forward schedule");
-  assert.equal(september.status, "PENDING", "future/unposted September must not be inferred as paid");
+  assert.equal(september.status, "PENDING", "September must not be inferred as paid merely because August was reconciled");
   assert.equal(september.amountPaid, 0);
 });
 
@@ -67,6 +70,7 @@ test("August 2026 confirmed pause remains PAUSED rather than being backfilled as
     principalAmount: 3000000,
     installmentAmount: 125000,
     recoveryStartDate: "2025-09-01",
+    openingRecoveredAmount: 1375000,
     recoveries: [],
     legacyPeriodEvents,
   });
@@ -80,6 +84,7 @@ test("August 2026 confirmed pause remains PAUSED rather than being backfilled as
 
 test("August opening-loan backfill is idempotent and late-import safe", () => {
   const migration = read(migrationPath);
+  const profile = read("backend/src/services/loanProfileService.js");
 
   for (const expected of [
     "DATE '2026-08-01'",
@@ -94,6 +99,14 @@ test("August opening-loan backfill is idempotent and late-import safe", () => {
     "COALESCE(NEW.\"notes\", '') NOT ILIKE '%Source Reference:%'",
   ]) {
     assert.ok(migration.includes(expected), `opening-loan history correction missing: ${expected}`);
+  }
+
+  for (const expected of [
+    "explicitLegacyPaidAmount",
+    "Number(openingRecoveredAmount || 0) - explicitLegacyPaidAmount",
+    'paymentSource = "LEGACY_OPENING_BALANCE_FALLBACK"',
+  ]) {
+    assert.ok(profile.includes(expected), `opening-balance reconciliation guard missing: ${expected}`);
   }
 
   assert.equal(
