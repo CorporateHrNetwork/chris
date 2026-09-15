@@ -15,6 +15,7 @@ function includesAll(source, values, label) {
 test("ZERMATT loan top-up remains render-safe and HR financial inputs preserve branch/head-office scope", () => {
   const loansUi = read("src/pages/Loans.jsx");
   const access = read("backend/src/services/zermattHrFinancialAccessService.js");
+  const scopeRoutes = read("backend/src/routes/activeBranchScopeRoutes.js");
   const hrRoutes = read("backend/src/routes/zermattHrPayrollInputRoutes.js");
   const financialRoutes = read("backend/src/routes/zermattFinancialSupportRoutes.js");
   const liabilityRoutes = read("backend/src/routes/payrollLiabilityEditRoutes.js");
@@ -22,6 +23,7 @@ test("ZERMATT loan top-up remains render-safe and HR financial inputs preserve b
   const salaryAdvanceControl = read("backend/src/services/salaryAdvanceControlService.js");
   const salaryRateControl = read("backend/src/services/zermattSalaryRateControlService.js");
   const loanControl = read("backend/src/services/zermattLoanControlService.js");
+  const app = read("backend/src/app.js");
 
   includesAll(loansUi, [
     "MAX_REPAYMENT_MONTHS",
@@ -48,26 +50,33 @@ test("ZERMATT loan top-up remains render-safe and HR financial inputs preserve b
     "availableLocations",
   ], "HR financial access model");
 
-  includesAll(hrRoutes, [
-    'router.get(\n  "/payroll/salary-rates"',
-    'router.get(\n  "/payroll/salary-advances"',
-    "visibleInCurrentHrScope",
-    "employeeLocationId",
+  // Read scoping remains centralized in Active Branch Scope; do not create a
+  // second copy of branch/head-office visibility rules in the HR mutation router.
+  includesAll(scopeRoutes, [
+    '"/payroll/salary-rates"',
+    '"/payroll/salary-advances"',
     "activeLocationId",
-    'req.auth?.locationScope === "ALL_LOCATIONS"',
-    "availableLocations",
-    'router.post(\n  "/payroll/salary-rates"',
-    'router.patch(\n  "/payroll/salary-rates/:id"',
-    'router.patch(\n  "/payroll/salary-rates/:id/retire"',
-    'router.delete(\n  "/payroll/salary-rates/:id"',
+    "workflowLocationId",
+    "payroll_salary_rates",
+    "payroll_salary_advances",
+    "payroll_loans",
+  ], "authoritative active-branch financial read scope");
+
+  includesAll(hrRoutes, [
+    'router.get("/payroll/hr-input-capabilities"',
+    '"/payroll/salary-rates"',
+    '"/payroll/salary-rates/:id"',
+    '"/payroll/salary-rates/:id/retire"',
     "requireEmployeeFinancialInputEditor",
     "requireHeadHrFinancialControl",
-  ], "Scoped salary-rate and salary-advance routes");
+    "assertEmployeeNumberAccess",
+    "assertSalaryRateAccess",
+  ], "Scoped salary-rate mutation routes");
 
-  assert.ok(
-    hrRoutes.indexOf('router.get(\n  "/payroll/salary-rates"') < hrRoutes.indexOf('router.post(\n  "/payroll/salary-rates"'),
-    "Zermatt scoped salary-rate read must be registered before salary-rate mutations in the tenant router"
-  );
+  const branchScopeMount = app.indexOf('app.use("/api", activeBranchScopeRoutes);');
+  const financialMount = app.indexOf('app.use("/api", zermattFinancialSupportRoutes);');
+  const hrInputMount = app.indexOf('app.use("/api", zermattHrPayrollInputRoutes);');
+  assert.ok(branchScopeMount >= 0 && financialMount > branchScopeMount && hrInputMount > branchScopeMount, "Active Branch Scope must precede all HR financial write routes");
 
   includesAll(financialRoutes, [
     'router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor',
@@ -83,6 +92,7 @@ test("ZERMATT loan top-up remains render-safe and HR financial inputs preserve b
     "requireSalaryAdvanceDeleteControl",
     "assertSalaryAdvanceAccess",
     "assertLoanRecordAccess",
+    "assertEmployeeNumberAccess",
     'router.patch("/payroll/salary-advances/:id"',
     'router.delete("/payroll/salary-advances/:id"',
     'router.patch("/loans/:id"',
