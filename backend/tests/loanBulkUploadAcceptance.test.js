@@ -9,7 +9,7 @@ const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath),
 const { templateBuffer } = require("../src/services/loanBulkImportService");
 const { buildAmortizationSchedule } = require("../src/services/loanProfileService");
 
-test("ZERMATT Loans expose controlled Excel bulk upload with opening-balance safeguards", () => {
+test("ZERMATT Loans preserve controlled Excel opening-balance import under the revised operating policy", () => {
   const routes = read("backend/src/routes/loanRoutes.js");
   const service = read("backend/src/services/loanBulkImportService.js");
   const loansUi = read("src/pages/Loans.jsx");
@@ -23,7 +23,7 @@ test("ZERMATT Loans expose controlled Excel bulk upload with opening-balance saf
   ]) {
     assert.ok(routes.includes(route), `missing loan bulk route: ${route}`);
   }
-  assert.ok(routes.includes('requirePermission("payroll.manage")'), "bulk loan upload must require payroll.manage");
+  assert.ok(routes.includes('requirePermission("payroll.manage")'), "opening loan bulk upload must require payroll.manage");
   assert.ok(routes.includes('upload.single("file")'), "bulk loan preview/import must accept controlled Excel upload");
 
   for (const control of [
@@ -51,8 +51,9 @@ test("ZERMATT Loans expose controlled Excel bulk upload with opening-balance saf
   assert.equal(policyRows.length, 9, "template must contain heading plus eight ZERMATT loan policies");
   assert.ok(policyRows.slice(1).every((row) => Number(row[1]) === 0), "all ZERMATT template policies must be 0% interest");
 
-  assert.ok(loansUi.includes("Bulk Loan Upload"), "Loans dashboard must expose a Bulk Loan Upload quick action");
-  assert.ok(loansUi.includes("setShowBulkUpload(true)"), "Bulk Loan Upload must be clickable from Loans");
+  assert.ok(loansUi.includes("Opening Loan Upload"), "Loans dashboard must expose the legacy/opening-balance import action distinctly from new approved-loan recording");
+  assert.ok(loansUi.includes("Maintain legacy/opening payroll balances"), "Opening Loan Upload must be described as a historical balance tool");
+  assert.ok(loansUi.includes("setShowBulkUpload(true)"), "Opening Loan Upload must be clickable from Loans");
   assert.ok(bulkUi.includes("Validate / Preview"), "bulk workflow must preview before import");
   assert.ok(bulkUi.includes("Import Validated Workbook"), "bulk workflow must expose explicit import action");
   assert.ok(bulkUi.includes("preview?.importAllowed"), "UI must block import until all rows validate");
@@ -73,5 +74,5 @@ test("ZERMATT Loans expose controlled Excel bulk upload with opening-balance saf
   assert.ok(profile.includes("payrollRecoveredAmount"), "loan profile must separately expose CHRiS payroll recoveries");
   assert.ok(profile.includes("LEGACY_OPENING_BALANCE_NOT_PAYROLL_HISTORY"), "opening balance must not be represented as fabricated payroll history");
 
-  console.log("PASS: ZERMATT controlled loan bulk upload gate passed.");
+  console.log("PASS: ZERMATT controlled opening-loan bulk upload gate passed.");
 });
