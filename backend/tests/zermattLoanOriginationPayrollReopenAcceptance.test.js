@@ -10,19 +10,19 @@ function includesAll(source, values, label) {
   for (const value of values) assert.ok(source.includes(value), `${label}: missing ${value}`);
 }
 
-test("ZERMATT preserves historical loan workflow records while new financial support follows the revised recording policy", () => {
+test("ZERMATT preserves historical loan workflow records while new financial support follows the revised scoped-HR recording policy", () => {
   const migration = read("backend/prisma/migrations/20260906114500_add_loan_origination_payroll_reopen/migration.sql");
   const repostMigration = read("backend/prisma/migrations/20260906122000_allow_reposting_reversed_loan_recovery/migration.sql");
   const legacyRoutes = read("backend/src/routes/loanOriginationWorkflowRoutes.js");
   const legacyWorkflow = read("backend/src/services/loanOriginationWorkflowService.js");
   const revisedRoutes = read("backend/src/routes/zermattFinancialSupportRoutes.js");
   const revisedService = read("backend/src/services/zermattFinancialSupportService.js");
+  const access = read("backend/src/services/zermattHrFinancialAccessService.js");
   const reopen = read("backend/src/services/payrollReopenService.js");
   const app = read("backend/src/app.js");
   const loansUi = read("src/pages/Loans.jsx");
   const payrollUi = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
 
-  // Keep historical schema and workflow/event data readable; do not drop migrations or legacy tables.
   includesAll(migration, [
     "PENDING_HR_VERIFICATION",
     "PENDING_GM_APPROVAL",
@@ -48,23 +48,32 @@ test("ZERMATT preserves historical loan workflow records while new financial sup
     "markDraftRunsRecalculationRequired",
   ], "historical workflow service");
 
-  // New Zermatt records do not originate or get approved/disbursed inside CHRiS.
   includesAll(revisedRoutes, [
     'router.post("/loans", zermattOnly, rejectLegacyLoanOrigination)',
     'router.post("/loans/applications", zermattOnly, rejectLegacyLoanOrigination)',
     "ZERMATT_MANUAL_GM_APPROVAL_POLICY",
-    'router.post("/loans/approved-disbursed"',
-    'router.post("/loans/:id/top-up"',
-    'router.post("/payroll/salary-advances"',
+    'router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor',
+    'router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor',
+    '"/payroll/salary-advances"',
+    "requireEmployeeFinancialInputEditor",
+    "assertLoanRecordAccess",
   ], "revised Zermatt routes");
   includesAll(revisedService, [
     'approvalMode: "MANUAL_GM_OUTSIDE_CHRIS"',
     'disbursementMode: "ACCOUNTS_PAYMENT_OUTSIDE_CHRIS"',
     'systemPurpose: "PAYROLL_RECOVERY_RECORD_ONLY"',
     '"status","purpose","notes","workflowLocationId","createdByUserId")',
-    "LOAN_APPROVED_DISBURSED_RECORDED_BY_HEAD_HR",
-    "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HEAD_HR",
+    "LOAN_APPROVED_DISBURSED_RECORDED_BY_HR",
+    "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR",
+    "MAX_REPAYMENT_MONTHS",
+    "INVALID_REPAYMENT_TERM",
   ], "revised Zermatt service");
+  includesAll(access, [
+    "BRANCH_HR_ROLES",
+    "HEAD_HR_ROLES",
+    "assertLocationWithinAccess",
+    "canManageLoans",
+  ], "scoped HR access");
 
   const revisedMount = app.indexOf('app.use("/api", zermattFinancialSupportRoutes);');
   const legacyMount = app.indexOf('app.use("/api/loans", loanOriginationWorkflowRoutes);');
@@ -93,6 +102,8 @@ test("ZERMATT preserves historical loan workflow records while new financial sup
     "Top-Up Amount Approved by GM",
     "Revised Repayment Schedule",
     "No second loan account was created",
+    "canManageLoans",
+    "canDeleteEmployeeFinancialInputs",
   ], "active Loans UI");
   for (const obsoleteControl of ["Create & Submit to Head HR", "Verify & Forward to GM", "GM Approve", "Process Disbursement"]) {
     assert.equal(loansUi.includes(obsoleteControl), false, `obsolete active-workflow control must be removed: ${obsoleteControl}`);
@@ -104,5 +115,5 @@ test("ZERMATT preserves historical loan workflow records while new financial sup
     "Draft and Submitted payroll affect Net Pay preview only",
   ], "Payroll UI");
 
-  console.log("PASS: ZERMATT revised financial-support + historical workflow preservation gate passed.");
+  console.log("PASS: ZERMATT scoped-HR financial-support + historical workflow preservation gate passed.");
 });
