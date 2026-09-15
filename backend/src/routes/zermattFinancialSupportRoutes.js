@@ -4,11 +4,22 @@ const prisma = require("../config/prisma");
 const { requireAuth } = require("../middleware/authMiddleware");
 const { validateLoanPurpose } = require("../services/loanPolicyService");
 const { assessLoanCollateral } = require("../services/eosbService");
+const loanService = require("../services/loanService");
 const {
   recordApprovedDisbursedLoan,
   applyApprovedDisbursedLoanTopUp,
   recordApprovedDisbursedSalaryAdvance,
 } = require("../services/zermattFinancialSupportService");
+const { deleteUnusedLoan } = require("../services/zermattLoanControlService");
+const {
+  isZermatt,
+  canManageLoans,
+  requireEmployeeFinancialInputEditor,
+  requireLoanEditor,
+  requireHeadHrFinancialControl,
+  assertEmployeeNumberAccess,
+  assertLoanRecordAccess,
+} = require("../services/zermattHrFinancialAccessService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -26,36 +37,8 @@ function sendError(res, error, fallback = "Unable to record approved financial s
   return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
 
-function isZermatt(req) {
-  return req.auth?.organization?.slug === "zermatt-liquor-limited";
-}
-
 function zermattOnly(req, res, next) {
   if (!isZermatt(req)) return next("route");
-  return next();
-}
-
-function isHeadHrRecorder(req) {
-  const permissions = new Set(req.auth?.permissions || []);
-  const roles = (req.auth?.roles || []).map((role) => String(role || "").trim().toUpperCase());
-  const roleMatch = roles.some((role) => [
-    "HEAD HR",
-    "HEAD OF HR",
-    "HEAD_HR",
-    "HEAD_HR_VERIFIER",
-    "HEAD OF HUMAN RESOURCES",
-  ].includes(role));
-  return permissions.has("loans.verify") || roleMatch;
-}
-
-function requireHeadHrRecorder(req, res, next) {
-  if (!isHeadHrRecorder(req)) {
-    return res.status(403).json({
-      status: "error",
-      code: "HEAD_HR_FINANCIAL_SUPPORT_RECORDING_REQUIRED",
-      message: "Only the Head of HR may record a Zermatt loan or salary advance after manual GM approval and external Accounts payment.",
-    });
-  }
   return next();
 }
 
@@ -63,7 +46,7 @@ function rejectLegacyLoanOrigination(req, res) {
   return res.status(409).json({
     status: "error",
     code: "ZERMATT_MANUAL_GM_APPROVAL_POLICY",
-    message: "Zermatt loans are approved manually by the GM and paid by Accounts outside CHRiS. Head HR should record the already approved/disbursed amount for payroll recovery instead.",
+    message: "Zermatt loans are approved manually by the GM and paid by Accounts outside CHRiS. Authorized HR should record the already approved/disbursed amount for payroll recovery instead.",
   });
 }
 
@@ -81,8 +64,8 @@ router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
     data: {
       approval: "MANUAL_GM_OUTSIDE_CHRIS",
       payment: "ACCOUNTS_OUTSIDE_CHRIS",
-      recorder: "HEAD_HR",
-      canRecord: isHeadHrRecorder(req),
+      recorder: "BRANCH_HR_OR_HEAD_HR_WITH_LOCATION_SCOPE",
+      canRecord: canManageLoans(req),
       systemPurpose: "PAYROLL_RECOVERY_RECORD_ONLY",
       loanTopUp: "MERGE_INTO_EXISTING_LOAN_ACCOUNT",
       appliesTo: ["LOAN", "SALARY_ADVANCE"],
@@ -106,8 +89,9 @@ router.post("/loans/:id/disbursement", zermattOnly, rejectLegacyLoanWorkflowMuta
 router.patch("/loans/:id/decision", zermattOnly, rejectLegacyLoanWorkflowMutation);
 router.patch("/loans/:id/disburse", zermattOnly, rejectLegacyLoanWorkflowMutation);
 
-router.post("/loans/approved-disbursed", zermattOnly, requireHeadHrRecorder, async (req, res) => {
+router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor, async (req, res) => {
   try {
+    await assertEmployeeNumberAccess({ req, employeeNumber: req.body?.employeeNumber, prismaClient: prisma });
     const purpose = await validateLoanPurpose({
       organizationId: req.auth.organizationId,
       purpose: req.body?.purpose,
@@ -138,8 +122,9 @@ router.post("/loans/approved-disbursed", zermattOnly, requireHeadHrRecorder, asy
   }
 });
 
-router.post("/loans/:id/top-up", zermattOnly, requireHeadHrRecorder, async (req, res) => {
+router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor, async (req, res) => {
   try {
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
     const existingRows = await prisma.$queryRawUnsafe(
       `SELECT l."id",l."loanNumber",l."purpose",l."status",e."employeeNumber"
          FROM "payroll_loans" l
@@ -186,24 +171,62 @@ router.post("/loans/:id/top-up", zermattOnly, requireHeadHrRecorder, async (req,
   }
 });
 
-// This route deliberately precedes the generic payroll route for Zermatt. The
-// advance already has GM approval and Accounts payment before Head HR records it.
-router.post("/payroll/salary-advances", zermattOnly, requireHeadHrRecorder, async (req, res) => {
+router.patch("/loans/:id/status", zermattOnly, requireLoanEditor, async (req, res) => {
   try {
-    const data = await recordApprovedDisbursedSalaryAdvance({
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    const data = await loanService.updateLoanStatus({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
-      input: req.body || {},
-      prismaClient: prisma,
+      loanId: req.params.id,
+      action: req.body?.action,
+      reason: req.body?.reason,
     });
-    return res.status(201).json({
-      status: "success",
-      message: "GM-approved salary advance recorded as already paid externally. Payroll recovery is now scheduled from the selected month.",
-      data,
-    });
+    return res.json({ status: "success", data });
   } catch (error) {
-    return sendError(res, error, "Unable to record the approved/disbursed salary advance.");
+    return sendError(res, error, "Unable to update loan status.");
   }
 });
+
+router.delete("/loans/:id", zermattOnly, requireHeadHrFinancialControl, async (req, res) => {
+  try {
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    const data = await deleteUnusedLoan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      reason: req.body?.reason,
+      prismaClient: prisma,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to delete the unused loan record.");
+  }
+});
+
+// Salary advances use the same external approval/payment policy. Branch HR may
+// record assigned-branch employees; Head HR has organization-wide authority.
+router.post(
+  "/payroll/salary-advances",
+  zermattOnly,
+  requireEmployeeFinancialInputEditor,
+  async (req, res) => {
+    try {
+      await assertEmployeeNumberAccess({ req, employeeNumber: req.body?.employeeNumber, prismaClient: prisma });
+      const data = await recordApprovedDisbursedSalaryAdvance({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        input: req.body || {},
+        prismaClient: prisma,
+      });
+      return res.status(201).json({
+        status: "success",
+        message: "GM-approved salary advance recorded as already paid externally. Payroll recovery is now scheduled from the selected month.",
+        data,
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to record the approved/disbursed salary advance.");
+    }
+  }
+);
 
 module.exports = router;
