@@ -92,12 +92,14 @@ test("ZERMATT August 2026 loan history uses full paid/paused installments and Lo
   assert.equal(roundingCase.some((row) => row.principalAmount > 0 && row.principalAmount < 1), false, "micro installment rows are not permitted");
 
   for (const expected of [
-    "Search Loan / Employee",
-    "Search Loan Register",
-    "Employee number, employee name, loan number, policy or status",
+    "loanSearch",
+    "Search employee, loan number, purpose or status",
     "filteredLoans.map",
     "loan.employeeName",
     "loan.employeeNumber",
+    "loan.loanNumber",
+    "loan.purpose",
+    "loan.status",
   ]) {
     assert.ok(loansUi.includes(expected), `loan register search control missing: ${expected}`);
   }
