@@ -56,32 +56,33 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
 
   const { loan, recoveries = [], amortizationSchedule = [] } = profile;
   const progress = loan.principalAmount > 0 ? Math.min(100, Math.round((loan.recoveredAmount / loan.principalAmount) * 100)) : 0;
+  const externallySettled = Number(loan.externalSettlementAmount || 0) > 0;
 
   return (
     <>
       <ModuleDashboardShell
         eyebrow="EMPLOYEE LOAN PROFILE"
         title={`${loan.employeeName} · ${loan.loanNumber}`}
-        description={`${loan.purpose || "Employee Loan"} · Zero-interest ZERMATT loan profile with approved-payroll recovery history and amortization plan.`}
+        description={`${loan.purpose || "Employee Loan"} · Zero-interest ZERMATT loan profile with approved-payroll recovery history and separately recorded external settlement where applicable.`}
         metrics={[
           <DashboardCard key="principal" title="Principal" value={money(loan.principalAmount)} subtitle="Approved loan principal" icon={<FaMoneyBillWave />} tone="green" />,
-          <DashboardCard key="recovered" title="Recovered" value={money(loan.recoveredAmount)} subtitle={`${progress}% of principal recovered`} icon={<FaHistory />} tone="gold" />,
-          <DashboardCard key="outstanding" title="Outstanding" value={money(loan.outstandingAmount)} subtitle="Remaining payroll recovery balance" icon={<FaFileInvoiceDollar />} tone="green" />,
-          <DashboardCard key="installment" title="Monthly Installment" value={money(loan.installmentAmount)} subtitle={`${loan.termMonths || 0} planned installment(s)`} icon={<FaMoneyBillWave />} tone="gold" />,
+          <DashboardCard key="recovered" title="Principal Cleared" value={money(loan.recoveredAmount)} subtitle={`${progress}% of principal no longer outstanding`} icon={<FaHistory />} tone="gold" />,
+          <DashboardCard key="outstanding" title="Outstanding" value={money(loan.outstandingAmount)} subtitle="Remaining payroll-recovery balance" icon={<FaFileInvoiceDollar />} tone="green" />,
+          <DashboardCard key="installment" title="Monthly Installment" value={money(loan.installmentAmount)} subtitle={`${loan.termMonths || 0} schedule event(s)`} icon={<FaMoneyBillWave />} tone="gold" />,
         ]}
         analytics={
-          <AnalyticsPanel title="Repayment Progress" subtitle="Posted recoveries originate only from approved payroll runs." icon={<FaHistory />}>
+          <AnalyticsPanel title="Repayment Progress" subtitle="Payroll recoveries originate only from approved payroll runs; external settlement is recorded separately and never fabricated as salary deduction." icon={<FaHistory />}>
             <div style={{ display: "grid", gap: 12 }}>
               <div className="chris-progress"><div className="chris-progress__bar" style={{ width: `${progress}%` }} /></div>
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                <strong>{progress}% recovered</strong>
+                <strong>{progress}% cleared</strong>
                 <span>{loan.nextPaymentDue ? `Next scheduled payment: ${loan.nextPaymentDue} · ${money(loan.nextPaymentAmount)}` : "No pending installment"}</span>
               </div>
             </div>
           </AnalyticsPanel>
         }
         recentActivity={
-          <AnalyticsPanel title="Loan Control" subtitle="ZERMATT loan policies are zero-interest; posted recovery history is immutable." icon={<FaFileInvoiceDollar />}>
+          <AnalyticsPanel title="Loan Control" subtitle="ZERMATT loan policies are zero-interest; posted payroll recovery history remains immutable." icon={<FaFileInvoiceDollar />}>
             <div style={detailGrid}>
               <Detail label="Status" value={loan.status} />
               <Detail label="Interest" value="0%" />
@@ -105,7 +106,7 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
 
         {error && <div style={errorStyle}>{error}</div>}
 
-        <AnalyticsPanel title="Loan Details" subtitle="Employee, policy, approval, disbursement and recovery authority." icon={<FaFileInvoiceDollar />}>
+        <AnalyticsPanel title="Loan Details" subtitle="Employee, policy, approval, disbursement, recovery and settlement authority." icon={<FaFileInvoiceDollar />}>
           <div style={detailGrid}>
             <Detail label="Employee Number" value={loan.employeeNumber} />
             <Detail label="Employee Name" value={loan.employeeName} />
@@ -119,13 +120,18 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
             <Detail label="Expected Final Installment" value={loan.expectedFinalInstallmentDate || "—"} />
             <Detail label="Parent / Top-Up Loan" value={loan.parentLoanNumber || "—"} />
             <Detail label="Notes" value={loan.notes || "—"} />
+            {externallySettled && <Detail label="External Settlement" value={money(loan.externalSettlementAmount)} />}
+            {externallySettled && <Detail label="Settlement Date" value={loan.externalSettlementDate || "—"} />}
+            {externallySettled && <Detail label="Settlement Source" value={loan.externalSettlementSource || "OTHER EXTERNAL SOURCE"} />}
+            {externallySettled && <Detail label="Settlement Reference" value={loan.externalSettlementReference || "See settlement reason / audit trail"} />}
+            {externallySettled && <Detail label="Settlement Reason" value={loan.externalSettlementReason || "—"} />}
           </div>
         </AnalyticsPanel>
 
-        <AnalyticsPanel title="Loan Amortization Schedule" subtitle="Zero-interest monthly recovery plan. Final installment is automatically capped at the remaining principal." icon={<FaMoneyBillWave />}>
+        <AnalyticsPanel title="Loan Amortization Schedule" subtitle="Zero-interest monthly recovery plan. External settlement appears as a separate zero-payroll-deduction settlement event and closes the remaining schedule." icon={<FaMoneyBillWave />}>
           <Table headers={["#", "Period", "Due Date", "Opening Balance", "Principal", "Interest", "Total Deduction", "Amount Paid", "Status"]}>
             {amortizationSchedule.map((row) => (
-              <tr key={row.installmentNumber}>
+              <tr key={`${row.installmentNumber}-${row.dueDate}-${row.status}`}>
                 <Cell>{row.installmentNumber}</Cell>
                 <Cell strong>{row.period}</Cell>
                 <Cell>{row.dueDate}</Cell>
@@ -141,7 +147,7 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
           </Table>
         </AnalyticsPanel>
 
-        <AnalyticsPanel title="Repayment History" subtitle="Actual loan deductions posted by approved payroll runs." icon={<FaHistory />}>
+        <AnalyticsPanel title="Repayment History" subtitle="Actual loan deductions posted by approved payroll runs only. External settlement is not inserted here as a salary deduction." icon={<FaHistory />}>
           <Table headers={["Recovery Date", "Payroll Period", "Amount", "Status"]}>
             {recoveries.map((row) => (
               <tr key={row.id}>
