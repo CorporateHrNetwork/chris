@@ -29,8 +29,10 @@ test("Loans dashboard reflects the revised Zermatt payroll-recovery operating mo
   for (const phrase of [
     "GM approval takes place outside CHRiS",
     "Accounts processes payment outside CHRiS",
-    "Head HR records the approved/disbursed amount",
+    "Authorized HR records the approved/disbursed amount",
     "CHRiS recovers the configured installment through payroll",
+    "Branch HR",
+    "Head HR",
   ]) {
     assert.ok(loansUi.includes(phrase), `revised operating model missing: ${phrase}`);
   }
@@ -38,10 +40,12 @@ test("Loans dashboard reflects the revised Zermatt payroll-recovery operating mo
   assert.ok(loansUi.includes('["ACTIVE", "PAUSED", "COMPLETED"]'), "financial history must include active, paused and completed loans");
   assert.ok(loansUi.includes('Math.max(0, Number(loan.outstandingAmount || 0))'), "outstanding exposure must use authoritative running balance");
   assert.ok(loansUi.includes("principal - balance"), "recovered amount must remain principal less outstanding so opening recoveries are included");
-  assert.ok(loansUi.includes("Record Approved Loan"), "Head HR recording action must be prominent");
+  assert.ok(loansUi.includes("Record Approved Loan"), "approved/disbursed recording action must be prominent");
   assert.ok(loansUi.includes("Same manual GM approval / external payment policy"), "Salary Advances must visibly share the revised policy");
+  assert.ok(loansUi.includes("canManageLoans"), "loan register actions must be capability-controlled");
+  assert.ok(loansUi.includes("canDeleteEmployeeFinancialInputs"), "Head HR delete authority must be capability-controlled");
   assert.ok(!loansUi.includes("Pending Workflow"), "obsolete in-system approval workflow KPI must be removed");
   assert.ok(!loansUi.includes("Awaiting Disbursement"), "obsolete in-system disbursement KPI must be removed");
 
-  console.log("PASS: revised Zermatt Loans dashboard gate passed.");
+  console.log("PASS: revised Zermatt Loans dashboard + scoped HR gate passed.");
 });
