@@ -30,11 +30,19 @@ const money = (value, currency = "NGN") => {
 export default function SalaryRatesManaged() {
   const navigate = useNavigate();
   const [rates, setRates] = useState([]);
+  const [capabilities, setCapabilities] = useState({
+    canManageEmployeeFinancialInputs: false,
+    canDeleteEmployeeFinancialInputs: false,
+    canBulkPayrollInputs: false,
+    isBranchHr: false,
+    isHeadHr: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [form, setForm] = useState(blankForm);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [editingRate, setEditingRate] = useState(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [importResult, setImportResult] = useState(null);
@@ -43,8 +51,12 @@ export default function SalaryRatesManaged() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiRequest("/api/payroll/salary-rates");
+      const [response, capabilityResponse] = await Promise.all([
+        apiRequest("/api/payroll/salary-rates"),
+        apiRequest("/api/payroll/hr-input-capabilities").catch(() => ({ data: {} })),
+      ]);
       setRates(response?.data || []);
+      setCapabilities((current) => ({ ...current, ...(capabilityResponse?.data || {}) }));
       setError("");
     } catch (requestError) {
       setError(requestError?.message || "Unable to load salary rates.");
@@ -54,6 +66,11 @@ export default function SalaryRatesManaged() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   const selectEmployee = (employeeNumber, employee) => {
     setSelectedEmployee(employee || null);
@@ -76,7 +93,33 @@ export default function SalaryRatesManaged() {
 
   const reset = () => {
     setSelectedEmployee(null);
+    setEditingRate(null);
     setForm(blankForm());
+  };
+
+  const startEdit = (rate) => {
+    setEditingRate(rate);
+    setSelectedEmployee({
+      employeeNumber: rate.employeeNumber,
+      employeeName: rate.employeeName,
+      currentSalaryRate: {
+        amount: rate.amount,
+        currency: rate.currency,
+        effectiveFrom: rate.effectiveFrom,
+        effectiveTo: rate.effectiveTo,
+      },
+    });
+    setForm({
+      employeeNumber: rate.employeeNumber,
+      amount: String(rate.amount ?? ""),
+      currency: rate.currency || "NGN",
+      effectiveFrom: rate.effectiveFrom || today(),
+      effectiveTo: rate.effectiveTo || "",
+      reason: rate.reason || "",
+    });
+    setError("");
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const save = async (event) => {
@@ -85,15 +128,72 @@ export default function SalaryRatesManaged() {
       setBusy("save");
       setError("");
       setMessage("");
-      await apiRequest("/api/payroll/salary-rates", {
-        method: "POST",
-        body: JSON.stringify(form),
-      });
-      setMessage("Salary rate saved. The effective-dated salary authority has been refreshed.");
+      if (editingRate) {
+        await apiRequest(`/api/payroll/salary-rates/${editingRate.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            amount: form.amount,
+            currency: form.currency,
+            effectiveFrom: form.effectiveFrom,
+            effectiveTo: form.effectiveTo || null,
+            reason: form.reason,
+          }),
+        });
+        setMessage("Salary rate changes saved with audit history. Approved payroll periods remain protected.");
+      } else {
+        await apiRequest("/api/payroll/salary-rates", {
+          method: "POST",
+          body: JSON.stringify(form),
+        });
+        setMessage("Salary rate saved. The effective-dated salary authority has been refreshed.");
+      }
       reset();
       await load();
     } catch (requestError) {
       setError(requestError?.message || "Unable to save salary rate.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const retireRate = async (rate) => {
+    const effectiveTo = window.prompt(`Effective end date for ${rate.employeeNumber} — ${rate.employeeName} (YYYY-MM-DD):`, today());
+    if (!effectiveTo) return;
+    const reason = window.prompt("Reason for ending/retiring this salary rate:", "Salary rate ended by HR");
+    if (!reason) return;
+    try {
+      setBusy(`retire-${rate.id}`);
+      setError("");
+      await apiRequest(`/api/payroll/salary-rates/${rate.id}/retire`, {
+        method: "PATCH",
+        body: JSON.stringify({ effectiveTo, reason }),
+      });
+      if (editingRate?.id === rate.id) reset();
+      setMessage("Salary rate ended/retired. The historical authority remains preserved for audit and payroll history.");
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to end salary rate.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const deleteRate = async (rate) => {
+    const reason = window.prompt(`Reason for deleting unused salary rate for ${rate.employeeNumber} — ${rate.employeeName}:`);
+    if (!reason) return;
+    if (!window.confirm("Delete this unused salary rate? CHRiS will refuse the deletion if the rate has supported approved payroll, and the deletion itself remains in the audit trail.")) return;
+    try {
+      setBusy(`delete-${rate.id}`);
+      setError("");
+      await apiRequest(`/api/payroll/salary-rates/${rate.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ reason }),
+      });
+      if (editingRate?.id === rate.id) reset();
+      setMessage("Unused salary rate deleted. The deletion remains available in the audit trail.");
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to delete salary rate.");
     } finally {
       setBusy("");
     }
@@ -147,19 +247,24 @@ export default function SalaryRatesManaged() {
     }
   };
 
+  const scopeText = capabilities.isBranchHr
+    ? "You are working in branch scope. Salary rates entered here are authoritative employee records and automatically appear in the consolidated HEAD OFFICE view."
+    : "HEAD OFFICE uses the consolidated organization view. Head HR can maintain salary rates across branches, while approved payroll history remains immutable.";
+
   return (
     <section style={pageStyle}>
       <button type="button" style={backButton} onClick={() => navigate("/payroll")}>← Payroll Dashboard</button>
       <div style={eyebrow}>PAYROLL OPERATIONS</div>
       <h1 style={titleStyle}>Salary Rates</h1>
-      <p style={leadStyle}>Maintain effective-dated authoritative monthly gross salary rates. Select employees from the searchable employee register; CHRiS never requires manual Employee Number entry in this workflow.</p>
+      <p style={leadStyle}>Maintain effective-dated authoritative monthly gross salary rates. Branch HR & Admin Officers can enter and edit employees in their assigned branch; Head HR can manage the organization-wide register. {scopeText}</p>
 
-      <Panel title="Individual Salary Rate">
+      <Panel title={editingRate ? `Edit Salary Rate · ${editingRate.employeeNumber}` : "Individual Salary Rate"}>
         <form style={formGrid} onSubmit={save}>
           <EmployeeSearchSelect
             label="Employee"
             value={form.employeeNumber}
             onChange={selectEmployee}
+            disabled={Boolean(editingRate)}
             required
             placeholder="Search employee number or name"
           />
@@ -168,12 +273,17 @@ export default function SalaryRatesManaged() {
           <Input type="date" label="Effective From" value={form.effectiveFrom} onChange={setField("effectiveFrom")} required />
           <Input type="date" label="Effective To (optional)" value={form.effectiveTo} onChange={setField("effectiveTo")} />
           <Input label="Reason" value={form.reason} onChange={setField("reason")} placeholder="Salary review, promotion, correction or opening authority" />
-          <div style={buttonCell}><button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : "Save Salary Rate"}</button></div>
+          <div style={buttonCell}>
+            <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : editingRate ? "Save Salary Rate Changes" : "Save Salary Rate"}</button>
+            {editingRate && <button type="button" style={secondaryButton} onClick={reset} disabled={Boolean(busy)}>Cancel Edit</button>}
+          </div>
         </form>
 
         {selectedEmployee && (
           <div style={authorityNote}>
-            {selectedEmployee.currentSalaryRate ? (
+            {editingRate ? (
+              <><strong>Controlled correction:</strong> changes are audited. If this salary rate has already supported approved payroll, CHRiS will preserve the historical rate and require a new effective-dated salary rate instead of rewriting payroll history.</>
+            ) : selectedEmployee.currentSalaryRate ? (
               <>
                 <strong>Current system salary authority:</strong>{" "}
                 {money(selectedEmployee.currentSalaryRate.amount, selectedEmployee.currentSalaryRate.currency)} · effective from {selectedEmployee.currentSalaryRate.effectiveFrom}
@@ -187,7 +297,7 @@ export default function SalaryRatesManaged() {
         )}
       </Panel>
 
-      <Panel title="Bulk Salary Rates">
+      {capabilities.canBulkPayrollInputs && <Panel title="Bulk Salary Rates">
         <div style={bulkGrid}>
           <button type="button" style={secondaryButton} onClick={downloadTemplate} disabled={Boolean(busy)}>{busy === "template" ? "Preparing…" : "Download Excel Template"}</button>
           <input type="file" accept=".xlsx,.xls" onChange={(event) => { setFile(event.target.files?.[0] || null); setPreview(null); setImportResult(null); }} />
@@ -196,17 +306,22 @@ export default function SalaryRatesManaged() {
         {preview && <div style={summaryStrip}><strong>{preview.validRows} valid</strong><span>{preview.invalidRows} invalid · {preview.totalRows} total</span><button type="button" style={primaryButton} onClick={importWorkbook} disabled={!preview.validRows || Boolean(busy)}>{busy === "import" ? "Importing…" : `Import ${preview.validRows} Valid Rate${preview.validRows === 1 ? "" : "s"}`}</button></div>}
         {preview?.rows?.length > 0 && <PreviewRows rows={preview.rows} />}
         {importResult && <div style={summaryStrip}><strong>{importResult.created} created</strong><span>{importResult.failed} failed · {importResult.total} total</span></div>}
-      </Panel>
+      </Panel>}
 
       {error && <Feedback>{error}</Feedback>}
       {message && <div style={successStyle}>{message}</div>}
 
       <Panel title="Effective Salary Rate Register">
-        <DataTable loading={loading} columns={["Employee", "Name", "Monthly Gross", "Effective From", "Effective To", "Status"]}>
+        <DataTable loading={loading} columns={["Employee", "Name", "Monthly Gross", "Effective From", "Effective To", "Status", "Action"]}>
           {(rates || []).map((rate) => (
             <tr key={rate.id}>
               <Td strong>{rate.employeeNumber}</Td><Td>{rate.employeeName}</Td><Td>{money(rate.amount, rate.currency)}</Td>
               <Td>{rate.effectiveFrom}</Td><Td>{rate.effectiveTo || "Open-ended"}</Td><Td><Badge>{rate.status}</Badge></Td>
+              <Td><div style={actionRow}>
+                {capabilities.canManageEmployeeFinancialInputs && rate.status !== "RETIRED" && <button type="button" style={smallButton} onClick={() => startEdit(rate)}>Edit</button>}
+                {capabilities.canManageEmployeeFinancialInputs && rate.status === "ACTIVE" && <button type="button" style={smallButton} onClick={() => retireRate(rate)} disabled={Boolean(busy)}>End / Retire</button>}
+                {capabilities.canDeleteEmployeeFinancialInputs && <button type="button" style={dangerButton} onClick={() => deleteRate(rate)} disabled={Boolean(busy)}>Delete</button>}
+              </div></Td>
             </tr>
           ))}
         </DataTable>
@@ -252,12 +367,15 @@ const fieldLabel = { display: "grid", gap: 6, color: "#C7D3CC", fontSize: 12, fo
 const inputStyle = { width: "100%", boxSizing: "border-box", borderRadius: 9, border: "1px solid rgba(212,175,55,.35)", padding: "10px 11px", background: "rgba(255,255,255,.06)", color: "#F7FAF8", outline: "none" };
 const primaryButton = { border: 0, borderRadius: 9, padding: "11px 16px", background: "#D4AF37", color: "#07140D", fontWeight: 900, cursor: "pointer" };
 const secondaryButton = { ...primaryButton, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.6)" };
-const buttonCell = { display: "flex", alignItems: "end" };
+const smallButton = { ...secondaryButton, padding: "6px 10px", fontSize: 11 };
+const dangerButton = { ...smallButton, color: "#FCA5A5", border: "1px solid rgba(248,113,113,.6)" };
+const buttonCell = { display: "flex", alignItems: "end", gap: 8, flexWrap: "wrap" };
+const actionRow = { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" };
 const bulkGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,max-content))", gap: 14, alignItems: "center" };
 const summaryStrip = { marginTop: 14, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", color: "#C7D3CC" };
 const authorityNote = { marginTop: 14, padding: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.35)", background: "rgba(212,175,55,.07)", color: "#C7D3CC", lineHeight: 1.55, fontSize: 12 };
 const tableWrap = { overflowX: "auto", minHeight: 50 };
-const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 900 };
+const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 1000 };
 const thStyle = { textAlign: "left", padding: "10px 9px", color: "#D4AF37", fontSize: 11, borderBottom: "1px solid rgba(255,255,255,.09)", whiteSpace: "nowrap" };
 const tdStyle = { padding: "10px 9px", color: "#C7D3CC", fontSize: 12, borderBottom: "1px solid rgba(255,255,255,.055)", verticalAlign: "top", whiteSpace: "nowrap" };
 const badgeStyle = { display: "inline-block", borderRadius: 999, padding: "4px 8px", border: "1px solid rgba(212,175,55,.4)", color: "#D4AF37", background: "rgba(212,175,55,.08)", fontSize: 10, fontWeight: 900 };
