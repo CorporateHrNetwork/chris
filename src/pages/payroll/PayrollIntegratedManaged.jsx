@@ -36,7 +36,7 @@ function useLoad(path, initial = []) {
 export default function PayrollIntegratedManaged({ mode }) {
   const navigate = useNavigate();
   const meta = {
-    execute: ["Execute Payroll", "Calculate payroll with statutory deductions, Salary Advance recovery and Loan recovery in one auditable payroll line."],
+    execute: ["Execute Payroll", "Calculate payroll with statutory deductions, Salary Advance recovery, Loan recovery and eligible after-tax benefits in one auditable payroll line."],
     payslips: ["Payslips", "Payslips are generated directly from approved payroll runs. Draft or rejected payroll does not produce an employee payslip."],
     statutory: ["Nigeria Statutory Review", "Review which payroll statutory items are active, employer-only, or require ZERMATT approval before activation."],
   };
@@ -100,7 +100,7 @@ function ExecuteIntegrated() {
       setBusy(`submit-${runId}`); setError(""); setMessage("");
       await apiRequest(`/api/payroll/runs/${runId}/submit`, {
         method: "POST",
-        body: { notes: "Submitted after integrated payroll review including statutory, Salary Advance and Loan recoveries." },
+        body: { notes: "Submitted after integrated payroll review including statutory, Salary Advance, Loan recoveries and after-tax benefits." },
       });
       setMessage("Payroll submitted for approval. Loan and Salary Advance balances remain unchanged until approval.");
       await load();
@@ -135,7 +135,7 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || !policyData?.configured} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. Manual Worked Days entered for the exact payroll period override standard attendance days for that employee. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
+        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit and does not change taxable gross, chargeable income or deductions. Manual Worked Days entered for the exact payroll period override standard attendance days for that employee. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
@@ -177,12 +177,13 @@ function PayrollLines({ rows }) {
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
-        <DataTable columns={["Select", "Employee", "Days", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Gross", "Net"]}>
+        <DataTable columns={["Select", "Employee", "Days", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net"]}>
           <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
           {displayRows.map((row) => {
             const details = row.details || {};
             const statutory = details.statutory || {};
             const structure = details.salaryStructure || {};
+            const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
             const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
             const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
             return (
@@ -197,6 +198,7 @@ function PayrollLines({ rows }) {
                 <Td>{money(customDeductions, row.currency)}</Td>
                 <Td>{money(row.advanceRecovery, row.currency)}</Td>
                 <Td>{money(row.loanRecovery, row.currency)}</Td>
+                <Td>{leaveAllowance ? `${money(leaveAllowance, row.currency)} · After tax` : "—"}</Td>
                 <Td>{money(row.grossPay, row.currency)}</Td>
                 <Td strong>{money(row.netPreview, row.currency)}</Td>
               </tr>
@@ -215,7 +217,7 @@ function ApprovedPayslips() {
   return (
     <>
       <Panel title="Approved Payroll Payslips">
-        <p style={controlNote}>Only APPROVED payroll runs appear here. If an approved payroll is reopened for correction, its payslips stop appearing until the replacement draft is recalculated, submitted and approved again.</p>
+        <p style={controlNote}>Only APPROVED payroll runs appear here. ZERMATT Leave Allowance is displayed separately as a non-taxable after-tax payment and is included in Net Pay without increasing PAYE or taxable Gross Pay. If an approved payroll is reopened for correction, its payslips stop appearing until the replacement draft is recalculated, submitted and approved again.</p>
         <EmployeeBatchSelector
           rows={rows || []}
           getId={(row) => row.id}
@@ -225,13 +227,14 @@ function ApprovedPayslips() {
           renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected Payslips</button> : null}
         >
           {({ displayRows, isSelected, toggleOne }) => (
-            <DataTable loading={loading} columns={["Select", "Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Net", "Action"]}>
+            <DataTable loading={loading} columns={["Select", "Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Leave Allowance", "Net", "Action"]}>
               {displayRows.map((row) => {
                 const statutory = row.details?.statutory || {};
+                const leaveAllowance = Number(row.details?.leaveAllowance?.amount || 0);
                 return <tr key={row.id}>
                   <Td><input type="checkbox" aria-label={`Select payslip ${row.employeeNumber} ${row.periodCode}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
                   <Td strong>{row.periodCode}</Td><Td>{row.employeeNumber} — {row.employeeName}</Td><Td>{money(row.grossPay, row.currency)}</Td>
-                  <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.loanRecovery, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
+                  <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.loanRecovery, row.currency)}</Td><Td>{leaveAllowance ? money(leaveAllowance, row.currency) : "—"}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
                   <Td><button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button></Td>
                 </tr>;
               })}
@@ -250,6 +253,7 @@ function PayslipCard({ row, onClose }) {
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
   const attendance = details.attendance || {};
+  const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
   const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   return (
@@ -267,12 +271,13 @@ function PayslipCard({ row, onClose }) {
           <tr><Td strong>Basic</Td><Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td></tr>
           {Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => <tr key={key}><Td>{key.charAt(0).toUpperCase() + key.slice(1)}</Td><Td>{money(value, row.currency)}</Td></tr>)}
           <tr><Td>Other Earnings</Td><Td>{money(customAllowances, row.currency)}</Td></tr>
-          <tr><Td strong>Gross Pay</Td><Td strong>{money(row.grossPay, row.currency)}</Td></tr>
+          <tr><Td strong>Taxable Gross Pay</Td><Td strong>{money(row.grossPay, row.currency)}</Td></tr>
           <tr><Td>PAYE</Td><Td>{money(statutory.payeTax, row.currency)}</Td></tr>
           <tr><Td>Pension</Td><Td>{money(statutory.employeePension, row.currency)}</Td></tr>
           <tr><Td>Other Deductions</Td><Td>{money(customDeductions, row.currency)}</Td></tr>
           <tr><Td>Salary Advance Recovery</Td><Td>{money(row.advanceRecovery, row.currency)}</Td></tr>
           <tr><Td>Loan Recovery</Td><Td>{money(row.loanRecovery, row.currency)}</Td></tr>
+          {leaveAllowance > 0 && <tr><Td strong>Leave Allowance · After Tax / Non-taxable</Td><Td strong>{money(leaveAllowance, row.currency)}</Td></tr>}
           <tr><Td strong>Net Pay</Td><Td strong>{money(row.netPreview, row.currency)}</Td></tr>
         </DataTable>
       </div>
