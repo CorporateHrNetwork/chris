@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaHandHoldingUsd,
-  FaUsers,
-  FaMoneyCheckAlt,
   FaBalanceScale,
-  FaFileInvoiceDollar,
   FaChartLine,
-  FaPlusCircle,
-  FaHistory,
   FaDownload,
-  FaIdCard,
-  FaFileUpload,
-  FaPaperPlane,
-  FaCheckCircle,
+  FaFileInvoiceDollar,
+  FaHandHoldingUsd,
+  FaHistory,
+  FaMoneyCheckAlt,
+  FaPlusCircle,
+  FaUsers,
 } from "react-icons/fa";
 
 import {
@@ -35,7 +31,6 @@ const money = (value) => new Intl.NumberFormat("en-NG", {
   currency: "NGN",
   maximumFractionDigits: 2,
 }).format(Number(value || 0));
-const percentage = (value, total) => total > 0 ? Math.round((Number(value || 0) / Number(total || 0)) * 100) : 0;
 
 const inputStyle = {
   width: "100%",
@@ -46,43 +41,44 @@ const inputStyle = {
   background: "var(--chris-dashboard-surface)",
   color: "var(--chris-dashboard-text)",
 };
-const buttonStyle = {
-  border: 0,
-  borderRadius: 9,
-  padding: "9px 13px",
-  fontWeight: 800,
-  cursor: "pointer",
-};
+const buttonStyle = { border: 0, borderRadius: 9, padding: "9px 13px", fontWeight: 800, cursor: "pointer" };
 const primaryButton = { ...buttonStyle, background: "var(--chris-dashboard-gold)", color: "#111" };
 const secondaryButton = { ...buttonStyle, background: "var(--chris-dashboard-surface)", color: "var(--chris-dashboard-text)", border: "1px solid var(--chris-dashboard-border)" };
 
-const WORKFLOW_PENDING = ["PENDING_HR_VERIFICATION", "PENDING_GM_APPROVAL"];
-const workflowLabel = (status) => ({
-  DRAFT: "Draft Application",
-  PENDING_HR_VERIFICATION: "Pending HR Verification",
-  RETURNED_FOR_CORRECTION: "Returned for Correction",
-  PENDING_GM_APPROVAL: "Pending GM Approval",
-  GM_APPROVED: "GM Approved",
-  AWAITING_DISBURSEMENT: "GM Approved — Awaiting Disbursement",
-  PENDING_APPROVAL: "Pending Approval (Legacy)",
-  APPROVED: "Approved (Legacy)",
-  ACTIVE: "Active",
-  PAUSED: "Paused",
-  COMPLETED: "Completed",
-  REJECTED: "Rejected",
-  CANCELLED: "Cancelled",
-}[status] || status || "—");
-
-const emptyLoanForm = () => ({
+const emptyForm = () => ({
   employeeNumber: "",
-  principalAmount: "",
+  approvedAmount: "",
   installmentAmount: "",
-  applicationDate: today(),
-  recoveryStartDate: "",
+  gmApprovalDate: today(),
+  disbursedDate: today(),
+  recoveryStartMonth: currentMonth(),
   purpose: "",
+  gmApprovalReference: "",
+  accountsPaymentReference: "",
   notes: "",
   suretyEmployeeNumber: "",
 });
+
+function addMonths(month, offset) {
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return "";
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1 + offset, 1));
+  return date.toISOString().slice(0, 7);
+}
+
+function repaymentPlan(balanceValue, installmentValue, startMonth) {
+  const balance = Math.max(0, Number(balanceValue || 0));
+  const installment = Math.max(0, Number(installmentValue || 0));
+  if (!balance || !installment || !/^\d{4}-\d{2}$/.test(startMonth || "")) return null;
+  const installmentCount = Math.ceil(balance / installment);
+  const finalInstallment = Math.round((balance - installment * Math.max(0, installmentCount - 1)) * 100) / 100;
+  return {
+    installmentCount,
+    startMonth,
+    endMonth: addMonths(startMonth, installmentCount - 1),
+    finalInstallment: finalInstallment || installment,
+  };
+}
 
 function Loans() {
   const navigate = useNavigate();
@@ -99,14 +95,9 @@ function Loans() {
   const [message, setMessage] = useState("");
   const [loanSearch, setLoanSearch] = useState("");
   const [topUpParent, setTopUpParent] = useState(null);
-  const [editingLoan, setEditingLoan] = useState(null);
-  const [applicationFormFile, setApplicationFormFile] = useState(null);
-  const [approvalToken, setApprovalToken] = useState("");
-  const [approvalTarget, setApprovalTarget] = useState(null);
-  const [form, setForm] = useState(emptyLoanForm());
+  const [form, setForm] = useState(emptyForm());
   const [collateral, setCollateral] = useState(null);
   const [collateralLoading, setCollateralLoading] = useState(false);
-  const [disbursementDrafts, setDisbursementDrafts] = useState({});
 
   const load = async () => {
     try {
@@ -132,29 +123,16 @@ function Loans() {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("approvalToken") || "";
-    if (!token) return;
-    setApprovalToken(token);
-    (async () => {
-      try {
-        setBusy("approval-token");
-        setError("");
-        const result = await apiRequest(`/api/loans/email-approval/${encodeURIComponent(token)}`);
-        setApprovalTarget(result?.data || null);
-      } catch (requestError) {
-        setError(requestError?.message || "Unable to validate the GM approval link.");
-      } finally {
-        setBusy("");
-      }
-    })();
-  }, []);
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   useEffect(() => {
     const employeeNumber = topUpParent?.employeeNumber || form.employeeNumber;
-    if (!employeeNumber || editingLoan || topUpParent) {
+    if (!employeeNumber) {
       setCollateral(null);
-      setCollateralLoading(false);
-      return;
+      return undefined;
     }
     let active = true;
     (async () => {
@@ -163,16 +141,13 @@ function Loans() {
         const result = await apiRequest(`/api/eosb/collateral/${encodeURIComponent(employeeNumber)}`);
         if (active) setCollateral(result?.data?.statement || null);
       } catch (requestError) {
-        if (active) {
-          setCollateral(null);
-          setError(requestError?.message || "Unable to assess the employee's EoSB loan collateral.");
-        }
+        if (active) setCollateral(null);
       } finally {
         if (active) setCollateralLoading(false);
       }
     })();
     return () => { active = false; };
-  }, [form.employeeNumber, editingLoan, topUpParent]);
+  }, [form.employeeNumber, topUpParent]);
 
   const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -182,29 +157,106 @@ function Loans() {
 
   const setEmployee = (employeeNumber) => {
     setForm((current) => ({ ...current, employeeNumber, suretyEmployeeNumber: "" }));
-    setCollateral(null);
-    setError("");
-    setMessage("");
-  };
-
-  const setSurety = (suretyEmployeeNumber) => {
-    setForm((current) => ({ ...current, suretyEmployeeNumber }));
     setError("");
     setMessage("");
   };
 
   const resetForm = () => {
     setTopUpParent(null);
-    setEditingLoan(null);
-    setApplicationFormFile(null);
     setCollateral(null);
-    setForm(emptyLoanForm());
+    setForm(emptyForm());
+  };
+
+  const startTopUp = (loan) => {
+    setTopUpParent(loan);
+    setForm({
+      employeeNumber: loan.employeeNumber,
+      approvedAmount: "",
+      installmentAmount: String(loan.installmentAmount || ""),
+      gmApprovalDate: today(),
+      disbursedDate: today(),
+      recoveryStartMonth: currentMonth(),
+      purpose: loan.purpose || "",
+      gmApprovalReference: "",
+      accountsPaymentReference: "",
+      notes: "",
+      suretyEmployeeNumber: "",
+    });
+    setError("");
+    setMessage("");
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const proposedBalance = topUpParent
+    ? Math.max(0, Number(topUpParent.outstandingAmount || 0)) + Math.max(0, Number(form.approvedAmount || 0))
+    : Math.max(0, Number(form.approvedAmount || 0));
+  const proposedPrincipal = topUpParent
+    ? Math.max(0, Number(topUpParent.principalAmount || 0)) + Math.max(0, Number(form.approvedAmount || 0))
+    : Math.max(0, Number(form.approvedAmount || 0));
+  const plan = repaymentPlan(proposedBalance, form.installmentAmount, form.recoveryStartMonth);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && !form.suretyEmployeeNumber) {
+      setError("This employee requires an internal employee surety. Select the surety before recording the approved amount.");
+      return;
+    }
+    try {
+      setBusy(topUpParent ? `topup-${topUpParent.id}` : "record");
+      setError("");
+      setMessage("");
+      const body = {
+        employeeNumber: topUpParent?.employeeNumber || form.employeeNumber,
+        approvedAmount: form.approvedAmount,
+        topUpAmount: form.approvedAmount,
+        installmentAmount: form.installmentAmount,
+        gmApprovalDate: form.gmApprovalDate,
+        disbursedDate: form.disbursedDate,
+        recoveryStartDate: `${form.recoveryStartMonth}-01`,
+        purpose: form.purpose,
+        gmApprovalReference: form.gmApprovalReference,
+        accountsPaymentReference: form.accountsPaymentReference,
+        notes: form.notes,
+        suretyEmployeeNumber: form.suretyEmployeeNumber || undefined,
+      };
+      const endpoint = topUpParent
+        ? `/api/loans/${topUpParent.id}/top-up`
+        : "/api/loans/approved-disbursed";
+      const result = await apiRequest(endpoint, { method: "POST", body: JSON.stringify(body) });
+      const returnedPlan = result?.data?.repaymentPlan;
+      if (topUpParent) {
+        setMessage(`Top-up merged into ${topUpParent.loanNumber}. Revised balance ${money(result?.data?.outstandingAmount || proposedBalance)} over ${returnedPlan?.installmentCount || plan?.installmentCount || 0} installment(s). No second loan account was created.`);
+      } else {
+        setMessage("GM-approved loan recorded as already disbursed outside CHRiS and activated for payroll recovery.");
+      }
+      resetForm();
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to record the approved loan amount.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const statusAction = async (loan, action) => {
+    try {
+      setBusy(`${action}-${loan.id}`);
+      setError("");
+      await apiRequest(`/api/loans/${loan.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ action, reason: `${action} through Loans workspace` }),
+      });
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to update loan status.");
+    } finally {
+      setBusy("");
+    }
   };
 
   const exportBulk = async (format) => {
     try {
       setBusy(`export-${format}`);
-      setError("");
       saveDownloadedBlob(await apiDownload(`/api/loans/reports/export?format=${format}`));
     } catch (requestError) {
       setError(requestError?.message || "Unable to export loan report.");
@@ -213,328 +265,49 @@ function Loans() {
     }
   };
 
-  const uploadApplicationForm = async (loanId, file) => {
-    if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    await apiRequest(`/api/loans/${loanId}/application-form`, { method: "POST", body });
-  };
-
-  const submitLoan = async (event) => {
-    event.preventDefault();
-    const newWorkflowApplication = !editingLoan && !topUpParent;
-    if (newWorkflowApplication && !applicationFormFile) {
-      setError("Attach the completed loan application form before creating and submitting the application.");
-      return;
-    }
-    if (newWorkflowApplication && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && !form.suretyEmployeeNumber) {
-      setError("This employee requires an internal employee surety. Select the surety before submitting the loan application.");
-      return;
-    }
-    try {
-      setBusy(editingLoan ? `edit-${editingLoan.id}` : "create");
-      setError("");
-      setMessage("");
-      const endpoint = editingLoan
-        ? `/api/loans/${editingLoan.id}`
-        : topUpParent
-          ? `/api/loans/${topUpParent.id}/top-up`
-          : "/api/loans/applications";
-      const body = {
-        ...form,
-        employeeNumber: topUpParent?.employeeNumber || form.employeeNumber,
-      };
-      if (!body.recoveryStartDate) delete body.recoveryStartDate;
-      if (!body.suretyEmployeeNumber) delete body.suretyEmployeeNumber;
-      const result = await apiRequest(endpoint, {
-        method: editingLoan ? "PATCH" : "POST",
-        body: JSON.stringify(body),
-      });
-      const loanId = result?.data?.id || editingLoan?.id;
-
-      if ((editingLoan && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(editingLoan.status)) || newWorkflowApplication) {
-        if (applicationFormFile && loanId) await uploadApplicationForm(loanId, applicationFormFile);
-      }
-
-      if (newWorkflowApplication && loanId) {
-        await apiRequest(`/api/loans/${loanId}/submit-for-hr-verification`, {
-          method: "POST",
-          body: JSON.stringify({ comments: form.notes || "Submitted by Branch HR & Admin Officer for Head HR verification." }),
-        });
-        setMessage("Loan application created, collateral validated, form attached and submitted to Head HR for verification. CHRiS has queued the workflow notification automatically.");
-      } else if (editingLoan) {
-        setMessage("Loan changes saved. If this application was returned, submit it again for Head HR verification from the Loan Register.");
-      } else {
-        setMessage("Top-up loan application created under the existing top-up workflow.");
-      }
-      resetForm();
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to save loan application.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const legacyDecide = async (loan, decision) => {
-    try {
-      setBusy(loan.id);
-      setError("");
-      await apiRequest(`/api/loans/${loan.id}/decision`, {
-        method: "PATCH",
-        body: JSON.stringify({ decision, notes: `${decision} through legacy Loans workspace` }),
-      });
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to decide loan.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const submitForHr = async (loan) => {
-    try {
-      setBusy(`workflow-${loan.id}`);
-      setError("");
-      await apiRequest(`/api/loans/${loan.id}/submit-for-hr-verification`, {
-        method: "POST",
-        body: JSON.stringify({ comments: "Corrected application resubmitted for Head HR verification." }),
-      });
-      setMessage(`${loan.employeeNumber} — ${loan.employeeName}: submitted for Head HR verification.`);
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to submit application for HR verification.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const hrDecision = async (loan, decision) => {
-    const comments = decision === "VERIFY"
-      ? "Head HR verified the loan application and forwarded it for GM approval."
-      : window.prompt(`Reason for ${decision === "RETURN" ? "returning" : "rejecting"} this loan application:`) || "";
-    if (decision !== "VERIFY" && !comments) return;
-    try {
-      setBusy(`workflow-${loan.id}`);
-      setError("");
-      await apiRequest(`/api/loans/${loan.id}/hr-verification`, {
-        method: "POST",
-        body: JSON.stringify({ decision, comments }),
-      });
-      setMessage(`Head HR decision recorded for ${loan.employeeNumber} — ${loan.employeeName}.`);
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to record Head HR decision.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const gmDecision = async (loan, decision, token = null) => {
-    const comments = decision === "APPROVE"
-      ? "General Manager approved the verified loan application."
-      : window.prompt(`Reason for ${decision === "RETURN" ? "returning" : "rejecting"} this loan application:`) || "";
-    if (decision !== "APPROVE" && !comments) return;
-    const loanId = loan.id || loan.loanId;
-    try {
-      setBusy(`workflow-${loanId}`);
-      setError("");
-      await apiRequest(`/api/loans/${loanId}/gm-decision`, {
-        method: "POST",
-        body: JSON.stringify({ decision, comments, token: token || undefined }),
-      });
-      setMessage(`General Manager decision recorded for ${loan.employeeNumber} — ${loan.employeeName}.`);
-      setApprovalTarget(null);
-      if (token) window.history.replaceState({}, "", "/loans");
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to record General Manager decision.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const statusAction = async (loan, action) => {
-    try {
-      setBusy(loan.id);
-      setError("");
-      await apiRequest(`/api/loans/${loan.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ action, reason: `${action} through Loans workspace` }),
-      });
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to update loan.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const legacyDisburse = async (loan) => {
-    const draft = disbursementDrafts[loan.id] || { disbursedDate: today(), recoveryStartMonth: currentMonth(), disbursementReference: "" };
-    try {
-      setBusy(loan.id);
-      setError("");
-      await apiRequest(`/api/loans/${loan.id}/disburse`, {
-        method: "PATCH",
-        body: JSON.stringify({ disbursedDate: draft.disbursedDate, recoveryStartDate: `${draft.recoveryStartMonth}-01`, notes: "Loan activated for payroll recovery" }),
-      });
-      setDisbursementDrafts((current) => ({ ...current, [loan.id]: undefined }));
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to disburse loan.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const workflowDisburse = async (loan) => {
-    const draft = disbursementDrafts[loan.id] || { disbursedDate: today(), recoveryStartMonth: currentMonth(), disbursementReference: "" };
-    if (!draft.disbursementReference?.trim()) {
-      setError("Enter the disbursement/payment reference before confirming the approved loan.");
-      return;
-    }
-    try {
-      setBusy(`workflow-${loan.id}`);
-      setError("");
-      await apiRequest(`/api/loans/${loan.id}/disbursement`, {
-        method: "POST",
-        body: JSON.stringify({
-          disbursedDate: draft.disbursedDate,
-          recoveryStartDate: `${draft.recoveryStartMonth}-01`,
-          disbursementReference: draft.disbursementReference,
-          notes: "Chief Accountant confirmed loan disbursement in CHRiS.",
-        }),
-      });
-      setDisbursementDrafts((current) => ({ ...current, [loan.id]: undefined }));
-      setMessage(`${loan.employeeNumber} — ${loan.employeeName}: loan disbursed and activated for payroll recovery from ${draft.recoveryStartMonth}.`);
-      await load();
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to process approved loan disbursement.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const startTopUp = (loan) => {
-    setEditingLoan(null);
-    setTopUpParent(loan);
-    setApplicationFormFile(null);
-    setCollateral(null);
-    setForm({ employeeNumber: loan.employeeNumber, principalAmount: "", installmentAmount: "", applicationDate: today(), recoveryStartDate: "", purpose: "", notes: "", suretyEmployeeNumber: "" });
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const startEdit = (loan) => {
-    setTopUpParent(null);
-    setEditingLoan(loan);
-    setApplicationFormFile(null);
-    setCollateral(null);
-    setForm({
-      employeeNumber: loan.employeeNumber,
-      principalAmount: String(loan.principalAmount ?? ""),
-      installmentAmount: String(loan.installmentAmount ?? ""),
-      applicationDate: loan.applicationDate || today(),
-      recoveryStartDate: loan.recoveryStartDate || "",
-      purpose: loan.purpose || "",
-      notes: loan.notes || "",
-      suretyEmployeeNumber: "",
-    });
-    setError("");
-    setMessage("");
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const editHistoryLocked = Boolean(editingLoan && (editingLoan.disbursedDate || ["ACTIVE", "PAUSED", "COMPLETED"].includes(editingLoan.status)));
-  const editEmployeeLocked = Boolean(editHistoryLocked || editingLoan?.parentLoanId);
-
-  const workflowMetrics = useMemo(() => ({
-    pendingHr: loans.filter((loan) => loan.status === "PENDING_HR_VERIFICATION").length,
-    pendingGm: loans.filter((loan) => loan.status === "PENDING_GM_APPROVAL").length,
-    awaitingDisbursement: loans.filter((loan) => ["GM_APPROVED", "AWAITING_DISBURSEMENT"].includes(loan.status)).length,
-  }), [loans]);
-
   const dashboardMetrics = useMemo(() => {
-    const activeLoans = loans.filter((loan) => loan.status === "ACTIVE");
-    const pausedLoans = loans.filter((loan) => loan.status === "PAUSED");
-    const completedLoans = loans.filter((loan) => loan.status === "COMPLETED");
-    const pendingLoans = loans.filter((loan) => ["PENDING_HR_VERIFICATION", "PENDING_GM_APPROVAL"].includes(loan.status));
-    const awaitingLoans = loans.filter((loan) => ["GM_APPROVED", "AWAITING_DISBURSEMENT"].includes(loan.status));
-
-    const activeAmount = activeLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
-    const pausedAmount = pausedLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
-    const pendingAmount = pendingLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
-    const awaitingAmount = awaitingLoans.reduce((total, loan) => total + Number(loan.principalAmount || 0), 0);
-    const livePrincipal = activeAmount + pausedAmount;
-
-    const financiallyDisbursedLoans = [...activeLoans, ...pausedLoans, ...completedLoans];
-    const recoveredAmount = financiallyDisbursedLoans.reduce((total, loan) => {
+    const financialLoans = loans.filter((loan) => ["ACTIVE", "PAUSED", "COMPLETED"].includes(loan.status));
+    const active = loans.filter((loan) => loan.status === "ACTIVE");
+    const outstanding = loans.filter((loan) => ["ACTIVE", "PAUSED"].includes(loan.status))
+      .reduce((sum, loan) => sum + Math.max(0, Number(loan.outstandingAmount || 0)), 0);
+    const recovered = financialLoans.reduce((sum, loan) => {
       const principal = Number(loan.principalAmount || 0);
-      const outstanding = Math.max(0, Number(loan.outstandingAmount || 0));
-      return total + Math.max(0, principal - outstanding);
+      const balance = Math.max(0, Number(loan.outstandingAmount || 0));
+      return sum + Math.max(0, principal - balance);
     }, 0);
-    const outstandingBalance = activeLoans.concat(pausedLoans)
-      .reduce((total, loan) => total + Math.max(0, Number(loan.outstandingAmount || 0)), 0);
-    const recoveryBase = recoveredAmount + outstandingBalance;
-
-    return {
-      activeAmount,
-      pausedAmount,
-      pendingAmount,
-      awaitingAmount,
-      recoveredAmount,
-      outstandingBalance,
-      activePercentage: percentage(activeAmount, livePrincipal),
-      pausedPercentage: percentage(pausedAmount, livePrincipal),
-      recoveredPercentage: percentage(recoveredAmount, recoveryBase),
-      outstandingPercentage: percentage(outstandingBalance, recoveryBase),
-    };
+    return { active: active.length, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
   }, [loans]);
 
   const filteredLoans = useMemo(() => {
     const term = loanSearch.trim().toLowerCase();
     if (!term) return loans;
-    return loans.filter((loan) => [
-      loan.employeeNumber,
-      loan.employeeName,
-      loan.loanNumber,
-      loan.purpose,
-      loan.status,
-      loan.locationName,
-    ].filter(Boolean).join(" ").toLowerCase().includes(term));
+    return loans.filter((loan) => [loan.employeeNumber, loan.employeeName, loan.loanNumber, loan.purpose, loan.status]
+      .filter(Boolean).join(" ").toLowerCase().includes(term));
   }, [loans, loanSearch]);
-
-  const portfolio = useMemo(() => ([
-    ["HR Verification", workflowMetrics.pendingHr],
-    ["GM Approval", workflowMetrics.pendingGm],
-    ["Disbursement", workflowMetrics.awaitingDisbursement],
-    ["Active", Number(summary.activeLoans || 0)],
-  ]), [summary, workflowMetrics]);
-  const portfolioMax = Math.max(1, ...portfolio.map(([, value]) => value));
 
   const activity = [
     {
-      id: "applications",
+      id: "policy",
       icon: <FaHandHoldingUsd />,
-      title: "Loan Applications",
-      description: `${workflowMetrics.pendingHr} pending Head HR verification · ${workflowMetrics.pendingGm} pending GM approval.`,
-      time: loading ? "Checking" : "Live",
-      tone: workflowMetrics.pendingHr + workflowMetrics.pendingGm ? "warning" : "success",
-    },
-    {
-      id: "repayments",
-      icon: <FaBalanceScale />,
-      title: "Payroll Recoveries",
-      description: `${recoveries.filter((row) => row.status === "POSTED").length} approved payroll recovery posting(s) are currently posted.`,
-      time: loading ? "Checking" : "Live",
+      title: "Manual GM Approval",
+      description: "GM approval takes place outside CHRiS before Head HR records the amount.",
+      time: "Zermatt policy",
       tone: "success",
     },
     {
-      id: "advances",
-      icon: <FaMoneyCheckAlt />,
-      title: "Salary Advances",
-      description: "Salary Advances remain a separate payroll liability with their own installment and outstanding balance.",
-      time: "Separate control",
+      id: "payment",
+      icon: <FaFileInvoiceDollar />,
+      title: "External Accounts Payment",
+      description: "Accounts processes payment outside CHRiS. Recording here does not issue a payment instruction.",
+      time: "External process",
+      tone: "success",
+    },
+    {
+      id: "recovery",
+      icon: <FaBalanceScale />,
+      title: "Payroll Recovery",
+      description: `${recoveries.filter((row) => row.status === "POSTED").length} posted loan recovery transaction(s).`,
+      time: loading ? "Checking" : "Live",
       tone: "success",
     },
   ];
@@ -547,181 +320,121 @@ function Loans() {
       <ModuleDashboardShell
         eyebrow="EMPLOYEE FINANCIAL SUPPORT"
         title="Loans Dashboard"
-        description="Branch HR creates and submits ZERMATT zero-interest loan applications; Head HR verifies; the GM approves; the Chief Accountant disburses; payroll then recovers installments from the configured recovery month."
-        metricsColumns={3}
+        description="ZERMATT loans are approved manually by the GM and paid outside CHRiS by Accounts. Head HR records the already approved/disbursed amount here only for payroll recovery and audit."
+        metricsColumns={4}
         metrics={[
-          <DashboardCard key="active" title="Active Loans" value={loading ? "—" : Number(summary.activeLoans || 0)} subtitle={loading ? "Calculating active exposure…" : `${money(dashboardMetrics.activeAmount)} · ${dashboardMetrics.activePercentage}% of active + paused principal`} icon={<FaHandHoldingUsd />} tone="green" />,
-          <DashboardCard key="paused" title="Paused Loans" value={loading ? "—" : Number(summary.pausedLoans || 0)} subtitle={loading ? "Calculating paused exposure…" : `${money(dashboardMetrics.pausedAmount)} · ${dashboardMetrics.pausedPercentage}% of active + paused principal`} icon={<FaUsers />} tone="gold" />,
-          <DashboardCard key="recovered" title="Recovered Loans" value={loading ? "—" : money(dashboardMetrics.recoveredAmount)} subtitle={loading ? "Calculating recovery rate…" : `${dashboardMetrics.recoveredPercentage}% recovered from disbursed loan exposure`} icon={<FaMoneyCheckAlt />} tone="green" />,
-          <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstandingBalance)} subtitle={loading ? "Calculating outstanding rate…" : `${dashboardMetrics.outstandingPercentage}% of disbursed loan exposure remains outstanding`} icon={<FaBalanceScale />} tone="gold" />,
-          <DashboardCard key="pending" title="Pending Workflow" value={loading ? "—" : workflowMetrics.pendingHr + workflowMetrics.pendingGm} subtitle={loading ? "Checking workflow…" : `${money(dashboardMetrics.pendingAmount)} · HR ${workflowMetrics.pendingHr} · GM ${workflowMetrics.pendingGm}`} icon={<FaCheckCircle />} tone="gold" />,
-          <DashboardCard key="disbursement" title="Awaiting Disbursement" value={loading ? "—" : workflowMetrics.awaitingDisbursement} subtitle={loading ? "Checking approved loans…" : `${money(dashboardMetrics.awaitingAmount)} approved and awaiting Chief Accountant action`} icon={<FaFileInvoiceDollar />} tone="green" />,
+          <DashboardCard key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
+          <DashboardCard key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
+          <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Remaining payroll-recoverable balance" icon={<FaBalanceScale />} tone="gold" />,
+          <DashboardCard key="recovered" title="Recovered" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Principal already recovered through payroll" icon={<FaMoneyCheckAlt />} tone="green" />,
         ]}
-        analytics={
-          <AnalyticsPanel title="Loan Workflow" subtitle="Simple maker-checker-approver-disbursement lifecycle." icon={<FaChartLine />}>
-            <div style={{ display: "grid", gap: 14 }}>
-              {portfolio.map(([stage, value]) => (
-                <div key={stage} style={{ display: "grid", gridTemplateColumns: "150px 1fr 50px", gap: 12, alignItems: "center" }}>
-                  <span style={{ color: "var(--chris-dashboard-text)", fontWeight: 800 }}>{stage}</span>
-                  <div className="chris-progress"><div className="chris-progress__bar" style={{ width: `${Math.round((value / portfolioMax) * 100)}%` }} /></div>
-                  <strong style={{ color: "var(--chris-dashboard-gold-bright)", textAlign: "right" }}>{loading ? "—" : value}</strong>
-                </div>
-              ))}
-            </div>
-          </AnalyticsPanel>
-        }
-        recentActivity={
-          <AnalyticsPanel title="Loan Intelligence" subtitle="Approval, disbursement and payroll recovery controls." icon={<FaFileInvoiceDollar />}>
-            <RecentActivityList items={activity} />
-          </AnalyticsPanel>
-        }
+        analytics={<AnalyticsPanel title="Zermatt Loan Control" subtitle="Manual approval outside CHRiS; payroll recovery inside CHRiS." icon={<FaChartLine />}><RecentActivityList items={activity} /></AnalyticsPanel>}
+        recentActivity={<AnalyticsPanel title="Recording Rule" subtitle="CHRiS is not a loan-payment engine." icon={<FaFileInvoiceDollar />}><div style={{ display: "grid", gap: 8, lineHeight: 1.6 }}><strong>1. GM approves manually.</strong><span>2. Accounts processes payment outside CHRiS.</span><span>3. Head HR records the approved/disbursed amount.</span><span>4. CHRiS recovers the configured installment through payroll.</span></div></AnalyticsPanel>}
         quickActions={[
-          <QuickActionCard key="new-loan" title="New Loan Application" subtitle="Create, attach form and submit to Head HR" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
-          <QuickActionCard key="bulk-upload" title="Bulk Loan Upload" subtitle="Import or correct opening loan balances" icon={<FaFileUpload />} onClick={() => setShowBulkUpload(true)} />,
-          <QuickActionCard key="advances" title="Salary Advances" subtitle="Open advance installment register" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
-          <QuickActionCard key="history" title="Recovery History" subtitle="Review posted/reversed payroll loan deductions" icon={<FaHistory />} onClick={() => document.getElementById("loan-recovery-history")?.scrollIntoView({ behavior: "smooth" })} />,
+          <QuickActionCard key="record" title="Record Approved Loan" subtitle="Head HR records an already approved/disbursed loan" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
+          <QuickActionCard key="advances" title="Salary Advances" subtitle="Same manual GM approval / external payment policy" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
+          <QuickActionCard key="bulk" title="Opening Loan Upload" subtitle="Maintain legacy/opening payroll balances" icon={<FaDownload />} onClick={() => setShowBulkUpload(true)} />,
+          <QuickActionCard key="history" title="Recovery History" subtitle="Review posted payroll loan deductions" icon={<FaHistory />} onClick={() => document.getElementById("loan-recovery-history")?.scrollIntoView({ behavior: "smooth" })} />,
         ]}
       />
 
-      {approvalTarget && (
-        <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
-          <AnalyticsPanel title="General Manager Loan Approval" subtitle="This secure email link is bound to the General Manager account and remains auditable. Authentication is required before a decision can be recorded." icon={<FaPaperPlane />}>
-            <div style={{ display: "grid", gap: 8 }}>
-              <strong>{approvalTarget.employeeNumber} — {approvalTarget.employeeName}</strong>
-              <span>{approvalTarget.loanNumber} · {approvalTarget.purpose} · {money(approvalTarget.principalAmount)} · installment {money(approvalTarget.installmentAmount)}</span>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={primaryButton} disabled={Boolean(busy)} onClick={() => gmDecision(approvalTarget, "APPROVE", approvalToken)}>Approve</button>
-                <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => gmDecision(approvalTarget, "RETURN", approvalToken)}>Return for Correction</button>
-                <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => gmDecision(approvalTarget, "REJECT", approvalToken)}>Reject</button>
-              </div>
-            </div>
-          </AnalyticsPanel>
-        </section>
-      )}
-
       <section ref={formRef} style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
-        {error && <div style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid #b91c1c", color: "#b91c1c" }}>{error}</div>}
+        {error && <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid #b91c1c", color: "#b91c1c" }}>{error}</div>}
         {message && <div style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid var(--chris-dashboard-border)", color: "var(--chris-dashboard-text)" }}>{message}</div>}
 
         <AnalyticsPanel
-          title={editingLoan ? `Edit Loan · ${editingLoan.loanNumber}` : topUpParent ? `Top-Up Application · ${topUpParent.loanNumber}` : "New Loan Application"}
-          subtitle={editingLoan
-            ? (editHistoryLocked
-                ? "The loan has financial history. Historical identity remains locked; permitted future settings may be adjusted without rewriting posted recoveries."
-                : "Draft/returned applications can be corrected before resubmission. Applications pending verification/approval are frozen.")
-            : "Branch HR & Admin selects the employee, completes the terms and attaches the signed/filled loan application form. CHRiS validates EoSB collateral or internal surety before Head HR verification."}
+          title={topUpParent ? `Record Approved Top-Up · ${topUpParent.loanNumber}` : "Record Approved & Disbursed Loan"}
+          subtitle={topUpParent
+            ? "The approved top-up is merged into this same loan account. Existing recoveries remain unchanged and the revised outstanding balance is redistributed using the monthly installment below."
+            : "Use only after the GM has manually approved the loan and Accounts has completed payment outside CHRiS. Head HR records the financial liability for payroll recovery."}
           icon={<FaPlusCircle />}
         >
-          <form onSubmit={submitLoan} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
-            <EmployeeSearchSelect label="Employee" value={topUpParent?.employeeNumber || form.employeeNumber} onChange={setEmployee} disabled={Boolean(topUpParent) || editEmployeeLocked} required placeholder="Search employee number or name" />
-            <label><small>Principal Amount</small><input style={{ ...inputStyle, ...(editHistoryLocked ? { opacity: .68 } : {}) }} type="number" min="0.01" step="0.01" value={form.principalAmount} onChange={setField("principalAmount")} disabled={editHistoryLocked} required /></label>
+          <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(205px,1fr))", gap: 12 }}>
+            <EmployeeSearchSelect label="Employee" value={topUpParent?.employeeNumber || form.employeeNumber} onChange={setEmployee} disabled={Boolean(topUpParent)} required placeholder="Search employee number or name" />
+            <label><small>{topUpParent ? "Top-Up Amount Approved by GM" : "Loan Amount Approved by GM"}</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.approvedAmount} onChange={setField("approvedAmount")} required /></label>
             <label><small>Monthly Installment</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>
-            <label><small>Application Date</small><input style={{ ...inputStyle, ...(editHistoryLocked ? { opacity: .68 } : {}) }} type="date" value={form.applicationDate} onChange={setField("applicationDate")} disabled={editHistoryLocked} required /></label>
-            {editingLoan?.disbursedDate && <label><small>Recovery Start</small><input style={inputStyle} type="date" value={form.recoveryStartDate} onChange={setField("recoveryStartDate")} required /></label>}
-            <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required>
-              <option value="">Select ZERMATT loan policy</option>
-              {form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}
-              {loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}
-            </select></label>
+            <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>
+            <label><small>External Accounts Payment Date</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>
+            <label><small>Payroll Recovery Start Month</small><input style={inputStyle} type="month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required /></label>
+            <label><small>GM Approval Reference</small><input style={inputStyle} value={form.gmApprovalReference} onChange={setField("gmApprovalReference")} placeholder="Optional approval/minute reference" /></label>
+            <label><small>Accounts Payment Reference</small><input style={inputStyle} value={form.accountsPaymentReference} onChange={setField("accountsPaymentReference")} placeholder="Optional transfer/payment reference" /></label>
+            <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required><option value="">Select loan policy</option>{form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}{loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}</select></label>
 
-            {!editingLoan && !topUpParent && collateralLoading && (
-              <div style={collateralCard}><strong>Checking EoSB / loan collateral…</strong></div>
-            )}
-            {!editingLoan && !topUpParent && collateral && (
-              <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
-                <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Loan Collateral Assessment</strong>
-                <div style={collateralGrid}>
-                  <span>Service: <strong>{collateral.service?.serviceDays || 0} days</strong></span>
-                  <span>EoSB: <strong>{money(collateral.eosb?.accruedValue)}</strong></span>
-                  <span>Existing exposure: <strong>{money(collateral.loanCollateral?.existingLoanExposure)}</strong></span>
-                  <span>Available collateral: <strong>{money(collateral.loanCollateral?.availableCollateral)}</strong></span>
-                  <span>Basis: <strong>{collateral.loanCollateral?.mode === "EOSB" ? "EoSB-backed" : "Internal surety required"}</strong></span>
-                </div>
-                {collateral.eosb?.missingReason ? <small style={{ color: "#F4D66B" }}>{collateral.eosb.missingReason}</small> : null}
-                {collateral.loanCollateral?.reason ? <small style={{ color: "var(--chris-dashboard-muted)" }}>{collateral.loanCollateral.reason}</small> : null}
+            {collateralLoading && <div style={collateralCard}><strong>Checking EoSB / internal-surety basis…</strong></div>}
+            {collateral && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
+              <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Collateral Control</strong>
+              <div style={collateralGrid}>
+                <span>Service: <strong>{collateral.service?.serviceDays || 0} days</strong></span>
+                <span>EoSB: <strong>{money(collateral.eosb?.accruedValue)}</strong></span>
+                <span>Existing secured exposure: <strong>{money(collateral.loanCollateral?.existingLoanExposure)}</strong></span>
+                <span>Available EoSB collateral: <strong>{money(collateral.loanCollateral?.availableCollateral)}</strong></span>
+                <span>Basis: <strong>{collateral.loanCollateral?.mode === "EOSB" ? "EoSB-backed" : "Internal Surety-backed"}</strong></span>
               </div>
-            )}
-            {!editingLoan && !topUpParent && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && (
-              <div style={{ gridColumn: "1 / -1", padding: 12, border: "1px solid rgba(212,175,55,.28)", borderRadius: 10 }}>
-                <strong style={{ display: "block", marginBottom: 8 }}>Internal Surety</strong>
-                <EmployeeSearchSelect label="Surety Employee" value={form.suretyEmployeeNumber} onChange={setSurety} required placeholder="Search current employee acting as surety" />
-                <small style={{ color: "var(--chris-dashboard-muted)" }}>The surety covers the requested loan amount. The applicant cannot act as their own surety, and inactive/exited employees cannot be selected as valid sureties.</small>
-              </div>
-            )}
+              {collateral.loanCollateral?.mode === "SURETY_REQUIRED" && <EmployeeSearchSelect label="Surety Employee" value={form.suretyEmployeeNumber} onChange={(value) => setForm((current) => ({ ...current, suretyEmployeeNumber: value }))} required placeholder="Search active internal employee" />}
+            </div>}
 
-            {!topUpParent && (!editingLoan || ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(editingLoan.status)) && (
-              <label><small>Completed Loan Application Form {editingLoan ? "(optional replacement)" : "*"}</small><input style={inputStyle} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(e) => setApplicationFormFile(e.target.files?.[0] || null)} required={!editingLoan} /></label>
-            )}
-            <label><small>Notes</small><input style={inputStyle} value={form.notes} onChange={setField("notes")} /></label>
-            <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-              <button style={primaryButton} disabled={Boolean(busy) || collateralLoading || !(topUpParent?.employeeNumber || form.employeeNumber) || !form.purpose || (!editingLoan && !topUpParent && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && !form.suretyEmployeeNumber)}>{busy ? "Saving…" : editingLoan ? "Save Changes" : topUpParent ? "Create Top-Up" : "Create & Submit to Head HR"}</button>
-              {(editingLoan || topUpParent) && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>{editingLoan ? "Cancel Edit" : "Cancel Top-Up"}</button>}
+            {topUpParent && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
+              <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Existing Loan + Top-Up</strong>
+              <div style={collateralGrid}>
+                <span>Current cumulative principal: <strong>{money(topUpParent.principalAmount)}</strong></span>
+                <span>Already recovered: <strong>{money(Math.max(0, Number(topUpParent.principalAmount || 0) - Number(topUpParent.outstandingAmount || 0)))}</strong></span>
+                <span>Current outstanding: <strong>{money(topUpParent.outstandingAmount)}</strong></span>
+                <span>New cumulative principal: <strong>{money(proposedPrincipal)}</strong></span>
+                <span>Revised outstanding: <strong>{money(proposedBalance)}</strong></span>
+              </div>
+            </div>}
+
+            {plan && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
+              <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Revised Repayment Schedule</strong>
+              <div style={collateralGrid}>
+                <span>Balance to recover: <strong>{money(proposedBalance)}</strong></span>
+                <span>Monthly installment: <strong>{money(form.installmentAmount)}</strong></span>
+                <span>Total installments: <strong>{plan.installmentCount}</strong></span>
+                <span>From: <strong>{plan.startMonth}</strong></span>
+                <span>To: <strong>{plan.endMonth}</strong></span>
+                <span>Final installment: <strong>{money(plan.finalInstallment)}</strong></span>
+              </div>
+            </div>}
+
+            <label style={{ gridColumn: "1 / -1" }}><small>Recording Notes</small><textarea style={{ ...inputStyle, minHeight: 76, resize: "vertical" }} value={form.notes} onChange={setField("notes")} placeholder="Optional internal note; payment itself is processed outside CHRiS." /></label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", gridColumn: "1 / -1" }}>
+              <button style={primaryButton} disabled={Boolean(busy) || !plan}>{busy ? "Recording…" : topUpParent ? "Merge Approved Top-Up" : "Record Approved & Disbursed Loan"}</button>
+              {topUpParent && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>Cancel Top-Up</button>}
             </div>
           </form>
         </AnalyticsPanel>
       </section>
 
       <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
-        <AnalyticsPanel title="Loan Register" subtitle="Search by employee number/name, loan number, policy or status. Employee Number and Full Name are shown together." icon={<FaHandHoldingUsd />}>
-          <div style={{ display: "flex", alignItems: "end", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-            <label style={{ flex: "1 1 340px", maxWidth: 460 }}>
-              <small>Search Loan / Employee</small>
-              <input aria-label="Search Loan Register" style={inputStyle} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Employee number, employee name, loan number, policy or status" />
-              <small style={{ color: "var(--chris-dashboard-muted)" }}>Showing {filteredLoans.length} of {loans.length} loan(s)</small>
-            </label>
-            <strong style={{ marginLeft: "auto", alignSelf: "center" }}>Bulk Loan Report</strong>
-            {[["xlsx", "Excel"], ["csv", "CSV"], ["pdf", "PDF"]].map(([format, label]) => <button key={format} style={secondaryButton} disabled={Boolean(busy)} onClick={() => exportBulk(format)}><FaDownload style={{ marginRight: 6 }} />{busy === `export-${format}` ? "Preparing…" : label}</button>)}
+        <AnalyticsPanel title="Loan Register" subtitle="One running loan account per facility. Approved top-ups increase the same account rather than creating a second loan." icon={<FaHandHoldingUsd />}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <input style={{ ...inputStyle, maxWidth: 360 }} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Search employee, loan number, purpose or status" />
+            <button style={secondaryButton} onClick={() => exportBulk("xlsx")} disabled={Boolean(busy)}>Export XLSX</button>
+            <button style={secondaryButton} onClick={() => exportBulk("csv")} disabled={Boolean(busy)}>Export CSV</button>
+            <button style={secondaryButton} onClick={() => exportBulk("pdf")} disabled={Boolean(busy)}>Export PDF</button>
           </div>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1320 }}>
-              <thead><tr>{["Loan", "Employee", "Policy / Purpose", "Principal", "Outstanding", "Installment", "Workflow / Status", "Recovery Start", "Actions"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}>
+              <thead><tr>{["Employee", "Loan", "Cumulative Principal", "Recovered", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
-                {!loading && !filteredLoans.length && <tr><td colSpan="9" style={{ padding: 16 }}>{loans.length ? "No loans match the current search." : "No loans have been recorded."}</td></tr>}
+                {!loading && filteredLoans.length === 0 && <tr><td colSpan="9" style={{ padding: 16 }}>No loan records found.</td></tr>}
                 {filteredLoans.map((loan) => {
-                  const draft = disbursementDrafts[loan.id] || { disbursedDate: today(), recoveryStartMonth: currentMonth(), disbursementReference: "" };
-                  const canEdit = ["DRAFT", "RETURNED_FOR_CORRECTION", "PENDING_APPROVAL", "APPROVED", "ACTIVE", "PAUSED"].includes(loan.status);
-                  const isWorkflowDisbursement = ["GM_APPROVED", "AWAITING_DISBURSEMENT"].includes(loan.status);
+                  const recovered = Math.max(0, Number(loan.principalAmount || 0) - Number(loan.outstandingAmount || 0));
                   return <tr key={loan.id}>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{loan.loanNumber}</strong>{loan.parentLoanNumber ? <div><small>Top-up of {loan.parentLoanNumber}</small></div> : null}</td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{loan.employeeNumber} — {loan.employeeName}</strong></td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{loan.purpose || "—"}<div><small>0% interest</small></div></td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(loan.principalAmount)}</td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(loan.outstandingAmount)}</td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(loan.installmentAmount)}</td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{workflowLabel(loan.status)}</strong></td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{loan.recoveryStartDate || "—"}</td>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                        <button style={primaryButton} disabled={Boolean(busy)} onClick={() => setSelectedLoanProfile(loan.id)}><FaIdCard style={{ marginRight: 6 }} />View Profile</button>
-                        {canEdit && !WORKFLOW_PENDING.includes(loan.status) && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => startEdit(loan)}>Edit</button>}
-                        {["DRAFT", "RETURNED_FOR_CORRECTION"].includes(loan.status) && <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => submitForHr(loan)}>Submit to Head HR</button>}
-                        {loan.status === "PENDING_HR_VERIFICATION" && <>
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => hrDecision(loan, "VERIFY")}>Verify & Forward to GM</button>
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => hrDecision(loan, "RETURN")}>Return</button>
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => hrDecision(loan, "REJECT")}>Reject</button>
-                        </>}
-                        {loan.status === "PENDING_GM_APPROVAL" && <>
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => gmDecision(loan, "APPROVE")}>GM Approve</button>
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => gmDecision(loan, "RETURN")}>GM Return</button>
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => gmDecision(loan, "REJECT")}>GM Reject</button>
-                        </>}
-                        {isWorkflowDisbursement && <>
-                          <input aria-label="Disbursed Date" style={{ ...inputStyle, width: 145 }} type="date" value={draft.disbursedDate} onChange={(e) => setDisbursementDrafts((current) => ({ ...current, [loan.id]: { ...draft, disbursedDate: e.target.value } }))} />
-                          <input aria-label="Recovery Start Month" style={{ ...inputStyle, width: 145 }} type="month" value={draft.recoveryStartMonth} onChange={(e) => setDisbursementDrafts((current) => ({ ...current, [loan.id]: { ...draft, recoveryStartMonth: e.target.value } }))} />
-                          <input aria-label="Disbursement Reference" placeholder="Payment/reference no." style={{ ...inputStyle, width: 170 }} value={draft.disbursementReference} onChange={(e) => setDisbursementDrafts((current) => ({ ...current, [loan.id]: { ...draft, disbursementReference: e.target.value } }))} />
-                          <button style={secondaryButton} disabled={busy === `workflow-${loan.id}`} onClick={() => workflowDisburse(loan)}>Process Disbursement</button>
-                        </>}
-                        {loan.status === "PENDING_APPROVAL" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => legacyDecide(loan, "APPROVE")}>Legacy Approve</button><button style={secondaryButton} disabled={busy === loan.id} onClick={() => legacyDecide(loan, "REJECT")}>Legacy Reject</button></>}
-                        {loan.status === "APPROVED" && <>
-                          <input aria-label="Legacy Disbursed Date" style={{ ...inputStyle, width: 145 }} type="date" value={draft.disbursedDate} onChange={(e) => setDisbursementDrafts((current) => ({ ...current, [loan.id]: { ...draft, disbursedDate: e.target.value } }))} />
-                          <input aria-label="Legacy Recovery Start Month" style={{ ...inputStyle, width: 145 }} type="month" value={draft.recoveryStartMonth} onChange={(e) => setDisbursementDrafts((current) => ({ ...current, [loan.id]: { ...draft, recoveryStartMonth: e.target.value } }))} />
-                          <button style={secondaryButton} disabled={busy === loan.id} onClick={() => legacyDisburse(loan)}>Legacy Disburse</button>
-                        </>}
-                        {loan.status === "ACTIVE" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => statusAction(loan, "PAUSE")}>Pause</button><button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button></>}
-                        {loan.status === "PAUSED" && <><button style={secondaryButton} disabled={busy === loan.id} onClick={() => statusAction(loan, "RESUME")}>Resume</button><button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button></>}
-                        {["PENDING_APPROVAL", "APPROVED", "ACTIVE", "PAUSED"].includes(loan.status) && <button style={secondaryButton} disabled={busy === loan.id} onClick={() => statusAction(loan, "CANCEL")}>Cancel</button>}
-                      </div>
-                    </td>
+                    <td style={cellStyle}><strong>{loan.employeeNumber}</strong><br /><span>{loan.employeeName}</span></td>
+                    <td style={cellStyle}>{loan.loanNumber}<br /><span>{loan.purpose || "—"}</span></td>
+                    <td style={cellStyle}>{money(loan.principalAmount)}</td>
+                    <td style={cellStyle}>{money(recovered)}</td>
+                    <td style={cellStyle}>{money(loan.outstandingAmount)}</td>
+                    <td style={cellStyle}>{money(loan.installmentAmount)}</td>
+                    <td style={cellStyle}>{loan.recoveryStartDate || "—"}</td>
+                    <td style={cellStyle}>{loan.status}</td>
+                    <td style={cellStyle}><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button style={secondaryButton} onClick={() => setSelectedLoanProfile(loan.id)}>Profile</button>
+                      {["ACTIVE", "PAUSED"].includes(loan.status) && <button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button>}
+                      {loan.status === "ACTIVE" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
+                      {loan.status === "PAUSED" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Resume</button>}
+                    </div></td>
                   </tr>;
                 })}
               </tbody>
@@ -731,20 +444,13 @@ function Loans() {
       </section>
 
       <section id="loan-recovery-history" style={{ maxWidth: 1240, margin: "0 auto 36px", padding: "0 20px" }}>
-        <AnalyticsPanel title="Loan Recovery History" subtitle="Payroll draft calculation schedules the installment from the recovery month. The loan balance changes only when payroll is approved; reopened payroll changes the posting to REVERSED rather than deleting history." icon={<FaHistory />}>
+        <AnalyticsPanel title="Loan Recovery History" subtitle="Balances reduce only when payroll recovery is posted. Top-ups never rewrite historical recoveries." icon={<FaHistory />}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead><tr>{["Date", "Employee", "Loan", "Payroll Period", "Amount", "Status"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
                 {!loading && !recoveries.length && <tr><td colSpan="6" style={{ padding: 16 }}>No approved payroll loan recoveries have posted yet.</td></tr>}
-                {recoveries.map((row) => <tr key={row.id}>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{row.recoveryDate}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}><strong>{row.employeeNumber} — {row.employeeName}</strong></td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{row.loanNumber}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{row.payrollPeriodCode}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{money(row.amount)}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{row.status}</td>
-                </tr>)}
+                {recoveries.map((row) => <tr key={row.id}><td style={cellStyle}>{row.recoveryDate}</td><td style={cellStyle}><strong>{row.employeeNumber}</strong> — {row.employeeName}</td><td style={cellStyle}>{row.loanNumber}</td><td style={cellStyle}>{row.payrollPeriodCode}</td><td style={cellStyle}>{money(row.amount)}</td><td style={cellStyle}>{row.status}</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -756,5 +462,6 @@ function Loans() {
 
 const collateralCard = { padding: 13, borderRadius: 10, border: "1px solid rgba(212,175,55,.28)", background: "rgba(212,175,55,.055)", display: "grid", gap: 8 };
 const collateralGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 8, color: "var(--chris-dashboard-text)", fontSize: 12 };
+const cellStyle = { padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)", verticalAlign: "top" };
 
 export default Loans;
