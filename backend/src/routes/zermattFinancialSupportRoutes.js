@@ -35,7 +35,7 @@ function zermattOnly(req, res, next) {
   return next();
 }
 
-function requireHeadHrRecorder(req, res, next) {
+function isHeadHrRecorder(req) {
   const permissions = new Set(req.auth?.permissions || []);
   const roles = (req.auth?.roles || []).map((role) => String(role || "").trim().toUpperCase());
   const roleMatch = roles.some((role) => [
@@ -45,7 +45,11 @@ function requireHeadHrRecorder(req, res, next) {
     "HEAD_HR_VERIFIER",
     "HEAD OF HUMAN RESOURCES",
   ].includes(role));
-  if (!permissions.has("loans.verify") && !roleMatch) {
+  return permissions.has("loans.verify") || roleMatch;
+}
+
+function requireHeadHrRecorder(req, res, next) {
+  if (!isHeadHrRecorder(req)) {
     return res.status(403).json({
       status: "error",
       code: "HEAD_HR_FINANCIAL_SUPPORT_RECORDING_REQUIRED",
@@ -63,6 +67,14 @@ function rejectLegacyLoanOrigination(req, res) {
   });
 }
 
+function rejectLegacyLoanWorkflowMutation(req, res) {
+  return res.status(409).json({
+    status: "error",
+    code: "ZERMATT_LEGACY_LOAN_WORKFLOW_RETIRED",
+    message: "The former CHRiS loan verification, GM approval and disbursement workflow is retired for Zermatt. Historical records remain available for review, but new decisions and disbursement actions must not be processed inside CHRiS.",
+  });
+}
+
 router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
   return res.json({
     status: "success",
@@ -70,6 +82,7 @@ router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
       approval: "MANUAL_GM_OUTSIDE_CHRIS",
       payment: "ACCOUNTS_OUTSIDE_CHRIS",
       recorder: "HEAD_HR",
+      canRecord: isHeadHrRecorder(req),
       systemPurpose: "PAYROLL_RECOVERY_RECORD_ONLY",
       loanTopUp: "MERGE_INTO_EXISTING_LOAN_ACCOUNT",
       appliesTo: ["LOAN", "SALARY_ADVANCE"],
@@ -82,6 +95,16 @@ router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
 // bypass the revised manual-GM/external-Accounts policy.
 router.post("/loans", zermattOnly, rejectLegacyLoanOrigination);
 router.post("/loans/applications", zermattOnly, rejectLegacyLoanOrigination);
+
+// Historical workflow records remain readable, but all obsolete workflow
+// mutations are blocked before the legacy router can process them.
+router.post("/loans/:id/application-form", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/submit-for-hr-verification", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/hr-verification", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/gm-decision", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/disbursement", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.patch("/loans/:id/decision", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.patch("/loans/:id/disburse", zermattOnly, rejectLegacyLoanWorkflowMutation);
 
 router.post("/loans/approved-disbursed", zermattOnly, requireHeadHrRecorder, async (req, res) => {
   try {
