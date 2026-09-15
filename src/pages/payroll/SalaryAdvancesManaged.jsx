@@ -4,6 +4,7 @@ import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { apiRequest } from "../../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const currentMonth = () => new Date().toISOString().slice(0, 7);
 const money = (value) => new Intl.NumberFormat("en-NG", {
   style: "currency",
   currency: "NGN",
@@ -14,10 +15,33 @@ const emptyForm = () => ({
   employeeNumber: "",
   amount: "",
   installmentAmount: "",
+  gmApprovalDate: today(),
   issuedDate: today(),
-  recoveryStartDate: today(),
+  recoveryStartMonth: currentMonth(),
+  gmApprovalReference: "",
+  accountsPaymentReference: "",
   reason: "",
 });
+
+function addMonths(month, offset) {
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return "";
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, monthNumber - 1 + offset, 1)).toISOString().slice(0, 7);
+}
+
+function repaymentPlan(balanceValue, installmentValue, startMonth) {
+  const balance = Math.max(0, Number(balanceValue || 0));
+  const installment = Math.max(0, Number(installmentValue || 0));
+  if (!balance || !installment || !/^\d{4}-\d{2}$/.test(startMonth || "")) return null;
+  const installmentCount = Math.ceil(balance / installment);
+  const finalInstallment = Math.round((balance - installment * Math.max(0, installmentCount - 1)) * 100) / 100;
+  return {
+    installmentCount,
+    startMonth,
+    endMonth: addMonths(startMonth, installmentCount - 1),
+    finalInstallment: finalInstallment || installment,
+  };
+}
 
 export default function SalaryAdvancesManaged() {
   const navigate = useNavigate();
@@ -48,10 +72,9 @@ export default function SalaryAdvancesManaged() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
     if (!message) return undefined;
-    const timer = window.setTimeout(() => setMessage(""), 4000);
+    const timer = window.setTimeout(() => setMessage(""), 5000);
     return () => window.clearTimeout(timer);
   }, [message]);
 
@@ -60,6 +83,8 @@ export default function SalaryAdvancesManaged() {
     [editing]
   );
   const historyLocked = Boolean(editing && (recoveredAmount > 0 || editing.status === "COMPLETED"));
+  const scheduleBalance = editing ? Math.max(0, Number(editing.outstandingAmount || 0)) : Math.max(0, Number(form.amount || 0));
+  const plan = repaymentPlan(scheduleBalance, form.installmentAmount, form.recoveryStartMonth);
 
   const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -86,8 +111,11 @@ export default function SalaryAdvancesManaged() {
       employeeNumber: row.employeeNumber,
       amount: String(row.amount ?? ""),
       installmentAmount: String(row.installmentAmount ?? ""),
+      gmApprovalDate: row.issuedDate || today(),
       issuedDate: row.issuedDate || today(),
-      recoveryStartDate: row.recoveryStartDate || today(),
+      recoveryStartMonth: String(row.recoveryStartDate || today()).slice(0, 7),
+      gmApprovalReference: "",
+      accountsPaymentReference: "",
       reason: row.reason || "",
     });
     setError("");
@@ -101,18 +129,37 @@ export default function SalaryAdvancesManaged() {
       setBusy(editing ? `edit-${editing.id}` : "create");
       setError("");
       setMessage("");
+      const payload = {
+        employeeNumber: form.employeeNumber,
+        amount: form.amount,
+        approvedAmount: form.amount,
+        installmentAmount: form.installmentAmount,
+        gmApprovalDate: form.gmApprovalDate,
+        issuedDate: form.issuedDate,
+        recoveryStartDate: `${form.recoveryStartMonth}-01`,
+        gmApprovalReference: form.gmApprovalReference,
+        accountsPaymentReference: form.accountsPaymentReference,
+        reason: form.reason,
+      };
       if (editing) {
         await apiRequest(`/api/payroll/salary-advances/${editing.id}`, {
           method: "PATCH",
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            employeeNumber: payload.employeeNumber,
+            amount: payload.amount,
+            installmentAmount: payload.installmentAmount,
+            issuedDate: payload.issuedDate,
+            recoveryStartDate: payload.recoveryStartDate,
+            reason: payload.reason,
+          }),
         });
         setMessage("Salary advance changes saved. Existing posted payroll recovery history was preserved.");
       } else {
         await apiRequest("/api/payroll/salary-advances", {
           method: "POST",
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
-        setMessage("Salary advance recorded.");
+        setMessage("GM-approved salary advance recorded as already paid outside CHRiS and activated for payroll recovery.");
       }
       setEditing(null);
       setForm(emptyForm());
@@ -161,7 +208,7 @@ export default function SalaryAdvancesManaged() {
         method: "DELETE",
         body: JSON.stringify({ reason }),
       });
-      setMessage("Unused salary advance deleted by Super User. The deletion remains auditable and draft payrolls were marked for recalculation.");
+      setMessage("Unused salary advance deleted. The deletion remains auditable and draft payrolls were marked for recalculation.");
       if (editing?.id === row.id) reset();
       await load();
     } catch (requestError) {
@@ -176,24 +223,37 @@ export default function SalaryAdvancesManaged() {
       <button type="button" style={backButton} onClick={() => navigate("/payroll")}>← Payroll Dashboard</button>
       <div style={eyebrow}>PAYROLL OPERATIONS</div>
       <h1 style={titleStyle}>Salary Advances</h1>
-      <p style={leadStyle}>Record advances, edit permitted details and control installment recoveries. Outstanding balances reduce only when an approved payroll run contains the recovery.</p>
-      {capabilities.canCancelDelete && <div style={superUserNotice}>ZERMATT Super User control is active: unused advances may be deleted; active/paused advances may be cancelled. Financial history remains immutable.</div>}
+      <p style={leadStyle}>ZERMATT salary advances are approved manually by the GM and paid outside CHRiS by Accounts. Head HR records the already approved and paid amount here only so CHRiS can recover it through payroll.</p>
+      <div style={policyNotice}><strong>Control:</strong> CHRiS does not approve or pay the salary advance. Recording confirms that external GM approval and Accounts payment have already occurred.</div>
+      {capabilities.canCancelDelete && <div style={superUserNotice}>ZERMATT Super User control remains available for correcting unused records or cancelling future recovery. Financial history remains immutable.</div>}
 
-      <Panel title={editing ? `Edit Salary Advance · ${editing.employeeNumber}` : "Record Salary Advance"}>
-        {editing && <p style={controlNote}>
-          {historyLocked
-            ? `This advance has ${money(recoveredAmount)} in posted payroll recovery. Employee, original advance amount and issued date are locked; future installment, recovery start and reason may be adjusted without rewriting history.`
-            : "No posted payroll recovery exists. The employee, amount, dates, installment and reason may still be corrected."}
-        </p>}
+      <Panel title={editing ? `Edit Salary Advance · ${editing.employeeNumber}` : "Record Approved & Paid Salary Advance"}>
+        {editing && <p style={controlNote}>{historyLocked ? `This advance has ${money(recoveredAmount)} in posted payroll recovery. Employee, original amount and payment date are locked; future installment and recovery start may be adjusted without rewriting history.` : "No posted payroll recovery exists. Permitted record details may still be corrected."}</p>}
         <form style={formGrid} onSubmit={save}>
           <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setEmployee} disabled={historyLocked} required placeholder="Search employee number or name" />
-          <Input type="number" label="Advance Amount" value={form.amount} onChange={setField("amount")} min="0.01" step="0.01" disabled={historyLocked} required />
-          <Input type="number" label="Installment Amount" value={form.installmentAmount} onChange={setField("installmentAmount")} min="0.01" step="0.01" required />
-          <Input type="date" label="Issued Date" value={form.issuedDate} onChange={setField("issuedDate")} disabled={historyLocked} required />
-          <Input type="date" label="Recovery Start" value={form.recoveryStartDate} onChange={setField("recoveryStartDate")} required />
-          <Input label="Reason" value={form.reason} onChange={setField("reason")} />
+          <Input type="number" label="Amount Approved by GM" value={form.amount} onChange={setField("amount")} min="0.01" step="0.01" disabled={historyLocked} required />
+          <Input type="number" label="Monthly Installment" value={form.installmentAmount} onChange={setField("installmentAmount")} min="0.01" step="0.01" required />
+          {!editing && <Input type="date" label="GM Approval Date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required />}
+          <Input type="date" label="External Accounts Payment Date" value={form.issuedDate} onChange={setField("issuedDate")} disabled={historyLocked} required />
+          <Input type="month" label="Payroll Recovery Start Month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required />
+          {!editing && <Input label="GM Approval Reference" value={form.gmApprovalReference} onChange={setField("gmApprovalReference")} placeholder="Optional approval/minute reference" />}
+          {!editing && <Input label="Accounts Payment Reference" value={form.accountsPaymentReference} onChange={setField("accountsPaymentReference")} placeholder="Optional transfer/payment reference" />}
+          <Input label="Reason / Notes" value={form.reason} onChange={setField("reason")} />
+
+          {plan && <div style={{ ...scheduleCard, gridColumn: "1 / -1" }}>
+            <strong>Payroll Recovery Schedule</strong>
+            <div style={scheduleGrid}>
+              <span>Balance: <strong>{money(scheduleBalance)}</strong></span>
+              <span>Installment: <strong>{money(form.installmentAmount)}</strong></span>
+              <span>Installments: <strong>{plan.installmentCount}</strong></span>
+              <span>From: <strong>{plan.startMonth}</strong></span>
+              <span>To: <strong>{plan.endMonth}</strong></span>
+              <span>Final installment: <strong>{money(plan.finalInstallment)}</strong></span>
+            </div>
+          </div>}
+
           <div style={buttonRow}>
-            <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy ? "Saving…" : editing ? "Save Changes" : "Record Advance"}</button>
+            <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber || !plan}>{busy ? "Saving…" : editing ? "Save Changes" : "Record Approved & Paid Advance"}</button>
             {editing && <button type="button" style={secondaryButton} onClick={reset} disabled={Boolean(busy)}>Cancel Edit</button>}
           </div>
         </form>
@@ -205,7 +265,7 @@ export default function SalaryAdvancesManaged() {
       <Panel title="Salary Advance Register">
         <div style={tableWrap}>
           <table style={tableStyle}>
-            <thead><tr>{["Employee", "Name", "Advance", "Recovered", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={thStyle}>{head}</th>)}</tr></thead>
+            <thead><tr>{["Employee", "Name", "Approved/Paid Advance", "Recovered", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={thStyle}>{head}</th>)}</tr></thead>
             <tbody>
               {!loading && rows.length === 0 && <tr><td colSpan="9" style={tdStyle}>No salary advances have been recorded.</td></tr>}
               {rows.map((row) => {
@@ -215,11 +275,7 @@ export default function SalaryAdvancesManaged() {
                 const deletable = capabilities.canCancelDelete && recovered <= 0 && !["COMPLETED"].includes(row.status);
                 return <tr key={row.id}>
                   <Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{money(row.amount)}</Td><Td>{money(recovered)}</Td><Td>{money(row.outstandingAmount)}</Td><Td>{money(row.installmentAmount)}</Td><Td>{row.recoveryStartDate}</Td><Td><Badge>{row.status}</Badge></Td>
-                  <Td><div style={actionRow}>
-                    {editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}
-                    {cancellable && <button type="button" style={warningButton} disabled={Boolean(busy)} onClick={() => cancelAdvance(row)}>{busy === `cancel-${row.id}` ? "Cancelling…" : "Cancel"}</button>}
-                    {deletable && <button type="button" style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteAdvance(row)}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}
-                  </div></Td>
+                  <Td><div style={actionRow}>{editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}{cancellable && <button type="button" style={warningButton} disabled={Boolean(busy)} onClick={() => cancelAdvance(row)}>{busy === `cancel-${row.id}` ? "Cancelling…" : "Cancel"}</button>}{deletable && <button type="button" style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteAdvance(row)}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}</div></Td>
                 </tr>;
               })}
             </tbody>
@@ -240,7 +296,10 @@ const pageStyle = { maxWidth: 1500, margin: "0 auto", color: "#F7FAF8" };
 const backButton = { border: 0, background: "transparent", color: "#D4AF37", fontWeight: 900, cursor: "pointer", padding: "0 0 14px" };
 const eyebrow = { color: "#D4AF37", fontSize: 11, fontWeight: 900, letterSpacing: ".14em" };
 const titleStyle = { margin: "6px 0", fontSize: 32 };
-const leadStyle = { color: "#C7D3CC", lineHeight: 1.65, maxWidth: 1050, marginBottom: 22 };
+const leadStyle = { color: "#C7D3CC", lineHeight: 1.65, maxWidth: 1050, marginBottom: 14 };
+const policyNotice = { padding: 13, marginBottom: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.5)", background: "rgba(212,175,55,.08)", color: "#F7FAF8", lineHeight: 1.55 };
+const superUserNotice = { padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid rgba(134,239,172,.35)", color: "#BBF7D0" };
+const controlNote = { color: "#C7D3CC", lineHeight: 1.55, marginTop: 0 };
 const panelStyle = { marginTop: 18, padding: 20, border: "1px solid rgba(212,175,55,.45)", borderRadius: 15, background: "linear-gradient(145deg,rgba(8,50,33,.94),rgba(3,20,13,.96))", boxShadow: "0 15px 38px rgba(0,0,0,.24)" };
 const panelTitle = { margin: "0 0 15px", fontSize: 18, color: "#D4AF37" };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, alignItems: "end" };
@@ -258,9 +317,9 @@ const tableWrap = { overflowX: "auto", minHeight: 50 };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 1050 };
 const thStyle = { textAlign: "left", padding: "10px 9px", color: "#D4AF37", fontSize: 11, borderBottom: "1px solid rgba(255,255,255,.09)", whiteSpace: "nowrap" };
 const tdStyle = { padding: "10px 9px", color: "#C7D3CC", fontSize: 12, borderBottom: "1px solid rgba(255,255,255,.055)", verticalAlign: "top", whiteSpace: "nowrap" };
-const badgeStyle = { display: "inline-block", borderRadius: 999, padding: "4px 8px", border: "1px solid rgba(212,175,55,.4)", color: "#D4AF37", background: "rgba(212,175,55,.08)", fontSize: 10, fontWeight: 900 };
-const errorStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(248,113,113,.45)", background: "rgba(185,28,28,.14)", color: "#FCA5A5" };
-const successStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.45)", background: "rgba(212,175,55,.08)", color: "#F7FAF8" };
-const superUserNotice = { margin: "0 0 16px", padding: 11, borderRadius: 10, border: "1px solid rgba(212,175,55,.45)", background: "rgba(212,175,55,.08)", color: "#F7FAF8", fontSize: 12 };
-const controlNote = { margin: "0 0 14px", color: "#C7D3CC", lineHeight: 1.55, fontSize: 12 };
-const mutedStyle = { color: "#9FB7AA", fontSize: 11 };
+const badgeStyle = { display: "inline-flex", padding: "4px 8px", borderRadius: 999, border: "1px solid rgba(212,175,55,.45)", color: "#D4AF37", fontWeight: 900, fontSize: 10 };
+const mutedStyle = { color: "#789082", fontSize: 11 };
+const errorStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(248,113,113,.6)", color: "#FCA5A5" };
+const successStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(134,239,172,.35)", color: "#BBF7D0" };
+const scheduleCard = { padding: 13, borderRadius: 10, border: "1px solid rgba(212,175,55,.35)", background: "rgba(212,175,55,.06)", display: "grid", gap: 8, color: "#F7FAF8" };
+const scheduleGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8, color: "#C7D3CC", fontSize: 12 };
