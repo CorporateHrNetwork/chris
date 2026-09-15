@@ -45,9 +45,21 @@ function buildAmortizationSchedule({
     postedByMonth.set(key, money((postedByMonth.get(key) || 0) + Number(recovery.amount || 0)));
   }
 
-  // Once explicit legacy month events exist, they are the authoritative schedule history.
-  // Do not re-spend the aggregate openingRecoveredAmount in later months.
-  let remainingLegacyPaid = legacyByMonth.size ? 0 : Math.max(0, money(openingRecoveredAmount));
+  // Explicit legacy-period events remain authoritative for the months they cover.
+  // The aggregate opening recovered balance is independent evidence of historical
+  // recovery. Reserve the value already represented by explicit PAID events and
+  // carry only the unrepresented remainder forward as a compatibility fallback.
+  // This repairs a genuinely missing legacy month (for example August 2026) without
+  // inferring payment merely because a calendar month has passed.
+  const explicitLegacyPaidAmount = money(
+    Array.from(legacyByMonth.values())
+      .filter((event) => event.status === "PAID")
+      .reduce((sum, event) => sum + Number(event.amount || 0), 0)
+  );
+  let remainingLegacyPaid = Math.max(
+    0,
+    money(Number(openingRecoveredAmount || 0) - explicitLegacyPaidAmount)
+  );
   let plannedOutstanding = principal;
   let monthOffset = 0;
   const schedule = [];
@@ -93,8 +105,9 @@ function buildAmortizationSchedule({
       }
       paymentSource = "APPROVED_PAYROLL";
     } else if (remainingLegacyPaid > 0) {
-      // Compatibility fallback for opening loans created before explicit legacy-period history existed.
-      // Currency-rounding residues of up to ₦1 must never create a false PARTIAL installment.
+      // Compatibility fallback for an opening-balance amount not yet represented by
+      // an explicit legacy-period event. Currency-rounding residues of up to ₦1 must
+      // never create a false PARTIAL installment.
       if (remainingLegacyPaid + 1 >= scheduledPrincipal) {
         status = "PAID";
         amountPaid = scheduledPrincipal;
@@ -165,7 +178,7 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
               pp."code" AS "payrollPeriodCode",pp."name" AS "payrollPeriodName",pr."approvedAt"
          FROM "payroll_loan_recoveries" r
          JOIN "payroll_runs" pr ON pr."id"=r."runId" AND pr."organizationId"=r."organizationId"
-         JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
+         JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=r."organizationId"
         WHERE r."organizationId"=$1 AND r."loanId"=$2
         ORDER BY r."recoveryDate" ASC,r."createdAt" ASC`,
       organizationId,
