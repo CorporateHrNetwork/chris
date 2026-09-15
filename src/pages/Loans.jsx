@@ -281,7 +281,7 @@ function Loans() {
       setMessage("");
 
       if (editingLoan) {
-        const result = await apiRequest(`/api/loans/${editingLoan.id}`, {
+        await apiRequest(`/api/loans/${editingLoan.id}`, {
           method: "PATCH",
           body: JSON.stringify({
             employeeNumber: editingLoan.employeeNumber,
@@ -342,6 +342,40 @@ function Loans() {
       await load();
     } catch (requestError) {
       setError(requestError?.message || "Unable to update loan status.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const completeExternally = async (loan) => {
+    const outstanding = Math.max(0, Number(loan.outstandingAmount || 0));
+    if (outstanding <= 0) {
+      setError("This loan has no outstanding balance to clear.");
+      return;
+    }
+    const reason = window.prompt(
+      `Record how ${loan.employeeNumber} — ${loan.employeeName} cleared the remaining ${money(outstanding)} outside salary deduction. Include the payment source/reference and supporting note:`
+    );
+    if (!reason?.trim()) return;
+    if (!window.confirm(
+      `Mark loan ${loan.loanNumber} COMPLETED and set its outstanding balance to ₦0.00? No payroll recovery will be fabricated. This action and the previous balance remain traceable in the organization audit trail.`
+    )) return;
+
+    try {
+      setBusy(`COMPLETE_EXTERNAL-${loan.id}`);
+      setError("");
+      setMessage("");
+      await apiRequest(`/api/loans/${loan.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          action: "COMPLETE_EXTERNAL",
+          reason: reason.trim(),
+        }),
+      });
+      setMessage(`Loan ${loan.loanNumber} marked COMPLETED after external settlement of ${money(outstanding)}. Payroll recovery has stopped and the action is preserved in the audit trail.`);
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to complete the loan from the external settlement.");
     } finally {
       setBusy("");
     }
@@ -444,10 +478,10 @@ function Loans() {
           <DashboardCard key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
           <DashboardCard key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
           <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Remaining payroll-recoverable balance" icon={<FaBalanceScale />} tone="gold" />,
-          <DashboardCard key="recovered" title="Recovered" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Principal already recovered through payroll" icon={<FaMoneyCheckAlt />} tone="green" />,
+          <DashboardCard key="recovered" title="Principal Cleared" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Payroll/opening recoveries plus recorded external settlements" icon={<FaMoneyCheckAlt />} tone="green" />,
         ]}
         analytics={<AnalyticsPanel title="Zermatt Loan Control" subtitle="Manual approval outside CHRiS; payroll recovery inside CHRiS." icon={<FaChartLine />}><RecentActivityList items={activity} /></AnalyticsPanel>}
-        recentActivity={<AnalyticsPanel title="Recording Rule" subtitle="CHRiS is not a loan-payment engine." icon={<FaFileInvoiceDollar />}><div style={{ display: "grid", gap: 8, lineHeight: 1.6 }}><strong>1. GM approves manually.</strong><span>2. Accounts processes payment outside CHRiS.</span><span>3. Authorized HR records the approved/disbursed amount.</span><span>4. CHRiS recovers the configured installment through payroll.</span><span style={{ marginTop: 5 }}>{scopeText}</span></div></AnalyticsPanel>}
+        recentActivity={<AnalyticsPanel title="Recording Rule" subtitle="CHRiS is not a loan-payment engine." icon={<FaFileInvoiceDollar />}><div style={{ display: "grid", gap: 8, lineHeight: 1.6 }}><strong>1. GM approves manually.</strong><span>2. Accounts processes payment outside CHRiS.</span><span>3. Authorized HR records the approved/disbursed amount.</span><span>4. CHRiS recovers the configured installment through payroll.</span><span>5. If an employee clears the balance outside payroll, HR records External Settlement; CHRiS does not fabricate a salary deduction.</span><span style={{ marginTop: 5 }}>{scopeText}</span></div></AnalyticsPanel>}
         quickActions={[
           <QuickActionCard key="record" title="Record Approved Loan" subtitle="Record an already approved/disbursed employee loan" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
           <QuickActionCard key="advances" title="Salary Advances" subtitle="Same manual GM approval / external payment policy" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
@@ -546,7 +580,7 @@ function Loans() {
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
-              <thead><tr>{["Employee", "Loan", "Cumulative Principal", "Recovered", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
+              <thead><tr>{["Employee", "Loan", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
                 {!loading && filteredLoans.length === 0 && <tr><td colSpan="9" style={{ padding: 16 }}>No loan records found.</td></tr>}
                 {filteredLoans.map((loan) => {
@@ -565,6 +599,7 @@ function Loans() {
                       <button style={secondaryButton} onClick={() => setSelectedLoanProfile(loan.id)}>View Profile</button>
                       {capabilities.canManageLoans && current && <button style={secondaryButton} onClick={() => startEdit(loan)}>Edit</button>}
                       {capabilities.canManageLoans && current && <button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button>}
+                      {capabilities.canManageLoans && current && Number(loan.outstandingAmount || 0) > 0 && <button style={primaryButton} disabled={Boolean(busy)} onClick={() => completeExternally(loan)}>Mark Completed</button>}
                       {capabilities.canManageLoans && loan.status === "ACTIVE" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
                       {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Resume</button>}
                       {capabilities.canDeleteEmployeeFinancialInputs && recovered <= 0 && loan.status !== "COMPLETED" && <button style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteLoan(loan)}>Delete</button>}
@@ -578,7 +613,7 @@ function Loans() {
       </section>
 
       <section id="loan-recovery-history" style={{ maxWidth: 1240, margin: "0 auto 36px", padding: "0 20px" }}>
-        <AnalyticsPanel title="Loan Recovery History" subtitle="Balances reduce only when payroll recovery is posted. Top-ups never rewrite historical recoveries." icon={<FaHistory />}>
+        <AnalyticsPanel title="Loan Recovery History" subtitle="This register contains actual approved-payroll deductions only. External settlements complete the loan without creating a fake payroll recovery and remain traceable in the loan record and organization audit trail." icon={<FaHistory />}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead><tr>{["Date", "Employee", "Loan", "Payroll Period", "Amount", "Status"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
