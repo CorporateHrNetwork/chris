@@ -73,7 +73,33 @@ test("Leave Allowance is 10 percent of annual Basic, not annual Gross", () => {
   assert.notEqual(result.leaveAllowance, 240000, "must not calculate 10% of annual Gross");
 });
 
-test("Zermatt Leave Allowance is wired through Benefits, payroll, approved payslip and duplicate protection", () => {
+test("Zermatt Leave Allowance is a non-taxable after-tax benefit", () => {
+  const service = read("backend/src/services/zermattLeaveAllowanceService.js");
+  const register = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
+  const payslip = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+
+  for (const expected of [
+    "taxable: false",
+    'payrollTreatment: "AFTER_TAX_NON_TAXABLE"',
+    "payeImpact: 0",
+    "const grossPay = oldGross",
+    "const allowances = oldAllowances",
+    "const deductions = oldDeductions",
+    "const netPreview = round2(oldNet + calculation.leaveAllowance)",
+  ]) {
+    assert.ok(service.includes(expected), `After-tax Leave Allowance control missing: ${expected}`);
+  }
+
+  assert.ok(!service.includes("calculateAnnualPaye"), "Leave Allowance must not trigger PAYE recalculation");
+  assert.ok(!service.includes("leaveAllowanceTaxableEarning"), "Leave Allowance must not be recorded as taxable earning");
+  assert.ok(!service.includes('"Leave Allowance": calculation.leaveAllowance'), "Leave Allowance must not be merged into taxable salary structure");
+  assert.ok(register.includes('payrollTreatment: "AFTER_TAX_NON_TAXABLE"'), "Benefits register must disclose after-tax treatment");
+  assert.ok(register.includes("taxable: false"), "Benefits register must mark Leave Allowance non-taxable");
+  assert.ok(payslip.includes("Leave Allowance · After Tax / Non-taxable"), "approved payslip must show Leave Allowance as a separate after-tax element");
+  assert.ok(payslip.includes("Taxable Gross Pay"), "payslip must distinguish taxable Gross Pay from after-tax Leave Allowance");
+});
+
+test("Zermatt Leave Allowance remains wired through Benefits, payroll, approved payslip and duplicate protection", () => {
   const service = read("backend/src/services/zermattLeaveAllowanceService.js");
   const register = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
   const route = read("backend/src/routes/zermattLeaveAllowanceRoutes.js");
@@ -87,9 +113,7 @@ test("Zermatt Leave Allowance is wired through Benefits, payroll, approved paysl
     "ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR",
     "Basic Monthly Salary × 12 × 10%",
     "pr.status='APPROVED'",
-    '"Leave Allowance": calculation.leaveAllowance',
     "benefitEarnings",
-    "additionalPaye",
   ]) {
     assert.ok(service.includes(expected), `Leave Allowance service control missing: ${expected}`);
   }
@@ -104,8 +128,7 @@ test("Zermatt Leave Allowance is wired through Benefits, payroll, approved paysl
   assert.ok(benefits.includes('workspace === "leave-allowance"'), "Leave Allowance must be a Benefits child workspace");
   assert.ok(benefits.includes("ZermattLeaveAllowance"), "Benefits child workspace component missing");
 
-  assert.ok(payslip.includes("Object.entries(structure)"), "payslip must render structured earnings separately");
-  assert.ok(payslip.includes("Gross Pay"), "payslip Gross Pay reconciliation missing");
+  assert.ok(payslip.includes("Leave Allowance"), "payslip must render Leave Allowance separately");
   assert.ok(payslip.includes("Net Pay"), "payslip Net Pay reconciliation missing");
 });
 
