@@ -339,12 +339,12 @@ async function completeLoanFromExternalSettlement({ organizationId, actorUserId,
       `UPDATE "payroll_loans"
           SET "status"='COMPLETED',
               "outstandingAmount"=0,
-              "externalSettlementAmount"=$3,
+              "externalSettlementAmount"=$3::numeric,
               "externalSettlementDate"=$4::date,
               "externalSettlementSource"='OTHER_EXTERNAL_SOURCE',
               "externalSettlementReference"=NULL,
-              "externalSettlementReason"=$5,
-              "notes"=CONCAT_WS(' | ',NULLIF("notes",''),$5),
+              "externalSettlementReason"=$5::text,
+              "notes"=CONCAT_WS(' | ',NULLIF("notes",''),$5::text),
               "updatedAt"=CURRENT_TIMESTAMP
         WHERE "organizationId"=$1 AND "id"=$2
         RETURNING *`,
