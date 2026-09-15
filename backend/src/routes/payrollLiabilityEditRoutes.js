@@ -11,6 +11,7 @@ const {
   requireEmployeeFinancialInputEditor,
   requireLoanEditor,
   requireHeadHrFinancialControl,
+  assertEmployeeNumberAccess,
   assertSalaryAdvanceAccess,
   assertLoanRecordAccess,
   capabilitySnapshot,
@@ -69,7 +70,12 @@ router.get("/payroll/salary-advances/control-capabilities", payrollView, (req, r
 
 router.patch("/payroll/salary-advances/:id", requireSalaryAdvanceEditor, async (req, res) => {
   try {
-    if (isZermatt(req)) await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
+    if (isZermatt(req)) {
+      await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
+      if (req.body?.employeeNumber) {
+        await assertEmployeeNumberAccess({ req, employeeNumber: req.body.employeeNumber, prismaClient: prisma });
+      }
+    }
     const data = await updateSalaryAdvance({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
@@ -129,7 +135,12 @@ router.delete("/payroll/salary-advances/:id", requireSalaryAdvanceDeleteControl,
 
 router.patch("/loans/:id", requireLoanLiabilityEditor, async (req, res) => {
   try {
-    if (isZermatt(req)) await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    if (isZermatt(req)) {
+      await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+      if (req.body?.employeeNumber) {
+        await assertEmployeeNumberAccess({ req, employeeNumber: req.body.employeeNumber, prismaClient: prisma });
+      }
+    }
     const input = { ...(req.body || {}) };
     if (input.purpose !== undefined) {
       input.purpose = await validateLoanPurpose({
