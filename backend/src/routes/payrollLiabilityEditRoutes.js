@@ -5,6 +5,16 @@ const { updateSalaryAdvance, updateLoan } = require("../services/payrollLiabilit
 const { cancelSalaryAdvance, deleteSalaryAdvance } = require("../services/salaryAdvanceControlService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
 const { validateLoanPurpose } = require("../services/loanPolicyService");
+const {
+  isZermatt,
+  canDeleteEmployeeFinancialInputs,
+  requireEmployeeFinancialInputEditor,
+  requireLoanEditor,
+  requireHeadHrFinancialControl,
+  assertSalaryAdvanceAccess,
+  assertLoanRecordAccess,
+  capabilitySnapshot,
+} = require("../services/zermattHrFinancialAccessService");
 const payrollDraftFreshnessRoutes = require("./payrollDraftFreshnessRoutes");
 
 const router = express.Router();
@@ -24,43 +34,32 @@ function sendError(res, error, fallback) {
   return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
 
-function isSuperUser(req) {
-  const roles = (req.auth?.roles || []).map((role) => String(role || "").trim().toUpperCase().replace(/[\s_-]+/g, ""));
-  const permissions = new Set(req.auth?.permissions || []);
-  const organizationSlug = String(req.auth?.organization?.slug || "").trim().toLowerCase();
-  const superRole = roles.some((role) => [
-    "SUPERUSER",
-    "SUPERADMIN",
-    "ORGANIZATIONSUPERUSER",
-    "ORGANIZATIONADMINISTRATOR",
-    "ADMINISTRATOR",
-  ].includes(role));
-  const superPermissionProfile = [
-    "payroll.manage",
-    "users.manage",
-    "roles.manage",
-    "settings.manage",
-  ].every((permission) => permissions.has(permission));
+const payrollManage = requirePermission("payroll.manage");
+const payrollView = requirePermission("payroll.view");
 
-  return organizationSlug === "zermatt-liquor-limited" && (superRole || superPermissionProfile);
+function requireSalaryAdvanceEditor(req, res, next) {
+  if (isZermatt(req)) return requireEmployeeFinancialInputEditor(req, res, next);
+  return payrollManage(req, res, next);
 }
 
-function requireZermattSuperUser(req, res, next) {
-  if (!isSuperUser(req)) {
-    return res.status(403).json({
-      status: "error",
-      code: "ZERMATT_SUPER_USER_REQUIRED",
-      message: "Only the ZERMATT Super User can cancel or delete salary advances.",
-    });
-  }
-  next();
+function requireLoanLiabilityEditor(req, res, next) {
+  if (isZermatt(req)) return requireLoanEditor(req, res, next);
+  return payrollManage(req, res, next);
 }
 
-router.get("/payroll/salary-advances/control-capabilities", requirePermission("payroll.manage"), (req, res) => {
+function requireSalaryAdvanceDeleteControl(req, res, next) {
+  if (isZermatt(req)) return requireHeadHrFinancialControl(req, res, next);
+  return payrollManage(req, res, next);
+}
+
+router.get("/payroll/salary-advances/control-capabilities", payrollView, (req, res) => {
+  const capabilities = capabilitySnapshot(req);
   return res.json({
     status: "success",
     data: {
-      canCancelDelete: isSuperUser(req),
+      ...capabilities,
+      canEdit: isZermatt(req) ? capabilities.canManageEmployeeFinancialInputs : (req.auth?.permissions || []).includes("payroll.manage"),
+      canCancelDelete: isZermatt(req) ? canDeleteEmployeeFinancialInputs(req) : false,
       deleteRule: "UNUSED_ONLY",
       cancelRule: "ACTIVE_OR_PAUSED",
       historicalRecoveryImmutable: true,
@@ -68,8 +67,9 @@ router.get("/payroll/salary-advances/control-capabilities", requirePermission("p
   });
 });
 
-router.patch("/payroll/salary-advances/:id", requirePermission("payroll.manage"), async (req, res) => {
+router.patch("/payroll/salary-advances/:id", requireSalaryAdvanceEditor, async (req, res) => {
   try {
+    if (isZermatt(req)) await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
     const data = await updateSalaryAdvance({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
@@ -87,8 +87,9 @@ router.patch("/payroll/salary-advances/:id", requirePermission("payroll.manage")
   }
 });
 
-router.post("/payroll/salary-advances/:id/cancel", requirePermission("payroll.manage"), requireZermattSuperUser, async (req, res) => {
+router.post("/payroll/salary-advances/:id/cancel", requireSalaryAdvanceDeleteControl, async (req, res) => {
   try {
+    if (isZermatt(req)) await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
     const data = await cancelSalaryAdvance({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
@@ -98,7 +99,7 @@ router.post("/payroll/salary-advances/:id/cancel", requirePermission("payroll.ma
     const freshness = await markDraftRunsRecalculationRequired({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
-      reason: `Salary Advance ${req.params.id} was cancelled by the ZERMATT Super User and payroll drafts must be recalculated.`,
+      reason: `Salary Advance ${req.params.id} was cancelled by authorized HR control and payroll drafts must be recalculated.`,
     });
     return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
   } catch (error) {
@@ -106,8 +107,9 @@ router.post("/payroll/salary-advances/:id/cancel", requirePermission("payroll.ma
   }
 });
 
-router.delete("/payroll/salary-advances/:id", requirePermission("payroll.manage"), requireZermattSuperUser, async (req, res) => {
+router.delete("/payroll/salary-advances/:id", requireSalaryAdvanceDeleteControl, async (req, res) => {
   try {
+    if (isZermatt(req)) await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
     const data = await deleteSalaryAdvance({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
@@ -117,7 +119,7 @@ router.delete("/payroll/salary-advances/:id", requirePermission("payroll.manage"
     const freshness = await markDraftRunsRecalculationRequired({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
-      reason: `Salary Advance ${req.params.id} was deleted by the ZERMATT Super User and payroll drafts must be recalculated.`,
+      reason: `Salary Advance ${req.params.id} was deleted by authorized HR control and payroll drafts must be recalculated.`,
     });
     return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
   } catch (error) {
@@ -125,8 +127,9 @@ router.delete("/payroll/salary-advances/:id", requirePermission("payroll.manage"
   }
 });
 
-router.patch("/loans/:id", requirePermission("payroll.manage"), async (req, res) => {
+router.patch("/loans/:id", requireLoanLiabilityEditor, async (req, res) => {
   try {
+    if (isZermatt(req)) await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
     const input = { ...(req.body || {}) };
     if (input.purpose !== undefined) {
       input.purpose = await validateLoanPurpose({
@@ -141,7 +144,12 @@ router.patch("/loans/:id", requirePermission("payroll.manage"), async (req, res)
       loanId: req.params.id,
       input,
     });
-    return res.json({ status: "success", data });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Loan ${req.params.id} was edited and payroll drafts must be recalculated.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
   } catch (error) {
     return sendError(res, error, "Unable to edit loan.");
   }
