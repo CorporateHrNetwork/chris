@@ -42,6 +42,7 @@ const employeeEmploymentAssignmentRoutes = require("./routes/employeeEmploymentA
 const employeeInvitationPublicRoutes = require("./routes/employeeInvitationPublicRoutes");
 const employmentGovernanceRoutes = require("./routes/employmentGovernanceRoutes");
 const zermattOperationsRoutes = require("./routes/zermattOperationsRoutes");
+const supportDeskCancellationRoutes = require("./routes/supportDeskCancellationRoutes");
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
 const eosbRoutes = require("./routes/eosbRoutes");
@@ -75,6 +76,10 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+// Requester cancellation is a guarded client action and is mounted before the
+// general Support Desk router so the dedicated ownership/attendance checks are
+// authoritative for /client/tickets/:ticketNumber/cancel.
+app.use("/api/support-desk", supportDeskCancellationRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/eosb", eosbRoutes);
