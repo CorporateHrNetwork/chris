@@ -5,6 +5,7 @@ const TABS = [
   ["legal", "Nigerian Employment Resources"],
   ["policy", "Employment Policy"],
   ["offer", "Employment Offer"],
+  ["sops", "SOPs"],
   ["jobs", "Job Descriptions"],
   ["onboarding", "Onboarding Material"],
   ["templates", "HR Templates"],
@@ -15,7 +16,9 @@ export default function ZermattEmploymentResources() {
   const [error, setError] = useState("");
   const [tab, setTab] = useState("legal");
   const [search, setSearch] = useState("");
+  const [sopSearch, setSopSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedSop, setSelectedSop] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -32,6 +35,13 @@ export default function ZermattEmploymentResources() {
     return rows.filter((row) => [row.jobTitle, row.designationCode, row.function, row.employmentLevel].some((value) => String(value || "").toLowerCase().includes(term)));
   }, [data, search]);
 
+  const sops = useMemo(() => {
+    const term = sopSearch.trim().toLowerCase();
+    const rows = data?.standardOperatingProcedures || [];
+    if (!term) return rows;
+    return rows.filter((row) => [row.title, row.category, row.owner, row.purpose].some((value) => String(value || "").toLowerCase().includes(term)));
+  }, [data, sopSearch]);
+
   if (error) return <section style={panel}><div style={errorStyle}>{error}</div></section>;
   if (!data) return <section style={panel}>Loading Zermatt employment resources…</section>;
 
@@ -39,12 +49,13 @@ export default function ZermattEmploymentResources() {
     <div style={{ marginBottom: 22 }}>
       <div style={eyebrow}>DOCUMENTS · EMPLOYMENT RESOURCES</div>
       <h1 style={{ margin: "7px 0 6px", fontSize: "var(--chris-font-2xl)" }}>Zermatt Employment Resource Library</h1>
-      <p style={lead}>Controlled HR working materials, statutory references, role descriptions, onboarding packs and reusable templates for Zermatt Liquor Limited.</p>
+      <p style={lead}>Controlled HR and operational working materials, statutory references, SOPs, role descriptions, onboarding packs and reusable templates for Zermatt Liquor Limited.</p>
       <div style={notice}>{data.disclaimer}</div>
     </div>
 
     <div style={metrics}>
       <Metric label="Legal / Compliance Guides" value={data.summary?.legalResources} />
+      <Metric label="SOPs" value={data.summary?.standardOperatingProcedures} />
       <Metric label="Job Descriptions" value={data.summary?.jobDescriptions} />
       <Metric label="Onboarding Materials" value={data.summary?.onboardingMaterials} />
       <Metric label="HR Templates" value={data.summary?.hrTemplates} />
@@ -55,6 +66,27 @@ export default function ZermattEmploymentResources() {
     {tab === "legal" && <Grid>{(data.legalResources || []).map((item) => <ResourceCard key={item.id} item={item} />)}</Grid>}
     {tab === "policy" && <Document title={data.employmentPolicy?.title} subtitle={`Version: ${data.employmentPolicy?.version}`}>{(data.employmentPolicy?.sections || []).map(([heading, text]) => <Section key={heading} heading={heading} text={text} />)}</Document>}
     {tab === "offer" && <Document title={data.employmentOfferTemplate?.title} subtitle="Reusable Zermatt recruitment / appointment working template. Management and HR must complete all placeholders before issue.">{(data.employmentOfferTemplate?.body || []).map((line, index) => <p key={index} style={paragraph}>{line}</p>)}</Document>}
+    {tab === "sops" && <>
+      <section style={panel}>
+        <div style={row}>
+          <div>
+            <h2 style={h2}>Standard Operating Procedures</h2>
+            <p style={muted}>Controlled Zermatt procedures covering HR, payroll, employee relations, safety, security, stock, procurement, finance, branch operations, Beer Barn, warehouse, logistics and ICT.</p>
+            <p style={{ ...muted, marginTop: 6 }}>Status: {String(data.sopStatus || "DRAFT_FOR_MANAGEMENT_APPROVAL").replaceAll("_", " ")}</p>
+          </div>
+          <input value={sopSearch} onChange={(e) => setSopSearch(e.target.value)} placeholder="Search SOP title, category, owner or purpose" style={input} />
+        </div>
+        <div style={{ ...muted, marginTop: 12 }}>{sops.length} SOP(s) shown · {(data.sopCategories || []).length} operational categories</div>
+      </section>
+      <Grid>{sops.map((sop) => <button type="button" key={sop.id} style={{ ...card, textAlign: "left", cursor: "pointer" }} onClick={() => setSelectedSop(sop)}>
+        <div style={tag}>{sop.category}</div>
+        <h3 style={h3}>{sop.title}</h3>
+        <div style={muted}>Owner: {sop.owner}</div>
+        <p style={paragraph}>{sop.purpose}</p>
+        <div style={openText}>OPEN SOP →</div>
+      </button>)}</Grid>
+      {selectedSop && <SopDocument sop={selectedSop} onClose={() => setSelectedSop(null)} />}
+    </>}
     {tab === "jobs" && <>
       <section style={panel}><div style={row}><div><h2 style={h2}>Job Descriptions</h2><p style={muted}>Generated from the authoritative Zermatt designation catalogue so every configured role has a controlled JD baseline.</p></div><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search title, code, function or level" style={input} /></div></section>
       <Grid>{jobs.map((job) => <button type="button" key={job.id} style={{ ...card, textAlign: "left", cursor: "pointer" }} onClick={() => setSelectedJob(job)}><div style={tag}>{job.designationCode}</div><h3 style={h3}>{job.jobTitle}</h3><div style={muted}>{job.function}</div><div style={{ ...muted, marginTop: 5 }}>{job.employmentLevel}</div><div style={openText}>OPEN JOB DESCRIPTION →</div></button>)}</Grid>
@@ -88,7 +120,25 @@ function JobDescription({ job, onClose }) {
     <div style={{ marginTop: 12 }}><button type="button" style={printButton} onClick={() => window.print()}>Print / Save as PDF</button></div>
   </section>;
 }
+function SopDocument({ sop, onClose }) {
+  return <section style={{ ...panel, marginTop: 18 }}>
+    <div style={row}>
+      <div><div style={tag}>{sop.category}</div><h2 style={h2}>{sop.title}</h2><p style={muted}>Owner: {sop.owner} · Version: {sop.version}</p></div>
+      <button type="button" style={closeButton} onClick={onClose}>Close</button>
+    </div>
+    <Section heading="Purpose" text={sop.purpose} />
+    <Section heading="Scope" text={sop.scope} />
+    <Section heading="Trigger / When to Use" text={sop.trigger} />
+    <NumberedList title="Procedure" items={sop.steps} />
+    <List title="Critical Controls" items={sop.controls} />
+    <List title="Required Records / Evidence" items={sop.records} />
+    {(sop.related || []).length > 0 && <List title="Related Documents / Processes" items={sop.related} />}
+    <div style={review}>{sop.reviewNote}</div>
+    <div style={{ marginTop: 12 }}><button type="button" style={printButton} onClick={() => window.print()}>Print / Save as PDF</button></div>
+  </section>;
+}
 function List({ title, items }) { return <div style={{ marginTop: 14 }}><strong style={{ color: "var(--chris-gold)" }}>{title}</strong><ul style={{ color: "var(--chris-text-secondary)", lineHeight: 1.7 }}>{(items || []).map((item) => <li key={item}>{item}</li>)}</ul></div>; }
+function NumberedList({ title, items }) { return <div style={{ marginTop: 14 }}><strong style={{ color: "var(--chris-gold)" }}>{title}</strong><ol style={{ color: "var(--chris-text-secondary)", lineHeight: 1.7 }}>{(items || []).map((item) => <li key={item}>{item}</li>)}</ol></div>; }
 
 const panel = { background: "linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))", border: "1px solid var(--chris-border-gold)", borderRadius: "var(--chris-radius-card)", padding: 20, boxShadow: "var(--chris-shadow-card)" };
 const card = { ...panel, minHeight: 150 };
