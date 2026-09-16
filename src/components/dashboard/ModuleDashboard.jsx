@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import ZermattEmploymentResources from "../../pages/documents/ZermattEmploymentResources";
+import DocumentsWorkspace from "../../pages/documents/DocumentsWorkspace";
 
 const MODULES = {
   recruitment:{eyebrow:"TALENT ACQUISITION",title:"Recruitment Dashboard",description:"Monitor recruitment activity, hiring pipeline and talent acquisition operations.",areas:["Job Requisitions","Candidates","Interviews","Offers","Onboarding Handover"]},
@@ -10,7 +10,7 @@ const MODULES = {
   performance:{eyebrow:"PERFORMANCE MANAGEMENT",title:"Performance Dashboard",description:"Monitor goals, reviews, ratings, performance cycles and workforce performance trends.",areas:["Goals","Appraisals","Review Cycles","Ratings","Performance Analytics"]},
   training:{eyebrow:"LEARNING & DEVELOPMENT",title:"Training & Development Dashboard",description:"Monitor learning programmes, training participation, development plans and capability growth.",areas:["Training Calendar","Programmes","Participants","Development Plans","Learning Analytics"]},
   assets:{eyebrow:"ASSET ADMINISTRATION",title:"Assets Dashboard",description:"Monitor employee-assigned assets, inventory status, returns and asset accountability.",areas:["Asset Register","Assignments","Returns","Maintenance","Asset Analytics"]},
-  documents:{eyebrow:"DOCUMENT MANAGEMENT",title:"Documents Dashboard",description:"Monitor HR documents, employee records, templates, expiries and document compliance.",areas:["Employee Documents","Employment Resources","Templates","Expiry Tracking","Letters","Document Analytics"]},
+  documents:{eyebrow:"DOCUMENT MANAGEMENT",title:"Documents Dashboard",description:"Monitor HR documents, employee records, templates, expiries and document compliance.",areas:["Employee Documents","HR Documents","Company Policies","Templates","Document Categories","Expiry Tracking","Document Requests"]},
   reports:{eyebrow:"WORKFORCE INTELLIGENCE",title:"Reports & Analytics Dashboard",description:"Access workforce analytics, operational reports, trends and management insights.",areas:["Workforce Reports","Lifecycle Reports","Attendance Reports","Leave Reports","Exports"]},
   organization:{eyebrow:"ORGANIZATION MANAGEMENT",title:"Organization Dashboard",description:"Monitor organizational structure, locations, departments, designations and reporting relationships.",areas:["Locations","Departments","Designations","Org Structure","Line Managers"]},
   workflows:{eyebrow:"WORKFLOW CONTROL",title:"Workflows & Approvals Dashboard",description:"Monitor pending approvals, workflow queues, turnaround times and process exceptions.",areas:["Pending Approvals","My Approvals","Workflow Rules","Escalations","Approval Analytics"]},
@@ -20,7 +20,7 @@ const MODULES = {
 };
 
 function ModuleDashboard({moduleKey}) {
-  if (moduleKey === "documents") return <ZermattEmploymentResources />;
+  if (moduleKey === "documents") return <DocumentsWorkspace />;
   const m = MODULES[moduleKey] || {eyebrow:"CHRIS MODULE",title:"Module Dashboard",description:"Operational and analytical overview.",areas:[]};
 
   return <div style={{color:"var(--chris-text-main)"}}>
