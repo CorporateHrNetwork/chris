@@ -47,6 +47,7 @@ const supportDeskCancellationRoutes = require("./routes/supportDeskCancellationR
 const supportDeskClientLifecycleGuardRoutes = require("./routes/supportDeskClientLifecycleGuardRoutes");
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
+const documentRoutes = require("./routes/documentRoutes");
 const eosbRoutes = require("./routes/eosbRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
@@ -78,34 +79,19 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-// Requester cancellation is a guarded client action and is mounted before the
-// general Support Desk router so the dedicated ownership/attendance checks are
-// authoritative for /client/tickets/:ticketNumber/cancel.
 app.use("/api/support-desk", supportDeskCancellationRoutes);
-// Prevent stale clients/direct API calls from adding new requester messages to
-// cancelled/resolved/closed cases. The main Support Desk router remains the
-// authoritative writer after this lifecycle guard calls next().
 app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
+app.use("/api/documents", documentRoutes);
 app.use("/api/eosb", eosbRoutes);
 
-// Authorized ZERMATT HR users need the same branch-scoped employee picker even
-// if a legacy role-provisioning refresh removes loans.apply. The service itself
-// scopes results by the user's assigned locations / ALL_LOCATIONS authority.
 app.use("/api", zermattHrLoanOptionRoutes);
-
-// Active branch scope is a cross-module operating context. It must run before
-// employee/leave/attendance/payroll/loan/report routers so branch-scoped reads
-// and mutation guards cannot be bypassed by entering a module directly.
 app.use("/api", activeBranchScopeRoutes);
 app.use("/api", activeBranchSupplementRoutes);
 
 app.use("/api/employees/onboarding", onboardingRoutes);
 app.use("/api/employees", employeeCareerCatalogRoutes);
-// Effective employee Employment Level and structural-edit guards must run before
-// the legacy employee router so individual overrides are reflected on profiles
-// without changing Designation.careerLevel for the whole organization.
 app.use("/api/employees", employeeProfileGovernanceRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/employee-data", employeeDataOperationsRoutes);
@@ -126,30 +112,14 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/zermatt", zermattOperationsRoutes);
 
 app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
-
-// ZERMATT financial-support policy: GM approval and Accounts payment happen
-// outside CHRiS. Authorized Branch HR may record/edit employees in the assigned
-// branch; Head HR operates organization-wide. These routers must precede generic
-// payroll mutation routes while activeBranchScope above remains authoritative.
 app.use("/api", zermattFinancialSupportRoutes);
 app.use("/api", zermattHrPayrollInputRoutes);
-
-// Leave Allowance is owned by Benefits but participates in ZERMATT payroll.
-// This router must precede the generic payroll route so ZERMATT draft execution
-// can add the annual earning before the payroll is submitted/approved.
 app.use("/api", zermattLeaveAllowanceRoutes);
-
-// Loan workflow routes are deliberately mounted before the generic /api liability editor.
-// Existing workflow records remain readable for historical integrity, but ZERMATT
-// new application creation is intercepted above by the revised policy router.
 app.use("/api/loans", loanOriginationWorkflowRoutes);
-
 app.use("/api", payrollLiabilityEditRoutes);
 app.use("/api/payroll", payrollReopenRoutes);
 app.use("/api/payroll", payrollIntegrationRoutes);
 app.use("/api/payroll", payrollRoutes);
-
-// Legacy loan routes remain as a compatibility fallback for existing payroll-managed records.
 app.use("/api/loans", loanRoutes);
 
 app.use("/api/exits", exitRoutes);
