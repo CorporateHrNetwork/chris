@@ -1,4 +1,5 @@
 const { ZERMATT_DESIGNATION_LEVELS, ZERMATT_EMPLOYMENT_LEVELS } = require("../config/zermattEmploymentLevels");
+const { getZermattSopLibrary } = require("./zermattSopResourceService");
 
 const LEGAL_RESOURCES = [
   {
@@ -221,10 +222,11 @@ function makeJobDescription(role) {
 }
 
 function getZermattEmploymentResourceLibrary() {
+  const sopLibrary = getZermattSopLibrary();
   return {
     generatedAt: new Date().toISOString(),
     tenant: "zermatt-liquor-limited",
-    disclaimer: "This library combines Zermatt HR working documents with plain-language compliance guidance. Statutory summaries are not a substitute for the official law, regulator guidance or legal advice. Management must approve company policies/templates before issue.",
+    disclaimer: "This library combines Zermatt HR working documents with plain-language compliance guidance. Statutory summaries are not a substitute for the official law, regulator guidance or legal advice. Management must approve company policies/templates/SOPs before issue.",
     legalResources: LEGAL_RESOURCES,
     employmentPolicy: EMPLOYMENT_POLICY,
     employmentOfferTemplate: {
@@ -242,11 +244,15 @@ function getZermattEmploymentResourceLibrary() {
     },
     onboardingMaterials: ONBOARDING_MATERIALS.map(([title, content], index) => ({ id: `onboarding-${index + 1}`, title, content })),
     hrTemplates: HR_TEMPLATES.map(([title, content], index) => ({ id: `template-${index + 1}`, title, content })),
+    standardOperatingProcedures: sopLibrary.sops,
+    sopCategories: sopLibrary.categories,
+    sopStatus: sopLibrary.status,
     jobDescriptions: ZERMATT_DESIGNATION_LEVELS.map(makeJobDescription),
     summary: {
       legalResources: LEGAL_RESOURCES.length,
       onboardingMaterials: ONBOARDING_MATERIALS.length,
       hrTemplates: HR_TEMPLATES.length,
+      standardOperatingProcedures: sopLibrary.sops.length,
       jobDescriptions: ZERMATT_DESIGNATION_LEVELS.length,
     },
   };
