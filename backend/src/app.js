@@ -34,6 +34,7 @@ const zermattFinancialSupportRoutes = require("./routes/zermattFinancialSupportR
 const zermattHrLoanOptionRoutes = require("./routes/zermattHrLoanOptionRoutes");
 const zermattHrPayrollInputRoutes = require("./routes/zermattHrPayrollInputRoutes");
 const zermattLeaveAllowanceRoutes = require("./routes/zermattLeaveAllowanceRoutes");
+const zermattSalaryReviewRoutes = require("./routes/zermattSalaryReviewRoutes");
 const exitRoutes = require("./routes/exitRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
@@ -117,6 +118,7 @@ app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
 app.use("/api", zermattFinancialSupportRoutes);
 app.use("/api", zermattHrPayrollInputRoutes);
 app.use("/api", zermattLeaveAllowanceRoutes);
+app.use("/api", zermattSalaryReviewRoutes);
 app.use("/api/loans", loanOriginationWorkflowRoutes);
 app.use("/api", payrollLiabilityEditRoutes);
 app.use("/api/payroll", payrollReopenRoutes);
