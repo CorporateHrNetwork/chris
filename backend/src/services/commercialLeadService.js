@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { dispatchCommercialEmail } = require("./commercialEmailService");
+const { buildCommercialAgentWorkflow } = require("./commercialAgentWorkflowService");
 
 const ENTITY_LEAD = "CommercialLead";
 const PLATFORM_SLUG = "corporatehr-network";
@@ -235,7 +236,7 @@ async function createDemoLead(prisma, input) {
     implementationHandoff: null,
   };
 
-  // Lead creation is authoritative. Notification failures must never discard the request.
+  // Lead creation is authoritative. Notification failures or downstream workflow issues must never discard the request.
   await recordEvent(prisma, {
     organizationId: organization.id,
     leadNumber: number,
@@ -244,13 +245,28 @@ async function createDemoLead(prisma, input) {
     reason: "Submitted from CHRiS commercial website",
   });
 
+  const agentWorkflow = buildCommercialAgentWorkflow(lead);
+  lead.agentWorkflow = agentWorkflow;
+  lead.nextAction = agentWorkflow.nextAction;
+  await recordEvent(prisma, {
+    organizationId: organization.id,
+    leadNumber: number,
+    action: "COMMERCIAL_AGENT_WORKFLOW_INITIALIZED",
+    previousValue: null,
+    newValue: {
+      agentWorkflow,
+      nextAction: agentWorkflow.nextAction,
+    },
+    reason: `Commercial intake orchestrated to ${agentWorkflow.currentAgent}; first-response SLA ${agentWorkflow.firstResponseDueAt}`,
+  });
+
   const internalNotification = await dispatchCommercialEmail({
     to: internalInbox,
     subject: `New CHRiS Demo Request · ${lead.leadNumber} · ${lead.companyName}`,
     replyTo: lead.email,
     type: "COMMERCIAL_INTERNAL_DEMO_ALERT",
     lead,
-    message: "A new CHRiS website demo request has been captured and routed into Commercial Operations.",
+    message: `A new CHRiS website demo request has been captured, qualified and routed to ${agentWorkflow.currentAgent}. Next action: ${agentWorkflow.nextAction}.`,
   });
   await recordEvent(prisma, {
     organizationId: organization.id,
