@@ -7,6 +7,7 @@ const {
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const LEAVE_ALLOWANCE_RATE = 10;
 const BENEFIT_CODE = "ZERMATT_LEAVE_ALLOWANCE";
+const ELIGIBLE_EMPLOYMENT_TYPE = "Full-Time";
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -37,7 +38,14 @@ function anniversaryForYear(hireDate, year) {
   return new Date(Date.UTC(year, month, Math.min(day, lastDay)));
 }
 
-function eligibilityForPeriod({ hireDate, periodStart, periodEnd }) {
+function eligibilityForPeriod({ hireDate, periodStart, periodEnd, employmentType }) {
+  if (employmentType !== ELIGIBLE_EMPLOYMENT_TYPE) {
+    return {
+      eligible: false,
+      reason: "EMPLOYMENT_TYPE_NOT_ELIGIBLE",
+      requiredEmploymentType: ELIGIBLE_EMPLOYMENT_TYPE,
+    };
+  }
   if (!hireDate || !periodStart || !periodEnd) return { eligible: false, reason: "HIRE_DATE_REQUIRED" };
   const hire = new Date(hireDate);
   const start = new Date(`${dateText(periodStart)}T00:00:00.000Z`);
@@ -56,11 +64,12 @@ function eligibilityForPeriod({ hireDate, periodStart, periodEnd }) {
 
   return {
     eligible: Boolean(eligible),
-    reason: eligible ? "ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR" : "NOT_DUE_THIS_PERIOD",
+    reason: eligible ? "FULL_TIME_ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR" : "NOT_DUE_THIS_PERIOD",
     entitlementYear: payrollYear,
     hireMonth: hireMonth + 1,
     anniversaryDate: anniversary ? anniversary.toISOString().slice(0, 10) : null,
     firstEligibleYear,
+    requiredEmploymentType: ELIGIBLE_EMPLOYMENT_TYPE,
   };
 }
 
@@ -132,7 +141,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
   }
 
   const lineRows = await prismaClient.$queryRawUnsafe(
-    `SELECT pl.*,e."hireDate",e."locationId",e."status" AS "employeeStatus"
+    `SELECT pl.*,e."hireDate",e."locationId",e."status" AS "employeeStatus",e."employmentType"
        FROM "payroll_run_lines" pl
        JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
       WHERE pl."organizationId"=$1 AND pl."runId"=$2
@@ -149,6 +158,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         hireDate: row.hireDate,
         periodStart: period.periodStart,
         periodEnd: period.periodEnd,
+        employmentType: row.employmentType,
       });
       if (!eligibility.eligible) continue;
 
@@ -165,10 +175,6 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
       });
       if (calculation.leaveAllowance <= 0) continue;
 
-      // ZERMATT policy: Leave Allowance is an after-tax, non-taxable benefit.
-      // PAYE, chargeable income, taxable gross, allowances and deductions therefore
-      // remain exactly as calculated by the Nigeria payroll engine. The full benefit
-      // is added only after tax to employee net pay.
       const oldGross = round2(row.grossPay);
       const oldAllowances = round2(row.allowances);
       const oldDeductions = round2(row.deductions);
@@ -183,6 +189,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         name: "Leave Allowance",
         module: "BENEFITS",
         benefitType: "LEAVE_ALLOWANCE",
+        employmentType: row.employmentType,
         amount: calculation.leaveAllowance,
         value: calculation.leaveAllowance,
         monthlyBasicSalary: calculation.monthlyBasicSalary,
@@ -231,6 +238,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         employeeNumber: row.employeeNumber,
         employeeName: row.employeeName,
         locationId: row.locationId,
+        employmentType: row.employmentType,
         ...leaveAllowance,
         grossPay,
         deductions,
@@ -271,6 +279,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         newValue: {
           payrollPeriodId: period.id,
           payrollPeriodCode: period.code,
+          eligibleEmploymentType: ELIGIBLE_EMPLOYMENT_TYPE,
           formula: "Basic Monthly Salary × 12 × 10%",
           payrollTreatment: "AFTER_TAX_NON_TAXABLE",
           taxable: false,
@@ -279,11 +288,12 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
           totalLeaveAllowance: round2(beneficiaries.reduce((sum, item) => sum + item.amount, 0)),
           beneficiaries: beneficiaries.map((item) => ({
             employeeNumber: item.employeeNumber,
+            employmentType: item.employmentType,
             entitlementYear: item.entitlementYear,
             amount: item.amount,
           })),
         },
-        reason: "Zermatt annual Leave Allowance applied as a non-taxable after-tax benefit in the employee entry month after the first completed service year.",
+        reason: "Zermatt annual Leave Allowance applied only to Full-Time employees as a non-taxable after-tax benefit in the employee entry month after the first completed service year.",
       },
     });
   });
@@ -291,6 +301,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
   return {
     organization: { id: organization.id, name: organization.name, slug: organization.slug },
     period: { id: period.id, code: period.code, periodStart: dateText(period.periodStart), periodEnd: dateText(period.periodEnd) },
+    eligibleEmploymentType: ELIGIBLE_EMPLOYMENT_TYPE,
     formula: "Basic Monthly Salary × 12 × 10%",
     payrollTreatment: "AFTER_TAX_NON_TAXABLE",
     taxable: false,
@@ -304,6 +315,7 @@ module.exports = {
   ZERMATT_SLUG,
   BENEFIT_CODE,
   LEAVE_ALLOWANCE_RATE,
+  ELIGIBLE_EMPLOYMENT_TYPE,
   eligibilityForPeriod,
   calculateLeaveAllowance,
   applyZermattLeaveAllowanceToDraft,
