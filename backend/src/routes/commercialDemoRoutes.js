@@ -7,6 +7,7 @@ const {
   getPlatformOrganization,
   getLead,
   listLeads,
+  listLeadActivity,
   updateLead,
 } = require("../services/commercialLeadService");
 
@@ -58,11 +59,13 @@ router.post("/public/demo-requests", publicRateLimit, async (req, res) => {
         leadNumber: lead.leadNumber,
         status: lead.status,
         preferredDemoDate: lead.preferredDemoDate,
+        acknowledgementStatus: lead.prospectAcknowledgement?.status || null,
       },
       message: "Thank you. Your CHRiS demo request has been received and routed to our Commercial team.",
     });
   } catch (error) {
-    const statusCode = error.code === "DEMO_REQUEST_VALIDATION_FAILED" ? 400 : 500;
+    const clientErrorCodes = new Set(["DEMO_REQUEST_VALIDATION_FAILED", "DEMO_REQUEST_CONSENT_REQUIRED"]);
+    const statusCode = clientErrorCodes.has(error.code) ? 400 : 500;
     return res.status(statusCode).json({ status: "error", code: error.code || "DEMO_REQUEST_FAILED", message: error.message || "Unable to submit demo request." });
   }
 });
@@ -81,6 +84,7 @@ router.get("/internal/summary", async (req, res) => {
       proposalStage: leads.filter((lead) => ["PROPOSAL_REQUIRED", "PROPOSAL_SENT", "NEGOTIATION"].includes(lead.status)).length,
       won: leads.filter((lead) => lead.status === "WON").length,
       highPriority: leads.filter((lead) => lead.commercialPriority === "HIGH" && !["WON", "LOST"].includes(lead.status)).length,
+      implementationReady: leads.filter((lead) => lead.implementationHandoff?.status === "READY").length,
     };
     return res.json({ status: "success", data: summary });
   } catch (error) {
@@ -97,6 +101,18 @@ router.get("/internal/leads", async (req, res) => {
     return res.json({ status: "success", results: leads.length, data: leads });
   } catch (error) {
     return res.status(500).json({ status: "error", code: error.code || "COMMERCIAL_LEADS_FAILED", message: error.message });
+  }
+});
+
+router.get("/internal/leads/:leadNumber/activity", async (req, res) => {
+  try {
+    const organization = await getPlatformOrganization(prisma);
+    const lead = await getLead(prisma, organization.id, req.params.leadNumber);
+    if (!lead) return res.status(404).json({ status: "error", code: "COMMERCIAL_LEAD_NOT_FOUND", message: "Commercial lead not found." });
+    const activity = await listLeadActivity(prisma, organization.id, req.params.leadNumber);
+    return res.json({ status: "success", results: activity.length, data: activity });
+  } catch (error) {
+    return res.status(500).json({ status: "error", code: error.code || "COMMERCIAL_ACTIVITY_FAILED", message: error.message });
   }
 });
 
