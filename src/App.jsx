@@ -64,6 +64,7 @@ import ReportingLines from "./pages/ReportingLines";
 import CostCentres from "./pages/CostCentres";
 import MySupportRequests from "./pages/MySupportRequests";
 import SupportDesk from "./pages/SupportDesk";
+import CommercialOperations from "./pages/CommercialOperations";
 import RemittanceWorkspace from "./pages/statutories/RemittanceWorkspace";
 
 function ProtectedLayout({ children }) {
@@ -151,6 +152,8 @@ function App() {
         <Route path="/support" element={<ProtectedLayout><MySupportRequests /></ProtectedLayout>} />
         {/* Internal Support Desk requires platform support permissions in the API and UI. */}
         <Route path="/support-desk" element={<PermissionLayout permission="support.internal.view"><SupportDesk /></PermissionLayout>} />
+        {/* Commercial Operations is platform-scoped in the API and is not available to client tenants. */}
+        <Route path="/commercial" element={<ProtectedLayout><CommercialOperations /></ProtectedLayout>} />
 
         <Route path="/compensation" element={<ProtectedLayout><ModuleDashboard moduleKey="compensation" /></ProtectedLayout>} />
         <Route path="/benefits" element={<ProtectedLayout><Benefits /></ProtectedLayout>} />
