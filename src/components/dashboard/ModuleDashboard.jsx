@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import DocumentsWorkspace from "../../pages/documents/DocumentsWorkspace";
+import EmploymentTypeManagement from "../../pages/EmploymentTypeManagement";
 
 const MODULES = {
   recruitment:{eyebrow:"TALENT ACQUISITION",title:"Recruitment Dashboard",description:"Monitor recruitment activity, hiring pipeline and talent acquisition operations.",areas:["Job Requisitions","Candidates","Interviews","Offers","Onboarding Handover"]},
@@ -21,6 +22,7 @@ const MODULES = {
 
 function ModuleDashboard({moduleKey}) {
   if (moduleKey === "documents") return <DocumentsWorkspace />;
+  if (moduleKey === "employmentTypes") return <EmploymentTypeManagement />;
   const m = MODULES[moduleKey] || {eyebrow:"CHRIS MODULE",title:"Module Dashboard",description:"Operational and analytical overview.",areas:[]};
 
   return <div style={{color:"var(--chris-text-main)"}}>
