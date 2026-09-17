@@ -13,6 +13,8 @@ const MODULES = {
   WORKFLOWS: new Set(["DASHBOARD", "APPROVAL_INBOX", "MY_REQUESTS", "TEMPLATES", "APPROVAL_CHAINS", "DELEGATIONS", "HISTORY"]),
   TRAINING: new Set(["DASHBOARD", "PROGRAMS", "CALENDAR", "EMPLOYEE_TRAINING", "LEARNING_RECORDS", "ASSESSMENTS", "CERTIFICATIONS", "REPORTS"]),
   REPORTS: new Set(["RECRUITMENT", "COMPENSATION", "BENEFITS", "CUSTOM"]),
+  BILLING: new Set(["DASHBOARD", "CURRENT_PLAN", "SUBSCRIPTION", "USAGE", "BILLING_DETAILS", "BILLING_HISTORY", "INVOICES"]),
+  COMPENSATION: new Set(["DASHBOARD", "SALARY_STRUCTURE", "GRADES_LEVELS", "SALARY_BANDS", "REVIEWS", "ADJUSTMENTS", "PROMOTIONS", "BONUSES_INCENTIVES", "TOTAL_REWARDS"]),
 };
 const STATUSES = new Set(["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 
@@ -34,6 +36,7 @@ function assertAccess(req, module, write = false) {
   else if (module === "PERFORMANCE") required = write ? ["performance.manage", "employees.update", "settings.view"] : ["performance.view", "employees.view", "settings.view"];
   else if (module === "TRAINING") required = write ? ["training.manage", "employees.update", "settings.view"] : ["training.view", "employees.view", "settings.view"];
   else if (module === "REPORTS") required = write ? ["reports.manage", "settings.view"] : ["reports.view", "settings.view"];
+  else if (module === "COMPENSATION") required = write ? ["payroll.manage", "employees.update", "settings.view"] : ["payroll.view", "employees.view", "settings.view"];
   else required = ["settings.view"];
   if (!hasAny(permissions, required)) {
     const error = new Error("You do not have permission to access this workspace.");
