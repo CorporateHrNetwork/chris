@@ -58,10 +58,14 @@ export default function ZermattLeaveAllowance() {
 
   const policy = data?.policy || {};
   const summary = data?.summary || {};
+  const settings = data?.settings || {};
 
   return (
     <section style={pageStyle}>
-      <button type="button" style={backButton} onClick={() => navigate("/benefits")}>← Benefits Dashboard</button>
+      <div style={headerActions}>
+        <button type="button" style={backButton} onClick={() => navigate("/benefits")}>← Benefits Dashboard</button>
+        <button type="button" style={settingsButton} onClick={() => navigate("/benefits?workspace=leave-allowance-settings")}>Leave Allowance Settings</button>
+      </div>
       <div style={eyebrow}>ZERMATT BENEFITS</div>
       <h1 style={titleStyle}>Leave Allowance</h1>
       <p style={leadStyle}>
@@ -69,6 +73,7 @@ export default function ZermattLeaveAllowance() {
       </p>
 
       <div style={cards}>
+        <Metric label="Payroll Status" value={loading ? "—" : settings.enabled === false ? "Paused" : "Enabled"} />
         <Metric label="Formula" value="Basic × 12 × 10%" />
         <Metric label="Visible Employees" value={loading ? "—" : summary.visibleEmployees ?? rows.length} />
         <Metric label="Approved Payments" value={loading ? "—" : summary.visibleApprovedPayments ?? 0} />
@@ -80,6 +85,7 @@ export default function ZermattLeaveAllowance() {
         <div style={policyGrid}>
           <Policy label="Eligibility" value={policy.eligibility || "First payment after one completed year of service in the employee entry month; annual recurrence thereafter."} />
           <Policy label="Calculation" value={policy.formula || "Basic Monthly Salary × 12 × 10%"} />
+          <Policy label="Tax treatment" value="After-tax / Non-taxable. Leave Allowance does not increase PAYE chargeable income." />
           <Policy label="Payroll treatment" value={policy.payrollTreatment || "Paid with salary in the eligible payroll period and separately identified on the approved payslip."} />
           <Policy label="Control" value="An approved entitlement year cannot be paid twice. Reopened payroll is recalculated before replacement approval." />
         </div>
@@ -138,7 +144,9 @@ function Policy({ label, value }) {
 }
 
 const pageStyle = { maxWidth: 1500, margin: "0 auto", color: "#F7FAF8" };
+const headerActions = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" };
 const backButton = { border: 0, background: "transparent", color: "#D4AF37", fontWeight: 900, cursor: "pointer", padding: "0 0 14px" };
+const settingsButton = { border: "1px solid rgba(212,175,55,.45)", background: "rgba(212,175,55,.08)", color: "#F7D66A", borderRadius: 9, fontWeight: 900, cursor: "pointer", padding: "9px 12px" };
 const eyebrow = { color: "#D4AF37", fontSize: 11, fontWeight: 900, letterSpacing: ".14em" };
 const titleStyle = { margin: "6px 0", fontSize: 32 };
 const leadStyle = { color: "#C7D3CC", lineHeight: 1.65, maxWidth: 1100, marginBottom: 22 };
