@@ -9,15 +9,15 @@ router.use(requireAuth);
 const MODULES = {
   STATUTORIES: new Set(["DASHBOARD", "PAYE_TAX", "PENSION_COMPLIANCE", "NHIA", "NSITF", "ITF", "REMITTANCES", "REPORTS"]),
   PERFORMANCE: new Set(["DASHBOARD", "GOALS_KPIS", "CYCLES", "REVIEWS", "APPRAISALS", "IMPROVEMENT_PLANS", "REPORTS"]),
+  ASSETS: new Set(["DASHBOARD", "REGISTER", "CATEGORIES", "ASSIGNMENT", "TRANSFERS", "RETURNS", "MAINTENANCE", "REPORTS"]),
+  WORKFLOWS: new Set(["DASHBOARD", "APPROVAL_INBOX", "MY_REQUESTS", "TEMPLATES", "APPROVAL_CHAINS", "DELEGATIONS", "HISTORY"]),
+  TRAINING: new Set(["DASHBOARD", "PROGRAMS", "CALENDAR", "EMPLOYEE_TRAINING", "LEARNING_RECORDS", "ASSESSMENTS", "CERTIFICATIONS", "REPORTS"]),
+  REPORTS: new Set(["RECRUITMENT", "COMPENSATION", "BENEFITS", "CUSTOM"]),
 };
 const STATUSES = new Set(["OPEN", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 
-function normalize(value) {
-  return String(value || "").trim();
-}
-function upper(value) {
-  return normalize(value).toUpperCase();
-}
+function normalize(value) { return String(value || "").trim(); }
+function upper(value) { return normalize(value).toUpperCase(); }
 function assertModuleArea(module, area) {
   if (!MODULES[module] || !MODULES[module].has(area)) {
     const error = new Error("Unsupported operational workspace.");
@@ -26,12 +26,16 @@ function assertModuleArea(module, area) {
     throw error;
   }
 }
+function hasAny(permissions, values) { return values.some((permission) => permissions.has(permission)); }
 function assertAccess(req, module, write = false) {
   const permissions = new Set(req.auth?.permissions || []);
-  const required = module === "STATUTORIES"
-    ? (write ? ["payroll.manage", "payroll.process"] : ["payroll.view", "settings.view"])
-    : (write ? ["performance.manage", "employees.update"] : ["performance.view", "employees.view"]);
-  if (!required.some((permission) => permissions.has(permission))) {
+  let required;
+  if (module === "STATUTORIES") required = write ? ["payroll.manage", "payroll.process"] : ["payroll.view", "settings.view"];
+  else if (module === "PERFORMANCE") required = write ? ["performance.manage", "employees.update", "settings.view"] : ["performance.view", "employees.view", "settings.view"];
+  else if (module === "TRAINING") required = write ? ["training.manage", "employees.update", "settings.view"] : ["training.view", "employees.view", "settings.view"];
+  else if (module === "REPORTS") required = write ? ["reports.manage", "settings.view"] : ["reports.view", "settings.view"];
+  else required = ["settings.view"];
+  if (!hasAny(permissions, required)) {
     const error = new Error("You do not have permission to access this workspace.");
     error.code = "OPERATIONAL_WORKSPACE_FORBIDDEN";
     error.statusCode = 403;
