@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "start": "npx prisma migrate deploy && node src/server.js",
     "test:compliance": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceFutureReadiness.test.js",
     "test:leave:runtime": "node scripts/leaveRuntimeAcceptance.js"
   },
