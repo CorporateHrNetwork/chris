@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { reversePayrollObligations } = require("./statutoryObligationService");
 
 function reopenError(code, message, statusCode = 400, details) {
   const error = new Error(message);
@@ -45,6 +46,13 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
     if (!run) throw reopenError("PAYROLL_RUN_NOT_FOUND", "Payroll run not found.", 404);
     if (run.status !== "APPROVED") throw reopenError("PAYROLL_RUN_NOT_APPROVED", "Only an approved payroll run can be reopened for correction.", 409);
     if (run.periodStatus === "CLOSED") throw reopenError("PAYROLL_PERIOD_CLOSED", "A payroll in a closed period cannot be reopened. Use a future adjustment payroll instead.", 409);
+
+    await reversePayrollObligations(tx, {
+      organizationId,
+      payrollRunId: runId,
+      actorUserId,
+      reason: explanation,
+    });
 
     const loanRecoveries = await tx.$queryRawUnsafe(
       `SELECT "id","loanId","amount","status"

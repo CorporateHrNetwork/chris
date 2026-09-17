@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { replaceDraftObligations } = require("./statutoryObligationService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
@@ -347,6 +348,17 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   if (period.status === "CLOSED") throw payrollError("PAYROLL_PERIOD_CLOSED", "Closed payroll periods cannot be recalculated.", 409);
   const policy = await getActivePolicy({ organizationId, asOf: period.periodEnd, prismaClient });
   if (!policy) throw payrollError("PAYROLL_POLICY_NOT_CONFIGURED", "No active Nigeria payroll policy covers this payroll period.", 409);
+  const complianceRule = await prismaClient.complianceRule.findFirst({
+    where: {
+      organizationId,
+      ruleKey: "NIGERIA_PAYROLL",
+      jurisdiction: "NG",
+      status: "ACTIVE",
+      effectiveFrom: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(`${period.periodStart}T00:00:00.000Z`) } }],
+    },
+    orderBy: [{ effectiveFrom: "desc" }, { version: "desc" }],
+  });
 
   const organization = await prismaClient.organization.findUnique({
     where: { id: organizationId },
@@ -617,6 +629,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
 
   await prismaClient.$transaction(async (tx) => {
     if (existing[0]) {
+      await tx.statutoryObligation.deleteMany({
+        where: { organizationId, payrollRunId: runId, status: "DRAFT_CALCULATED" },
+      });
       await tx.$executeRawUnsafe(`DELETE FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2`, organizationId, runId);
       await tx.$executeRawUnsafe(
         `UPDATE "payroll_runs"
@@ -639,11 +654,12 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     }
 
     for (const line of lines) {
+      line.runLineId = crypto.randomUUID();
       await tx.$executeRawUnsafe(
         `INSERT INTO "payroll_run_lines"
           ("id","organizationId","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","grossPay","netPreview","statutoryStatus","details")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'CALCULATED_NIGERIA_2026',$14::jsonb)`,
-        crypto.randomUUID(),
+        line.runLineId,
         organizationId,
         runId,
         line.employee.id,
@@ -659,6 +675,14 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         JSON.stringify(line.details)
       );
     }
+
+    await replaceDraftObligations(tx, {
+      organizationId,
+      payrollRunId: runId,
+      periodEnd: period.periodEnd,
+      ruleId: complianceRule?.id || null,
+      lines,
+    });
 
     await tx.$executeRawUnsafe(
       `UPDATE "payroll_runs"

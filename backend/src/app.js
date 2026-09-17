@@ -34,6 +34,7 @@ const zermattFinancialSupportRoutes = require("./routes/zermattFinancialSupportR
 const zermattHrLoanOptionRoutes = require("./routes/zermattHrLoanOptionRoutes");
 const zermattHrPayrollInputRoutes = require("./routes/zermattHrPayrollInputRoutes");
 const exitRoutes = require("./routes/exitRoutes");
+const complianceRoutes = require("./routes/complianceRoutes");
 const lineManagerRoutes = require("./routes/lineManagerRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const organizationRoutes = require("./routes/organizationRoutes");
@@ -132,6 +133,7 @@ app.use("/api", payrollLiabilityEditRoutes);
 app.use("/api/payroll", payrollReopenRoutes);
 app.use("/api/payroll", payrollIntegrationRoutes);
 app.use("/api/payroll", payrollRoutes);
+app.use("/api/compliance", complianceRoutes);
 
 // Legacy loan routes remain as a compatibility fallback for existing payroll-managed records.
 app.use("/api/loans", loanRoutes);
