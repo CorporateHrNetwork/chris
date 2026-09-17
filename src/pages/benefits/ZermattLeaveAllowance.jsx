@@ -58,9 +58,13 @@ export default function ZermattLeaveAllowance() {
       <Metric label="Eligible Type" value="Full-Time only" />
       <Metric label="Eligible Employees" value={loading ? "—" : summary.employmentTypeEligible ?? 0} />
       <Metric label="Not Eligible" value={loading ? "—" : summary.employmentTypeIneligible ?? 0} />
-      <Metric label="Approved Payments" value={loading ? "—" : summary.visibleApprovedPayments ?? 0} />
-      <Metric label="Approved Amount" value={loading ? "—" : money(summary.visibleApprovedAmount || 0)} />
+      <Metric label="Payable Employees This Month" value={loading ? "—" : summary.payableEmployeesThisMonth ?? 0} />
+      <Metric label="Amount Payable This Month" value={loading ? "—" : money(summary.amountPayableThisMonth || 0)} />
     </div>
+
+    {!loading && <div style={payableNote}>
+      {summary.currentMonth ? `${monthName(summary.currentMonth)} payable amount` : "Current-month payable amount"} is sourced from {summary.payableSource === "CURRENT_MONTH_PAYROLL" ? "the current payroll calculation" : "the Leave Allowance register calculation until payroll is generated"}.
+    </div>}
 
     <section style={panelStyle}>
       <h2 style={panelTitle}>Zermatt Leave Allowance Policy</h2>
@@ -76,13 +80,13 @@ export default function ZermattLeaveAllowance() {
 
     <section style={panelStyle}>
       <div style={toolbar}>
-        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>Eligibility is driven by the authoritative current Employment Type. Projected amount is calculated only for Full-Time employees.</div></div>
+        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>Eligibility is driven by the authoritative current Employment Type. Projected amount is calculated only for Full-Time employees. Current-month payable amounts switch to the payroll-calculated value as soon as payroll exists.</div></div>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, branch, type or eligibility" style={searchInput} />
       </div>
       {error && <div style={errorStyle}>{error}</div>}
       {loading ? <div style={loadingStyle}>Loading Leave Allowance register…</div> : <div style={tableWrap}>
         <table style={tableStyle}>
-          <thead><tr>{['Employee','Branch','Employment Type','Eligibility','Hire Date','First Due','Next Due','Monthly Basic','Projected Allowance','Last Approved Payment','Employee Status'].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
+          <thead><tr>{['Employee','Branch','Employment Type','Eligibility','Hire Date','First Due','Next Due','Monthly Basic','Projected Allowance','Payable This Month','Last Approved Payment','Employee Status'].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
           <tbody>
             {rows.map((row) => {
               const eligibleType = row.eligibilityStatus === "ELIGIBLE_EMPLOYMENT_TYPE";
@@ -96,11 +100,12 @@ export default function ZermattLeaveAllowance() {
                 <td style={tdStyle}>{eligibleType ? monthName(row.nextDueMonth) : "—"}</td>
                 <td style={tdStyle}>{eligibleType ? money(row.monthlyBasicSalary, row.currency) : "—"}</td>
                 <td style={tdStrong}>{eligibleType ? money(row.projectedLeaveAllowance, row.currency) : "Not eligible"}</td>
+                <td style={tdStrong}>{row.dueThisMonth ? money(row.amountPayableThisMonth, row.currency) : "—"}<div style={tiny}>{row.dueThisMonth ? String(row.payableSource || "").replaceAll("_", " ") : ""}</div></td>
                 <td style={tdStyle}>{row.lastPayment ? `${row.lastPayment.periodCode} · ${money(row.lastPayment.amount, row.currency)}` : "Not yet paid"}</td>
                 <td style={tdStyle}><span style={badge}>{String(row.status || "—").replaceAll("_", " ")}</span></td>
               </tr>;
             })}
-            {!rows.length && <tr><td colSpan={11} style={emptyStyle}>No employees match the current filter.</td></tr>}
+            {!rows.length && <tr><td colSpan={12} style={emptyStyle}>No employees match the current filter.</td></tr>}
           </tbody>
         </table>
       </div>}
@@ -117,8 +122,9 @@ const backButton={border:0,background:"transparent",color:"#D4AF37",fontWeight:9
 const settingsButton={border:"1px solid rgba(212,175,55,.45)",background:"rgba(212,175,55,.08)",color:"#F7D66A",borderRadius:9,fontWeight:900,cursor:"pointer",padding:"9px 12px"};
 const eyebrow={color:"#D4AF37",fontSize:11,fontWeight:900,letterSpacing:".14em"}; const titleStyle={margin:"6px 0",fontSize:32}; const leadStyle={color:"#C7D3CC",lineHeight:1.65,maxWidth:1100,marginBottom:22};
 const cards={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}; const metricCard={padding:16,borderRadius:14,border:"1px solid rgba(212,175,55,.35)",background:"rgba(7,49,32,.75)"}; const metricLabel={color:"#9FB7AA",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",marginBottom:7}; const metricValue={color:"#F7D66A",fontSize:20};
+const payableNote={marginTop:10,color:"#9FB7AA",fontSize:11,lineHeight:1.5};
 const panelStyle={marginTop:18,padding:20,border:"1px solid rgba(212,175,55,.4)",borderRadius:15,background:"linear-gradient(145deg,rgba(8,50,33,.94),rgba(3,20,13,.96))"}; const panelTitle={margin:"0 0 14px",fontSize:18,color:"#D4AF37"}; const policyGrid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}; const policyCard={padding:14,border:"1px solid rgba(255,255,255,.08)",borderRadius:10,color:"#C7D3CC",background:"rgba(255,255,255,.03)"};
 const toolbar={display:"flex",justifyContent:"space-between",gap:16,alignItems:"end",flexWrap:"wrap",marginBottom:14}; const subtle={color:"#9FB7AA",fontSize:12,lineHeight:1.5,maxWidth:850}; const searchInput={minWidth:300,padding:"10px 12px",borderRadius:9,border:"1px solid rgba(212,175,55,.35)",background:"rgba(255,255,255,.06)",color:"#F7FAF8"};
-const tableWrap={width:"100%",overflowX:"auto"}; const tableStyle={width:"100%",minWidth:1450,borderCollapse:"collapse"}; const thStyle={padding:10,textAlign:"left",borderBottom:"1px solid rgba(212,175,55,.35)",color:"#D4AF37",fontSize:11,whiteSpace:"nowrap"}; const tdStyle={padding:10,borderBottom:"1px solid rgba(255,255,255,.08)",color:"#C7D3CC",fontSize:12,verticalAlign:"top"}; const tdStrong={...tdStyle,fontWeight:900,color:"#F7FAF8"};
+const tableWrap={width:"100%",overflowX:"auto"}; const tableStyle={width:"100%",minWidth:1580,borderCollapse:"collapse"}; const thStyle={padding:10,textAlign:"left",borderBottom:"1px solid rgba(212,175,55,.35)",color:"#D4AF37",fontSize:11,whiteSpace:"nowrap"}; const tdStyle={padding:10,borderBottom:"1px solid rgba(255,255,255,.08)",color:"#C7D3CC",fontSize:12,verticalAlign:"top"}; const tdStrong={...tdStyle,fontWeight:900,color:"#F7FAF8"};
 const badge={display:"inline-block",padding:"4px 7px",borderRadius:999,border:"1px solid rgba(212,175,55,.35)",color:"#F7D66A",fontSize:10,fontWeight:900}; const eligibleBadge={...badge,color:"#86EFAC",border:"1px solid rgba(134,239,172,.45)"}; const ineligibleBadge={...badge,color:"#FCA5A5",border:"1px solid rgba(252,165,165,.45)"}; const tiny={fontSize:9,marginTop:5,color:"#9FB7AA",maxWidth:220,lineHeight:1.4};
 const emptyStyle={...tdStyle,textAlign:"center",padding:24}; const errorStyle={padding:12,borderRadius:10,background:"rgba(127,29,29,.35)",border:"1px solid rgba(248,113,113,.45)",color:"#FCA5A5"}; const loadingStyle={padding:18,color:"#C7D3CC"};
