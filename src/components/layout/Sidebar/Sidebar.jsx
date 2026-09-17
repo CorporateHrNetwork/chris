@@ -73,7 +73,7 @@ const MENU_GROUPS = [
   { id:"reports", label:"Reports & Analytics", icon:<FaFileAlt/>, permission:"reports.view", children:[
     {label:"Reports Dashboard",path:"/reports"},{label:"Workforce Analytics",path:"/reports?view=workforce"},{label:"Employee Reports",path:"/reports?view=employees"},{label:"Headcount Reports",path:"/reports?view=headcount"},{label:"Branch Reports",path:"/reports?view=branches"},{label:"Recruitment Reports",path:"/reports/recruitment"},{label:"Attendance Reports",path:"/reports?view=attendance",permission:"attendance.view"},{label:"Leave Reports",path:"/reports?view=leave",permission:"leave.view"},{label:"Payroll Reports",path:"/reports?view=payroll",permission:"payroll.view"},{label:"Compensation Reports",path:"/reports/compensation"},{label:"Benefits Reports",path:"/reports/benefits"},{label:"Custom Reports",path:"/reports/custom"}
   ]},
-  { id:"organization", label:"Organization", icon:<FaSitemapAlt/>, adminOnly:true, children:[
+  { id:"organization", label:"Organization", icon:<FaSitemap/>, adminOnly:true, children:[
     {label:"Organization Profile",path:"/organization/profile"},{label:"Head Office & Branches",path:"/settings?workspace=locations"},{label:"Departments & Designations",path:"/designations"},{label:"Organization Chart",path:"/organization/chart"},{label:"Reporting Lines",path:"/organization/reporting-lines"},{label:"Cost Centres",path:"/organization/cost-centres"}
   ]},
   { id:"workflows", label:"Workflows & Approvals", icon:<FaClipboardCheck/>, adminOnly:true, children:[
