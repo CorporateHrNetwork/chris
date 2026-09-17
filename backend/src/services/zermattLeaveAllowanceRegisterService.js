@@ -2,6 +2,7 @@ const prisma = require("../config/prisma");
 const { getActivePolicy } = require("./nigeriaPayrollComplianceService");
 const {
   ZERMATT_SLUG,
+  ELIGIBLE_EMPLOYMENT_TYPE,
   calculateLeaveAllowance,
 } = require("./zermattLeaveAllowanceService");
 
@@ -34,7 +35,7 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
   const policy = await getActivePolicy({ organizationId, prismaClient });
   const employees = await prismaClient.$queryRawUnsafe(
     `SELECT e."id",e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
-            e."hireDate",e."status",e."locationId",l."name" AS "locationName",
+            e."hireDate",e."status",e."employmentType",e."locationId",l."name" AS "locationName",
             sr."amount" AS "scheduledMonthlyGross",sr."currency"
        FROM "employees" e
        LEFT JOIN "organization_locations" l ON l."id"=e."locationId" AND l."organizationId"=e."organizationId"
@@ -79,15 +80,16 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
   const currentMonth = now.getUTCMonth();
   const rows = employees.map((employee) => {
     const hire = employee.hireDate ? new Date(employee.hireDate) : null;
+    const employmentTypeEligible = employee.employmentType === ELIGIBLE_EMPLOYMENT_TYPE;
     const scheduledMonthlyGross = round2(employee.scheduledMonthlyGross || 0);
-    const calculation = policy && scheduledMonthlyGross > 0
+    const calculation = policy && scheduledMonthlyGross > 0 && employmentTypeEligible
       ? calculateLeaveAllowance({ scheduledMonthlyGross, salaryStructure: policy.salaryStructure })
       : null;
     const history = paymentsByEmployee.get(employee.id) || [];
     let firstDueMonth = null;
     let nextDueMonth = null;
 
-    if (hire && !Number.isNaN(hire.getTime())) {
+    if (employmentTypeEligible && hire && !Number.isNaN(hire.getTime())) {
       const hireYear = hire.getUTCFullYear();
       const hireMonth = hire.getUTCMonth();
       firstDueMonth = `${hireYear + 1}-${String(hireMonth + 1).padStart(2, "0")}`;
@@ -103,6 +105,11 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       employeeNumber: employee.employeeNumber,
       employeeName: employee.employeeName,
       hireDate: dateText(employee.hireDate),
+      employmentType: employee.employmentType,
+      eligibilityStatus: employmentTypeEligible ? "ELIGIBLE_EMPLOYMENT_TYPE" : "NOT_ELIGIBLE_EMPLOYMENT_TYPE",
+      eligibilityReason: employmentTypeEligible
+        ? "Full-Time employee; anniversary/month rules still apply."
+        : `Leave Allowance is restricted to ${ELIGIBLE_EMPLOYMENT_TYPE} employees.`,
       entryMonth: hire ? hire.getUTCMonth() + 1 : null,
       status: employee.status,
       locationId: employee.locationId,
@@ -125,9 +132,10 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
   return {
     policy: {
       tenant: ZERMATT_SLUG,
+      eligibleEmploymentType: ELIGIBLE_EMPLOYMENT_TYPE,
       ratePercent: 10,
       formula: "Basic Monthly Salary × 12 × 10%",
-      eligibility: "First payment is due in the employee's entry month after completing one year of service, then annually in that same month.",
+      eligibility: "Only Full-Time employees qualify. First payment is due in the employee's entry month after completing one year of service, then annually in that same month.",
       taxable: false,
       payrollTreatment: "AFTER_TAX_NON_TAXABLE",
       payrollDescription: "Paid through the eligible month's payroll after PAYE. It does not increase taxable gross, chargeable income or PAYE and is shown separately on the approved payslip.",
@@ -135,6 +143,8 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
     rows,
     summary: {
       employees: rows.length,
+      employmentTypeEligible: rows.filter((row) => row.eligibilityStatus === "ELIGIBLE_EMPLOYMENT_TYPE").length,
+      employmentTypeIneligible: rows.filter((row) => row.eligibilityStatus === "NOT_ELIGIBLE_EMPLOYMENT_TYPE").length,
       withSalaryAuthority: rows.filter((row) => row.scheduledMonthlyGross > 0).length,
       totalApprovedPayments: payments.length,
       totalApprovedAmount: round2(payments.reduce((sum, payment) => sum + Number(jsonValue(payment.leaveAllowance, {}).amount || 0), 0)),
