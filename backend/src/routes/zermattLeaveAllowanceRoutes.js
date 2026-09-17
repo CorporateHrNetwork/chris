@@ -101,6 +101,7 @@ router.get(
         getSettings(prisma, req.auth.organizationId),
       ]);
       const rows = (data.rows || []).filter((row) => visibleInCurrentHrScope(req, row.locationId));
+      const payableRows = rows.filter((row) => row.dueThisMonth && Number(row.amountPayableThisMonth || 0) > 0);
       return res.json({
         status: "success",
         data: {
@@ -113,6 +114,11 @@ router.get(
             visibleApprovedPayments: rows.reduce((sum, row) => sum + Number(row.paymentHistory?.length || 0), 0),
             visibleApprovedAmount: rows.reduce(
               (sum, row) => sum + (row.paymentHistory || []).reduce((inner, payment) => inner + Number(payment.amount || 0), 0),
+              0
+            ),
+            payableEmployeesThisMonth: payableRows.length,
+            amountPayableThisMonth: payableRows.reduce(
+              (sum, row) => sum + Number(row.amountPayableThisMonth || 0),
               0
             ),
           },
