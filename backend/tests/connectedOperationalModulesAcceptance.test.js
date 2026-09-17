@@ -14,6 +14,8 @@ describe("connected operational modules", () => {
       "/workflows/approval-inbox", "/workflows/my-requests", "/workflows/templates", "/workflows/approval-chains", "/workflows/delegations", "/workflows/history",
       "/employment-types", "/employment-types/permanent", "/employment-types/contract", "/employment-types/temporary", "/employment-types/probation", "/employment-types/intern-trainee", "/employment-types/expatriate", "/employment-types/custom",
       "/training/programs", "/training/calendar", "/training/employee-training", "/training/learning-records", "/training/assessments", "/training/certifications", "/training/reports",
+      "/billing", "/billing/current-plan", "/billing/subscription", "/billing/usage", "/billing/details", "/billing/history", "/billing/invoices",
+      "/compensation", "/compensation/salary-structure", "/compensation/grades-levels", "/compensation/salary-bands", "/compensation/reviews", "/compensation/adjustments", "/compensation/promotions", "/compensation/bonuses-incentives", "/compensation/total-rewards",
     ];
     for (const route of requiredPaths) expect(sidebar).toContain(`path:\"${route}\"`);
   });
@@ -24,13 +26,22 @@ describe("connected operational modules", () => {
     expect(workspace).toContain('module="WORKFLOWS"');
     expect(workspace).toContain('module="TRAINING"');
     expect(workspace).toContain('module="REPORTS"');
+    expect(workspace).toContain('module="COMPENSATION"');
+    expect(workspace).toContain('module="BILLING"');
+    expect(workspace).toContain("SalaryReviewManagement");
     expect(workspace).toContain("EmploymentTypeManagement");
   });
 
-  test("operational backend supports the new modules", () => {
+  test("operational backend supports connected modules", () => {
     const routes = read("backend/src/routes/operationalControlRoutes.js");
-    for (const moduleName of ["ASSETS", "WORKFLOWS", "TRAINING", "REPORTS"]) {
+    for (const moduleName of ["ASSETS", "WORKFLOWS", "TRAINING", "REPORTS", "COMPENSATION", "BILLING"]) {
       expect(routes).toContain(`${moduleName}: new Set`);
     }
+  });
+
+  test("compensation reviews preserve the dedicated salary review control", () => {
+    const workspace = read("src/pages/shared/PlannedWorkspace.jsx");
+    expect(workspace).toContain('pathname==="/compensation/reviews"');
+    expect(workspace).toContain("<SalaryReviewManagement/>");
   });
 });
