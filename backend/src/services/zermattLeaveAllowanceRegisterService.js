@@ -20,6 +20,12 @@ function jsonValue(value, fallback = {}) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+function monthKeyFromDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient = prisma }) {
   const organization = await prismaClient.organization.findUnique({
     where: { id: organizationId },
@@ -61,6 +67,42 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
     organizationId
   );
 
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+  const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
+
+  // Current-month payroll is authoritative once a draft/submitted/approved run exists.
+  // If payroll has not yet been created, the register projection remains the payable source.
+  const currentPayrollRows = await prismaClient.$queryRawUnsafe(
+    `SELECT pr."id" AS "runId",pr."status" AS "runStatus",pr."createdAt",pp."code" AS "periodCode",pp."periodEnd",
+            pl."employeeId",pl."details"->'leaveAllowance' AS "leaveAllowance"
+       FROM "payroll_runs" pr
+       JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
+       JOIN "payroll_run_lines" pl ON pl."runId"=pr."id" AND pl."organizationId"=pr."organizationId"
+      WHERE pr."organizationId"=$1
+        AND TO_CHAR(pp."periodEnd", 'YYYY-MM')=$2
+        AND pr."status" IN ('DRAFT','SUBMITTED','APPROVED')
+        AND pl."details" ? 'leaveAllowance'
+      ORDER BY CASE pr."status" WHEN 'APPROVED' THEN 3 WHEN 'SUBMITTED' THEN 2 ELSE 1 END DESC,
+               pr."createdAt" DESC`,
+    organizationId,
+    currentMonthKey
+  );
+
+  const payrollByEmployee = new Map();
+  for (const row of currentPayrollRows) {
+    if (!payrollByEmployee.has(row.employeeId)) {
+      payrollByEmployee.set(row.employeeId, {
+        runId: row.runId,
+        runStatus: row.runStatus,
+        periodCode: row.periodCode,
+        periodEnd: dateText(row.periodEnd),
+        ...jsonValue(row.leaveAllowance, {}),
+      });
+    }
+  }
+
   const paymentsByEmployee = new Map();
   for (const payment of payments) {
     const item = {
@@ -75,9 +117,6 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
     paymentsByEmployee.set(payment.employeeId, list);
   }
 
-  const now = new Date();
-  const currentYear = now.getUTCFullYear();
-  const currentMonth = now.getUTCMonth();
   const rows = employees.map((employee) => {
     const hire = employee.hireDate ? new Date(employee.hireDate) : null;
     const employmentTypeEligible = employee.employmentType === ELIGIBLE_EMPLOYMENT_TYPE;
@@ -86,6 +125,7 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       ? calculateLeaveAllowance({ scheduledMonthlyGross, salaryStructure: policy.salaryStructure })
       : null;
     const history = paymentsByEmployee.get(employee.id) || [];
+    const currentPayroll = payrollByEmployee.get(employee.id) || null;
     let firstDueMonth = null;
     let nextDueMonth = null;
 
@@ -99,6 +139,11 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       while (paidYears.has(nextYear)) nextYear += 1;
       nextDueMonth = `${nextYear}-${String(hireMonth + 1).padStart(2, "0")}`;
     }
+
+    const registerDueThisMonth = employmentTypeEligible && nextDueMonth === currentMonthKey;
+    const payrollAmountThisMonth = currentPayroll ? round2(currentPayroll.amount || currentPayroll.value || 0) : null;
+    const registerAmountThisMonth = registerDueThisMonth ? round2(calculation?.leaveAllowance || 0) : 0;
+    const amountPayableThisMonth = currentPayroll ? payrollAmountThisMonth : registerAmountThisMonth;
 
     return {
       employeeId: employee.id,
@@ -124,10 +169,16 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       payrollTreatment: "AFTER_TAX_NON_TAXABLE",
       firstDueMonth,
       nextDueMonth,
+      dueThisMonth: currentPayroll ? payrollAmountThisMonth > 0 : registerDueThisMonth,
+      amountPayableThisMonth,
+      payableSource: currentPayroll ? `PAYROLL_${currentPayroll.runStatus}` : "REGISTER_CALCULATION",
+      currentPayroll,
       lastPayment: history[0] || null,
       paymentHistory: history,
     };
   });
+
+  const dueRows = rows.filter((row) => row.dueThisMonth && row.amountPayableThisMonth > 0);
 
   return {
     policy: {
@@ -146,6 +197,10 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       employmentTypeEligible: rows.filter((row) => row.eligibilityStatus === "ELIGIBLE_EMPLOYMENT_TYPE").length,
       employmentTypeIneligible: rows.filter((row) => row.eligibilityStatus === "NOT_ELIGIBLE_EMPLOYMENT_TYPE").length,
       withSalaryAuthority: rows.filter((row) => row.scheduledMonthlyGross > 0).length,
+      currentMonth: currentMonthKey,
+      payableEmployeesThisMonth: dueRows.length,
+      amountPayableThisMonth: round2(dueRows.reduce((sum, row) => sum + Number(row.amountPayableThisMonth || 0), 0)),
+      payableSource: currentPayrollRows.length ? "CURRENT_MONTH_PAYROLL" : "REGISTER_CALCULATION",
       totalApprovedPayments: payments.length,
       totalApprovedAmount: round2(payments.reduce((sum, payment) => sum + Number(jsonValue(payment.leaveAllowance, {}).amount || 0), 0)),
     },
