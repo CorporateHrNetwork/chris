@@ -25,25 +25,20 @@ export default function ZermattLeaveAllowanceSettings() {
     try {
       setSaving(true);
       setError("");
-      const result = await apiRequest("/api/benefits/leave-allowance/settings", {
-        method: "PUT",
-        body: { enabled, reason },
-      });
+      const result = await apiRequest("/api/benefits/leave-allowance/settings", { method: "PUT", body: { enabled, reason } });
       setSettings(result?.data || settings);
       setMessage(result?.message || "Leave Allowance settings saved.");
       setReason("");
     } catch (err) {
       setError(err?.message || "Unable to save settings.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return <section style={page}>
     <button type="button" style={back} onClick={() => navigate("/benefits?workspace=leave-allowance")}>← Leave Allowance</button>
     <div style={eyebrow}>ZERMATT BENEFITS · SETTINGS</div>
     <h1 style={title}>Leave Allowance Settings</h1>
-    <p style={lead}>Control whether Leave Allowance participates in future draft payroll calculations. The approved Zermatt formula, qualification rule and tax treatment are locked business rules and cannot be casually changed from this screen.</p>
+    <p style={lead}>Control whether Leave Allowance participates in future draft payroll calculations. The approved Zermatt formula, Full-Time eligibility, qualification rule and tax treatment are locked business rules and cannot be casually changed from this screen.</p>
 
     {error && <div style={errorBox}>{error}</div>}
     {message && <div style={successBox}>{message}</div>}
@@ -56,6 +51,8 @@ export default function ZermattLeaveAllowanceSettings() {
         </div>
 
         <div style={grid}>
+          <Setting label="Eligible Employment Type" value="Full-Time only" />
+          <Setting label="Ineligible Employment Types" value="Part-time · Expatriate · NYSC/Internship" />
           <Setting label="Formula" value="Basic Monthly Salary × 12 × 10%" />
           <Setting label="Rate" value={`${settings.ratePercent}% of annual Basic`} />
           <Setting label="Qualifying service" value="1 completed year" />
@@ -69,7 +66,7 @@ export default function ZermattLeaveAllowanceSettings() {
         <label style={label}>Reason for settings change
           <textarea style={{ ...input, minHeight: 84 }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Required when changing activation status" required={enabled !== Boolean(settings.enabled)} />
         </label>
-        <div style={notice}>Disabling the benefit affects only future draft/recalculated payrolls. It does not rewrite approved payroll or previously issued payslips. All settings changes are retained in the CHRiS audit trail.</div>
+        <div style={notice}>Employment Type eligibility is controlled by the authoritative employee master record. Moving an employee away from Full-Time makes future Leave Allowance payroll calculations ineligible without rewriting approved historical payroll. All settings changes are retained in the CHRiS audit trail.</div>
         <button style={saveButton} disabled={saving || (enabled !== Boolean(settings.enabled) && !reason.trim())}>{saving ? "Saving…" : "Save Settings"}</button>
       </form>}
     </section>
