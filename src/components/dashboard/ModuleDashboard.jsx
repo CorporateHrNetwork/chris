@@ -1,13 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import DocumentsWorkspace from "../../pages/documents/DocumentsWorkspace";
 import EmploymentTypeManagement from "../../pages/EmploymentTypeManagement";
+import OperationalControlWorkspace from "../../pages/shared/OperationalControlWorkspace";
 
 const MODULES = {
   recruitment:{eyebrow:"TALENT ACQUISITION",title:"Recruitment Dashboard",description:"Monitor recruitment activity, hiring pipeline and talent acquisition operations.",areas:["Job Requisitions","Candidates","Interviews","Offers","Onboarding Handover"]},
   payroll:{eyebrow:"PAYROLL OPERATIONS",title:"Payroll Dashboard",description:"Monitor payroll processing, pay-cycle readiness, exceptions and statutory outputs.",areas:["Payroll Runs","Salary Rates","Allowances","Deductions","Pay Advice"]},
   compensation:{eyebrow:"REWARDS MANAGEMENT",title:"Compensation & Rewards Dashboard",description:"Monitor compensation structures, rewards, salary positioning and employee reward programmes.",areas:["Salary Structure","Allowances","Bonuses","Rewards","Compensation Analytics"]},
   benefits:{eyebrow:"EMPLOYEE REWARDS",title:"Benefits Dashboard",description:"Monitor employee benefit participation, eligibility, enrolment and benefit administration.",areas:["Benefit Plans","Eligibility","Enrolment","Dependants","Benefit Analytics"]},
-  statutories:{eyebrow:"COMPLIANCE OPERATIONS",title:"Statutories Dashboard",description:"Monitor statutory obligations, deductions, remittances, reconciliation and compliance status.",areas:["PAYE","Pension","NSITF","ITF","Health / Other Statutories"]},
   performance:{eyebrow:"PERFORMANCE MANAGEMENT",title:"Performance Dashboard",description:"Monitor goals, reviews, ratings, performance cycles and workforce performance trends.",areas:["Goals","Appraisals","Review Cycles","Ratings","Performance Analytics"]},
   training:{eyebrow:"LEARNING & DEVELOPMENT",title:"Training & Development Dashboard",description:"Monitor learning programmes, training participation, development plans and capability growth.",areas:["Training Calendar","Programmes","Participants","Development Plans","Learning Analytics"]},
   assets:{eyebrow:"ASSET ADMINISTRATION",title:"Assets Dashboard",description:"Monitor employee-assigned assets, inventory status, returns and asset accountability.",areas:["Asset Register","Assignments","Returns","Maintenance","Asset Analytics"]},
@@ -23,6 +23,7 @@ const MODULES = {
 function ModuleDashboard({moduleKey}) {
   if (moduleKey === "documents") return <DocumentsWorkspace />;
   if (moduleKey === "employmentTypes") return <EmploymentTypeManagement />;
+  if (moduleKey === "statutories") return <OperationalControlWorkspace module="STATUTORIES" area="DASHBOARD" />;
   const m = MODULES[moduleKey] || {eyebrow:"CHRIS MODULE",title:"Module Dashboard",description:"Operational and analytical overview.",areas:[]};
 
   return <div style={{color:"var(--chris-text-main)"}}>
