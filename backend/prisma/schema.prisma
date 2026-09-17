@@ -68,6 +68,12 @@ model Organization {
   employeeExportJobs                 EmployeeExportJob[]
   employeeSelfOnboardingInvites      EmployeeSelfOnboardingInvite[]
   costCentres                        CostCentre[]
+  complianceRules                    ComplianceRule[]
+  complianceRuleEvents               ComplianceRuleEvent[]
+  statutoryObligations               StatutoryObligation[]
+  statutoryRemittanceBatches         StatutoryRemittanceBatch[]
+  statutoryLifecycleEvents           StatutoryLifecycleEvent[]
+  exitSettlements                    ExitSettlement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -238,6 +244,17 @@ model User {
   onboardingTasksCompleted             EmployeeOnboardingTask[]            @relation("EmployeeOnboardingTaskCompletedBy")
   employeeExitProcessesInitiated       EmployeeExitProcess[]               @relation("EmployeeExitInitiatedBy")
   employeeExitProcessesCompleted       EmployeeExitProcess[]               @relation("EmployeeExitCompletedBy")
+  complianceRulesCreated               ComplianceRule[]                    @relation("ComplianceRuleCreatedBy")
+  complianceRulesReviewed              ComplianceRule[]                    @relation("ComplianceRuleReviewedBy")
+  complianceRulesApproved              ComplianceRule[]                    @relation("ComplianceRuleApprovedBy")
+  complianceRuleEvents                 ComplianceRuleEvent[]
+  remittanceBatchesCreated             StatutoryRemittanceBatch[]          @relation("RemittanceCreatedBy")
+  remittanceBatchesApproved            StatutoryRemittanceBatch[]          @relation("RemittanceApprovedBy")
+  statutoryLifecycleEvents             StatutoryLifecycleEvent[]
+  exitSettlementsCalculated            ExitSettlement[]                    @relation("ExitSettlementCalculatedBy")
+  exitSettlementsApproved              ExitSettlement[]                    @relation("ExitSettlementApprovedBy")
+  exitSettlementsPaid                  ExitSettlement[]                    @relation("ExitSettlementPaidBy")
+  employeeExitTerminationAuthorities   EmployeeExitProcess[]               @relation("EmployeeExitTerminationAuthority")
   employeeExitProcessesCancelled       EmployeeExitProcess[]               @relation("EmployeeExitCancelledBy")
   lineManagerAssignmentsPerformed      EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentPerformedBy")
   employmentLevelAssignmentsPerformed  EmployeeEmploymentLevelAssignment[] @relation("EmploymentLevelAssignmentPerformedBy")
@@ -538,9 +555,11 @@ model Employee {
   onboardings                 EmployeeOnboarding[]
   documents                   EmployeeDocument[]
   exitProcesses               EmployeeExitProcess[]
-  lineManagerAssignments      EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentEmployee")
-  managedEmployeeAssignments  EmployeeLineManagerAssignment[] @relation("LineManagerAssignmentManager")
+  lineManagerAssignments      EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentEmployee")
+  managedEmployeeAssignments  EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentManager")
   employmentLevelAssignments  EmployeeEmploymentLevelAssignment[]
+  statutoryObligations        StatutoryObligation[]
+  exitSettlements             ExitSettlement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -561,7 +580,7 @@ model Employee {
 }
 
 model EmployeeEmploymentLevelAssignment {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   organizationId    String
   employeeId        String
   levelNumber       Int
@@ -1349,13 +1368,13 @@ enum AttendanceSource {
 }
 
 model EmployeeExportJob {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   organizationId    String
   requestedByUserId String
-  status            String   @default("QUEUED")
-  format            String   @default("XLSX")
-  filters           Json     @default("{}")
-  columns           Json     @default("[]")
+  status            String    @default("QUEUED")
+  format            String    @default("XLSX")
+  filters           Json      @default("{}")
+  columns           Json      @default("[]")
   rowCount          Int?
   fileName          String?
   storagePath       String?
@@ -1375,24 +1394,24 @@ model EmployeeExportJob {
 }
 
 model EmployeeSelfOnboardingInvite {
-  id                String         @id @default(uuid())
-  organizationId    String
-  createdByUserId   String
-  employeeId        String?
-  tokenHash         String         @unique
-  recipientEmail    String
-  departmentId      String
-  designationId     String
-  locationId        String
-  employmentStatus  EmployeeStatus @default(PROBATION)
-  hireDate          DateTime?
-  status            String         @default("PENDING")
-  expiresAt         DateTime
-  openedAt          DateTime?
-  submittedAt       DateTime?
-  completedAt       DateTime?
-  revokedAt         DateTime?
-  submittedData     Json           @default("{}")
+  id               String         @id @default(uuid())
+  organizationId   String
+  createdByUserId  String
+  employeeId       String?
+  tokenHash        String         @unique
+  recipientEmail   String
+  departmentId     String
+  designationId    String
+  locationId       String
+  employmentStatus EmployeeStatus @default(PROBATION)
+  hireDate         DateTime?
+  status           String         @default("PENDING")
+  expiresAt        DateTime
+  openedAt         DateTime?
+  submittedAt      DateTime?
+  completedAt      DateTime?
+  revokedAt        DateTime?
+  submittedData    Json           @default("{}")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User         @relation("EmployeeInviteCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -1446,18 +1465,23 @@ enum EmployeeStatus {
 }
 
 model EmployeeExitProcess {
-  id             String         @id @default(uuid())
-  organizationId String
-  employeeId     String
-  exitType       String
-  targetStatus   EmployeeStatus
-  noticeDate     DateTime?
-  noticeStatus   String         @default("IN_PROGRESS")
-  lastWorkingDay DateTime
-  reason         String
-  notes          String?
-  clearance      Json           @default("{}")
-  status         String         @default("IN_PROGRESS")
+  id                         String              @id @default(uuid())
+  organizationId             String
+  employeeId                 String
+  exitType                   String
+  targetStatus               EmployeeStatus
+  noticeDate                 DateTime?
+  noticeStatus               String              @default("IN_PROGRESS")
+  lastWorkingDay             DateTime
+  reason                     String
+  notes                      String?
+  clearance                  Json                @default("{}")
+  status                     String              @default("IN_PROGRESS")
+  financialStatus            ExitFinancialStatus @default(NOT_STARTED)
+  finalClosureAt             DateTime?
+  terminationReasonClass     String?
+  terminationAuthorityUserId String?
+  disciplinaryCaseId         String?
 
   initiatedByUserId String?
   completedByUserId String?
@@ -1470,13 +1494,17 @@ model EmployeeExitProcess {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
 
-  initiatedBy User? @relation("EmployeeExitInitiatedBy", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
-  completedBy User? @relation("EmployeeExitCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
-  cancelledBy User? @relation("EmployeeExitCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  initiatedBy          User?             @relation("EmployeeExitInitiatedBy", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+  completedBy          User?             @relation("EmployeeExitCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy          User?             @relation("EmployeeExitCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  terminationAuthority User?             @relation("EmployeeExitTerminationAuthority", fields: [terminationAuthorityUserId], references: [id], onDelete: SetNull)
+  disciplinaryCase     DisciplinaryCase? @relation(fields: [organizationId, disciplinaryCaseId], references: [organizationId, id], onDelete: Restrict)
+  settlement           ExitSettlement?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([organizationId, id])
   @@index([organizationId])
   @@index([employeeId])
   @@index([status])
@@ -1760,18 +1788,18 @@ model EmployeeDocument {
 // ============================================================
 
 model EmploymentContractLifecycle {
-  id                      String   @id @default(uuid())
+  id                      String    @id @default(uuid())
   organizationId          String
   employeeId              String?
   referenceCode           String
   firstName               String
   lastName                String
   email                   String?
-  currentState             String   @default("APPLICANT")
+  currentState            String    @default("APPLICANT")
   effectiveEmploymentDate DateTime?
-  createdByUserId          String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdByUserId         String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   transitions EmploymentContractTransition[]
   documents   EmploymentContractDocument[]
@@ -1816,7 +1844,7 @@ model EmploymentContractDocument {
   createdByUserId   String?
   createdAt         DateTime @default(now())
 
-  lifecycle EmploymentContractLifecycle      @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+  lifecycle EmploymentContractLifecycle       @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
   events    EmploymentContractDocumentEvent[]
 
   @@index([organizationId, lifecycleId])
@@ -1843,7 +1871,7 @@ model EmploymentContractDocumentEvent {
 }
 
 model DisciplinaryCase {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   organizationId  String
   employeeId      String
   employeeNumber  String
@@ -1852,19 +1880,21 @@ model DisciplinaryCase {
   allegation      String
   policyReference String?
   policyVersion   String?
-  status          String   @default("OPEN")
+  status          String    @default("OPEN")
   outcome         String?
   openedAt        DateTime
   decidedAt       DateTime?
   createdByUserId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   evidenceVersions    DisciplinaryEvidenceVersion[]
   processEvents       DisciplinaryProcessEvent[]
   externalProceedings DisciplinaryExternalProceeding[]
+  terminationExits    EmployeeExitProcess[]
 
   @@unique([organizationId, caseNumber])
+  @@unique([organizationId, id])
   @@index([organizationId, employeeId])
   @@index([organizationId, employeeNumber])
   @@index([organizationId, status])
@@ -1872,7 +1902,7 @@ model DisciplinaryCase {
 }
 
 model DisciplinaryEvidenceVersion {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   organizationId     String
   disciplinaryCaseId String
   logicalEvidenceKey String
@@ -1884,7 +1914,7 @@ model DisciplinaryEvidenceVersion {
   contentHash        String
   finalizedAt        DateTime?
   createdByUserId    String?
-  createdAt          DateTime @default(now())
+  createdAt          DateTime  @default(now())
 
   disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
 
@@ -1914,7 +1944,7 @@ model DisciplinaryProcessEvent {
 }
 
 model DisciplinaryExternalProceeding {
-  id                 String   @id @default(uuid())
+  id                 String    @id @default(uuid())
   organizationId     String
   disciplinaryCaseId String
   proceedingType     String
@@ -1925,8 +1955,8 @@ model DisciplinaryExternalProceeding {
   openedAt           DateTime?
   closedAt           DateTime?
   notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
 
@@ -1936,7 +1966,7 @@ model DisciplinaryExternalProceeding {
 }
 
 model ExternalVerificationRecord {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   organizationId   String
   employeeId       String?
   subjectReference String?
@@ -1951,12 +1981,306 @@ model ExternalVerificationRecord {
   errorMessage     String?
   responseMetadata Json?
   createdByUserId  String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([organizationId, employeeId])
   @@index([organizationId, identifierType])
   @@index([organizationId, status])
   @@index([organizationId, nextRetryAt])
   @@map("external_verification_records")
+}
+
+enum ComplianceRuleStatus {
+  WATCH
+  DRAFT
+  REVIEWED
+  APPROVED
+  ACTIVE
+  SUPERSEDED
+  RETIRED
+  REJECTED
+}
+
+enum StatutoryObligationStatus {
+  DRAFT_CALCULATED
+  CONFIRMED
+  DUE
+  PARTIALLY_REMITTED
+  REMITTED
+  RECONCILED
+  OVERDUE
+  DISPUTED
+  REVERSED
+  ADJUSTMENT_REQUIRED
+}
+
+enum StatutoryRemittanceStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PAID
+  PARTIALLY_ALLOCATED
+  ALLOCATED
+  RECONCILED
+  FAILED
+  REVERSED
+}
+
+enum StatutoryReconciliationStatus {
+  OPEN
+  MATCHED
+  SHORTFALL
+  OVERPAYMENT
+  UNMATCHED
+  RESOLVED
+}
+
+enum ExitSettlementStatus {
+  DRAFT
+  CALCULATED
+  PENDING_APPROVAL
+  APPROVED
+  PAYMENT_PENDING
+  PARTIALLY_PAID
+  PAID
+  WAIVED
+  DISPUTED
+}
+
+enum ExitFinancialStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  PAID
+  WAIVED
+}
+
+model ComplianceRule {
+  id               String               @id @default(uuid())
+  organizationId   String
+  ruleKey          String
+  name             String
+  category         String
+  jurisdiction     String               @default("NG")
+  version          Int
+  status           ComplianceRuleStatus @default(DRAFT)
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  legalAuthority   String?
+  sourceReference  String?
+  payload          Json
+  payloadHash      String
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  activatedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                 @relation("ComplianceRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy   User?                 @relation("ComplianceRuleReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  approvedBy   User?                 @relation("ComplianceRuleApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  events       ComplianceRuleEvent[]
+  obligations  StatutoryObligation[]
+
+  @@unique([organizationId, ruleKey, jurisdiction, version])
+  @@unique([organizationId, id])
+  @@index([organizationId, ruleKey, jurisdiction, status, effectiveFrom, effectiveTo])
+  @@map("compliance_rules")
+}
+
+model ComplianceRuleEvent {
+  id               String   @id @default(uuid())
+  organizationId   String
+  complianceRuleId String
+  eventType        String
+  actorUserId      String?
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  complianceRule ComplianceRule @relation(fields: [organizationId, complianceRuleId], references: [organizationId, id], onDelete: Cascade)
+  actor          User?          @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, complianceRuleId, createdAt])
+  @@map("compliance_rule_events")
+}
+
+model StatutoryObligation {
+  id                  String                    @id @default(uuid())
+  organizationId      String
+  employeeId          String
+  payrollRunId        String
+  payrollRunLineId    String?
+  obligationType      String
+  jurisdiction        String                    @default("NG")
+  periodYear          Int
+  periodMonth         Int
+  ruleId              String?
+  currency            String                    @default("NGN")
+  assessableBase      Decimal                   @default(0) @db.Decimal(18, 2)
+  employeeAmount      Decimal                   @default(0) @db.Decimal(18, 2)
+  employerAmount      Decimal                   @default(0) @db.Decimal(18, 2)
+  totalLiability      Decimal                   @default(0) @db.Decimal(18, 2)
+  amountRemitted      Decimal                   @default(0) @db.Decimal(18, 2)
+  status              StatutoryObligationStatus @default(DRAFT_CALCULATED)
+  dueDate             DateTime?
+  confirmedAt         DateTime?
+  exceptionCode       String?
+  exceptionReason     String?
+  calculationSnapshot Json
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  organization Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee                        @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  rule         ComplianceRule?                 @relation(fields: [organizationId, ruleId], references: [organizationId, id], onDelete: Restrict)
+  allocations  StatutoryRemittanceAllocation[]
+
+  @@unique([organizationId, payrollRunLineId, obligationType])
+  @@unique([organizationId, id])
+  @@index([organizationId, payrollRunId, status])
+  @@index([organizationId, periodYear, periodMonth, obligationType, status])
+  @@index([organizationId, employeeId, periodYear, periodMonth])
+  @@map("statutory_obligations")
+}
+
+model StatutoryRemittanceBatch {
+  id                String                    @id @default(uuid())
+  organizationId    String
+  reference         String
+  obligationType    String
+  jurisdiction      String                    @default("NG")
+  authorityName     String
+  periodYear        Int
+  periodMonth       Int
+  currency          String                    @default("NGN")
+  declaredAmount    Decimal                   @db.Decimal(18, 2)
+  allocatedAmount   Decimal                   @default(0) @db.Decimal(18, 2)
+  status            StatutoryRemittanceStatus @default(DRAFT)
+  paymentReference  String?
+  paymentDate       DateTime?
+  evidenceReference String?
+  createdByUserId   String?
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  organization   Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User?                           @relation("RemittanceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedBy     User?                           @relation("RemittanceApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  allocations    StatutoryRemittanceAllocation[]
+  reconciliation StatutoryReconciliation?
+
+  @@unique([organizationId, reference])
+  @@unique([organizationId, id])
+  @@index([organizationId, periodYear, periodMonth, obligationType, status])
+  @@map("statutory_remittance_batches")
+}
+
+model StatutoryRemittanceAllocation {
+  id             String   @id @default(uuid())
+  organizationId String
+  batchId        String
+  obligationId   String
+  amount         Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+
+  batch      StatutoryRemittanceBatch @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+  obligation StatutoryObligation      @relation(fields: [organizationId, obligationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([batchId, obligationId])
+  @@index([organizationId, obligationId])
+  @@map("statutory_remittance_allocations")
+}
+
+model StatutoryReconciliation {
+  id                 String                        @id @default(uuid())
+  organizationId     String
+  batchId            String                        @unique
+  expectedAmount     Decimal                       @db.Decimal(18, 2)
+  paidAmount         Decimal                       @db.Decimal(18, 2)
+  varianceAmount     Decimal                       @db.Decimal(18, 2)
+  status             StatutoryReconciliationStatus @default(OPEN)
+  notes              String?
+  reconciledByUserId String?
+  reconciledAt       DateTime?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  batch StatutoryRemittanceBatch @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, batchId])
+  @@index([organizationId, status])
+  @@map("statutory_reconciliations")
+}
+
+model StatutoryLifecycleEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  subjectType    String
+  subjectId      String
+  eventType      String
+  actorUserId    String?
+  previousStatus String?
+  newStatus      String?
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, subjectType, subjectId, createdAt])
+  @@map("statutory_lifecycle_events")
+}
+
+model ExitSettlement {
+  id                    String               @id @default(uuid())
+  organizationId        String
+  exitProcessId         String               @unique
+  employeeId            String
+  currency              String               @default("NGN")
+  finalSalary           Decimal              @default(0) @db.Decimal(18, 2)
+  allowancePayable      Decimal              @default(0) @db.Decimal(18, 2)
+  leavePayable          Decimal              @default(0) @db.Decimal(18, 2)
+  noticePay             Decimal              @default(0) @db.Decimal(18, 2)
+  gratuitySeverance     Decimal              @default(0) @db.Decimal(18, 2)
+  taxAdjustment         Decimal              @default(0) @db.Decimal(18, 2)
+  pensionAdjustment     Decimal              @default(0) @db.Decimal(18, 2)
+  loanRecovery          Decimal              @default(0) @db.Decimal(18, 2)
+  salaryAdvanceRecovery Decimal              @default(0) @db.Decimal(18, 2)
+  otherRecovery         Decimal              @default(0) @db.Decimal(18, 2)
+  grossPayable          Decimal              @default(0) @db.Decimal(18, 2)
+  totalRecovery         Decimal              @default(0) @db.Decimal(18, 2)
+  netSettlement         Decimal              @default(0) @db.Decimal(18, 2)
+  amountPaid            Decimal              @default(0) @db.Decimal(18, 2)
+  status                ExitSettlementStatus @default(DRAFT)
+  calculationSnapshot   Json
+  notes                 String?
+  calculatedByUserId    String?
+  calculatedAt          DateTime?
+  approvedByUserId      String?
+  approvedAt            DateTime?
+  paidByUserId          String?
+  paidAt                DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  exitProcess  EmployeeExitProcess @relation(fields: [organizationId, exitProcessId], references: [organizationId, id], onDelete: Restrict)
+  employee     Employee            @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  calculatedBy User?               @relation("ExitSettlementCalculatedBy", fields: [calculatedByUserId], references: [id], onDelete: SetNull)
+  approvedBy   User?               @relation("ExitSettlementApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  paidBy       User?               @relation("ExitSettlementPaidBy", fields: [paidByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, exitProcessId])
+  @@index([organizationId, employeeId, status])
+  @@map("exit_settlements")
 }

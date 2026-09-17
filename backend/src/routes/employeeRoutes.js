@@ -1085,6 +1085,12 @@ router.patch(
         notes,
       } = req.body || {};
 
+      return res.status(409).json({
+        status: "error",
+        code: "CONTROLLED_EXIT_WORKFLOW_REQUIRED",
+        message: "Direct employee exit is disabled. Initiate and complete the controlled /api/exits workflow so governance, clearance and settlement controls cannot be bypassed.",
+      });
+
 
       /*
       --------------------------------------------------------

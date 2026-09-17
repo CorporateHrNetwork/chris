@@ -64,6 +64,7 @@ import ReportingLines from "./pages/ReportingLines";
 import CostCentres from "./pages/CostCentres";
 import MySupportRequests from "./pages/MySupportRequests";
 import SupportDesk from "./pages/SupportDesk";
+import RemittanceWorkspace from "./pages/statutories/RemittanceWorkspace";
 
 function ProtectedLayout({ children }) {
   return (
@@ -194,7 +195,7 @@ function App() {
         <Route path="/statutories/nhia" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/nsitf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/itf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/statutories/remittances" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/statutories/remittances" element={<ProtectedLayout><RemittanceWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/performance/goals-kpis" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/performance/cycles" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />

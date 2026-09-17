@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { confirmPayrollObligations } = require("./statutoryObligationService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 const PERIOD_STATUSES = ["OPEN", "LOCKED", "CLOSED"];
@@ -859,7 +860,7 @@ async function submitPayrollRun({ organizationId, actorUserId, runId, notes, pri
   return { runId, status: "PENDING_APPROVAL" };
 }
 
-async function decidePayrollRun({ organizationId, actorUserId, runId, decision, statutoryReviewed, notes, prismaClient = prisma }) {
+async function decidePayrollRun({ organizationId, actorUserId, runId, decision, statutoryReviewed, statutoryObligationsRequired = false, notes, prismaClient = prisma }) {
   const action = text(decision).toUpperCase();
   if (!["APPROVE", "REJECT"].includes(action)) throw operationalError("INVALID_PAYROLL_DECISION", "Decision must be APPROVE or REJECT.");
   const rows = await prismaClient.$queryRawUnsafe(
@@ -904,6 +905,9 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
     );
 
     if (action === "APPROVE") {
+      if (statutoryObligationsRequired) {
+        await confirmPayrollObligations(tx, { organizationId, payrollRunId: runId, actorUserId });
+      }
       const recoveryRows = await tx.$queryRawUnsafe(
         `SELECT "details" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2`,
         organizationId,

@@ -488,12 +488,13 @@ router.post("/runs/:id/submit", requirePermission("payroll.process"), async (req
 router.post("/runs/:id/decision", requirePermission("payroll.manage"), async (req, res) => {
   try {
     const decision = String(req.body?.decision || "").trim().toUpperCase();
+    let isNigeriaPayroll = false;
     if (decision === "APPROVE") {
       const organization = await prisma.organization.findUnique({
         where: { id: req.auth.organizationId },
         select: { country: true, slug: true },
       });
-      const isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
+      isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
       if (isNigeriaPayroll) {
         await validateNigeriaPayrollApproval({
           organizationId: req.auth.organizationId,
@@ -510,6 +511,7 @@ router.post("/runs/:id/decision", requirePermission("payroll.manage"), async (re
         runId: req.params.id,
         decision: req.body?.decision,
         statutoryReviewed: req.body?.statutoryReviewed === true,
+        statutoryObligationsRequired: isNigeriaPayroll,
         notes: req.body?.notes,
       }),
     });
