@@ -351,6 +351,13 @@ function EmployeeDashboard() {
             }
           />,
           <QuickActionCard
+            key="employment-types"
+            title="Employment Types"
+            subtitle="Change Full-Time, Part-time or other Employment Type"
+            icon={<FaExchangeAlt />}
+            onClick={() => navigate("/employment-types")}
+          />,
+          <QuickActionCard
             key="analytics"
             title="Employee Analytics"
             subtitle="Status, gender and workforce insights"
