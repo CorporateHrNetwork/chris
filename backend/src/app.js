@@ -50,6 +50,7 @@ const supportDeskClientLifecycleGuardRoutes = require("./routes/supportDeskClien
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
 const documentRoutes = require("./routes/documentRoutes");
+const operationalControlRoutes = require("./routes/operationalControlRoutes");
 const eosbRoutes = require("./routes/eosbRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
@@ -86,6 +87,7 @@ app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
 
 app.use("/api", zermattHrLoanOptionRoutes);
