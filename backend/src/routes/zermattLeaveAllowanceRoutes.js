@@ -11,6 +11,10 @@ const {
 const {
   listZermattLeaveAllowanceRegister,
 } = require("../services/zermattLeaveAllowanceRegisterService");
+const {
+  getSettings,
+  updateSettings,
+} = require("../services/zermattLeaveAllowanceSettingsService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -42,20 +46,66 @@ function visibleInCurrentHrScope(req, locationId) {
 }
 
 router.get(
+  "/benefits/leave-allowance/settings",
+  zermattOnly,
+  requirePermission("payroll.view"),
+  async (req, res) => {
+    try {
+      return res.json({ status: "success", data: await getSettings(prisma, req.auth.organizationId) });
+    } catch (error) {
+      return sendError(res, error, "Unable to load Leave Allowance settings.");
+    }
+  }
+);
+
+router.put(
+  "/benefits/leave-allowance/settings",
+  zermattOnly,
+  requirePermission("payroll.manage"),
+  async (req, res) => {
+    try {
+      const previous = await getSettings(prisma, req.auth.organizationId);
+      const settings = await updateSettings(prisma, {
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        settings: {
+          ...previous,
+          enabled: req.body?.enabled === undefined ? previous.enabled : Boolean(req.body.enabled),
+        },
+        reason: req.body?.reason || "Leave Allowance activation setting updated",
+      });
+      return res.json({
+        status: "success",
+        message: settings.enabled
+          ? "Zermatt Leave Allowance is enabled for eligible payroll periods."
+          : "Zermatt Leave Allowance is paused for future draft payroll calculations.",
+        data: settings,
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to update Leave Allowance settings.");
+    }
+  }
+);
+
+router.get(
   "/benefits/leave-allowance",
   zermattOnly,
   requirePermission("payroll.view"),
   async (req, res) => {
     try {
-      const data = await listZermattLeaveAllowanceRegister({
-        organizationId: req.auth.organizationId,
-        prismaClient: prisma,
-      });
+      const [data, settings] = await Promise.all([
+        listZermattLeaveAllowanceRegister({
+          organizationId: req.auth.organizationId,
+          prismaClient: prisma,
+        }),
+        getSettings(prisma, req.auth.organizationId),
+      ]);
       const rows = (data.rows || []).filter((row) => visibleInCurrentHrScope(req, row.locationId));
       return res.json({
         status: "success",
         data: {
           ...data,
+          settings,
           rows,
           summary: {
             ...data.summary,
@@ -74,9 +124,6 @@ router.get(
   }
 );
 
-// ZERMATT draft payroll is intercepted before the generic payroll router so the
-// Benefits-owned Leave Allowance is part of the same calculation, totals and
-// approved payslip. Other tenants continue through the existing payroll route.
 router.post(
   "/payroll/runs/draft",
   zermattOnly,
@@ -106,13 +153,23 @@ router.post(
       const runId = base?.run?.id;
       if (!runId) throw new Error("PAYROLL_RUN_NOT_CREATED");
 
-      const leaveAllowance = await applyZermattLeaveAllowanceToDraft({
-        organizationId: req.auth.organizationId,
-        actorUserId: req.auth.userId,
-        runId,
-        periodId: req.body?.periodId,
-        prismaClient: prisma,
-      });
+      const settings = await getSettings(prisma, req.auth.organizationId);
+      const leaveAllowance = settings.enabled
+        ? await applyZermattLeaveAllowanceToDraft({
+            organizationId: req.auth.organizationId,
+            actorUserId: req.auth.userId,
+            runId,
+            periodId: req.body?.periodId,
+            prismaClient: prisma,
+          })
+        : {
+            enabled: false,
+            beneficiaryCount: 0,
+            totalLeaveAllowance: 0,
+            payrollTreatment: settings.taxTreatment,
+            formula: "Basic Monthly Salary × 12 × 10%",
+            beneficiaries: [],
+          };
 
       const runRows = await prisma.$queryRawUnsafe(
         `SELECT pr."id",pr."periodId",pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
@@ -158,13 +215,15 @@ router.post(
 
       return res.status(201).json({
         status: "success",
-        message: leaveAllowance.beneficiaryCount
-          ? `Draft payroll calculated. ${leaveAllowance.beneficiaryCount} employee(s) received Zermatt Leave Allowance for this period.`
-          : "Draft payroll calculated. No Zermatt Leave Allowance fell due in this period.",
+        message: !settings.enabled
+          ? "Draft payroll calculated. Zermatt Leave Allowance is currently disabled in Benefits settings."
+          : leaveAllowance.beneficiaryCount
+            ? `Draft payroll calculated. ${leaveAllowance.beneficiaryCount} employee(s) received Zermatt Leave Allowance for this period.`
+            : "Draft payroll calculated. No Zermatt Leave Allowance fell due in this period.",
         data: {
           run,
           lines: lineRows.map(mapLine),
-          leaveAllowance,
+          leaveAllowance: { ...leaveAllowance, settings },
         },
       });
     } catch (error) {
