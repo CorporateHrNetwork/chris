@@ -50,7 +50,7 @@ const MENU_GROUPS = [
     {label:"Payroll Dashboard",path:"/payroll"},{label:"Execute Payroll",path:"/payroll?workspace=execute"},{label:"Payroll Periods",path:"/payroll?workspace=periods"},{label:"Salary Rates",path:"/payroll?workspace=rates"},{label:"Allowances",path:"/payroll?workspace=allowances"},{label:"Deductions",path:"/payroll?workspace=deductions"},{label:"Payslips",path:"/payroll?workspace=payslips"},{label:"Loans",path:"/loans"},{label:"Salary Advances",path:"/payroll?workspace=salary-advances"},{label:"Paid Leave",path:"/payroll?workspace=paid-leave"},{label:"Payroll Approvals",path:"/payroll?workspace=approvals"}
   ]},
   { id:"compensation", label:"Compensation & Rewards", icon:<FaMoneyBillWave/>, adminOnly:true, children:[
-    {label:"Compensation Dashboard",planned:true},{label:"Salary Structure",planned:true},{label:"Grades & Levels",planned:true},{label:"Salary Bands",planned:true},{label:"Compensation Reviews",planned:true},{label:"Salary Adjustments",planned:true},{label:"Promotions",planned:true},{label:"Bonuses & Incentives",planned:true},{label:"Total Rewards",planned:true}
+    {label:"Compensation Dashboard",path:"/compensation"},{label:"Salary Structure",path:"/compensation/salary-structure"},{label:"Grades & Levels",path:"/compensation/grades-levels"},{label:"Salary Bands",path:"/compensation/salary-bands"},{label:"Compensation Reviews",path:"/compensation/reviews"},{label:"Salary Adjustments",path:"/compensation/adjustments"},{label:"Promotions",path:"/compensation/promotions"},{label:"Bonuses & Incentives",path:"/compensation/bonuses-incentives"},{label:"Total Rewards",path:"/compensation/total-rewards"}
   ]},
   { id:"benefits", label:"Benefits", icon:<FaGift/>, adminOnly:true, children:[
     {label:"Benefits Overview",path:"/benefits"},{label:"Pension",path:"/benefits/pension"},{label:"Gratuity",path:"/benefits/gratuity"},{label:"Health Insurance",path:"/benefits/health-insurance"},{label:"Life Insurance",path:"/benefits/life-insurance"},{label:"Medical Benefits",path:"/benefits/medical"},{label:"Housing / Rent",path:"/benefits/housing"},{label:"Transport Benefits",path:"/benefits/transport"},{label:"Meal Benefits",path:"/benefits/meals"},{label:"Other Benefits",path:"/benefits/other"},{label:"Benefit Enrolments",path:"/benefits/enrolments"}
@@ -73,7 +73,7 @@ const MENU_GROUPS = [
   { id:"reports", label:"Reports & Analytics", icon:<FaFileAlt/>, permission:"reports.view", children:[
     {label:"Reports Dashboard",path:"/reports"},{label:"Workforce Analytics",path:"/reports?view=workforce"},{label:"Employee Reports",path:"/reports?view=employees"},{label:"Headcount Reports",path:"/reports?view=headcount"},{label:"Branch Reports",path:"/reports?view=branches"},{label:"Recruitment Reports",path:"/reports/recruitment"},{label:"Attendance Reports",path:"/reports?view=attendance",permission:"attendance.view"},{label:"Leave Reports",path:"/reports?view=leave",permission:"leave.view"},{label:"Payroll Reports",path:"/reports?view=payroll",permission:"payroll.view"},{label:"Compensation Reports",path:"/reports/compensation"},{label:"Benefits Reports",path:"/reports/benefits"},{label:"Custom Reports",path:"/reports/custom"}
   ]},
-  { id:"organization", label:"Organization", icon:<FaSitemap/>, adminOnly:true, children:[
+  { id:"organization", label:"Organization", icon:<FaSitemapAlt/>, adminOnly:true, children:[
     {label:"Organization Profile",path:"/organization/profile"},{label:"Head Office & Branches",path:"/settings?workspace=locations"},{label:"Departments & Designations",path:"/designations"},{label:"Organization Chart",path:"/organization/chart"},{label:"Reporting Lines",path:"/organization/reporting-lines"},{label:"Cost Centres",path:"/organization/cost-centres"}
   ]},
   { id:"workflows", label:"Workflows & Approvals", icon:<FaClipboardCheck/>, adminOnly:true, children:[
@@ -86,7 +86,7 @@ const MENU_GROUPS = [
     {label:"Users & Roles",path:"/settings"},{label:"Roles & Permissions",path:"/settings"},{label:"Location Access",path:"/settings?workspace=locations"},{label:"Employee Settings",path:"/settings?workspace=employees"},{label:"Payroll Settings",path:"/settings?workspace=payroll"},{label:"Attendance Settings",path:"/settings?workspace=attendance"},{label:"Leave Settings",path:"/settings?workspace=leave"},{label:"Benefits Settings",path:"/settings?workspace=benefits"},{label:"Recruitment Settings",path:"/settings?workspace=recruitment"},{label:"Notifications",path:"/settings?workspace=notifications"},{label:"Security",path:"/settings?workspace=security"},{label:"System Settings",path:"/settings?workspace=system"}
   ]},
   { id:"billing", label:"Billing & Subscription", icon:<FaFileInvoiceDollar/>, adminOnly:true, children:[
-    {label:"Current Plan",planned:true},{label:"Subscription",planned:true},{label:"Usage",planned:true},{label:"Billing Details",planned:true},{label:"Billing History",planned:true},{label:"Invoices",planned:true}
+    {label:"Billing Dashboard",path:"/billing"},{label:"Current Plan",path:"/billing/current-plan"},{label:"Subscription",path:"/billing/subscription"},{label:"Usage",path:"/billing/usage"},{label:"Billing Details",path:"/billing/details"},{label:"Billing History",path:"/billing/history"},{label:"Invoices",path:"/billing/invoices"}
   ]},
 ];
 
