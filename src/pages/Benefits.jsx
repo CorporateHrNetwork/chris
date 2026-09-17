@@ -19,6 +19,7 @@ import {
   RecentActivityList,
 } from "../components/dashboard";
 import ZermattLeaveAllowance from "./benefits/ZermattLeaveAllowance";
+import ZermattLeaveAllowanceSettings from "./benefits/ZermattLeaveAllowanceSettings";
 
 function Benefits() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ function Benefits() {
   const workspace = searchParams.get("workspace") || "";
 
   if (workspace === "leave-allowance") return <ZermattLeaveAllowance />;
+  if (workspace === "leave-allowance-settings") return <ZermattLeaveAllowanceSettings />;
 
   const activity = [
     {
@@ -171,6 +173,13 @@ function Benefits() {
           subtitle="Eligibility, projected amount and approved payment history"
           icon={<FaCalendarAlt />}
           onClick={() => navigate("/benefits?workspace=leave-allowance")}
+        />,
+        <QuickActionCard
+          key="leave-allowance-settings"
+          title="Leave Allowance Settings"
+          subtitle="Activation control and locked payroll rules"
+          icon={<FaShieldAlt />}
+          onClick={() => navigate("/benefits?workspace=leave-allowance-settings")}
         />,
         <QuickActionCard
           key="plans"
