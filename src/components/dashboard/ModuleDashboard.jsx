@@ -24,6 +24,8 @@ function ModuleDashboard({moduleKey}) {
   if (moduleKey === "statutories") return <OperationalControlWorkspace module="STATUTORIES" area="DASHBOARD" />;
   if (moduleKey === "assets") return <OperationalControlWorkspace module="ASSETS" area="DASHBOARD" />;
   if (moduleKey === "workflows") return <OperationalControlWorkspace module="WORKFLOWS" area="DASHBOARD" />;
+  if (moduleKey === "compensation") return <OperationalControlWorkspace module="COMPENSATION" area="DASHBOARD" />;
+  if (moduleKey === "billing") return <OperationalControlWorkspace module="BILLING" area="DASHBOARD" />;
   const m = MODULES[moduleKey] || {eyebrow:"CHRIS MODULE",title:"Module Dashboard",description:"Operational and analytical overview.",areas:[]};
 
   return <div style={{color:"var(--chris-text-main)"}}>
