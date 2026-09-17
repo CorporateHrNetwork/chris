@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { dispatchCommercialEmail } = require("./commercialEmailService");
 
 const ENTITY_LEAD = "CommercialLead";
 const PLATFORM_SLUG = "corporatehr-network";
@@ -164,29 +165,6 @@ async function listLeadActivity(prisma, organizationId, number) {
     newValue: row.newValue || null,
     createdAt: row.createdAt,
   }));
-}
-
-async function dispatchCommercialEmail({ to, subject, replyTo, type, lead, message }) {
-  const webhook = clean(process.env.COMMERCIAL_EMAIL_WEBHOOK_URL);
-  if (!webhook) {
-    return { status: "PENDING_CONFIGURATION", to, channel: "EMAIL_WEBHOOK", type };
-  }
-  try {
-    const response = await fetch(webhook, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ to, subject, replyTo, type, lead, message }),
-    });
-    return {
-      status: response.ok ? "SENT" : "FAILED",
-      to,
-      channel: "EMAIL_WEBHOOK",
-      type,
-      httpStatus: response.status,
-    };
-  } catch (error) {
-    return { status: "FAILED", to, channel: "EMAIL_WEBHOOK", type, error: error.message };
-  }
 }
 
 async function createDemoLead(prisma, input) {
