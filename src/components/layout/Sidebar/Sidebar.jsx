@@ -36,6 +36,7 @@ const MENU_GROUPS = [
   { id:"dashboard", label:"Dashboard", icon:<FaTachometerAlt/>, permission:"dashboard.view", path:"/", exact:true },
   { id:"client-support", label:"My Support Requests", icon:<FaHeadset/>, authenticated:true, clientTenantOnly:true, path:"/support", exact:true },
   { id:"internal-support-desk", label:"CHRiS Support Desk", icon:<FaHeadset/>, permission:"support.internal.view", platformTenantOnly:true, path:"/support-desk", exact:true },
+  { id:"commercial-operations", label:"Commercial Operations", icon:<FaBriefcase/>, adminOnly:true, platformTenantOnly:true, path:"/commercial", exact:true },
   { id:"employees", label:"Employees", icon:<FaUsers/>, permission:"employees.view", children:[
     {label:"Add / Onboard Employee",path:"/employees/add"},{label:"Employee Dashboard",path:"/employees"},{label:"Employee Directory",path:"/employees/directory"},{label:"Employee Profiles",path:"/employees/profiles"},{label:"Onboarding Tracker",path:"/employees/onboarding"},{label:"Employee Analytics",path:"/employees/analytics"},{label:"Transfers",path:"/employees/transfers"},{label:"Promotions",path:"/employees/promotions"},{label:"Exits",path:"/employees/exits"},{label:"Line Managers",path:"/employees/line-managers"}
   ]},
