@@ -49,45 +49,109 @@ function buildBody({ type, lead, message }) {
   return lines.join("\r\n");
 }
 
-function readResponse(socket, expectedCodes, timeoutMs = 15000) {
-  return new Promise((resolve, reject) => {
-    let buffer = "";
-    const timeout = setTimeout(() => cleanup(new Error("SMTP response timeout.")), timeoutMs);
+function createResponseQueue(socket) {
+  let buffer = "";
+  let current = null;
+  const queued = [];
+  const waiters = [];
 
-    function cleanup(error, value) {
-      clearTimeout(timeout);
-      socket.off("data", onData);
-      socket.off("error", onError);
-      if (error) reject(error);
-      else resolve(value);
+  function deliver(response) {
+    const waiter = waiters.shift();
+    if (waiter) waiter.resolve(response);
+    else queued.push(response);
+  }
+
+  function onData(chunk) {
+    buffer += chunk.toString("utf8");
+    while (buffer.includes("\n")) {
+      const index = buffer.indexOf("\n");
+      const rawLine = buffer.slice(0, index + 1);
+      buffer = buffer.slice(index + 1);
+      const line = rawLine.replace(/\r?\n$/, "");
+      const match = line.match(/^(\d{3})([- ])(.*)$/);
+      if (!match) continue;
+      const code = Number(match[1]);
+      const separator = match[2];
+      if (!current) current = { code, lines: [] };
+      current.lines.push(line);
+      if (separator === " ") {
+        deliver({ code: current.code, response: current.lines.join("\r\n") });
+        current = null;
+      }
     }
+  }
 
-    function onError(error) {
-      cleanup(error);
-    }
+  function onError(error) {
+    while (waiters.length) waiters.shift().reject(error);
+  }
 
-    function onData(chunk) {
-      buffer += chunk.toString("utf8");
-      const lines = buffer.split(/\r?\n/).filter(Boolean);
-      if (!lines.length) return;
-      const last = lines[lines.length - 1];
-      if (!/^\d{3} /.test(last)) return;
-      const code = Number(last.slice(0, 3));
-      if (!expectedCodes.includes(code)) {
-        cleanup(new Error(`SMTP command failed with status ${code}.`));
+  socket.on("data", onData);
+  socket.on("error", onError);
+
+  function next(expectedCodes, timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+      const validate = (response) => {
+        if (!expectedCodes.includes(response.code)) {
+          reject(new Error(`SMTP command failed with status ${response.code}: ${response.response}`));
+          return;
+        }
+        resolve(response);
+      };
+
+      if (queued.length) {
+        validate(queued.shift());
         return;
       }
-      cleanup(null, { code, response: buffer });
-    }
 
-    socket.on("data", onData);
+      const timeout = setTimeout(() => {
+        const index = waiters.findIndex((item) => item.resolve === wrappedResolve);
+        if (index >= 0) waiters.splice(index, 1);
+        reject(new Error("SMTP response timeout."));
+      }, timeoutMs);
+
+      function wrappedResolve(response) {
+        clearTimeout(timeout);
+        validate(response);
+      }
+
+      function wrappedReject(error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+
+      waiters.push({ resolve: wrappedResolve, reject: wrappedReject });
+    });
+  }
+
+  function destroy() {
+    socket.off("data", onData);
+    socket.off("error", onError);
+  }
+
+  return { next, destroy };
+}
+
+async function connectSecure(socket, timeoutMs = 8000) {
+  if (socket.authorized || socket.encrypted && socket.secureConnecting === false) return;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => cleanup(new Error("SMTP connection timeout.")), timeoutMs);
+    function cleanup(error) {
+      clearTimeout(timer);
+      socket.off("secureConnect", onSecure);
+      socket.off("error", onError);
+      if (error) reject(error);
+      else resolve();
+    }
+    function onSecure() { cleanup(); }
+    function onError(error) { cleanup(error); }
+    socket.once("secureConnect", onSecure);
     socket.once("error", onError);
   });
 }
 
-async function command(socket, value, expectedCodes) {
+async function smtpCommand(socket, responses, value, expectedCodes) {
   socket.write(`${value}\r\n`);
-  return readResponse(socket, expectedCodes);
+  return responses.next(expectedCodes);
 }
 
 async function sendViaSmtp({ to, subject, replyTo, type, lead, message }) {
@@ -102,22 +166,18 @@ async function sendViaSmtp({ to, subject, replyTo, type, lead, message }) {
     servername: config.host,
     rejectUnauthorized: true,
   });
+  const responses = createResponseQueue(socket);
 
   try {
-    await new Promise((resolve, reject) => {
-      socket.once("secureConnect", resolve);
-      socket.once("error", reject);
-      socket.setTimeout(20000, () => reject(new Error("SMTP connection timeout.")));
-    });
-
-    await readResponse(socket, [220]);
-    await command(socket, `EHLO ${config.host}`, [250]);
-    await command(socket, "AUTH LOGIN", [334]);
-    await command(socket, Buffer.from(config.user).toString("base64"), [334]);
-    await command(socket, Buffer.from(config.password).toString("base64"), [235]);
-    await command(socket, `MAIL FROM:<${config.user}>`, [250]);
-    await command(socket, `RCPT TO:<${clean(to)}>`, [250, 251]);
-    await command(socket, "DATA", [354]);
+    await connectSecure(socket);
+    await responses.next([220]);
+    await smtpCommand(socket, responses, `EHLO ${config.host}`, [250]);
+    await smtpCommand(socket, responses, "AUTH LOGIN", [334]);
+    await smtpCommand(socket, responses, Buffer.from(config.user).toString("base64"), [334]);
+    await smtpCommand(socket, responses, Buffer.from(config.password).toString("base64"), [235]);
+    await smtpCommand(socket, responses, `MAIL FROM:<${config.user}>`, [250]);
+    await smtpCommand(socket, responses, `RCPT TO:<${clean(to)}>`, [250, 251]);
+    await smtpCommand(socket, responses, "DATA", [354]);
 
     const body = escapeDots(buildBody({ type, lead, message }));
     const headers = [
@@ -133,7 +193,7 @@ async function sendViaSmtp({ to, subject, replyTo, type, lead, message }) {
     ].filter(Boolean);
 
     socket.write(`${headers.join("\r\n")}\r\n\r\n${body}\r\n.\r\n`);
-    const accepted = await readResponse(socket, [250]);
+    const accepted = await responses.next([250]);
     socket.write("QUIT\r\n");
 
     return {
@@ -144,6 +204,7 @@ async function sendViaSmtp({ to, subject, replyTo, type, lead, message }) {
       smtpStatus: accepted.code,
     };
   } finally {
+    responses.destroy();
     socket.end();
     socket.destroy();
   }
