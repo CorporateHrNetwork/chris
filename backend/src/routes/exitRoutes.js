@@ -10,6 +10,8 @@ const {
 } = require("../services/lineManagerService");
 
 const { getExitRegister } = require("../services/exitRegisterService");
+const { assertTerminationReady } = require("../services/terminationGovernanceService");
+const settlements = require("../services/exitSettlementService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -131,6 +133,9 @@ router.post(
       const exitType = String(req.body?.exitType || "").trim().toUpperCase();
       const lastWorkingDay = date(req.body?.lastWorkingDay);
       const reason = text(req.body?.reason);
+      const terminationReasonClass = text(req.body?.terminationReasonClass)?.toUpperCase() || null;
+      const terminationAuthorityUserId = text(req.body?.terminationAuthorityUserId);
+      const disciplinaryCaseId = text(req.body?.disciplinaryCaseId);
 
       if (!employeeId) {
         return res.status(400).json({ status: "error", message: "Select an employee." });
@@ -146,6 +151,9 @@ router.post(
 
       if (!reason) {
         return res.status(400).json({ status: "error", message: "Enter the reason for exit." });
+      }
+      if (EXIT_TYPES[exitType] === "TERMINATED" && (!terminationReasonClass || !terminationAuthorityUserId)) {
+        return res.status(400).json({ status: "error", code: "TERMINATION_GOVERNANCE_INPUT_REQUIRED", message: "Termination reason class and approving authority are required." });
       }
 
       const employee = await prisma.employee.findFirst({
@@ -192,6 +200,9 @@ router.post(
           clearance: DEFAULT_CLEARANCE,
           status: "IN_PROGRESS",
           initiatedByUserId: req.auth.userId || null,
+          terminationReasonClass,
+          terminationAuthorityUserId,
+          disciplinaryCaseId,
         },
         include: {
           employee: {
@@ -435,6 +446,16 @@ router.post(
         const employee = await tx.employee.findFirst({
           where: { id: exitProcess.employeeId, organizationId },
         });
+        if (exitProcess.targetStatus === "TERMINATED") {
+          await assertTerminationReady(tx, {
+            organizationId,
+            employeeId: employee.id,
+            reasonClass: exitProcess.terminationReasonClass,
+            authorityUserId: exitProcess.terminationAuthorityUserId,
+            disciplinaryCaseId: exitProcess.disciplinaryCaseId,
+            effectiveDate: exitProcess.lastWorkingDay,
+          });
+        }
 
         const episode = await tx.employeeEmploymentEpisode.findFirst({
           where: {
@@ -506,6 +527,7 @@ router.post(
           where: { id: exitProcess.id },
           data: {
             status: "COMPLETED",
+            financialStatus: "PENDING",
             completedAt: new Date(),
             completedByUserId: req.auth.userId || null,
           },
@@ -527,6 +549,7 @@ router.post(
         data: serialize(completed),
       });
     } catch (error) {
+      if (error?.code) return res.status(error.statusCode || 409).json({ status: "error", code: error.code, message: error.message, details: error.details });
       console.error("Complete exit process error:", error);
       return res.status(500).json({
         status: "error",
@@ -535,5 +558,30 @@ router.post(
     }
   }
 );
+
+router.get("/:id/settlement", requirePermission("employees.view"), async (req, res) => {
+  try { return res.json({ status: "success", data: await settlements.getSettlement({ organizationId: req.auth.organizationId, exitProcessId: req.params.id }) }); }
+  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+});
+router.post("/:id/settlement/calculate", requirePermission("employees.update"), async (req, res) => {
+  try { return res.json({ status: "success", data: await settlements.calculateSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, input: req.body || {} }) }); }
+  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message, details: error.details }); }
+});
+router.post("/:id/settlement/submit", requirePermission("employees.update"), async (req, res) => {
+  try { return res.json({ status: "success", data: await settlements.submitSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id }) }); }
+  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+});
+router.post("/:id/settlement/approve", requirePermission("payroll.manage"), async (req, res) => {
+  try { return res.json({ status: "success", data: await settlements.approveSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, notes: req.body?.notes }) }); }
+  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+});
+router.post("/:id/settlement/payment", requirePermission("payroll.manage"), async (req, res) => {
+  try { return res.json({ status: "success", data: await settlements.recordSettlementPayment({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, amount: req.body?.amount, notes: req.body?.notes }) }); }
+  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+});
+router.post("/:id/settlement/waive", requirePermission("payroll.manage"), async (req, res) => {
+  try { return res.json({ status: "success", data: await settlements.waiveSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, reason: req.body?.reason }) }); }
+  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+});
 
 module.exports = router;
