@@ -30,10 +30,12 @@ import chrisLogo from "../../../assets/images/chris-logo.png";
 import { clearAuthSession } from "../../../services/api";
 import useAuthorization from "../../../hooks/useAuthorization";
 
+const PLATFORM_ORGANIZATION_SLUG = "corporatehr-network";
+
 const MENU_GROUPS = [
   { id:"dashboard", label:"Dashboard", icon:<FaTachometerAlt/>, permission:"dashboard.view", path:"/", exact:true },
-  { id:"client-support", label:"Support", icon:<FaHeadset/>, authenticated:true, path:"/support", exact:true },
-  { id:"internal-support-desk", label:"CHRiS Support Desk", icon:<FaHeadset/>, permission:"support.internal.view", path:"/support-desk", exact:true },
+  { id:"client-support", label:"My Support Requests", icon:<FaHeadset/>, authenticated:true, clientTenantOnly:true, path:"/support", exact:true },
+  { id:"internal-support-desk", label:"CHRiS Support Desk", icon:<FaHeadset/>, permission:"support.internal.view", platformTenantOnly:true, path:"/support-desk", exact:true },
   { id:"employees", label:"Employees", icon:<FaUsers/>, permission:"employees.view", children:[
     {label:"Add / Onboard Employee",path:"/employees/add"},{label:"Employee Dashboard",path:"/employees"},{label:"Employee Directory",path:"/employees/directory"},{label:"Employee Profiles",path:"/employees/profiles"},{label:"Onboarding Tracker",path:"/employees/onboarding"},{label:"Employee Analytics",path:"/employees/analytics"},{label:"Transfers",path:"/employees/transfers"},{label:"Promotions",path:"/employees/promotions"},{label:"Exits",path:"/employees/exits"},{label:"Line Managers",path:"/employees/line-managers"}
   ]},
@@ -44,7 +46,7 @@ const MENU_GROUPS = [
     {label:"Attendance Dashboard",path:"/attendance"},{label:"Attendance Register",path:"/attendance/register"},{label:"Shifts",path:"/attendance/shifts"},{label:"Shift Schedule",path:"/attendance/shift-schedule"},{label:"Worked Hours",path:"/attendance/worked-hours"},{label:"Worked Days",path:"/attendance/worked-days"},{label:"Off Days",path:"/attendance/off-days"},{label:"Overtime",path:"/attendance/overtime"},{label:"Public Holidays",path:"/attendance/public-holidays"},{label:"Lateness & Absence",path:"/attendance/lateness-absence"}
   ]},
   { id:"leave", label:"Leave", icon:<FaCalendarAlt/>, permission:"leave.view", children:[
-    {label:"Leave Overview",path:"/leave"},{label:"Leave Requests",path:"/leave/requests"},{label:"Active Leave",path:"/leave/active"},{label:"Return to Work",path:"/leave/returns"},{label:"Leave Calendar",path:"/leave/calendar"},{label:"Leave Balances",path:"/leave/balances"},{label:"Leave Entitlements",path:"/leave/entitlements"},{label:"Leave Policies",path:"/leave/policies"},{label:"Leave Exceptions",path:"/leave/exceptions"}
+    {label:"Leave Overview",path:"/leave"},{label:"Leave Requests",path:"/leave/requests"},{label:"Active Leave",path:"/leave/active"},{label:"Return to Work",path:"/leave/returns"},{label:"Leave Calendar",path:"/leave/calendar"},{label:"Leave Balancing",path:"/leave/balances"},{label:"Leave Entitlements",path:"/leave/entitlements"},{label:"Leave Policies",path:"/leave/policies"},{label:"Leave Exceptions",path:"/leave/exceptions"}
   ]},
   { id:"payroll", label:"Payroll", icon:<FaMoneyCheckAlt/>, permission:"payroll.view", children:[
     {label:"Payroll Dashboard",path:"/payroll"},{label:"Execute Payroll",path:"/payroll?workspace=execute"},{label:"Payroll Periods",path:"/payroll?workspace=periods"},{label:"Salary Rates",path:"/payroll?workspace=rates"},{label:"Allowances",path:"/payroll?workspace=allowances"},{label:"Deductions",path:"/payroll?workspace=deductions"},{label:"Payslips",path:"/payroll?workspace=payslips"},{label:"Loans",path:"/loans"},{label:"Salary Advances",path:"/payroll?workspace=salary-advances"},{label:"Paid Leave",path:"/payroll?workspace=paid-leave"},{label:"Payroll Approvals",path:"/payroll?workspace=approvals"}
@@ -92,18 +94,21 @@ const MENU_GROUPS = [
 
 function Sidebar() {
   const location = useLocation();
-  const { hasPermission, loading: authorizationLoading } = useAuthorization();
+  const { profile, hasPermission, loading: authorizationLoading } = useAuthorization();
   const [openGroups, setOpenGroups] = useState({});
   const canViewSettings = !authorizationLoading && hasPermission("settings.view");
+  const isPlatformTenant = profile?.organization?.slug === PLATFORM_ORGANIZATION_SLUG;
   const visibleGroups = useMemo(() => {
     if (authorizationLoading) return [];
     return MENU_GROUPS.filter((group) => {
+      if (group.clientTenantOnly && isPlatformTenant) return false;
+      if (group.platformTenantOnly && !isPlatformTenant) return false;
       if (group.authenticated) return true;
       if (group.adminOnly) return canViewSettings;
       if (group.permission) return hasPermission(group.permission);
       return false;
     }).map((group) => ({ ...group, children: group.children?.filter((child) => !child.permission || hasPermission(child.permission)) }));
-  }, [authorizationLoading, canViewSettings, hasPermission]);
+  }, [authorizationLoading, canViewSettings, hasPermission, isPlatformTenant]);
 
   const pathMatches = (childPath, includeQuery = false) => {
     if (!childPath) return false;
