@@ -49,6 +49,44 @@ const EMPTY_REHIRE = {
   notes: "",
 };
 
+const EMPTY_SETTLEMENT = {
+  finalSalary: "",
+  finalSalaryReference: "",
+  allowancePayable: "",
+  leavePayable: "",
+  leaveReference: "",
+  noticePay: "",
+  noticePayReference: "",
+  gratuitySeverance: "",
+  gratuityReference: "",
+  taxAdjustment: "",
+  pensionAdjustment: "",
+  otherRecovery: "",
+  currency: "NGN",
+  notes: "",
+};
+
+function settlementFormFromRecord(record) {
+  if (!record) return EMPTY_SETTLEMENT;
+  const evidence = record.calculationSnapshot?.evidenceReferences || {};
+  return {
+    finalSalary: String(record.finalSalary || ""),
+    finalSalaryReference: evidence.finalSalary || "",
+    allowancePayable: String(record.allowancePayable || ""),
+    leavePayable: String(record.leavePayable || ""),
+    leaveReference: evidence.leave || "",
+    noticePay: String(record.noticePay || ""),
+    noticePayReference: evidence.noticePay || "",
+    gratuitySeverance: String(record.gratuitySeverance || ""),
+    gratuityReference: evidence.gratuity || "",
+    taxAdjustment: String(record.taxAdjustment || ""),
+    pensionAdjustment: String(record.pensionAdjustment || ""),
+    otherRecovery: String(record.otherRecovery || ""),
+    currency: record.currency || "NGN",
+    notes: record.notes || "",
+  };
+}
+
 function nameOf(employee) {
   return [employee?.firstName, employee?.middleName, employee?.lastName]
     .filter(Boolean)
@@ -71,17 +109,30 @@ function dateText(value) {
   });
 }
 
+function moneyText(value, currency = "NGN") {
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency: currency || "NGN",
+      maximumFractionDigits: 2,
+    }).format(Number(value || 0));
+  } catch {
+    return `${currency || "NGN"} ${Number(value || 0).toLocaleString()}`;
+  }
+}
+
 export default function EmployeeExits() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const employeeNumber = searchParams.get("employeeNumber");
   const rehireNumber = searchParams.get("rehire");
+  const settlementExitId = searchParams.get("settlement");
 
   const { hasPermission } = useAuthorization();
   const canUpdate = hasPermission("employees.update");
+  const canManagePayroll = hasPermission("payroll.manage");
 
-  const [employees, setEmployees] = useState([]);
   const [selectedEmployeeRecord,setSelectedEmployeeRecord] = useState(null);
   const [rehireEmployeeRecord,setRehireEmployeeRecord] = useState(null);
   const [exits, setExits] = useState([]);
@@ -95,13 +146,16 @@ export default function EmployeeExits() {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
+  const [settlement, setSettlement] = useState(null);
+  const [settlementForm, setSettlementForm] = useState(EMPTY_SETTLEMENT);
+  const [settlementPayment, setSettlementPayment] = useState("");
+  const [settlementDecisionNotes, setSettlementDecisionNotes] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [employeeResult, exitResult, registerResult, departmentResult, designationResult, locationResult] =
+      const [exitResult, registerResult, departmentResult, designationResult, locationResult] =
         await Promise.all([
-          apiRequest("/api/employees"),
           apiRequest("/api/exits"),
           apiRequest("/api/exits/register"),
           apiRequest("/api/employees/career/departments"),
@@ -109,7 +163,6 @@ export default function EmployeeExits() {
           apiRequest("/api/location-catalog"),
         ]);
 
-      setEmployees(employeeResult?.data || []);
       setExits(exitResult?.data || []);
       setExitRegister(registerResult?.data || []);
       setDepartments((departmentResult?.data || []).filter((item) => item.isActive !== false));
@@ -123,12 +176,28 @@ export default function EmployeeExits() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(loadData, 0);
+    return () => window.clearTimeout(timer);
   }, [loadData]);
+
+  useEffect(() => {
+    let active = true;
+    if (!settlementExitId) {
+      return undefined;
+    }
+    apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`)
+      .then((result) => {
+        if (!active) return;
+        const record = result?.data || null;
+        setSettlement(record);
+        if (record) setSettlementForm(settlementFormFromRecord(record));
+      })
+      .catch((error) => { if (active) setFeedback(error?.message || "Unable to load the exit settlement."); });
+    return () => { active = false; };
+  }, [settlementExitId]);
   useEffect(() => {
     let active = true;
     if (!employeeNumber) {
-      setSelectedEmployeeRecord(null);
       return undefined;
     }
 
@@ -149,7 +218,6 @@ export default function EmployeeExits() {
   useEffect(() => {
     let active = true;
     if (!rehireNumber) {
-      setRehireEmployeeRecord(null);
       return undefined;
     }
 
@@ -191,6 +259,11 @@ export default function EmployeeExits() {
 
   const exitedEmployees = exitRegister;
 
+  const settlementExit = useMemo(
+    () => exitedEmployees.find((employee) => employee.exitProcess?.id === settlementExitId) || null,
+    [exitedEmployees, settlementExitId]
+  );
+
   const rehireDesignationOptions = useMemo(
     () =>
       designations.filter(
@@ -221,12 +294,15 @@ export default function EmployeeExits() {
         ? rehireEmployee.location.id
         : "";
 
-    setRehireForm((current) => ({
-      ...current,
-      departmentId,
-      designationId,
-      locationId,
-    }));
+    const timer = window.setTimeout(() => {
+      setRehireForm((current) => ({
+        ...current,
+        departmentId,
+        designationId,
+        locationId,
+      }));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [rehireEmployee, departments, designations, locations]);
 
   function setExitField(name, value) {
@@ -399,6 +475,97 @@ export default function EmployeeExits() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function setSettlementField(name, value) {
+    setSettlementForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function runSettlementAction(action, body) {
+    if (!settlementExitId) return;
+    setBusy(true);
+    setFeedback("");
+    try {
+      const result = await apiRequest(
+        `/api/exits/${encodeURIComponent(settlementExitId)}/settlement/${action}`,
+        { method: "POST", ...(body === undefined ? {} : { body }) }
+      );
+      setSettlement(result?.data || null);
+      const actionLabel = action === "calculate" ? "calculated" : action === "payment" ? "payment recorded" : action === "submit" ? "submitted" : action === "approve" ? "approved" : "waived";
+      setFeedback(`Exit settlement ${actionLabel} successfully.`);
+      if (["approve", "payment", "waive"].includes(action)) await loadData();
+      if (action === "payment") setSettlementPayment("");
+      if (["approve", "waive"].includes(action)) setSettlementDecisionNotes("");
+    } catch (error) {
+      setFeedback(error?.message || "Unable to update the exit settlement.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function calculateExitSettlement(event) {
+    event.preventDefault();
+    const amountFields = ["finalSalary", "allowancePayable", "leavePayable", "noticePay", "gratuitySeverance", "taxAdjustment", "pensionAdjustment", "otherRecovery"];
+    const body = { ...settlementForm };
+    for (const key of amountFields) body[key] = Number(body[key] || 0);
+    runSettlementAction("calculate", body);
+  }
+
+  if (settlementExitId) {
+    return (
+      <div>
+        <PageHero
+          eyebrow="EXIT FINANCIAL CLOSURE"
+          title="Exit Settlement"
+          subtitle="Calculate, independently approve and close the employee's financial settlement without delaying the HR-effective exit."
+          action={<button type="button" onClick={() => navigate("/employees/exits")} style={secondaryButton}><FaArrowLeft /> Exit Register</button>}
+        />
+
+        {feedback ? <div style={feedbackStyle}>{feedback}</div> : null}
+        {loading ? <div style={panel}>Loading settlement workflow...</div> : !settlementExit ? <div style={warning}>The completed exit could not be found.</div> : (
+          <div style={twoColumn}>
+            <EmployeeCard employee={settlementExit} />
+            <section style={panel}>
+              <div style={sectionHeader}>
+                <div><div style={eyebrow}>FINANCIAL STATUS</div><h2 style={sectionTitle}>{titleCase(settlementExit.exitProcess?.financialStatus || "PENDING")}</h2></div>
+                {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
+              </div>
+
+              {!settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status) ? (
+                <form onSubmit={calculateExitSettlement} style={formGrid}>
+                  <SettlementAmount label="Final Salary" amountKey="finalSalary" referenceKey="finalSalaryReference" form={settlementForm} setField={setSettlementField} />
+                  <Field label="Allowance Payable"><input type="number" min="0" step="0.01" value={settlementForm.allowancePayable} onChange={(event) => setSettlementField("allowancePayable", event.target.value)} style={input} /></Field>
+                  <SettlementAmount label="Leave Payable" amountKey="leavePayable" referenceKey="leaveReference" form={settlementForm} setField={setSettlementField} />
+                  <SettlementAmount label="Notice Pay" amountKey="noticePay" referenceKey="noticePayReference" form={settlementForm} setField={setSettlementField} />
+                  <SettlementAmount label="Gratuity / Severance" amountKey="gratuitySeverance" referenceKey="gratuityReference" form={settlementForm} setField={setSettlementField} />
+                  <Field label="Tax Adjustment / Recovery"><input type="number" min="0" step="0.01" value={settlementForm.taxAdjustment} onChange={(event) => setSettlementField("taxAdjustment", event.target.value)} style={input} /></Field>
+                  <Field label="Pension Adjustment / Recovery"><input type="number" min="0" step="0.01" value={settlementForm.pensionAdjustment} onChange={(event) => setSettlementField("pensionAdjustment", event.target.value)} style={input} /></Field>
+                  <Field label="Other Recovery"><input type="number" min="0" step="0.01" value={settlementForm.otherRecovery} onChange={(event) => setSettlementField("otherRecovery", event.target.value)} style={input} /></Field>
+                  <div style={full}><Field label="Calculation Notes"><textarea value={settlementForm.notes} onChange={(event) => setSettlementField("notes", event.target.value)} style={textarea} /></Field></div>
+                  <div style={footer}><span style={muted}>Loan and salary-advance recoveries are read from authoritative outstanding balances and cannot be overridden here.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy}>{busy ? "Calculating..." : "Calculate Settlement"}</button></div>
+                </form>
+              ) : null}
+
+              {settlement ? (
+                <div style={{ marginTop: 18 }}>
+                  <div style={settlementSummary}>
+                    <Info label="Gross Payable" value={moneyText(settlement.grossPayable, settlement.currency)} />
+                    <Info label="Total Recovery" value={moneyText(settlement.totalRecovery, settlement.currency)} />
+                    <Info label="Net Settlement" value={moneyText(settlement.netSettlement, settlement.currency)} />
+                    <Info label="Amount Paid / Recovered" value={moneyText(settlement.amountPaid, settlement.currency)} />
+                  </div>
+                  {settlement.status === "CALCULATED" ? <div style={footer}><span style={muted}>Submitting locks the calculation for independent approval.</span><button type="button" style={primaryButton} disabled={!canUpdate || busy} onClick={() => runSettlementAction("submit")}>Submit for Approval</button></div> : null}
+                  {settlement.status === "PENDING_APPROVAL" ? <div style={settlementAction}><Field label="Approval / Waiver Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={primaryButton} disabled={!canManagePayroll || busy} onClick={() => runSettlementAction("approve", { notes: settlementDecisionNotes })}>Approve Settlement</button><button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive with Reason</button></div> : null}
+                  {["PAYMENT_PENDING", "PARTIALLY_PAID"].includes(settlement.status) ? <div style={settlementAction}><Field label="Payment / Recovery Amount"><input type="number" min="0.01" step="0.01" value={settlementPayment} onChange={(event) => setSettlementPayment(event.target.value)} style={input} /></Field><Field label="Payment Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={primaryButton} disabled={!canManagePayroll || busy || !Number(settlementPayment)} onClick={() => runSettlementAction("payment", { amount: Number(settlementPayment), notes: settlementDecisionNotes })}>Record Payment / Recovery</button></div> : null}
+                  {["APPROVED", "PAYMENT_PENDING"].includes(settlement.status) ? <div style={settlementAction}><Field label="Waiver Reason"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive Settlement</button></div> : null}
+                  {["PAID", "WAIVED"].includes(settlement.status) ? <div style={closureNotice}>Financial closure complete. The HR-effective exit date and employment history remain unchanged.</div> : null}
+                </div>
+              ) : null}
+            </section>
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (employeeNumber) {
@@ -710,6 +877,7 @@ export default function EmployeeExits() {
                   <th style={th}>Status</th>
                   <th style={th}>Exit Date</th>
                   <th style={th}>Exit Workflow</th>
+                  <th style={th}>Financial Closure</th>
                   <th style={th}>Action</th>
                 </tr>
               </thead>
@@ -727,16 +895,14 @@ export default function EmployeeExits() {
                     <td style={td}>{dateText(employee.exitProcess?.effectiveDate || employee.exitDate)}</td>
                     <td style={td}>{employee.exitProcess ? `${titleCase(employee.exitProcess.status)} · ${titleCase(employee.exitProcess.exitType)}` : "Not recorded"}</td>
                     <td style={td}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(`/employees/exits?rehire=${encodeURIComponent(employee.employeeNumber)}`)
-                        }
-                        style={rehireButton}
-                        disabled={!canUpdate}
-                      >
-                        <FaRedo /> Rehire
-                      </button>
+                      <strong>{titleCase(employee.exitProcess?.financialStatus || "NOT_STARTED")}</strong>
+                      {employee.exitProcess?.settlement ? <div style={muted}>{moneyText(employee.exitProcess.settlement.netSettlement, employee.exitProcess.settlement.currency)} net</div> : null}
+                    </td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                        {employee.exitProcess?.id ? <button type="button" onClick={() => navigate(`/employees/exits?settlement=${encodeURIComponent(employee.exitProcess.id)}`)} style={rehireButton}>Settlement</button> : null}
+                        <button type="button" onClick={() => navigate(`/employees/exits?rehire=${encodeURIComponent(employee.employeeNumber)}`)} style={rehireButton} disabled={!canUpdate}><FaRedo /> Rehire</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -794,6 +960,15 @@ function Field({ label, children }) {
       <span style={fieldLabel}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function SettlementAmount({ label, amountKey, referenceKey, form, setField }) {
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <Field label={label}><input type="number" min="0" step="0.01" value={form[amountKey]} onChange={(event) => setField(amountKey, event.target.value)} style={input} /></Field>
+      <Field label={`${label} Source Reference`}><input value={form[referenceKey]} onChange={(event) => setField(referenceKey, event.target.value)} style={input} placeholder="Payroll, leave or approval reference" /></Field>
+    </div>
   );
 }
 
@@ -882,3 +1057,7 @@ const th = { padding: "12px 14px", textAlign: "left", borderBottom: "1px solid r
 const td = { padding: "13px 14px", borderBottom: "1px solid rgba(255,255,255,.045)", color: "#E5ECE8", fontSize: 12 };
 const rehireButton = { minHeight: 34, display: "inline-flex", alignItems: "center", gap: 6, padding: "0 11px", border: "1px solid rgba(212,175,55,.45)", borderRadius: 8, background: "rgba(212,175,55,.07)", color: "var(--chris-gold)", fontWeight: 850, cursor: "pointer" };
 const empty = { minHeight: 150, display: "grid", placeItems: "center", color: "#9FB0A7", fontSize: 13 };
+const settlementSummary = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, padding: 15, border: "1px solid rgba(212,175,55,.18)", borderRadius: 12, background: "rgba(255,255,255,.015)" };
+const settlementAction = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", alignItems: "end", gap: 10, marginTop: 16 };
+const dangerButton = { ...primaryButton, borderColor: "rgba(239,68,68,.7)", background: "rgba(127,29,29,.24)", color: "#FCA5A5" };
+const closureNotice = { marginTop: 16, padding: 13, border: "1px solid rgba(46,233,139,.35)", borderRadius: 10, background: "rgba(46,233,139,.08)", color: "#BAF7D7", fontSize: 12, fontWeight: 800 };

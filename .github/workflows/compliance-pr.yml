@@ -51,6 +51,9 @@ jobs:
       - name: Run compliance safeguards
         run: npm run test:compliance
 
+      - name: Run compliance administrative API and UI acceptance
+        run: npm run test:compliance:api
+
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js

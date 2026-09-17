@@ -22,6 +22,9 @@ function serializeExitRegisterEmployee(employee) {
       reason: process.reason,
       effectiveDate: process.lastWorkingDay,
       completedAt: process.completedAt,
+      financialStatus: process.financialStatus,
+      finalClosureAt: process.finalClosureAt,
+      settlement: process.settlement || null,
     } : null,
   };
 }
@@ -46,7 +49,25 @@ async function getExitRegister(prisma, organizationId) {
       location: { select: { id: true, name: true } },
       exitProcesses: {
         where: { status: "COMPLETED", completedAt: { not: null }, cancelledAt: null },
-        select: { id: true, status: true, exitType: true, reason: true, lastWorkingDay: true, completedAt: true },
+        select: {
+          id: true,
+          status: true,
+          exitType: true,
+          reason: true,
+          lastWorkingDay: true,
+          completedAt: true,
+          financialStatus: true,
+          finalClosureAt: true,
+          settlement: {
+            select: {
+              id: true,
+              status: true,
+              currency: true,
+              netSettlement: true,
+              amountPaid: true,
+            },
+          },
+        },
         orderBy: completedExitOrder,
         take: 1,
       },
