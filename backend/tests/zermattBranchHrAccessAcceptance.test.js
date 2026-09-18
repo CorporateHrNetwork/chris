@@ -103,8 +103,9 @@ for (const expected of [
 ]) {
   expect(financialPermissionMigration, expected, `Branch HR loan-input migration is missing ${expected}.`);
 }
+const executableFinancialPermissionMigration = financialPermissionMigration.replace(/--.*$/gm, "");
 for (const forbidden of ["payroll.manage", "payroll.process", "loans.approve", "loans.disburse"]) {
-  assert.ok(!financialPermissionMigration.includes(forbidden), `Branch HR financial-input migration must not grant ${forbidden}.`);
+  assert.ok(!executableFinancialPermissionMigration.includes(forbidden), `Branch HR financial-input migration must not grant ${forbidden}.`);
 }
 
 // Runtime authority is also role-aware, so future account/role reprovisioning
