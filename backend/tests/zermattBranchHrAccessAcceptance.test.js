@@ -45,6 +45,11 @@ expect(
 );
 expect(users, "userLocation.deleteMany", "User location replacements are not controlled.");
 expect(users, "userLocation.createMany", "User location assignments are not persisted.");
+expect(
+  users,
+  "access.locationIds.map((locationId) => ({ locationId }))",
+  "Nested branch-user creation must let Prisma inherit organizationId from the parent User relation."
+);
 expect(users, "CHRIS_USER_ACCESS_UPDATED", "User role/location changes are not audited.");
 expect(users, "ZERMATT_HEAD_OFFICE_NOT_ASSIGNABLE", "ZERMATT Head Office consolidated-context protection is missing.");
 
