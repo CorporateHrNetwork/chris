@@ -10,6 +10,7 @@ import PlannedWorkspace from "./pages/shared/PlannedWorkspace";
 import ModuleDashboard from "./components/dashboard/ModuleDashboard";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
+import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -195,7 +196,7 @@ function App() {
         <Route path="/statutories/nhia" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/nsitf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/itf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/statutories/remittances" element={<ProtectedLayout><RemittanceWorkspace /></ProtectedLayout>} />
+        <Route path="/statutories/remittances" element={<ProtectedLayout><ConsolidatedComplianceRoute><RemittanceWorkspace /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/statutories/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/performance/goals-kpis" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/performance/cycles" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
