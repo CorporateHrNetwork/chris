@@ -504,6 +504,21 @@ router.get(
           permissions:
             req.auth.permissions || [],
 
+          locationScope:
+            req.auth.locationScope,
+
+          activeLocationId:
+            req.auth.activeLocationId || null,
+
+          consolidatedOrganization:
+            Boolean(req.auth.consolidatedOrganization),
+
+          consolidatedHeadOffice:
+            Boolean(req.auth.consolidatedHeadOffice),
+
+          availableLocations:
+            req.auth.availableLocations || [],
+
           organization: {
             id:
               req.auth.organization.id,
