@@ -27,7 +27,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
       setBusy(true);
       setError("");
       setMessage("");
-      const result = await apiRequest("/api/zermatt/attendance/worked-days", {
+      const result = await apiRequest("/api/attendance/manual-payroll-inputs", {
         method: "POST",
         body: {
           employeeNumber,
@@ -38,7 +38,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
           notes: notes || "Manual worked days entered because clocking is not configured/complete.",
         },
       });
-      setMessage(result?.message || "Worked days saved. Recalculate payroll before submission.");
+      setMessage(result?.message || "Worked days saved. Any affected draft payroll is marked for recalculation.");
       setWorkedDays("");
       setWorkedHours("");
       setNotes("");
@@ -52,9 +52,9 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
 
   return (
     <section style={panelStyle}>
-      <div style={headingStyle}>SUPER USER · MANUAL WORKED DAYS</div>
+      <div style={headingStyle}>AUTHORIZED HR · MANUAL WORKED DAYS</div>
       <p style={helpStyle}>
-        Use this only where attendance clocking is not configured or an approved attendance exception must be reflected in payroll. The entry becomes the exact-period attendance basis for the selected employee; CHRiS marks existing draft payroll for recalculation.
+        Use this where attendance clocking is not configured or an approved absence/attendance exception must be reflected in payroll. Branch HR & Admin Officers may maintain employees in their assigned branch; Head HR may work organization-wide. The same authoritative attendance input feeds Head Office payroll and CHRiS marks existing draft payroll for recalculation.
       </p>
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div style={messageStyle}>{message}</div>}
