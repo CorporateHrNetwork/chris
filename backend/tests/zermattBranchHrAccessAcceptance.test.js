@@ -25,6 +25,7 @@ const workedDaysPanel = read(repoRoot, "src", "components", "payroll", "ManualWo
 const payrollUi = read(repoRoot, "src", "pages", "payroll", "PayrollIntegratedManaged.jsx");
 const editUser = read(repoRoot, "src", "components", "settings", "EditUserForm.jsx");
 const provisioner = read(backendRoot, "scripts", "provision-zermatt-branch-hr-access.cjs");
+const stagingFixture = read(backendRoot, "scripts", "provision-synthetic-zermatt-staging.cjs");
 const financialPermissionMigration = read(
   backendRoot,
   "prisma",
@@ -181,5 +182,29 @@ for (const expected of [
 }
 expect(payrollUi, "Export Audit Pack", "Approved payroll UI must expose the audit-pack export.");
 expect(payrollUi, "external auditor confirmation, GM approval and Accounts & Finance payout processing", "Payroll UI must describe the external handoff lifecycle.");
+
+// Synthetic ZERMATT staging must remain isolated, explicit and free of embedded credentials.
+for (const expected of [
+  "CHRIS_ENABLE_SYNTHETIC_ZERMATT_FIXTURE",
+  "SYNTHETIC STAGING ACCEPTANCE",
+  'slug: SLUG',
+  '"HEAD OFFICE"',
+  '"ABUJA BRANCH"',
+  '"PHC BRANCH"',
+  '"LAGOS BRANCH"',
+  '"Head of HR"',
+  '"HR & Admin Officer - Branch"',
+  '"STG-ZLL-SEP-2026"',
+  '"ZLL-NG-PAYROLL"',
+  '"ADMIN_ENTERED"',
+  "Refusing to overwrite an existing non-synthetic",
+]) {
+  expect(stagingFixture, expected, `Synthetic ZERMATT staging fixture is missing ${expected}.`);
+}
+for (const secret of ["ChangeMe123!", "Password123", "Synthetic123"]) {
+  assert.ok(!stagingFixture.includes(secret), "Synthetic staging fixture must not embed reusable passwords.");
+}
+expect(stagingFixture, "Passwords are supplied only through Render environment variables and are never printed.", "Fixture must keep staging passwords out of source and logs.");
+
 
 console.log("PASS: ZERMATT Branch HR & Admin access governance acceptance checks.");
