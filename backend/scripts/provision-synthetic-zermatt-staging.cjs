@@ -111,17 +111,17 @@ async function main() {
   const headDesignation = await prisma.designation.upsert({
     where: { organizationId_code: { organizationId: organization.id, code: "STG-HEAD-HR" } },
     update: { name: "Head of HR", departmentId: hrDepartment.id, isActive: true, careerTrack: "HUMAN_RESOURCES", careerLevel: null },
-    create: { organizationId: organization.id, code: "STG-HEAD-HR", name: "Head of HR", departmentId: hrDepartment.id, isActive: true, careerTrack: "HUMAN_RESOURCES", careerLevel: 10 },
+    create: { organizationId: organization.id, code: "STG-HEAD-HR", name: "Head of HR", departmentId: hrDepartment.id, isActive: true, careerTrack: "HUMAN_RESOURCES", careerLevel: null },
   });
   const branchDesignation = await prisma.designation.upsert({
     where: { organizationId_code: { organizationId: organization.id, code: "STG-HRA-OFF" } },
     update: { name: "HR & Admin Officer", departmentId: hrDepartment.id, isActive: true, careerTrack: "HUMAN_RESOURCES", careerLevel: null },
-    create: { organizationId: organization.id, code: "STG-HRA-OFF", name: "HR & Admin Officer", departmentId: hrDepartment.id, isActive: true, careerTrack: "HUMAN_RESOURCES", careerLevel: 4 },
+    create: { organizationId: organization.id, code: "STG-HRA-OFF", name: "HR & Admin Officer", departmentId: hrDepartment.id, isActive: true, careerTrack: "HUMAN_RESOURCES", careerLevel: null },
   });
   const opsDesignation = await prisma.designation.upsert({
     where: { organizationId_code: { organizationId: organization.id, code: "STG-OPS-ASSOC" } },
     update: { name: "Operations Associate", departmentId: opsDepartment.id, isActive: true, careerTrack: "OPERATIONS", careerLevel: null },
-    create: { organizationId: organization.id, code: "STG-OPS-ASSOC", name: "Operations Associate", departmentId: opsDepartment.id, isActive: true, careerTrack: "OPERATIONS", careerLevel: 2 },
+    create: { organizationId: organization.id, code: "STG-OPS-ASSOC", name: "Operations Associate", departmentId: opsDepartment.id, isActive: true, careerTrack: "OPERATIONS", careerLevel: null },
   });
 
   const employees = [
