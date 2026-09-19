@@ -142,6 +142,341 @@ async function audit(client, { organizationId, actorUserId, entityType, entityId
   });
 }
 
+async function nextLoanReferences(client, organizationId) {
+  await client.$executeRawUnsafe(
+    `SELECT pg_advisory_xact_lock(hashtext($1))`,
+    `zermatt-loan-reference:${organizationId}`
+  );
+  const rows = await client.$queryRawUnsafe(
+    `SELECT COALESCE(MAX(NULLIF(regexp_replace("gmApprovalReference", '^.*-', ''), '')::int), 0)::int AS "maxSeq"
+       FROM "payroll_loans"
+      WHERE "organizationId"=$1 AND "gmApprovalReference" ~ '^ZLL-GM-[0-9]+
+  return {
+    approvalMode: "MANUAL_GM_OUTSIDE_CHRIS",
+    disbursementMode: "ACCOUNTS_PAYMENT_OUTSIDE_CHRIS",
+    systemPurpose: "PAYROLL_RECOVERY_RECORD_ONLY",
+    gmApprovalReference: text(input?.gmApprovalReference) || null,
+    accountsPaymentReference: text(input?.accountsPaymentReference || input?.disbursementReference) || null,
+  };
+}
+
+async function recordApprovedDisbursedLoan({
+  organizationId,
+  actorUserId,
+  input,
+  collateralAssessment,
+  prismaClient = prisma,
+}) {
+  await assertZermattOrganization(prismaClient, organizationId);
+  const employee = await resolveEmployee(prismaClient, organizationId, input?.employeeNumber);
+  const approvedAmount = positiveMoney(input?.approvedAmount ?? input?.principalAmount, "GM Approved Loan Amount");
+  const installmentAmount = positiveMoney(input?.installmentAmount, "Monthly Installment");
+  if (installmentAmount > approvedAmount) {
+    throw policyError("INVALID_LOAN_INSTALLMENT", "Monthly Installment cannot exceed the approved loan amount.");
+  }
+  const gmApprovalDate = dateOnly(input?.gmApprovalDate || input?.approvedDate, "GM Approval Date");
+  const disbursedDate = dateOnly(input?.disbursedDate || input?.issuedDate, "External Disbursement Date");
+  const recoveryStartDate = monthStart(input?.recoveryStartMonth || input?.recoveryStartDate, "Recovery Start Month");
+  if (disbursedDate < gmApprovalDate) {
+    throw policyError("INVALID_EXTERNAL_APPROVAL_SEQUENCE", "External disbursement date cannot be earlier than the GM approval date.");
+  }
+  if (recoveryStartDate.slice(0, 7) < disbursedDate.slice(0, 7)) {
+    throw policyError("INVALID_RECOVERY_START", "Payroll recovery month cannot be earlier than the external disbursement month.");
+  }
+
+  const id = crypto.randomUUID();
+  const loanNumber = `LN-${employee.employeeNumber}-${id.slice(0, 8).toUpperCase()}`;
+  const plan = repaymentPlan(approvedAmount, installmentAmount, recoveryStartDate);
+
+  const created = await prismaClient.$transaction(async (tx) => {
+    const references = await nextLoanReferences(tx, organizationId);
+    const metadata = {
+      ...approvalMetadata(input),
+      ...references,
+    };
+    const rows = await tx.$queryRawUnsafe(
+      `INSERT INTO "payroll_loans"
+        ("id","organizationId","employeeId","loanNumber","principalAmount","outstandingAmount","installmentAmount",
+         "applicationDate","approvedDate","approvedByUserId","disbursedDate","recoveryStartDate","disbursementReference",
+         "gmApprovalReference","accountsPaymentReference","status","purpose","notes","workflowLocationId","createdByUserId")
+       VALUES ($1,$2,$3,$4,$5,$5,$6,$7::date,$7::date,$8,$9::date,$10::date,$11,$12,$13,'ACTIVE',$14,$15,$16,$8)
+       RETURNING *`,
+      id,
+      organizationId,
+      employee.id,
+      loanNumber,
+      approvedAmount,
+      installmentAmount,
+      gmApprovalDate,
+      actorUserId || null,
+      disbursedDate,
+      recoveryStartDate,
+      metadata.accountsPaymentReference,
+      metadata.gmApprovalReference,
+      metadata.accountsPaymentReference,
+      text(input?.purpose) || null,
+      text(input?.notes) || null,
+      employee.locationId || null
+    );
+
+    const value = {
+      id,
+      loanNumber,
+      employeeNumber: employee.employeeNumber,
+      employeeName: employeeName(employee),
+      principalAmount: approvedAmount,
+      outstandingAmount: approvedAmount,
+      installmentAmount,
+      gmApprovalDate,
+      disbursedDate,
+      recoveryStartDate,
+      status: "ACTIVE",
+      repaymentPlan: plan,
+      collateral: collateralAssessment || null,
+      ...metadata,
+    };
+    await audit(tx, {
+      organizationId,
+      actorUserId,
+      entityType: "PayrollLoan",
+      entityId: id,
+      action: "LOAN_APPROVED_DISBURSED_RECORDED_BY_HR",
+      newValue: value,
+      reason: input?.notes || "GM-approved loan paid externally by Accounts and recorded by authorized HR for payroll recovery",
+    });
+    await markDraftRunsRecalculationRequired({
+      organizationId,
+      actorUserId,
+      reason: `Approved/disbursed loan ${loanNumber} was recorded for payroll recovery from ${recoveryStartDate}.`,
+      prismaClient: tx,
+    });
+    return { ...rows[0], ...value };
+  });
+
+  return created;
+}
+
+async function applyApprovedDisbursedLoanTopUp({
+  organizationId,
+  actorUserId,
+  loanId,
+  input,
+  collateralAssessment,
+  prismaClient = prisma,
+}) {
+  await assertZermattOrganization(prismaClient, organizationId);
+  const topUpAmount = positiveMoney(input?.topUpAmount ?? input?.principalAmount, "GM Approved Top-Up Amount");
+  const gmApprovalDate = dateOnly(input?.gmApprovalDate || input?.approvedDate, "GM Approval Date");
+  const disbursedDate = dateOnly(input?.disbursedDate || input?.issuedDate, "External Disbursement Date");
+  const recoveryStartDate = monthStart(input?.recoveryStartMonth || input?.recoveryStartDate, "Recovery Start Month");
+  if (disbursedDate < gmApprovalDate) {
+    throw policyError("INVALID_EXTERNAL_APPROVAL_SEQUENCE", "External disbursement date cannot be earlier than the GM approval date.");
+  }
+  if (recoveryStartDate.slice(0, 7) < disbursedDate.slice(0, 7)) {
+    throw policyError("INVALID_RECOVERY_START", "Payroll recovery month cannot be earlier than the external top-up disbursement month.");
+  }
+  const metadata = approvalMetadata(input);
+
+  return prismaClient.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe(
+      `SELECT l.*,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName"
+         FROM "payroll_loans" l
+         JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
+        WHERE l."organizationId"=$1 AND l."id"=$2
+        FOR UPDATE`,
+      organizationId,
+      loanId
+    );
+    const existing = rows[0];
+    if (!existing) throw policyError("LOAN_NOT_FOUND", "Loan account not found.", 404);
+    if (!["ACTIVE", "PAUSED"].includes(String(existing.status || "").toUpperCase())) {
+      throw policyError("TOPUP_ACCOUNT_NOT_CURRENT", "Top-up can only be recorded against an Active or Paused loan account.", 409);
+    }
+
+    const currentPrincipal = Number(existing.principalAmount || 0);
+    const currentOutstanding = Math.max(0, Number(existing.outstandingAmount || 0));
+    const installmentAmount = positiveMoney(input?.installmentAmount || existing.installmentAmount, "New Monthly Installment");
+    const newPrincipal = Math.round((currentPrincipal + topUpAmount) * 100) / 100;
+    const newOutstanding = Math.round((currentOutstanding + topUpAmount) * 100) / 100;
+    if (installmentAmount > newOutstanding) {
+      throw policyError("INVALID_LOAN_INSTALLMENT", "New Monthly Installment cannot exceed the revised outstanding balance.");
+    }
+    const plan = repaymentPlan(newOutstanding, installmentAmount, recoveryStartDate);
+
+    const updatedRows = await tx.$queryRawUnsafe(
+      `UPDATE "payroll_loans"
+          SET "principalAmount"=$3,
+              "outstandingAmount"=$4,
+              "installmentAmount"=$5,
+              "recoveryStartDate"=$6::date,
+              "notes"=CASE WHEN $7::text IS NULL OR $7='' THEN "notes" ELSE CONCAT_WS(' | ',"notes",$7) END,
+              "updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1 AND "id"=$2
+        RETURNING *`,
+      organizationId,
+      loanId,
+      newPrincipal,
+      newOutstanding,
+      installmentAmount,
+      recoveryStartDate,
+      text(input?.notes) || null
+    );
+
+    const previousValue = {
+      loanNumber: existing.loanNumber,
+      principalAmount: currentPrincipal,
+      outstandingAmount: currentOutstanding,
+      installmentAmount: Number(existing.installmentAmount || 0),
+      recoveryStartDate: existing.recoveryStartDate,
+      status: existing.status,
+    };
+    const newValue = {
+      loanNumber: existing.loanNumber,
+      employeeNumber: existing.employeeNumber,
+      employeeName: existing.employeeName,
+      topUpAmount,
+      principalAmount: newPrincipal,
+      outstandingAmount: newOutstanding,
+      installmentAmount,
+      gmApprovalDate,
+      disbursedDate,
+      recoveryStartDate,
+      status: existing.status,
+      repaymentPlan: plan,
+      collateral: collateralAssessment || null,
+      ...metadata,
+    };
+    await audit(tx, {
+      organizationId,
+      actorUserId,
+      entityType: "PayrollLoan",
+      entityId: loanId,
+      action: "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR",
+      previousValue,
+      newValue,
+      reason: input?.notes || "GM-approved top-up paid externally by Accounts and merged into the existing loan account by authorized HR",
+    });
+    await markDraftRunsRecalculationRequired({
+      organizationId,
+      actorUserId,
+      reason: `Loan ${existing.loanNumber} top-up changed the payroll recovery balance/installment from ${recoveryStartDate}.`,
+      prismaClient: tx,
+    });
+
+    return {
+      ...updatedRows[0],
+      employeeNumber: existing.employeeNumber,
+      employeeName: existing.employeeName,
+      topUpAmount,
+      previousPrincipalAmount: currentPrincipal,
+      previousOutstandingAmount: currentOutstanding,
+      principalAmount: newPrincipal,
+      outstandingAmount: newOutstanding,
+      installmentAmount,
+      gmApprovalDate,
+      disbursedDate,
+      recoveryStartDate,
+      repaymentPlan: plan,
+      collateral: collateralAssessment || null,
+      ...metadata,
+    };
+  });
+}
+
+async function recordApprovedDisbursedSalaryAdvance({
+  organizationId,
+  actorUserId,
+  input,
+  prismaClient = prisma,
+}) {
+  await assertZermattOrganization(prismaClient, organizationId);
+  const employee = await resolveEmployee(prismaClient, organizationId, input?.employeeNumber);
+  const amount = positiveMoney(input?.approvedAmount ?? input?.amount, "GM Approved Salary Advance Amount");
+  const installmentAmount = positiveMoney(input?.installmentAmount, "Monthly Installment");
+  if (installmentAmount > amount) {
+    throw policyError("INVALID_ADVANCE_INSTALLMENT", "Monthly Installment cannot exceed the approved salary advance amount.");
+  }
+  const gmApprovalDate = dateOnly(input?.gmApprovalDate || input?.approvedDate, "GM Approval Date");
+  const issuedDate = dateOnly(input?.issuedDate || input?.disbursedDate, "External Payment Date");
+  const recoveryStartDate = monthStart(input?.recoveryStartMonth || input?.recoveryStartDate, "Recovery Start Month");
+  if (issuedDate < gmApprovalDate) {
+    throw policyError("INVALID_EXTERNAL_APPROVAL_SEQUENCE", "External payment date cannot be earlier than the GM approval date.");
+  }
+  if (recoveryStartDate.slice(0, 7) < issuedDate.slice(0, 7)) {
+    throw policyError("INVALID_RECOVERY_START", "Payroll recovery month cannot be earlier than the external payment month.");
+  }
+  const metadata = approvalMetadata(input);
+  const plan = repaymentPlan(amount, installmentAmount, recoveryStartDate);
+  const id = crypto.randomUUID();
+
+  return prismaClient.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe(
+      `INSERT INTO "payroll_salary_advances"
+        ("id","organizationId","employeeId","amount","outstandingAmount","installmentAmount","issuedDate","recoveryStartDate","status","reason","createdByUserId")
+       VALUES ($1,$2,$3,$4,$4,$5,$6::date,$7::date,'ACTIVE',$8,$9)
+       RETURNING *`,
+      id,
+      organizationId,
+      employee.id,
+      amount,
+      installmentAmount,
+      issuedDate,
+      recoveryStartDate,
+      text(input?.reason || input?.notes) || null,
+      actorUserId || null
+    );
+    const value = {
+      id,
+      employeeNumber: employee.employeeNumber,
+      employeeName: employeeName(employee),
+      amount,
+      outstandingAmount: amount,
+      installmentAmount,
+      gmApprovalDate,
+      issuedDate,
+      recoveryStartDate,
+      status: "ACTIVE",
+      repaymentPlan: plan,
+      ...metadata,
+    };
+    await audit(tx, {
+      organizationId,
+      actorUserId,
+      entityType: "PayrollSalaryAdvance",
+      entityId: id,
+      action: "SALARY_ADVANCE_APPROVED_DISBURSED_RECORDED_BY_HR",
+      newValue: value,
+      reason: input?.reason || input?.notes || "GM-approved salary advance paid externally by Accounts and recorded by authorized HR for payroll recovery",
+    });
+    await markDraftRunsRecalculationRequired({
+      organizationId,
+      actorUserId,
+      reason: `Approved/disbursed salary advance for ${employee.employeeNumber} was recorded for payroll recovery from ${recoveryStartDate}.`,
+      prismaClient: tx,
+    });
+    return { ...rows[0], ...value };
+  });
+}
+
+module.exports = {
+  policyError,
+  repaymentPlan,
+  assertZermattOrganization,
+  recordApprovedDisbursedLoan,
+  applyApprovedDisbursedLoanTopUp,
+  recordApprovedDisbursedSalaryAdvance,
+};`,
+    organizationId
+  );
+  const sequence = Number(rows[0]?.maxSeq || 0) + 1;
+  const suffix = String(sequence).padStart(6, "0");
+  return {
+    sequence,
+    gmApprovalReference: `ZLL-GM-${suffix}`,
+    accountsPaymentReference: `ZLL-AP-${suffix}`,
+  };
+}
+
 function approvalMetadata(input) {
   return {
     approvalMode: "MANUAL_GM_OUTSIDE_CHRIS",
