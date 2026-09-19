@@ -341,7 +341,10 @@ function printPayslip(row, organization = {}) {
   ];
   const logo = logoUrl ? `<img class="organization-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo">` : "";
   const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : "";
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+  // Keep a same-origin about:blank handle long enough to write the document.
+  // `noopener` in windowFeatures can make browsers return null while still
+  // opening a blank tab. We remove opener immediately below instead.
+  const printWindow = window.open("", "_blank");
   if (!printWindow) {
     window.alert("Allow pop-ups to print this payslip.");
     return;
