@@ -17,6 +17,19 @@ function json(value) {
 }
 
 function mapLine(row) {
+  const details = json(row.details);
+  const storedAttendance = details.attendance || {};
+  const liveWorkedDays = row.liveWorkedDays == null ? null : number(row.liveWorkedDays);
+  const standardDays = number(storedAttendance.standardDays || 0);
+  const authoritativeAttendance = liveWorkedDays == null ? storedAttendance : {
+    ...storedAttendance,
+    payableDays: liveWorkedDays,
+    workedDays: liveWorkedDays,
+    expectedDays: standardDays,
+    workedHours: row.liveWorkedHours == null ? null : number(row.liveWorkedHours),
+    source: "ATTENDANCE_PAYROLL_INPUT",
+    notes: row.liveAttendanceNotes || null,
+  };
   return {
     ...row,
     baseSalary: number(row.baseSalary),
@@ -26,17 +39,41 @@ function mapLine(row) {
     loanRecovery: number(row.loanRecovery),
     grossPay: number(row.grossPay),
     netPreview: number(row.netPreview),
-    details: json(row.details),
+    locationId: row.locationId || null,
+    locationCode: row.locationCode || null,
+    locationName: row.locationName || null,
+    details: {
+      ...details,
+      location: {
+        id: row.locationId || null,
+        code: row.locationCode || null,
+        name: row.locationName || null,
+      },
+      attendance: authoritativeAttendance,
+      attendanceRecalculationRequired:
+        liveWorkedDays != null && number(storedAttendance.payableDays) !== liveWorkedDays,
+    },
   };
 }
 
 router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), async (req, res) => {
   try {
     const rows = await prisma.$queryRawUnsafe(
-      `SELECT "id","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","loanRecovery","grossPay","netPreview","statutoryStatus","details","createdAt","updatedAt"
-         FROM "payroll_run_lines"
-        WHERE "organizationId"=$1 AND "runId"=$2
-        ORDER BY "employeeNumber" ASC`,
+      `SELECT pl."id",pl."runId",pl."employeeId",pl."employeeNumber",pl."employeeName",pl."currency",
+              pl."baseSalary",pl."allowances",pl."deductions",pl."advanceRecovery",pl."loanRecovery",
+              pl."grossPay",pl."netPreview",pl."statutoryStatus",pl."details",pl."createdAt",pl."updatedAt",
+              e."locationId",loc."code" AS "locationCode",loc."name" AS "locationName",
+              api."workedDays" AS "liveWorkedDays",api."workedHours" AS "liveWorkedHours",api."notes" AS "liveAttendanceNotes"
+         FROM "payroll_run_lines" pl
+         JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
+         JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
+         JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
+         LEFT JOIN "organization_locations" loc ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
+         LEFT JOIN "attendance_payroll_inputs" api
+           ON api."organizationId"=pl."organizationId" AND api."employeeId"=pl."employeeId"
+          AND api."periodStart"=pp."periodStart" AND api."periodEnd"=pp."periodEnd"
+        WHERE pl."organizationId"=$1 AND pl."runId"=$2
+        ORDER BY pl."employeeNumber" ASC`,
       req.auth.organizationId,
       req.params.id
     );
