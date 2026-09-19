@@ -17,6 +17,14 @@ function createZermattAnnualCarryoverScheduler({ prisma, intervalMs = HOUR_MS })
         select: { id: true },
       });
       if (!organization) return { skipped: "ZERMATT_NOT_CONFIGURED", leaveYear: year };
+      const carryoverBalances = await prisma.leaveBalance.count({
+        where: {
+          organizationId: organization.id,
+          leaveYear: year,
+          carriedForward: { gt: 0 },
+        },
+      });
+      if (!carryoverBalances) return { skipped: "NO_CARRYOVER_BALANCES", leaveYear: year };
       return await forfeitExpiredCarryover({
         organizationId: organization.id,
         actorUserId: null,
