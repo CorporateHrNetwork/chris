@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeBatchSelector from "../../components/EmployeeBatchSelector";
 import ManualWorkedDaysPanel from "../../components/payroll/ManualWorkedDaysPanel";
-import { apiRequest, getStoredOrganization } from "../../services/api";
+import { apiRequest, apiDownload, saveDownloadedBlob, getStoredOrganization } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -111,6 +111,19 @@ function ExecuteIntegrated() {
     }
   };
 
+  const exportAuditPack = async (run) => {
+    try {
+      setBusy(`export-${run.id}`); setError(""); setMessage("");
+      const download = await apiDownload(`/api/payroll/runs/${run.id}/audit-pack.xlsx`);
+      saveDownloadedBlob(download);
+      setMessage("Approved payroll audit pack exported for external auditor confirmation, GM approval and Accounts & Finance payout processing.");
+    } catch (err) {
+      setError(err.message || "Unable to export payroll audit pack.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const reopen = async (run) => {
     const reason = window.prompt(`Reason for reopening approved payroll ${run.periodCode}:`);
     if (!reason?.trim()) return;
@@ -135,7 +148,7 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || !policyData?.configured} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit and does not change taxable gross, chargeable income or deductions. Manual Worked Days entered for the exact payroll period override standard attendance days for that employee. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
+        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. After approval, export the formula-backed Payroll Audit Pack for external auditor confirmation, GM approval and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month; Loan and Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
@@ -151,6 +164,7 @@ function ExecuteIntegrated() {
               <Td><div style={buttonRow}>
                 <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
+                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `export-${run.id}`} onClick={() => exportAuditPack(run)}>{busy === `export-${run.id}` ? "Exporting…" : "Export Audit Pack"}</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
               </div></Td>
             </tr>
