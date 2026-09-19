@@ -188,12 +188,14 @@ test("administrative UI exposes remittance operations and exit financial closure
   const consolidatedRoute = read("src/components/auth/ConsolidatedComplianceRoute.jsx");
   const authRoutes = read("backend/src/routes/authRoutes.js");
   const remittance = read("src/pages/statutories/RemittanceWorkspace.jsx");
+  const payroll = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
   const exits = read("src/pages/EmployeeExits.jsx");
   const exitRoutes = read("backend/src/routes/exitRoutes.js");
   const register = read("backend/src/services/exitRegisterService.js");
   assert.match(app, /statutories\/remittances.*ConsolidatedComplianceRoute.*RemittanceWorkspace/);
   for (const contract of ["consolidatedOrganization", "activeLocationId", "Consolidated access required"]) assert.ok(consolidatedRoute.includes(contract) || authRoutes.includes(contract), `frontend consolidated-scope gate missing ${contract}`);
   for (const contract of ["/api/compliance/remittances", "/api/compliance/obligations", "Record Payment", "Record Allocation", "Reconcile", "Reverse Batch"]) assert.ok(remittance.includes(contract), `remittance UI missing ${contract}`);
+  for (const contract of ["organization-logo", "organization-name", "watermark", "Employee Payslip", "window.open(\"\", \"_blank\""]) assert.ok(payroll.includes(contract), `payslip print document missing ${contract}`);
   for (const contract of ["runSettlementAction(\"calculate\"", "runSettlementAction(\"submit\"", "runSettlementAction(\"approve\"", "runSettlementAction(\"payment\"", "runSettlementAction(\"waive\"", "Loan and salary-advance recoveries are read from authoritative outstanding balances"]) assert.ok(exits.includes(contract), `exit settlement UI missing ${contract}`);
   for (const endpoint of ["settlement/calculate", "settlement/submit", "settlement/approve", "settlement/payment", "settlement/waive"]) assert.ok(exitRoutes.includes(endpoint), `exit API missing ${endpoint}`);
   for (const contract of ["financialStatus", "finalClosureAt", "settlement:"]) assert.ok(register.includes(contract), `exit register missing ${contract}`);
