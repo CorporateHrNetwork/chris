@@ -4,6 +4,7 @@ const express =
 const {
   requireAuth,
   requirePermission,
+  requireAnyPermission,
 } = require(
   "../middleware/authMiddleware"
 );
@@ -62,12 +63,53 @@ const {
 } = require(
   "../services/attendancePayrollInputLifecycleService"
 );
+const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+
 const router =
   express.Router();
 
 router.use(
   requireAuth
 );
+
+function attendanceScopeError(code, message, statusCode = 403) {
+  const error = new Error(message);
+  error.code = code;
+  error.statusCode = statusCode;
+  error.safeMessage = message;
+  return error;
+}
+
+async function assertEmployeeWithinAttendanceScope(req, employeeNumber) {
+  const normalized = String(employeeNumber || "").trim().toUpperCase();
+  if (!normalized) throw attendanceScopeError("EMPLOYEE_REQUIRED", "Employee is required.", 400);
+  const employee = await prisma.employee.findFirst({
+    where: { organizationId: req.auth.organizationId, employeeNumber: normalized },
+    select: { id: true, employeeNumber: true, locationId: true },
+  });
+  if (!employee) throw attendanceScopeError("EMPLOYEE_NOT_FOUND", `Employee ${normalized} was not found.`, 404);
+
+  if (req.auth?.activeLocationId && employee.locationId !== req.auth.activeLocationId) {
+    throw attendanceScopeError("ATTENDANCE_ACTIVE_BRANCH_MISMATCH", "The selected employee does not belong to the active branch.");
+  }
+  if (req.auth?.locationScope !== "ALL_LOCATIONS") {
+    const allowed = new Set((req.auth?.availableLocations || []).map((location) => location.id).filter(Boolean));
+    if (!employee.locationId || !allowed.has(employee.locationId)) {
+      throw attendanceScopeError("ATTENDANCE_LOCATION_ACCESS_DENIED", "The selected employee is outside your assigned branch/location scope.");
+    }
+  }
+  return employee;
+}
+
+async function assertManualInputWithinAttendanceScope(req, id) {
+  const input = await prisma.attendancePayrollInput.findFirst({
+    where: { id, organizationId: req.auth.organizationId },
+    include: { employee: { select: { employeeNumber: true } } },
+  });
+  if (!input) throw attendanceScopeError("MANUAL_PAYROLL_INPUT_NOT_FOUND", "Manual payroll attendance input was not found.", 404);
+  await assertEmployeeWithinAttendanceScope(req, input.employee?.employeeNumber);
+  return input;
+}
 
 router.get(
   "/shifts",
@@ -612,11 +654,13 @@ router.get(
 
 router.post(
   "/manual-payroll-inputs",
-  requirePermission(
-    "attendance.manage"
+  requireAnyPermission(
+    "attendance.manage",
+    "payroll.manage"
   ),
   async (req, res) => {
     try {
+      await assertEmployeeWithinAttendanceScope(req, req.body?.employeeNumber);
       const data =
         await createManualPayrollInput({
           organizationId:
@@ -636,10 +680,16 @@ router.post(
           recordedByUserId:
             req.auth.userId,
         });
+      const freshness = await markDraftRunsRecalculationRequired({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        reason: `Manual worked days for ${req.body?.employeeNumber || "employee"} were recorded; draft payroll must be recalculated.`,
+      });
 
       return res.status(201).json({
         status: "success",
-        data,
+        message: "Worked days saved. Any affected draft payroll is marked for recalculation and Head Office will use the same authoritative attendance input.",
+        data: { attendancePayrollInput: data, payrollDraftFreshness: freshness },
       });
     } catch (error) {
       return handleError(error, res);
@@ -708,11 +758,16 @@ router.get(
 );
 router.patch(
   "/manual-payroll-inputs/:id",
-  requirePermission(
-    "attendance.manage"
+  requireAnyPermission(
+    "attendance.manage",
+    "payroll.manage"
   ),
   async (req, res) => {
     try {
+      const existing = await assertManualInputWithinAttendanceScope(req, req.params.id);
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "employeeNumber")) {
+        await assertEmployeeWithinAttendanceScope(req, req.body?.employeeNumber);
+      }
       const data =
         await updateManualPayrollInput({
           organizationId:
@@ -724,10 +779,16 @@ router.patch(
           recordedByUserId:
             req.auth.userId,
         });
+      const freshness = await markDraftRunsRecalculationRequired({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        reason: `Manual worked days for ${existing.employee?.employeeNumber || "employee"} were edited; draft payroll must be recalculated.`,
+      });
 
       return res.json({
         status: "success",
-        data,
+        message: "Worked days updated. Draft payroll was marked for recalculation.",
+        data: { attendancePayrollInput: data, payrollDraftFreshness: freshness },
       });
     } catch (error) {
       return handleError(error, res);
@@ -737,20 +798,29 @@ router.patch(
 
 router.delete(
   "/manual-payroll-inputs/:id",
-  requirePermission(
-    "attendance.manage"
+  requireAnyPermission(
+    "attendance.manage",
+    "payroll.manage"
   ),
   async (req, res) => {
     try {
+      const existing = await assertManualInputWithinAttendanceScope(req, req.params.id);
       await deleteManualPayrollInput({
         organizationId:
           req.auth.organizationId,
         id:
           req.params.id,
       });
+      const freshness = await markDraftRunsRecalculationRequired({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        reason: `Manual worked days for ${existing.employee?.employeeNumber || "employee"} were removed; draft payroll must be recalculated.`,
+      });
 
       return res.json({
         status: "success",
+        message: "Manual worked-days input removed. Draft payroll was marked for recalculation.",
+        data: { payrollDraftFreshness: freshness },
       });
     } catch (error) {
       return handleError(error, res);

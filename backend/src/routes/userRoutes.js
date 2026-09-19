@@ -310,7 +310,9 @@ router.post("/", requirePermission("users.manage"), async (req, res) => {
           locationScope: access.locationScope,
           userRoles: { create: roles.roleIds.map((roleId) => ({ roleId })) },
           userLocations: access.locationScope === "ASSIGNED_LOCATIONS"
-            ? { create: access.locationIds.map((locationId) => ({ organizationId, locationId })) }
+            // organizationId is supplied implicitly by the nested User relation.
+            // Prisma's nested create input therefore accepts locationId only.
+            ? { create: access.locationIds.map((locationId) => ({ locationId })) }
             : undefined,
         },
         select: userSelect,

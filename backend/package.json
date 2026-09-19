@@ -9,7 +9,8 @@
     "test:compliance": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceFutureReadiness.test.js",
     "test:compliance:api": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceAdministrativeApiAcceptance.test.js",
     "test:migration:compliance": "node scripts/complianceMigrationAcceptance.js",
-    "test:leave:runtime": "node scripts/leaveRuntimeAcceptance.js"
+    "test:leave:runtime": "node scripts/leaveRuntimeAcceptance.js",
+    "staging:provision:zermatt": "node scripts/provision-synthetic-zermatt-staging.cjs"
   },
   "keywords": [],
   "author": "",
