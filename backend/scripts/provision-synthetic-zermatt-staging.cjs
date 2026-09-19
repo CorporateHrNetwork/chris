@@ -222,6 +222,76 @@ async function main() {
     create: { organizationId: organization.id, basis: "ADMIN_ENTERED" },
   });
 
+  const annualLeaveType = await prisma.leaveType.upsert({
+    where: { organizationId_code: { organizationId: organization.id, code: "ANNUAL" } },
+    update: { name: "Annual Leave", isPaid: true, isActive: true, unit: "DAYS" },
+    create: {
+      organizationId: organization.id,
+      name: "Annual Leave",
+      code: "ANNUAL",
+      description: `${SYNTHETIC_MARKER} — ZERMATT annual leave`,
+      unit: "DAYS",
+      isPaid: true,
+      isActive: true,
+      requiresAttachment: false,
+      allowsHalfDay: false,
+    },
+  });
+
+  await prisma.leavePolicy.upsert({
+    where: {
+      organizationId_code_versionNumber: {
+        organizationId: organization.id,
+        code: "ZLL-ANNUAL-FT",
+        versionNumber: 1,
+      },
+    },
+    update: {
+      leaveTypeId: annualLeaveType.id,
+      name: "ZERMATT Annual Leave — Full-Time",
+      status: "ACTIVE",
+      jurisdiction: "NG",
+      entitlementDays: 20,
+      accrualMethod: "ANNUAL",
+      allowCarryForward: true,
+      isActive: true,
+      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      eligibilityRules: { employmentTypes: ["Full-Time"] },
+      balanceRules: {
+        carryoverExpiry: "03-31",
+        consumptionPriority: "CARRYOVER_FIRST",
+      },
+    },
+    create: {
+      organizationId: organization.id,
+      leaveTypeId: annualLeaveType.id,
+      name: "ZERMATT Annual Leave — Full-Time",
+      code: "ZLL-ANNUAL-FT",
+      description: `${SYNTHETIC_MARKER} — required by ZERMATT annual-leave carryover scheduler`,
+      category: "ANNUAL",
+      jurisdiction: "NG",
+      status: "ACTIVE",
+      origin: "ORGANIZATION",
+      complianceStatus: "CUSTOM_NOT_ASSESSED",
+      versionNumber: 1,
+      eligibilityRules: { employmentTypes: ["Full-Time"] },
+      entitlementRules: { annualDays: 20, unit: "DAYS" },
+      balanceRules: {
+        carryoverExpiry: "03-31",
+        consumptionPriority: "CARRYOVER_FIRST",
+      },
+      entitlementDays: 20,
+      accrualMethod: "ANNUAL",
+      minimumServiceDays: 0,
+      serviceBasis: "CURRENT_EPISODE",
+      allowCarryForward: true,
+      allowNegativeBalance: false,
+      noticeDays: 0,
+      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      isActive: true,
+    },
+  });
+
   await prisma.organizationAudit.create({
     data: {
       organizationId: organization.id,
