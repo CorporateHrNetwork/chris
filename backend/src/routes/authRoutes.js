@@ -526,6 +526,12 @@ router.get(
             name:
               req.auth.organization.name,
 
+            legalName:
+              req.auth.organization.legalName,
+
+            logoUrl:
+              req.auth.organization.logoUrl,
+
             slug:
               req.auth.organization.slug,
 
