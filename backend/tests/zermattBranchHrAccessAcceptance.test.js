@@ -19,6 +19,10 @@ const app = read(backendRoot, "src", "app.js");
 const financialSupportRoutes = read(backendRoot, "src", "routes", "zermattFinancialSupportRoutes.js");
 const loanOptionsRoutes = read(backendRoot, "src", "routes", "zermattHrLoanOptionRoutes.js");
 const financialAccess = read(backendRoot, "src", "services", "zermattHrFinancialAccessService.js");
+const attendanceRoutes = read(backendRoot, "src", "routes", "attendanceRoutes.js");
+const payrollRoutes = read(backendRoot, "src", "routes", "payrollRoutes.js");
+const workedDaysPanel = read(repoRoot, "src", "components", "payroll", "ManualWorkedDaysPanel.jsx");
+const payrollUi = read(repoRoot, "src", "pages", "payroll", "PayrollIntegratedManaged.jsx");
 const editUser = read(repoRoot, "src", "components", "settings", "EditUserForm.jsx");
 const provisioner = read(backendRoot, "scripts", "provision-zermatt-branch-hr-access.cjs");
 const financialPermissionMigration = read(
@@ -133,5 +137,49 @@ expect(financialSupportRoutes, "requireEmployeeFinancialInputEditor", "Salary-ad
 expect(financialSupportRoutes, "assertEmployeeNumberAccess", "New financial-support records must verify the employee is within the user's branch/location authority.");
 expect(financialSupportRoutes, "assertLoanRecordAccess", "Loan top-up/status operations must verify loan branch ownership.");
 expect(financialSupportRoutes, "requireHeadHrFinancialControl", "Destructive loan correction must remain Head-HR controlled.");
+
+// Branch attendance corrections are operational inputs, not payroll approval authority.
+// They must use the generic attendance service, remain branch-scoped, and invalidate draft payroll.
+for (const expected of [
+  '"/manual-payroll-inputs"',
+  "assertEmployeeWithinAttendanceScope",
+  "ATTENDANCE_ACTIVE_BRANCH_MISMATCH",
+  "ATTENDANCE_LOCATION_ACCESS_DENIED",
+  "markDraftRunsRecalculationRequired",
+]) {
+  expect(attendanceRoutes, expected, `Generic manual worked-days control is missing ${expected}.`);
+}
+expect(workedDaysPanel, '"/api/attendance/manual-payroll-inputs"', "Payroll UI must use the generic attendance worked-days endpoint.");
+assert.ok(!workedDaysPanel.includes('"/api/zermatt/attendance/worked-days"'), "Payroll UI must not call the legacy ZERMATT-only worked-days endpoint.");
+expect(workedDaysPanel, "Branch HR & Admin Officers", "Worked-days UI must explain branch HR attendance authority.");
+
+// ZERMATT payroll execution and approval remain Head-of-HR controls.
+// Branch HR retains attendance.manage/payroll.view without payroll.process/payroll.manage.
+for (const expected of [
+  "requireZermattHeadHrPayrollAuthority",
+  "ZERMATT_HEAD_HR_PAYROLL_AUTHORITY_REQUIRED",
+  'router.post("/runs/draft", requirePermission("payroll.process"), requireZermattHeadHrPayrollAuthority',
+  'router.post("/runs/:id/submit", requirePermission("payroll.process"), requireZermattHeadHrPayrollAuthority',
+  'router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZermattHeadHrPayrollAuthority',
+]) {
+  expect(payrollRoutes, expected, `ZERMATT Head-HR payroll authority is missing ${expected}.`);
+}
+
+// Approved payroll export must be an external-audit handoff, not a second in-system approval chain.
+for (const expected of [
+  '"/runs/:id/audit-pack.xlsx"',
+  "PAYROLL_AUDIT_PACK_REQUIRES_APPROVAL",
+  "Payroll Register",
+  "Management Summary",
+  "Branch Analysis",
+  "External Handoff",
+  "External Auditor Confirmation",
+  "GM Approval",
+  "Accounts & Finance Payout",
+]) {
+  expect(payrollRoutes, expected, `Payroll audit-pack contract is missing ${expected}.`);
+}
+expect(payrollUi, "Export Audit Pack", "Approved payroll UI must expose the audit-pack export.");
+expect(payrollUi, "external auditor confirmation, GM approval and Accounts & Finance payout processing", "Payroll UI must describe the external handoff lifecycle.");
 
 console.log("PASS: ZERMATT Branch HR & Admin access governance acceptance checks.");
