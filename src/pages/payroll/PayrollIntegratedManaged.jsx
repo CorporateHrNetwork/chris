@@ -57,7 +57,7 @@ export default function PayrollIntegratedManaged({ mode }) {
 function ExecuteIntegrated() {
   const { data: periods, error: periodsError } = useLoad("/api/payroll/periods");
   const { data: runs, loading, error, setError, load } = useLoad("/api/payroll/runs");
-  const { data: policyData } = useLoad("/api/payroll/compliance-policy", {});
+  const { data: policyData, loading: policyLoading } = useLoad("/api/payroll/compliance-policy", {});
   const [periodId, setPeriodId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
@@ -146,13 +146,13 @@ function ExecuteIntegrated() {
       <Panel title="Integrated Draft Payroll">
         <div style={buttonRow}>
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
-          <button type="button" style={primaryButton} disabled={!periodId || busy || !policyData?.configured} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
+          <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
         <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. After approval, export the formula-backed Payroll Audit Pack for external auditor confirmation, GM approval and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month; Loan and Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
-      <Feedback error={periodsError || error || (!policyData?.configured ? "Nigeria payroll policy is not configured." : "")} />
+      <Feedback error={periodsError || error || (!policyLoading && policyData?.configured === false ? "Nigeria payroll policy is not configured." : "")} />
       {message && <div style={infoStyle}>{message}</div>}
 
       <Panel title="Payroll Runs">
