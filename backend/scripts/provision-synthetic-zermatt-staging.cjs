@@ -218,8 +218,8 @@ async function main() {
 
   await prisma.attendancePayrollSetting.upsert({
     where: { organizationId: organization.id },
-    update: { basis: "MANUAL" },
-    create: { organizationId: organization.id, basis: "MANUAL" },
+    update: { basis: "ADMIN_ENTERED" },
+    create: { organizationId: organization.id, basis: "ADMIN_ENTERED" },
   });
 
   await prisma.organizationAudit.create({
