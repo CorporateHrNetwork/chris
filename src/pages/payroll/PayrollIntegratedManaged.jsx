@@ -62,12 +62,27 @@ function ExecuteIntegrated() {
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [branchView, setBranchView] = useState("");
   const selectablePeriods = (periods || []).filter((period) => period.status !== "CLOSED");
 
   const fetchIntegratedLines = async (runId) => {
     const response = await apiRequest(`/api/payroll/runs/${runId}/integrated-lines`);
-    setLines(response?.data || []);
+    const nextLines = response?.data || [];
+    setLines(nextLines);
+    setBranchView((current) => current && nextLines.some((row) => row.locationId === current) ? current : "");
   };
+
+  const branchOptions = [...new Map(
+    (lines || []).filter((row) => row.locationId).map((row) => [
+      row.locationId,
+      { id: row.locationId, code: row.locationCode, name: row.locationName || row.locationCode || "Branch" },
+    ])
+  ).values()].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const visibleLines = branchView ? lines.filter((row) => row.locationId === branchView) : lines;
+  const branchLabel = branchView
+    ? branchOptions.find((branch) => branch.id === branchView)?.name || "Selected Branch"
+    : "HEAD OFFICE · ALL BRANCHES";
+  const attendanceChangesPending = visibleLines.filter((row) => row.details?.attendanceRecalculationRequired).length;
 
   const calculate = async () => {
     try {
@@ -172,7 +187,23 @@ function ExecuteIntegrated() {
         </DataTable>
       </Panel>
 
-      {lines.length > 0 && <Panel title="Employee Payroll Calculation"><PayrollLines rows={lines} /></Panel>}
+      {lines.length > 0 && <Panel title="Employee Payroll Calculation">
+        <div style={branchViewBar}>
+          <strong style={{ color: "#D4AF37" }}>Payroll KPI View</strong>
+          <button type="button" style={!branchView ? activeBranchButton : branchButton} onClick={() => setBranchView("")}>HEAD OFFICE · ALL</button>
+          {branchOptions.map((branch) => <button key={branch.id} type="button" style={branchView === branch.id ? activeBranchButton : branchButton} onClick={() => setBranchView(branch.id)}>{branch.code || branch.name}</button>)}
+          <span style={branchViewText}>{branchLabel}</span>
+        </div>
+        <div style={payrollKpiGrid}>
+          <Summary label="Employees" value={visibleLines.length} />
+          <Summary label="Expected Days" value={visibleLines.reduce((sum, row) => sum + Number(row.details?.attendance?.standardDays || 0), 0)} />
+          <Summary label="Worked Days" value={visibleLines.reduce((sum, row) => sum + Number(row.details?.attendance?.payableDays || 0), 0)} />
+          <Summary label="Gross Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} />
+          <Summary label="Net Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))} />
+        </div>
+        {attendanceChangesPending > 0 && <div style={warningStyle}>{attendanceChangesPending} employee attendance input(s) have changed since the last payroll calculation. The latest Worked Days are shown now; Head HR must recalculate before submission/approval so monetary values use those days.</div>}
+        <PayrollLines rows={visibleLines} />
+      </Panel>}
     </>
   );
 }
@@ -191,7 +222,7 @@ function PayrollLines({ rows }) {
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
-        <DataTable columns={["Select", "Employee", "Days", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net"]}>
+        <DataTable columns={["Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net"]}>
           <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
           {displayRows.map((row) => {
             const details = row.details || {};
@@ -204,7 +235,10 @@ function PayrollLines({ rows }) {
               <tr key={row.id}>
                 <Td><input type="checkbox" aria-label={`Select ${row.employeeNumber} ${row.employeeName}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
                 <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
-                <Td>{details.attendance ? `${details.attendance.payableDays}/${details.attendance.standardDays}` : "—"}</Td>
+                <Td>{row.locationCode || row.locationName || "—"}</Td>
+                <Td>{details.attendance?.standardDays ?? "—"}</Td>
+                <Td>{details.attendance?.payableDays ?? "—"}{details.attendanceRecalculationRequired ? " *" : ""}</Td>
+                <Td>{details.attendance?.source ? String(details.attendance.source).replaceAll("_", " ") : "—"}</Td>
                 <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
                 <Td>{money(customAllowances, row.currency)}</Td>
                 <Td>{money(statutory.payeTax, row.currency)}</Td>
@@ -408,6 +442,13 @@ const primaryButton = { border: 0, borderRadius: 9, padding: "11px 16px", backgr
 const secondaryButton = { ...primaryButton, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.5)" };
 const smallButton = { ...secondaryButton, padding: "7px 10px", fontSize: 12 };
 const buttonRow = { display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" };
+const branchViewBar = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12, padding: 10, border: "1px solid rgba(212,175,55,.28)", borderRadius: 10 };
+const branchButton = { border: "1px solid rgba(212,175,55,.35)", borderRadius: 8, padding: "7px 10px", background: "rgba(4,46,28,.72)", color: "#F7FAF8", fontWeight: 800, cursor: "pointer" };
+const activeBranchButton = { ...branchButton, background: "#D4AF37", color: "#111" };
+const branchViewText = { marginLeft: "auto", color: "#AFC0B6", fontSize: 11, fontWeight: 800 };
+const payrollKpiGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 12 };
+const warningStyle = { padding: 10, marginBottom: 12, border: "1px solid rgba(245,158,11,.55)", borderRadius: 9, background: "rgba(245,158,11,.08)", color: "#F5D98C", fontSize: 12 };
+
 const controlNote = { color: "#A9BDB2", lineHeight: 1.6, fontSize: 13 };
 const tableWrap = { width: "100%", overflowX: "auto" };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 900 };
