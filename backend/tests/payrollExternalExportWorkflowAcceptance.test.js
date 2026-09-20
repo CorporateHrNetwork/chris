@@ -22,7 +22,12 @@ test("draft payroll review export is pre-approval, non-payable and audit logged"
   const draftStart = routes.indexOf('router.get("/runs/:id/draft-review.xlsx"');
   const approvedStart = routes.indexOf('router.get("/runs/:id/approved-payout.xlsx"');
   const draftBlock = routes.slice(draftStart, approvedStart);
-  assert.equal(draftBlock.includes("includePaymentDetails: true"), false, "Draft export must not fetch payment-account details.");
+  assert.ok(draftBlock.includes("includePaymentDetails: true"), "Draft export must fetch employee bank/account details for verification.");
+  for (const expected of [
+    '"Bank", "Account Name", "Account Number"',
+    "including employee bank/account details for verification",
+    "Verify payroll figures and employee bank/account details.",
+  ]) assert.ok(routes.includes(expected), `Missing draft bank-verification control: ${expected}`);
 });
 
 test("approved payroll export requires CHRiS approval and includes controlled payout register", () => {
@@ -56,4 +61,18 @@ test("Payroll Runs UI exposes explicit draft-review and approved-payout actions"
     "PRE-APPROVAL / NOT FOR PAYOUT",
   ]) assert.ok(ui.includes(expected), `Missing payroll export UI control: ${expected}`);
   assert.equal(ui.includes("Export Audit Pack"), false, "Primary UI should use the explicit Approved Payout export label.");
+});
+
+
+test("Payroll Register formulas remain aligned after bank columns are included", () => {
+  for (const expected of [
+    "SUM('Payroll Register'!J2:J",
+    "SUM('Payroll Register'!Q2:Q",
+    "SUM('Payroll Register'!K2:K",
+    "SUM('Payroll Register'!L2:L",
+    "SUM('Payroll Register'!N2:N",
+    "SUM('Payroll Register'!O2:O",
+    "'Payroll Register'!J$2:J",
+    "'Payroll Register'!Q$2:Q",
+  ]) assert.ok(routes.includes(expected), `Payroll Register formulas must follow bank columns: ${expected}`);
 });
