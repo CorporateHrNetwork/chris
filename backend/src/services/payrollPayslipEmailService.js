@@ -168,9 +168,6 @@ function buildPayslipEmail(row) {
           <tr><td style="padding:6px 0;color:#64748b;">Employee Name</td><td style="padding:6px 0;text-align:right;font-weight:700;">${escapeHtml(row.employeeName || "—")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Employee Number</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.employeeNumber || "—")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Designation</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.designation || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Bank</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.bankName || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Account Name</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.accountName || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Account Number</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.accountNumber || "—")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Payroll Period</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.periodStart || "—")} → ${escapeHtml(row.periodEnd || "—")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Pay Date</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.payDate || "—")}</td></tr>
           <tr><td style="padding:6px 0;color:#64748b;">Worked Days</td><td style="padding:6px 0;text-align:right;">${attendance.payableDays != null ? `${escapeHtml(attendance.payableDays)} / ${escapeHtml(attendance.standardDays)}` : "—"}</td></tr>
@@ -192,9 +189,6 @@ function buildPayslipEmail(row) {
     `Employee Name: ${row.employeeName || "—"}`,
     `Employee Number: ${row.employeeNumber || "—"}`,
     `Designation: ${row.designation || "—"}`,
-    `Bank: ${row.bankName || "—"}`,
-    `Account Name: ${row.accountName || "—"}`,
-    `Account Number: ${row.accountNumber || "—"}`,
     `Payroll Period: ${row.periodStart || "—"} to ${row.periodEnd || "—"}`,
     `Pay Date: ${row.payDate || "—"}`,
     `Running Loan Balance: ${money(row.runningLoanBalance, row.currency)}`,
