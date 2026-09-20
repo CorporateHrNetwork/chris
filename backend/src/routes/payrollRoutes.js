@@ -1260,6 +1260,181 @@ router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZe
 });
 
 
+
+function payrollObject(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try { return JSON.parse(value); } catch { return {}; }
+}
+
+function payrollSection(sectionData, ...keys) {
+  const root = payrollObject(sectionData);
+  for (const key of keys) {
+    const value = root?.[key];
+    if (value && typeof value === "object") return value;
+  }
+  return {};
+}
+
+function payrollComponentKey(item, prefix) {
+  const code = String(item?.code || "").trim();
+  const name = String(item?.name || "").trim();
+  return prefix + ":" + (code || name || "OTHER").toUpperCase();
+}
+
+function payrollComponentLabel(item, prefix) {
+  const code = String(item?.code || "").trim();
+  const name = String(item?.name || "").trim();
+  const value = [code, name].filter(Boolean).join(" — ") || "Other";
+  return prefix + " · " + value;
+}
+
+function payrollPrettyLabel(value) {
+  return String(value || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function payrollBranchLabel(meta = {}) {
+  const code = String(meta.branchCode || "").trim().toUpperCase();
+  const name = String(meta.branch || "").trim();
+  const upper = name.toUpperCase();
+  if (code === "HO" || code === "ABJ" || upper.includes("ABUJA") || upper.includes("HEAD OFFICE")) return "Abuja";
+  if (code === "LAG" || upper.includes("LAGOS")) return "Lagos";
+  if (code === "PHC" || upper.includes("PORT HARCOURT") || /(^|\s)PHC(\s|$)/.test(upper)) return "PHC";
+  return name || code || "Unassigned";
+}
+
+function payrollBranchRank(branch) {
+  const value = String(branch || "").toUpperCase();
+  if (value === "ABUJA") return 0;
+  if (value === "LAGOS") return 1;
+  if (value === "PHC") return 2;
+  return 3;
+}
+
+function payrollSheetName(value, used) {
+  const base = String(value || "Branch")
+    .replace(/[\\/?*[\]:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 27) || "Branch";
+  let candidate = base;
+  let index = 2;
+  while (used.has(candidate)) candidate = (base.slice(0, 24) + " " + index++).slice(0, 31);
+  used.add(candidate);
+  return candidate;
+}
+
+function payrollVisualBar(value, maximum, width = 28) {
+  const amount = Number(value || 0);
+  const max = Number(maximum || 0);
+  if (!(max > 0) || !(amount > 0)) return "";
+  const blocks = Math.max(1, Math.min(width, Math.round((amount / max) * width)));
+  return "█".repeat(blocks);
+}
+
+function payrollWorkbookModel(lines, employeeMeta) {
+  const structureKeys = new Set();
+  const allowanceLabels = new Map();
+  const deductionLabels = new Map();
+
+  for (const line of lines) {
+    const details = line.details || {};
+    for (const key of Object.keys(details.salaryStructure || {})) {
+      if (String(key).toLowerCase() !== "basic") structureKeys.add(key);
+    }
+    for (const item of details.customAllowances || []) {
+      allowanceLabels.set(payrollComponentKey(item, "ALW"), payrollComponentLabel(item, "Allowance"));
+    }
+    for (const item of details.customDeductions || []) {
+      deductionLabels.set(payrollComponentKey(item, "DED"), payrollComponentLabel(item, "Deduction"));
+    }
+  }
+
+  const structuredColumns = [...structureKeys].sort().map((key) => ({ key, label: payrollPrettyLabel(key) }));
+  const allowanceColumns = [...allowanceLabels.entries()].sort((a,b) => a[1].localeCompare(b[1])).map(([key,label]) => ({ key,label }));
+  const deductionColumns = [...deductionLabels.entries()].sort((a,b) => a[1].localeCompare(b[1])).map(([key,label]) => ({ key,label }));
+
+  const headers = [
+    "Employee No", "Employee Name", "Designation", "Employment Type", "Branch", "Email",
+    "Bank", "Account Name", "Account Number",
+    "PFA", "Pension PIN", "TIN", "PAYE State",
+    "Basic",
+    ...structuredColumns.map((item) => item.label),
+    ...allowanceColumns.map((item) => item.label),
+    "Total Allowances", "Gross Pay",
+    "PAYE", "Employee Pension", "Employer Pension", "Total Pension", "NHF",
+    "NSITF Employer", "ITF Employer",
+    ...deductionColumns.map((item) => item.label),
+    "Payroll Deductions", "Salary Advance", "Loan Recovery", "Leave Allowance", "Net Pay",
+  ];
+
+  const rows = lines.map((line) => {
+    const details = line.details || {};
+    const statutory = details.statutory || {};
+    const structure = details.salaryStructure || {};
+    const meta = employeeMeta.get(line.employeeId) || {};
+    const allowanceValues = new Map((details.customAllowances || []).map((item) => [payrollComponentKey(item, "ALW"), Number(item.value || 0)]));
+    const deductionValues = new Map((details.customDeductions || []).map((item) => [payrollComponentKey(item, "DED"), Number(item.value || 0)]));
+    const employeePension = Number(statutory.employeePension || 0);
+    const employerPension = Number(statutory.employerPension || 0);
+
+    return {
+      employeeId: line.employeeId,
+      branch: payrollBranchLabel(meta),
+      cells: [
+        line.employeeNumber,
+        line.employeeName,
+        meta.designation || "",
+        meta.employmentType || "",
+        payrollBranchLabel(meta),
+        meta.email || "",
+        meta.bankName || "",
+        meta.accountName || "",
+        meta.accountNumber || "",
+        meta.pensionPfa || "",
+        meta.pensionPin || "",
+        meta.taxIdentificationNumber || "",
+        meta.payeState || "",
+        Number(structure.basic ?? line.baseSalary ?? 0),
+        ...structuredColumns.map((item) => Number(structure[item.key] || 0)),
+        ...allowanceColumns.map((item) => Number(allowanceValues.get(item.key) || 0)),
+        Number(line.allowances || 0),
+        Number(line.grossPay || 0),
+        Number(statutory.payeTax || 0),
+        employeePension,
+        employerPension,
+        employeePension + employerPension,
+        Number(statutory.nhfEmployee || 0),
+        Number(statutory.nsitfEmployer || 0),
+        Number(statutory.itfEmployerAccrual || 0),
+        ...deductionColumns.map((item) => Number(deductionValues.get(item.key) || 0)),
+        Number(line.deductions || 0),
+        Number(line.advanceRecovery || 0),
+        Number(line.loanRecovery || details.loanRecovery || 0),
+        Number(details.leaveAllowance?.amount || 0),
+        Number(line.netPreview || 0),
+      ],
+      line,
+      meta,
+    };
+  });
+
+  return { headers, rows, structuredColumns, allowanceColumns, deductionColumns };
+}
+
+function payrollAppendRegisterSheet(workbook, sheetName, headers, rows) {
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows.map((row) => row.cells)]);
+  sheet["!cols"] = headers.map((header) => ({
+    wch: /Name|Designation|PFA|Allowance|Deduction/.test(header) ? 24 :
+      /Account|PIN|TIN|Employee No|Email/.test(header) ? 20 : 16,
+  }));
+  if (rows.length) sheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+}
+
 function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage }) {
   const workbook = XLSX.utils.book_new();
   const isApproved = stage === "APPROVED_PAYOUT";
@@ -1269,6 +1444,113 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   const controlLabel = isApproved
     ? "APPROVED IN CHRiS — EXTERNAL APPROVAL / PAYOUT HANDOFF"
     : "PRE-APPROVAL REVIEW — NOT FOR PAYOUT";
+
+  const model = payrollWorkbookModel(lines, employeeMeta);
+  const total = (selector) => model.rows.reduce((sum, row) => sum + Number(selector(row) || 0), 0);
+  const headerIndex = Object.fromEntries(model.headers.map((header, index) => [header, index]));
+  const totalByHeader = (header) => {
+    const index = headerIndex[header];
+    return index == null ? 0 : model.rows.reduce((sum, row) => sum + Number(row.cells[index] || 0), 0);
+  };
+
+  const branchGroups = new Map();
+  for (const row of model.rows) {
+    const current = branchGroups.get(row.branch) || [];
+    current.push(row);
+    branchGroups.set(row.branch, current);
+  }
+  const branches = [...branchGroups.keys()].sort((a,b) => payrollBranchRank(a) - payrollBranchRank(b) || a.localeCompare(b));
+
+  const gross = totalByHeader("Gross Pay");
+  const net = totalByHeader("Net Pay");
+  const paye = totalByHeader("PAYE");
+  const employeePension = totalByHeader("Employee Pension");
+  const employerPension = totalByHeader("Employer Pension");
+  const nhf = totalByHeader("NHF");
+  const nsitf = totalByHeader("NSITF Employer");
+  const itf = totalByHeader("ITF Employer");
+  const payrollDeductions = totalByHeader("Payroll Deductions");
+  const advances = totalByHeader("Salary Advance");
+  const loans = totalByHeader("Loan Recovery");
+  const employerStatutory = employerPension + nsitf + itf;
+  const totalEmployerCost = gross + employerStatutory;
+
+  const dashboardKpis = [
+    ["Employee Headcount", model.rows.length],
+    ["Gross Payroll", gross],
+    ["Net Payroll", net],
+    ["PAYE", paye],
+    ["Employee Pension", employeePension],
+    ["Employer Pension", employerPension],
+    ["Total Pension", employeePension + employerPension],
+    ["Payroll Deductions", payrollDeductions],
+    ["Salary Advances", advances],
+    ["Loan Recoveries", loans],
+    ["Employer Statutory Cost", employerStatutory],
+    ["Total Employer Cost", totalEmployerCost],
+  ];
+  const maxKpi = Math.max(...dashboardKpis.slice(1).map(([,value]) => Number(value || 0)), 1);
+
+  const dashboardRows = [
+    ["CHRiS PAYROLL DASHBOARD & KPI REPORT"],
+    ["Organization", organization.legalName || organization.name || ""],
+    ["Payroll Period", run.periodCode || ""],
+    ["Run Status", run.status || ""],
+    ["Control", controlLabel],
+    ["Generated At", new Date().toISOString()],
+    [],
+    ["KEY PAYROLL INDICATORS"],
+    ["KPI", "Value", "Visual"],
+    ...dashboardKpis.map(([label,value], index) => [label, value, index === 0 ? "" : payrollVisualBar(value, maxKpi)]),
+    [],
+    ["BRANCH PAYROLL COMPARISON"],
+    ["Branch", "Headcount", "Gross Payroll", "Net Payroll", "PAYE", "Employee Pension", "Employer Pension", "Gross Visual"],
+  ];
+  const branchStats = branches.map((branch) => {
+    const rows = branchGroups.get(branch) || [];
+    const sumHeader = (header) => {
+      const index = headerIndex[header];
+      return rows.reduce((sum, row) => sum + Number(row.cells[index] || 0), 0);
+    };
+    return {
+      branch,
+      headcount: rows.length,
+      gross: sumHeader("Gross Pay"),
+      net: sumHeader("Net Pay"),
+      paye: sumHeader("PAYE"),
+      employeePension: sumHeader("Employee Pension"),
+      employerPension: sumHeader("Employer Pension"),
+    };
+  });
+  const maxBranchGross = Math.max(...branchStats.map((row) => row.gross), 1);
+  for (const stat of branchStats) {
+    dashboardRows.push([
+      stat.branch, stat.headcount, stat.gross, stat.net, stat.paye,
+      stat.employeePension, stat.employerPension, payrollVisualBar(stat.gross, maxBranchGross),
+    ]);
+  }
+  dashboardRows.push(
+    [],
+    ["STATUTORY COST COMPOSITION"],
+    ["Statutory Item", "Amount", "Visual"],
+  );
+  const statutoryMix = [
+    ["PAYE", paye],
+    ["Employee Pension", employeePension],
+    ["Employer Pension", employerPension],
+    ["NHF", nhf],
+    ["NSITF Employer", nsitf],
+    ["ITF Employer", itf],
+  ];
+  const maxStatutory = Math.max(...statutoryMix.map(([,value]) => value), 1);
+  for (const [label,value] of statutoryMix) dashboardRows.push([label, value, payrollVisualBar(value, maxStatutory)]);
+
+  const dashboard = XLSX.utils.aoa_to_sheet(dashboardRows);
+  dashboard["!cols"] = [
+    { wch: 28 }, { wch: 20 }, { wch: 34 }, { wch: 20 },
+    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 34 },
+  ];
+  XLSX.utils.book_append_sheet(workbook, dashboard, "Payroll Dashboard");
 
   const control = XLSX.utils.aoa_to_sheet([
     [title],
@@ -1281,90 +1563,58 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Purpose"],
     [isApproved
       ? "Final CHRiS-approved payroll export for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS."
-      : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval, including employee bank/account details for verification."],
+      : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval, including employee bank/account and statutory details for verification."],
+    [],
+    ["Workbook Contents"],
+    ["Payroll Dashboard, consolidated Payroll Register, separate branch payroll sheets, full statutory identifiers and contributions, all configured allowance/deduction components, and workflow-specific review/payout sheets."],
     [],
     ["Governance"],
     [isApproved
       ? "This export does not create external approval events inside CHRiS. External auditor confirmation, GM approval and payout remain outside CHRiS."
       : "This workbook is not an approved payroll and must not be used for payout. Any findings must be corrected in CHRiS and the payroll recalculated before submission/approval."],
   ]);
-  control["!cols"] = [{ wch: 28 }, { wch: 110 }];
+  control["!cols"] = [{ wch: 28 }, { wch: 118 }];
   XLSX.utils.book_append_sheet(workbook, control, "Workflow Control");
 
-  const headers = [
-    "Employee No", "Employee Name", "Designation", "Branch",
-    "Bank", "Account Name", "Account Number",
-    "Basic", "Allowances", "Gross Pay",
-    "PAYE", "Pension", "Other Deductions", "Salary Advance", "Loan Recovery",
-    "Leave Allowance", "Net Pay"
+  payrollAppendRegisterSheet(workbook, "Payroll Register", model.headers, model.rows);
+
+  const usedSheetNames = new Set(workbook.SheetNames);
+  for (const branch of branches) {
+    const branchSheetName = payrollSheetName("Branch - " + branch, usedSheetNames);
+    payrollAppendRegisterSheet(workbook, branchSheetName, model.headers, branchGroups.get(branch) || []);
+  }
+
+  const statutoryHeaders = [
+    "Employee No", "Employee Name", "Branch", "PFA", "Pension PIN", "TIN", "PAYE State",
+    "Pensionable Base", "Employee Pension Rate", "Employee Pension",
+    "Employer Pension Rate", "Employer Pension", "Total Pension", "PAYE",
+    "NHF", "NSITF Employer", "ITF Employer"
   ];
-  const detailRows = lines.map((line) => {
-    const statutory = line.details?.statutory || {};
-    const leaveAllowance = Number(line.details?.leaveAllowance?.amount || 0);
-    const meta = employeeMeta.get(line.employeeId) || {};
+  const statutoryRows = model.rows.map((row) => {
+    const statutory = row.line.details?.statutory || {};
     return [
-      line.employeeNumber,
-      line.employeeName,
-      meta.designation || "",
-      meta.branch || "Unassigned",
-      meta.bankName || "",
-      meta.accountName || "",
-      meta.accountNumber || "",
-      Number(line.baseSalary || 0),
-      Number(line.allowances || 0),
-      Number(line.grossPay || 0),
-      Number(statutory.payeTax || 0),
+      row.line.employeeNumber,
+      row.line.employeeName,
+      row.branch,
+      row.meta.pensionPfa || "",
+      row.meta.pensionPin || "",
+      row.meta.taxIdentificationNumber || "",
+      row.meta.payeState || "",
+      Number(statutory.pensionableBase || 0),
+      Number(statutory.employeePensionRate || 0),
       Number(statutory.employeePension || 0),
-      Number(line.deductions || 0),
-      Number(line.advanceRecovery || 0),
-      Number(line.loanRecovery || line.details?.loanRecovery || 0),
-      leaveAllowance,
-      Number(line.netPreview || 0),
+      Number(statutory.employerPensionRate || 0),
+      Number(statutory.employerPension || 0),
+      Number(statutory.employeePension || 0) + Number(statutory.employerPension || 0),
+      Number(statutory.payeTax || 0),
+      Number(statutory.nhfEmployee || 0),
+      Number(statutory.nsitfEmployer || 0),
+      Number(statutory.itfEmployerAccrual || 0),
     ];
   });
-  const register = XLSX.utils.aoa_to_sheet([headers, ...detailRows]);
-  register["!cols"] = [
-    { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 22 },
-    { wch: 22 }, { wch: 28 }, { wch: 20 },
-    { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
-    { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 },
-  ];
-  XLSX.utils.book_append_sheet(workbook, register, "Payroll Register");
-
-  const lastRow = Math.max(2, detailRows.length + 1);
-  const summary = XLSX.utils.aoa_to_sheet([
-    ["CHRiS Payroll Management Report"],
-    ["Organization", organization.legalName || organization.name || ""],
-    ["Payroll Period", run.periodCode || ""],
-    ["Run Status", run.status || ""],
-    ["Approved At", run.approvedAt ? new Date(run.approvedAt).toISOString() : ""],
-    ["Control", controlLabel],
-    [],
-    ["KPI", "Value", "Formula-driven Visual"],
-    ["Employee Headcount", { f: `COUNTA('Payroll Register'!A2:A${lastRow})` }, ""],
-    ["Gross Payroll", { f: `SUM('Payroll Register'!J2:J${lastRow})` }, { f: 'REPT("█",ROUND(B10/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["Net Payroll", { f: `SUM('Payroll Register'!Q2:Q${lastRow})` }, { f: 'REPT("█",ROUND(B11/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["PAYE", { f: `SUM('Payroll Register'!K2:K${lastRow})` }, { f: 'REPT("█",ROUND(B12/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["Pension", { f: `SUM('Payroll Register'!L2:L${lastRow})` }, { f: 'REPT("█",ROUND(B13/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["Loans + Advances", { f: `SUM('Payroll Register'!N2:N${lastRow})+SUM('Payroll Register'!O2:O${lastRow})` }, { f: 'REPT("█",ROUND(B14/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-  ]);
-  summary["!cols"] = [{ wch: 28 }, { wch: 22 }, { wch: 38 }];
-  XLSX.utils.book_append_sheet(workbook, summary, "Management Summary");
-
-  const branches = [...new Set(detailRows.map((row) => row[3]))].sort();
-  const branchRows = [["Branch", "Headcount", "Gross Payroll", "Net Payroll"]];
-  for (const branch of branches) {
-    const rowNumber = branchRows.length + 1;
-    branchRows.push([
-      branch,
-      { f: `COUNTIF('Payroll Register'!D$2:D${lastRow},A${rowNumber})` },
-      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!J$2:J${lastRow})` },
-      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!Q$2:Q${lastRow})` },
-    ]);
-  }
-  const branchSheet = XLSX.utils.aoa_to_sheet(branchRows);
-  branchSheet["!cols"] = [{ wch: 28 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
-  XLSX.utils.book_append_sheet(workbook, branchSheet, "Branch Analysis");
+  const statutorySheet = XLSX.utils.aoa_to_sheet([statutoryHeaders, ...statutoryRows]);
+  statutorySheet["!cols"] = statutoryHeaders.map((header) => ({ wch: /Name|PFA/.test(header) ? 26 : 18 }));
+  XLSX.utils.book_append_sheet(workbook, statutorySheet, "Statutory Register");
 
   if (!isApproved) {
     const reviewRows = [
@@ -1377,36 +1627,37 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       ["Investigation / Verification Result", ""],
       ["Exceptions Identified", ""],
       ["Employees / Lines Requiring Correction", ""],
+      ["Payroll / Bank / Statutory Details Requiring Correction", ""],
       ["Corrective Action Required", ""],
       ["Reviewer Name", ""],
       ["Review Date", ""],
       ["Review Reference", ""],
       [],
-      ["Instruction", "Verify payroll figures and employee bank/account details. Return findings to the CHRiS payroll owner. Corrections must be made in CHRiS, payroll recalculated, reviewed and approved before any payout workflow begins."],
+      ["Instruction", "Verify payroll figures, allowances/deductions, bank/account details, PAYE, employee/employer pension, PFA/PIN/TIN and other statutory details. Return findings to the CHRiS payroll owner. Corrections must be made in CHRiS, payroll recalculated, reviewed and approved before any payout workflow begins."],
     ];
     const reviewSheet = XLSX.utils.aoa_to_sheet(reviewRows);
-    reviewSheet["!cols"] = [{ wch: 38 }, { wch: 100 }];
+    reviewSheet["!cols"] = [{ wch: 44 }, { wch: 110 }];
     XLSX.utils.book_append_sheet(workbook, reviewSheet, "External HR Review");
   } else {
     const paymentRows = [[
-      "Employee No", "Employee Name", "Bank", "Account Name", "Account Number", "Net Pay", "Payout Status", "Payment Reference"
+      "Employee No", "Employee Name", "Branch", "Bank", "Account Name", "Account Number", "Net Pay", "Payout Status", "Payment Reference"
     ]];
-    for (const line of lines) {
-      const meta = employeeMeta.get(line.employeeId) || {};
+    for (const row of model.rows) {
       paymentRows.push([
-        line.employeeNumber,
-        line.employeeName,
-        meta.bankName || "",
-        meta.accountName || "",
-        meta.accountNumber || "",
-        Number(line.netPreview || 0),
+        row.line.employeeNumber,
+        row.line.employeeName,
+        row.branch,
+        row.meta.bankName || "",
+        row.meta.accountName || "",
+        row.meta.accountNumber || "",
+        Number(row.line.netPreview || 0),
         "",
         "",
       ]);
     }
     const paymentSheet = XLSX.utils.aoa_to_sheet(paymentRows);
     paymentSheet["!cols"] = [
-      { wch: 16 }, { wch: 28 }, { wch: 22 }, { wch: 28 },
+      { wch: 16 }, { wch: 28 }, { wch: 18 }, { wch: 22 }, { wch: 28 },
       { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 28 },
     ];
     XLSX.utils.book_append_sheet(workbook, paymentSheet, "Payment Register");
@@ -1441,16 +1692,16 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
   const lines = await payroll.listRunLines({ organizationId, runId });
   const employeeSelect = {
     id: true,
+    email: true,
+    employmentType: true,
     designation: { select: { name: true } },
     location: { select: { name: true, code: true } },
-  };
-  if (includePaymentDetails) {
-    employeeSelect.onboardings = {
+    onboardings: {
       orderBy: { updatedAt: "desc" },
       take: 1,
       select: { sectionData: true },
-    };
-  }
+    },
+  };
 
   const employees = await prisma.employee.findMany({
     where: { organizationId, id: { in: lines.map((line) => line.employeeId) } },
@@ -1458,15 +1709,24 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
   });
 
   const employeeMeta = new Map(employees.map((employee) => {
+    const sectionData = employee.onboardings?.[0]?.sectionData || {};
     const payment = includePaymentDetails
-      ? employee.onboardings?.[0]?.sectionData?.["payment-details"] || {}
+      ? payrollSection(sectionData, "payment-details", "paymentDetails")
       : {};
+    const statutory = payrollSection(sectionData, "statutory-details", "statutoryDetails");
     return [employee.id, {
       designation: employee.designation?.name || "",
+      employmentType: employee.employmentType || "",
       branch: employee.location?.name || employee.location?.code || "Unassigned",
+      branchCode: employee.location?.code || "",
+      email: employee.email || "",
       bankName: includePaymentDetails ? String(payment.bankName || "").trim() : "",
       accountName: includePaymentDetails ? String(payment.accountName || "").trim() : "",
       accountNumber: includePaymentDetails ? String(payment.accountNumber || "").trim() : "",
+      pensionPfa: String(statutory.pensionPfa || "").trim(),
+      pensionPin: String(statutory.pensionPin || "").trim(),
+      taxIdentificationNumber: String(statutory.taxIdentificationNumber || "").trim(),
+      payeState: String(statutory.payeState || "").trim(),
     }];
   }));
 

@@ -95,6 +95,8 @@ test("withheld statutory obligations, approved payslip email and live preview co
   for (const expected of [
     'router.post("/payslips/:id/email"',
     'router.post("/payslips/email-batch"',
+    'router.post("/payslips/email-run"',
+    '"PAYSLIPS_BULK_EMAIL_REQUESTED"',
     '"employeeEmail"',
   ]) assert.ok(payrollRoutes.includes(expected), `payslip email API missing: ${expected}`);
 
@@ -110,6 +112,9 @@ test("withheld statutory obligations, approved payslip email and live preview co
     "View Preview",
     "Preview only — this payroll has not yet been approved by Head HR.",
     "Email Selected Payslips",
+    "Email All Payslips to Employees",
+    "Approved Payroll Period",
+    "/api/payroll/payslips/email-run",
     "Email Payslip",
     "Draft payslips are preview-only",
   ]) assert.ok(payrollUi.includes(expected), `payslip UI control missing: ${expected}`);
@@ -160,4 +165,27 @@ test("approved payslip email body is generated from the approved payroll calcula
   assert.match(result.html, /Salary Advance Recovery/);
   assert.match(result.html, /Loan Recovery/);
   assert.match(result.plainText, /Generated from an approved CHRiS payroll run/);
+});
+
+
+test("bulk email processes an entire approved run in bounded chunks and reports missing emails", () => {
+  const payrollRoutes = read("backend/src/routes/payrollIntegrationRoutes.js");
+  const payrollUi = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+
+  for (const expected of [
+    'const chunkSize = 10',
+    'run.status !== "APPROVED"',
+    'lines.length > 1000',
+    '"PAYSLIP_EMPLOYEE_EMAIL_REQUIRED"',
+    "missingEmail",
+    "pendingConfiguration",
+    "PAYSLIPS_BULK_EMAIL_REQUESTED",
+  ]) assert.ok(payrollRoutes.includes(expected), `Missing whole-run payslip email control: ${expected}`);
+
+  for (const expected of [
+    "emailAllForRun",
+    "window.confirm",
+    "Email All Payslips to Employees",
+    "bulkRunId",
+  ]) assert.ok(payrollUi.includes(expected), `Missing email-all payslips UI control: ${expected}`);
 });

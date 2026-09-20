@@ -319,9 +319,22 @@ function ApprovedPayslips() {
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [bulkRunId, setBulkRunId] = useState("");
   const approvedPayslipRef = useRef(null);
   const organization = profile?.organization || getStoredOrganization() || {};
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.employeeEmail, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
+  const approvedRuns = useMemo(() => {
+    const seen = new Map();
+    for (const row of rows || []) {
+      if (!row.runId || seen.has(row.runId)) continue;
+      seen.set(row.runId, {
+        id: row.runId,
+        code: row.periodCode || row.runId,
+        name: row.periodName || row.periodCode || row.runId,
+      });
+    }
+    return [...seen.values()];
+  }, [rows]);
 
   const emailOne = async (row) => {
     try {
@@ -352,6 +365,39 @@ function ApprovedPayslips() {
     }
   };
 
+
+  useEffect(() => {
+    if (!bulkRunId && approvedRuns.length) setBulkRunId(approvedRuns[0].id);
+  }, [approvedRuns, bulkRunId]);
+
+  const emailAllForRun = async () => {
+    if (!bulkRunId) {
+      setEmailError("Select an approved payroll period first.");
+      return;
+    }
+    const selectedRun = approvedRuns.find((run) => run.id === bulkRunId);
+    const confirmed = window.confirm(
+      `Email all approved payslips for ${selectedRun?.name || selectedRun?.code || "the selected payroll"} to the employee email addresses stored in CHRiS?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setBusy("email-run"); setEmailError(""); setFeedback("");
+      const response = await apiRequest("/api/payroll/payslips/email-run", {
+        method: "POST",
+        body: { runId: bulkRunId },
+      });
+      const data = response?.data || {};
+      setFeedback(
+        `${data.sent || 0} payslip(s) emailed. ${data.missingEmail || 0} employee(s) have no email address. ${Math.max(0, (data.notSent || 0) - (data.missingEmail || 0))} other delivery item(s) were not sent.`
+      );
+    } catch (err) {
+      setEmailError(err.message || "Unable to email all payslips for the selected approved payroll.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   useEffect(() => {
     if (!selected) return;
     const frame = window.requestAnimationFrame(() => {
@@ -364,7 +410,26 @@ function ApprovedPayslips() {
   return (
     <>
       <Panel title="Approved Payroll Payslips">
-        <p style={controlNote}>Only APPROVED payroll runs appear here. Approved payslips can be viewed, printed and emailed individually or in bulk to the employee email stored in CHRiS. A missing employee email affects only that employee's delivery and never blocks payroll approval.</p>
+        <p style={controlNote}>Only APPROVED payroll runs appear here. Approved payslips can be viewed, printed and emailed individually, by selection, or for the entire approved payroll run to the employee email stored in CHRiS. A missing employee email affects only that employee's delivery and never blocks payroll approval.</p>
+        <div style={bulkPayslipEmailBarStyle}>
+          <Select
+            label="Approved Payroll Period"
+            value={bulkRunId}
+            onChange={setBulkRunId}
+            options={[
+              ["", "Select approved payroll"],
+              ...approvedRuns.map((run) => [run.id, `${run.code} · ${run.name}`]),
+            ]}
+          />
+          <button
+            type="button"
+            style={primaryButton}
+            disabled={!bulkRunId || busy === "email-run"}
+            onClick={emailAllForRun}
+          >
+            {busy === "email-run" ? "Emailing All Payslips…" : "Email All Payslips to Employees"}
+          </button>
+        </div>
         <EmployeeBatchSelector
           rows={rows || []}
           getId={(row) => row.id}
@@ -653,6 +718,7 @@ const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,min
 const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.25)", borderRadius: 10, background: "rgba(255,255,255,.04)" };
 const summaryLabel = { color: "#9FB7AA", fontSize: 11, marginBottom: 5 };
 const batchSummaryStyle = { display: "flex", alignItems: "center", minHeight: 36, padding: "0 4px", color: "#C7D3CC", fontSize: 12 };
+const bulkPayslipEmailBarStyle = { display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", margin: "14px 0", padding: 14, border: "1px solid rgba(212,175,55,.30)", borderRadius: 12, background: "rgba(255,255,255,.035)" };
 
 const payslipScrollAnchorStyle = { scrollMarginTop: 84, outline: "none" };
 

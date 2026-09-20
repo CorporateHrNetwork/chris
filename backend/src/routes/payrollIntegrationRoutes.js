@@ -236,6 +236,128 @@ router.post("/payslips/email-batch", requirePermission("payroll.manage"), async 
   }
 });
 
+
+router.post("/payslips/email-run", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    const runId = String(req.body?.runId || "").trim();
+    if (!runId) {
+      return res.status(400).json({ status: "error", code: "PAYSLIP_RUN_REQUIRED", message: "Select an approved payroll run to email." });
+    }
+
+    const runRows = await prisma.$queryRawUnsafe(
+      `SELECT "id","status","periodId"
+         FROM "payroll_runs"
+        WHERE "organizationId"=$1 AND "id"=$2
+        LIMIT 1`,
+      req.auth.organizationId,
+      runId
+    );
+    const run = runRows[0];
+    if (!run) {
+      return res.status(404).json({ status: "error", code: "PAYSLIP_RUN_NOT_FOUND", message: "Payroll run not found." });
+    }
+    if (run.status !== "APPROVED") {
+      return res.status(409).json({ status: "error", code: "PAYSLIP_RUN_REQUIRES_APPROVAL", message: "Bulk payslip email is available only for an APPROVED payroll run." });
+    }
+
+    const lines = await prisma.$queryRawUnsafe(
+      `SELECT pl."id",pl."employeeNumber",pl."employeeName",e."email" AS "employeeEmail"
+         FROM "payroll_run_lines" pl
+         JOIN "employees" e
+           ON e."id"=pl."employeeId"
+          AND e."organizationId"=pl."organizationId"
+        WHERE pl."organizationId"=$1 AND pl."runId"=$2
+        ORDER BY pl."employeeNumber" ASC`,
+      req.auth.organizationId,
+      runId
+    );
+
+    if (!lines.length) {
+      return res.status(409).json({ status: "error", code: "PAYSLIP_RUN_EMPTY", message: "The approved payroll run does not contain payslips to email." });
+    }
+    if (lines.length > 1000) {
+      return res.status(409).json({ status: "error", code: "PAYSLIP_RUN_EMAIL_LIMIT", message: "A maximum of 1,000 payslips can be emailed from one payroll run." });
+    }
+
+    const results = [];
+    const chunkSize = 10;
+    for (let start = 0; start < lines.length; start += chunkSize) {
+      const chunk = lines.slice(start, start + chunkSize);
+      const chunkResults = await Promise.all(chunk.map(async (line) => {
+        if (!String(line.employeeEmail || "").trim()) {
+          return {
+            success: false,
+            payrollRunLineId: line.id,
+            employeeNumber: line.employeeNumber,
+            employeeName: line.employeeName,
+            code: "PAYSLIP_EMPLOYEE_EMAIL_REQUIRED",
+            message: "Employee email is missing.",
+          };
+        }
+        try {
+          const result = await sendApprovedPayslipEmail({
+            organizationId: req.auth.organizationId,
+            actorUserId: req.auth.userId,
+            payrollRunLineId: line.id,
+            prismaClient: prisma,
+          });
+          return { success: result.status === "SENT", ...result };
+        } catch (error) {
+          return {
+            success: false,
+            payrollRunLineId: line.id,
+            employeeNumber: line.employeeNumber,
+            employeeName: line.employeeName,
+            code: error?.code || "PAYSLIP_EMAIL_FAILED",
+            message: error?.message || "Unable to email payslip.",
+          };
+        }
+      }));
+      results.push(...chunkResults);
+    }
+
+    const sent = results.filter((item) => item.success).length;
+    const missingEmail = results.filter((item) => item.code === "PAYSLIP_EMPLOYEE_EMAIL_REQUIRED").length;
+    const pendingConfiguration = results.filter((item) => item.status === "PENDING_CONFIGURATION").length;
+    const failed = results.length - sent;
+
+    await prisma.organizationAudit.create({
+      data: {
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId || null,
+        entityType: "PayrollRun",
+        entityId: runId,
+        action: "PAYSLIPS_BULK_EMAIL_REQUESTED",
+        previousValue: { status: run.status },
+        newValue: {
+          total: results.length,
+          sent,
+          notSent: failed,
+          missingEmail,
+          pendingConfiguration,
+        },
+        reason: "Bulk employee payslip delivery for approved payroll run.",
+      },
+    });
+
+    return res.status(failed ? 207 : 200).json({
+      status: "success",
+      message: `${sent} of ${results.length} approved payslip(s) emailed. ${missingEmail} employee(s) have no email address. ${failed - missingEmail} other delivery item(s) were not sent.`,
+      data: {
+        total: results.length,
+        sent,
+        notSent: failed,
+        missingEmail,
+        pendingConfiguration,
+        results,
+      },
+    });
+  } catch (error) {
+    console.error("Payroll-run payslip email error:", error);
+    return res.status(500).json({ status: "error", message: "Unable to email payslips for the approved payroll run." });
+  }
+});
+
 router.get("/statutory-catalogue", requirePermission("payroll.view"), async (req, res) => {
   try {
     const data = await getPayrollStatutoryCatalogue({
