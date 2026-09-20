@@ -15,9 +15,11 @@ const {
 } = require("./services/zermattAnnualCarryoverScheduler");
 
 const PORT = process.env.PORT || 5000;
+const STAGING_RELEASE_MARKER = "2026-09-20T02:45Z";
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
 
 console.log(`CHRIS Paystack configured: ${paystackConfigured ? "YES" : "NO"}`);
+console.log(`CHRIS staging release marker: ${STAGING_RELEASE_MARKER}`);
 
 const snapshotScheduler = createWorkforceSnapshotScheduler({ prisma });
 const annualCarryoverScheduler = createZermattAnnualCarryoverScheduler({ prisma });
