@@ -373,6 +373,43 @@ function componentValue(component, grossBase) {
   return round2(component.amount || 0);
 }
 
+async function insertPayrollRunLinesBulk(tx, { organizationId, runId, lines }) {
+  const chunkSize = 100;
+  for (let start = 0; start < lines.length; start += chunkSize) {
+    const chunk = lines.slice(start, start + chunkSize);
+    const params = [];
+    const values = chunk.map((line) => {
+      line.runLineId = line.runLineId || crypto.randomUUID();
+      const base = params.length;
+      params.push(
+        line.runLineId,
+        organizationId,
+        runId,
+        line.employee.id,
+        line.employee.employeeNumber,
+        employeeName(line.employee),
+        line.currency,
+        line.baseSalary,
+        line.allowances,
+        line.deductions,
+        line.advanceRecovery,
+        line.grossPay,
+        line.netPreview,
+        JSON.stringify(line.details)
+      );
+      const p = (offset) => `${base + offset}`;
+      return `(${p(1)},${p(2)},${p(3)},${p(4)},${p(5)},${p(6)},${p(7)},${p(8)},${p(9)},${p(10)},${p(11)},${p(12)},${p(13)},'CALCULATED_NIGERIA_2026',${p(14)}::jsonb)`;
+    });
+
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "payroll_run_lines"
+        ("id","organizationId","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","grossPay","netPreview","statutoryStatus","details")
+       VALUES ${values.join(",")}`,
+      ...params
+    );
+  }
+}
+
 async function getPeriod(client, organizationId, periodId) {
   const rows = await client.$queryRawUnsafe(
     `SELECT "id","code","name","periodStart","periodEnd","payDate","status"
@@ -780,28 +817,11 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       );
     }
 
-    for (const line of lines) {
-      line.runLineId = crypto.randomUUID();
-      await tx.$executeRawUnsafe(
-        `INSERT INTO "payroll_run_lines"
-          ("id","organizationId","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","grossPay","netPreview","statutoryStatus","details")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'CALCULATED_NIGERIA_2026',$14::jsonb)`,
-        line.runLineId,
-        organizationId,
-        runId,
-        line.employee.id,
-        line.employee.employeeNumber,
-        employeeName(line.employee),
-        line.currency,
-        line.baseSalary,
-        line.allowances,
-        line.deductions,
-        line.advanceRecovery,
-        line.grossPay,
-        line.netPreview,
-        JSON.stringify(line.details)
-      );
-    }
+    await insertPayrollRunLinesBulk(tx, {
+      organizationId,
+      runId,
+      lines,
+    });
 
     await replaceDraftObligations(tx, {
       organizationId,
@@ -822,6 +842,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       round2(lines.reduce((sum, line) => sum + line.deductions + line.advanceRecovery, 0)),
       round2(lines.reduce((sum, line) => sum + line.netPreview, 0))
     );
+  }, {
+    maxWait: 10000,
+    timeout: 30000,
   });
 
   await writeAudit(prismaClient, {
