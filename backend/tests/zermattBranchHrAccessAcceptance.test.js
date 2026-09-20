@@ -206,5 +206,30 @@ for (const secret of ["ChangeMe123!", "Password123", "Synthetic123"]) {
 }
 expect(stagingFixture, "Passwords are supplied only through Render environment variables and are never printed.", "Fixture must keep staging passwords out of source and logs.");
 
+const stagingHeadPermissionStart = stagingFixture.indexOf("const HEAD_PERMISSIONS = [");
+const stagingHeadPermissionEnd = stagingFixture.indexOf("];", stagingHeadPermissionStart);
+const stagingHeadPermissionBlock = stagingFixture.slice(stagingHeadPermissionStart, stagingHeadPermissionEnd + 2);
+for (const required of [
+  '"dashboard.view"',
+  '"employees.view"',
+  '"recruitment.view"',
+  '"attendance.view"',
+  '"leave.view"',
+  '"payroll.view"',
+  '"performance.view"',
+  '"training.view"',
+  '"reports.view"',
+  '"settings.view"',
+]) {
+  assert.ok(stagingHeadPermissionBlock.includes(required), `Synthetic Head HR staging role must include ${required} so client-admin sidebar modules match real ZERMATT.`);
+}
+const stagingBranchPermissionStart = stagingFixture.indexOf("const BRANCH_PERMISSIONS = [");
+const stagingBranchPermissionEnd = stagingFixture.indexOf("];", stagingBranchPermissionStart);
+const stagingBranchPermissionBlock = stagingFixture.slice(stagingBranchPermissionStart, stagingBranchPermissionEnd + 2);
+for (const forbidden of ['"settings.view"','"payroll.process"','"payroll.manage"']) {
+  assert.ok(!stagingBranchPermissionBlock.includes(forbidden), `Synthetic Branch HR must remain least-privilege and must not gain ${forbidden}.`);
+}
+
+
 
 console.log("PASS: ZERMATT Branch HR & Admin access governance acceptance checks.");
