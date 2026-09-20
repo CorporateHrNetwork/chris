@@ -412,7 +412,7 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
   const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const organizationName = payslipOrganizationName(organization);
-  const logoUrl = safeImageUrl(organization?.logoUrl);
+  const logoUrl = payslipLogoUrl(organization);
   return (
     <Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber} — ${row.employeeName}`}>
       <div style={payslipPreviewDocumentStyle}>
@@ -487,6 +487,14 @@ function payslipOrganizationName(organization = {}) {
     .trim();
 }
 
+function payslipLogoUrl(organization = {}) {
+  const configured = safeImageUrl(organization?.logoUrl);
+  if (configured) return configured;
+  const slug = String(organization?.slug || "").trim().toLowerCase();
+  if (slug === "zermatt-liquor-limited") return "/zrt-logo.jpeg";
+  return "";
+}
+
 function printPayslip(row, organization = {}) {
   const details = row.details || {};
   const statutory = details.statutory || {};
@@ -496,7 +504,7 @@ function printPayslip(row, organization = {}) {
   const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const organizationName = payslipOrganizationName(organization);
-  const logoUrl = safeImageUrl(organization.logoUrl);
+  const logoUrl = payslipLogoUrl(organization);
   const rows = [
     ["Basic", money(structure.basic ?? row.baseSalary, row.currency)],
     ...Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => [key.charAt(0).toUpperCase() + key.slice(1), money(value, row.currency)]),
