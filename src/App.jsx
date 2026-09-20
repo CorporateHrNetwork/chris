@@ -8,7 +8,7 @@ import {
 
 import MainLayout from "./layouts/MainLayout";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
-import ModuleDashboard from "./components/dashboard/ModuleDashboard";
+const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
@@ -30,7 +30,7 @@ const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnbo
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
 const LineManagers = lazy(() => import("./pages/LineManagers"));
-import EmployeeProfile from "./components/employees/EmployeeProfile";
+const EmployeeProfile = lazy(() => import("./components/employees/EmployeeProfile"));
 import EmployeeProfileErrorBoundary from "./components/employees/EmployeeProfileErrorBoundary";
 const Recruitment = lazy(() => import("./pages/Recruitment"));
 const RecruitmentVacancies = lazy(() => import("./pages/RecruitmentVacancies"));
