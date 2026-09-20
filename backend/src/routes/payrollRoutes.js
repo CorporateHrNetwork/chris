@@ -874,6 +874,8 @@ router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZe
   try {
     const decision = String(req.body?.decision || "").trim().toUpperCase();
     let isNigeriaPayroll = false;
+    let statutoryCompliance = null;
+
     if (decision === "APPROVE") {
       const organization = await prisma.organization.findUnique({
         where: { id: req.auth.organizationId },
@@ -881,24 +883,32 @@ router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZe
       });
       isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
       if (isNigeriaPayroll) {
-        await validateNigeriaPayrollApproval({
+        statutoryCompliance = await validateNigeriaPayrollApproval({
           organizationId: req.auth.organizationId,
           runId: req.params.id,
         });
       }
     }
 
+    const data = await payroll.decidePayrollRun({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      runId: req.params.id,
+      decision: req.body?.decision,
+      statutoryReviewed: req.body?.statutoryReviewed === true,
+      statutoryObligationsRequired: isNigeriaPayroll,
+      statutoryCompliance,
+      notes: req.body?.notes,
+    });
+
     return res.json({
       status: "success",
-      data: await payroll.decidePayrollRun({
-        organizationId: req.auth.organizationId,
-        actorUserId: req.auth.userId,
-        runId: req.params.id,
-        decision: req.body?.decision,
-        statutoryReviewed: req.body?.statutoryReviewed === true,
-        statutoryObligationsRequired: isNigeriaPayroll,
-        notes: req.body?.notes,
-      }),
+      message: decision === "APPROVE" && statutoryCompliance?.withheldCount
+        ? `Payroll approved. ${statutoryCompliance.withheldCount} employee(s) have statutory remittance items withheld pending completion of required statutory details.`
+        : decision === "APPROVE"
+          ? "Payroll approved. Statutory liabilities were confirmed for remittance processing."
+          : "Payroll decision recorded.",
+      data,
     });
   } catch (error) {
     return sendError(res, error, "Unable to decide payroll run.");
