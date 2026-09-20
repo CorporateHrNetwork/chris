@@ -34,6 +34,37 @@ function employeeName(employee) {
   return [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ");
 }
 
+function normalizedEmploymentType(value) {
+  return text(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function statutoryEmploymentTypeExemption(employmentType) {
+  const normalized = normalizedEmploymentType(employmentType);
+  const exempt =
+    normalized === "PART TIME" ||
+    normalized === "PARTTIME" ||
+    normalized === "EXPATRIATE" ||
+    normalized === "NYSC INTERNSHIP" ||
+    normalized === "INTERNSHIP" ||
+    normalized === "INTERN" ||
+    normalized === "INTERN TRAINEE";
+
+  return {
+    exempt,
+    normalizedEmploymentType: normalized,
+    payeExempt: exempt,
+    pensionExempt: exempt,
+    source: exempt ? "CHRIS_EMPLOYMENT_TYPE_EXEMPTION_RULE" : null,
+    reason: exempt
+      ? "CHRiS employment-type rule: Part-Time, Expatriate and Internship/Intern employees are excluded from PAYE and pension deductions."
+      : null,
+  };
+}
+
 function jsonValue(value, fallback) {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "object") return value;
@@ -576,8 +607,13 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         .filter(([key]) => pensionableKeys.has(String(key).toLowerCase()))
         .reduce((sum, [, value]) => sum + Number(value || 0), 0)
     );
-    const employeePension = percent(pensionableBase, policy.pensionEmployeeRate);
-    const employerPension = percent(pensionableBase, policy.pensionEmployerRate);
+    const employmentTypeExemption = statutoryEmploymentTypeExemption(employee.employmentType);
+    const employeePension = employmentTypeExemption.pensionExempt
+      ? 0
+      : percent(pensionableBase, policy.pensionEmployeeRate);
+    const employerPension = employmentTypeExemption.pensionExempt
+      ? 0
+      : percent(pensionableBase, policy.pensionEmployerRate);
     const nhfEmployee = nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
 
     const recurringTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && row.recurring).reduce((sum, row) => sum + row.value, 0));
@@ -589,9 +625,15 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     const recurringAnnualChargeable = Math.max(0, round2(recurringAnnualTaxableIncome - annualEmployeePension - annualNhf - rentReliefAnnual));
     const totalAnnualChargeable = Math.max(0, round2(recurringAnnualChargeable + oneTimeTaxableAllowances));
     const minimumWageExempt = minimumWageMonthly > 0 && round2(structuredGross + recurringTaxableAllowances) <= minimumWageMonthly;
-    const recurringAnnualTax = minimumWageExempt ? 0 : calculateAnnualPaye(recurringAnnualChargeable, bands);
-    const totalAnnualTax = minimumWageExempt ? 0 : calculateAnnualPaye(totalAnnualChargeable, bands);
-    const payeTax = round2(recurringAnnualTax / 12 + Math.max(0, totalAnnualTax - recurringAnnualTax));
+    const recurringAnnualTax = employmentTypeExemption.payeExempt || minimumWageExempt
+      ? 0
+      : calculateAnnualPaye(recurringAnnualChargeable, bands);
+    const totalAnnualTax = employmentTypeExemption.payeExempt || minimumWageExempt
+      ? 0
+      : calculateAnnualPaye(totalAnnualChargeable, bands);
+    const payeTax = employmentTypeExemption.payeExempt
+      ? 0
+      : round2(recurringAnnualTax / 12 + Math.max(0, totalAnnualTax - recurringAnnualTax));
 
     const customDeductions = round2(customDeductionItems.reduce((sum, item) => sum + item.value, 0));
     const statutoryEmployeeDeductions = round2(employeePension + nhfEmployee + payeTax);
@@ -650,6 +692,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         customAllowances: customAllowanceItems,
         customDeductions: customDeductionItems,
         statutory: {
+          employmentTypeExemption,
           pensionableBase,
           employeePensionRate: policy.pensionEmployeeRate,
           employeePension,
@@ -682,7 +725,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           salaryAdvanceRecovery: "ONLY_ACTIVE_REPAYMENT_SCHEDULE_DUE_THIS_PERIOD",
           loanRecovery: "AUTHORITATIVE_OUTSTANDING_BALANCE",
         },
-        control: "PAYE and pension are calculated under the effective Nigeria payroll policy. ZERMATT payroll periods reset manual attendance, Salary Advance and Other items to period defaults. Salary Advance is ₦0 unless an active repayment schedule is due in the current payroll period; mapped recurring deduction installments and authoritative loan recoveries continue under their governed schedules. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
+        control: "PAYE and pension are calculated under the effective Nigeria payroll policy except where an explicit CHRiS employment-type exemption rule applies. Part-Time, Expatriate and Internship/Intern employment types are set to zero PAYE and zero pension contribution in payroll under this CHRiS rule. ZERMATT payroll periods reset manual attendance, Salary Advance and Other items to period defaults. Salary Advance is ₦0 unless an active repayment schedule is due in the current payroll period; mapped recurring deduction installments and authoritative loan recoveries continue under their governed schedules. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
       },
     };
   });
