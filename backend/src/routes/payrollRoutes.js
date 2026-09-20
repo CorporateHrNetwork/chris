@@ -119,7 +119,15 @@ router.patch("/tax-reliefs/:id/decision", requirePermission("payroll.manage"), a
       decision: req.body?.decision,
       notes: req.body?.notes,
     });
-    return res.json({ status: "success", data });
+    let payrollDraftFreshness = null;
+    if (String(req.body?.decision || "").trim().toUpperCase() === "VERIFY") {
+      payrollDraftFreshness = await markDraftRunsRecalculationRequired({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        reason: `Verified rent relief for ${data?.employeeId || "employee"} changed PAYE inputs; draft payroll must be recalculated.`,
+      });
+    }
+    return res.json({ status: "success", data: { relief: data, payrollDraftFreshness } });
   } catch (error) {
     return sendError(res, error, "Unable to decide rent relief declaration.");
   }
@@ -409,24 +417,16 @@ router.post(
 
       const imported = results.filter((row) => row.success).length;
       const failed = results.length - imported;
-      let payrollDraftFreshness = null;
-      if (imported > 0) {
-        payrollDraftFreshness = await markDraftRunsRecalculationRequired({
-          organizationId: req.auth.organizationId,
-          actorUserId: req.auth.userId,
-          reason: `${imported} rent-relief record(s) were imported; draft PAYE must be recalculated after verification changes.`,
-        });
-      }
 
       return res.status(207).json({
         status: "success",
-        message: `${imported} rent-relief record(s) imported for verification. ${failed} row(s) failed.`,
+        message: `${imported} rent-relief record(s) imported as PENDING_VERIFICATION. ${failed} row(s) failed.`,
         data: {
           results,
           imported,
           failed,
           total: results.length,
-          payrollDraftFreshness,
+          payrollDraftFreshness: null,
         },
       });
     } catch (error) {
