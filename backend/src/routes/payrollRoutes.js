@@ -1413,7 +1413,7 @@ function payrollWorkbookModel(lines, employeeMeta) {
         ...deductionColumns.map((item) => Number(deductionValues.get(item.key) || 0)),
         Number(line.deductions || 0),
         Number(line.advanceRecovery || 0),
-        Number(line.loanRecovery || details.loanRecovery || 0),
+        Number(line.loanRecovery ?? details.loanRecoveryTotal ?? 0),
         Number(details.leaveAllowance?.amount || 0),
         Number(line.netPreview || 0),
       ],

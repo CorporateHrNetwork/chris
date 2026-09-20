@@ -1000,7 +1000,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     runId
   );
   const lineRows = await prismaClient.$queryRawUnsafe(
-    `SELECT "id","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","grossPay","netPreview","statutoryStatus","details","createdAt","updatedAt"
+    `SELECT "id","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","loanRecovery","grossPay","netPreview","statutoryStatus","details","createdAt","updatedAt"
        FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "employeeNumber" ASC`,
     organizationId,
     runId
@@ -1022,6 +1022,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       allowances: Number(row.allowances || 0),
       deductions: Number(row.deductions || 0),
       advanceRecovery: Number(row.advanceRecovery || 0),
+      loanRecovery: Number(row.loanRecovery || 0),
       grossPay: Number(row.grossPay || 0),
       netPreview: Number(row.netPreview || 0),
       details: jsonValue(row.details, {}),
