@@ -861,7 +861,7 @@ async function submitPayrollRun({ organizationId, actorUserId, runId, notes, pri
   return { runId, status: "PENDING_APPROVAL" };
 }
 
-async function decidePayrollRun({ organizationId, actorUserId, runId, decision, statutoryReviewed, statutoryObligationsRequired = false, notes, prismaClient = prisma }) {
+async function decidePayrollRun({ organizationId, actorUserId, runId, decision, statutoryReviewed, statutoryObligationsRequired = false, statutoryCompliance = null, notes, prismaClient = prisma }) {
   const action = text(decision).toUpperCase();
   if (!["APPROVE", "REJECT"].includes(action)) throw operationalError("INVALID_PAYROLL_DECISION", "Decision must be APPROVE or REJECT.");
   const rows = await prismaClient.$queryRawUnsafe(
@@ -907,7 +907,12 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
 
     if (action === "APPROVE") {
       if (statutoryObligationsRequired) {
-        await confirmPayrollObligations(tx, { organizationId, payrollRunId: runId, actorUserId });
+        await confirmPayrollObligations(tx, {
+          organizationId,
+          payrollRunId: runId,
+          actorUserId,
+          statutoryCompliance,
+        });
       }
       const recoveryRows = await tx.$queryRawUnsafe(
         `SELECT "details" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2`,
@@ -944,9 +949,24 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
     entityId: runId,
     action: approvalAction,
     reason: notes,
-    newValue: { statutoryReviewed: Boolean(statutoryReviewed), control: "Approval does not transmit payment instructions." },
+    newValue: {
+      statutoryReviewed: Boolean(statutoryReviewed),
+      statutoryCompliance: statutoryCompliance ? {
+        missingTaxCount: Number(statutoryCompliance.missingTaxCount || 0),
+        missingPensionCount: Number(statutoryCompliance.missingPensionCount || 0),
+        withheldCount: Number(statutoryCompliance.withheldCount || 0),
+        approvalBlocked: false,
+      } : null,
+      control: "Payroll approval does not transmit payment instructions and is not blocked by incomplete employee statutory remittance identifiers. Affected liabilities are withheld from remittance allocation until the required details are completed.",
+    },
   });
-  return { runId, status: approvalAction, paymentPosted: false };
+  return {
+    runId,
+    status: approvalAction,
+    paymentPosted: false,
+    statutoryWithheldCount: action === "APPROVE" ? Number(statutoryCompliance?.withheldCount || 0) : 0,
+    statutoryReadiness: action === "APPROVE" ? statutoryCompliance || null : null,
+  };
 }
 
 async function listApprovals({ organizationId, prismaClient = prisma }) {
