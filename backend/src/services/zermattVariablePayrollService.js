@@ -265,11 +265,29 @@ async function getPeriod(client, organizationId, periodIdOrCode) {
   return rows[0];
 }
 
+async function assertPeriodAcceptsPayrollInputs(client, organizationId, period) {
+  if (period.status === "CLOSED") throw payrollInputError("PAYROLL_PERIOD_CLOSED", "A payroll input cannot be added to a closed payroll period.", 409);
+  const rows = await client.$queryRawUnsafe(
+    `SELECT "status" FROM "payroll_runs" WHERE "organizationId"=$1 AND "periodId"=$2 LIMIT 1`,
+    organizationId,
+    period.id
+  );
+  const runStatus = rows[0]?.status;
+  if (runStatus && !["DRAFT", "REJECTED"].includes(runStatus)) {
+    throw payrollInputError(
+      "PAYROLL_PERIOD_INPUT_LOCKED",
+      `Payroll ${period.code} is already ${String(runStatus).replaceAll("_", " ")}. Reopen it for correction or select the next open payroll period.`,
+      409,
+      { payrollPeriodCode: period.code, payrollRunStatus: runStatus }
+    );
+  }
+}
+
 async function createVariableInput({ organizationId, actorUserId, input, source = "MANUAL", prismaClient = prisma }) {
   const employee = await getEmployee(prismaClient, organizationId, input?.employeeNumber);
   const component = await getComponent(prismaClient, organizationId, input?.componentCode, input?.kind || null);
   const period = await getPeriod(prismaClient, organizationId, input?.payrollPeriodId || input?.payrollPeriodCode);
-  if (period.status === "CLOSED") throw payrollInputError("PAYROLL_PERIOD_CLOSED", "A variable payroll input cannot be added to a closed payroll period.", 409);
+  await assertPeriodAcceptsPayrollInputs(prismaClient, organizationId, period);
 
   let referencePeriod = null;
   if (text(input?.referencePayrollPeriodId || input?.referencePayrollPeriodCode)) {
@@ -348,7 +366,7 @@ async function createDeductionPlan({ organizationId, actorUserId, input, source 
   const component = await getComponent(prismaClient, organizationId, input?.componentCode, "DEDUCTION");
   if (component.installmentEligible !== true) throw payrollInputError("INSTALLMENTS_NOT_ALLOWED", `${component.name} is not configured for installment deductions.`, 409);
   const startPeriod = await resolveStartPeriod(prismaClient, organizationId, input);
-  if (startPeriod.status === "CLOSED") throw payrollInputError("PAYROLL_PERIOD_CLOSED", "Recurring deductions must begin from an open or locked payroll period.", 409);
+  await assertPeriodAcceptsPayrollInputs(prismaClient, organizationId, startPeriod);
   const { year, month } = periodYearMonth(startPeriod);
   const schedule = buildInstallmentSchedule({
     totalAmount: input?.totalAmount,
