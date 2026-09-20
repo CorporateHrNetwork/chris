@@ -37,3 +37,11 @@ test("synthetic Zermatt staging can receive the authoritative logo through Rende
     assert.ok(fixture.includes(expected), `Missing staging logo provisioning control: ${expected}`);
   }
 });
+
+test("Zermatt payslips fall back to the bundled official logo when tenant logoUrl is empty", () => {
+  const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+  assert.ok(ui.includes("function payslipLogoUrl"));
+  assert.ok(ui.includes('slug === "zermatt-liquor-limited"'));
+  assert.ok(ui.includes('return "/zrt-logo.jpeg"'));
+  assert.ok(ui.includes("const logoUrl = payslipLogoUrl(organization);"));
+});
