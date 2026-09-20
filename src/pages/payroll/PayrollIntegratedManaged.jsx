@@ -414,7 +414,7 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
   const organizationName = payslipOrganizationName(organization);
   const logoUrl = payslipLogoUrl(organization);
   return (
-    <Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber} — ${row.employeeName}`}>
+    <Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber}`}>
       <div style={payslipPreviewDocumentStyle}>
         {logoUrl
           ? <img src={logoUrl} alt="" aria-hidden="true" style={payslipPreviewWatermarkImageStyle} />
@@ -426,10 +426,16 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
             <div style={payslipPreviewTitleStyle}>EMPLOYEE PAYSLIP</div>
           </div>
       <div style={summaryGrid}>
-        <Summary label="Employee" value={`${row.employeeNumber} — ${row.employeeName}`} />
+        <Summary label="Employee Name" value={row.employeeName || "—"} />
+        <Summary label="Employee Number" value={row.employeeNumber || "—"} />
+        <Summary label="Designation" value={row.designation || "—"} />
+        <Summary label="Bank" value={row.bankName || "—"} />
+        <Summary label="Account Name" value={row.accountName || "—"} />
+        <Summary label="Account Number" value={row.accountNumber || "—"} />
         <Summary label="Payroll Period" value={`${row.periodStart} → ${row.periodEnd}`} />
         <Summary label="Pay Date" value={row.payDate || "—"} />
         <Summary label="Worked Days" value={attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"} />
+        <Summary label="Running Loan Balance" value={money(row.runningLoanBalance, row.currency)} />
         <Summary label="Attendance Source" value={attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"} />
         <Summary label="Status" value={row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · Preview Only`} />
       </div>
@@ -519,10 +525,16 @@ function printPayslip(row, organization = {}) {
     ["Net Pay", money(row.netPreview, row.currency), true],
   ];
   const detailItems = [
-    ["Employee", `${row.employeeNumber} — ${row.employeeName}`],
+    ["Employee Name", row.employeeName || "—"],
+    ["Employee Number", row.employeeNumber || "—"],
+    ["Designation", row.designation || "—"],
+    ["Bank", row.bankName || "—"],
+    ["Account Name", row.accountName || "—"],
+    ["Account Number", row.accountNumber || "—"],
     ["Payroll Period", `${row.periodStart} — ${row.periodEnd}`],
     ["Pay Date", row.payDate || "—"],
     ["Worked Days", attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"],
+    ["Running Loan Balance", money(row.runningLoanBalance, row.currency)],
     ["Attendance Source", attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"],
     ["Status", row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · PREVIEW ONLY`],
   ];
@@ -539,7 +551,7 @@ function printPayslip(row, organization = {}) {
   printWindow.opener = null;
   printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title></title><style>
     @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:297mm;padding:18mm 19mm 16mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.86)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.86)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
+  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
   printWindow.document.close();
 }
 
