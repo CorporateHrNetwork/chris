@@ -80,6 +80,7 @@ jobs:
           node tests/payrollExternalExportWorkflowAcceptance.test.js
           node tests/payrollRecalculationLoanRecoveryHistoryAcceptance.test.js
           node tests/payrollConnectedDashboardAcceptance.test.js
+          node tests/payrollExportDashboardInteractivityAcceptance.test.js
           node tests/payrollExportLoanRecoveryAcceptance.test.js
           node tests/zermattPayslipBrandingAcceptance.test.js
           node tests/zermattVariablePayrollInputsAcceptance.test.js
