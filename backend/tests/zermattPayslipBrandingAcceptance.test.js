@@ -20,7 +20,9 @@ test("live and print payslips render organization branding and watermark", () =>
     "<title></title>",
     "@page{size:A4 portrait;margin:0}",
     "opacity:.10",
-    'mixBlendMode: "multiply"',
+    'background: "linear-gradient(145deg,#082F20,#031A11)"',
+    'border: "1px solid rgba(212,175,55,.42)"',
+    'color: "#F7FAF8"',
   ]) {
     assert.ok(ui.includes(expected), `Missing payslip branding control: ${expected}`);
   }
