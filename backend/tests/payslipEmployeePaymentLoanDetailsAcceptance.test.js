@@ -8,57 +8,61 @@ process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/chris_test";
 const root = path.resolve(__dirname, "..", "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-test("payslip payloads expose designation, bank details and authoritative running loan balance", () => {
+test("payslip payload exposes designation and loan balance without bank account data", () => {
   const routes = read("backend/src/routes/payrollIntegrationRoutes.js");
   for (const expected of [
     'd."name" AS "designation"',
-    'pay."bankName"',
-    'pay."accountName"',
-    'pay."accountNumber"',
     '"loanOutstandingBalance"',
-    'FROM "employee_onboardings" eo',
     'FROM "payroll_loans" l',
     'l."status" IN (\'ACTIVE\',\'PAUSED\')',
     "runningLoanBalance",
   ]) assert.ok(routes.includes(expected), `Missing payslip payload control: ${expected}`);
+  for (const forbidden of ['pay."bankName"', 'pay."accountName"', 'pay."accountNumber"', 'FROM "employee_onboardings" eo']) {
+    assert.equal(routes.includes(forbidden), false, `Payslip payload must not expose bank-account data: ${forbidden}`);
+  }
 });
 
-test("screen and print payslips show the requested employee/payment fields and do not repeat the name in the print reference", () => {
+test("screen and print payslips retain CHRiS identity fields and move running loan balance to the bottom", () => {
   const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
   for (const expected of [
     'label="Employee Name"',
     'label="Employee Number"',
     'label="Designation"',
-    'label="Bank"',
-    'label="Account Name"',
-    'label="Account Number"',
     'label="Running Loan Balance"',
     '["Employee Name", row.employeeName || "—"]',
     '["Employee Number", row.employeeNumber || "—"]',
     '["Designation", row.designation || "—"]',
-    '["Bank", row.bankName || "—"]',
-    '["Account Name", row.accountName || "—"]',
-    '["Account Number", row.accountNumber || "—"]',
     '["Running Loan Balance", money(row.runningLoanBalance, row.currency)]',
+    ">Loan Summary<",
   ]) assert.ok(ui.includes(expected), `Missing payslip presentation field: ${expected}`);
+  for (const forbidden of ['label="Bank"', 'label="Account Name"', 'label="Account Number"', '["Bank",', '["Account Name",', '["Account Number",']) {
+    assert.equal(ui.includes(forbidden), false, `Bank account details must not be rendered on payslips: ${forbidden}`);
+  }
   assert.ok(ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p>'));
   assert.ok(!ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p>'));
-  assert.ok(ui.includes('<Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber}`}>'));
 });
 
-test("emailed approved payslips carry the same designation, account and loan-balance details", () => {
-  const service = read("backend/src/services/payrollPayslipEmailService.js");
+test("preview uses CHRiS global dark-green and gold visual language while print remains compact A4", () => {
+  const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
   for (const expected of [
-    'd."name" AS "designation"',
-    'pay."bankName"',
-    'pay."accountName"',
-    'pay."accountNumber"',
-    '"loanOutstandingBalance"',
-    "Running Loan Balance",
-    "Designation:",
-    "Account Name:",
-    "Account Number:",
-  ]) assert.ok(service.includes(expected), `Missing emailed payslip detail: ${expected}`);
+    'background: "linear-gradient(145deg,#082F20,#031A11)"',
+    'border: "1px solid rgba(212,175,55,.42)"',
+    'color: "#F7FAF8"',
+    'color: "#F7D66A"',
+    '@page{size:A4 portrait;margin:0}',
+    '.payslip{position:relative;width:210mm;height:297mm;padding:10mm 14mm 9mm;overflow:hidden}',
+    'th,td{padding:5px 8px',
+    '.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px',
+  ]) assert.ok(ui.includes(expected), `Missing preview/one-page print control: ${expected}`);
+});
+
+test("emailed payslip includes designation and running loan balance but excludes bank account details", () => {
+  const service = read("backend/src/services/payrollPayslipEmailService.js");
+  assert.ok(service.includes('d."name" AS "designation"'));
+  assert.ok(service.includes('"loanOutstandingBalance"'));
+  for (const forbidden of ['pay."bankName"', 'pay."accountName"', 'pay."accountNumber"', 'Bank: ${row.bankName', 'Account Name: ${row.accountName', 'Account Number: ${row.accountNumber']) {
+    assert.equal(service.includes(forbidden), false, `Email payslip must not expose bank-account data: ${forbidden}`);
+  }
 
   const { buildPayslipEmail } = require("../src/services/payrollPayslipEmailService");
   const output = buildPayslipEmail({
@@ -66,9 +70,6 @@ test("emailed approved payslips carry the same designation, account and loan-bal
     employeeName: "Jane Mary Doe",
     employeeEmail: "jane@example.test",
     designation: "HR Officer",
-    bankName: "Zenith Bank",
-    accountName: "Jane Mary Doe",
-    accountNumber: "0123456789",
     runningLoanBalance: 125000,
     currency: "NGN",
     baseSalary: 200000,
@@ -93,39 +94,22 @@ test("emailed approved payslips carry the same designation, account and loan-bal
     },
   });
   assert.match(output.html, /HR Officer/);
-  assert.match(output.html, /Zenith Bank/);
-  assert.match(output.html, /0123456789/);
   assert.match(output.html, /Running Loan Balance/);
+  assert.doesNotMatch(output.html, />Bank</);
+  assert.doesNotMatch(output.html, /Account Name/);
+  assert.doesNotMatch(output.html, /Account Number/);
   assert.match(output.plainText, /Designation: HR Officer/);
-  assert.match(output.plainText, /Account Number: 0123456789/);
+  assert.doesNotMatch(output.plainText, /^Bank:/m);
+  assert.doesNotMatch(output.plainText, /^Account Name:/m);
+  assert.doesNotMatch(output.plainText, /^Account Number:/m);
 });
 
-test("payment and loan details render after the earnings ledger in screen and print payslips", () => {
+test("loan summary follows the earnings ledger in screen and print payslips", () => {
   const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
-
   const screenNet = ui.indexOf('<PayslipLedgerRow label="Net Pay"');
-  const screenPayment = ui.indexOf(">Payment & Loan Summary<");
-  assert.ok(screenNet >= 0 && screenPayment > screenNet, "Payment & Loan Summary must follow Net Pay in the screen payslip.");
-
+  const screenLoan = ui.indexOf(">Loan Summary<");
+  assert.ok(screenNet >= 0 && screenLoan > screenNet);
   const printNet = ui.indexOf('["Net Pay", money(row.netPreview, row.currency), true]');
-  const printPayment = ui.indexOf('<section class="payment-summary">');
-  assert.ok(printNet >= 0 && printPayment > printNet, "Payment & Loan Summary must follow the earnings/deductions table in print output.");
-
-  const identityStart = ui.indexOf("const detailItems = [");
-  const identityEnd = ui.indexOf("];", identityStart);
-  const identityBlock = ui.slice(identityStart, identityEnd);
-  assert.equal(identityBlock.includes('["Bank",'), false);
-  assert.equal(identityBlock.includes('["Account Name",'), false);
-  assert.equal(identityBlock.includes('["Account Number",'), false);
-  assert.equal(identityBlock.includes('["Running Loan Balance",'), false);
-
-  for (const expected of [
-    "payslipIdentityGridStyle",
-    "payslipLedgerTableStyle",
-    "payslipPaymentSectionStyle",
-    "payslipPaymentGridStyle",
-    "payslipLedgerNetStyle",
-  ]) {
-    assert.ok(ui.includes(expected), `Missing CHRiS document visual-language control: ${expected}`);
-  }
+  const printLoan = ui.indexOf('<section class="payment-summary">');
+  assert.ok(printNet >= 0 && printLoan > printNet);
 });
