@@ -152,7 +152,6 @@ async function nextLoanReferences(client, organizationId) {
        FROM "payroll_loans"
       WHERE "organizationId"=$1
         AND "gmApprovalReference" ~ '^ZLL-GM-[0-9]+
-function approvalMetadata(input) {
   return {
     approvalMode: "MANUAL_GM_OUTSIDE_CHRIS",
     disbursementMode: "ACCOUNTS_PAYMENT_OUTSIDE_CHRIS",
@@ -478,7 +477,6 @@ module.exports = {
     accountsPaymentReference: `ZLL-AP-${suffix}`,
   };
 }
-
 function approvalMetadata(input) {
   return {
     approvalMode: "MANUAL_GM_OUTSIDE_CHRIS",
