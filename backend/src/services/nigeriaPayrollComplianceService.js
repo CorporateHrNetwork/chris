@@ -355,7 +355,7 @@ async function bulkVerifyRentReliefs({
   const reason = text(notes) || `Bulk verification of ${ids.length} PAYE rent-relief record(s).`;
 
   return prismaClient.$transaction(async (tx) => {
-    const placeholders = ids.map((_, index) => `${index + 2}`).join(",");
+    const placeholders = ids.map((_, index) => "$" + (index + 2)).join(",");
     const existingRows = await tx.$queryRawUnsafe(
       `SELECT "id","employeeId","taxYear","status","annualDeclaredAmount","eligibleReliefAmount","evidenceReference","notes"
          FROM "payroll_tax_reliefs"
@@ -402,8 +402,8 @@ async function bulkVerifyRentReliefs({
       actorUserId || null,
       reason,
     ];
-    const actorPlaceholder = `${ids.length + 2}`;
-    const notesPlaceholder = `${ids.length + 3}`;
+    const actorPlaceholder = "$" + (ids.length + 2);
+    const notesPlaceholder = "$" + (ids.length + 3);
 
     await tx.$executeRawUnsafe(
       `UPDATE "payroll_tax_reliefs"
