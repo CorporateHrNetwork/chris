@@ -113,6 +113,7 @@ function mapRunLine(row) {
     allowances: numberValue(row.allowances) || 0,
     deductions: numberValue(row.deductions) || 0,
     advanceRecovery: numberValue(row.advanceRecovery) || 0,
+    loanRecovery: numberValue(row.loanRecovery) || 0,
     grossPay: numberValue(row.grossPay) || 0,
     netPreview: numberValue(row.netPreview) || 0,
   };
@@ -625,7 +626,7 @@ async function listRuns({ organizationId, prismaClient = prisma }) {
 
 async function listRunLines({ organizationId, runId, prismaClient = prisma }) {
   const rows = await prismaClient.$queryRawUnsafe(
-    `SELECT "id","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","grossPay","netPreview","statutoryStatus","details","createdAt","updatedAt"
+    `SELECT "id","runId","employeeId","employeeNumber","employeeName","currency","baseSalary","allowances","deductions","advanceRecovery","loanRecovery","grossPay","netPreview","statutoryStatus","details","createdAt","updatedAt"
        FROM "payroll_run_lines"
       WHERE "organizationId"=$1 AND ($2::text IS NULL OR "runId"=$2)
       ORDER BY "employeeNumber" ASC`,
