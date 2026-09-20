@@ -333,6 +333,131 @@ async function decideRentRelief({ organizationId, actorUserId, reliefId, decisio
   return updated[0];
 }
 
+
+async function bulkVerifyRentReliefs({
+  organizationId,
+  actorUserId,
+  reliefIds,
+  notes,
+  prismaClient = prisma,
+}) {
+  const ids = [...new Set((Array.isArray(reliefIds) ? reliefIds : [])
+    .map((value) => text(value))
+    .filter(Boolean))];
+
+  if (!ids.length) {
+    throw payrollError("RENT_RELIEF_SELECTION_REQUIRED", "Select at least one pending rent-relief record to verify.");
+  }
+  if (ids.length > 500) {
+    throw payrollError("RENT_RELIEF_BULK_LIMIT_EXCEEDED", "A maximum of 500 rent-relief records can be verified in one batch.");
+  }
+
+  const reason = text(notes) || `Bulk verification of ${ids.length} PAYE rent-relief record(s).`;
+
+  return prismaClient.$transaction(async (tx) => {
+    const placeholders = ids.map((_, index) => "$" + (index + 2)).join(",");
+    const existingRows = await tx.$queryRawUnsafe(
+      `SELECT "id","employeeId","taxYear","status","annualDeclaredAmount","eligibleReliefAmount","evidenceReference","notes"
+         FROM "payroll_tax_reliefs"
+        WHERE "organizationId"=$1 AND "id" IN (${placeholders})
+        FOR UPDATE`,
+      organizationId,
+      ...ids
+    );
+
+    if (existingRows.length !== ids.length) {
+      const found = new Set(existingRows.map((row) => String(row.id)));
+      const missingIds = ids.filter((id) => !found.has(id));
+      throw payrollError(
+        "RENT_RELIEF_BATCH_SELECTION_CHANGED",
+        "One or more selected rent-relief records are no longer available. Reload the register and select the pending records again.",
+        409,
+        { missingIds }
+      );
+    }
+
+    const invalidState = existingRows.filter((row) => row.status !== "PENDING_VERIFICATION");
+    if (invalidState.length) {
+      throw payrollError(
+        "RENT_RELIEF_BATCH_NOT_PENDING",
+        "Bulk verification can only include records that are still pending verification.",
+        409,
+        { reliefIds: invalidState.map((row) => row.id) }
+      );
+    }
+
+    const missingEvidence = existingRows.filter((row) => !text(row.evidenceReference));
+    if (missingEvidence.length) {
+      throw payrollError(
+        "RENT_RELIEF_EVIDENCE_REQUIRED",
+        "Every selected record must have an Evidence / Document Reference before bulk verification.",
+        409,
+        { reliefIds: missingEvidence.map((row) => row.id) }
+      );
+    }
+
+    const updateParams = [
+      organizationId,
+      ...ids,
+      actorUserId || null,
+      reason,
+    ];
+    const actorPlaceholder = "$" + (ids.length + 2);
+    const notesPlaceholder = "$" + (ids.length + 3);
+
+    await tx.$executeRawUnsafe(
+      `UPDATE "payroll_tax_reliefs"
+          SET "status"='VERIFIED',
+              "verifiedByUserId"=${actorPlaceholder},
+              "verifiedAt"=CURRENT_TIMESTAMP,
+              "notes"=COALESCE(${notesPlaceholder},"notes"),
+              "updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1
+          AND "id" IN (${placeholders})
+          AND "status"='PENDING_VERIFICATION'`,
+      ...updateParams
+    );
+
+    await tx.organizationAudit.createMany({
+      data: existingRows.map((row) => ({
+        organizationId,
+        actorUserId: actorUserId || null,
+        entityType: "PayrollTaxRelief",
+        entityId: row.id,
+        action: "VERIFIED_RENT_RELIEF",
+        previousValue: {
+          status: row.status,
+          employeeId: row.employeeId,
+          taxYear: Number(row.taxYear),
+          annualDeclaredAmount: Number(row.annualDeclaredAmount || 0),
+          eligibleReliefAmount: Number(row.eligibleReliefAmount || 0),
+          evidenceReference: row.evidenceReference,
+        },
+        newValue: {
+          status: "VERIFIED",
+          employeeId: row.employeeId,
+          taxYear: Number(row.taxYear),
+          annualDeclaredAmount: Number(row.annualDeclaredAmount || 0),
+          eligibleReliefAmount: Number(row.eligibleReliefAmount || 0),
+          evidenceReference: row.evidenceReference,
+          verifiedByUserId: actorUserId || null,
+        },
+        reason,
+      })),
+    });
+
+    return {
+      verified: existingRows.length,
+      reliefIds: existingRows.map((row) => row.id),
+      employeeIds: existingRows.map((row) => row.employeeId),
+      taxYears: [...new Set(existingRows.map((row) => Number(row.taxYear)))],
+    };
+  }, {
+    maxWait: 10000,
+    timeout: 30000,
+  });
+}
+
 function calculateAnnualPaye(chargeableIncome, bands) {
   let remaining = Math.max(0, Number(chargeableIncome || 0));
   let tax = 0;
@@ -912,6 +1037,7 @@ module.exports = {
   listTaxReliefs,
   declareRentRelief,
   decideRentRelief,
+  bulkVerifyRentReliefs,
   executeNigeriaDraftPayroll,
   statutoryEmploymentTypeExemption,
   payrollError,

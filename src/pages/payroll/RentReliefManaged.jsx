@@ -16,6 +16,8 @@ export default function RentReliefManaged() {
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkPreview, setBulkPreview] = useState(null);
   const [bulkMessage, setBulkMessage] = useState("");
+  const [registerMessage, setRegisterMessage] = useState("");
+  const [selectedReliefIds, setSelectedReliefIds] = useState([]);
   const [form, setForm] = useState({ employeeNumber: "", taxYear: String(year), annualRentPaid: "", evidenceReference: "", notes: "" });
 
   const load = useCallback(async () => {
@@ -26,6 +28,7 @@ export default function RentReliefManaged() {
         apiRequest("/api/payroll/compliance-policy"),
       ]);
       setRows(reliefs?.data || []);
+      setSelectedReliefIds([]);
       setPolicy(policyResult?.data?.policy || null);
       setError("");
     } catch (requestError) {
@@ -133,6 +136,58 @@ export default function RentReliefManaged() {
     }
   };
 
+
+  const pendingReliefIds = rows
+    .filter((row) => row.status === "PENDING_VERIFICATION")
+    .map((row) => row.id);
+
+  const allPendingSelected =
+    pendingReliefIds.length > 0 &&
+    pendingReliefIds.every((id) => selectedReliefIds.includes(id));
+
+  const toggleReliefSelection = (id) => {
+    setSelectedReliefIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id]
+    );
+  };
+
+  const toggleAllPending = () => {
+    setSelectedReliefIds(allPendingSelected ? [] : pendingReliefIds);
+  };
+
+  const verifySelected = async () => {
+    if (!selectedReliefIds.length) {
+      setError("Select at least one pending rent-relief record.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Verify ${selectedReliefIds.length} selected rent-relief record(s)? Verified reliefs will become eligible for PAYE calculation and any existing draft payroll will require recalculation.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setBusy("bulk-verify");
+      setError("");
+      setRegisterMessage("");
+      const response = await apiRequest("/api/payroll/tax-reliefs/bulk/verify", {
+        method: "POST",
+        body: {
+          reliefIds: selectedReliefIds,
+          notes: `Bulk rent-relief verification completed for ${selectedReliefIds.length} selected record(s).`,
+        },
+      });
+      setRegisterMessage(response?.message || `${selectedReliefIds.length} rent-relief record(s) verified successfully.`);
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to bulk verify selected rent relief.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const rate = Number(policy?.payeRules?.rentReliefRate || 20);
   const cap = Number(policy?.payeRules?.rentReliefCap || 500000);
 
@@ -216,9 +271,46 @@ export default function RentReliefManaged() {
 
       {error && <Feedback>{error}</Feedback>}
       <Panel title="Rent Relief Register">
-        <DataTable loading={loading} columns={["Employee", "Name", "Year", "Annual Rent", "Eligible Relief", "Evidence", "Status", "Action"]}>
+        <div style={registerToolbarStyle}>
+          <div style={buttonRow}>
+            <button
+              type="button"
+              style={smallButton}
+              disabled={Boolean(busy) || pendingReliefIds.length === 0}
+              onClick={toggleAllPending}
+            >
+              {allPendingSelected ? "Clear Selection" : `Select All Pending (${pendingReliefIds.length})`}
+            </button>
+            <button
+              type="button"
+              style={primaryButton}
+              disabled={Boolean(busy) || selectedReliefIds.length === 0}
+              onClick={verifySelected}
+            >
+              {busy === "bulk-verify" ? "Verifying…" : `Verify Selected (${selectedReliefIds.length})`}
+            </button>
+          </div>
+          <div style={selectionSummaryStyle}>
+            {selectedReliefIds.length} selected · {pendingReliefIds.length} pending
+          </div>
+        </div>
+
+        {registerMessage && <div style={successStyle}>{registerMessage}</div>}
+
+        <DataTable loading={loading} columns={["Select", "Employee", "Name", "Year", "Annual Rent", "Eligible Relief", "Evidence", "Status", "Action"]}>
           {rows.map((row) => (
             <tr key={row.id}>
+              <Td>
+                {row.status === "PENDING_VERIFICATION" ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select rent relief for ${row.employeeNumber}`}
+                    checked={selectedReliefIds.includes(row.id)}
+                    disabled={Boolean(busy)}
+                    onChange={() => toggleReliefSelection(row.id)}
+                  />
+                ) : "—"}
+              </Td>
               <Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{row.taxYear}</Td>
               <Td>{money(row.annualDeclaredAmount)}</Td><Td>{money(row.eligibleReliefAmount)}</Td><Td>{row.evidenceReference || "—"}</Td><Td><Badge>{row.status}</Badge></Td>
               <Td>{row.status === "PENDING_VERIFICATION" ? <div style={buttonRow}><button style={smallButton} disabled={Boolean(busy)} onClick={() => decide(row.id, "VERIFY")}>Verify</button><button style={dangerButton} disabled={Boolean(busy)} onClick={() => decide(row.id, "REJECT")}>Reject</button></div> : "—"}</Td>
@@ -251,6 +343,8 @@ const primaryButton = { border: 0, borderRadius: 9, padding: "11px 16px", backgr
 const smallButton = { border: "1px solid rgba(212,175,55,.6)", borderRadius: 8, padding: "6px 10px", background: "transparent", color: "#D4AF37", fontWeight: 900, cursor: "pointer" };
 const dangerButton = { ...smallButton, borderColor: "rgba(248,113,113,.6)", color: "#FCA5A5" };
 const buttonRow = { display: "flex", gap: 8, flexWrap: "wrap" };
+const registerToolbarStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 };
+const selectionSummaryStyle = { color: "#AFC2B8", fontSize: 12, fontWeight: 800 };
 const controlNote = { margin: "0 0 14px", color: "#C7D3CC", lineHeight: 1.55, fontSize: 12 };
 const tableWrap = { overflowX: "auto", minHeight: 50 };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 1000 };

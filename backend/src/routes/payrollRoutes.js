@@ -134,6 +134,40 @@ router.patch("/tax-reliefs/:id/decision", requirePermission("payroll.manage"), a
 });
 
 
+router.post(
+  "/tax-reliefs/bulk/verify",
+  requirePermission("payroll.manage"),
+  requireZermattHeadHrPayrollAuthority,
+  async (req, res) => {
+    try {
+      const data = await nigeriaPayroll.bulkVerifyRentReliefs({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        reliefIds: req.body?.reliefIds,
+        notes: req.body?.notes,
+      });
+
+      const payrollDraftFreshness = await markDraftRunsRecalculationRequired({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        reason: `${data.verified} rent-relief record(s) were bulk verified; draft PAYE must be recalculated.`,
+      });
+
+      return res.json({
+        status: "success",
+        message: `${data.verified} rent-relief record(s) verified successfully.`,
+        data: {
+          ...data,
+          payrollDraftFreshness,
+        },
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to bulk verify rent relief.");
+    }
+  }
+);
+
+
 function rentReliefTemplateBuffer() {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(
