@@ -99,3 +99,33 @@ test("emailed approved payslips carry the same designation, account and loan-bal
   assert.match(output.plainText, /Designation: HR Officer/);
   assert.match(output.plainText, /Account Number: 0123456789/);
 });
+
+test("payment and loan details render after the earnings ledger in screen and print payslips", () => {
+  const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+
+  const screenNet = ui.indexOf('<PayslipLedgerRow label="Net Pay"');
+  const screenPayment = ui.indexOf(">Payment & Loan Summary<");
+  assert.ok(screenNet >= 0 && screenPayment > screenNet, "Payment & Loan Summary must follow Net Pay in the screen payslip.");
+
+  const printNet = ui.indexOf('["Net Pay", money(row.netPreview, row.currency), true]');
+  const printPayment = ui.indexOf('<section class="payment-summary">');
+  assert.ok(printNet >= 0 && printPayment > printNet, "Payment & Loan Summary must follow the earnings/deductions table in print output.");
+
+  const identityStart = ui.indexOf("const detailItems = [");
+  const identityEnd = ui.indexOf("];", identityStart);
+  const identityBlock = ui.slice(identityStart, identityEnd);
+  assert.equal(identityBlock.includes('["Bank",'), false);
+  assert.equal(identityBlock.includes('["Account Name",'), false);
+  assert.equal(identityBlock.includes('["Account Number",'), false);
+  assert.equal(identityBlock.includes('["Running Loan Balance",'), false);
+
+  for (const expected of [
+    "payslipIdentityGridStyle",
+    "payslipLedgerTableStyle",
+    "payslipPaymentSectionStyle",
+    "payslipPaymentGridStyle",
+    "payslipLedgerNetStyle",
+  ]) {
+    assert.ok(ui.includes(expected), `Missing CHRiS document visual-language control: ${expected}`);
+  }
+});
