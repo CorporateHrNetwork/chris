@@ -1281,7 +1281,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Purpose"],
     [isApproved
       ? "Final CHRiS-approved payroll export for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS."
-      : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval."],
+      : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval, including employee bank/account details for verification."],
     [],
     ["Governance"],
     [isApproved
@@ -1292,7 +1292,9 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   XLSX.utils.book_append_sheet(workbook, control, "Workflow Control");
 
   const headers = [
-    "Employee No", "Employee Name", "Designation", "Branch", "Basic", "Allowances", "Gross Pay",
+    "Employee No", "Employee Name", "Designation", "Branch",
+    "Bank", "Account Name", "Account Number",
+    "Basic", "Allowances", "Gross Pay",
     "PAYE", "Pension", "Other Deductions", "Salary Advance", "Loan Recovery",
     "Leave Allowance", "Net Pay"
   ];
@@ -1305,6 +1307,9 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       line.employeeName,
       meta.designation || "",
       meta.branch || "Unassigned",
+      meta.bankName || "",
+      meta.accountName || "",
+      meta.accountNumber || "",
       Number(line.baseSalary || 0),
       Number(line.allowances || 0),
       Number(line.grossPay || 0),
@@ -1320,6 +1325,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   const register = XLSX.utils.aoa_to_sheet([headers, ...detailRows]);
   register["!cols"] = [
     { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 22 },
+    { wch: 22 }, { wch: 28 }, { wch: 20 },
     { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
     { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 },
   ];
@@ -1336,11 +1342,11 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     [],
     ["KPI", "Value", "Formula-driven Visual"],
     ["Employee Headcount", { f: `COUNTA('Payroll Register'!A2:A${lastRow})` }, ""],
-    ["Gross Payroll", { f: `SUM('Payroll Register'!G2:G${lastRow})` }, { f: 'REPT("█",ROUND(B10/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["Net Payroll", { f: `SUM('Payroll Register'!N2:N${lastRow})` }, { f: 'REPT("█",ROUND(B11/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["PAYE", { f: `SUM('Payroll Register'!H2:H${lastRow})` }, { f: 'REPT("█",ROUND(B12/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["Pension", { f: `SUM('Payroll Register'!I2:I${lastRow})` }, { f: 'REPT("█",ROUND(B13/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
-    ["Loans + Advances", { f: `SUM('Payroll Register'!K2:K${lastRow})+SUM('Payroll Register'!L2:L${lastRow})` }, { f: 'REPT("█",ROUND(B14/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Gross Payroll", { f: `SUM('Payroll Register'!J2:J${lastRow})` }, { f: 'REPT("█",ROUND(B10/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Net Payroll", { f: `SUM('Payroll Register'!Q2:Q${lastRow})` }, { f: 'REPT("█",ROUND(B11/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["PAYE", { f: `SUM('Payroll Register'!K2:K${lastRow})` }, { f: 'REPT("█",ROUND(B12/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Pension", { f: `SUM('Payroll Register'!L2:L${lastRow})` }, { f: 'REPT("█",ROUND(B13/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Loans + Advances", { f: `SUM('Payroll Register'!N2:N${lastRow})+SUM('Payroll Register'!O2:O${lastRow})` }, { f: 'REPT("█",ROUND(B14/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
   ]);
   summary["!cols"] = [{ wch: 28 }, { wch: 22 }, { wch: 38 }];
   XLSX.utils.book_append_sheet(workbook, summary, "Management Summary");
@@ -1352,8 +1358,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     branchRows.push([
       branch,
       { f: `COUNTIF('Payroll Register'!D$2:D${lastRow},A${rowNumber})` },
-      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!G$2:G${lastRow})` },
-      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!N$2:N${lastRow})` },
+      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!J$2:J${lastRow})` },
+      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!Q$2:Q${lastRow})` },
     ]);
   }
   const branchSheet = XLSX.utils.aoa_to_sheet(branchRows);
@@ -1376,7 +1382,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       ["Review Date", ""],
       ["Review Reference", ""],
       [],
-      ["Instruction", "Return findings to the CHRiS payroll owner. Corrections must be made in CHRiS, payroll recalculated, reviewed and approved before any payout workflow begins."],
+      ["Instruction", "Verify payroll figures and employee bank/account details. Return findings to the CHRiS payroll owner. Corrections must be made in CHRiS, payroll recalculated, reviewed and approved before any payout workflow begins."],
     ];
     const reviewSheet = XLSX.utils.aoa_to_sheet(reviewRows);
     reviewSheet["!cols"] = [{ wch: 38 }, { wch: 100 }];
@@ -1491,7 +1497,7 @@ async function auditPayrollExport({ organizationId, actorUserId, run, action, st
 
 router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
-    const context = await payrollExportContext(req.auth.organizationId, req.params.id);
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
     if (!["DRAFT", "REJECTED", "SUBMITTED"].includes(context.run.status)) {
       throw payroll.operationalError(
         "PAYROLL_DRAFT_REVIEW_REQUIRES_PREAPPROVAL_STATUS",
