@@ -62,6 +62,11 @@ expect(nigeriaPayroll, 'organization.slug === "zermatt-liquor-limited"', "ZERMAT
 expect(nigeriaPayroll, "component.oneTimePeriodId === period.id", "Legacy ZERMATT Other components must participate only when explicitly tied to the current payroll period.");
 expect(nigeriaPayroll, 'manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD"', "Manual attendance overrides must be explicitly period scoped.");
 expect(nigeriaPayroll, 'scheduledDeductionCarryForward: "ONLY_MAPPED_INSTALLMENT_MONTHS"', "Only mapped recurring installments may continue into later payroll periods.");
+expect(nigeriaPayroll, 'salaryAdvanceDefault: 0', "Salary Advance must reset to zero in a new payroll period.");
+expect(nigeriaPayroll, 'salaryAdvanceCarryForward: false', "Prior payroll Salary Advance values must not carry forward.");
+expect(nigeriaPayroll, 'salaryAdvanceRecovery: "ONLY_ACTIVE_REPAYMENT_SCHEDULE_DUE_THIS_PERIOD"', "Salary Advance may appear only when an active repayment schedule is due.");
+expect(nigeriaPayroll, 'source: "ACTIVE_SALARY_ADVANCE_REPAYMENT_SCHEDULE"', "Salary Advance recovery rows must identify their schedule source.");
+expect(nigeriaPayroll, '"installmentAmount" > 0', "Only salary advances with a valid installment schedule may enter payroll.");
 expect(nigeriaPayroll, 'legacyOtherComponentCarryForward: organization.slug !== "zermatt-liquor-limited"', "Indefinite legacy Other components must not carry forward for ZERMATT.");
 expect(payrollOps, "postDeductionInstallments(tx", "Payroll approval must post scheduled installments.");
 expect(reopen, "reverseDeductionInstallments(tx", "Approved-payroll reopen must restore scheduled installments.");
