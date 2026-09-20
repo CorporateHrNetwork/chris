@@ -55,8 +55,6 @@ const emptyForm = () => ({
   disbursedDate: today(),
   recoveryStartMonth: currentMonth(),
   purpose: "",
-  gmApprovalReference: "",
-  accountsPaymentReference: "",
   notes: "",
   suretyEmployeeNumber: "",
 });
@@ -216,8 +214,6 @@ function Loans() {
       disbursedDate: today(),
       recoveryStartMonth: currentMonth(),
       purpose: loan.purpose || "",
-      gmApprovalReference: "",
-      accountsPaymentReference: "",
       notes: "",
       suretyEmployeeNumber: "",
     });
@@ -238,8 +234,6 @@ function Loans() {
       disbursedDate: String(loan.disbursedDate || today()).slice(0, 10),
       recoveryStartMonth: String(loan.recoveryStartDate || today()).slice(0, 7),
       purpose: loan.purpose || "",
-      gmApprovalReference: "",
-      accountsPaymentReference: "",
       notes: loan.notes || "",
       suretyEmployeeNumber: "",
     });
@@ -307,8 +301,6 @@ function Loans() {
         disbursedDate: form.disbursedDate,
         recoveryStartDate: `${form.recoveryStartMonth}-01`,
         purpose: form.purpose,
-        gmApprovalReference: form.gmApprovalReference,
-        accountsPaymentReference: form.accountsPaymentReference,
         notes: form.notes,
         suretyEmployeeNumber: form.suretyEmployeeNumber || undefined,
       };
@@ -320,7 +312,7 @@ function Loans() {
       if (topUpParent) {
         setMessage(`Top-up merged into ${topUpParent.loanNumber}. Revised balance ${money(result?.data?.outstandingAmount || proposedBalance)} over ${returnedPlan?.installmentCount || plan?.installmentCount || 0} installment(s). No second loan account was created.`);
       } else {
-        setMessage("GM-approved loan recorded as already disbursed outside CHRiS and activated for payroll recovery.");
+        setMessage(`Loan recorded and activated for payroll recovery. GM Approval Ref: ${result?.data?.gmApprovalReference || "—"} · Accounts Payment Ref: ${result?.data?.accountsPaymentReference || "—"}.`);
       }
       resetForm();
       await load();
@@ -510,8 +502,7 @@ function Loans() {
             {!editingLoan && <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>}
             {!editingLoan && <label><small>External Accounts Payment Date</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>}
             <label><small>Payroll Recovery Start Month</small><input style={inputStyle} type="month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required /></label>
-            {!editingLoan && <label><small>GM Approval Reference</small><input style={inputStyle} value={form.gmApprovalReference} onChange={setField("gmApprovalReference")} placeholder="Optional approval/minute reference" /></label>}
-            {!editingLoan && <label><small>Accounts Payment Reference</small><input style={inputStyle} value={form.accountsPaymentReference} onChange={setField("accountsPaymentReference")} placeholder="Optional transfer/payment reference" /></label>}
+            {!editingLoan && !topUpParent && <div style={collateralCard}><strong>System References</strong><span>CHRiS will generate the next sequential GM Approval Reference and Accounts Payment Reference automatically when this loan is first recorded. The same authoritative references are visible at Branch and Head Office.</span></div>}
             <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required><option value="">Select ZERMATT loan policy</option>{form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}{loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}</select></label>
 
             {collateralLoading && <div style={collateralCard}><strong>Checking EoSB / internal-surety basis…</strong></div>}
@@ -580,15 +571,17 @@ function Loans() {
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
-              <thead><tr>{["Employee", "Loan", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
+              <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
-                {!loading && filteredLoans.length === 0 && <tr><td colSpan="9" style={{ padding: 16 }}>No loan records found.</td></tr>}
+                {!loading && filteredLoans.length === 0 && <tr><td colSpan="11" style={{ padding: 16 }}>No loan records found.</td></tr>}
                 {filteredLoans.map((loan) => {
                   const recovered = Math.max(0, Number(loan.principalAmount || 0) - Number(loan.outstandingAmount || 0));
                   const current = ["ACTIVE", "PAUSED"].includes(loan.status);
                   return <tr key={loan.id}>
                     <td style={cellStyle}><strong>{loan.employeeNumber}</strong><br /><span>{loan.employeeName}</span></td>
                     <td style={cellStyle}>{loan.loanNumber}<br /><span>{loan.purpose || "—"}</span></td>
+                    <td style={cellStyle}>{loan.gmApprovalReference || "—"}</td>
+                    <td style={cellStyle}>{loan.accountsPaymentReference || loan.disbursementReference || "—"}</td>
                     <td style={cellStyle}>{money(loan.principalAmount)}</td>
                     <td style={cellStyle}>{money(recovered)}</td>
                     <td style={cellStyle}>{money(loan.outstandingAmount)}</td>

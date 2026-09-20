@@ -57,6 +57,7 @@ jobs:
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js
+          node tests/zermattVariablePayrollInputsAcceptance.test.js
           node tests/exitRegister.test.js
           node tests/employeeEmploymentGovernanceAcceptance.test.js
 

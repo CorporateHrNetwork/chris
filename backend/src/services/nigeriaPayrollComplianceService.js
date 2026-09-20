@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
+const { loadPeriodVariableItems, calculateVariableValue } = require("./zermattVariablePayrollService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
@@ -453,6 +454,13 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     period.id
   );
 
+  const variableItemsByEmployee = await loadPeriodVariableItems({
+    organizationId,
+    period,
+    employeeIds: employees.map((employee) => employee.id),
+    prismaClient,
+  });
+
   const advanceRows = await prismaClient.$queryRawUnsafe(
     `SELECT "id","employeeId","outstandingAmount","installmentAmount"
        FROM "payroll_salary_advances"
@@ -502,7 +510,8 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     );
 
     const applicable = componentRows.filter((component) => !component.employeeId || component.employeeId === employee.id);
-    const customAllowanceItems = applicable
+    const periodVariableItems = variableItemsByEmployee.get(employee.id) || { allowances: [], deductions: [] };
+    const configuredAllowanceItems = applicable
       .filter((component) => component.kind === "ALLOWANCE")
       .map((component) => ({
         id: component.id,
@@ -510,16 +519,44 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         name: component.name,
         taxable: component.taxable === true,
         recurring: !component.oneTimePeriodId,
+        source: "EFFECTIVE_DATED_COMPONENT",
         value: componentValue(component, structuredGross),
       }));
-    const customDeductionItems = applicable
+    const variableAllowanceItems = periodVariableItems.allowances.map((item) => ({
+      ...item,
+      id: item.inputId,
+      recurring: false,
+      value: calculateVariableValue(item, scheduledMonthlyGross),
+      calculation: {
+        calculationType: item.calculationType,
+        monthlyGross: scheduledMonthlyGross,
+        quantity: item.quantity ?? null,
+        divisor: item.calculationType === "GROSS_DIV_208_X1_25" ? 208 : (item.calculationType === "ENTERED_AMOUNT" ? null : 26),
+        multiplier: item.calculationType === "GROSS_DIV_26_X2" ? 2 : item.calculationType === "GROSS_DIV_26_X1_5" ? 1.5 : item.calculationType === "GROSS_DIV_208_X1_25" ? 1.25 : 1,
+      },
+    }));
+    const customAllowanceItems = [...configuredAllowanceItems, ...variableAllowanceItems];
+
+    const configuredDeductionItems = applicable
       .filter((component) => component.kind === "DEDUCTION")
       .map((component) => ({
         id: component.id,
         code: component.code,
         name: component.name,
+        source: "EFFECTIVE_DATED_COMPONENT",
         value: componentValue(component, structuredGross),
       }));
+    const variableDeductionItems = periodVariableItems.deductions.map((item) => ({
+      ...item,
+      id: item.inputId || item.installmentId,
+      value: calculateVariableValue(item, scheduledMonthlyGross),
+      calculation: {
+        calculationType: item.calculationType,
+        monthlyGross: scheduledMonthlyGross,
+        quantity: item.quantity ?? null,
+      },
+    }));
+    const customDeductionItems = [...configuredDeductionItems, ...variableDeductionItems];
 
     const otherAllowances = round2(customAllowanceItems.reduce((sum, item) => sum + item.value, 0));
     const grossPay = round2(structuredGross + otherAllowances);

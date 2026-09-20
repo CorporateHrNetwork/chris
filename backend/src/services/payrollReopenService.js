@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { reversePayrollObligations } = require("./statutoryObligationService");
+const { reverseDeductionInstallments } = require("./zermattVariablePayrollService");
 
 function reopenError(code, message, statusCode = 400, details) {
   const error = new Error(message);
@@ -111,6 +112,11 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
       }
     }
 
+    const deductionInstallmentReversal = await reverseDeductionInstallments(tx, {
+      organizationId,
+      payrollRunId: runId,
+    });
+
     await tx.$executeRawUnsafe(
       `UPDATE "payroll_runs"
           SET "status"='DRAFT',
@@ -142,6 +148,8 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
       loanRecoveryAmountRestored: money(loanRecoveries.reduce((sum, row) => sum + Number(row.amount || 0), 0)),
       salaryAdvanceRecoveriesReversed,
       salaryAdvanceAmountRestored,
+      deductionInstallmentsReversed: deductionInstallmentReversal.installmentsReversed,
+      deductionInstallmentAmountRestored: deductionInstallmentReversal.amountRestored,
       payslipControl: "APPROVED_PAYSLIP_SUPERSEDED_UNTIL_REAPPROVAL",
     };
     await writeAudit(tx, {
@@ -169,7 +177,7 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
       statutoryStatus: "RECALCULATION_REQUIRED",
       reason: explanation,
       ...newValue,
-      control: "Reopened payroll must be recalculated, submitted and approved again. Loan and Salary Advance balances were restored from the original approved run; historical recovery rows were reversed rather than deleted.",
+      control: "Reopened payroll must be recalculated, submitted and approved again. Loan, Salary Advance and finite scheduled-deduction balances were restored from the original approved run; historical recovery state is reversed rather than silently duplicated.",
     };
   });
 }

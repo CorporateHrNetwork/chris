@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeBatchSelector from "../../components/EmployeeBatchSelector";
 import ManualWorkedDaysPanel from "../../components/payroll/ManualWorkedDaysPanel";
-import { apiRequest } from "../../services/api";
+import { apiRequest, apiDownload, saveDownloadedBlob, getStoredOrganization } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -57,17 +57,32 @@ export default function PayrollIntegratedManaged({ mode }) {
 function ExecuteIntegrated() {
   const { data: periods, error: periodsError } = useLoad("/api/payroll/periods");
   const { data: runs, loading, error, setError, load } = useLoad("/api/payroll/runs");
-  const { data: policyData } = useLoad("/api/payroll/compliance-policy", {});
+  const { data: policyData, loading: policyLoading } = useLoad("/api/payroll/compliance-policy", {});
   const [periodId, setPeriodId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [branchView, setBranchView] = useState("");
   const selectablePeriods = (periods || []).filter((period) => period.status !== "CLOSED");
 
   const fetchIntegratedLines = async (runId) => {
     const response = await apiRequest(`/api/payroll/runs/${runId}/integrated-lines`);
-    setLines(response?.data || []);
+    const nextLines = response?.data || [];
+    setLines(nextLines);
+    setBranchView((current) => current && nextLines.some((row) => row.locationId === current) ? current : "");
   };
+
+  const branchOptions = [...new Map(
+    (lines || []).filter((row) => row.locationId).map((row) => [
+      row.locationId,
+      { id: row.locationId, code: row.locationCode, name: row.locationName || row.locationCode || "Branch" },
+    ])
+  ).values()].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const visibleLines = branchView ? lines.filter((row) => row.locationId === branchView) : lines;
+  const branchLabel = branchView
+    ? branchOptions.find((branch) => branch.id === branchView)?.name || "Selected Branch"
+    : "HEAD OFFICE · ALL BRANCHES";
+  const attendanceChangesPending = visibleLines.filter((row) => row.details?.attendanceRecalculationRequired).length;
 
   const calculate = async () => {
     try {
@@ -111,6 +126,19 @@ function ExecuteIntegrated() {
     }
   };
 
+  const exportAuditPack = async (run) => {
+    try {
+      setBusy(`export-${run.id}`); setError(""); setMessage("");
+      const download = await apiDownload(`/api/payroll/runs/${run.id}/audit-pack.xlsx`);
+      saveDownloadedBlob(download);
+      setMessage("Approved payroll audit pack exported for external auditor confirmation, GM approval and Accounts & Finance payout processing.");
+    } catch (err) {
+      setError(err.message || "Unable to export payroll audit pack.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const reopen = async (run) => {
     const reason = window.prompt(`Reason for reopening approved payroll ${run.periodCode}:`);
     if (!reason?.trim()) return;
@@ -133,13 +161,13 @@ function ExecuteIntegrated() {
       <Panel title="Integrated Draft Payroll">
         <div style={buttonRow}>
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
-          <button type="button" style={primaryButton} disabled={!periodId || busy || !policyData?.configured} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
+          <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>Loan installments become eligible in the payroll draft from the beginning of the configured recovery month. Draft and Submitted payroll affect Net Pay preview only; Loan and Salary Advance balances reduce on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit and does not change taxable gross, chargeable income or deductions. Manual Worked Days entered for the exact payroll period override standard attendance days for that employee. An approved payroll may be reopened for correction: CHRiS reverses its posted Loan/Salary Advance effects, changes the run to DRAFT + RECALCULATION_REQUIRED, and requires recalculation, resubmission and reapproval.</p>
+        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. After approval, export the formula-backed Payroll Audit Pack for external auditor confirmation, GM approval and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month; Loan and Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
-      <Feedback error={periodsError || error || (!policyData?.configured ? "Nigeria payroll policy is not configured." : "")} />
+      <Feedback error={periodsError || error || (!policyLoading && policyData?.configured === false ? "Nigeria payroll policy is not configured." : "")} />
       {message && <div style={infoStyle}>{message}</div>}
 
       <Panel title="Payroll Runs">
@@ -151,6 +179,7 @@ function ExecuteIntegrated() {
               <Td><div style={buttonRow}>
                 <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
+                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `export-${run.id}`} onClick={() => exportAuditPack(run)}>{busy === `export-${run.id}` ? "Exporting…" : "Export Audit Pack"}</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
               </div></Td>
             </tr>
@@ -158,7 +187,23 @@ function ExecuteIntegrated() {
         </DataTable>
       </Panel>
 
-      {lines.length > 0 && <Panel title="Employee Payroll Calculation"><PayrollLines rows={lines} /></Panel>}
+      {lines.length > 0 && <Panel title="Employee Payroll Calculation">
+        <div style={branchViewBar}>
+          <strong style={{ color: "#D4AF37" }}>Payroll KPI View</strong>
+          <button type="button" style={!branchView ? activeBranchButton : branchButton} onClick={() => setBranchView("")}>HEAD OFFICE · ALL</button>
+          {branchOptions.map((branch) => <button key={branch.id} type="button" style={branchView === branch.id ? activeBranchButton : branchButton} onClick={() => setBranchView(branch.id)}>{branch.code || branch.name}</button>)}
+          <span style={branchViewText}>{branchLabel}</span>
+        </div>
+        <div style={payrollKpiGrid}>
+          <Summary label="Employees" value={visibleLines.length} />
+          <Summary label="Expected Days" value={visibleLines.reduce((sum, row) => sum + Number(row.details?.attendance?.standardDays || 0), 0)} />
+          <Summary label="Worked Days" value={visibleLines.reduce((sum, row) => sum + Number(row.details?.attendance?.payableDays || 0), 0)} />
+          <Summary label="Gross Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} />
+          <Summary label="Net Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))} />
+        </div>
+        {attendanceChangesPending > 0 && <div style={warningStyle}>{attendanceChangesPending} employee attendance input(s) have changed since the last payroll calculation. The latest Worked Days are shown now; Head HR must recalculate before submission/approval so monetary values use those days.</div>}
+        <PayrollLines rows={visibleLines} />
+      </Panel>}
     </>
   );
 }
@@ -177,7 +222,7 @@ function PayrollLines({ rows }) {
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
-        <DataTable columns={["Select", "Employee", "Days", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net"]}>
+        <DataTable columns={["Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net"]}>
           <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
           {displayRows.map((row) => {
             const details = row.details || {};
@@ -190,7 +235,10 @@ function PayrollLines({ rows }) {
               <tr key={row.id}>
                 <Td><input type="checkbox" aria-label={`Select ${row.employeeNumber} ${row.employeeName}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
                 <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
-                <Td>{details.attendance ? `${details.attendance.payableDays}/${details.attendance.standardDays}` : "—"}</Td>
+                <Td>{row.locationCode || row.locationName || "—"}</Td>
+                <Td>{details.attendance?.standardDays ?? "—"}</Td>
+                <Td>{details.attendance?.payableDays ?? "—"}{details.attendanceRecalculationRequired ? " *" : ""}</Td>
+                <Td>{details.attendance?.source ? String(details.attendance.source).replaceAll("_", " ") : "—"}</Td>
                 <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
                 <Td>{money(customAllowances, row.currency)}</Td>
                 <Td>{money(statutory.payeTax, row.currency)}</Td>
@@ -212,7 +260,9 @@ function PayrollLines({ rows }) {
 
 function ApprovedPayslips() {
   const { data: rows, loading, error } = useLoad("/api/payroll/payslips");
+  const { data: profile } = useLoad("/api/auth/me", {});
   const [selected, setSelected] = useState(null);
+  const organization = profile?.organization || getStoredOrganization() || {};
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
   return (
     <>
@@ -243,12 +293,12 @@ function ApprovedPayslips() {
         </EmployeeBatchSelector>
       </Panel>
       <Feedback error={error} />
-      {selected && <PayslipCard row={selected} onClose={() => setSelected(null)} />}
+      {selected && <PayslipCard row={selected} organization={organization} onClose={() => setSelected(null)} />}
     </>
   );
 }
 
-function PayslipCard({ row, onClose }) {
+function PayslipCard({ row, organization, onClose }) {
   const details = row.details || {};
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
@@ -281,9 +331,77 @@ function PayslipCard({ row, onClose }) {
           <tr><Td strong>Net Pay</Td><Td strong>{money(row.netPreview, row.currency)}</Td></tr>
         </DataTable>
       </div>
-      <div style={{ ...buttonRow, marginTop: 14 }}><button type="button" style={secondaryButton} onClick={onClose}>Close</button><button type="button" style={primaryButton} onClick={() => window.print()}>Print Payslip</button></div>
+      <div style={{ ...buttonRow, marginTop: 14 }}><button type="button" style={secondaryButton} onClick={onClose}>Close</button><button type="button" style={primaryButton} onClick={() => printPayslip(row, organization)}>Print Payslip</button></div>
     </Panel>
   );
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[character]));
+}
+
+function safeImageUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(String(value), window.location.origin);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function printPayslip(row, organization = {}) {
+  const details = row.details || {};
+  const statutory = details.statutory || {};
+  const structure = details.salaryStructure || {};
+  const attendance = details.attendance || {};
+  const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
+  const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const organizationName = organization.legalName || organization.name || "CHRiS Organization";
+  const logoUrl = safeImageUrl(organization.logoUrl);
+  const rows = [
+    ["Basic", money(structure.basic ?? row.baseSalary, row.currency)],
+    ...Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => [key.charAt(0).toUpperCase() + key.slice(1), money(value, row.currency)]),
+    ["Other Earnings", money(customAllowances, row.currency)],
+    ["Taxable Gross Pay", money(row.grossPay, row.currency), true],
+    ["PAYE", money(statutory.payeTax, row.currency)],
+    ["Pension", money(statutory.employeePension, row.currency)],
+    ["Other Deductions", money(customDeductions, row.currency)],
+    ["Salary Advance Recovery", money(row.advanceRecovery, row.currency)],
+    ["Loan Recovery", money(row.loanRecovery, row.currency)],
+    ...(leaveAllowance > 0 ? [["Leave Allowance · After Tax / Non-taxable", money(leaveAllowance, row.currency), true]] : []),
+    ["Net Pay", money(row.netPreview, row.currency), true],
+  ];
+  const detailItems = [
+    ["Employee", `${row.employeeNumber} — ${row.employeeName}`],
+    ["Payroll Period", `${row.periodStart} — ${row.periodEnd}`],
+    ["Pay Date", row.payDate || "—"],
+    ["Worked Days", attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"],
+    ["Attendance Source", attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"],
+    ["Status", "Approved Payroll"],
+  ];
+  const logo = logoUrl ? `<img class="organization-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo">` : "";
+  const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : "";
+  // Keep a same-origin about:blank handle long enough to write the document.
+  // `noopener` in windowFeatures can make browsers return null while still
+  // opening a blank tab. We remove opener immediately below instead.
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.alert("Allow pop-ups to print this payslip.");
+    return;
+  }
+  printWindow.opener = null;
+  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(row.periodCode)} Payslip - ${escapeHtml(row.employeeNumber)}</title><style>
+    @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:270mm;padding:8mm 7mm 6mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:0;top:50%;left:50%;width:52%;max-width:330px;max-height:330px;transform:translate(-50%,-50%);object-fit:contain;opacity:.055;filter:grayscale(100%);pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.86)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.86)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>Generated from an approved CHRiS payroll run.</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
+  printWindow.document.close();
 }
 
 function StatutoryCatalogue() {
@@ -324,6 +442,13 @@ const primaryButton = { border: 0, borderRadius: 9, padding: "11px 16px", backgr
 const secondaryButton = { ...primaryButton, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.5)" };
 const smallButton = { ...secondaryButton, padding: "7px 10px", fontSize: 12 };
 const buttonRow = { display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" };
+const branchViewBar = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12, padding: 10, border: "1px solid rgba(212,175,55,.28)", borderRadius: 10 };
+const branchButton = { border: "1px solid rgba(212,175,55,.35)", borderRadius: 8, padding: "7px 10px", background: "rgba(4,46,28,.72)", color: "#F7FAF8", fontWeight: 800, cursor: "pointer" };
+const activeBranchButton = { ...branchButton, background: "#D4AF37", color: "#111" };
+const branchViewText = { marginLeft: "auto", color: "#AFC0B6", fontSize: 11, fontWeight: 800 };
+const payrollKpiGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 12 };
+const warningStyle = { padding: 10, marginBottom: 12, border: "1px solid rgba(245,158,11,.55)", borderRadius: 9, background: "rgba(245,158,11,.08)", color: "#F5D98C", fontSize: 12 };
+
 const controlNote = { color: "#A9BDB2", lineHeight: 1.6, fontSize: 13 };
 const tableWrap = { width: "100%", overflowX: "auto" };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 900 };
