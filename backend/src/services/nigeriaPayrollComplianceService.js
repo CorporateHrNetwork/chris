@@ -472,10 +472,11 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   });
 
   const advanceRows = await prismaClient.$queryRawUnsafe(
-    `SELECT "id","employeeId","outstandingAmount","installmentAmount"
+    `SELECT "id","employeeId","outstandingAmount","installmentAmount","recoveryStartDate"
        FROM "payroll_salary_advances"
       WHERE "organizationId"=$1 AND "status"='ACTIVE'
         AND "outstandingAmount" > 0
+        AND "installmentAmount" > 0
         AND "recoveryStartDate" <= $2::date`,
     organizationId,
     period.periodEnd
@@ -596,13 +597,21 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     const statutoryEmployeeDeductions = round2(employeePension + nhfEmployee + payeTax);
     const deductions = round2(customDeductions + statutoryEmployeeDeductions);
 
+    // Salary Advance is zero by default in every payroll period. A value appears
+    // only when an ACTIVE repayment schedule has reached its recovery start month
+    // and still has an outstanding balance. No prior payroll-line value is carried.
     const advances = advanceRows
       .filter((advance) => advance.employeeId === employee.id)
       .map((advance) => ({
         id: advance.id,
         value: round2(Math.min(Number(advance.outstandingAmount || 0), Number(advance.installmentAmount || 0))),
+        recoveryStartDate: dateText(advance.recoveryStartDate),
+        scheduledPayrollPeriod: period.code,
+        source: "ACTIVE_SALARY_ADVANCE_REPAYMENT_SCHEDULE",
       }));
-    const advanceRecovery = round2(advances.reduce((sum, row) => sum + row.value, 0));
+    const advanceRecovery = advances.length
+      ? round2(advances.reduce((sum, row) => sum + row.value, 0))
+      : 0;
     const netPreview = Math.max(0, round2(grossPay - deductions - advanceRecovery));
 
     const employerNsitf = nsitfRule.enabled === true ? percent(grossPay, Number(nsitfRule.employerRate || 0)) : 0;
@@ -668,9 +677,12 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           legacyOtherComponentCarryForward: organization.slug !== "zermatt-liquor-limited",
           scheduledDeductionCarryForward: "ONLY_MAPPED_INSTALLMENT_MONTHS",
           statutoryRecalculatedEachPeriod: true,
-          loanAndAdvanceRecovery: "AUTHORITATIVE_OUTSTANDING_BALANCE",
+          salaryAdvanceDefault: 0,
+          salaryAdvanceCarryForward: false,
+          salaryAdvanceRecovery: "ONLY_ACTIVE_REPAYMENT_SCHEDULE_DUE_THIS_PERIOD",
+          loanRecovery: "AUTHORITATIVE_OUTSTANDING_BALANCE",
         },
-        control: "PAYE and pension are calculated under the effective Nigeria payroll policy. ZERMATT payroll periods reset manual attendance and Other items to period defaults; only mapped recurring deduction installments and authoritative loan/salary-advance balances continue. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
+        control: "PAYE and pension are calculated under the effective Nigeria payroll policy. ZERMATT payroll periods reset manual attendance, Salary Advance and Other items to period defaults. Salary Advance is ₦0 unless an active repayment schedule is due in the current payroll period; mapped recurring deduction installments and authoritative loan recoveries continue under their governed schedules. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
       },
     };
   });
