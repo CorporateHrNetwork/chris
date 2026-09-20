@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
-import { apiRequest } from "../../services/api";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
 
 const money = (value, currency = "NGN") => new Intl.NumberFormat("en-NG", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value || 0));
 
@@ -13,6 +13,9 @@ export default function RentReliefManaged() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkPreview, setBulkPreview] = useState(null);
+  const [bulkMessage, setBulkMessage] = useState("");
   const [form, setForm] = useState({ employeeNumber: "", taxYear: String(year), annualRentPaid: "", evidenceReference: "", notes: "" });
 
   const load = useCallback(async () => {
@@ -65,6 +68,71 @@ export default function RentReliefManaged() {
     }
   };
 
+
+  const downloadBulkTemplate = async () => {
+    try {
+      setBusy("bulk-template");
+      setError("");
+      const download = await apiDownload("/api/payroll/tax-reliefs/rent/template");
+      saveDownloadedBlob(download);
+      setBulkMessage("Bulk rent-relief template downloaded.");
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to download rent relief template.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const previewBulk = async () => {
+    if (!bulkFile) {
+      setError("Select the completed rent-relief Excel file first.");
+      return;
+    }
+    try {
+      setBusy("bulk-preview");
+      setError("");
+      setBulkMessage("");
+      const body = new FormData();
+      body.append("file", bulkFile);
+      const response = await apiRequest("/api/payroll/tax-reliefs/rent/bulk/preview", {
+        method: "POST",
+        body,
+      });
+      setBulkPreview(response?.data || null);
+      const data = response?.data || {};
+      setBulkMessage(`${data.validRows || 0} valid row(s); ${data.invalidRows || 0} row(s) require correction.`);
+    } catch (requestError) {
+      setBulkPreview(null);
+      setError(requestError?.message || "Unable to validate rent relief workbook.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const importBulk = async () => {
+    if (!bulkFile || !bulkPreview?.validRows) return;
+    try {
+      setBusy("bulk-import");
+      setError("");
+      setBulkMessage("");
+      const body = new FormData();
+      body.append("file", bulkFile);
+      const response = await apiRequest("/api/payroll/tax-reliefs/rent/bulk/import", {
+        method: "POST",
+        body,
+      });
+      const data = response?.data || {};
+      setBulkMessage(response?.message || `${data.imported || 0} rent-relief record(s) imported for verification.`);
+      setBulkPreview(null);
+      setBulkFile(null);
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to import rent relief workbook.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const rate = Number(policy?.payeRules?.rentReliefRate || 20);
   const cap = Number(policy?.payeRules?.rentReliefCap || 500000);
 
@@ -85,6 +153,65 @@ export default function RentReliefManaged() {
           <Input label="Notes" value={form.notes} onChange={(value) => setForm((current) => ({ ...current, notes: value }))} />
           <div><button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : "Save for Verification"}</button></div>
         </form>
+      </Panel>
+
+      <Panel title="Bulk Rent Relief Upload">
+        <p style={controlNote}>
+          Use this for Zermatt bulk rent-relief data. Uploading does not approve the relief: every valid row is saved as PENDING_VERIFICATION until HR reviews the supporting evidence and selects Verify or Reject.
+        </p>
+        <div style={buttonRow}>
+          <button type="button" style={smallButton} disabled={Boolean(busy)} onClick={downloadBulkTemplate}>
+            {busy === "bulk-template" ? "Preparing…" : "Download Template"}
+          </button>
+          <label style={filePickerStyle}>
+            <span>Select completed Excel</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                setBulkFile(file);
+                setBulkPreview(null);
+                setBulkMessage(file ? `Selected: ${file.name}` : "");
+                setError("");
+              }}
+            />
+          </label>
+          <button type="button" style={smallButton} disabled={Boolean(busy) || !bulkFile} onClick={previewBulk}>
+            {busy === "bulk-preview" ? "Validating…" : "Validate / Preview"}
+          </button>
+          <button
+            type="button"
+            style={primaryButton}
+            disabled={Boolean(busy) || !bulkFile || !bulkPreview?.validRows}
+            onClick={importBulk}
+          >
+            {busy === "bulk-import" ? "Importing…" : "Confirm Import"}
+          </button>
+        </div>
+
+        {bulkMessage && <div style={successStyle}>{bulkMessage}</div>}
+
+        {bulkPreview && (
+          <>
+            <div style={previewSummaryStyle}>
+              <strong>{bulkPreview.totalRows || 0}</strong> total · <strong>{bulkPreview.validRows || 0}</strong> valid · <strong>{bulkPreview.invalidRows || 0}</strong> invalid
+            </div>
+            <DataTable columns={["Row", "Employee", "Year", "Annual Rent", "Eligible Relief", "Evidence", "Result"]}>
+              {(bulkPreview.rows || []).map((row) => (
+                <tr key={row.rowNumber}>
+                  <Td>{row.rowNumber}</Td>
+                  <Td strong>{row.display?.employeeNumber || "—"}{row.display?.employeeName ? ` · ${row.display.employeeName}` : ""}</Td>
+                  <Td>{row.display?.taxYear || "—"}</Td>
+                  <Td>{money(row.display?.annualRentPaid)}</Td>
+                  <Td>{money(row.display?.eligibleRelief)}</Td>
+                  <Td>{row.display?.evidenceReference || "—"}</Td>
+                  <Td>{row.valid ? <Badge>VALID</Badge> : <span style={invalidTextStyle}>{(row.errors || []).join(" ")}</span>}</Td>
+                </tr>
+              ))}
+            </DataTable>
+          </>
+        )}
       </Panel>
 
       {error && <Feedback>{error}</Feedback>}
@@ -131,4 +258,8 @@ const thStyle = { textAlign: "left", padding: "10px 9px", color: "#D4AF37", font
 const tdStyle = { padding: "10px 9px", color: "#C7D3CC", fontSize: 12, borderBottom: "1px solid rgba(255,255,255,.055)", verticalAlign: "top", whiteSpace: "nowrap" };
 const badgeStyle = { display: "inline-block", borderRadius: 999, padding: "4px 8px", border: "1px solid rgba(212,175,55,.4)", color: "#D4AF37", background: "rgba(212,175,55,.08)", fontSize: 10, fontWeight: 900 };
 const errorStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px solid rgba(248,113,113,.45)", background: "rgba(185,28,28,.14)", color: "#FCA5A5" };
+const successStyle = { marginTop: 14, padding: 11, borderRadius: 10, border: "1px solid rgba(46,233,139,.35)", background: "rgba(46,233,139,.08)", color: "#8FF0BB", fontSize: 12, fontWeight: 800 };
+const previewSummaryStyle = { margin: "14px 0 8px", color: "#C7D3CC", fontSize: 12 };
+const invalidTextStyle = { color: "#FCA5A5", whiteSpace: "normal", lineHeight: 1.45, maxWidth: 360, display: "inline-block" };
+const filePickerStyle = { display: "grid", gap: 6, minWidth: 260, color: "#C7D3CC", fontSize: 12, fontWeight: 800 };
 const loadingStyle = { padding: 14, color: "#C7D3CC" };
