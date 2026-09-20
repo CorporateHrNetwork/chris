@@ -876,5 +876,6 @@ module.exports = {
   declareRentRelief,
   decideRentRelief,
   executeNigeriaDraftPayroll,
+  statutoryEmploymentTypeExemption,
   payrollError,
 };
