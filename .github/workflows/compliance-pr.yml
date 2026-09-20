@@ -78,6 +78,9 @@ jobs:
           node tests/zermattVariablePayrollInputsAcceptance.test.js
           node tests/exitRegister.test.js
           node tests/employeeEmploymentGovernanceAcceptance.test.js
+          node tests/employeeDataOperations.test.js
+          node tests/employeeExportNameReconciliation.test.js
+          node tests/zermattEmployeeExportOrderingAcceptance.test.js
 
   frontend-build:
     name: Frontend production build
