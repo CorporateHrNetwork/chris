@@ -12,6 +12,7 @@ const service = read(backendRoot, "src", "services", "zermattVariablePayrollServ
 const nigeriaPayroll = read(backendRoot, "src", "services", "nigeriaPayrollComplianceService.js");
 const payrollOps = read(backendRoot, "src", "services", "payrollOperationsService.js");
 const reopen = read(backendRoot, "src", "services", "payrollReopenService.js");
+const exitSettlement = read(backendRoot, "src", "services", "exitSettlementService.js");
 const routes = read(backendRoot, "src", "routes", "payrollRoutes.js");
 const ui = read(repoRoot, "src", "pages", "payroll", "PayrollComponentsManaged.jsx");
 
@@ -52,11 +53,14 @@ expect(service, "count = Math.ceil(totalCents / nominalCents);", "Amount-per-ins
 expect(service, '"status"=CASE WHEN NOT EXISTS', "Deduction plan must complete when no scheduled installment remains.");
 expect(service, "postDeductionInstallments", "Approval posting lifecycle is missing.");
 expect(service, "reverseDeductionInstallments", "Reopen reversal lifecycle is missing.");
+expect(service, "PAYROLL_PERIOD_INPUT_LOCKED", "Inputs must be blocked once the payroll period is submitted/approved.");
 
 expect(nigeriaPayroll, "loadPeriodVariableItems", "Nigeria payroll must load variable period inputs.");
 expect(nigeriaPayroll, "calculateVariableValue(item, scheduledMonthlyGross)", "Formula allowances must calculate from authoritative monthly gross salary.");
 expect(payrollOps, "postDeductionInstallments(tx", "Payroll approval must post scheduled installments.");
 expect(reopen, "reverseDeductionInstallments(tx", "Approved-payroll reopen must restore scheduled installments.");
+expect(exitSettlement, "scheduledDeductionRecovery", "Outstanding scheduled deductions must be surfaced in exit settlement.");
+expect(exitSettlement, '"payroll_deduction_plans"', "Exit settlement must read authoritative finite-deduction balances.");
 
 for (const route of [
   '"/variable-components"',
