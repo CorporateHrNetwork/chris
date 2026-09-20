@@ -12,6 +12,7 @@ const EXPORT_COLUMN_CATALOG = [
   { key: "gender", label: "Gender" },
   { key: "status", label: "Status" },
   { key: "hireDate", label: "Employment Date" },
+  { key: "employmentType", label: "Employment Type" },
   { key: "department", label: "Department" },
   { key: "designation", label: "Designation" },
   { key: "employmentLevel", label: "Employment Level" },
@@ -37,6 +38,7 @@ const DEFAULT_EXPORT_COLUMNS = [
   "department",
   "designation",
   "employmentLevel",
+  "employmentType",
   "location",
   "status",
   "hireDate",
@@ -386,6 +388,49 @@ function composeExportEmployeeName(employee, personal = {}) {
 
   return deduplicated.join(" ");
 }
+
+function zermattBranchRank(employee) {
+  const code = String(employee?.location?.code || "").trim().toUpperCase();
+  const name = String(employee?.location?.name || "").trim().toUpperCase();
+
+  if (
+    code === "HO" ||
+    code === "ABJ" ||
+    name.includes("ABUJA") ||
+    name.includes("HEAD OFFICE")
+  ) return 0;
+
+  if (code === "LAG" || name.includes("LAGOS")) return 1;
+
+  if (
+    code === "PHC" ||
+    name.includes("PORT HARCOURT") ||
+    /(^|\s)PHC(\s|$)/.test(name)
+  ) return 2;
+
+  return 3;
+}
+
+function employeeHireTimestamp(employee) {
+  if (!employee?.hireDate) return Number.POSITIVE_INFINITY;
+  const value = new Date(employee.hireDate).getTime();
+  return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+}
+
+function compareZermattEmployeeExportRows(left, right) {
+  const branchDifference = zermattBranchRank(left) - zermattBranchRank(right);
+  if (branchDifference !== 0) return branchDifference;
+
+  const hireDateDifference = employeeHireTimestamp(left) - employeeHireTimestamp(right);
+  if (hireDateDifference !== 0) return hireDateDifference;
+
+  return String(left?.employeeNumber || "").localeCompare(
+    String(right?.employeeNumber || ""),
+    undefined,
+    { numeric: true, sensitivity: "base" }
+  );
+}
+
 function exportValue(employee, key) {
   const sections = latestOnboardingData(employee);
   const personal = sections["personal-details"] || {};
@@ -404,6 +449,7 @@ function exportValue(employee, key) {
     gender: employee.gender,
     status: employee.status,
     hireDate: employee.hireDate,
+    employmentType: employee.employmentType,
     department: employee.department?.name,
     designation: employee.designation?.name,
     employmentLevel: level?.name || (Number.isInteger(employee.designation?.careerLevel) ? `Level ${employee.designation.careerLevel}` : ""),
@@ -448,26 +494,37 @@ async function createEmployeeExport(prisma, {
   });
 
   try {
-    const employees = await prisma.employee.findMany({
-      where: {
-        organizationId,
-        ...buildEmployeeWhere(filters),
-      },
-      include: {
-        department: true,
-        designation: { include: { employmentLevel: true } },
-        location: true,
-        onboardings: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { sectionData: true },
+    const [organization, employees] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { slug: true },
+      }),
+      prisma.employee.findMany({
+        where: {
+          organizationId,
+          ...buildEmployeeWhere(filters),
         },
-      },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-    });
+        include: {
+          department: true,
+          designation: { include: { employmentLevel: true } },
+          location: true,
+          onboardings: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { sectionData: true },
+          },
+        },
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      }),
+    ]);
+
+    const orderedEmployees =
+      organization?.slug === "zermatt-liquor-limited"
+        ? [...employees].sort(compareZermattEmployeeExportRows)
+        : employees;
 
     const catalogByKey = Object.fromEntries(EXPORT_COLUMN_CATALOG.map((row) => [row.key, row]));
-    const rows = employees.map((employee) =>
+    const rows = orderedEmployees.map((employee) =>
       Object.fromEntries(
         finalColumns.map((key) => [catalogByKey[key].label, exportValue(employee, key)])
       )
@@ -498,7 +555,7 @@ async function createEmployeeExport(prisma, {
       where: { id: job.id },
       data: {
         status: "COMPLETED",
-        rowCount: employees.length,
+        rowCount: orderedEmployees.length,
         fileName,
         storagePath: absolutePath,
         completedAt: new Date(),
@@ -530,6 +587,7 @@ module.exports = {
   IMPORT_HEADERS,
   safeSpreadsheetValue,
   composeExportEmployeeName,
+  compareZermattEmployeeExportRows,
   parseWorkbook,
   prepareBulkRows,
   buildTemplateWorkbook,

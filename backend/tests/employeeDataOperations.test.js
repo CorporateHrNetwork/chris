@@ -21,6 +21,7 @@ assert.notEqual(hashInviteToken(token), token);
 assert.ok(IMPORT_HEADERS.includes("Employee Name"));
 assert.ok(IMPORT_HEADERS.includes("Department"));
 assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "employeeNumber"));
+assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "employmentType"));
 assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "taxIdentificationNumber"));
 
 console.log("PASS: employee data operations security and spreadsheet contracts.");
