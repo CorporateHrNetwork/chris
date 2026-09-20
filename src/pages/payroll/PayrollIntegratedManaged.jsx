@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeBatchSelector from "../../components/EmployeeBatchSelector";
 import ManualWorkedDaysPanel from "../../components/payroll/ManualWorkedDaysPanel";
@@ -65,6 +65,7 @@ function ExecuteIntegrated() {
   const [message, setMessage] = useState("");
   const [branchView, setBranchView] = useState("");
   const [selectedPayslip, setSelectedPayslip] = useState(null);
+  const payslipPreviewRef = useRef(null);
   const organization = profile?.organization || getStoredOrganization() || {};
   const selectablePeriods = (periods || []).filter((period) => period.status !== "CLOSED");
 
@@ -175,6 +176,15 @@ function ExecuteIntegrated() {
     }
   };
 
+  useEffect(() => {
+    if (!selectedPayslip) return;
+    const frame = window.requestAnimationFrame(() => {
+      payslipPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      payslipPreviewRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedPayslip]);
+
   return (
     <>
       <Panel title="Integrated Draft Payroll">
@@ -223,13 +233,15 @@ function ExecuteIntegrated() {
         {attendanceChangesPending > 0 && <div style={warningStyle}>{attendanceChangesPending} employee attendance input(s) have changed since the last payroll calculation. The latest Worked Days are shown now; Head HR must recalculate before submission/approval so monetary values use those days.</div>}
         <PayrollLines rows={visibleLines} onViewPayslip={setSelectedPayslip} />
       </Panel>}
-      {selectedPayslip && <PayslipCard
-        row={selectedPayslip}
-        organization={organization}
-        onClose={() => setSelectedPayslip(null)}
-        onEmail={() => emailLivePayslip(selectedPayslip)}
-        emailBusy={busy === `email-${selectedPayslip.id}`}
-      />}
+      {selectedPayslip && <div ref={payslipPreviewRef} tabIndex={-1} style={payslipScrollAnchorStyle}>
+        <PayslipCard
+          row={selectedPayslip}
+          organization={organization}
+          onClose={() => setSelectedPayslip(null)}
+          onEmail={() => emailLivePayslip(selectedPayslip)}
+          emailBusy={busy === `email-${selectedPayslip.id}`}
+        />
+      </div>}
     </>
   );
 }
@@ -292,6 +304,7 @@ function ApprovedPayslips() {
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
   const [emailError, setEmailError] = useState("");
+  const approvedPayslipRef = useRef(null);
   const organization = profile?.organization || getStoredOrganization() || {};
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.employeeEmail, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
 
@@ -323,6 +336,15 @@ function ApprovedPayslips() {
       setBusy("");
     }
   };
+
+  useEffect(() => {
+    if (!selected) return;
+    const frame = window.requestAnimationFrame(() => {
+      approvedPayslipRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      approvedPayslipRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selected]);
 
   return (
     <>
@@ -368,13 +390,15 @@ function ApprovedPayslips() {
       </Panel>
       <Feedback error={error || emailError} />
       {feedback && <div style={infoStyle}>{feedback}</div>}
-      {selected && <PayslipCard
-        row={selected}
-        organization={organization}
-        onClose={() => setSelected(null)}
-        onEmail={() => emailOne(selected)}
-        emailBusy={busy === `email-${selected.id}`}
-      />}
+      {selected && <div ref={approvedPayslipRef} tabIndex={-1} style={payslipScrollAnchorStyle}>
+        <PayslipCard
+          row={selected}
+          organization={organization}
+          onClose={() => setSelected(null)}
+          onEmail={() => emailOne(selected)}
+          emailBusy={busy === `email-${selected.id}`}
+        />
+      </div>}
     </>
   );
 }
@@ -549,3 +573,5 @@ const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,min
 const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.25)", borderRadius: 10, background: "rgba(255,255,255,.04)" };
 const summaryLabel = { color: "#9FB7AA", fontSize: 11, marginBottom: 5 };
 const batchSummaryStyle = { display: "flex", alignItems: "center", minHeight: 36, padding: "0 4px", color: "#C7D3CC", fontSize: 12 };
+
+const payslipScrollAnchorStyle = { scrollMarginTop: 84, outline: "none" };
