@@ -411,8 +411,20 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
   const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
   const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
   const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const organizationName = organization?.legalName || organization?.name || "Zermatt Liquor Limited";
+  const logoUrl = safeImageUrl(organization?.logoUrl);
   return (
     <Panel title={`Payslip · ${row.periodCode} · ${row.employeeNumber} — ${row.employeeName}`}>
+      <div style={payslipPreviewDocumentStyle}>
+        {logoUrl
+          ? <img src={logoUrl} alt="" aria-hidden="true" style={payslipPreviewWatermarkImageStyle} />
+          : <div aria-hidden="true" style={payslipPreviewWatermarkTextStyle}>{organizationName}</div>}
+        <div style={payslipPreviewContentStyle}>
+          <div style={payslipPreviewHeaderStyle}>
+            {logoUrl && <img src={logoUrl} alt={`${organizationName} logo`} style={payslipPreviewLogoStyle} />}
+            <div style={payslipPreviewOrganizationNameStyle}>{organizationName}</div>
+            <div style={payslipPreviewTitleStyle}>EMPLOYEE PAYSLIP</div>
+          </div>
       <div style={summaryGrid}>
         <Summary label="Employee" value={`${row.employeeNumber} — ${row.employeeName}`} />
         <Summary label="Payroll Period" value={`${row.periodStart} → ${row.periodEnd}`} />
@@ -441,6 +453,8 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
         <button type="button" style={secondaryButton} onClick={onClose}>Close</button>
         <button type="button" style={primaryButton} onClick={() => printPayslip(row, organization)}>{row.runStatus === "APPROVED" ? "Print Payslip" : "Print Preview"}</button>
         {row.runStatus === "APPROVED" && onEmail && <button type="button" style={primaryButton} disabled={!row.employeeEmail || emailBusy} onClick={onEmail}>{emailBusy ? "Emailing…" : row.employeeEmail ? "Email Payslip" : "Employee Email Missing"}</button>}
+      </div>
+        </div>
       </div>
     </Panel>
   );
@@ -498,7 +512,7 @@ function printPayslip(row, organization = {}) {
     ["Status", row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · PREVIEW ONLY`],
   ];
   const logo = logoUrl ? `<img class="organization-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo">` : "";
-  const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : "";
+  const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : `<div class="watermark-text">${escapeHtml(organizationName)}</div>`;
   // Keep a same-origin about:blank handle long enough to write the document.
   // `noopener` in windowFeatures can make browsers return null while still
   // opening a blank tab. We remove opener immediately below instead.
@@ -509,7 +523,7 @@ function printPayslip(row, organization = {}) {
   }
   printWindow.opener = null;
   printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(row.periodCode)} Payslip - ${escapeHtml(row.employeeNumber)}</title><style>
-    @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:270mm;padding:8mm 7mm 6mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:0;top:50%;left:50%;width:52%;max-width:330px;max-height:330px;transform:translate(-50%,-50%);object-fit:contain;opacity:.055;filter:grayscale(100%);pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.86)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.86)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+    @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:270mm;padding:8mm 7mm 6mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:0;top:50%;left:50%;width:52%;max-width:330px;max-height:330px;transform:translate(-50%,-50%);object-fit:contain;opacity:.055;filter:grayscale(100%);pointer-events:none}.watermark-text{position:fixed;z-index:0;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:80%;text-align:center;color:#064e3b;opacity:.055;font-size:42pt;font-weight:900;letter-spacing:.08em;pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.86)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.86)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
   </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
   printWindow.document.close();
 }
@@ -575,3 +589,12 @@ const summaryLabel = { color: "#9FB7AA", fontSize: 11, marginBottom: 5 };
 const batchSummaryStyle = { display: "flex", alignItems: "center", minHeight: 36, padding: "0 4px", color: "#C7D3CC", fontSize: 12 };
 
 const payslipScrollAnchorStyle = { scrollMarginTop: 84, outline: "none" };
+
+const payslipPreviewDocumentStyle = { position: "relative", overflow: "hidden", borderRadius: 12, background: "#fff", color: "#17211c", padding: 18, border: "1px solid rgba(212,175,55,.35)" };
+const payslipPreviewContentStyle = { position: "relative", zIndex: 1 };
+const payslipPreviewHeaderStyle = { textAlign: "center", paddingBottom: 14, marginBottom: 16, borderBottom: "2px solid #0B6B43" };
+const payslipPreviewLogoStyle = { display: "block", maxWidth: 120, maxHeight: 64, margin: "0 auto 8px", objectFit: "contain" };
+const payslipPreviewOrganizationNameStyle = { color: "#064E3B", fontSize: 20, fontWeight: 900, lineHeight: 1.25 };
+const payslipPreviewTitleStyle = { marginTop: 6, color: "#9A7410", fontSize: 13, fontWeight: 900, letterSpacing: ".12em" };
+const payslipPreviewWatermarkImageStyle = { position: "absolute", zIndex: 0, top: "50%", left: "50%", width: "52%", maxWidth: 330, maxHeight: 330, transform: "translate(-50%, -50%)", objectFit: "contain", opacity: 0.055, filter: "grayscale(100%)", pointerEvents: "none" };
+const payslipPreviewWatermarkTextStyle = { position: "absolute", zIndex: 0, top: "50%", left: "50%", width: "80%", transform: "translate(-50%, -50%) rotate(-28deg)", textAlign: "center", color: "#064E3B", opacity: 0.055, fontSize: "clamp(30px,6vw,56px)", fontWeight: 900, letterSpacing: ".08em", pointerEvents: "none" };

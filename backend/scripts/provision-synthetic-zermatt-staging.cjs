@@ -7,6 +7,7 @@ const prisma = require("../src/config/prisma");
 const SLUG = "zermatt-liquor-limited";
 const SYNTHETIC_MARKER = "SYNTHETIC STAGING ACCEPTANCE";
 const ENABLED = String(process.env.CHRIS_ENABLE_SYNTHETIC_ZERMATT_FIXTURE || "").toLowerCase() === "true";
+const STAGING_ZERMATT_LOGO_URL = String(process.env.CHRIS_STAGING_ZERMATT_LOGO_URL || "").trim();
 
 const PASSWORDS = {
   head: process.env.CHRIS_STAGING_ZERMATT_HEAD_HR_PASSWORD,
@@ -63,7 +64,7 @@ async function main() {
     throw new Error("Refusing to overwrite an existing non-synthetic zermatt-liquor-limited tenant.");
   }
 
-  const organization = existing || await prisma.organization.create({
+  let organization = existing || await prisma.organization.create({
     data: {
       name: "Zermatt Liquor Limited — Synthetic Staging",
       legalName: `Zermatt Liquor Limited — ${SYNTHETIC_MARKER}`,
@@ -75,6 +76,13 @@ async function main() {
       status: "ACTIVE",
     },
   });
+
+  if (STAGING_ZERMATT_LOGO_URL && organization.logoUrl !== STAGING_ZERMATT_LOGO_URL) {
+    organization = await prisma.organization.update({
+      where: { id: organization.id },
+      data: { logoUrl: STAGING_ZERMATT_LOGO_URL },
+    });
+  }
 
   const locationSpecs = [
     ["HEAD OFFICE", "HO", "HEAD_OFFICE", "Abuja", "FCT"],
@@ -245,11 +253,11 @@ async function main() {
 
   console.log(JSON.stringify({
     status: "success",
-    organization: { id: organization.id, slug: organization.slug, name: organization.name },
+    organization: { id: organization.id, slug: organization.slug, name: organization.name, logoConfigured: Boolean(organization.logoUrl) },
     loginUrl: "/login?organization=zermatt-liquor-limited",
     users: userSpecs.map(([key,email,,role,,locationCode]) => ({ key, email, role: role.name, branch: locationCode || "HEAD OFFICE" })),
     payrollPeriod: "STG-ZLL-SEP-2026",
-    note: "Passwords are supplied only through Render environment variables and are never printed.",
+    note: STAGING_ZERMATT_LOGO_URL ? "Passwords remain in Render environment variables. Official staging organization logo URL is configured." : "Passwords remain in Render environment variables. Set CHRIS_STAGING_ZERMATT_LOGO_URL to use the official Zermatt logo; payslips use a branded text watermark fallback until then.",
   }, null, 2));
 }
 

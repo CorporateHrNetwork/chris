@@ -72,6 +72,7 @@ jobs:
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js
           node tests/payrollPayslipEmailWithheldStatutoryAcceptance.test.js
           node tests/employmentTypeStatutoryExemptionPayslipScrollAcceptance.test.js
+          node tests/zermattPayslipBrandingAcceptance.test.js
           node tests/zermattVariablePayrollInputsAcceptance.test.js
           node tests/exitRegister.test.js
           node tests/employeeEmploymentGovernanceAcceptance.test.js
