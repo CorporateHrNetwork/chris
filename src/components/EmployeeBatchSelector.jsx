@@ -117,7 +117,7 @@ export default function EmployeeBatchSelector({
         </div>
 
         <div style={buttonRowStyle}>
-          <button type="button" style={secondaryButton} disabled={!selectedRows.length} onClick={() => setSelectedOnly((value) => !value)}>
+          <button type="button" style={secondaryButton} disabled={!selectedRows.length} onClick={() => { setSelectedOnly((value) => !value); setPage(1); }}>
             {selectedOnly ? "Show All" : "View Selected"}
           </button>
           <button type="button" style={secondaryButton} disabled={!selectedRows.length} onClick={clearSelection}>Clear Selection</button>
