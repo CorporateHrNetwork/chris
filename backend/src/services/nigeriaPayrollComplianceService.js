@@ -918,6 +918,26 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
 
   await prismaClient.$transaction(async (tx) => {
     if (existing[0]) {
+      const postedLoanRecoveries = await tx.$queryRawUnsafe(
+        `SELECT COUNT(*)::int AS "count", COALESCE(SUM("amount"),0) AS "amount"
+           FROM "payroll_loan_recoveries"
+          WHERE "organizationId"=$1 AND "runId"=$2 AND "status"='POSTED'`,
+        organizationId,
+        runId
+      );
+      const postedRecoveryCount = Number(postedLoanRecoveries[0]?.count || 0);
+      if (postedRecoveryCount > 0) {
+        throw payrollError(
+          "POSTED_LOAN_RECOVERY_RECALCULATION_BLOCKED",
+          "This payroll still has posted loan recoveries. Reopen/reverse the approved payroll before recalculation so loan balances and recovery history remain accurate.",
+          409,
+          {
+            postedRecoveryCount,
+            postedRecoveryAmount: round2(postedLoanRecoveries[0]?.amount || 0),
+          }
+        );
+      }
+
       await tx.statutoryObligation.deleteMany({
         where: { organizationId, payrollRunId: runId, status: "DRAFT_CALCULATED" },
       });
