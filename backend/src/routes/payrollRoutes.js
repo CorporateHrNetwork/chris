@@ -1427,34 +1427,40 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx", cellFormula: true });
 }
 
-async function payrollExportContext(organizationId, runId) {
+async function payrollExportContext(organizationId, runId, { includePaymentDetails = false } = {}) {
   const runs = await payroll.listRuns({ organizationId });
   const run = runs.find((item) => item.id === runId);
   if (!run) throw payroll.operationalError("PAYROLL_RUN_NOT_FOUND", "Payroll run not found.", 404);
 
   const lines = await payroll.listRunLines({ organizationId, runId });
+  const employeeSelect = {
+    id: true,
+    designation: { select: { name: true } },
+    location: { select: { name: true, code: true } },
+  };
+  if (includePaymentDetails) {
+    employeeSelect.onboardings = {
+      orderBy: { updatedAt: "desc" },
+      take: 1,
+      select: { sectionData: true },
+    };
+  }
+
   const employees = await prisma.employee.findMany({
     where: { organizationId, id: { in: lines.map((line) => line.employeeId) } },
-    select: {
-      id: true,
-      designation: { select: { name: true } },
-      location: { select: { name: true, code: true } },
-      onboardings: {
-        orderBy: { updatedAt: "desc" },
-        take: 1,
-        select: { sectionData: true },
-      },
-    },
+    select: employeeSelect,
   });
 
   const employeeMeta = new Map(employees.map((employee) => {
-    const payment = employee.onboardings?.[0]?.sectionData?.["payment-details"] || {};
+    const payment = includePaymentDetails
+      ? employee.onboardings?.[0]?.sectionData?.["payment-details"] || {}
+      : {};
     return [employee.id, {
       designation: employee.designation?.name || "",
       branch: employee.location?.name || employee.location?.code || "Unassigned",
-      bankName: String(payment.bankName || "").trim(),
-      accountName: String(payment.accountName || "").trim(),
-      accountNumber: String(payment.accountNumber || "").trim(),
+      bankName: includePaymentDetails ? String(payment.bankName || "").trim() : "",
+      accountName: includePaymentDetails ? String(payment.accountName || "").trim() : "",
+      accountNumber: includePaymentDetails ? String(payment.accountNumber || "").trim() : "",
     }];
   }));
 
@@ -1515,7 +1521,7 @@ router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), req
 
 router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
-    const context = await payrollExportContext(req.auth.organizationId, req.params.id);
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
     if (context.run.status !== "APPROVED") {
       throw payroll.operationalError(
         "PAYROLL_APPROVED_PAYOUT_REQUIRES_APPROVAL",
@@ -1545,7 +1551,7 @@ router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), 
 
 router.get("/runs/:id/audit-pack.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
-    const context = await payrollExportContext(req.auth.organizationId, req.params.id);
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
     if (context.run.status !== "APPROVED") {
       throw payroll.operationalError("PAYROLL_AUDIT_PACK_REQUIRES_APPROVAL", "Only an approved payroll run can be exported for external audit and GM approval.", 409);
     }
