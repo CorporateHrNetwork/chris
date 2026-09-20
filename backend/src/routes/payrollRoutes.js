@@ -1483,14 +1483,14 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     const index = headerIndex[header];
     if (index == null || !model.rows.length) return null;
     const column = XLSX.utils.encode_col(index);
-    return \`'\${payrollRegisterSheet}'!\$\${column}\$2:\$\${column}\$\${dataEndRow}\`;
+    return `'${payrollRegisterSheet}'!$${column}$2:$${column}$${dataEndRow}`;
   };
   const employeeNumberRange = payrollRange("Employee No");
   const branchRange = payrollRange("Branch");
   const selectedSumFormula = (header) => {
     const range = payrollRange(header);
     if (!range || !branchRange) return null;
-    return \`IF(\$B\$9="ALL",SUM(\${range}),SUMIF(\${branchRange},\$B\$9,\${range}))\`;
+    return `IF($B$9="ALL",SUM(${range}),SUMIF(${branchRange},$B$9,${range}))`;
   };
   const formulaCell = (formula, value = 0, type = "n") =>
     formula ? { t: type, f: formula, v: type === "n" ? Number(value || 0) : String(value || "") } : value;
@@ -1528,7 +1528,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     selectedEmployerStatutoryFormula,
   ].filter(Boolean).join("+");
   const selectedHeadcountFormula = employeeNumberRange && branchRange
-    ? \`IF(\$B\$9="ALL",COUNTA(\${employeeNumberRange}),COUNTIF(\${branchRange},\$B\$9))\`
+    ? `IF($B$9="ALL",COUNTA(${employeeNumberRange}),COUNTIF(${branchRange},$B$9))`
     : null;
 
   const selectedKpis = [
@@ -1637,7 +1637,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     dashboard.B9.c = [{
       a: "CHRiS",
       t: branches.length
-        ? \`Enter ALL or one exact branch name: \${branches.join(", ")}\`
+        ? `Enter ALL or one exact branch name: ${branches.join(", ")}`
         : "Enter ALL. No branch-specific payroll rows are available in this export.",
     }];
   }
@@ -1656,10 +1656,10 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     const linkCell = XLSX.utils.encode_cell({ r: rowIndex, c: 8 });
     const branchSheet = branchSheetNames.get(branch);
     if (dashboard[branchCell] && branchSheet) {
-      dashboard[branchCell].l = { Target: \`#'\${branchSheet}'!A1\`, Tooltip: \`Open \${branch} payroll register\` };
+      dashboard[branchCell].l = { Target: `#'${branchSheet}'!A1`, Tooltip: `Open ${branch} payroll register` };
     }
     if (dashboard[linkCell] && branchSheet) {
-      dashboard[linkCell].l = { Target: \`#'\${branchSheet}'!A1\`, Tooltip: \`Open \${branch} payroll register\` };
+      dashboard[linkCell].l = { Target: `#'${branchSheet}'!A1`, Tooltip: `Open ${branch} payroll register` };
     }
     for (let column = 2; column <= 6; column += 1) {
       const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: column });
@@ -1677,7 +1677,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     if (dashboard[visualCell] && statutoryDashboardRows.length) {
       dashboard[visualCell] = {
         t: "s",
-        f: \`IF(B\${excelRow}<=0,"",REPT("█",MAX(1,ROUND(B\${excelRow}/MAX(\$B\$\${statutoryAmountStart + 1}:\$B\$\${statutoryAmountEnd + 1})*28,0))))\`,
+        f: `IF(B${excelRow}<=0,"",REPT("█",MAX(1,ROUND(B${excelRow}/MAX($B$${statutoryAmountStart + 1}:$B$${statutoryAmountEnd + 1})*28,0))))`,
         v: payrollVisualBar(value, maxStatutory),
       };
     }
