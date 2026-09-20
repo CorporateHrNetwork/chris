@@ -14,7 +14,10 @@ test("CHRiS provides a non-blank startup recovery shell", () => {
     "__CHRIS_RETRY_BOOT__",
     "__CHRIS_MARK_BOOT_COMPLETE__",
     "__chris_boot",
-    "Reload CHRiS",
+    "__chris_fresh",
+    "caches.delete",
+    "serviceWorker.getRegistrations",
+    "Open Fresh CHRiS",
   ]) assert.ok(html.includes(expected), `Missing boot recovery control: ${expected}`);
 });
 
