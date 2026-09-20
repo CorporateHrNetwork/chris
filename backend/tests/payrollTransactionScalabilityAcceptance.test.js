@@ -14,6 +14,8 @@ test("Nigeria payroll uses a bounded extended interactive transaction timeout", 
 test("Nigeria payroll bulk-inserts payroll run lines instead of one SQL insert per employee", () => {
   assert.ok(source.includes("async function insertPayrollRunLinesBulk"));
   assert.ok(source.includes("const chunkSize = 100"));
+  assert.ok(source.includes('const p = (offset) => "$" + (base + offset);'));
+  assert.ok(!source.includes('const p = (offset) => `${base + offset}`;'));
   assert.ok(source.includes("VALUES ${values.join(\",\")}"));
   assert.ok(source.includes("await insertPayrollRunLinesBulk(tx"));
 });
