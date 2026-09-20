@@ -150,7 +150,9 @@ async function nextLoanReferences(client, organizationId) {
   const rows = await client.$queryRawUnsafe(
     `SELECT COALESCE(MAX(NULLIF(regexp_replace("gmApprovalReference", '^.*-', ''), '')::int), 0)::int AS "maxSeq"
        FROM "payroll_loans"
-      WHERE "organizationId"=$1 AND "gmApprovalReference" ~ '^ZLL-GM-[0-9]+
+      WHERE "organizationId"=$1
+        AND "gmApprovalReference" ~ '^ZLL-GM-[0-9]+
+function approvalMetadata(input) {
   return {
     approvalMode: "MANUAL_GM_OUTSIDE_CHRIS",
     disbursementMode: "ACCOUNTS_PAYMENT_OUTSIDE_CHRIS",
