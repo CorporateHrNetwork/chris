@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuthorization from "../../hooks/useAuthorization";
-import { apiRequest } from "../../services/api";
+import { apiRequest, apiDownload, saveDownloadedBlob } from "../../services/api";
 
 const OBLIGATION_TYPES = ["PAYE", "PENSION", "NHF", "NSITF_ECS", "ITF"];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -24,6 +24,8 @@ export default function RemittanceWorkspace() {
   const canManage = hasAnyPermission("remittances.manage", "payroll.manage");
   const [batches, setBatches] = useState([]);
   const [obligations, setObligations] = useState([]);
+  const [withheld, setWithheld] = useState([]);
+  const [withheldSummary, setWithheldSummary] = useState({ count: 0, employees: 0, outstandingAmount: 0, readyToRelease: 0 });
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -45,12 +47,15 @@ export default function RemittanceWorkspace() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [batchResult, obligationResult] = await Promise.all([
+      const [batchResult, obligationResult, withheldResult] = await Promise.all([
         apiRequest("/api/compliance/remittances"),
         apiRequest("/api/compliance/obligations"),
+        apiRequest("/api/compliance/withheld-obligations"),
       ]);
       setBatches(batchResult?.data || []);
       setObligations(obligationResult?.data || []);
+      setWithheld(withheldResult?.data || []);
+      setWithheldSummary(withheldResult?.summary || { count: 0, employees: 0, outstandingAmount: 0, readyToRelease: 0 });
     } catch (error) {
       setFeedback({ error: true, message: error.message || "Unable to load statutory remittances." });
     } finally {
@@ -72,6 +77,7 @@ export default function RemittanceWorkspace() {
       && item.obligationType === selected.obligationType
       && Number(item.periodYear) === Number(selected.periodYear)
       && Number(item.periodMonth) === Number(selected.periodMonth)
+      && item.exceptionCode !== "WITHHELD_MISSING_STATUTORY_DETAILS"
       && ["CONFIRMED", "DUE", "PARTIALLY_REMITTED", "OVERDUE"].includes(item.status)),
     [obligations, selected]
   );
@@ -90,6 +96,34 @@ export default function RemittanceWorkspace() {
     } catch (error) {
       setFeedback({ error: true, message: error.message || "Unable to update the remittance." });
       return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function exportWithheld() {
+    try {
+      setBusy("withheld-export");
+      setFeedback({ error: false, message: "" });
+      const download = await apiDownload("/api/compliance/withheld-obligations.xlsx");
+      saveDownloadedBlob(download);
+      setFeedback({ error: false, message: "Withheld statutory remittance pool exported to Excel." });
+    } catch (error) {
+      setFeedback({ error: true, message: error.message || "Unable to export withheld statutory pool." });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function releaseReadyWithheld() {
+    try {
+      setBusy("withheld-release");
+      setFeedback({ error: false, message: "" });
+      const result = await apiRequest("/api/compliance/withheld-obligations/release-ready", { method: "POST", body: {} });
+      setFeedback({ error: false, message: result?.message || "Withheld statutory pool refreshed." });
+      await load();
+    } catch (error) {
+      setFeedback({ error: true, message: error.message || "Unable to release remittance-ready statutory obligations." });
     } finally {
       setBusy("");
     }
@@ -125,6 +159,30 @@ export default function RemittanceWorkspace() {
       <p style={lead}>Create controlled statutory remittance batches, retain payment evidence, allocate confirmed payroll obligations and reconcile variances. CHRiS records the internal control lifecycle only; it does not transmit funds.</p>
 
       {feedback.message ? <div role="status" style={{ ...notice, ...(feedback.error ? errorNotice : successNotice) }}>{feedback.message}</div> : null}
+
+      <Panel title="Withheld Statutory Remittance Pool" subtitle="Approved payroll liabilities awaiting complete employee statutory details">
+        <p style={muted}>Payroll approval is not blocked by missing employee statutory identifiers. Affected PAYE/Pension liabilities remain recorded here and cannot be allocated to a remittance batch until the required employee details are completed. Use the Excel export for future consolidated/lump-sum remittance preparation.</p>
+        <div style={summaryGrid}>
+          <Summary label="Withheld Items" value={withheldSummary.count || 0} />
+          <Summary label="Employees" value={withheldSummary.employees || 0} />
+          <Summary label="Outstanding" value={money(withheldSummary.outstandingAmount || 0)} />
+          <Summary label="Ready To Release" value={withheldSummary.readyToRelease || 0} />
+        </div>
+        <div style={{ ...buttonRow, marginTop: 12 }}>
+          <button type="button" style={smallButton} disabled={Boolean(busy) || !withheld.length} onClick={exportWithheld}>{busy === "withheld-export" ? "Exporting…" : "Export Withheld Pool (Excel)"}</button>
+          <button type="button" style={primaryButton} disabled={!canManage || Boolean(busy) || !withheldSummary.readyToRelease} onClick={releaseReadyWithheld}>{busy === "withheld-release" ? "Releasing…" : "Release Completed Details"}</button>
+        </div>
+        {withheld.length ? <div style={{ ...tableWrap, marginTop: 14 }}><table style={table}><thead><tr>{["Period", "Employee", "Type", "Outstanding", "Missing Details", "Pool Status"].map((item) => <th key={item} style={th}>{item}</th>)}</tr></thead><tbody>
+          {withheld.map((item) => <tr key={item.id}>
+            <td style={td}>{item.periodYear}-{String(item.periodMonth).padStart(2, "0")}</td>
+            <td style={td}><strong>{item.employee?.employeeNumber || "—"}</strong><div style={muted}>{[item.employee?.firstName, item.employee?.middleName, item.employee?.lastName].filter(Boolean).join(" ")}</div></td>
+            <td style={td}>{words(item.obligationType)}</td>
+            <td style={td}>{money(item.outstandingAmount, item.currency)}</td>
+            <td style={td}>{(item.missingFields || []).join(", ") || "Completed"}</td>
+            <td style={td}><Badge value={item.poolStatus} /></td>
+          </tr>)}
+        </tbody></table></div> : <Empty>No statutory obligations are currently withheld for missing employee details.</Empty>}
+      </Panel>
 
       <Panel title="Create Remittance Batch" subtitle="The preparer cannot approve the same batch.">
         <form style={formGrid} onSubmit={createBatch}>
@@ -169,6 +227,9 @@ export default function RemittanceWorkspace() {
   );
 }
 
+function Summary({ label, value }) {
+  return <div style={summaryCard}><div style={summaryLabel}>{label}</div><strong>{value}</strong></div>;
+}
 function Panel({ title: heading, subtitle, children }) {
   return <section style={panel}><div style={panelHead}><div><h2 style={panelTitle}>{heading}</h2>{subtitle ? <p style={muted}>{subtitle}</p> : null}</div></div>{children}</section>;
 }
@@ -214,3 +275,8 @@ const actionGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minm
 const action = { padding: 15, border: "1px solid rgba(212,175,55,.18)", borderRadius: 12, background: "rgba(255,255,255,.018)" };
 const actionTitle = { margin: 0, color: "#F5F7F6", fontSize: 14 };
 const actionFields = { display: "grid", gap: 10, marginTop: 13 };
+
+const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginTop: 14 };
+const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.20)", borderRadius: 10, background: "rgba(255,255,255,.025)" };
+const summaryLabel = { marginBottom: 5, color: "#94A89D", fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em" };
+const buttonRow = { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" };
