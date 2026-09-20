@@ -45,6 +45,13 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Check critical backend syntax
+        run: |
+          node --check src/services/zermattFinancialSupportService.js
+          node --check src/services/zermattVariablePayrollService.js
+          node --check src/routes/payrollRoutes.js
+          node --check src/services/nigeriaPayrollComplianceService.js
+
       - name: Rehearse full migration chain
         run: npm run test:migration:compliance
 

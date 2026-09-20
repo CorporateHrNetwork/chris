@@ -454,6 +454,16 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     period.id
   );
 
+  // ZERMATT payroll periods reset manual "Other" items at the start of every period.
+  // Historical effective-dated components remain in the audit/register, but an
+  // indefinite legacy component must not silently carry into a later payroll.
+  // Period-specific legacy items may still be honored for their explicitly linked
+  // period. Finite recurring deductions are supplied separately by the governed
+  // installment schedule engine.
+  const zermattPeriodScopedLegacyComponents = organization.slug === "zermatt-liquor-limited"
+    ? componentRows.filter((component) => component.oneTimePeriodId === period.id)
+    : componentRows;
+
   const variableItemsByEmployee = await loadPeriodVariableItems({
     organizationId,
     period,
@@ -509,7 +519,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         .reduce((sum, [, value]) => sum + Number(value || 0), 0)
     );
 
-    const applicable = componentRows.filter((component) => !component.employeeId || component.employeeId === employee.id);
+    const applicable = zermattPeriodScopedLegacyComponents.filter((component) => !component.employeeId || component.employeeId === employee.id);
     const periodVariableItems = variableItemsByEmployee.get(employee.id) || { allowances: [], deductions: [] };
     const configuredAllowanceItems = applicable
       .filter((component) => component.kind === "ALLOWANCE")
@@ -623,6 +633,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           prorationFactor: round2(prorationFactor),
           source: attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT",
           notes: attendanceInput?.notes || null,
+          manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD",
         },
         scheduledMonthlyGross,
         structuredGross,
@@ -649,7 +660,17 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           employerStatutoryCost,
         },
         salaryAdvanceRecoveries: advances,
-        control: "PAYE and pension are calculated under the effective Nigeria payroll policy. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
+        periodReset: {
+          expectedDaysDefault: true,
+          manualAttendanceCarryForward: false,
+          oneTimeAllowanceCarryForward: false,
+          oneTimeDeductionCarryForward: false,
+          legacyOtherComponentCarryForward: organization.slug !== "zermatt-liquor-limited",
+          scheduledDeductionCarryForward: "ONLY_MAPPED_INSTALLMENT_MONTHS",
+          statutoryRecalculatedEachPeriod: true,
+          loanAndAdvanceRecovery: "AUTHORITATIVE_OUTSTANDING_BALANCE",
+        },
+        control: "PAYE and pension are calculated under the effective Nigeria payroll policy. ZERMATT payroll periods reset manual attendance and Other items to period defaults; only mapped recurring deduction installments and authoritative loan/salary-advance balances continue. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
       },
     };
   });
