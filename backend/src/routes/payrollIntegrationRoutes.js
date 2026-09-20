@@ -38,6 +38,11 @@ function mapLine(row) {
     deductions: number(row.deductions),
     advanceRecovery: number(row.advanceRecovery),
     loanRecovery: number(row.loanRecovery),
+    loanOutstandingBalance: number(row.loanOutstandingBalance),
+    runningLoanBalance:
+      row.runStatus === "APPROVED"
+        ? number(row.loanOutstandingBalance)
+        : Math.max(0, number(row.loanOutstandingBalance) - number(row.loanRecovery)),
     grossPay: number(row.grossPay),
     netPreview: number(row.netPreview),
     locationId: row.locationId || null,
@@ -66,7 +71,10 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
       `SELECT pl."id",pl."runId",pl."employeeId",pl."employeeNumber",pl."employeeName",pl."currency",
               pl."baseSalary",pl."allowances",pl."deductions",pl."advanceRecovery",pl."loanRecovery",
               pl."grossPay",pl."netPreview",pl."statutoryStatus",pl."details",pl."createdAt",pl."updatedAt",
-              e."locationId",e."email" AS "employeeEmail",loc."code" AS "locationCode",loc."name" AS "locationName",
+              e."locationId",e."email" AS "employeeEmail",d."name" AS "designation",
+              loc."code" AS "locationCode",loc."name" AS "locationName",
+              pay."bankName",pay."accountName",pay."accountNumber",
+              loan."loanOutstandingBalance",
               pr."status" AS "runStatus",pr."approvedAt",
               pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
               api."workedDays" AS "liveWorkedDays",api."workedHours" AS "liveWorkedHours",api."notes" AS "liveAttendanceNotes"
@@ -74,7 +82,23 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
          JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
          JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
          JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
+         LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
          LEFT JOIN "organization_locations" loc ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
+         LEFT JOIN LATERAL (
+           SELECT
+             eo."sectionData"->'payment-details'->>'bankName' AS "bankName",
+             eo."sectionData"->'payment-details'->>'accountName' AS "accountName",
+             eo."sectionData"->'payment-details'->>'accountNumber' AS "accountNumber"
+           FROM "employee_onboardings" eo
+           WHERE eo."organizationId"=pl."organizationId" AND eo."employeeId"=pl."employeeId"
+           ORDER BY eo."updatedAt" DESC, eo."createdAt" DESC
+           LIMIT 1
+         ) pay ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(l."outstandingAmount") FILTER (WHERE l."status" IN ('ACTIVE','PAUSED')),0) AS "loanOutstandingBalance"
+           FROM "payroll_loans" l
+           WHERE l."organizationId"=pl."organizationId" AND l."employeeId"=pl."employeeId"
+         ) loan ON TRUE
          LEFT JOIN "attendance_payroll_inputs" api
            ON api."organizationId"=pl."organizationId" AND api."employeeId"=pl."employeeId"
           AND api."periodStart"=pp."periodStart" AND api."periodEnd"=pp."periodEnd"
@@ -99,11 +123,29 @@ router.get("/payslips", requirePermission("payroll.view"), async (req, res) => {
           pl."statutoryStatus",pl."details",pl."createdAt",pl."updatedAt",
           pr."status" AS "runStatus",pr."approvedAt",
           pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
-          e."email" AS "employeeEmail"
+          e."email" AS "employeeEmail",d."name" AS "designation",
+          pay."bankName",pay."accountName",pay."accountNumber",
+          loan."loanOutstandingBalance"
        FROM "payroll_run_lines" pl
        JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
        JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
+       LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
+       LEFT JOIN LATERAL (
+         SELECT
+           eo."sectionData"->'payment-details'->>'bankName' AS "bankName",
+           eo."sectionData"->'payment-details'->>'accountName' AS "accountName",
+           eo."sectionData"->'payment-details'->>'accountNumber' AS "accountNumber"
+         FROM "employee_onboardings" eo
+         WHERE eo."organizationId"=pl."organizationId" AND eo."employeeId"=pl."employeeId"
+         ORDER BY eo."updatedAt" DESC, eo."createdAt" DESC
+         LIMIT 1
+       ) pay ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(l."outstandingAmount") FILTER (WHERE l."status" IN ('ACTIVE','PAUSED')),0) AS "loanOutstandingBalance"
+         FROM "payroll_loans" l
+         WHERE l."organizationId"=pl."organizationId" AND l."employeeId"=pl."employeeId"
+       ) loan ON TRUE
       WHERE pl."organizationId"=$1 AND pr."status"='APPROVED'
       ORDER BY pp."periodStart" DESC, pl."employeeNumber" ASC`,
       req.auth.organizationId
