@@ -75,6 +75,7 @@ jobs:
           node tests/payrollTransactionScalabilityAcceptance.test.js
           node tests/employmentTypeStatutoryExemptionPayslipScrollAcceptance.test.js
           node tests/frontendBootRecoveryAcceptance.test.js
+          node tests/frontendPerformanceCodeSplittingAcceptance.test.js
           node tests/zermattPayslipBrandingAcceptance.test.js
           node tests/zermattVariablePayrollInputsAcceptance.test.js
           node tests/exitRegister.test.js
