@@ -130,14 +130,27 @@ function ExecuteIntegrated() {
     }
   };
 
-  const exportAuditPack = async (run) => {
+  const exportDraftReview = async (run) => {
     try {
-      setBusy(`export-${run.id}`); setError(""); setMessage("");
-      const download = await apiDownload(`/api/payroll/runs/${run.id}/audit-pack.xlsx`);
+      setBusy(`draft-export-${run.id}`); setError(""); setMessage("");
+      const download = await apiDownload(`/api/payroll/runs/${run.id}/draft-review.xlsx`);
       saveDownloadedBlob(download);
-      setMessage("Approved payroll audit pack exported for external auditor confirmation, GM approval and Accounts & Finance payout processing.");
+      setMessage("Draft payroll review pack exported. It is marked PRE-APPROVAL / NOT FOR PAYOUT for external HR investigation and verification.");
     } catch (err) {
-      setError(err.message || "Unable to export payroll audit pack.");
+      setError(err.message || "Unable to export draft payroll review pack.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const exportApprovedPayout = async (run) => {
+    try {
+      setBusy(`approved-export-${run.id}`); setError(""); setMessage("");
+      const download = await apiDownload(`/api/payroll/runs/${run.id}/approved-payout.xlsx`);
+      saveDownloadedBlob(download);
+      setMessage("Approved payroll export generated for the external auditor / management approval and Accounts & Finance payout workflow.");
+    } catch (err) {
+      setError(err.message || "Unable to export approved payroll payout pack.");
     } finally {
       setBusy("");
     }
@@ -192,7 +205,7 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. After approval, export the formula-backed Payroll Audit Pack for external auditor confirmation, GM approval and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
+        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. Before approval, export the Draft Review Pack for external HR investigation/verification; it is clearly marked NOT FOR PAYOUT. After CHRiS approval, export the Approved Payout Pack for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
@@ -207,8 +220,9 @@ function ExecuteIntegrated() {
               <Td>{money(run.grossTotal)}</Td><Td>{money(run.deductionTotal)}</Td><Td>{money(run.netPreviewTotal)}</Td>
               <Td><div style={buttonRow}>
                 <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
+                {["DRAFT", "REJECTED", "SUBMITTED"].includes(run.status) && <button type="button" style={smallButton} disabled={busy === `draft-export-${run.id}`} onClick={() => exportDraftReview(run)}>{busy === `draft-export-${run.id}` ? "Exporting…" : "Export Draft Review"}</button>}
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
-                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `export-${run.id}`} onClick={() => exportAuditPack(run)}>{busy === `export-${run.id}` ? "Exporting…" : "Export Audit Pack"}</button>}
+                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `approved-export-${run.id}`} onClick={() => exportApprovedPayout(run)}>{busy === `approved-export-${run.id}` ? "Exporting…" : "Export Approved Payout"}</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
               </div></Td>
             </tr>

@@ -77,6 +77,7 @@ jobs:
           node tests/frontendBootRecoveryAcceptance.test.js
           node tests/frontendPerformanceCodeSplittingAcceptance.test.js
           node tests/payrollRuntimePerformanceAcceptance.test.js
+          node tests/payrollExternalExportWorkflowAcceptance.test.js
           node tests/zermattPayslipBrandingAcceptance.test.js
           node tests/zermattVariablePayrollInputsAcceptance.test.js
           node tests/exitRegister.test.js
