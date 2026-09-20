@@ -5,6 +5,8 @@ import {
   setActiveLocationId,
 } from "../services/api";
 
+const STAGING_RELEASE_MARKER = "2026-09-20T02:45Z";
+
 function locationLabel(location) {
   const name = String(location?.name || "Location").trim();
   const code = String(location?.code || "").trim();
@@ -134,6 +136,7 @@ export default function BranchContextSelector({ compact = false }) {
       <div
         style={wrapStyle}
         data-chris-branch-context={compact ? "compact" : "page"}
+        data-chris-staging-release={STAGING_RELEASE_MARKER}
       >
         <span style={labelStyle}>{compact ? "BRANCH" : "OPERATING CONTEXT"}</span>
         <select
