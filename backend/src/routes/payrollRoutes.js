@@ -1260,28 +1260,57 @@ router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZe
 });
 
 
-function payrollAuditWorkbook({ organization, run, lines, employeeLocations }) {
+function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage }) {
   const workbook = XLSX.utils.book_new();
+  const isApproved = stage === "APPROVED_PAYOUT";
+  const title = isApproved
+    ? "CHRiS Approved Payroll — External Approval & Payout Pack"
+    : "CHRiS Draft Payroll — External HR Review Pack";
+  const controlLabel = isApproved
+    ? "APPROVED IN CHRiS — EXTERNAL APPROVAL / PAYOUT HANDOFF"
+    : "PRE-APPROVAL REVIEW — NOT FOR PAYOUT";
+
+  const control = XLSX.utils.aoa_to_sheet([
+    [title],
+    ["Organization", organization.legalName || organization.name || ""],
+    ["Payroll Period", run.periodCode || ""],
+    ["CHRiS Run Status", run.status || ""],
+    ["Export Control", controlLabel],
+    ["Exported At", new Date().toISOString()],
+    [],
+    ["Purpose"],
+    [isApproved
+      ? "Final CHRiS-approved payroll export for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS."
+      : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval."],
+    [],
+    ["Governance"],
+    [isApproved
+      ? "This export does not create external approval events inside CHRiS. External auditor confirmation, GM approval and payout remain outside CHRiS."
+      : "This workbook is not an approved payroll and must not be used for payout. Any findings must be corrected in CHRiS and the payroll recalculated before submission/approval."],
+  ]);
+  control["!cols"] = [{ wch: 28 }, { wch: 110 }];
+  XLSX.utils.book_append_sheet(workbook, control, "Workflow Control");
+
   const headers = [
-    "Employee No", "Employee Name", "Branch", "Basic", "Allowances", "Gross Pay",
+    "Employee No", "Employee Name", "Designation", "Branch", "Basic", "Allowances", "Gross Pay",
     "PAYE", "Pension", "Other Deductions", "Salary Advance", "Loan Recovery",
     "Leave Allowance", "Net Pay"
   ];
   const detailRows = lines.map((line) => {
     const statutory = line.details?.statutory || {};
     const leaveAllowance = Number(line.details?.leaveAllowance?.amount || 0);
-    const otherDeductions = Number(line.deductions || 0);
-    const branch = employeeLocations.get(line.employeeId) || "Unassigned";
+    const meta = employeeMeta.get(line.employeeId) || {};
     return [
       line.employeeNumber,
       line.employeeName,
-      branch,
+      meta.designation || "",
+      meta.branch || "Unassigned",
       Number(line.baseSalary || 0),
       Number(line.allowances || 0),
       Number(line.grossPay || 0),
       Number(statutory.payeTax || 0),
       Number(statutory.employeePension || 0),
-      otherDeductions,
+      Number(line.deductions || 0),
       Number(line.advanceRecovery || 0),
       Number(line.loanRecovery || line.details?.loanRecovery || 0),
       leaveAllowance,
@@ -1290,7 +1319,7 @@ function payrollAuditWorkbook({ organization, run, lines, employeeLocations }) {
   });
   const register = XLSX.utils.aoa_to_sheet([headers, ...detailRows]);
   register["!cols"] = [
-    { wch: 16 }, { wch: 28 }, { wch: 22 },
+    { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 22 },
     { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
     { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 }, { wch: 17 },
   ];
@@ -1303,51 +1332,155 @@ function payrollAuditWorkbook({ organization, run, lines, employeeLocations }) {
     ["Payroll Period", run.periodCode || ""],
     ["Run Status", run.status || ""],
     ["Approved At", run.approvedAt ? new Date(run.approvedAt).toISOString() : ""],
+    ["Control", controlLabel],
     [],
     ["KPI", "Value", "Formula-driven Visual"],
     ["Employee Headcount", { f: `COUNTA('Payroll Register'!A2:A${lastRow})` }, ""],
-    ["Gross Payroll", { f: `SUM('Payroll Register'!F2:F${lastRow})` }, { f: 'REPT("█",ROUND(B9/MAX($B$9,$B$10,$B$11,$B$12,$B$13)*30,0))' }],
-    ["Net Payroll", { f: `SUM('Payroll Register'!M2:M${lastRow})` }, { f: 'REPT("█",ROUND(B10/MAX($B$9,$B$10,$B$11,$B$12,$B$13)*30,0))' }],
-    ["PAYE", { f: `SUM('Payroll Register'!G2:G${lastRow})` }, { f: 'REPT("█",ROUND(B11/MAX($B$9,$B$10,$B$11,$B$12,$B$13)*30,0))' }],
-    ["Pension", { f: `SUM('Payroll Register'!H2:H${lastRow})` }, { f: 'REPT("█",ROUND(B12/MAX($B$9,$B$10,$B$11,$B$12,$B$13)*30,0))' }],
-    ["Loans + Advances", { f: `SUM('Payroll Register'!J2:J${lastRow})+SUM('Payroll Register'!K2:K${lastRow})` }, { f: 'REPT("█",ROUND(B13/MAX($B$9,$B$10,$B$11,$B$12,$B$13)*30,0))' }],
+    ["Gross Payroll", { f: `SUM('Payroll Register'!G2:G${lastRow})` }, { f: 'REPT("█",ROUND(B10/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Net Payroll", { f: `SUM('Payroll Register'!N2:N${lastRow})` }, { f: 'REPT("█",ROUND(B11/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["PAYE", { f: `SUM('Payroll Register'!H2:H${lastRow})` }, { f: 'REPT("█",ROUND(B12/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Pension", { f: `SUM('Payroll Register'!I2:I${lastRow})` }, { f: 'REPT("█",ROUND(B13/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
+    ["Loans + Advances", { f: `SUM('Payroll Register'!K2:K${lastRow})+SUM('Payroll Register'!L2:L${lastRow})` }, { f: 'REPT("█",ROUND(B14/MAX($B$10,$B$11,$B$12,$B$13,$B$14)*30,0))' }],
   ]);
-  summary["!cols"] = [{ wch: 26 }, { wch: 22 }, { wch: 38 }];
+  summary["!cols"] = [{ wch: 28 }, { wch: 22 }, { wch: 38 }];
   XLSX.utils.book_append_sheet(workbook, summary, "Management Summary");
 
-  const branches = [...new Set(detailRows.map((row) => row[2]))].sort();
+  const branches = [...new Set(detailRows.map((row) => row[3]))].sort();
   const branchRows = [["Branch", "Headcount", "Gross Payroll", "Net Payroll"]];
   for (const branch of branches) {
     const rowNumber = branchRows.length + 1;
     branchRows.push([
       branch,
-      { f: `COUNTIF('Payroll Register'!C$2:C${lastRow},A${rowNumber})` },
-      { f: `SUMIF('Payroll Register'!C$2:C${lastRow},A${rowNumber},'Payroll Register'!F$2:F${lastRow})` },
-      { f: `SUMIF('Payroll Register'!C$2:C${lastRow},A${rowNumber},'Payroll Register'!M$2:M${lastRow})` },
+      { f: `COUNTIF('Payroll Register'!D$2:D${lastRow},A${rowNumber})` },
+      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!G$2:G${lastRow})` },
+      { f: `SUMIF('Payroll Register'!D$2:D${lastRow},A${rowNumber},'Payroll Register'!N$2:N${lastRow})` },
     ]);
   }
   const branchSheet = XLSX.utils.aoa_to_sheet(branchRows);
   branchSheet["!cols"] = [{ wch: 28 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(workbook, branchSheet, "Branch Analysis");
 
-  const handoff = XLSX.utils.aoa_to_sheet([
-    ["ZERMATT Payroll External Approval Handoff"],
-    ["CHRiS Internal Payroll Authority", "Head of HR prepares, processes/executes and approves payroll inside CHRiS."],
-    ["External Auditor", "Confirms exported payroll and management reports outside CHRiS."],
-    ["General Manager", "Provides final business approval outside CHRiS after auditor confirmation."],
-    ["Accounts & Finance", "Processes payout outside CHRiS after GM approval."],
-    [],
-    ["Evidence Field", "Reference / Date / Notes"],
-    ["External Auditor Confirmation", ""],
-    ["GM Approval", ""],
-    ["Accounts & Finance Payout", ""],
-    [],
-    ["Control", "This workbook is an audit/export handoff. External confirmation, GM approval and payout do not constitute CHRiS payroll approval events."],
-  ]);
-  handoff["!cols"] = [{ wch: 34 }, { wch: 90 }];
-  XLSX.utils.book_append_sheet(workbook, handoff, "External Handoff");
+  if (!isApproved) {
+    const reviewRows = [
+      ["Draft Payroll External HR Review / Investigation"],
+      ["Control", "PRE-APPROVAL — NOT FOR PAYOUT"],
+      ["Payroll Period", run.periodCode || ""],
+      ["CHRiS Status", run.status || ""],
+      [],
+      ["Review Field", "External HR Head / Reviewer Entry"],
+      ["Investigation / Verification Result", ""],
+      ["Exceptions Identified", ""],
+      ["Employees / Lines Requiring Correction", ""],
+      ["Corrective Action Required", ""],
+      ["Reviewer Name", ""],
+      ["Review Date", ""],
+      ["Review Reference", ""],
+      [],
+      ["Instruction", "Return findings to the CHRiS payroll owner. Corrections must be made in CHRiS, payroll recalculated, reviewed and approved before any payout workflow begins."],
+    ];
+    const reviewSheet = XLSX.utils.aoa_to_sheet(reviewRows);
+    reviewSheet["!cols"] = [{ wch: 38 }, { wch: 100 }];
+    XLSX.utils.book_append_sheet(workbook, reviewSheet, "External HR Review");
+  } else {
+    const paymentRows = [[
+      "Employee No", "Employee Name", "Bank", "Account Name", "Account Number", "Net Pay", "Payout Status", "Payment Reference"
+    ]];
+    for (const line of lines) {
+      const meta = employeeMeta.get(line.employeeId) || {};
+      paymentRows.push([
+        line.employeeNumber,
+        line.employeeName,
+        meta.bankName || "",
+        meta.accountName || "",
+        meta.accountNumber || "",
+        Number(line.netPreview || 0),
+        "",
+        "",
+      ]);
+    }
+    const paymentSheet = XLSX.utils.aoa_to_sheet(paymentRows);
+    paymentSheet["!cols"] = [
+      { wch: 16 }, { wch: 28 }, { wch: 22 }, { wch: 28 },
+      { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 28 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, paymentSheet, "Payment Register");
+
+    const handoff = XLSX.utils.aoa_to_sheet([
+      ["ZERMATT Payroll External Approval & Payout Handoff"],
+      ["CHRiS Internal Payroll Authority", "Head of HR prepares, processes/executes and approves payroll inside CHRiS."],
+      ["External Auditor", "Confirms the approved payroll and management reports outside CHRiS."],
+      ["General Manager", "Provides final business approval outside CHRiS after auditor confirmation."],
+      ["Accounts & Finance", "Processes payout using the Payment Register after required external approvals."],
+      [],
+      ["Evidence Field", "Reference / Date / Notes"],
+      ["External Auditor Confirmation", ""],
+      ["GM Approval", ""],
+      ["Accounts & Finance Payout", ""],
+      ["Bank / Payment Batch Reference", ""],
+      [],
+      ["Control", "This workbook is an export/handoff from an APPROVED CHRiS payroll. External confirmation, GM approval and payout remain outside CHRiS and do not create additional CHRiS payroll approval events."],
+    ]);
+    handoff["!cols"] = [{ wch: 36 }, { wch: 96 }];
+    XLSX.utils.book_append_sheet(workbook, handoff, "External Handoff");
+  }
 
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx", cellFormula: true });
+}
+
+async function payrollExportContext(organizationId, runId) {
+  const runs = await payroll.listRuns({ organizationId });
+  const run = runs.find((item) => item.id === runId);
+  if (!run) throw payroll.operationalError("PAYROLL_RUN_NOT_FOUND", "Payroll run not found.", 404);
+
+  const lines = await payroll.listRunLines({ organizationId, runId });
+  const employees = await prisma.employee.findMany({
+    where: { organizationId, id: { in: lines.map((line) => line.employeeId) } },
+    select: {
+      id: true,
+      designation: { select: { name: true } },
+      location: { select: { name: true, code: true } },
+      onboardings: {
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+        select: { sectionData: true },
+      },
+    },
+  });
+
+  const employeeMeta = new Map(employees.map((employee) => {
+    const payment = employee.onboardings?.[0]?.sectionData?.["payment-details"] || {};
+    return [employee.id, {
+      designation: employee.designation?.name || "",
+      branch: employee.location?.name || employee.location?.code || "Unassigned",
+      bankName: String(payment.bankName || "").trim(),
+      accountName: String(payment.accountName || "").trim(),
+      accountNumber: String(payment.accountNumber || "").trim(),
+    }];
+  }));
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { name: true, legalName: true },
+  });
+
+  return { run, lines, employeeMeta, organization: organization || {} };
+}
+
+async function auditPayrollExport({ organizationId, actorUserId, run, action, stage }) {
+  await prisma.organizationAudit.create({
+    data: {
+      organizationId,
+      actorUserId: actorUserId || null,
+      entityType: "PayrollRun",
+      entityId: run.id,
+      action,
+      previousValue: { status: run.status, periodCode: run.periodCode },
+      newValue: { exportStage: stage, exportedAt: new Date().toISOString() },
+      reason: stage === "APPROVED_PAYOUT"
+        ? "Approved payroll exported for external approval and payout workflow."
+        : "Pre-approval payroll exported for external HR investigation and verification.",
+    },
+  });
 }
 
 router.get("/runs/:id/audit-pack.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
