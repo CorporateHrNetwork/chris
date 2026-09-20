@@ -17,6 +17,18 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
     [periods, periodId]
   );
 
+  const changePeriod = (nextPeriodId) => {
+    setPeriodId(nextPeriodId);
+    // Manual attendance is a payroll-period exception, never an employee master value.
+    // Changing payroll period must immediately clear the previous period's entered
+    // days/hours so they cannot be visually or accidentally carried forward.
+    setWorkedDays("");
+    setWorkedHours("");
+    setNotes("");
+    setError("");
+    setMessage("");
+  };
+
   const save = async (event) => {
     event.preventDefault();
     if (!employeeNumber || !selectedPeriod || workedDays === "") {
@@ -54,7 +66,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
     <section style={panelStyle}>
       <div style={headingStyle}>AUTHORIZED HR · MANUAL WORKED DAYS</div>
       <p style={helpStyle}>
-        Use this where attendance clocking is not configured or an approved absence/attendance exception must be reflected in payroll. Branch HR & Admin Officers may maintain employees in their assigned branch; Head HR may work organization-wide. The same authoritative attendance input feeds Head Office payroll and CHRiS marks existing draft payroll for recalculation.
+        Use this where attendance clocking is not configured or an approved absence/attendance exception must be reflected in payroll. Branch HR & Admin Officers may maintain employees in their assigned branch; Head HR may work organization-wide. Manual Worked Days apply only to the selected payroll period. When you move to the next period, the entry fields reset and CHRiS returns the employee to Expected Days unless a new exception is entered. Historical entries remain available for audit.
       </p>
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div style={messageStyle}>{message}</div>}
@@ -68,7 +80,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
         />
         <label style={fieldStyle}>
           <span>Payroll Period</span>
-          <select style={inputStyle} value={periodId} onChange={(event) => setPeriodId(event.target.value)} required>
+          <select style={inputStyle} value={periodId} onChange={(event) => changePeriod(event.target.value)} required>
             <option value="">Select payroll period</option>
             {(periods || []).filter((period) => period.status !== "CLOSED").map((period) => (
               <option key={period.id} value={period.id}>{period.code} — {period.name}</option>

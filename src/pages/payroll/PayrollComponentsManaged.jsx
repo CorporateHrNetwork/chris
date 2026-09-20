@@ -396,7 +396,7 @@ export default function PayrollComponentsManaged({ kind }) {
       {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs} /></Panel>}
 
       {legacyRows.length > 0 && <Panel title="Existing Effective-Dated Components">
-        <p style={controlNote}>These are the earlier fixed/percentage payroll components already configured in CHRiS. They remain intact and continue to participate in payroll under the existing effective-date rules.</p>
+        <p style={controlNote}>These are earlier fixed/percentage payroll components retained for history and audit. For ZERMATT, indefinite legacy Other Allowances/Deductions do not carry into a new payroll period. Only an item explicitly tied to the selected period can participate; new recurring deductions must use the finite installment schedule above.</p>
         <DataTable columns={["Scope", "Code", "Name", "Value", "Effective", "Status"]}>
           {legacyRows.map((row) => <tr key={row.id}>
             <Td strong>{row.employeeNumber || "ALL"}</Td><Td>{row.code}</Td><Td>{row.name}</Td>

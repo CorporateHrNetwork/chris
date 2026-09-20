@@ -15,6 +15,7 @@ const reopen = read(backendRoot, "src", "services", "payrollReopenService.js");
 const exitSettlement = read(backendRoot, "src", "services", "exitSettlementService.js");
 const routes = read(backendRoot, "src", "routes", "payrollRoutes.js");
 const ui = read(repoRoot, "src", "pages", "payroll", "PayrollComponentsManaged.jsx");
+const manualWorkedDaysUi = read(repoRoot, "src", "components", "payroll", "ManualWorkedDaysPanel.jsx");
 
 for (const table of [
   "payroll_variable_components",
@@ -57,6 +58,11 @@ expect(service, "PAYROLL_PERIOD_INPUT_LOCKED", "Inputs must be blocked once the 
 
 expect(nigeriaPayroll, "loadPeriodVariableItems", "Nigeria payroll must load variable period inputs.");
 expect(nigeriaPayroll, "calculateVariableValue(item, scheduledMonthlyGross)", "Formula allowances must calculate from authoritative monthly gross salary.");
+expect(nigeriaPayroll, 'organization.slug === "zermatt-liquor-limited"', "ZERMATT-specific payroll reset control must be tenant-scoped.");
+expect(nigeriaPayroll, "component.oneTimePeriodId === period.id", "Legacy ZERMATT Other components must participate only when explicitly tied to the current payroll period.");
+expect(nigeriaPayroll, 'manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD"', "Manual attendance overrides must be explicitly period scoped.");
+expect(nigeriaPayroll, 'scheduledDeductionCarryForward: "ONLY_MAPPED_INSTALLMENT_MONTHS"', "Only mapped recurring installments may continue into later payroll periods.");
+expect(nigeriaPayroll, 'legacyOtherComponentCarryForward: organization.slug !== "zermatt-liquor-limited"', "Indefinite legacy Other components must not carry forward for ZERMATT.");
 expect(payrollOps, "postDeductionInstallments(tx", "Payroll approval must post scheduled installments.");
 expect(reopen, "reverseDeductionInstallments(tx", "Approved-payroll reopen must restore scheduled installments.");
 expect(exitSettlement, "scheduledDeductionRecovery", "Outstanding scheduled deductions must be surfaced in exit settlement.");
@@ -72,6 +78,11 @@ for (const route of [
 ]) expect(routes, route, `Missing payroll input route ${route}.`);
 expect(routes, "assertPayrollInputEmployeeScope", "Bulk and manual variable inputs must enforce branch/location scope.");
 expect(routes, "markDraftRunsRecalculationRequired", "Variable input changes must invalidate stale draft payroll.");
+
+expect(manualWorkedDaysUi, "const changePeriod = (nextPeriodId) =>", "Worked Days UI must reset entry state when the payroll period changes.");
+expect(manualWorkedDaysUi, 'setWorkedDays("");', "Worked Days must clear when a new payroll period is selected.");
+expect(manualWorkedDaysUi, 'setWorkedHours("");', "Worked Hours must clear when a new payroll period is selected.");
+expect(manualWorkedDaysUi, "Historical entries remain available for audit.", "UI must explain audit-safe period isolation.");
 
 for (const label of [
   "One-Time",
