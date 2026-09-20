@@ -1,5 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import EmployeeBatchSelector from "../../components/EmployeeBatchSelector";
 import ManualWorkedDaysPanel from "../../components/payroll/ManualWorkedDaysPanel";
 import { apiRequest, apiDownload, saveDownloadedBlob, getStoredOrganization } from "../../services/api";
@@ -237,13 +249,14 @@ function ExecuteIntegrated() {
           {branchOptions.map((branch) => <button key={branch.id} type="button" style={branchView === branch.id ? activeBranchButton : branchButton} onClick={() => setBranchView(branch.id)}>{branch.code || branch.name}</button>)}
           <span style={branchViewText}>{branchLabel}</span>
         </div>
-        <div style={payrollKpiGrid}>
-          <Summary label="Employees" value={visibleLines.length} />
-          <Summary label="Expected Days" value={visibleLines.reduce((sum, row) => sum + Number(row.details?.attendance?.standardDays || 0), 0)} />
-          <Summary label="Worked Days" value={visibleLines.reduce((sum, row) => sum + Number(row.details?.attendance?.payableDays || 0), 0)} />
-          <Summary label="Gross Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} />
-          <Summary label="Net Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))} />
-        </div>
+        <PayrollConnectedDashboard
+          allLines={lines}
+          visibleLines={visibleLines}
+          branchView={branchView}
+          setBranchView={setBranchView}
+          branchOptions={branchOptions}
+          branchLabel={branchLabel}
+        />
         {attendanceChangesPending > 0 && <div style={warningStyle}>{attendanceChangesPending} employee attendance input(s) have changed since the last payroll calculation. The latest Worked Days are shown now; Head HR must recalculate before submission/approval so monetary values use those days.</div>}
         <PayrollLines rows={visibleLines} onViewPayslip={setSelectedPayslip} />
       </Panel>}
@@ -258,6 +271,222 @@ function ExecuteIntegrated() {
       </div>}
     </>
   );
+}
+
+
+function PayrollConnectedDashboard({
+  allLines = [],
+  visibleLines = [],
+  branchView,
+  setBranchView,
+  branchOptions = [],
+  branchLabel,
+}) {
+  const dashboard = useMemo(() => {
+    const sum = (rows, selector) => rows.reduce((total, row) => total + Number(selector(row) || 0), 0);
+    const statutoryValue = (row, key) => Number(row.details?.statutory?.[key] || 0);
+    const leaveValue = (row) => Number(row.details?.leaveAllowance?.amount || 0);
+
+    const totalsFor = (rows) => {
+      const employeePension = sum(rows, (row) => statutoryValue(row, "employeePension"));
+      const employerPension = sum(rows, (row) => statutoryValue(row, "employerPension"));
+      const nsitf = sum(rows, (row) => statutoryValue(row, "nsitfEmployer"));
+      const itf = sum(rows, (row) => statutoryValue(row, "itfEmployerAccrual"));
+      const gross = sum(rows, (row) => row.grossPay);
+      const net = sum(rows, (row) => row.netPreview);
+      return {
+        employees: rows.length,
+        gross,
+        net,
+        paye: sum(rows, (row) => statutoryValue(row, "payeTax")),
+        employeePension,
+        employerPension,
+        totalPension: employeePension + employerPension,
+        nhf: sum(rows, (row) => statutoryValue(row, "nhfEmployee")),
+        nsitf,
+        itf,
+        payrollDeductions: sum(rows, (row) => row.deductions),
+        salaryAdvance: sum(rows, (row) => row.advanceRecovery),
+        loanRecovery: sum(rows, (row) => row.loanRecovery),
+        leaveAllowance: sum(rows, leaveValue),
+        expectedDays: sum(rows, (row) => row.details?.attendance?.standardDays),
+        workedDays: sum(rows, (row) => row.details?.attendance?.payableDays),
+        employerStatutory: employerPension + nsitf + itf,
+        employerCost: gross + employerPension + nsitf + itf,
+      };
+    };
+
+    const totals = totalsFor(visibleLines);
+
+    const branchData = branchOptions.map((branch) => {
+      const branchRows = allLines.filter((row) => row.locationId === branch.id);
+      const values = totalsFor(branchRows);
+      return {
+        id: branch.id,
+        branch: branch.code || branch.name,
+        branchName: branch.name,
+        employees: values.employees,
+        gross: values.gross,
+        net: values.net,
+        paye: values.paye,
+        loanRecovery: values.loanRecovery,
+      };
+    });
+
+    const statutoryData = [
+      { name: "PAYE", value: totals.paye },
+      { name: "Employee Pension", value: totals.employeePension },
+      { name: "Employer Pension", value: totals.employerPension },
+      { name: "NHF", value: totals.nhf },
+      { name: "NSITF", value: totals.nsitf },
+      { name: "ITF", value: totals.itf },
+    ].filter((item) => item.value > 0);
+
+    const deductionData = [
+      { name: "Payroll deductions", value: totals.payrollDeductions },
+      { name: "Salary advance", value: totals.salaryAdvance },
+      { name: "Loan recovery", value: totals.loanRecovery },
+      { name: "PAYE", value: totals.paye },
+      { name: "Employee pension", value: totals.employeePension },
+    ].filter((item) => item.value > 0);
+
+    return { totals, branchData, statutoryData, deductionData };
+  }, [allLines, visibleLines, branchOptions]);
+
+  const tooltipFormatter = (value) => [money(value), "Amount"];
+  const netRate = dashboard.totals.gross > 0 ? (dashboard.totals.net / dashboard.totals.gross) * 100 : 0;
+
+  return (
+    <section style={connectedDashboardStyle} aria-label="Connected payroll dashboard">
+      <div style={connectedDashboardHeaderStyle}>
+        <div>
+          <div style={connectedDashboardEyebrowStyle}>CONNECTED PAYROLL DASHBOARD</div>
+          <h3 style={connectedDashboardTitleStyle}>{branchLabel}</h3>
+          <div style={connectedDashboardSubtextStyle}>Live view of the payroll run currently loaded below. Branch selections update every KPI and chart instantly.</div>
+        </div>
+        <div style={dashboardStatusPillStyle}>{visibleLines.length} employee{visibleLines.length === 1 ? "" : "s"}</div>
+      </div>
+
+      <div style={payrollKpiGrid}>
+        <DashboardKpi label="Gross Payroll" value={money(dashboard.totals.gross)} />
+        <DashboardKpi label="Net Payroll" value={money(dashboard.totals.net)} hint={`${netRate.toFixed(1)}% of gross`} />
+        <DashboardKpi label="PAYE" value={money(dashboard.totals.paye)} />
+        <DashboardKpi label="Employee Pension" value={money(dashboard.totals.employeePension)} />
+        <DashboardKpi label="Employer Pension" value={money(dashboard.totals.employerPension)} />
+        <DashboardKpi label="Loan Recovery" value={money(dashboard.totals.loanRecovery)} />
+        <DashboardKpi label="Salary Advance" value={money(dashboard.totals.salaryAdvance)} />
+        <DashboardKpi label="Employer Cost" value={money(dashboard.totals.employerCost)} hint="Gross + employer statutory" />
+      </div>
+
+      <div style={dashboardChartGridStyle}>
+        <DashboardChart title="Branch Gross vs Net" subtitle="Click a branch below the chart to filter the entire payroll view.">
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={dashboard.branchData} margin={{ top: 10, right: 10, left: 0, bottom: 6 }}>
+              <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+              <XAxis dataKey="branch" tick={{ fill: "#C7D3CC", fontSize: 11 }} axisLine={{ stroke: "rgba(212,175,55,.25)" }} tickLine={false} />
+              <YAxis tick={{ fill: "#AFC0B6", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => new Intl.NumberFormat("en-NG", { notation: "compact" }).format(value)} />
+              <Tooltip formatter={tooltipFormatter} contentStyle={dashboardTooltipStyle} />
+              <Legend wrapperStyle={{ color: "#C7D3CC", fontSize: 11 }} />
+              <Bar dataKey="gross" name="Gross Payroll" fill="#D4AF37" radius={[5, 5, 0, 0]} />
+              <Bar dataKey="net" name="Net Payroll" fill="#2EE98B" radius={[5, 5, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={dashboardBranchSelectorStyle}>
+            <button type="button" style={!branchView ? activeDashboardBranchChipStyle : dashboardBranchChipStyle} onClick={() => setBranchView("")}>ALL</button>
+            {dashboard.branchData.map((branch) => (
+              <button
+                key={branch.id}
+                type="button"
+                style={branchView === branch.id ? activeDashboardBranchChipStyle : dashboardBranchChipStyle}
+                onClick={() => setBranchView(branch.id)}
+                title={branch.branchName}
+              >
+                {branch.branch}
+              </button>
+            ))}
+          </div>
+        </DashboardChart>
+
+        <DashboardChart title="Statutory Composition" subtitle="PAYE and employee/employer statutory obligations for the active dashboard scope.">
+          {dashboard.statutoryData.length ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={dashboard.statutoryData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={58}
+                  outerRadius={96}
+                  paddingAngle={2}
+                  fill="#D4AF37"
+                />
+                <Tooltip formatter={tooltipFormatter} contentStyle={dashboardTooltipStyle} />
+                <Legend wrapperStyle={{ color: "#C7D3CC", fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <DashboardEmpty>No statutory values in the selected scope.</DashboardEmpty>}
+        </DashboardChart>
+
+        <DashboardChart title="Deduction & Recovery Mix" subtitle="Connected view of PAYE, pension, payroll deductions, Salary Advance and Loan Recovery.">
+          {dashboard.deductionData.length ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={dashboard.deductionData} layout="vertical" margin={{ top: 8, right: 16, left: 18, bottom: 4 }}>
+                <CartesianGrid stroke="rgba(255,255,255,.08)" horizontal={false} />
+                <XAxis type="number" tick={{ fill: "#AFC0B6", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => new Intl.NumberFormat("en-NG", { notation: "compact" }).format(value)} />
+                <YAxis type="category" dataKey="name" width={118} tick={{ fill: "#C7D3CC", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={tooltipFormatter} contentStyle={dashboardTooltipStyle} />
+                <Bar dataKey="value" name="Amount" fill="#D4AF37" radius={[0, 5, 5, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <DashboardEmpty>No deductions or recoveries in the selected scope.</DashboardEmpty>}
+        </DashboardChart>
+
+        <DashboardChart title="Attendance & Cost Control" subtitle="Payroll attendance inputs and employer-cost indicators for the active scope.">
+          <div style={dashboardMiniGridStyle}>
+            <DashboardMetric label="Expected Days" value={dashboard.totals.expectedDays.toLocaleString()} />
+            <DashboardMetric label="Worked Days" value={dashboard.totals.workedDays.toLocaleString()} />
+            <DashboardMetric label="Total Pension" value={money(dashboard.totals.totalPension)} />
+            <DashboardMetric label="Payroll Deductions" value={money(dashboard.totals.payrollDeductions)} />
+            <DashboardMetric label="Leave Allowance" value={money(dashboard.totals.leaveAllowance)} />
+            <DashboardMetric label="Employer Statutory" value={money(dashboard.totals.employerStatutory)} />
+          </div>
+        </DashboardChart>
+      </div>
+    </section>
+  );
+}
+
+function DashboardKpi({ label, value, hint }) {
+  return (
+    <div style={dashboardKpiCardStyle}>
+      <div style={dashboardKpiLabelStyle}>{label}</div>
+      <div style={dashboardKpiValueStyle}>{value}</div>
+      {hint && <div style={dashboardKpiHintStyle}>{hint}</div>}
+    </div>
+  );
+}
+
+function DashboardChart({ title, subtitle, children }) {
+  return (
+    <article style={dashboardChartCardStyle}>
+      <div style={dashboardChartTitleStyle}>{title}</div>
+      <div style={dashboardChartSubtitleStyle}>{subtitle}</div>
+      <div style={dashboardChartBodyStyle}>{children}</div>
+    </article>
+  );
+}
+
+function DashboardMetric({ label, value }) {
+  return (
+    <div style={dashboardMetricStyle}>
+      <span style={dashboardMetricLabelStyle}>{label}</span>
+      <strong style={dashboardMetricValueStyle}>{value}</strong>
+    </div>
+  );
+}
+
+function DashboardEmpty({ children }) {
+  return <div style={dashboardEmptyStyle}>{children}</div>;
 }
 
 function PayrollLines({ rows, onViewPayslip }) {
@@ -701,7 +930,31 @@ const branchViewBar = { display: "flex", alignItems: "center", gap: 8, flexWrap:
 const branchButton = { border: "1px solid rgba(212,175,55,.35)", borderRadius: 8, padding: "7px 10px", background: "rgba(4,46,28,.72)", color: "#F7FAF8", fontWeight: 800, cursor: "pointer" };
 const activeBranchButton = { ...branchButton, background: "#D4AF37", color: "#111" };
 const branchViewText = { marginLeft: "auto", color: "#AFC0B6", fontSize: 11, fontWeight: 800 };
-const payrollKpiGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 12 };
+const payrollKpiGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10, marginBottom: 16 };
+const connectedDashboardStyle = { marginBottom: 16, padding: 16, borderRadius: 14, border: "1px solid rgba(212,175,55,.28)", background: "linear-gradient(145deg,rgba(5,39,25,.88),rgba(2,20,13,.94))" };
+const connectedDashboardHeaderStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 14 };
+const connectedDashboardEyebrowStyle = { color: "#D4AF37", fontSize: 10, fontWeight: 900, letterSpacing: ".14em" };
+const connectedDashboardTitleStyle = { margin: "5px 0 4px", color: "#F7FAF8", fontSize: 18 };
+const connectedDashboardSubtextStyle = { color: "#9FB7AA", fontSize: 11, lineHeight: 1.5, maxWidth: 760 };
+const dashboardStatusPillStyle = { padding: "7px 10px", borderRadius: 999, border: "1px solid rgba(212,175,55,.35)", background: "rgba(212,175,55,.08)", color: "#F7D66A", fontSize: 11, fontWeight: 900 };
+const dashboardKpiCardStyle = { minWidth: 0, padding: 12, borderRadius: 11, border: "1px solid rgba(212,175,55,.22)", background: "rgba(255,255,255,.04)" };
+const dashboardKpiLabelStyle = { color: "#9FB7AA", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".055em" };
+const dashboardKpiValueStyle = { marginTop: 6, color: "#F7FAF8", fontSize: "clamp(15px,2vw,21px)", fontWeight: 900, overflowWrap: "anywhere" };
+const dashboardKpiHintStyle = { marginTop: 4, color: "#D4AF37", fontSize: 9.5 };
+const dashboardChartGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))", gap: 12 };
+const dashboardChartCardStyle = { minWidth: 0, padding: 14, borderRadius: 12, border: "1px solid rgba(212,175,55,.18)", background: "rgba(1,15,10,.50)" };
+const dashboardChartTitleStyle = { color: "#F7D66A", fontWeight: 900, fontSize: 13 };
+const dashboardChartSubtitleStyle = { marginTop: 3, color: "#8FA79A", fontSize: 10.5, lineHeight: 1.45 };
+const dashboardChartBodyStyle = { width: "100%", minHeight: 280, marginTop: 10 };
+const dashboardTooltipStyle = { background: "#082F20", border: "1px solid rgba(212,175,55,.45)", borderRadius: 8, color: "#F7FAF8", fontSize: 11 };
+const dashboardBranchSelectorStyle = { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 };
+const dashboardBranchChipStyle = { border: "1px solid rgba(212,175,55,.25)", borderRadius: 999, padding: "5px 8px", background: "transparent", color: "#C7D3CC", fontSize: 10, fontWeight: 800, cursor: "pointer" };
+const activeDashboardBranchChipStyle = { ...dashboardBranchChipStyle, background: "#D4AF37", color: "#07140D", borderColor: "#D4AF37" };
+const dashboardMiniGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: 9, alignContent: "start" };
+const dashboardMetricStyle = { padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.035)" };
+const dashboardMetricLabelStyle = { display: "block", color: "#9FB7AA", fontSize: 10, marginBottom: 5 };
+const dashboardMetricValueStyle = { color: "#F7FAF8", fontSize: 14, overflowWrap: "anywhere" };
+const dashboardEmptyStyle = { minHeight: 220, display: "grid", placeItems: "center", color: "#8FA79A", fontSize: 12, textAlign: "center", padding: 20 };
 const mutedText = { color: "#94A89D", fontSize: 11 };
 const warningStyle = { padding: 10, marginBottom: 12, border: "1px solid rgba(245,158,11,.55)", borderRadius: 9, background: "rgba(245,158,11,.08)", color: "#F5D98C", fontSize: 12 };
 
