@@ -1483,29 +1483,84 @@ async function auditPayrollExport({ organizationId, actorUserId, run, action, st
   });
 }
 
+router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
+  try {
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id);
+    if (!["DRAFT", "REJECTED", "SUBMITTED"].includes(context.run.status)) {
+      throw payroll.operationalError(
+        "PAYROLL_DRAFT_REVIEW_REQUIRES_PREAPPROVAL_STATUS",
+        "Draft review export is available only before CHRiS payroll approval.",
+        409
+      );
+    }
+    const buffer = payrollExternalWorkbook({
+      ...context,
+      stage: "DRAFT_REVIEW",
+    });
+    await auditPayrollExport({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      run: context.run,
+      action: "PAYROLL_DRAFT_REVIEW_EXPORTED",
+      stage: "DRAFT_REVIEW",
+    });
+    const safePeriod = String(context.run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
+    res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${safePeriod}_Draft_Payroll_External_HR_Review.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Unable to export draft payroll review pack.");
+  }
+});
+
+router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
+  try {
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id);
+    if (context.run.status !== "APPROVED") {
+      throw payroll.operationalError(
+        "PAYROLL_APPROVED_PAYOUT_REQUIRES_APPROVAL",
+        "Only an APPROVED CHRiS payroll can be exported for external approval and payout.",
+        409
+      );
+    }
+    const buffer = payrollExternalWorkbook({
+      ...context,
+      stage: "APPROVED_PAYOUT",
+    });
+    await auditPayrollExport({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      run: context.run,
+      action: "PAYROLL_APPROVED_PAYOUT_EXPORTED",
+      stage: "APPROVED_PAYOUT",
+    });
+    const safePeriod = String(context.run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
+    res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${safePeriod}_Approved_Payroll_External_Approval_Payout.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
+  } catch (error) {
+    return sendError(res, error, "Unable to export approved payroll payout pack.");
+  }
+});
+
 router.get("/runs/:id/audit-pack.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
-    const runs = await payroll.listRuns({ organizationId: req.auth.organizationId });
-    const run = runs.find((item) => item.id === req.params.id);
-    if (!run) throw payroll.operationalError("PAYROLL_RUN_NOT_FOUND", "Payroll run not found.", 404);
-    if (run.status !== "APPROVED") {
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id);
+    if (context.run.status !== "APPROVED") {
       throw payroll.operationalError("PAYROLL_AUDIT_PACK_REQUIRES_APPROVAL", "Only an approved payroll run can be exported for external audit and GM approval.", 409);
     }
-    const lines = await payroll.listRunLines({ organizationId: req.auth.organizationId, runId: req.params.id });
-    const employees = await prisma.employee.findMany({
-      where: { organizationId: req.auth.organizationId, id: { in: lines.map((line) => line.employeeId) } },
-      select: { id: true, location: { select: { name: true, code: true } } },
+    const buffer = payrollExternalWorkbook({
+      ...context,
+      stage: "APPROVED_PAYOUT",
     });
-    const employeeLocations = new Map(employees.map((employee) => [
-      employee.id,
-      employee.location?.name || employee.location?.code || "Unassigned",
-    ]));
-    const organization = await prisma.organization.findUnique({
-      where: { id: req.auth.organizationId },
-      select: { name: true, legalName: true },
+    await auditPayrollExport({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      run: context.run,
+      action: "PAYROLL_AUDIT_PACK_EXPORTED",
+      stage: "APPROVED_PAYOUT",
     });
-    const buffer = payrollAuditWorkbook({ organization: organization || {}, run, lines, employeeLocations });
-    const safePeriod = String(run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
+    const safePeriod = String(context.run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
     res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${safePeriod}_Payroll_Audit_Pack.xlsx"`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     return res.send(buffer);
