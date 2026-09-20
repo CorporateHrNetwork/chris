@@ -73,7 +73,6 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
               pl."grossPay",pl."netPreview",pl."statutoryStatus",pl."details",pl."createdAt",pl."updatedAt",
               e."locationId",e."email" AS "employeeEmail",d."name" AS "designation",
               loc."code" AS "locationCode",loc."name" AS "locationName",
-              pay."bankName",pay."accountName",pay."accountNumber",
               loan."loanOutstandingBalance",
               pr."status" AS "runStatus",pr."approvedAt",
               pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
@@ -84,16 +83,6 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
          JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
          LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
          LEFT JOIN "organization_locations" loc ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
-         LEFT JOIN LATERAL (
-           SELECT
-             eo."sectionData"->'payment-details'->>'bankName' AS "bankName",
-             eo."sectionData"->'payment-details'->>'accountName' AS "accountName",
-             eo."sectionData"->'payment-details'->>'accountNumber' AS "accountNumber"
-           FROM "employee_onboardings" eo
-           WHERE eo."organizationId"=pl."organizationId" AND eo."employeeId"=pl."employeeId"
-           ORDER BY eo."updatedAt" DESC, eo."createdAt" DESC
-           LIMIT 1
-         ) pay ON TRUE
          LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(l."outstandingAmount") FILTER (WHERE l."status" IN ('ACTIVE','PAUSED')),0) AS "loanOutstandingBalance"
            FROM "payroll_loans" l
@@ -124,23 +113,12 @@ router.get("/payslips", requirePermission("payroll.view"), async (req, res) => {
           pr."status" AS "runStatus",pr."approvedAt",
           pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
           e."email" AS "employeeEmail",d."name" AS "designation",
-          pay."bankName",pay."accountName",pay."accountNumber",
           loan."loanOutstandingBalance"
        FROM "payroll_run_lines" pl
        JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
        JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
        LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
-       LEFT JOIN LATERAL (
-         SELECT
-           eo."sectionData"->'payment-details'->>'bankName' AS "bankName",
-           eo."sectionData"->'payment-details'->>'accountName' AS "accountName",
-           eo."sectionData"->'payment-details'->>'accountNumber' AS "accountNumber"
-         FROM "employee_onboardings" eo
-         WHERE eo."organizationId"=pl."organizationId" AND eo."employeeId"=pl."employeeId"
-         ORDER BY eo."updatedAt" DESC, eo."createdAt" DESC
-         LIMIT 1
-       ) pay ON TRUE
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(l."outstandingAmount") FILTER (WHERE l."status" IN ('ACTIVE','PAUSED')),0) AS "loanOutstandingBalance"
          FROM "payroll_loans" l
