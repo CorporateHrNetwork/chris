@@ -38,6 +38,24 @@ function requireZermattSuperUser(req, res, next) {
   next();
 }
 
+function requireZermattAllLocationsContext(req, res, next) {
+  if (req.auth?.organization?.slug !== "zermatt-liquor-limited") {
+    return res.status(404).json({
+      status: "error",
+      code: "ZERMATT_BRANCH_CONTEXT_TENANT_ONLY",
+      message: "Branch context switching is configured for Zermatt Liquor Limited.",
+    });
+  }
+  if (req.auth?.locationScope !== "ALL_LOCATIONS") {
+    return res.status(403).json({
+      status: "error",
+      code: "ZERMATT_ALL_LOCATIONS_REQUIRED",
+      message: "Your account is restricted to its assigned branch/location.",
+    });
+  }
+  next();
+}
+
 async function assertEmployeeInActiveBranch(req, employeeNumber) {
   if (!req.auth.activeLocationId) return null;
   const employee = await prisma.employee.findFirst({
@@ -181,7 +199,7 @@ router.post("/attendance/worked-days", requirePermission("attendance.manage"), r
   }
 });
 
-router.get("/branch-context", requireZermattSuperUser, (req, res) => {
+router.get("/branch-context", requireZermattAllLocationsContext, (req, res) => {
   return res.json({ status: "success", data: { organizationId: req.auth.organizationId, locationScope: req.auth.locationScope, activeLocationId: req.auth.activeLocationId, consolidatedHeadOffice: req.auth.consolidatedHeadOffice, availableLocations: req.auth.availableLocations || [], instruction: "Use X-CHRiS-Location-Id for a branch-specific session context; omit it for consolidated Head Office context." } });
 });
 
