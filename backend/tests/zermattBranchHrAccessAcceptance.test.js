@@ -21,6 +21,7 @@ const loanOptionsRoutes = read(backendRoot, "src", "routes", "zermattHrLoanOptio
 const financialAccess = read(backendRoot, "src", "services", "zermattHrFinancialAccessService.js");
 const attendanceRoutes = read(backendRoot, "src", "routes", "attendanceRoutes.js");
 const payrollRoutes = read(backendRoot, "src", "routes", "payrollRoutes.js");
+const zermattOperations = read(backendRoot, "src", "routes", "zermattOperationsRoutes.js");
 const workedDaysPanel = read(repoRoot, "src", "components", "payroll", "ManualWorkedDaysPanel.jsx");
 const payrollUi = read(repoRoot, "src", "pages", "payroll", "PayrollIntegratedManaged.jsx");
 const editUser = read(repoRoot, "src", "components", "settings", "EditUserForm.jsx");
@@ -153,6 +154,15 @@ for (const expected of [
 expect(workedDaysPanel, '"/api/attendance/manual-payroll-inputs"', "Payroll UI must use the generic attendance worked-days endpoint.");
 assert.ok(!workedDaysPanel.includes('"/api/zermatt/attendance/worked-days"'), "Payroll UI must not call the legacy ZERMATT-only worked-days endpoint.");
 expect(workedDaysPanel, "Branch HR & Admin Officers", "Worked-days UI must explain branch HR attendance authority.");
+
+expect(zermattOperations, "requireZermattAllLocationsContext", "ZERMATT branch-context endpoint must have a dedicated all-locations guard.");
+expect(zermattOperations, 'req.auth?.locationScope !== "ALL_LOCATIONS"', "Branch switching must require ALL_LOCATIONS authority.");
+expect(zermattOperations, '"ZERMATT_ALL_LOCATIONS_REQUIRED"', "Assigned-location users must be blocked from organization-wide branch switching.");
+expect(zermattOperations, 'router.get("/branch-context", requireZermattAllLocationsContext', "Branch-context lookup must allow Head HR/all-location users without granting Super User authority.");
+assert.ok(
+  !zermattOperations.includes('router.get("/branch-context", requireZermattSuperUser'),
+  "Branch-context discovery must not require ZERMATT Super User; switching context is not itself a privileged transaction."
+);
 
 // ZERMATT payroll execution and approval remain Head-of-HR controls.
 // Branch HR retains attendance.manage/payroll.view without payroll.process/payroll.manage.
