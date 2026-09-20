@@ -16,10 +16,10 @@ test("draft payroll review export remains pre-approval, non-payable and includes
     '"Investigation / Verification Result"',
     '"Corrective Action Required"',
     '"PAYROLL_DRAFT_REVIEW_EXPORTED"',
-    '"CHRiS_\${safePeriod}_Draft_Payroll_External_HR_Review.xlsx"',
+    '"CHRiS_${safePeriod}_Draft_Payroll_External_HR_Review.xlsx"',
     '{ includePaymentDetails: true }',
     "Verify payroll figures, allowances/deductions, bank/account details, PAYE, employee/employer pension, PFA/PIN/TIN",
-  ]) assert.ok(routes.includes(expected), \`Missing draft payroll review control: \${expected}\`);
+  ]) assert.ok(routes.includes(expected), "Missing draft payroll review control: " + expected);
 });
 
 test("comprehensive payroll workbook includes statutory identifiers, employer/employee pension and every component class", () => {
@@ -36,7 +36,7 @@ test("comprehensive payroll workbook includes statutory identifiers, employer/em
     "payrollComponentKey",
     "payrollComponentLabel",
     '"Statutory Register"',
-  ]) assert.ok(routes.includes(expected), \`Missing comprehensive payroll export field: \${expected}\`);
+  ]) assert.ok(routes.includes(expected), "Missing comprehensive payroll export field: " + expected);
 });
 
 test("payroll workbook includes executive dashboard, KPI visuals and separate branch worksheets", () => {
@@ -53,7 +53,7 @@ test("payroll workbook includes executive dashboard, KPI visuals and separate br
     'if (value === "ABUJA") return 0',
     'if (value === "LAGOS") return 1',
     'if (value === "PHC") return 2',
-  ]) assert.ok(routes.includes(expected), \`Missing dashboard/branch workbook control: \${expected}\`);
+  ]) assert.ok(routes.includes(expected), "Missing dashboard/branch workbook control: " + expected);
 });
 
 test("approved payroll export requires CHRiS approval and includes controlled payout register", () => {
@@ -66,8 +66,8 @@ test("approved payroll export requires CHRiS approval and includes controlled pa
     '"GM Approval"',
     '"Accounts & Finance Payout"',
     '"PAYROLL_APPROVED_PAYOUT_EXPORTED"',
-    '"CHRiS_\${safePeriod}_Approved_Payroll_External_Approval_Payout.xlsx"',
-  ]) assert.ok(routes.includes(expected), \`Missing approved payout export control: \${expected}\`);
+    '"CHRiS_${safePeriod}_Approved_Payroll_External_Approval_Payout.xlsx"',
+  ]) assert.ok(routes.includes(expected), "Missing approved payout export control: " + expected);
 });
 
 test("payroll export context reads PFA PIN TIN and PAYE state from statutory-details", () => {
@@ -77,7 +77,7 @@ test("payroll export context reads PFA PIN TIN and PAYE state from statutory-det
     "statutory.pensionPin",
     "statutory.taxIdentificationNumber",
     "statutory.payeState",
-  ]) assert.ok(routes.includes(expected), \`Missing employee statutory metadata mapping: \${expected}\`);
+  ]) assert.ok(routes.includes(expected), "Missing employee statutory metadata mapping: " + expected);
 });
 
 test("legacy approved audit pack remains backward compatible", () => {
@@ -94,6 +94,6 @@ test("Payroll Runs UI exposes explicit draft-review and approved-payout actions"
     "/draft-review.xlsx",
     "/approved-payout.xlsx",
     "PRE-APPROVAL / NOT FOR PAYOUT",
-  ]) assert.ok(ui.includes(expected), \`Missing payroll export UI control: \${expected}\`);
+  ]) assert.ok(ui.includes(expected), "Missing payroll export UI control: " + expected);
   assert.equal(ui.includes("Export Audit Pack"), false, "Primary UI should use the explicit Approved Payout export label.");
 });
