@@ -793,6 +793,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
 
   await prismaClient.$transaction(async (tx) => {
     if (existing[0]) {
+      await tx.statutoryObligation.deleteMany({
+        where: { organizationId, payrollRunId: runId, status: "DRAFT_CALCULATED" },
+      });
       await tx.$executeRawUnsafe(`DELETE FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2`, organizationId, runId);
       await tx.$executeRawUnsafe(
         `UPDATE "payroll_runs"
