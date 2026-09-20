@@ -16,16 +16,23 @@ test("CHRiS employment-type exemption normalizes Part-Time, Expatriate and Inter
     "Part Time",
     "PARTTIME",
     "Expatriate",
+    "Expatriates",
+    "Expatriate Staff",
     "NYSC / Internship",
+    "Internship / NYSC",
     "Internship",
+    "Internship Trainee",
     "Intern",
     "Intern / Trainee",
+    "Part-Time Employee",
+    "Part Time Staff",
   ]) {
     const result = statutoryEmploymentTypeExemption(employmentType);
     assert.equal(result.exempt, true, employmentType);
     assert.equal(result.payeExempt, true, employmentType);
     assert.equal(result.pensionExempt, true, employmentType);
     assert.equal(result.source, "CHRIS_EMPLOYMENT_TYPE_EXEMPTION_RULE");
+    assert.ok(result.matchedCategory);
   }
 
   for (const employmentType of ["Full-Time", "Permanent", "Contract", "Temporary"]) {

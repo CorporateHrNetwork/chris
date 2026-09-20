@@ -44,23 +44,37 @@ function normalizedEmploymentType(value) {
 
 function statutoryEmploymentTypeExemption(employmentType) {
   const normalized = normalizedEmploymentType(employmentType);
-  const exempt =
-    normalized === "PART TIME" ||
-    normalized === "PARTTIME" ||
-    normalized === "EXPATRIATE" ||
-    normalized === "NYSC INTERNSHIP" ||
-    normalized === "INTERNSHIP" ||
-    normalized === "INTERN" ||
-    normalized === "INTERN TRAINEE";
+  const compact = normalized.replace(/\s+/g, "");
+
+  const isPartTime =
+    normalized.includes("PART TIME") ||
+    compact.includes("PARTTIME");
+
+  const isExpatriate =
+    normalized.includes("EXPATRIATE");
+
+  const isInternship =
+    normalized.includes("INTERNSHIP") ||
+    normalized.includes("INTERN") ||
+    normalized.includes("NYSC");
+
+  const exempt = isPartTime || isExpatriate || isInternship;
 
   return {
     exempt,
     normalizedEmploymentType: normalized,
+    matchedCategory: isPartTime
+      ? "PART_TIME"
+      : isExpatriate
+        ? "EXPATRIATE"
+        : isInternship
+          ? "INTERNSHIP_NYSC"
+          : null,
     payeExempt: exempt,
     pensionExempt: exempt,
     source: exempt ? "CHRIS_EMPLOYMENT_TYPE_EXEMPTION_RULE" : null,
     reason: exempt
-      ? "CHRiS employment-type rule: Part-Time, Expatriate and Internship/Intern employees are excluded from PAYE and pension deductions."
+      ? "CHRiS employment-type rule: Part-Time, Expatriate and Internship/Intern/NYSC employees are excluded from PAYE and pension deductions."
       : null,
   };
 }
