@@ -397,7 +397,7 @@ async function insertPayrollRunLinesBulk(tx, { organizationId, runId, lines }) {
         line.netPreview,
         JSON.stringify(line.details)
       );
-      const p = (offset) => `${base + offset}`;
+      const p = (offset) => "$" + (base + offset);
       return `(${p(1)},${p(2)},${p(3)},${p(4)},${p(5)},${p(6)},${p(7)},${p(8)},${p(9)},${p(10)},${p(11)},${p(12)},${p(13)},'CALCULATED_NIGERIA_2026',${p(14)}::jsonb)`;
     });
 
