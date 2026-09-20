@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   Pie,
   PieChart,
@@ -418,8 +419,11 @@ function PayrollConnectedDashboard({
                   innerRadius={58}
                   outerRadius={96}
                   paddingAngle={2}
-                  fill="#D4AF37"
-                />
+                >
+                  {dashboard.statutoryData.map((item, index) => (
+                    <Cell key={item.name} fill={dashboardPieColors[index % dashboardPieColors.length]} />
+                  ))}
+                </Pie>
                 <Tooltip formatter={tooltipFormatter} contentStyle={dashboardTooltipStyle} />
                 <Legend wrapperStyle={{ color: "#C7D3CC", fontSize: 11 }} />
               </PieChart>
@@ -955,6 +959,7 @@ const dashboardMetricStyle = { padding: 11, borderRadius: 10, border: "1px solid
 const dashboardMetricLabelStyle = { display: "block", color: "#9FB7AA", fontSize: 10, marginBottom: 5 };
 const dashboardMetricValueStyle = { color: "#F7FAF8", fontSize: 14, overflowWrap: "anywhere" };
 const dashboardEmptyStyle = { minHeight: 220, display: "grid", placeItems: "center", color: "#8FA79A", fontSize: 12, textAlign: "center", padding: 20 };
+const dashboardPieColors = ["#D4AF37", "#2EE98B", "#72A7FF", "#F59E0B", "#A78BFA", "#F472B6"];
 const mutedText = { color: "#94A89D", fontSize: 11 };
 const warningStyle = { padding: 10, marginBottom: 12, border: "1px solid rgba(245,158,11,.55)", borderRadius: 9, background: "rgba(245,158,11,.08)", color: "#F5D98C", fontSize: 12 };
 
