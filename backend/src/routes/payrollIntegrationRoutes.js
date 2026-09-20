@@ -43,6 +43,9 @@ function mapLine(row) {
     locationId: row.locationId || null,
     locationCode: row.locationCode || null,
     locationName: row.locationName || null,
+    periodStart: row.periodStart ? new Date(row.periodStart).toISOString().slice(0, 10) : null,
+    periodEnd: row.periodEnd ? new Date(row.periodEnd).toISOString().slice(0, 10) : null,
+    payDate: row.payDate ? new Date(row.payDate).toISOString().slice(0, 10) : null,
     details: {
       ...details,
       location: {
