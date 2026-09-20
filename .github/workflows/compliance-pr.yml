@@ -81,6 +81,7 @@ jobs:
           node tests/employeeDataOperations.test.js
           node tests/employeeExportNameReconciliation.test.js
           node tests/zermattEmployeeExportOrderingAcceptance.test.js
+          node tests/rentReliefBulkUploadAcceptance.test.js
 
   frontend-build:
     name: Frontend production build
