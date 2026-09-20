@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { statutoryReadinessByEmployee } = require("./payrollApprovalComplianceService");
 
 function remitError(code, message, statusCode = 409, details) {
   const error = new Error(message); error.code = code; error.statusCode = statusCode; error.details = details; return error;
@@ -109,6 +110,14 @@ async function allocateBatch({ organizationId, actorUserId, batchId, allocations
         status: { in: ["CONFIRMED","DUE","PARTIALLY_REMITTED","OVERDUE"] },
       } });
       if (!obligation) throw remitError("INELIGIBLE_OBLIGATION", "An allocation targets a missing, mismatched or ineligible obligation.", 409, { obligationId: item.obligationId });
+      if (obligation.exceptionCode === "WITHHELD_MISSING_STATUTORY_DETAILS") {
+        throw remitError(
+          "OBLIGATION_WITHHELD_MISSING_STATUTORY_DETAILS",
+          "This statutory obligation is withheld because required employee statutory details are incomplete. Complete the employee record and release the obligation before allocation.",
+          409,
+          { obligationId: obligation.id, employeeId: obligation.employeeId, obligationType: obligation.obligationType }
+        );
+      }
       if (money(Number(obligation.amountRemitted) + amount) > money(obligation.totalLiability)) {
         throw remitError("OBLIGATION_OVERALLOCATION", "Allocation exceeds the obligation outstanding balance.", 409, { obligationId: obligation.id });
       }
@@ -194,4 +203,119 @@ async function listBatches({ organizationId, prismaClient = prisma }) {
   return prismaClient.statutoryRemittanceBatch.findMany({ where: { organizationId }, include: { allocations: true, reconciliation: true }, orderBy: { createdAt: "desc" } });
 }
 
-module.exports = { listObligations, createBatch, submitBatch, approveBatch, recordPayment, allocateBatch, reconcileBatch, failBatch, reverseBatch, listBatches, remitError };
+async function listWithheldObligations({ organizationId, prismaClient = prisma }) {
+  const rows = await prismaClient.statutoryObligation.findMany({
+    where: {
+      organizationId,
+      exceptionCode: "WITHHELD_MISSING_STATUTORY_DETAILS",
+      status: { in: ["CONFIRMED", "DUE", "OVERDUE", "PARTIALLY_REMITTED"] },
+    },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          employeeNumber: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: [
+      { periodYear: "asc" },
+      { periodMonth: "asc" },
+      { obligationType: "asc" },
+      { createdAt: "asc" },
+    ],
+  });
+
+  const readiness = await statutoryReadinessByEmployee({
+    organizationId,
+    employeeIds: rows.map((row) => row.employeeId),
+    prismaClient,
+  });
+
+  return rows.map((row) => {
+    const employeeReadiness = readiness.get(row.employeeId);
+    const readyForRelease = row.obligationType === "PAYE"
+      ? Boolean(employeeReadiness?.taxReady)
+      : row.obligationType === "PENSION"
+        ? Boolean(employeeReadiness?.pensionReady)
+        : true;
+    const missingFields = row.obligationType === "PAYE"
+      ? employeeReadiness?.taxMissingFields || []
+      : row.obligationType === "PENSION"
+        ? employeeReadiness?.pensionMissingFields || []
+        : [];
+
+    return {
+      ...row,
+      totalLiability: money(row.totalLiability),
+      amountRemitted: money(row.amountRemitted),
+      outstandingAmount: money(Number(row.totalLiability) - Number(row.amountRemitted)),
+      readyForRelease,
+      missingFields,
+      poolStatus: readyForRelease ? "DETAILS_COMPLETED_READY_TO_RELEASE" : "WITHHELD_PENDING_DETAILS",
+    };
+  });
+}
+
+async function releaseReadyWithheldObligations({ organizationId, actorUserId, prismaClient = prisma }) {
+  return prismaClient.$transaction(async (tx) => {
+    await assertActor(tx, organizationId, actorUserId);
+    const rows = await listWithheldObligations({ organizationId, prismaClient: tx });
+    const releasable = rows.filter((row) => row.readyForRelease);
+    if (!releasable.length) {
+      return { released: 0, remaining: rows.length };
+    }
+
+    for (const row of releasable) {
+      await tx.statutoryObligation.update({
+        where: { id: row.id },
+        data: {
+          exceptionCode: null,
+          exceptionReason: null,
+        },
+      });
+      await lifecycle(tx, {
+        organizationId,
+        subjectType: "STATUTORY_OBLIGATION",
+        subjectId: row.id,
+        eventType: "WITHHELD_OBLIGATION_RELEASED",
+        actorUserId,
+        previousStatus: "WITHHELD_MISSING_STATUTORY_DETAILS",
+        newStatus: row.status,
+        metadata: {
+          employeeNumber: row.employee?.employeeNumber || null,
+          obligationType: row.obligationType,
+          periodYear: row.periodYear,
+          periodMonth: row.periodMonth,
+          totalLiability: money(row.totalLiability),
+        },
+      });
+    }
+
+    return {
+      released: releasable.length,
+      remaining: rows.length - releasable.length,
+      releasedIds: releasable.map((row) => row.id),
+    };
+  }, { isolationLevel: "Serializable" });
+}
+
+module.exports = {
+  listObligations,
+  listWithheldObligations,
+  releaseReadyWithheldObligations,
+  createBatch,
+  submitBatch,
+  approveBatch,
+  recordPayment,
+  allocateBatch,
+  reconcileBatch,
+  failBatch,
+  reverseBatch,
+  listBatches,
+  remitError,
+};
