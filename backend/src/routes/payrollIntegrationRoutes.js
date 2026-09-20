@@ -83,11 +83,17 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
          JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
          LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
          LEFT JOIN "organization_locations" loc ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
-         LEFT JOIN LATERAL (
-           SELECT COALESCE(SUM(l."outstandingAmount") FILTER (WHERE l."status" IN ('ACTIVE','PAUSED')),0) AS "loanOutstandingBalance"
-           FROM "payroll_loans" l
-           WHERE l."organizationId"=pl."organizationId" AND l."employeeId"=pl."employeeId"
-         ) loan ON TRUE
+       LEFT JOIN (
+         SELECT
+           l."organizationId",
+           l."employeeId",
+           COALESCE(SUM(l."outstandingAmount"),0) AS "loanOutstandingBalance"
+         FROM "payroll_loans" l
+         WHERE l."status" IN ('ACTIVE','PAUSED')
+         GROUP BY l."organizationId",l."employeeId"
+       ) loan
+         ON loan."organizationId"=pl."organizationId"
+        AND loan."employeeId"=pl."employeeId"
          LEFT JOIN "attendance_payroll_inputs" api
            ON api."organizationId"=pl."organizationId" AND api."employeeId"=pl."employeeId"
           AND api."periodStart"=pp."periodStart" AND api."periodEnd"=pp."periodEnd"
@@ -119,11 +125,17 @@ router.get("/payslips", requirePermission("payroll.view"), async (req, res) => {
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
        JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
        LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
-       LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM(l."outstandingAmount") FILTER (WHERE l."status" IN ('ACTIVE','PAUSED')),0) AS "loanOutstandingBalance"
+       LEFT JOIN (
+         SELECT
+           l."organizationId",
+           l."employeeId",
+           COALESCE(SUM(l."outstandingAmount"),0) AS "loanOutstandingBalance"
          FROM "payroll_loans" l
-         WHERE l."organizationId"=pl."organizationId" AND l."employeeId"=pl."employeeId"
-       ) loan ON TRUE
+         WHERE l."status" IN ('ACTIVE','PAUSED')
+         GROUP BY l."organizationId",l."employeeId"
+       ) loan
+         ON loan."organizationId"=pl."organizationId"
+        AND loan."employeeId"=pl."employeeId"
       WHERE pl."organizationId"=$1 AND pr."status"='APPROVED'
       ORDER BY pp."periodStart" DESC, pl."employeeNumber" ASC`,
       req.auth.organizationId

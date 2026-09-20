@@ -255,6 +255,7 @@ function PayrollLines({ rows, onViewPayslip }) {
       getSearchText={getSearchText}
       searchPlaceholder="Search employee number, name, employment type or cost centre"
       selectionLabel="payroll employee(s)"
+      pageSize={50}
       renderActions={({ selectedRows }) => selectedRows.length ? (
         <div style={batchSummaryStyle}><strong>Selected batch:</strong> {selectedRows.length} employee(s) · Gross {money(selectedRows.reduce((sum, row) => sum + Number(row.grossPay || 0), 0))} · Net {money(selectedRows.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))}</div>
       ) : null}
@@ -356,6 +357,7 @@ function ApprovedPayslips() {
           getSearchText={getSearchText}
           searchPlaceholder="Search employee number, employee name, email or payroll period"
           selectionLabel="payslip(s)"
+          pageSize={50}
           renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? <div style={buttonRow}>
             <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected</button>
             <button type="button" style={smallButton} disabled={busy === "email-batch"} onClick={() => emailSelected(selectedRows)}>{busy === "email-batch" ? "Emailing…" : "Email Selected Payslips"}</button>
