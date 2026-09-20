@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
+process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/chris_test";
+
 const root = path.resolve(__dirname, "..", "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
