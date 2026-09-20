@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { confirmPayrollObligations } = require("./statutoryObligationService");
+const { postDeductionInstallments } = require("./zermattVariablePayrollService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 const PERIOD_STATUSES = ["OPEN", "LOCKED", "CLOSED"];
@@ -930,6 +931,10 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
           );
         }
       }
+      await postDeductionInstallments(tx, {
+        organizationId,
+        payrollRunId: runId,
+      });
     }
   });
   await writeAudit(prismaClient, {
