@@ -37,7 +37,7 @@ export default function PayrollIntegratedManaged({ mode }) {
   const navigate = useNavigate();
   const meta = {
     execute: ["Execute Payroll", "Calculate payroll with statutory deductions, Salary Advance recovery, Loan recovery and eligible after-tax benefits in one auditable payroll line."],
-    payslips: ["Payslips", "Payslips are generated directly from approved payroll runs. Draft or rejected payroll does not produce an employee payslip."],
+    payslips: ["Payslips", "Approved payroll payslips can be viewed, printed and emailed individually or in bulk. Draft payroll lines expose live preview payslips from Execute Payroll but cannot be emailed."],
     statutory: ["Nigeria Statutory Review", "Review which payroll statutory items are active, employer-only, or require ZERMATT approval before activation."],
   };
   const [title, description] = meta[mode] || meta.execute;
@@ -58,11 +58,14 @@ function ExecuteIntegrated() {
   const { data: periods, error: periodsError } = useLoad("/api/payroll/periods");
   const { data: runs, loading, error, setError, load } = useLoad("/api/payroll/runs");
   const { data: policyData, loading: policyLoading } = useLoad("/api/payroll/compliance-policy", {});
+  const { data: profile } = useLoad("/api/auth/me", {});
   const [periodId, setPeriodId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [branchView, setBranchView] = useState("");
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
+  const organization = profile?.organization || getStoredOrganization() || {};
   const selectablePeriods = (periods || []).filter((period) => period.status !== "CLOSED");
 
   const fetchIntegratedLines = async (runId) => {
@@ -156,6 +159,22 @@ function ExecuteIntegrated() {
     }
   };
 
+  const emailLivePayslip = async (row) => {
+    if (row?.runStatus !== "APPROVED") {
+      setError("Draft payslips are preview-only. Email becomes available after Head HR approves the payroll.");
+      return;
+    }
+    try {
+      setBusy(`email-${row.id}`); setError(""); setMessage("");
+      const response = await apiRequest(`/api/payroll/payslips/${row.id}/email`, { method: "POST" });
+      setMessage(response?.message || `Payslip email action completed for ${row.employeeNumber}.`);
+    } catch (err) {
+      setError(err.message || "Unable to email approved payslip.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   return (
     <>
       <Panel title="Integrated Draft Payroll">
@@ -163,7 +182,7 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. After approval, export the formula-backed Payroll Audit Pack for external auditor confirmation, GM approval and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
+        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. After approval, export the formula-backed Payroll Audit Pack for external auditor confirmation, GM approval and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
@@ -202,13 +221,20 @@ function ExecuteIntegrated() {
           <Summary label="Net Payroll" value={money(visibleLines.reduce((sum, row) => sum + Number(row.netPreview || 0), 0))} />
         </div>
         {attendanceChangesPending > 0 && <div style={warningStyle}>{attendanceChangesPending} employee attendance input(s) have changed since the last payroll calculation. The latest Worked Days are shown now; Head HR must recalculate before submission/approval so monetary values use those days.</div>}
-        <PayrollLines rows={visibleLines} />
+        <PayrollLines rows={visibleLines} onViewPayslip={setSelectedPayslip} />
       </Panel>}
+      {selectedPayslip && <PayslipCard
+        row={selectedPayslip}
+        organization={organization}
+        onClose={() => setSelectedPayslip(null)}
+        onEmail={() => emailLivePayslip(selectedPayslip)}
+        emailBusy={busy === `email-${selectedPayslip.id}`}
+      />}
     </>
   );
 }
 
-function PayrollLines({ rows }) {
+function PayrollLines({ rows, onViewPayslip }) {
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
   return (
     <EmployeeBatchSelector
@@ -222,7 +248,7 @@ function PayrollLines({ rows }) {
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
-        <DataTable columns={["Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net"]}>
+        <DataTable columns={["Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip"]}>
           <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
           {displayRows.map((row) => {
             const details = row.details || {};
@@ -249,6 +275,7 @@ function PayrollLines({ rows }) {
                 <Td>{leaveAllowance ? `${money(leaveAllowance, row.currency)} · After tax` : "—"}</Td>
                 <Td>{money(row.grossPay, row.currency)}</Td>
                 <Td strong>{money(row.netPreview, row.currency)}</Td>
+                <Td><button type="button" style={smallButton} onClick={() => onViewPayslip?.(row)}>{row.runStatus === "APPROVED" ? "View Payslip" : "View Preview"}</button></Td>
               </tr>
             );
           })}
@@ -262,43 +289,97 @@ function ApprovedPayslips() {
   const { data: rows, loading, error } = useLoad("/api/payroll/payslips");
   const { data: profile } = useLoad("/api/auth/me", {});
   const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [emailError, setEmailError] = useState("");
   const organization = profile?.organization || getStoredOrganization() || {};
-  const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
+  const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.employeeEmail, row.periodCode, row.periodName].filter(Boolean).join(" "), []);
+
+  const emailOne = async (row) => {
+    try {
+      setBusy(`email-${row.id}`); setEmailError(""); setFeedback("");
+      const response = await apiRequest(`/api/payroll/payslips/${row.id}/email`, { method: "POST" });
+      setFeedback(response?.message || `Payslip email action completed for ${row.employeeNumber}.`);
+    } catch (err) {
+      setEmailError(err.message || "Unable to email approved payslip.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const emailSelected = async (selectedRows) => {
+    if (!selectedRows.length) return;
+    try {
+      setBusy("email-batch"); setEmailError(""); setFeedback("");
+      const response = await apiRequest("/api/payroll/payslips/email-batch", {
+        method: "POST",
+        body: { lineIds: selectedRows.map((row) => row.id) },
+      });
+      const data = response?.data || {};
+      setFeedback(`${data.sent || 0} selected payslip(s) emailed. ${data.notSent || 0} not sent.`);
+    } catch (err) {
+      setEmailError(err.message || "Unable to email selected payslips.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   return (
     <>
       <Panel title="Approved Payroll Payslips">
-        <p style={controlNote}>Only APPROVED payroll runs appear here. ZERMATT Leave Allowance is displayed separately as a non-taxable after-tax payment and is included in Net Pay without increasing PAYE or taxable Gross Pay. If an approved payroll is reopened for correction, its payslips stop appearing until the replacement draft is recalculated, submitted and approved again.</p>
+        <p style={controlNote}>Only APPROVED payroll runs appear here. Approved payslips can be viewed, printed and emailed individually or in bulk to the employee email stored in CHRiS. A missing employee email affects only that employee's delivery and never blocks payroll approval.</p>
         <EmployeeBatchSelector
           rows={rows || []}
           getId={(row) => row.id}
           getSearchText={getSearchText}
-          searchPlaceholder="Search employee number, employee name or payroll period"
+          searchPlaceholder="Search employee number, employee name, email or payroll period"
           selectionLabel="payslip(s)"
-          renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected Payslips</button> : null}
+          renderActions={({ selectedRows, setSelectedOnly }) => selectedRows.length ? <div style={buttonRow}>
+            <button type="button" style={smallButton} onClick={() => setSelectedOnly(true)}>Batch View Selected</button>
+            <button type="button" style={smallButton} disabled={busy === "email-batch"} onClick={() => emailSelected(selectedRows)}>{busy === "email-batch" ? "Emailing…" : "Email Selected Payslips"}</button>
+          </div> : null}
         >
           {({ displayRows, isSelected, toggleOne }) => (
-            <DataTable loading={loading} columns={["Select", "Period", "Employee", "Gross", "PAYE", "Pension", "Advance", "Loan", "Leave Allowance", "Net", "Action"]}>
+            <DataTable loading={loading} columns={["Select", "Period", "Employee", "Email", "Gross", "PAYE", "Pension", "Advance", "Loan", "Leave Allowance", "Net", "Action"]}>
               {displayRows.map((row) => {
                 const statutory = row.details?.statutory || {};
                 const leaveAllowance = Number(row.details?.leaveAllowance?.amount || 0);
                 return <tr key={row.id}>
                   <Td><input type="checkbox" aria-label={`Select payslip ${row.employeeNumber} ${row.periodCode}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
-                  <Td strong>{row.periodCode}</Td><Td>{row.employeeNumber} — {row.employeeName}</Td><Td>{money(row.grossPay, row.currency)}</Td>
-                  <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.loanRecovery, row.currency)}</Td><Td>{leaveAllowance ? money(leaveAllowance, row.currency) : "—"}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
-                  <Td><button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button></Td>
+                  <Td strong>{row.periodCode}</Td>
+                  <Td>{row.employeeNumber} — {row.employeeName}</Td>
+                  <Td>{row.employeeEmail || <span style={mutedText}>No email</span>}</Td>
+                  <Td>{money(row.grossPay, row.currency)}</Td>
+                  <Td>{money(statutory.payeTax, row.currency)}</Td>
+                  <Td>{money(statutory.employeePension, row.currency)}</Td>
+                  <Td>{money(row.advanceRecovery, row.currency)}</Td>
+                  <Td>{money(row.loanRecovery, row.currency)}</Td>
+                  <Td>{leaveAllowance ? money(leaveAllowance, row.currency) : "—"}</Td>
+                  <Td strong>{money(row.netPreview, row.currency)}</Td>
+                  <Td><div style={buttonRow}>
+                    <button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button>
+                    <button type="button" style={smallButton} disabled={!row.employeeEmail || busy === `email-${row.id}`} onClick={() => emailOne(row)}>{busy === `email-${row.id}` ? "Emailing…" : "Email"}</button>
+                  </div></Td>
                 </tr>;
               })}
             </DataTable>
           )}
         </EmployeeBatchSelector>
       </Panel>
-      <Feedback error={error} />
-      {selected && <PayslipCard row={selected} organization={organization} onClose={() => setSelected(null)} />}
+      <Feedback error={error || emailError} />
+      {feedback && <div style={infoStyle}>{feedback}</div>}
+      {selected && <PayslipCard
+        row={selected}
+        organization={organization}
+        onClose={() => setSelected(null)}
+        onEmail={() => emailOne(selected)}
+        emailBusy={busy === `email-${selected.id}`}
+      />}
     </>
   );
 }
 
-function PayslipCard({ row, organization, onClose }) {
+function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false }) {
   const details = row.details || {};
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
@@ -314,7 +395,7 @@ function PayslipCard({ row, organization, onClose }) {
         <Summary label="Pay Date" value={row.payDate || "—"} />
         <Summary label="Worked Days" value={attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"} />
         <Summary label="Attendance Source" value={attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"} />
-        <Summary label="Status" value="Approved Payroll" />
+        <Summary label="Status" value={row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · Preview Only`} />
       </div>
       <div style={{ marginTop: 16 }}>
         <DataTable columns={["Earnings / Deductions", "Amount"]}>
@@ -331,7 +412,12 @@ function PayslipCard({ row, organization, onClose }) {
           <tr><Td strong>Net Pay</Td><Td strong>{money(row.netPreview, row.currency)}</Td></tr>
         </DataTable>
       </div>
-      <div style={{ ...buttonRow, marginTop: 14 }}><button type="button" style={secondaryButton} onClick={onClose}>Close</button><button type="button" style={primaryButton} onClick={() => printPayslip(row, organization)}>Print Payslip</button></div>
+      {row.runStatus !== "APPROVED" && <div style={warningStyle}>Preview only — this payroll has not yet been approved by Head HR. Printing is allowed for review, but employee email delivery remains disabled until approval.</div>}
+      <div style={{ ...buttonRow, marginTop: 14 }}>
+        <button type="button" style={secondaryButton} onClick={onClose}>Close</button>
+        <button type="button" style={primaryButton} onClick={() => printPayslip(row, organization)}>Print {row.runStatus === "APPROVED" ? "Payslip" : "Preview"}</button>
+        {row.runStatus === "APPROVED" && onEmail && <button type="button" style={primaryButton} disabled={!row.employeeEmail || emailBusy} onClick={onEmail}>{emailBusy ? "Emailing…" : row.employeeEmail ? "Email Payslip" : "Employee Email Missing"}</button>}
+      </div>
     </Panel>
   );
 }
@@ -385,7 +471,7 @@ function printPayslip(row, organization = {}) {
     ["Pay Date", row.payDate || "—"],
     ["Worked Days", attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"],
     ["Attendance Source", attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"],
-    ["Status", "Approved Payroll"],
+    ["Status", row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · PREVIEW ONLY`],
   ];
   const logo = logoUrl ? `<img class="organization-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo">` : "";
   const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : "";
@@ -400,7 +486,7 @@ function printPayslip(row, organization = {}) {
   printWindow.opener = null;
   printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(row.periodCode)} Payslip - ${escapeHtml(row.employeeNumber)}</title><style>
     @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:270mm;padding:8mm 7mm 6mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:0;top:50%;left:50%;width:52%;max-width:330px;max-height:330px;transform:translate(-50%,-50%);object-fit:contain;opacity:.055;filter:grayscale(100%);pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.86)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.86)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>Generated from an approved CHRiS payroll run.</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
+  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
   printWindow.document.close();
 }
 
@@ -447,6 +533,7 @@ const branchButton = { border: "1px solid rgba(212,175,55,.35)", borderRadius: 8
 const activeBranchButton = { ...branchButton, background: "#D4AF37", color: "#111" };
 const branchViewText = { marginLeft: "auto", color: "#AFC0B6", fontSize: 11, fontWeight: 800 };
 const payrollKpiGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 12 };
+const mutedText = { color: "#94A89D", fontSize: 11 };
 const warningStyle = { padding: 10, marginBottom: 12, border: "1px solid rgba(245,158,11,.55)", borderRadius: 9, background: "rgba(245,158,11,.08)", color: "#F5D98C", fontSize: 12 };
 
 const controlNote = { color: "#A9BDB2", lineHeight: 1.6, fontSize: 13 };
