@@ -425,35 +425,52 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
             <div style={payslipPreviewOrganizationNameStyle}>{organizationName}</div>
             <div style={payslipPreviewTitleStyle}>EMPLOYEE PAYSLIP</div>
           </div>
-      <div style={summaryGrid}>
-        <Summary label="Employee Name" value={row.employeeName || "—"} />
-        <Summary label="Employee Number" value={row.employeeNumber || "—"} />
-        <Summary label="Designation" value={row.designation || "—"} />
-        <Summary label="Bank" value={row.bankName || "—"} />
-        <Summary label="Account Name" value={row.accountName || "—"} />
-        <Summary label="Account Number" value={row.accountNumber || "—"} />
-        <Summary label="Payroll Period" value={`${row.periodStart} → ${row.periodEnd}`} />
-        <Summary label="Pay Date" value={row.payDate || "—"} />
-        <Summary label="Worked Days" value={attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"} />
-        <Summary label="Running Loan Balance" value={money(row.runningLoanBalance, row.currency)} />
-        <Summary label="Attendance Source" value={attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"} />
-        <Summary label="Status" value={row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · Preview Only`} />
+      <div style={payslipIdentityGridStyle}>
+        <PayslipDetail label="Employee Name" value={row.employeeName || "—"} />
+        <PayslipDetail label="Employee Number" value={row.employeeNumber || "—"} />
+        <PayslipDetail label="Designation" value={row.designation || "—"} />
+        <PayslipDetail label="Payroll Period" value={`${row.periodStart} → ${row.periodEnd}`} />
+        <PayslipDetail label="Pay Date" value={row.payDate || "—"} />
+        <PayslipDetail label="Worked Days" value={attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"} />
+        <PayslipDetail label="Attendance Source" value={attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"} />
+        <PayslipDetail label="Status" value={row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · Preview Only`} />
       </div>
-      <div style={{ marginTop: 16 }}>
-        <DataTable columns={["Earnings / Deductions", "Amount"]}>
-          <tr><Td strong>Basic</Td><Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td></tr>
-          {Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => <tr key={key}><Td>{key.charAt(0).toUpperCase() + key.slice(1)}</Td><Td>{money(value, row.currency)}</Td></tr>)}
-          <tr><Td>Other Earnings</Td><Td>{money(customAllowances, row.currency)}</Td></tr>
-          <tr><Td strong>Taxable Gross Pay</Td><Td strong>{money(row.grossPay, row.currency)}</Td></tr>
-          <tr><Td>PAYE</Td><Td>{money(statutory.payeTax, row.currency)}</Td></tr>
-          <tr><Td>Pension</Td><Td>{money(statutory.employeePension, row.currency)}</Td></tr>
-          <tr><Td>Other Deductions</Td><Td>{money(customDeductions, row.currency)}</Td></tr>
-          <tr><Td>Salary Advance Recovery</Td><Td>{money(row.advanceRecovery, row.currency)}</Td></tr>
-          <tr><Td>Loan Recovery</Td><Td>{money(row.loanRecovery, row.currency)}</Td></tr>
-          {leaveAllowance > 0 && <tr><Td strong>Leave Allowance · After Tax / Non-taxable</Td><Td strong>{money(leaveAllowance, row.currency)}</Td></tr>}
-          <tr><Td strong>Net Pay</Td><Td strong>{money(row.netPreview, row.currency)}</Td></tr>
-        </DataTable>
+
+      <div style={payslipLedgerWrapStyle}>
+        <table style={payslipLedgerTableStyle}>
+          <thead>
+            <tr>
+              <th style={payslipLedgerHeadStyle}>Earnings / Deductions</th>
+              <th style={{ ...payslipLedgerHeadStyle, textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <PayslipLedgerRow label="Basic" value={money(structure.basic ?? row.baseSalary, row.currency)} />
+            {Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => (
+              <PayslipLedgerRow key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={money(value, row.currency)} />
+            ))}
+            <PayslipLedgerRow label="Other Earnings" value={money(customAllowances, row.currency)} />
+            <PayslipLedgerRow label="Taxable Gross Pay" value={money(row.grossPay, row.currency)} strong />
+            <PayslipLedgerRow label="PAYE" value={money(statutory.payeTax, row.currency)} />
+            <PayslipLedgerRow label="Pension" value={money(statutory.employeePension, row.currency)} />
+            <PayslipLedgerRow label="Other Deductions" value={money(customDeductions, row.currency)} />
+            <PayslipLedgerRow label="Salary Advance Recovery" value={money(row.advanceRecovery, row.currency)} />
+            <PayslipLedgerRow label="Loan Recovery" value={money(row.loanRecovery, row.currency)} />
+            {leaveAllowance > 0 && <PayslipLedgerRow label="Leave Allowance · After Tax / Non-taxable" value={money(leaveAllowance, row.currency)} strong />}
+            <PayslipLedgerRow label="Net Pay" value={money(row.netPreview, row.currency)} net />
+          </tbody>
+        </table>
       </div>
+
+      <section style={payslipPaymentSectionStyle}>
+        <div style={payslipPaymentTitleStyle}>Payment & Loan Summary</div>
+        <div style={payslipPaymentGridStyle}>
+          <PayslipPaymentDetail label="Bank" value={row.bankName || "—"} />
+          <PayslipPaymentDetail label="Account Name" value={row.accountName || "—"} />
+          <PayslipPaymentDetail label="Account Number" value={row.accountNumber || "—"} />
+          <PayslipPaymentDetail label="Running Loan Balance" value={money(row.runningLoanBalance, row.currency)} />
+        </div>
+      </section>
       {row.runStatus !== "APPROVED" && <div style={warningStyle}>Preview only — this payroll has not yet been approved by Head HR. Printing is allowed for review, but employee email delivery remains disabled until approval.</div>}
       <div style={{ ...buttonRow, marginTop: 14 }}>
         <button type="button" style={secondaryButton} onClick={onClose}>Close</button>
@@ -528,15 +545,17 @@ function printPayslip(row, organization = {}) {
     ["Employee Name", row.employeeName || "—"],
     ["Employee Number", row.employeeNumber || "—"],
     ["Designation", row.designation || "—"],
-    ["Bank", row.bankName || "—"],
-    ["Account Name", row.accountName || "—"],
-    ["Account Number", row.accountNumber || "—"],
     ["Payroll Period", `${row.periodStart} — ${row.periodEnd}`],
     ["Pay Date", row.payDate || "—"],
     ["Worked Days", attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"],
-    ["Running Loan Balance", money(row.runningLoanBalance, row.currency)],
     ["Attendance Source", attendance.source ? String(attendance.source).replaceAll("_", " ") : "—"],
     ["Status", row.runStatus === "APPROVED" ? "Approved Payroll" : `${String(row.runStatus || "DRAFT").replaceAll("_", " ")} · PREVIEW ONLY`],
+  ];
+  const paymentItems = [
+    ["Bank", row.bankName || "—"],
+    ["Account Name", row.accountName || "—"],
+    ["Account Number", row.accountNumber || "—"],
+    ["Running Loan Balance", money(row.runningLoanBalance, row.currency)],
   ];
   const logo = logoUrl ? `<img class="organization-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo">` : "";
   const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : `<div class="watermark-text">${escapeHtml(organizationName)}</div>`;
@@ -550,8 +569,8 @@ function printPayslip(row, organization = {}) {
   }
   printWindow.opener = null;
   printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title></title><style>
-    @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:297mm;padding:18mm 19mm 16mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.86)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.86)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
+    @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#fff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;min-height:297mm;padding:18mm 19mm 16mm;overflow:hidden}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:14px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:120px;max-height:64px;margin:0 auto 8px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:21px;line-height:1.25}.document-title{margin:7px 0 0;color:#9a7410;font-size:15px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:16px 0 12px;text-align:center;color:#475569;font-size:10pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}.detail{padding:9px 11px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.94)}.detail span{display:block;margin-bottom:4px;color:#64748b;font-size:8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:9.5pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.94)}th,td{padding:8px 10px;border-bottom:1px solid #d8dee2;font-size:9.5pt}th{background:#064e3b!important;color:#fff!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:8pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:11pt}.payment-summary{margin-top:16px;padding-top:12px;border-top:2px solid #064e3b}.payment-title{margin:0 0 8px;color:#9a7410;font-size:8.5pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.payment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.payment-item{padding:8px 10px;border:1px solid #d8c788;border-radius:7px;background:rgba(255,255,255,.94)}.payment-item span{display:block;margin-bottom:4px;color:#64748b;font-size:7.5pt;text-transform:uppercase;letter-spacing:.04em}.payment-item strong{font-size:9.5pt;overflow-wrap:anywhere}.footer{display:flex;justify-content:space-between;gap:16px;margin-top:18px;padding-top:10px;border-top:1px solid #94a3b8;color:#64748b;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><section class="payment-summary"><h3 class="payment-title">Payment & Loan Summary</h3><div class="payment-grid">${paymentItems.map(([label, value]) => `<div class="payment-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div></section><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
   printWindow.document.close();
 }
 
@@ -572,6 +591,16 @@ function StatutoryCatalogue() {
   );
 }
 
+function PayslipDetail({ label, value }) { return <div style={payslipDetailCardStyle}><div style={payslipDetailLabelStyle}>{label}</div><strong style={payslipDetailValueStyle}>{value}</strong></div>; }
+function PayslipPaymentDetail({ label, value }) { return <div style={payslipPaymentCardStyle}><div style={payslipPaymentLabelStyle}>{label}</div><strong style={payslipPaymentValueStyle}>{value}</strong></div>; }
+function PayslipLedgerRow({ label, value, strong = false, net = false }) {
+  return (
+    <tr>
+      <td style={{ ...payslipLedgerCellStyle, ...(strong || net ? payslipLedgerStrongStyle : {}) }}>{label}</td>
+      <td style={{ ...payslipLedgerCellStyle, textAlign: "right", ...(strong || net ? payslipLedgerStrongStyle : {}), ...(net ? payslipLedgerNetStyle : {}) }}>{value}</td>
+    </tr>
+  );
+}
 function Summary({ label, value }) { return <div style={summaryCard}><div style={summaryLabel}>{label}</div><strong>{value}</strong></div>; }
 function Panel({ title, children }) { return <section style={panelStyle}><h2 style={panelTitle}>{title}</h2>{children}</section>; }
 function Feedback({ error }) { return error ? <div role="alert" style={errorStyle}>{error}</div> : null; }
@@ -617,7 +646,23 @@ const batchSummaryStyle = { display: "flex", alignItems: "center", minHeight: 36
 
 const payslipScrollAnchorStyle = { scrollMarginTop: 84, outline: "none" };
 
-const payslipPreviewDocumentStyle = { position: "relative", overflow: "hidden", borderRadius: 12, background: "#fff", color: "#17211c", padding: 18, border: "1px solid rgba(212,175,55,.35)" };
+const payslipPreviewDocumentStyle = { position: "relative", overflow: "hidden", borderRadius: 14, background: "#fff", color: "#17211c", padding: "24px 28px 28px", border: "1px solid rgba(212,175,55,.35)", boxShadow: "0 18px 48px rgba(0,0,0,.18)" };
+const payslipIdentityGridStyle = { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10, marginBottom: 18 };
+const payslipDetailCardStyle = { padding: "10px 12px", border: "1px solid rgba(154,116,16,.34)", borderRadius: 9, background: "rgba(255,255,255,.94)" };
+const payslipDetailLabelStyle = { color: "#64748B", fontSize: 10, textTransform: "uppercase", letterSpacing: ".045em", marginBottom: 4, fontWeight: 700 };
+const payslipDetailValueStyle = { color: "#17211C", fontSize: 13, lineHeight: 1.35, overflowWrap: "anywhere" };
+const payslipLedgerWrapStyle = { marginTop: 4, overflowX: "auto", borderRadius: 8, border: "1px solid rgba(6,78,59,.14)" };
+const payslipLedgerTableStyle = { width: "100%", minWidth: 0, borderCollapse: "collapse", background: "rgba(255,255,255,.94)" };
+const payslipLedgerHeadStyle = { padding: "10px 12px", background: "#064E3B", color: "#FFFFFF", textAlign: "left", textTransform: "uppercase", letterSpacing: ".06em", fontSize: 11, fontWeight: 900 };
+const payslipLedgerCellStyle = { padding: "9px 12px", borderBottom: "1px solid #E2E8F0", color: "#334155", fontSize: 12 };
+const payslipLedgerStrongStyle = { fontWeight: 900, color: "#064E3B" };
+const payslipLedgerNetStyle = { borderTop: "2px solid #9A7410", borderBottom: "2px solid #9A7410", fontSize: 14 };
+const payslipPaymentSectionStyle = { marginTop: 18, paddingTop: 14, borderTop: "2px solid #064E3B" };
+const payslipPaymentTitleStyle = { marginBottom: 10, color: "#9A7410", fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: ".08em" };
+const payslipPaymentGridStyle = { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10 };
+const payslipPaymentCardStyle = { padding: "10px 12px", border: "1px solid rgba(154,116,16,.32)", borderRadius: 9, background: "#FFFDF8" };
+const payslipPaymentLabelStyle = { color: "#64748B", fontSize: 10, textTransform: "uppercase", letterSpacing: ".045em", marginBottom: 4, fontWeight: 700 };
+const payslipPaymentValueStyle = { color: "#17211C", fontSize: 13, lineHeight: 1.35, overflowWrap: "anywhere" };
 const payslipPreviewContentStyle = { position: "relative", zIndex: 1 };
 const payslipPreviewHeaderStyle = { textAlign: "center", paddingBottom: 14, marginBottom: 16, borderBottom: "2px solid #0B6B43" };
 const payslipPreviewLogoStyle = { display: "block", maxWidth: 120, maxHeight: 64, margin: "0 auto 8px", objectFit: "contain" };
