@@ -880,12 +880,15 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
     );
   }
   const approvalAction = action === "APPROVE" ? "APPROVED" : "REJECTED";
+  const approvedStatutoryStatus = Number(statutoryCompliance?.withheldCount || 0) > 0
+    ? "MANUAL_REVIEW_CONFIRMED_WITH_WITHHELD"
+    : "MANUAL_REVIEW_CONFIRMED";
   const approvalId = crypto.randomUUID();
   await prismaClient.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(
       `UPDATE "payroll_runs"
           SET "status"=$3,
-              "statutoryStatus"=CASE WHEN $3='APPROVED' THEN 'MANUAL_REVIEW_CONFIRMED' ELSE "statutoryStatus" END,
+              "statutoryStatus"=CASE WHEN $3='APPROVED' THEN $5 ELSE "statutoryStatus" END,
               "approvedByUserId"=CASE WHEN $3='APPROVED' THEN $4 ELSE NULL END,
               "approvedAt"=CASE WHEN $3='APPROVED' THEN CURRENT_TIMESTAMP ELSE NULL END,
               "updatedAt"=CURRENT_TIMESTAMP
@@ -893,7 +896,8 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
       organizationId,
       runId,
       approvalAction,
-      actorUserId || null
+      actorUserId || null,
+      approvedStatutoryStatus
     );
     await tx.$executeRawUnsafe(
       `INSERT INTO "payroll_approvals" ("id","organizationId","runId","action","actorUserId","notes") VALUES ($1,$2,$3,$4,$5,$6)`,
