@@ -125,6 +125,316 @@ router.patch("/tax-reliefs/:id/decision", requirePermission("payroll.manage"), a
   }
 });
 
+
+function rentReliefTemplateBuffer() {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet([
+      ["CHRiS PAYE Rent Relief Bulk Import"],
+      ["Complete one employee per row. Employee Number is preferred; exact Employee Name can be used when Employee Number is unavailable."],
+      ["Required fields: Tax Year, Annual Rent Paid and Evidence / Document Reference."],
+      ["Imported rows are always saved as PENDING_VERIFICATION. Bulk upload never bypasses HR evidence review."],
+      ["A VERIFIED rent-relief record is immutable and cannot be overwritten by bulk upload."],
+      ["CHRiS calculates eligible relief from the active payroll policy and uses it in PAYE only after verification."],
+      ["After successful import, any existing draft payroll is marked for recalculation."],
+    ]),
+    "Instructions"
+  );
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet([
+      ["Employee No", "Employee Name", "Tax Year", "Annual Rent Paid", "Evidence / Document Reference", "Notes"],
+      ["ZLL000001", "Jane Mary Doe", 2026, 1200000, "ZLL-RR-2026-0001", "Rent relief evidence submitted for HR verification."],
+    ]),
+    "Rent Relief"
+  );
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+function normalizeEmployeeMatchName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+async function prepareRentReliefWorkbook(organizationId, buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const sheetName =
+    workbook.SheetNames.find((name) => ["rent relief", "rent relief template", "tax evidence register"].includes(String(name).trim().toLowerCase())) ||
+    workbook.SheetNames[0];
+  if (!sheetName) throw payroll.operationalError("EMPTY_WORKBOOK", "The workbook does not contain a worksheet.");
+
+  const sourceRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
+  const employees = await prisma.employee.findMany({
+    where: { organizationId },
+    select: {
+      id: true,
+      employeeNumber: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+    },
+    orderBy: { employeeNumber: "asc" },
+  });
+
+  const employeeByNumber = new Map(
+    employees.map((row) => [String(row.employeeNumber || "").trim().toUpperCase(), row])
+  );
+  const employeesByName = new Map();
+  for (const employee of employees) {
+    const fullName = [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ");
+    const key = normalizeEmployeeMatchName(fullName);
+    if (!key) continue;
+    const current = employeesByName.get(key) || [];
+    current.push(employee);
+    employeesByName.set(key, current);
+  }
+
+  const existingRows = await prisma.$queryRawUnsafe(
+    `SELECT "employeeId","taxYear","status"
+       FROM "payroll_tax_reliefs"
+      WHERE "organizationId"=$1 AND "reliefType"='RENT'`,
+    organizationId
+  );
+  const existingByEmployeeYear = new Map(
+    existingRows.map((row) => [`${row.employeeId}:${Number(row.taxYear)}`, row])
+  );
+
+  const seenEmployeeYears = new Set();
+  const parsedRows = sourceRows.map((row, index) => {
+    const employeeNumberInput = getCell(row, [
+      "Employee No",
+      "Employee Number",
+      "Employee Number*",
+      "Employee ID",
+    ]).toUpperCase();
+    const employeeNameInput = getCell(row, [
+      "Employee Name",
+      "Employee Name*",
+      "Name",
+    ]);
+    const taxYearRaw = getCell(row, ["Tax Year", "Tax Year*"]);
+    const annualRentRaw = getCell(row, [
+      "Annual Rent Paid",
+      "Annual Rent Paid (₦)",
+      "Annual Rent Paid (₦)*",
+      "Annual Rent Paid*",
+      "Annual Rent",
+    ]);
+    const evidenceReference = getCell(row, [
+      "Evidence / Document Reference",
+      "Evidence / Document Reference*",
+      "Evidence Reference",
+      "Document Reference",
+    ]);
+    const notes = getCell(row, [
+      "Notes",
+      "Verification Notes",
+      "Verification Notes / HR Notes",
+      "Remarks",
+    ]);
+
+    const errors = [];
+    let employee = employeeNumberInput ? employeeByNumber.get(employeeNumberInput) : null;
+
+    if (!employee && !employeeNumberInput && employeeNameInput) {
+      const matches = employeesByName.get(normalizeEmployeeMatchName(employeeNameInput)) || [];
+      if (matches.length === 1) employee = matches[0];
+      else if (matches.length > 1) errors.push("Employee Name matches more than one CHRiS employee. Add Employee Number.");
+    }
+
+    if (!employee) {
+      errors.push(
+        employeeNumberInput
+          ? "Employee Number was not found in this organization."
+          : "Employee could not be matched. Add Employee Number or an exact CHRiS Employee Name."
+      );
+    }
+
+    const taxYear = Number(String(taxYearRaw || "").replace(/,/g, ""));
+    if (!Number.isInteger(taxYear) || taxYear < 2026) errors.push("Tax Year must be 2026 or later.");
+
+    const annualRentPaid = Number(String(annualRentRaw || "").replace(/[₦,\s]/g, ""));
+    if (annualRentRaw === "" || !Number.isFinite(annualRentPaid) || annualRentPaid < 0) {
+      errors.push("Annual Rent Paid is required and must be zero or greater.");
+    }
+
+    if (!evidenceReference) errors.push("Evidence / Document Reference is required for bulk rent relief.");
+
+    if (employee && Number.isInteger(taxYear)) {
+      const employeeYearKey = `${employee.id}:${taxYear}`;
+      if (seenEmployeeYears.has(employeeYearKey)) {
+        errors.push("This employee and tax year appear more than once in the workbook.");
+      } else {
+        seenEmployeeYears.add(employeeYearKey);
+      }
+      if (existingByEmployeeYear.get(employeeYearKey)?.status === "VERIFIED") {
+        errors.push("A VERIFIED rent-relief record already exists and cannot be overwritten.");
+      }
+    }
+
+    return {
+      rowNumber: index + 2,
+      employee,
+      taxYear,
+      annualRentPaid,
+      evidenceReference,
+      notes,
+      errors,
+    };
+  });
+
+  const taxYears = [...new Set(parsedRows.filter((row) => Number.isInteger(row.taxYear) && row.taxYear >= 2026).map((row) => row.taxYear))];
+  const policyPairs = await Promise.all(
+    taxYears.map(async (taxYear) => [
+      taxYear,
+      await nigeriaPayroll.getActivePolicy({
+        organizationId,
+        asOf: `${taxYear}-12-31`,
+      }),
+    ])
+  );
+  const policyByYear = new Map(policyPairs);
+
+  return parsedRows.map((row) => {
+    const errors = [...row.errors];
+    const policy = policyByYear.get(row.taxYear);
+    if (Number.isInteger(row.taxYear) && row.taxYear >= 2026 && !policy) {
+      errors.push(`No active Nigeria payroll policy covers tax year ${row.taxYear}.`);
+    }
+    const rate = Number(policy?.payeRules?.rentReliefRate ?? 20);
+    const cap = Number(policy?.payeRules?.rentReliefCap ?? 500000);
+    const eligibleRelief = Number.isFinite(row.annualRentPaid)
+      ? Math.min(cap, Math.round((row.annualRentPaid * rate / 100) * 100) / 100)
+      : 0;
+    const employeeName = row.employee
+      ? [row.employee.firstName, row.employee.middleName, row.employee.lastName].filter(Boolean).join(" ")
+      : "";
+
+    return {
+      rowNumber: row.rowNumber,
+      valid: errors.length === 0,
+      errors,
+      input: errors.length
+        ? null
+        : {
+            employeeNumber: row.employee.employeeNumber,
+            taxYear: row.taxYear,
+            annualRentPaid: row.annualRentPaid,
+            evidenceReference: row.evidenceReference,
+            notes: row.notes || "Bulk rent relief import — pending HR verification.",
+          },
+      display: {
+        employeeNumber: row.employee?.employeeNumber || "",
+        employeeName: employeeName || "",
+        taxYear: row.taxYear || "",
+        annualRentPaid: Number.isFinite(row.annualRentPaid) ? row.annualRentPaid : "",
+        eligibleRelief,
+        evidenceReference: row.evidenceReference,
+        status: "PENDING_VERIFICATION",
+      },
+    };
+  });
+}
+
+router.get(
+  "/tax-reliefs/rent/template",
+  requirePermission("payroll.manage"),
+  requireZermattHeadHrPayrollAuthority,
+  async (req, res) => {
+    res.setHeader("Content-Disposition", 'attachment; filename="CHRIS_PAYE_Rent_Relief_Bulk_Template.xlsx"');
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(rentReliefTemplateBuffer());
+  }
+);
+
+router.post(
+  "/tax-reliefs/rent/bulk/preview",
+  requirePermission("payroll.manage"),
+  requireZermattHeadHrPayrollAuthority,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file?.buffer) throw payroll.operationalError("IMPORT_FILE_REQUIRED", "Select an Excel file to validate.");
+      const rows = await prepareRentReliefWorkbook(req.auth.organizationId, req.file.buffer);
+      return res.json({
+        status: "success",
+        data: {
+          rows,
+          totalRows: rows.length,
+          validRows: rows.filter((row) => row.valid).length,
+          invalidRows: rows.filter((row) => !row.valid).length,
+        },
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to validate rent relief workbook.");
+    }
+  }
+);
+
+router.post(
+  "/tax-reliefs/rent/bulk/import",
+  requirePermission("payroll.manage"),
+  requireZermattHeadHrPayrollAuthority,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file?.buffer) throw payroll.operationalError("IMPORT_FILE_REQUIRED", "Select an Excel file to import.");
+      const rows = await prepareRentReliefWorkbook(req.auth.organizationId, req.file.buffer);
+      const results = [];
+
+      for (const row of rows) {
+        if (!row.valid) {
+          results.push({ rowNumber: row.rowNumber, success: false, employee: row.display, errors: row.errors });
+          continue;
+        }
+        try {
+          const saved = await nigeriaPayroll.declareRentRelief({
+            organizationId: req.auth.organizationId,
+            actorUserId: req.auth.userId,
+            input: row.input,
+          });
+          results.push({ rowNumber: row.rowNumber, success: true, employee: saved, errors: [] });
+        } catch (error) {
+          results.push({
+            rowNumber: row.rowNumber,
+            success: false,
+            employee: row.display,
+            errors: [error.message || "Unable to save rent relief."],
+          });
+        }
+      }
+
+      const imported = results.filter((row) => row.success).length;
+      const failed = results.length - imported;
+      let payrollDraftFreshness = null;
+      if (imported > 0) {
+        payrollDraftFreshness = await markDraftRunsRecalculationRequired({
+          organizationId: req.auth.organizationId,
+          actorUserId: req.auth.userId,
+          reason: `${imported} rent-relief record(s) were imported; draft PAYE must be recalculated after verification changes.`,
+        });
+      }
+
+      return res.status(207).json({
+        status: "success",
+        message: `${imported} rent-relief record(s) imported for verification. ${failed} row(s) failed.`,
+        data: {
+          results,
+          imported,
+          failed,
+          total: results.length,
+          payrollDraftFreshness,
+        },
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to import rent relief workbook.");
+    }
+  }
+);
+
 router.get("/periods", requirePermission("payroll.view"), async (req, res) => {
   try {
     return res.json({ status: "success", data: await payroll.listPeriods({ organizationId: req.auth.organizationId }) });
