@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -6,67 +7,67 @@ import {
 } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
-import PlannedWorkspace from "./pages/shared/PlannedWorkspace";
-import ModuleDashboard from "./components/dashboard/ModuleDashboard";
+const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
+const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
-import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
-import Employees from "./pages/Employees";
-import EmployeeDashboard from "./pages/EmployeeDashboard";
-import EmployeeAnalytics from "./pages/EmployeeAnalytics";
-import EmployeeModuleWorkspace from "./pages/EmployeeModuleWorkspace";
-import EmployeeOnboarding from "./pages/EmployeeOnboarding";
-import AddOnboardEmployeeEntry from "./pages/AddOnboardEmployeeEntry";
-import OnboardingTracker from "./pages/OnboardingTracker";
-import BulkEmployeeImport from "./pages/BulkEmployeeImport";
-import EmployeeInvitations from "./pages/EmployeeInvitations";
-import EmployeeExportQueue from "./pages/EmployeeExportQueue";
-import EmployeeSelfOnboardingPublic from "./pages/EmployeeSelfOnboardingPublic";
-import EmployeeGovernance from "./pages/EmployeeGovernance";
-import EmployeeExits from "./pages/EmployeeExits";
-import LineManagers from "./pages/LineManagers";
-import EmployeeProfile from "./components/employees/EmployeeProfile";
+const Login = lazy(() => import("./pages/Login"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Employees = lazy(() => import("./pages/Employees"));
+const EmployeeDashboard = lazy(() => import("./pages/EmployeeDashboard"));
+const EmployeeAnalytics = lazy(() => import("./pages/EmployeeAnalytics"));
+const EmployeeModuleWorkspace = lazy(() => import("./pages/EmployeeModuleWorkspace"));
+const EmployeeOnboarding = lazy(() => import("./pages/EmployeeOnboarding"));
+const AddOnboardEmployeeEntry = lazy(() => import("./pages/AddOnboardEmployeeEntry"));
+const OnboardingTracker = lazy(() => import("./pages/OnboardingTracker"));
+const BulkEmployeeImport = lazy(() => import("./pages/BulkEmployeeImport"));
+const EmployeeInvitations = lazy(() => import("./pages/EmployeeInvitations"));
+const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
+const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
+const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
+const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
+const LineManagers = lazy(() => import("./pages/LineManagers"));
+const EmployeeProfile = lazy(() => import("./components/employees/EmployeeProfile"));
 import EmployeeProfileErrorBoundary from "./components/employees/EmployeeProfileErrorBoundary";
-import Recruitment from "./pages/Recruitment";
-import RecruitmentVacancies from "./pages/RecruitmentVacancies";
-import RecruitmentTalentWorkspace from "./pages/RecruitmentTalentWorkspace";
-import AttendanceDashboard from "./pages/AttendanceDashboard";
-import AttendanceRegister from "./pages/AttendanceRegister";
-import ShiftManagement from "./pages/ShiftManagement";
-import ShiftSchedule from "./pages/ShiftSchedule";
-import AttendanceAnalyticsPage from "./pages/AttendanceAnalyticsPage";
-import WorkedHours from "./pages/WorkedHours";
-import PublicHolidays from "./pages/PublicHolidays";
-import LeaveDashboard from "./pages/LeaveDashboard";
-import LeaveRequests from "./pages/LeaveRequests";
-import LeaveBalances from "./pages/LeaveBalances";
-import LeavePolicies from "./pages/LeavePolicies";
-import LeaveActive from "./pages/LeaveActive";
-import LeaveReturns from "./pages/LeaveReturns";
-import LeaveCalendarPage from "./pages/LeaveCalendarPage";
-import LeaveEntitlements from "./pages/LeaveEntitlements";
-import LeaveExceptions from "./pages/LeaveExceptions";
-import Payroll from "./pages/Payroll";
-import Benefits from "./pages/Benefits";
-import BenefitChildPage from "./pages/benefits/BenefitChildPage";
-import Loans from "./pages/Loans";
-import Performance from "./pages/Performance";
-import Training from "./pages/Training";
-import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
-import Designations from "./pages/Designations";
-import OrganizationProfile from "./pages/OrganizationProfile";
-import OrganizationChart from "./pages/OrganizationChart";
-import ReportingLines from "./pages/ReportingLines";
-import CostCentres from "./pages/CostCentres";
-import MySupportRequests from "./pages/MySupportRequests";
-import SupportDesk from "./pages/SupportDesk";
-import CommercialOperations from "./pages/CommercialOperations";
-import RemittanceWorkspace from "./pages/statutories/RemittanceWorkspace";
+const Recruitment = lazy(() => import("./pages/Recruitment"));
+const RecruitmentVacancies = lazy(() => import("./pages/RecruitmentVacancies"));
+const RecruitmentTalentWorkspace = lazy(() => import("./pages/RecruitmentTalentWorkspace"));
+const AttendanceDashboard = lazy(() => import("./pages/AttendanceDashboard"));
+const AttendanceRegister = lazy(() => import("./pages/AttendanceRegister"));
+const ShiftManagement = lazy(() => import("./pages/ShiftManagement"));
+const ShiftSchedule = lazy(() => import("./pages/ShiftSchedule"));
+const AttendanceAnalyticsPage = lazy(() => import("./pages/AttendanceAnalyticsPage"));
+const WorkedHours = lazy(() => import("./pages/WorkedHours"));
+const PublicHolidays = lazy(() => import("./pages/PublicHolidays"));
+const LeaveDashboard = lazy(() => import("./pages/LeaveDashboard"));
+const LeaveRequests = lazy(() => import("./pages/LeaveRequests"));
+const LeaveBalances = lazy(() => import("./pages/LeaveBalances"));
+const LeavePolicies = lazy(() => import("./pages/LeavePolicies"));
+const LeaveActive = lazy(() => import("./pages/LeaveActive"));
+const LeaveReturns = lazy(() => import("./pages/LeaveReturns"));
+const LeaveCalendarPage = lazy(() => import("./pages/LeaveCalendarPage"));
+const LeaveEntitlements = lazy(() => import("./pages/LeaveEntitlements"));
+const LeaveExceptions = lazy(() => import("./pages/LeaveExceptions"));
+const Payroll = lazy(() => import("./pages/Payroll"));
+const Benefits = lazy(() => import("./pages/Benefits"));
+const BenefitChildPage = lazy(() => import("./pages/benefits/BenefitChildPage"));
+const Loans = lazy(() => import("./pages/Loans"));
+const Performance = lazy(() => import("./pages/Performance"));
+const Training = lazy(() => import("./pages/Training"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Designations = lazy(() => import("./pages/Designations"));
+const OrganizationProfile = lazy(() => import("./pages/OrganizationProfile"));
+const OrganizationChart = lazy(() => import("./pages/OrganizationChart"));
+const ReportingLines = lazy(() => import("./pages/ReportingLines"));
+const CostCentres = lazy(() => import("./pages/CostCentres"));
+const MySupportRequests = lazy(() => import("./pages/MySupportRequests"));
+const SupportDesk = lazy(() => import("./pages/SupportDesk"));
+const CommercialOperations = lazy(() => import("./pages/CommercialOperations"));
+const RemittanceWorkspace = lazy(() => import("./pages/statutories/RemittanceWorkspace"));
 
 function ProtectedLayout({ children }) {
   return (
@@ -84,9 +85,22 @@ function PermissionLayout({ permission, children }) {
   );
 }
 
+function AppLoading() {
+  return (
+    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#07110C", color: "#F7D66A", fontFamily: "Arial, Helvetica, sans-serif" }}>
+      <div role="status" aria-live="polite" style={{ textAlign: "center" }}>
+        <div style={{ width: 52, height: 52, margin: "0 auto 14px", borderRadius: "50%", display: "grid", placeItems: "center", background: "#D4AF37", color: "#07140D", fontWeight: 900 }}>CH</div>
+        <div style={{ fontSize: 18, fontWeight: 900 }}>Loading CHRiS…</div>
+        <div style={{ marginTop: 6, color: "#AFC0B6", fontSize: 12 }}>Opening the selected workspace</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<AppLoading />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -274,6 +288,7 @@ function App() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
