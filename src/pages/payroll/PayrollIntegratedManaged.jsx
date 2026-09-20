@@ -415,7 +415,7 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
       {row.runStatus !== "APPROVED" && <div style={warningStyle}>Preview only — this payroll has not yet been approved by Head HR. Printing is allowed for review, but employee email delivery remains disabled until approval.</div>}
       <div style={{ ...buttonRow, marginTop: 14 }}>
         <button type="button" style={secondaryButton} onClick={onClose}>Close</button>
-        <button type="button" style={primaryButton} onClick={() => printPayslip(row, organization)}>Print {row.runStatus === "APPROVED" ? "Payslip" : "Preview"}</button>
+        <button type="button" style={primaryButton} onClick={() => printPayslip(row, organization)}>{row.runStatus === "APPROVED" ? "Print Payslip" : "Print Preview"}</button>
         {row.runStatus === "APPROVED" && onEmail && <button type="button" style={primaryButton} disabled={!row.employeeEmail || emailBusy} onClick={onEmail}>{emailBusy ? "Emailing…" : row.employeeEmail ? "Email Payslip" : "Employee Email Missing"}</button>}
       </div>
     </Panel>
