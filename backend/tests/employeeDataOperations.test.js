@@ -5,6 +5,7 @@ const {
   hashInviteToken,
   IMPORT_HEADERS,
   EXPORT_COLUMN_CATALOG,
+  DEFAULT_EXPORT_COLUMNS,
 } = require("../src/services/employeeDataOperationsService");
 
 assert.equal(safeSpreadsheetValue("=SUM(A1:A2)"), "'=SUM(A1:A2)");
@@ -22,6 +23,8 @@ assert.ok(IMPORT_HEADERS.includes("Employee Name"));
 assert.ok(IMPORT_HEADERS.includes("Department"));
 assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "employeeNumber"));
 assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "employmentType"));
+assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "grossSalary"));
+assert.ok(DEFAULT_EXPORT_COLUMNS.includes("grossSalary"));
 assert.ok(EXPORT_COLUMN_CATALOG.some((row) => row.key === "taxIdentificationNumber"));
 
 console.log("PASS: employee data operations security and spreadsheet contracts.");

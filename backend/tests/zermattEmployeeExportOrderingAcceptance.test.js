@@ -29,3 +29,17 @@ assert.deepEqual(
 );
 
 console.log("PASS: Zermatt employee export Employment Type and branch/seniority ordering.");
+
+
+const fs = require("node:fs");
+const path = require("node:path");
+const source = fs.readFileSync(
+  path.resolve(__dirname, "../src/services/employeeDataOperationsService.js"),
+  "utf8"
+);
+
+assert.ok(source.includes('{ key: "grossSalary", label: "Gross Salary" }'));
+assert.ok(source.includes('FROM "payroll_salary_rates"'));
+assert.ok(source.includes('"status"=\'ACTIVE\''));
+assert.ok(source.includes('"effectiveFrom" <= $2::date'));
+assert.ok(source.includes('currentGrossSalary'));

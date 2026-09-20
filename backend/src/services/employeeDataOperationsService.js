@@ -13,6 +13,7 @@ const EXPORT_COLUMN_CATALOG = [
   { key: "status", label: "Status" },
   { key: "hireDate", label: "Employment Date" },
   { key: "employmentType", label: "Employment Type" },
+  { key: "grossSalary", label: "Gross Salary" },
   { key: "department", label: "Department" },
   { key: "designation", label: "Designation" },
   { key: "employmentLevel", label: "Employment Level" },
@@ -39,6 +40,7 @@ const DEFAULT_EXPORT_COLUMNS = [
   "designation",
   "employmentLevel",
   "employmentType",
+  "grossSalary",
   "location",
   "status",
   "hireDate",
@@ -450,6 +452,7 @@ function exportValue(employee, key) {
     status: employee.status,
     hireDate: employee.hireDate,
     employmentType: employee.employmentType,
+    grossSalary: employee.currentGrossSalary,
     department: employee.department?.name,
     designation: employee.designation?.name,
     employmentLevel: level?.name || (Number.isInteger(employee.designation?.careerLevel) ? `Level ${employee.designation.careerLevel}` : ""),
@@ -494,7 +497,8 @@ async function createEmployeeExport(prisma, {
   });
 
   try {
-    const [organization, employees] = await Promise.all([
+    const effectiveDate = new Date().toISOString().slice(0, 10);
+    const [organization, employees, salaryRateRows] = await Promise.all([
       prisma.organization.findUnique({
         where: { id: organizationId },
         select: { slug: true },
@@ -516,12 +520,33 @@ async function createEmployeeExport(prisma, {
         },
         orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       }),
+      prisma.$queryRawUnsafe(
+        `SELECT DISTINCT ON ("employeeId") "employeeId","amount"
+           FROM "payroll_salary_rates"
+          WHERE "organizationId"=$1
+            AND "status"='ACTIVE'
+            AND "effectiveFrom" <= $2::date
+            AND ("effectiveTo" IS NULL OR "effectiveTo" >= $2::date)
+          ORDER BY "employeeId","effectiveFrom" DESC`,
+        organizationId,
+        effectiveDate
+      ),
     ]);
+
+    const currentSalaryByEmployee = new Map(
+      salaryRateRows.map((row) => [row.employeeId, Number(row.amount || 0)])
+    );
+    const employeesWithSalary = employees.map((employee) => ({
+      ...employee,
+      currentGrossSalary: currentSalaryByEmployee.has(employee.id)
+        ? currentSalaryByEmployee.get(employee.id)
+        : "",
+    }));
 
     const orderedEmployees =
       organization?.slug === "zermatt-liquor-limited"
-        ? [...employees].sort(compareZermattEmployeeExportRows)
-        : employees;
+        ? [...employeesWithSalary].sort(compareZermattEmployeeExportRows)
+        : employeesWithSalary;
 
     const catalogByKey = Object.fromEntries(EXPORT_COLUMN_CATALOG.map((row) => [row.key, row]));
     const rows = orderedEmployees.map((employee) =>
