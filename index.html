@@ -70,13 +70,35 @@
         window.__CHRIS_MARK_BOOT_COMPLETE__ = () => {
           window.__CHRIS_BOOT_COMPLETE__ = true;
           try { sessionStorage.removeItem(recoveryKey); } catch {}
+          try {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete("__chris_boot");
+            cleanUrl.searchParams.delete("__chris_reload");
+            cleanUrl.searchParams.delete("__chris_fresh");
+            window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+          } catch {}
         };
 
-        window.__CHRIS_RETRY_BOOT__ = () => {
+        window.__CHRIS_RETRY_BOOT__ = async () => {
           try { sessionStorage.removeItem(recoveryKey); } catch {}
-          const url = new URL(window.location.href);
-          url.searchParams.set("__chris_reload", Date.now().toString());
-          window.location.replace(url.toString());
+
+          try {
+            if ("caches" in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map((key) => caches.delete(key)));
+            }
+          } catch {}
+
+          try {
+            if ("serviceWorker" in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(registrations.map((registration) => registration.unregister()));
+            }
+          } catch {}
+
+          const freshUrl = new URL("/", window.location.origin);
+          freshUrl.searchParams.set("__chris_fresh", Date.now().toString());
+          window.location.replace(freshUrl.toString());
         };
 
         const recoverOnce = () => {
@@ -90,7 +112,7 @@
             window.location.replace(url.toString());
             return;
           }
-          showRecovery("CHRiS did not finish loading after an automatic recovery attempt. Select Reload CHRiS.");
+          showRecovery("CHRiS did not finish loading after an automatic recovery attempt. Open a fresh CHRiS session to load the latest deployed application.");
         };
 
         window.addEventListener("error", () => {
@@ -112,7 +134,7 @@
           <div id="chris-boot-mark">CH</div>
           <h1 id="chris-boot-title">Starting CHRiS</h1>
           <p id="chris-boot-message">Loading the secure workspace...</p>
-          <button id="chris-boot-retry" type="button" onclick="window.__CHRIS_RETRY_BOOT__()">Reload CHRiS</button>
+          <button id="chris-boot-retry" type="button" onclick="window.__CHRIS_RETRY_BOOT__()">Open Fresh CHRiS</button>
         </div>
       </div>
     </div>
