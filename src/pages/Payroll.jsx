@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useState,
 } from "react";
@@ -26,13 +28,13 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
-import PayrollWorkspace from "./payroll/PayrollWorkspace";
-import NigeriaPayrollSupplementWorkspace from "./payroll/NigeriaPayrollSupplementWorkspace";
-import SalaryAdvancesManaged from "./payroll/SalaryAdvancesManaged";
-import SalaryRatesManaged from "./payroll/SalaryRatesManaged";
-import PayrollComponentsManaged from "./payroll/PayrollComponentsManaged";
-import RentReliefManaged from "./payroll/RentReliefManaged";
-import PayrollIntegratedManaged from "./payroll/PayrollIntegratedManaged";
+const PayrollWorkspace = lazy(() => import("./payroll/PayrollWorkspace"));
+const NigeriaPayrollSupplementWorkspace = lazy(() => import("./payroll/NigeriaPayrollSupplementWorkspace"));
+const SalaryAdvancesManaged = lazy(() => import("./payroll/SalaryAdvancesManaged"));
+const SalaryRatesManaged = lazy(() => import("./payroll/SalaryRatesManaged"));
+const PayrollComponentsManaged = lazy(() => import("./payroll/PayrollComponentsManaged"));
+const RentReliefManaged = lazy(() => import("./payroll/RentReliefManaged"));
+const PayrollIntegratedManaged = lazy(() => import("./payroll/PayrollIntegratedManaged"));
 import { apiRequest } from "../services/api";
 
 const WORKSPACES = new Set([
@@ -48,6 +50,16 @@ const WORKSPACES = new Set([
   "statutory",
   "rent-relief",
 ]);
+
+function PayrollWorkspaceLoading() {
+  return (
+    <section aria-live="polite" style={{ minHeight: 280, display: "grid", placeItems: "center", color: "#D4AF37" }}>
+      <div role="status" style={{ textAlign: "center", fontWeight: 900 }}>
+        Loading payroll workspace…
+      </div>
+    </section>
+  );
+}
 
 function ratioPercent(value, total) {
   if (!total) return 0;
@@ -65,6 +77,13 @@ function Payroll() {
 
   useEffect(() => {
     let active = true;
+    if (WORKSPACES.has(workspace)) {
+      setLoading(false);
+      setError("");
+      return () => { active = false; };
+    }
+
+    setLoading(true);
     Promise.all([
       apiRequest("/api/payroll/readiness"),
       apiRequest("/api/payroll/compliance-policy").catch(() => null),
@@ -89,14 +108,20 @@ function Payroll() {
   }, [workspace]);
 
   if (WORKSPACES.has(workspace)) {
-    if (["execute", "payslips", "statutory"].includes(workspace)) return <PayrollIntegratedManaged mode={workspace} />;
-    if (workspace === "salary-advances") return <SalaryAdvancesManaged />;
-    if (workspace === "rates") return <SalaryRatesManaged />;
-    if (workspace === "allowances") return <PayrollComponentsManaged kind="ALLOWANCE" />;
-    if (workspace === "deductions") return <PayrollComponentsManaged kind="DEDUCTION" />;
-    if (workspace === "rent-relief") return <RentReliefManaged />;
-    if (workspace === "approvals") return <NigeriaPayrollSupplementWorkspace mode={workspace} />;
-    return <PayrollWorkspace mode={workspace} />;
+    let workspaceView = <PayrollWorkspace mode={workspace} />;
+    if (["execute", "payslips", "statutory"].includes(workspace)) workspaceView = <PayrollIntegratedManaged mode={workspace} />;
+    else if (workspace === "salary-advances") workspaceView = <SalaryAdvancesManaged />;
+    else if (workspace === "rates") workspaceView = <SalaryRatesManaged />;
+    else if (workspace === "allowances") workspaceView = <PayrollComponentsManaged kind="ALLOWANCE" />;
+    else if (workspace === "deductions") workspaceView = <PayrollComponentsManaged kind="DEDUCTION" />;
+    else if (workspace === "rent-relief") workspaceView = <RentReliefManaged />;
+    else if (workspace === "approvals") workspaceView = <NigeriaPayrollSupplementWorkspace mode={workspace} />;
+
+    return (
+      <Suspense fallback={<PayrollWorkspaceLoading />}>
+        {workspaceView}
+      </Suspense>
+    );
   }
 
   const summary = readiness?.summary || {};
