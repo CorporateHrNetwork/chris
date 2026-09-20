@@ -38,7 +38,7 @@ async function calculateSettlement({ organizationId, actorUserId, exitProcessId,
         throw settlementError("SETTLEMENT_EVIDENCE_REQUIRED", `A source reference is required for ${label}.`, 400, { amountKey, referenceKey });
       }
     }
-    const [loanRows, advanceRows] = await Promise.all([
+    const [loanRows, advanceRows, scheduledDeductionRows] = await Promise.all([
       tx.$queryRawUnsafe(
         `SELECT COALESCE(SUM("outstandingAmount"),0) AS "amount" FROM "payroll_loans"
           WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status" IN ('ACTIVE','APPROVED','DISBURSED')`,
@@ -49,16 +49,29 @@ async function calculateSettlement({ organizationId, actorUserId, exitProcessId,
           WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status"='ACTIVE'`,
         organizationId, exit.employeeId
       ),
+      tx.$queryRawUnsafe(
+        `SELECT COALESCE(SUM("outstandingAmount"),0) AS "amount" FROM "payroll_deduction_plans"
+          WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status"='ACTIVE' AND "outstandingAmount" > 0`,
+        organizationId, exit.employeeId
+      ),
     ]);
+    const scheduledDeductionRecovery = money(scheduledDeductionRows[0]?.amount);
     const authoritativeInput = {
       ...input,
       loanRecovery: money(loanRows[0]?.amount),
       salaryAdvanceRecovery: money(advanceRows[0]?.amount),
+      otherRecovery: money(money(input.otherRecovery) + scheduledDeductionRecovery),
     };
     const values = calculate(authoritativeInput);
     const snapshot = {
       inputs: Object.fromEntries(Object.keys(values).filter((key) => !["grossPayable","totalRecovery","netSettlement"].includes(key)).map((key) => [key, values[key]])),
-      authoritativeBalances: { loanRecovery: values.loanRecovery, salaryAdvanceRecovery: values.salaryAdvanceRecovery },
+      authoritativeBalances: {
+        loanRecovery: values.loanRecovery,
+        salaryAdvanceRecovery: values.salaryAdvanceRecovery,
+        scheduledDeductionRecovery,
+        otherRecoveryEntered: money(input.otherRecovery),
+        otherRecoveryTotal: values.otherRecovery,
+      },
       evidenceReferences: {
         finalSalary: text(input.finalSalaryReference) || null, leave: text(input.leaveReference) || null,
         noticePay: text(input.noticePayReference) || null, gratuity: text(input.gratuityReference) || null,
