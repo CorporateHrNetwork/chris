@@ -53,44 +53,41 @@ async function replaceDraftObligations(tx, { organizationId, payrollRunId, perio
   return rows;
 }
 async function confirmPayrollObligations(tx, { organizationId, payrollRunId, actorUserId, statutoryCompliance = null }) {
-  const draftCount = await tx.statutoryObligation.count({
+  const obligations = await tx.statutoryObligation.findMany({
     where: { organizationId, payrollRunId, status: "DRAFT_CALCULATED" },
+    select: { id: true, employeeId: true, obligationType: true },
   });
-  if (!draftCount) throw obligationError("PAYROLL_OBLIGATIONS_MISSING", "Payroll approval cannot continue because no draft statutory obligations exist.");
 
-  const withheldByType = statutoryCompliance?.withheldEmployeeIdsByType || {};
-  const payeEmployeeIds = [...new Set(withheldByType.PAYE || [])];
-  const pensionEmployeeIds = [...new Set(withheldByType.PENSION || [])];
+  const payeWithheld = new Set(statutoryCompliance?.withheldEmployeeIdsByType?.PAYE || []);
+  const pensionWithheld = new Set(statutoryCompliance?.withheldEmployeeIdsByType?.PENSION || []);
+  const readyIds = [];
+  const withheldPayeIds = [];
+  const withheldPensionIds = [];
+
+  for (const obligation of obligations) {
+    if (obligation.obligationType === "PAYE" && payeWithheld.has(obligation.employeeId)) {
+      withheldPayeIds.push(obligation.id);
+    } else if (obligation.obligationType === "PENSION" && pensionWithheld.has(obligation.employeeId)) {
+      withheldPensionIds.push(obligation.id);
+    } else {
+      readyIds.push(obligation.id);
+    }
+  }
 
   const confirmedAt = new Date();
-  const ready = await tx.statutoryObligation.updateMany({
-    where: {
-      organizationId,
-      payrollRunId,
-      status: "DRAFT_CALCULATED",
-      NOT: [
-        ...(payeEmployeeIds.length ? [{ obligationType: "PAYE", employeeId: { in: payeEmployeeIds } }] : []),
-        ...(pensionEmployeeIds.length ? [{ obligationType: "PENSION", employeeId: { in: pensionEmployeeIds } }] : []),
-      ],
-    },
-    data: {
-      status: "CONFIRMED",
-      confirmedAt,
-      exceptionCode: null,
-      exceptionReason: null,
-    },
-  });
+  let readyCount = 0;
+  if (readyIds.length) {
+    const result = await tx.statutoryObligation.updateMany({
+      where: { organizationId, id: { in: readyIds }, status: "DRAFT_CALCULATED" },
+      data: { status: "CONFIRMED", confirmedAt, exceptionCode: null, exceptionReason: null },
+    });
+    readyCount = Number(result.count || 0);
+  }
 
-  let withheldPaye = { count: 0 };
-  if (payeEmployeeIds.length) {
-    withheldPaye = await tx.statutoryObligation.updateMany({
-      where: {
-        organizationId,
-        payrollRunId,
-        status: "DRAFT_CALCULATED",
-        obligationType: "PAYE",
-        employeeId: { in: payeEmployeeIds },
-      },
+  let withheldPayeCount = 0;
+  if (withheldPayeIds.length) {
+    const result = await tx.statutoryObligation.updateMany({
+      where: { organizationId, id: { in: withheldPayeIds }, status: "DRAFT_CALCULATED" },
       data: {
         status: "CONFIRMED",
         confirmedAt,
@@ -98,18 +95,13 @@ async function confirmPayrollObligations(tx, { organizationId, payrollRunId, act
         exceptionReason: "PAYE remittance withheld because required employee Tax Identification Number and/or PAYE State details are incomplete.",
       },
     });
+    withheldPayeCount = Number(result.count || 0);
   }
 
-  let withheldPension = { count: 0 };
-  if (pensionEmployeeIds.length) {
-    withheldPension = await tx.statutoryObligation.updateMany({
-      where: {
-        organizationId,
-        payrollRunId,
-        status: "DRAFT_CALCULATED",
-        obligationType: "PENSION",
-        employeeId: { in: pensionEmployeeIds },
-      },
+  let withheldPensionCount = 0;
+  if (withheldPensionIds.length) {
+    const result = await tx.statutoryObligation.updateMany({
+      where: { organizationId, id: { in: withheldPensionIds }, status: "DRAFT_CALCULATED" },
       data: {
         status: "CONFIRMED",
         confirmedAt,
@@ -117,37 +109,43 @@ async function confirmPayrollObligations(tx, { organizationId, payrollRunId, act
         exceptionReason: "Pension remittance withheld because required employee Pension PFA and/or Pension PIN details are incomplete.",
       },
     });
+    withheldPensionCount = Number(result.count || 0);
   }
 
-  const withheldCount = Number(withheldPaye.count || 0) + Number(withheldPension.count || 0);
-  const totalConfirmed = Number(ready.count || 0) + withheldCount;
+  const withheldCount = withheldPayeCount + withheldPensionCount;
+  const totalConfirmed = readyCount + withheldCount;
 
   await tx.statutoryLifecycleEvent.create({ data: {
     organizationId,
     subjectType: "PAYROLL_RUN",
     subjectId: payrollRunId,
-    eventType: withheldCount ? "OBLIGATIONS_CONFIRMED_WITH_WITHHELD_POOL" : "OBLIGATIONS_CONFIRMED",
+    eventType: withheldCount
+      ? "OBLIGATIONS_CONFIRMED_WITH_WITHHELD_POOL"
+      : totalConfirmed
+        ? "OBLIGATIONS_CONFIRMED"
+        : "PAYROLL_APPROVED_NO_STATUTORY_LIABILITY",
     actorUserId: actorUserId || null,
-    previousStatus: "DRAFT_CALCULATED",
-    newStatus: "CONFIRMED",
+    previousStatus: obligations.length ? "DRAFT_CALCULATED" : null,
+    newStatus: totalConfirmed ? "CONFIRMED" : "NO_APPLICABLE_LIABILITY",
     metadata: {
       count: totalConfirmed,
-      readyForRemittanceCount: Number(ready.count || 0),
+      readyForRemittanceCount: readyCount,
       withheldCount,
-      withheldPayeCount: Number(withheldPaye.count || 0),
-      withheldPensionCount: Number(withheldPension.count || 0),
-      control: "Payroll approval is independent from remittance readiness. Withheld obligations remain recorded but cannot be allocated to a remittance batch until required employee statutory identifiers are complete.",
+      withheldPayeCount,
+      withheldPensionCount,
+      control: "Payroll approval is independent from remittance readiness. Missing employee statutory identifiers never block payroll approval; affected liabilities remain recorded but cannot be allocated until the required details are completed.",
     },
   } });
 
   return {
     count: totalConfirmed,
-    readyForRemittanceCount: Number(ready.count || 0),
+    readyForRemittanceCount: readyCount,
     withheldCount,
-    withheldPayeCount: Number(withheldPaye.count || 0),
-    withheldPensionCount: Number(withheldPension.count || 0),
+    withheldPayeCount,
+    withheldPensionCount,
   };
 }
+
 async function reversePayrollObligations(tx, { organizationId, payrollRunId, actorUserId, reason }) {
   const remitted = await tx.statutoryObligation.count({ where: { organizationId, payrollRunId, amountRemitted: { gt: 0 } } });
   if (remitted) throw obligationError("REMITTED_OBLIGATIONS_BLOCK_PAYROLL_REOPEN", "Payroll cannot be reopened after statutory remittance. Record a future adjustment instead.");
