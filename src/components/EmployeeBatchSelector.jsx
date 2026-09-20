@@ -9,11 +9,13 @@ export default function EmployeeBatchSelector({
   searchPlaceholder = "Search employee number or name",
   selectionLabel = "employee(s)",
   renderActions,
+  pageSize = 0,
   children,
 }) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectedOnly, setSelectedOnly] = useState(false);
+  const [page, setPage] = useState(1);
 
   const filteredRows = useMemo(() => {
     const term = normalize(query);
@@ -26,10 +28,17 @@ export default function EmployeeBatchSelector({
     () => (rows || []).filter((row) => selectedIdSet.has(String(getId(row)))),
     [rows, selectedIdSet, getId]
   );
-  const filteredIds = useMemo(() => filteredRows.map((row) => String(getId(row))), [filteredRows, getId]);
-  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIdSet.has(id));
-  const someFilteredSelected = filteredIds.some((id) => selectedIdSet.has(id));
-  const displayRows = selectedOnly ? filteredRows.filter((row) => selectedIdSet.has(String(getId(row)))) : filteredRows;
+  const unpagedDisplayRows = selectedOnly ? filteredRows.filter((row) => selectedIdSet.has(String(getId(row)))) : filteredRows;
+  const effectivePageSize = Number(pageSize) > 0 ? Number(pageSize) : 0;
+  const pageCount = effectivePageSize ? Math.max(1, Math.ceil(unpagedDisplayRows.length / effectivePageSize)) : 1;
+  const safePage = Math.min(page, pageCount);
+  const pageStart = effectivePageSize ? (safePage - 1) * effectivePageSize : 0;
+  const displayRows = effectivePageSize
+    ? unpagedDisplayRows.slice(pageStart, pageStart + effectivePageSize)
+    : unpagedDisplayRows;
+  const visibleIds = useMemo(() => displayRows.map((row) => String(getId(row))), [displayRows, getId]);
+  const allFilteredSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIdSet.has(id));
+  const someFilteredSelected = visibleIds.some((id) => selectedIdSet.has(id));
 
   const toggleOne = (row) => {
     const id = String(getId(row));
@@ -39,8 +48,8 @@ export default function EmployeeBatchSelector({
   const toggleFiltered = () => {
     setSelectedIds((current) => {
       const currentSet = new Set(current);
-      if (allFilteredSelected) filteredIds.forEach((id) => currentSet.delete(id));
-      else filteredIds.forEach((id) => currentSet.add(id));
+      if (allFilteredSelected) visibleIds.forEach((id) => currentSet.delete(id));
+      else visibleIds.forEach((id) => currentSet.add(id));
       return Array.from(currentSet);
     });
   };
@@ -48,6 +57,7 @@ export default function EmployeeBatchSelector({
   const clearSelection = () => {
     setSelectedIds([]);
     setSelectedOnly(false);
+    setPage(1);
   };
 
   const api = {
@@ -64,7 +74,14 @@ export default function EmployeeBatchSelector({
     someFilteredSelected,
     clearSelection,
     selectedOnly,
-    setSelectedOnly,
+    setSelectedOnly: (value) => {
+      setSelectedOnly(value);
+      setPage(1);
+    },
+    page: safePage,
+    pageCount,
+    pageSize: effectivePageSize,
+    totalDisplayCount: unpagedDisplayRows.length,
   };
 
   return (
@@ -75,7 +92,10 @@ export default function EmployeeBatchSelector({
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
             placeholder={searchPlaceholder}
             style={inputStyle}
           />
@@ -93,7 +113,7 @@ export default function EmployeeBatchSelector({
 
         <div style={statusStyle}>
           <strong>{selectedRows.length}</strong> {selectionLabel} selected
-          <span style={mutedStyle}> · {displayRows.length} shown</span>
+          <span style={mutedStyle}> · {displayRows.length} shown{effectivePageSize ? ` of ${unpagedDisplayRows.length}` : ""}</span>
         </div>
 
         <div style={buttonRowStyle}>
@@ -104,6 +124,14 @@ export default function EmployeeBatchSelector({
           {renderActions ? renderActions(api) : null}
         </div>
       </div>
+
+      {effectivePageSize && pageCount > 1 && (
+        <div style={paginationStyle}>
+          <button type="button" style={secondaryButton} disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button>
+          <span style={paginationTextStyle}>Page {safePage} of {pageCount}</span>
+          <button type="button" style={secondaryButton} disabled={safePage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</button>
+        </div>
+      )}
 
       {children(api)}
     </div>
@@ -120,3 +148,6 @@ const statusStyle = { minHeight: 40, display: "flex", alignItems: "center", colo
 const mutedStyle = { color: "#9FB7AA", fontWeight: 700 };
 const buttonRowStyle = { gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" };
 const secondaryButton = { borderRadius: 9, padding: "8px 11px", fontSize: 12, fontWeight: 900, cursor: "pointer", background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.5)" };
+
+const paginationStyle = { display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, flexWrap: "wrap" };
+const paginationTextStyle = { color: "#C7D3CC", fontSize: 12, fontWeight: 800 };
