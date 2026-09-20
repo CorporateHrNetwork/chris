@@ -17,9 +17,13 @@ const PASSWORDS = {
 
 const HEAD_PERMISSIONS = [
   "dashboard.view","employees.view","employees.create","employees.update",
+  "recruitment.view",
   "attendance.view","attendance.manage","leave.view","leave.manage",
   "payroll.view","payroll.process","payroll.manage","payslips.view","payslips.download",
-  "loans.view","reports.view","reports.export"
+  "loans.view",
+  "performance.view","training.view",
+  "reports.view","reports.export",
+  "settings.view"
 ];
 
 const BRANCH_PERMISSIONS = [
@@ -161,8 +165,8 @@ async function main() {
   const permissions = await permissionMap([...new Set([...HEAD_PERMISSIONS, ...BRANCH_PERMISSIONS])]);
   const headRole = await prisma.role.upsert({
     where: { organizationId_name: { organizationId: organization.id, name: "Head of HR" } },
-    update: { description: `${SYNTHETIC_MARKER} — consolidated payroll authority` },
-    create: { organizationId: organization.id, name: "Head of HR", description: `${SYNTHETIC_MARKER} — consolidated payroll authority` },
+    update: { description: `${SYNTHETIC_MARKER} — client-admin Head HR authority with consolidated payroll control` },
+    create: { organizationId: organization.id, name: "Head of HR", description: `${SYNTHETIC_MARKER} — client-admin Head HR authority with consolidated payroll control` },
   });
   const branchRole = await prisma.role.upsert({
     where: { organizationId_name: { organizationId: organization.id, name: "HR & Admin Officer - Branch" } },
