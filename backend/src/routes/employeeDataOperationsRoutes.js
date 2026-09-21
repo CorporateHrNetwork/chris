@@ -6,6 +6,7 @@ const fs = require("fs");
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const { createEmployee } = require("../services/employeeCreationService");
+const payroll = require("../services/payrollOperationsService");
 const {
   EXPORT_COLUMN_CATALOG,
   DEFAULT_EXPORT_COLUMNS,
@@ -122,6 +123,9 @@ router.post(
       });
 
       const results = [];
+      const canManagePayroll =
+        (req.auth.permissions || []).includes("payroll.manage");
+
       for (const row of rows) {
         if (!row.valid) {
           results.push({
@@ -132,12 +136,44 @@ router.post(
           });
           continue;
         }
+        if (row.salaryRate && !canManagePayroll) {
+          results.push({
+            rowNumber: row.rowNumber,
+            success: false,
+            employee: row.display,
+            errors: [
+              "Payroll Manage permission is required to create the opening salary rate supplied in this row.",
+            ],
+          });
+          continue;
+        }
+
         try {
           const employee = await createEmployee({
             organizationId: req.auth.organizationId,
             actorUserId: req.auth.userId,
             input: row.input,
           });
+
+          let salaryRate = null;
+          let warnings = [];
+          if (row.salaryRate) {
+            try {
+              salaryRate = await payroll.saveSalaryRate({
+                organizationId: req.auth.organizationId,
+                actorUserId: req.auth.userId,
+                input: {
+                  employeeNumber: employee.employeeNumber,
+                  ...row.salaryRate,
+                },
+              });
+            } catch (salaryError) {
+              warnings = [
+                `Employee created, but opening salary rate could not be saved: ${salaryError.message || "Unknown salary-rate error"}`,
+              ];
+            }
+          }
+
           results.push({
             rowNumber: row.rowNumber,
             success: true,
@@ -148,6 +184,8 @@ router.post(
                 .join(" "),
               email: employee.email,
             },
+            salaryRate,
+            warnings,
             errors: [],
           });
         } catch (error) {
