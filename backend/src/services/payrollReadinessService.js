@@ -40,22 +40,71 @@ function statutorySignals(statutory) {
   };
 }
 
-async function activeSalaryRates(prismaClient, organizationId) {
+async function activeSalaryRates(
+  prismaClient,
+  organizationId,
+  { periodStart = null, periodEnd = null } = {}
+) {
   try {
+    const effectiveStart = periodStart || new Date().toISOString().slice(0, 10);
+    const effectiveEnd = periodEnd || effectiveStart;
     const rows = await prismaClient.$queryRawUnsafe(
       `SELECT DISTINCT ON ("employeeId") "employeeId", "amount", "currency", "effectiveFrom", "effectiveTo"
          FROM "payroll_salary_rates"
         WHERE "organizationId"=$1 AND "status"='ACTIVE'
-          AND "effectiveFrom" <= CURRENT_DATE
-          AND ("effectiveTo" IS NULL OR "effectiveTo" >= CURRENT_DATE)
+          AND "effectiveFrom" <= $2::date
+          AND ("effectiveTo" IS NULL OR "effectiveTo" >= $3::date)
         ORDER BY "employeeId", "effectiveFrom" DESC`,
-      organizationId
+      organizationId,
+      effectiveEnd,
+      effectiveStart
     );
     return new Map(rows.map((row) => [row.employeeId, row]));
   } catch (error) {
     if (String(error?.message || "").includes("payroll_salary_rates")) return new Map();
     throw error;
   }
+}
+
+async function resolvePayrollReadinessWindow(
+  prismaClient,
+  organizationId,
+  periodId
+) {
+  if (!periodId) {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      periodId: null,
+      periodCode: null,
+      periodStart: today,
+      periodEnd: today,
+      mode: "CURRENT_DATE",
+    };
+  }
+
+  const rows = await prismaClient.$queryRawUnsafe(
+    `SELECT "id","code","periodStart","periodEnd"
+       FROM "payroll_periods"
+      WHERE "organizationId"=$1 AND "id"=$2
+      LIMIT 1`,
+    organizationId,
+    String(periodId)
+  );
+
+  if (!rows[0]) {
+    const error = new Error("Payroll period not found.");
+    error.code = "PAYROLL_PERIOD_NOT_FOUND";
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return {
+    periodId: rows[0].id,
+    periodCode: rows[0].code,
+    periodStart: new Date(rows[0].periodStart).toISOString().slice(0, 10),
+    periodEnd: new Date(rows[0].periodEnd).toISOString().slice(0, 10),
+    mode: "PAYROLL_PERIOD",
+  };
 }
 
 async function activePayrollPolicy(prismaClient, organizationId) {
@@ -79,6 +128,7 @@ async function activePayrollPolicy(prismaClient, organizationId) {
 async function getPayrollReadiness({
   organizationId,
   locationId = null,
+  periodId = null,
   prismaClient = prisma,
 }) {
   const employees = await prismaClient.employee.findMany({
@@ -102,6 +152,11 @@ async function getPayrollReadiness({
   });
 
   const employeeIds = employees.map((employee) => employee.id);
+  const readinessWindow = await resolvePayrollReadinessWindow(
+    prismaClient,
+    organizationId,
+    periodId
+  );
   const [onboardings, attendanceSetting, salaryRateByEmployee, payrollPolicy] =
     await Promise.all([
       employeeIds.length
@@ -122,7 +177,7 @@ async function getPayrollReadiness({
         where: { organizationId },
         select: { basis: true },
       }),
-      activeSalaryRates(prismaClient, organizationId),
+      activeSalaryRates(prismaClient, organizationId, readinessWindow),
       activePayrollPolicy(prismaClient, organizationId),
     ]);
 
@@ -223,6 +278,7 @@ async function getPayrollReadiness({
   summary.locationContext = locationId
     ? { mode: "BRANCH", locationId }
     : { mode: "HEAD_OFFICE_CONSOLIDATED", locationId: null };
+  summary.salaryRateEffectiveWindow = readinessWindow;
 
   const missingEmployment = summary.currentEmployees - summary.employmentReady;
   const missingCompensation = summary.currentEmployees - summary.compensationReady;
@@ -280,6 +336,7 @@ async function getPayrollReadiness({
   return {
     generatedAt: new Date().toISOString(),
     locationContext: summary.locationContext,
+    salaryRateEffectiveWindow: readinessWindow,
     executionEnabled,
     calculationEnabled: executionEnabled,
     statutoryCalculationEnabled: executionEnabled && Boolean(payrollPolicy),
