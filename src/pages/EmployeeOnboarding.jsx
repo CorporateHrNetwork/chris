@@ -22,6 +22,7 @@ import {
 
 import {
   apiRequest,
+  getStoredOrganization,
 } from "../services/api";
 import OnboardingSectionDataForm from "../components/employees/OnboardingSectionDataForm";
 import OnboardingDocumentsForm from "../components/employees/OnboardingDocumentsForm";
@@ -43,6 +44,10 @@ import {
   NIGERIA_PFAS,
   findNigeriaPfa,
 } from "../data/nigeriaPfas";
+import {
+  ZERMATT_DOCUMENT_ITEMS,
+  isZermattOrganization,
+} from "../data/zermattOnboardingDocuments";
 
 function countryFlagPath(code) {
   return `/flags/${String(
@@ -246,6 +251,16 @@ function EmployeeOnboarding({
   const {
     employeeNumber: routeEmployeeNumber = "",
   } = useParams();
+  const zermattTenant = isZermattOrganization(getStoredOrganization());
+  const tenantDefaultSections = useMemo(
+    () =>
+      DEFAULT_SECTIONS.map((section) =>
+        zermattTenant && section.key === "documents"
+          ? { ...section, items: ZERMATT_DOCUMENT_ITEMS }
+          : section
+      ),
+    [zermattTenant]
+  );
   const navigate = useNavigate();
   const continuationOpenedFor = useRef("");
   const sectionEditorRef = useRef(null);
@@ -285,7 +300,7 @@ function EmployeeOnboarding({
   const [
     selectedSections,
     setSelectedSections,
-  ] = useState(DEFAULT_SECTIONS);
+  ] = useState(() => tenantDefaultSections);
 
   const [
     employeeNumber,
@@ -519,17 +534,30 @@ function EmployeeOnboarding({
         return null;
       }
 
-      return (
+      const section =
         selectedRecord.template
           ?.sections?.find(
-            (section) =>
-              section.key ===
+            (item) =>
+              item.key ===
               selectedSectionKey
-          ) || null
-      );
+          ) || null;
+
+      if (
+        section &&
+        zermattTenant &&
+        section.key === "documents"
+      ) {
+        return {
+          ...section,
+          items: ZERMATT_DOCUMENT_ITEMS,
+        };
+      }
+
+      return section;
     }, [
       selectedRecord,
       selectedSectionKey,
+      zermattTenant,
     ]);
 
   async function createWorkflow() {
@@ -661,7 +689,7 @@ function EmployeeOnboarding({
         }
 
         const section =
-          DEFAULT_SECTIONS.find(
+          tenantDefaultSections.find(
             (item) =>
               item.key === key
           );
@@ -714,8 +742,14 @@ function EmployeeOnboarding({
         ? progress.completedItemKeys
         : [];
 
+    const sectionItemLabels =
+      zermattTenant &&
+      section.key === "documents"
+        ? ZERMATT_DOCUMENT_ITEMS
+        : section.items;
+
     setSectionItems(
-      section.items.map(
+      sectionItemLabels.map(
         (item) => ({
           label: item,
           completed:
