@@ -2279,32 +2279,15 @@ router.patch(
           req.params.sectionKey
         ] || {};
 
-      if (
-        section.required !== false &&
-        req.params.sectionKey !== "personal-details"
-      ) {
-        const validation =
-          validateOnboardingSection(
-            req.params.sectionKey,
-            savedData
-          );
-
-        if (!validation.valid) {
-          return res.status(422).json({
-            status: "error",
-            code: "ONBOARDING_SECTION_INCOMPLETE",
-            message:
-              `${section.label} is incomplete. Complete the highlighted field${validation.fields.length === 1 ? "" : "s"}.`,
-            details: {
-              sectionKey:
-                req.params.sectionKey,
-              fields:
-                validation.fields,
-            },
-          });
-        }
-      }
-
+      /*
+       * Save-progress semantics:
+       * Non-personal onboarding sections may be saved while incomplete.
+       * Completion is calculated below from the fields already supplied.
+       * This preserves valid partial entries (for example TIN/PAYE details)
+       * instead of discarding the entire section until every requirement
+       * has been entered. A completely blank required section is still
+       * rejected by the guard above.
+       */
       const completedItemKeys =
         buildCompletion(
           req.params.sectionKey,
