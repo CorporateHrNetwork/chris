@@ -447,19 +447,30 @@ function CreateResultTable({ rows, validation = false }) {
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={tableStyle}>
-        <thead><tr><th>Row</th><th>Employee</th><th>Email</th><th>Status</th><th>Details</th></tr></thead>
+        <thead><tr><th>Row</th><th>Employee</th><th>Email</th><th>Employment Type</th><th>Cost Centre</th><th>Opening Salary</th><th>Status</th><th>Details</th></tr></thead>
         <tbody>
           {(rows || []).map((row) => {
             const ok = validation ? row.valid : row.success;
             const employee = validation ? row.display : row.employee;
+            const display = validation ? row.display : row;
             const errors = row.errors || [];
+            const warnings = row.warnings || [];
+            const salaryAmount = validation
+              ? row.display?.grossSalary
+              : row.salaryRate?.amount;
+            const salaryCurrency = validation
+              ? row.display?.salaryCurrency
+              : row.salaryRate?.currency;
             return (
               <tr key={row.rowNumber}>
                 <td>{row.rowNumber}</td>
                 <td>{employee?.name || employee?.employeeNumber || "-"}</td>
                 <td>{employee?.email || "-"}</td>
-                <td><span style={ok ? okBadge : badBadge}>{ok ? (validation ? "Valid" : "Created") : "Needs attention"}</span></td>
-                <td>{errors.length ? errors.join(" · ") : (employee?.employeeNumber || "Ready")}</td>
+                <td>{validation ? (row.display?.employmentType || "-") : "-"}</td>
+                <td>{validation ? (row.display?.costCentre || "-") : "-"}</td>
+                <td>{salaryAmount ? `${salaryCurrency || "NGN"} ${Number(salaryAmount).toLocaleString()}` : "-"}</td>
+                <td><span style={ok ? okBadge : badBadge}>{ok ? (validation ? "Valid" : warnings.length ? "Created / review" : "Created") : "Needs attention"}</span></td>
+                <td>{errors.length ? errors.join(" · ") : warnings.length ? warnings.join(" · ") : (employee?.employeeNumber || display?.employeeNumber || "Ready")}</td>
               </tr>
             );
           })}
