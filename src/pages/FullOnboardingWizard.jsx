@@ -231,6 +231,30 @@ export default function FullOnboardingWizard() {
     }, 0);
   }
 
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return undefined;
+    const observed = sectionRefs.current.filter(Boolean);
+    if (!observed.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const index = sectionRefs.current.indexOf(visible.target);
+        if (index >= 0) setStep(index);
+      },
+      {
+        rootMargin: "-12% 0px -68% 0px",
+        threshold: [0.08, 0.2, 0.4],
+      }
+    );
+
+    observed.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [loading]);
+
   function validationFor(targetStep) {
     if (targetStep === 0 && (!form.firstName.trim() || !form.surname.trim() || !form.gender || !form.phone.trim() || !form.email.trim())) return "Complete First Name, Surname, Gender, Phone and Email.";
     if (targetStep === 1 && (!form.hireDate || !["Active", "Probation"].includes(form.status))) return "Select a valid initial status and Hire Date.";
@@ -388,14 +412,33 @@ export default function FullOnboardingWizard() {
 
     {complete && completionEmployee && <section className="qa-success" role="status"><div><strong>Employee created and onboarding started successfully — {completionEmployee.employeeNumber} {completionEmployee.displayName || completionEmployee.name}</strong><p>The completed draft has been cleared.</p></div><div className="qa-actions"><button className="qa-primary" type="button" onClick={() => follow(`/employees/${encodeURIComponent(completionEmployee.employeeNumber)}`)}>View Employee</button><button className="qa-secondary" type="button" onClick={() => follow("/employees/onboarding")}>Onboarding Tracker</button><button className="qa-secondary" type="button" onClick={addAnother}>Add Another Employee</button></div></section>}
 
-    <nav className="qa-steps fo-steps fo-sticky-nav" aria-label="Unified onboarding sections">
-      {STEPS.map((label, index) => <button key={label} type="button" className={step === index ? "active" : ""} onClick={() => jumpToSection(index)}><span>{index + 1}</span>{label}</button>)}
-    </nav>
+    <section className="fo-onboarding-layout">
+      <aside className="fo-section-sidebar" aria-label="Onboarding section navigation">
+        <div className="fo-section-sidebar-head">
+          <small>ONBOARDING SECTIONS</small>
+          <strong>{step + 1} of {STEPS.length}</strong>
+        </div>
+        <nav className="fo-section-nav" aria-label="Unified onboarding sections">
+          {STEPS.map((label, index) => (
+            <button
+              key={label}
+              type="button"
+              className={step === index ? "active" : ""}
+              onClick={() => jumpToSection(index)}
+              aria-current={step === index ? "step" : undefined}
+            >
+              <span>{index + 1}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-    {error && <div className="qa-error fo-global-error" role="alert">{error}</div>}
-    {createdEmployee && !complete && <div className="fo-note" role="status"><strong>Employee created successfully — {createdEmployee.employeeNumber} {createdEmployee.name || fullName}</strong><span>CHRiS is continuing the same onboarding transaction. The employee record will not be created again.</span></div>}
+      <main className="fo-onboarding-main">
+        {error && <div className="qa-error fo-global-error" role="alert">{error}</div>}
+        {createdEmployee && !complete && <div className="fo-note" role="status"><strong>Employee created successfully — {createdEmployee.employeeNumber} {createdEmployee.name || fullName}</strong><span>CHRiS is continuing the same onboarding transaction. The employee record will not be created again.</span></div>}
 
-    <section className="fo-stack">
+        <section className="fo-stack">
       <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[0] = node; panelRef.current = node; }} tabIndex="-1">
         <div className="qa-panel-title"><div><small>1 · PERSONAL INFORMATION</small><h2>Identity & Contact</h2></div>{loading && <span>Loading setup…</span>}</div>
         <div className="qa-grid"><Field label="First Name"><input value={form.firstName} onChange={set("firstName")} /></Field><Field label="Middle Name" optional><input value={form.middleName} onChange={set("middleName")} /></Field><Field label="Surname"><input value={form.surname} onChange={set("surname")} /></Field><Field label="Gender"><select value={form.gender} onChange={set("gender")}><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option><option>Unspecified</option></select></Field><Field label="Phone"><input type="tel" value={form.phone} onChange={set("phone")} /></Field><Field label="Alternative Phone" optional><input type="tel" value={form.alternativePhone} onChange={set("alternativePhone")} /></Field><Field label="Email"><input type="email" value={form.email} onChange={set("email")} /></Field><Field label="Date of Birth" optional><input type="date" value={form.dateOfBirth} onChange={set("dateOfBirth")} /></Field><Field label="Marital Status" optional><select value={form.maritalStatus} onChange={set("maritalStatus")}><option value="">Select status</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></Field><Field label="Nationality" optional><input value={form.nationality} onChange={set("nationality")} /></Field><Field label="Country of Residence" optional><SearchableRegistrySelect ariaLabel="Country of Residence" value={COUNTRY_CATALOG.find((country) => country.name === form.country)?.code || "NG"} options={COUNTRY_CATALOG.map((country) => ({ value: country.code, label: country.name }))} onChange={(value) => { const country = COUNTRY_CATALOG.find((item) => item.code === value); setForm((current) => ({ ...current, country: country?.name || "Nigeria" })); setError(""); }} placeholder="Search country" /></Field><Field label="Residential Address" optional><textarea rows="2" value={form.residentialAddress} onChange={set("residentialAddress")} /></Field><Field label="ID Type"><select value={form.idType} onChange={set("idType")}><option value="">Select ID type</option><option value="NIN">National Identification Number (NIN)</option><option value="INTERNATIONAL_PASSPORT">International Passport</option><option value="DRIVERS_LICENSE">Driver's License</option><option value="VOTERS_CARD">Voter's Card</option></select></Field><Field label="ID Number"><input value={form.idNumber} onChange={set("idNumber")} /></Field><Field label="ID Expiry Date" optional><input type="date" value={form.idExpiryDate} onChange={set("idExpiryDate")} /></Field></div>
@@ -450,6 +493,8 @@ export default function FullOnboardingWizard() {
         <div className="fo-review"><Review title="Personal" rows={[["Name", fullName], ["Gender", form.gender], ["Phone", form.phone], ["Email", form.email], ["Nationality", form.nationality]]}/><Review title="Employment" rows={[["Status", form.status], ["Hire Date", form.hireDate], ["Employment Type", form.employmentType], ["Workflow", template?.name]]}/><Review title="Organization" rows={[["Department", departments.find((row) => row.id === form.departmentId)?.name], ["Designation", designation?.name], ["Employment Level", Number.isInteger(designation?.careerLevel) ? `Level ${designation.careerLevel}` : "Missing"], ["Location", locations.find((row) => row.id === form.locationId)?.name], ["Cost Centre / Operating Unit", costCentres.find((row) => row.id === form.costCentreId)?.name]]}/><Review title="Compensation & Payment" rows={[["Monthly Gross", form.grossSalary ? `${form.salaryCurrency} ${Number(form.grossSalary).toLocaleString()}` : "—"], ["Salary Effective From", form.salaryEffectiveFrom], ["Bank", payment.bankName], ["Account Name", payment.accountName], ["Payroll Currency", payment.payrollCurrency], ["Method", payment.paymentMethod]]}/><Review title="Statutory Information" rows={[["TIN", statutory.taxIdentificationNumber], ["PAYE State", statutory.payeState], ["PFA", statutory.pensionPfa], ["RSA PIN", statutory.pensionPin], ["NHIA", statutory.nhiaNumber]]}/><Review title="Employee Contacts" rows={[["Next of Kin", nextOfKin.name], ["Relationship", nextOfKin.relationship], ["Emergency Contact", emergencyContact.name], ["Emergency Phone", emergencyContact.phoneNumber]]}/><Review title="Legal / Assets" rows={[["Employment Contract", legal.employmentContractStatus], ["Data Privacy Consent", legal.dataPrivacyConsentStatus], ["Laptop / Computer", assets.laptopComputer], ["ID / Access Card", assets.accessCard]]}/><Review title="Documents" rows={[["Staged", `${documents.length} document(s)`]]}/><Review title="Onboarding Checklist" rows={[["Template sections", `${sections.length}`], ["Tasks", `${checklistItems.length}`]]}/>{incomplete.length > 0 && <div className="fo-warning"><strong>Still outstanding</strong><span>{incomplete.join(" · ")}. CHRiS will preserve partial onboarding data; payroll-critical Zermatt fields are validated before employee creation.</span></div>}</div>
         <footer className="qa-footer fo-final-footer"><button type="button" className="qa-secondary" disabled={busy} onClick={() => navigate("/employees/directory")}>Cancel</button><button type="button" className="qa-primary" disabled={busy || loading} onClick={submit}>{busy ? (createdEmployee ? "Completing onboarding…" : "Creating employee…") : createdEmployee ? "Complete Remaining Onboarding" : "Create Employee & Start Onboarding"}</button></footer>
       </section>
+        </section>
+      </main>
     </section>
   </section>;
 }
