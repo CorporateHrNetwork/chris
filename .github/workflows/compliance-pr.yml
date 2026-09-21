@@ -90,6 +90,7 @@ jobs:
           node tests/employeeExportNameReconciliation.test.js
           node tests/employeeOnboardingNationalityAutofillAcceptance.test.mjs
           node tests/zermattOnboardingDocumentCatalogueAcceptance.test.mjs
+          node tests/onboardingPartialSectionPersistenceAcceptance.test.js
           node tests/zermattEmployeeExportOrderingAcceptance.test.js
           node tests/rentReliefBulkUploadAcceptance.test.js
           node tests/rentReliefBulkVerificationAcceptance.test.js
