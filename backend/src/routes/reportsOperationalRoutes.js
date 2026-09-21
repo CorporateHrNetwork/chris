@@ -473,7 +473,7 @@ async function auditExport(req, view, data, rowCount) {
   });
 }
 
-function sendWorkbook(res, workbook, view, scope) {
+function sendWorkbook(req, res, workbook, view, scope) {
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
   const safeScope = String(scope.locationCode || scope.locationName || "REPORT")
     .replace(/[^a-zA-Z0-9_-]+/g, "-");
@@ -500,7 +500,7 @@ router.get(
       appendSheet(workbook, [data.totals], "Attendance Summary");
       appendSheet(workbook, data.records, "Attendance Records");
       await auditExport(req, "attendance", data, data.records.length);
-      return sendWorkbook(res, workbook, "attendance", data.scope);
+      return sendWorkbook(req, res, workbook, "attendance", data.scope);
     } catch (error) {
       return sendError(res, error, "Unable to export Attendance Reports.");
     }
@@ -524,7 +524,7 @@ router.get(
       appendSheet(workbook, data.requests, "Leave Requests");
       appendSheet(workbook, data.balances, "Leave Balances");
       await auditExport(req, "leave", data, data.requests.length + data.balances.length);
-      return sendWorkbook(res, workbook, "leave", data.scope);
+      return sendWorkbook(req, res, workbook, "leave", data.scope);
     } catch (error) {
       return sendError(res, error, "Unable to export Leave Reports.");
     }
@@ -556,7 +556,7 @@ router.get(
         data,
         data.runs.length + (data.allocation?.details?.length || 0)
       );
-      return sendWorkbook(res, workbook, "payroll", data.scope);
+      return sendWorkbook(req, res, workbook, "payroll", data.scope);
     } catch (error) {
       return sendError(res, error, "Unable to export Payroll Reports.");
     }
