@@ -1340,14 +1340,6 @@ function payrollSheetName(value, used) {
   return candidate;
 }
 
-function payrollVisualBar(value, maximum, width = 28) {
-  const amount = Number(value || 0);
-  const max = Number(maximum || 0);
-  if (!(max > 0) || !(amount > 0)) return "";
-  const blocks = Math.max(1, Math.min(width, Math.round((amount / max) * width)));
-  return "█".repeat(blocks);
-}
-
 function payrollWorkbookModel(lines, employeeMeta) {
   const structureKeys = new Set();
   const allowanceLabels = new Map();
@@ -1948,7 +1940,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval, including employee bank/account and statutory details for verification."],
     [],
     ["Workbook Contents"],
-    ["Payroll Dashboard, consolidated Payroll Register, separate branch payroll sheets, full statutory identifiers and contributions, all configured allowance/deduction components, and workflow-specific review/payout sheets."],
+    ["Payroll Dashboard with native Excel charts and Branch / Department / Cost Centre analysis, consolidated Payroll Register, separate branch payroll sheets, full statutory identifiers and contributions, all configured allowance/deduction components, and workflow-specific review/payout sheets."],
     [],
     ["Governance"],
     [isApproved
@@ -2070,7 +2062,12 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     bookType: "xlsx",
     cellFormula: true,
   });
-  return addNativeExcelCharts(workbookBuffer, nativeCharts);
+  try {
+    return addNativeExcelCharts(workbookBuffer, nativeCharts);
+  } catch (chartError) {
+    console.error("CHRiS native Excel chart generation failed; returning workbook without chart objects.", chartError);
+    return workbookBuffer;
+  }
 }
 
 async function payrollExportContext(organizationId, runId, { includePaymentDetails = false } = {}) {
