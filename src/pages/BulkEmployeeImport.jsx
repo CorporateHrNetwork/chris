@@ -173,14 +173,14 @@ export default function BulkEmployeeImport() {
   return (
     <section style={pageStyle}>
       <button type="button" style={backStyle} onClick={() => navigate("/employees/directory")}>← Employee Directory</button>
-      <div style={eyebrow}>EMPLOYEE DATA OPERATIONS</div>
-      <h1 style={title}>Employee Upload & Employment Assignment</h1>
+      <div style={eyebrow}>UNIFIED EMPLOYEE ONBOARDING</div>
+      <h1 style={title}>Bulk Onboarding</h1>
       <p style={lead}>
-        Create new employees through the controlled CHRiS import flow, or assign Employment Type and Cost Centre / Operating Unit to existing employees without recreating employee records.
+        Bulk onboarding follows the same destination and payroll-readiness rules as individual onboarding. Enter each employee once; CHRiS validates organization mappings, derives mapped Cost Centre values, and creates the opening salary authority with the employee.
       </p>
 
       <div style={modeRow}>
-        <button type="button" style={mode === "create" ? activeModeButton : modeButton} onClick={() => switchMode("create")}>Create Employees</button>
+        <button type="button" style={mode === "create" ? activeModeButton : modeButton} onClick={() => switchMode("create")}>Bulk Onboarding</button>
         <button type="button" style={mode === "assign" ? activeModeButton : modeButton} onClick={() => switchMode("assign")}>Assign Existing Employees</button>
       </div>
 
@@ -242,14 +242,14 @@ function CreateEmployeesWorkspace({
   return (
     <>
       <div style={stepsGrid}>
-        <Card number="1" title="Download new-employee template">
-          <p style={muted}>Use the CHRiS workbook so department, designation, Employment Type and Cost Centre can be validated consistently.</p>
+        <Card number="1" title="Download unified onboarding template">
+          <p style={muted}>The workbook mirrors the individual onboarding core fields in the same sequence. Department mappings can auto-fill Cost Centre; Designation determines Employment Level; salary authority is created with the employee.</p>
           <button type="button" style={secondaryButton} onClick={downloadTemplate} disabled={busy}>
             {busy === "template" ? "Preparing…" : "Download Excel Template"}
           </button>
         </Card>
 
-        <Card number="2" title="Validate and create employees">
+        <Card number="2" title="Validate and onboard employees">
           <input
             type="file"
             accept=".xlsx,.xls"
@@ -276,7 +276,7 @@ function CreateEmployeesWorkspace({
           <CreateResultTable rows={preview.rows} validation />
           <div style={actionRow}>
             <button type="button" style={primaryButton} onClick={importRows} disabled={busy || preview.validRows === 0}>
-              {busy === "import" ? "Importing…" : `Import ${preview.validRows} Valid Employee${preview.validRows === 1 ? "" : "s"}`}
+              {busy === "import" ? "Importing…" : `Onboard ${preview.validRows} Valid Employee${preview.validRows === 1 ? "" : "s"}`}
             </button>
           </div>
         </section>
