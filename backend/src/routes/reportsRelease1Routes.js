@@ -9,6 +9,9 @@ const {
 const {
   getReportsRelease1,
 } = require("../services/reportsRelease1Service");
+const {
+  appendReportCoverSheet,
+} = require("../services/reportWorkbookBrandingService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -41,9 +44,22 @@ function summaryRows(data) {
   ];
 }
 
-function buildWorkbook(data, view) {
+function buildWorkbook(data, view, organization) {
   const workbook = XLSX.utils.book_new();
   const normalized = String(view || "overview").trim().toLowerCase();
+  const reportTitles = {
+    overview: "Reports Dashboard",
+    workforce: "Workforce Analytics",
+    employees: "Employee Report",
+    headcount: "Headcount Report",
+    branches: "Branch Report",
+  };
+  appendReportCoverSheet(workbook, {
+    organization,
+    reportTitle: reportTitles[normalized] || "Report",
+    scope: data.scope,
+    generatedAt: data.generatedAt,
+  });
 
   if (normalized === "employees") {
     addJsonSheet(workbook, data.employees, "Employee Report");
@@ -119,12 +135,13 @@ router.get(
         organizationId: req.auth.organizationId,
         locationId: req.auth.activeLocationId || null,
       });
-      const workbook = buildWorkbook(data, view);
+      const workbook = buildWorkbook(data, view, req.auth.organization);
       const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
       const scopeName = data.scope.mode === "HEAD_OFFICE_CONSOLIDATED"
         ? "HEAD-OFFICE"
         : data.scope.locationCode || data.scope.locationName;
-      const fileName = `CHRIS_${safeFilePart(scopeName)}_${safeFilePart(view)}_report.xlsx`;
+      const orgPart = safeFilePart(req.auth.organization?.name || req.auth.organization?.legalName || "Organisation");
+      const fileName = `${orgPart}_${safeFilePart(scopeName)}_${safeFilePart(view)}_report.xlsx`;
 
       await prisma.organizationAudit.create({
         data: {
