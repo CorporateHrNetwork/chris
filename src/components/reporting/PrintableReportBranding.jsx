@@ -14,41 +14,40 @@ function cleanOrganizationName(organization = {}) {
   return raw.replace(/\s*[—-]\s*SYNTHETIC STAGING ACCEPTANCE\s*$/i, "").trim();
 }
 
-export default function PrintableReportBranding({
-  reportTitle,
-  scopeLabel,
-  generatedAt,
-  organization: organizationProp,
-}) {
-  const organization = organizationProp || getStoredOrganization() || {};
+function resolveOrganization(organizationProp) {
+  return organizationProp || getStoredOrganization() || {};
+}
+
+export function PrintableReportHeader({ reportTitle, scopeLabel, organization: organizationProp }) {
+  const organization = resolveOrganization(organizationProp);
   const organizationName = cleanOrganizationName(organization);
   const logoUrl = safeLogoUrl(organization);
+  return (
+    <header className="chris-print-report-header">
+      {logoUrl && <img className="chris-print-report-logo" src={logoUrl} alt={organizationName + " logo"} />}
+      <div className="chris-print-report-heading">
+        <div className="chris-print-report-owner">{organizationName}</div>
+        <h1>{reportTitle || "Report"}</h1>
+        {scopeLabel && <div className="chris-print-report-scope">{scopeLabel}</div>}
+      </div>
+    </header>
+  );
+}
 
+export function PrintableReportFooter({ generatedAt }) {
+  return (
+    <footer className="chris-print-report-footer">
+      <span>{generatedAt ? "Generated " + new Date(generatedAt).toLocaleString("en-NG") : "Generated from authoritative organisation data"}</span>
+      <strong>Powered by CHRiS</strong>
+    </footer>
+  );
+}
+
+export default function PrintableReportBranding(props) {
   return (
     <>
-      <header className="chris-print-report-header">
-        {logoUrl && (
-          <img
-            className="chris-print-report-logo"
-            src={logoUrl}
-            alt={organizationName + " logo"}
-          />
-        )}
-        <div className="chris-print-report-heading">
-          <div className="chris-print-report-owner">{organizationName}</div>
-          <h1>{reportTitle || "Report"}</h1>
-          {scopeLabel && <div className="chris-print-report-scope">{scopeLabel}</div>}
-        </div>
-      </header>
-
-      <footer className="chris-print-report-footer">
-        <span>
-          {generatedAt
-            ? "Generated " + new Date(generatedAt).toLocaleString("en-NG")
-            : "Generated from authoritative organisation data"}
-        </span>
-        <strong>Powered by CHRiS</strong>
-      </footer>
+      <PrintableReportHeader {...props} />
+      <PrintableReportFooter generatedAt={props.generatedAt} />
     </>
   );
 }
