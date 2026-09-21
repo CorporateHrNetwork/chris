@@ -60,6 +60,19 @@
     break-before: avoid;
   }
 
+  .chris-print-report-powered {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #64748b !important;
+  }
+
+  .chris-print-report-powered img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+  }
+
   .chris-print-report-footer strong {
     color: #064e3b !important;
     font-weight: 900;
