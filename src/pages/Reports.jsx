@@ -551,7 +551,7 @@ function BreakdownBars({ rows, total, maxRows = 12 }) {
 }
 
 function SimpleBreakdownTable({ rows }) {
-  return <div style={tableWrapStyle}><table style={tableStyle}><thead><tr><th style={thStyle}>Category</th><th style={thRightStyle}>Headcount</th></tr></thead><tbody>{rows.map((row) => <tr key={row.name}><td style={tdStyle}>{friendlyLabel(row.name)}</td><td style={tdRightStrongStyle}>{Number(row.count || 0).toLocaleString("en-NG")}</td></tr>)}</tbody></table></div>;
+  return <div style={compactTableWrapStyle}><table style={compactTableStyle}><thead><tr><th style={thStyle}>Category</th><th style={thRightStyle}>Headcount</th></tr></thead><tbody>{rows.map((row) => <tr key={row.name}><td style={tdStyle}>{friendlyLabel(row.name)}</td><td style={tdRightStrongStyle}>{Number(row.count || 0).toLocaleString("en-NG")}</td></tr>)}</tbody></table></div>;
 }
 
 function Panel({ title, subtitle, actions, children, variant = "default" }) {
@@ -637,6 +637,8 @@ const summaryPanelTitleStyle = { margin: 0, color: "#064E3B", fontSize: 17, font
 const summaryPanelSubtitleStyle = { color: "#64748B", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
 const tableWrapStyle = { width: "100%", overflowX: "auto", maxHeight: 620, overflowY: "auto" };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 720, fontSize: 11 };
+const compactTableWrapStyle = { width: "100%", overflowX: "visible", maxHeight: 620, overflowY: "auto" };
+const compactTableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 0, tableLayout: "fixed", fontSize: 11 };
 const thStyle = { textAlign: "left", color: "#F6D35D", padding: "10px 11px", borderBottom: "1px solid rgba(212,175,55,.22)", whiteSpace: "nowrap", fontSize: 9, textTransform: "uppercase", letterSpacing: ".045em", position: "sticky", top: 0, background: "#06321f", zIndex: 1 };
 const thRightStyle = { ...thStyle, textAlign: "right" };
 const tdStyle = { padding: "10px 11px", borderBottom: "1px solid rgba(255,255,255,.055)", color: "#C9DCD2", verticalAlign: "top" };
