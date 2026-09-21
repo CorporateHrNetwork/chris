@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
@@ -19,6 +19,7 @@ export default function BulkEmployeeImport() {
     reason: "",
   });
   const [assignmentNotice, setAssignmentNotice] = useState("");
+  const assignmentSuccessTimer = useRef(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeeMatches, setEmployeeMatches] = useState([]);
   const [employeeSearchBusy, setEmployeeSearchBusy] = useState(false);
@@ -26,6 +27,12 @@ export default function BulkEmployeeImport() {
   const [assignmentFile, setAssignmentFile] = useState(null);
   const [assignmentPreview, setAssignmentPreview] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
+
+  useEffect(() => () => {
+    if (assignmentSuccessTimer.current) {
+      window.clearTimeout(assignmentSuccessTimer.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (mode !== "assign") return undefined;
@@ -174,20 +181,23 @@ export default function BulkEmployeeImport() {
         }
       );
       setAssignmentNotice(response.message || "Employee assignment saved.");
-      setSelectedAssignmentEmployee((current) => {
-        if (!current || current.employeeNumber !== assignment.employeeNumber.trim()) return current;
-        const selectedCostCentre =
-          response.data?.costCentre ||
-          catalog.costCentres?.find((row) => row.id === response.data?.costCentreId) ||
-          current.costCentre ||
-          null;
-        return {
-          ...current,
-          employmentType: response.data?.employmentType || current.employmentType || null,
-          costCentreId: response.data?.costCentreId || current.costCentreId || null,
-          costCentre: selectedCostCentre,
-        };
+      setEmployeeSearch("");
+      setEmployeeMatches([]);
+      setSelectedAssignmentEmployee(null);
+      setAssignment({
+        employeeNumber: "",
+        employmentType: "",
+        costCentreId: "",
+        reason: "",
       });
+
+      if (assignmentSuccessTimer.current) {
+        window.clearTimeout(assignmentSuccessTimer.current);
+      }
+      assignmentSuccessTimer.current = window.setTimeout(() => {
+        setAssignmentNotice("");
+        assignmentSuccessTimer.current = null;
+      }, 4000);
     } catch (err) {
       setError(err.message);
     } finally {
