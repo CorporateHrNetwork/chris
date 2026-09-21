@@ -1966,7 +1966,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   }
 
   const statutoryHeaders = [
-    "Employee No", "Employee Name", "Branch", "PFA", "Pension PIN", "TIN", "PAYE State",
+    "Employee No", "Employee Name", "Department", "Cost Centre Code", "Cost Centre / Operating Unit", "Branch", "PFA", "Pension PIN", "TIN", "PAYE State",
     "Pensionable Base", "Employee Pension Rate", "Employee Pension",
     "Employer Pension Rate", "Employer Pension", "Total Pension", "PAYE",
     "NHF", "NSITF Employer", "ITF Employer"
@@ -1976,6 +1976,9 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     return [
       row.line.employeeNumber,
       row.line.employeeName,
+      row.department,
+      row.costCentreCode,
+      row.costCentre,
       row.branch,
       row.meta.pensionPfa || "",
       row.meta.pensionPin || "",
@@ -2062,7 +2065,12 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     XLSX.utils.book_append_sheet(workbook, handoff, "External Handoff");
   }
 
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx", cellFormula: true });
+  const workbookBuffer = XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+    cellFormula: true,
+  });
+  return addNativeExcelCharts(workbookBuffer, nativeCharts);
 }
 
 async function payrollExportContext(organizationId, runId, { includePaymentDetails = false } = {}) {
