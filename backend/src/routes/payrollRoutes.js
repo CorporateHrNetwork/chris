@@ -1661,7 +1661,6 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Run Status", run.status || ""],
     ["Control", controlLabel],
     ["Generated At", new Date().toISOString()],
-    ["Platform", "Powered by CHRiS"],
     [],
     ["INTERACTIVE DASHBOARD CONTROLS"],
     ["Branch Focus", "ALL", "Enter ALL or an exact branch name."],
@@ -1770,6 +1769,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["2", "Use the real Excel charts on the right side of this dashboard for interactive chart selection, legends, tooltips and chart controls."],
     ["3", "Use filter arrows in Payroll Register and branch registers to drill into employees, departments, cost centres, components and statutory values."],
     ["4", "Click Open Payroll Register or Open Branch Sheet links to move directly to supporting detail."],
+    [],
+    ["Platform", "Powered by CHRiS"],
   );
 
   const dashboard = XLSX.utils.aoa_to_sheet(dashboardRows);
