@@ -210,23 +210,186 @@ async function branchPayrollRuns(req) {
   return rows.map(mapMoneyRow);
 }
 
+function payrollStatutoryValue(line, key) {
+  return Number(line?.details?.statutory?.[key] || 0);
+}
+
+function aggregatePayrollDimension(rows, key, codeKey = null) {
+  const groups = new Map();
+  for (const row of rows) {
+    const label = String(row[key] || "Unassigned").trim() || "Unassigned";
+    const code = codeKey ? String(row[codeKey] || "").trim() : "";
+    const mapKey = codeKey ? `${code}::${label}` : label;
+    const current = groups.get(mapKey) || {
+      label,
+      code,
+      headcount: 0,
+      grossPayroll: 0,
+      deductions: 0,
+      netPayroll: 0,
+      paye: 0,
+      employeePension: 0,
+      employerPension: 0,
+      employerStatutoryCost: 0,
+      totalEmployerCost: 0,
+    };
+    current.headcount += 1;
+    current.grossPayroll += Number(row.grossPay || 0);
+    current.deductions += Number(row.totalDeductions || 0);
+    current.netPayroll += Number(row.netPay || 0);
+    current.paye += Number(row.paye || 0);
+    current.employeePension += Number(row.employeePension || 0);
+    current.employerPension += Number(row.employerPension || 0);
+    current.employerStatutoryCost += Number(row.employerStatutoryCost || 0);
+    current.totalEmployerCost += Number(row.totalEmployerCost || 0);
+    groups.set(mapKey, current);
+  }
+  return [...groups.values()].sort(
+    (a, b) => b.grossPayroll - a.grossPayroll || a.label.localeCompare(b.label)
+  );
+}
+
+async function latestPayrollAllocation(req, latestRun) {
+  if (!latestRun?.id) {
+    return {
+      byBranch: [],
+      byDepartment: [],
+      byCostCentre: [],
+      details: [],
+    };
+  }
+
+  const lines = await payroll.listRunLines({
+    organizationId: req.auth.organizationId,
+    runId: latestRun.id,
+  });
+
+  if (!lines.length) {
+    return {
+      byBranch: [],
+      byDepartment: [],
+      byCostCentre: [],
+      details: [],
+    };
+  }
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      organizationId: req.auth.organizationId,
+      id: { in: lines.map((line) => line.employeeId) },
+      ...(req.auth.activeLocationId
+        ? { locationId: req.auth.activeLocationId }
+        : {}),
+    },
+    select: {
+      id: true,
+      department: { select: { code: true, name: true } },
+      costCentre: { select: { code: true, name: true } },
+      location: { select: { code: true, name: true } },
+    },
+  });
+  const employeeMap = new Map(employees.map((employee) => [employee.id, employee]));
+
+  const details = lines
+    .filter((line) => employeeMap.has(line.employeeId))
+    .map((line) => {
+      const employee = employeeMap.get(line.employeeId) || {};
+      const snapshot = line.details?.organizationSnapshot || {};
+      const department =
+        snapshot.departmentName ||
+        employee.department?.name ||
+        "Unassigned";
+      const departmentCode =
+        snapshot.departmentCode ||
+        employee.department?.code ||
+        "";
+      const costCentre =
+        snapshot.costCentreName ||
+        employee.costCentre?.name ||
+        "Unassigned";
+      const costCentreCode =
+        snapshot.costCentreCode ||
+        employee.costCentre?.code ||
+        "";
+      const branch =
+        snapshot.locationName ||
+        employee.location?.name ||
+        "Unassigned";
+      const branchCode =
+        snapshot.locationCode ||
+        employee.location?.code ||
+        "";
+
+      const paye = payrollStatutoryValue(line, "payeTax");
+      const employeePension = payrollStatutoryValue(line, "employeePension");
+      const employerPension = payrollStatutoryValue(line, "employerPension");
+      const nsitf = payrollStatutoryValue(line, "nsitfEmployer");
+      const itf = payrollStatutoryValue(line, "itfEmployerAccrual");
+      const employerStatutoryCost = employerPension + nsitf + itf;
+      const grossPay = Number(line.grossPay || 0);
+      const totalDeductions =
+        Number(line.deductions || 0) +
+        Number(line.advanceRecovery || 0) +
+        Number(line.loanRecovery || line.details?.loanRecoveryTotal || 0);
+
+      return {
+        employeeNumber: line.employeeNumber,
+        employeeName: line.employeeName,
+        departmentCode,
+        department,
+        costCentreCode,
+        costCentre,
+        branchCode,
+        branch,
+        grossPay,
+        totalDeductions,
+        netPay: Number(line.netPreview || 0),
+        paye,
+        employeePension,
+        employerPension,
+        employerStatutoryCost,
+        totalEmployerCost: grossPay + employerStatutoryCost,
+      };
+    });
+
+  return {
+    byBranch: aggregatePayrollDimension(details, "branch", "branchCode"),
+    byDepartment: aggregatePayrollDimension(details, "department", "departmentCode"),
+    byCostCentre: aggregatePayrollDimension(details, "costCentre", "costCentreCode"),
+    details,
+  };
+}
+
 async function loadPayroll(req) {
   const runs = req.auth.activeLocationId
     ? await branchPayrollRuns(req)
     : await payroll.listRuns({ organizationId: req.auth.organizationId });
   const mapped = runs.map(mapMoneyRow);
   const latest = mapped[0] || null;
+  const allocation = await latestPayrollAllocation(req, latest);
+  const latestEmployerStatutoryCost = allocation.details.reduce(
+    (sum, row) => sum + Number(row.employerStatutoryCost || 0),
+    0
+  );
+  const latestTotalEmployerCost = allocation.details.reduce(
+    (sum, row) => sum + Number(row.totalEmployerCost || 0),
+    0
+  );
+
   return {
     generatedAt: new Date().toISOString(),
     scope: scopeDescriptor(req),
     latest,
     runs: mapped,
+    allocation,
     totals: {
       runCount: mapped.length,
       latestEmployeeCount: Number(latest?.employeeCount || 0),
       latestGrossPayroll: Number(latest?.grossTotal || 0),
       latestDeductions: Number(latest?.deductionTotal || 0),
       latestNetPayroll: Number(latest?.netPreviewTotal || 0),
+      latestEmployerStatutoryCost,
+      latestTotalEmployerCost,
     },
     control: req.auth.activeLocationId
       ? "Branch financial totals are derived from employees in the active branch. Payroll execution and approval remain Head Office controls."
@@ -360,7 +523,16 @@ router.get(
       const workbook = XLSX.utils.book_new();
       appendSheet(workbook, [data.totals], "Payroll Summary");
       appendSheet(workbook, data.runs, "Payroll Runs");
-      await auditExport(req, "payroll", data, data.runs.length);
+      appendSheet(workbook, data.allocation?.byDepartment || [], "By Department");
+      appendSheet(workbook, data.allocation?.byCostCentre || [], "By Cost Centre");
+      appendSheet(workbook, data.allocation?.byBranch || [], "By Branch");
+      appendSheet(workbook, data.allocation?.details || [], "Payroll Detail");
+      await auditExport(
+        req,
+        "payroll",
+        data,
+        data.runs.length + (data.allocation?.details?.length || 0)
+      );
       return sendWorkbook(res, workbook, "payroll", data.scope);
     } catch (error) {
       return sendError(res, error, "Unable to export Payroll Reports.");
