@@ -8,3 +8,7 @@
 .fo-global-error{position:sticky;top:145px;z-index:9;margin-top:14px}
 .fo-final-footer{margin-top:18px}
 @media(max-width:800px){.fo-sticky-nav{position:static}.fo-global-error{position:static}}
+
+.fo-subsection{display:grid;gap:10px;padding:14px;border:1px solid #244b39;border-radius:12px;background:rgba(6,35,23,.38)}
+.fo-subsection+.fo-subsection{margin-top:14px}
+.fo-subsection h3{margin:0;color:#d4af37;font-size:14px}
