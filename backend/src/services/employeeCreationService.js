@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 const STATUS_MAP = {
   Active: "ACTIVE",
   Probation: "PROBATION",
@@ -95,6 +97,14 @@ const ERROR_DEFINITIONS = {
     400,
     "Enter a valid Hire Date in YYYY-MM-DD format.",
   ],
+  INVALID_OPENING_SALARY_RATE: [
+    400,
+    "Enter a valid opening Monthly Gross Salary greater than zero.",
+  ],
+  INVALID_OPENING_SALARY_EFFECTIVE_DATE: [
+    400,
+    "Enter a valid Salary Effective From date in YYYY-MM-DD format.",
+  ],
   EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED: [
     409,
     "The current CHRIS employee number range has been exhausted. Extend the employee number format before creating another employee.",
@@ -109,6 +119,38 @@ function employeeCreationError(code) {
   error.safeMessage = definition?.[1] || "Unable to create employee.";
   error.isEmployeeCreationError = true;
   return error;
+}
+
+function normalizeOpeningSalaryRate(value, fallbackDate) {
+  if (!value || typeof value !== "object") return null;
+
+  const amount = Number(value.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw employeeCreationError("INVALID_OPENING_SALARY_RATE");
+  }
+
+  const currency = String(value.currency || "NGN").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw employeeCreationError("INVALID_OPENING_SALARY_RATE");
+  }
+
+  const effectiveFrom = String(value.effectiveFrom || fallbackDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) {
+    throw employeeCreationError("INVALID_OPENING_SALARY_EFFECTIVE_DATE");
+  }
+  const parsed = new Date(`${effectiveFrom}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== effectiveFrom) {
+    throw employeeCreationError("INVALID_OPENING_SALARY_EFFECTIVE_DATE");
+  }
+
+  return {
+    amount,
+    currency,
+    effectiveFrom,
+    reason:
+      String(value.reason || "Opening salary rate from employee creation").trim() ||
+      "Opening salary rate from employee creation",
+  };
 }
 
 function normalizeEmployeeName(value) {
@@ -213,6 +255,12 @@ async function createEmployeeWithDependencies(
     assertTenantNinAvailable,
   } = dependencies;
   const payload = normalizeCreationPayload(input);
+  const openingSalaryRate = normalizeOpeningSalaryRate(
+    input?.openingSalaryRate,
+    payload.hireDate
+      ? payload.hireDate.toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10)
+  );
 
   if (payload.email) {
     const duplicateEmail = await prisma.employee.findFirst({
@@ -359,6 +407,43 @@ async function createEmployeeWithDependencies(
       include: { department: true, designation: true, location: true, costCentre: true },
     });
 
+    if (openingSalaryRate) {
+      const salaryRateId = crypto.randomUUID();
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "payroll_salary_rates"
+          ("id","organizationId","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdByUserId")
+         VALUES ($1,$2,$3,$4,$5,'MONTHLY',$6::date,NULL,'ACTIVE',$7,$8)`,
+        salaryRateId,
+        organizationId,
+        employee.id,
+        openingSalaryRate.amount,
+        openingSalaryRate.currency,
+        openingSalaryRate.effectiveFrom,
+        openingSalaryRate.reason,
+        actorUserId || null
+      );
+
+      await tx.organizationAudit.create({
+        data: {
+          organizationId,
+          actorUserId: actorUserId || null,
+          entityType: "PayrollSalaryRate",
+          entityId: salaryRateId,
+          action: "CREATED",
+          newValue: {
+            employeeNumber: employee.employeeNumber,
+            amount: openingSalaryRate.amount,
+            currency: openingSalaryRate.currency,
+            frequency: "MONTHLY",
+            effectiveFrom: openingSalaryRate.effectiveFrom,
+            effectiveTo: null,
+            status: "ACTIVE",
+          },
+          reason: openingSalaryRate.reason,
+        },
+      });
+    }
+
     await tx.employeeEmploymentEpisode.create({
       data: {
         organizationId,
@@ -393,6 +478,7 @@ module.exports = {
   createEmployee,
   createEmployeeWithDependencies,
   normalizeCreationPayload,
+  normalizeOpeningSalaryRate,
   normalizeEmploymentType,
   normalizeZermattEmploymentType,
 };
