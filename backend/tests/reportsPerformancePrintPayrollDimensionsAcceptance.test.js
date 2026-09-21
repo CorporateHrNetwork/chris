@@ -102,7 +102,9 @@ test("printable reports are owned by the client organisation and credit CHRiS in
     "organization?.name",
     "chris-print-report-owner",
     "chris-print-report-header",
-    "Powered by CHRiS",
+    "Powered by",
+    "chrisLogo",
+    "chris-print-report-powered",
     "chris-print-report-footer",
   ]) {
     assert.ok(
