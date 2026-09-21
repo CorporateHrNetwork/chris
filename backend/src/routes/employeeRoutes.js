@@ -4416,6 +4416,15 @@ router.get(
             code: true,
             description: true,
             isActive: true,
+            costCentreId: true,
+            costCentre: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                status: true,
+              },
+            },
 
             _count: {
               select: {
