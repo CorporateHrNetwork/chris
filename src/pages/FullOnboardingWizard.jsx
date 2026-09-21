@@ -62,7 +62,7 @@ export default function FullOnboardingWizard() {
   const completedTaskKeys = useRef(new Set());
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(initialForm);
-  const [payment, setPayment] = useState({ payrollCurrency: "NGN", paymentMethod: "Bank Transfer" });
+  const [payment, setPayment] = useState({ payrollCurrency: organization.currency || "NGN", paymentMethod: "Bank Transfer" });
   const [statutory, setStatutory] = useState({});
   const [documents, setDocuments] = useState([]);
   const [documentDraft, setDocumentDraft] = useState({ category: "CV_RESUME", file: null, notes: "" });
@@ -132,6 +132,15 @@ export default function FullOnboardingWizard() {
     };
   }, []);
 
+  const availableDesignations = useMemo(() => designations.filter(
+    (designation) => designation.departmentId === form.departmentId
+  ), [designations, form.departmentId]);
+  const matchingTemplates = useMemo(() => {
+    const matching = templates.filter((template) => !template.employmentType ||
+      String(template.employmentType).toLowerCase() === form.employmentType.toLowerCase());
+    return matching.length ? matching : templates;
+  }, [templates, form.employmentType]);
+
   useEffect(() => {
     const matching = matchingTemplates[0];
     if (!matching) return;
@@ -150,15 +159,6 @@ export default function FullOnboardingWizard() {
       paymentMethod: current.paymentMethod || "Bank Transfer",
     }));
   }, [form.salaryCurrency, organization.currency]);
-
-  const availableDesignations = useMemo(() => designations.filter(
-    (designation) => designation.departmentId === form.departmentId
-  ), [designations, form.departmentId]);
-  const matchingTemplates = useMemo(() => {
-    const matching = templates.filter((template) => !template.employmentType ||
-      String(template.employmentType).toLowerCase() === form.employmentType.toLowerCase());
-    return matching.length ? matching : templates;
-  }, [templates, form.employmentType]);
   const designation = designations.find((row) => row.id === form.designationId);
   const template = templates.find((row) => row.id === form.templateId);
   const fullName = [form.firstName, form.middleName, form.surname].map((value) => value.trim()).filter(Boolean).join(" ");
