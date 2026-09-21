@@ -217,7 +217,7 @@ function Reports() {
           <button type="button" style={secondaryButtonStyle} onClick={() => window.print()}>
             <FaPrint /> Print / Save PDF
           </button>
-          <button type="button" style={primaryButtonStyle} onClick={exportExcel} disabled={exporting || loading || !report || Boolean(operationalError)}>
+          <button type="button" style={primaryButtonStyle} onClick={exportExcel} disabled={exporting || loading || !viewData || Boolean(viewError)}>
             <FaDownload /> {exporting ? "Exporting..." : "Export Excel"}
           </button>
         </div>
