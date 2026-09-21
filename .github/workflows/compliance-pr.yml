@@ -52,6 +52,7 @@ jobs:
           node --check src/services/payrollPayslipEmailService.js
           node --check src/services/payrollApprovalComplianceService.js
           node --check src/services/employeePayrollAuthoritySyncService.js
+          node --check src/services/excelNativeChartService.js
           node --check src/services/statutoryObligationService.js
           node --check src/services/statutoryRemittanceService.js
           node --check src/routes/payrollRoutes.js
@@ -83,6 +84,7 @@ jobs:
           node tests/payrollConnectedDashboardAcceptance.test.js
           node tests/payrollReadinessErrorUxAcceptance.test.js
           node tests/payrollExportDashboardInteractivityAcceptance.test.js
+          node tests/reportsPerformancePrintPayrollDimensionsAcceptance.test.js
           node tests/payrollExportLoanRecoveryAcceptance.test.js
           node tests/zermattPayslipBrandingAcceptance.test.js
           node tests/zermattVariablePayrollInputsAcceptance.test.js
