@@ -38,6 +38,17 @@ const DEFAULT_SECTIONS = [
   { key: "assets", label: "Assets", required: false, items: ["Laptop / Computer", "Phone", "ID / Access Card", "PPE", "Other Assigned Assets"] },
 ];
 
+const ZERMATT_ORGANIZATION_SLUG = "zermatt-liquor-limited";
+const ZERMATT_DOCUMENT_ITEMS = [
+  "CV/Resume",
+  "Offer of Appointment Letter",
+  "Employee Personal Data",
+  "SSCE Certificate/ND/HND/B. Sc/PGD/M. Sc/MBA",
+  "Guarantor 1 & 2",
+  "NIN Slip",
+  "Passport",
+];
+
 const DOCUMENT_CATEGORY_LABELS = {
   CV_RESUME: "CV / Resume",
   OFFER_APPOINTMENT: "Offer / Appointment Letter",
@@ -45,7 +56,53 @@ const DOCUMENT_CATEGORY_LABELS = {
   CERTIFICATES: "Certificates",
   PASSPORT_PHOTO: "Passport Photograph",
   OTHER: "Other Required Documents",
+  EMPLOYEE_PERSONAL_DATA: "Employee Personal Data",
+  GUARANTOR_1_2: "Guarantor 1 & 2",
+  NIN_SLIP: "NIN Slip",
 };
+
+const ZERMATT_DOCUMENT_CATEGORY_LABELS = {
+  CV_RESUME: "CV/Resume",
+  OFFER_APPOINTMENT: "Offer of Appointment Letter",
+  EMPLOYEE_PERSONAL_DATA: "Employee Personal Data",
+  CERTIFICATES: "SSCE Certificate/ND/HND/B. Sc/PGD/M. Sc/MBA",
+  GUARANTOR_1_2: "Guarantor 1 & 2",
+  NIN_SLIP: "NIN Slip",
+  PASSPORT_PHOTO: "Passport",
+};
+
+async function useZermattDocumentRequirements(sections, organizationId) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+
+  const zermattTenant =
+    String(organization?.slug || "").trim().toLowerCase() ===
+    ZERMATT_ORGANIZATION_SLUG;
+
+  if (!zermattTenant) {
+    return sections;
+  }
+
+  return sections.map((section) =>
+    section.key === "documents"
+      ? { ...section, items: [...ZERMATT_DOCUMENT_ITEMS] }
+      : section
+  );
+}
+
+async function documentCategoryLabelsForOrganization(organizationId) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+
+  return String(organization?.slug || "").trim().toLowerCase() ===
+    ZERMATT_ORGANIZATION_SLUG
+    ? { ...DOCUMENT_CATEGORY_LABELS, ...ZERMATT_DOCUMENT_CATEGORY_LABELS }
+    : DOCUMENT_CATEGORY_LABELS;
+}
 
 function normalizeSections(value) {
   if (!Array.isArray(value) || !value.length) {
@@ -146,7 +203,7 @@ function completedStatus(value) {
   );
 }
 
-function buildCompletion(sectionKey, data, documents) {
+function buildCompletion(sectionKey, data, documents, requiredDocumentItems = null, documentCategoryLabels = DOCUMENT_CATEGORY_LABELS) {
   switch (sectionKey) {
     case "personal-details": {
       const keys = [];
@@ -238,21 +295,22 @@ function buildCompletion(sectionKey, data, documents) {
       const labels = new Set(
         (documents || []).map(
           (document) =>
-            DOCUMENT_CATEGORY_LABELS[
+            documentCategoryLabels[
               document.category
             ]
-        )
+        ).filter(Boolean)
       );
 
-      return DEFAULT_SECTIONS
-        .find(
-          (section) =>
-            section.key === "documents"
-        )
-        .items
-        .filter((item) =>
-          labels.has(item)
-        );
+      const requiredItems =
+        Array.isArray(requiredDocumentItems) && requiredDocumentItems.length
+          ? requiredDocumentItems
+          : DEFAULT_SECTIONS
+              .find((section) => section.key === "documents")
+              .items;
+
+      return requiredItems.filter((item) =>
+        labels.has(item)
+      );
     }
 
     default:
@@ -442,8 +500,11 @@ router.post(
       }
 
       const sections =
-        normalizeSections(
-          req.body?.sections
+        await useZermattDocumentRequirements(
+          normalizeSections(
+            req.body?.sections
+          ),
+          req.auth.organizationId
         );
 
       const code =
@@ -1106,8 +1167,11 @@ router.post(
       }
 
       const sections =
-        normalizeSections(
-          template.sections
+        await useZermattDocumentRequirements(
+          normalizeSections(
+            template.sections
+          ),
+          organizationId
         );
 
       const data = await prisma.$transaction(async (tx) => {
@@ -1456,8 +1520,11 @@ router.post(
         });
 
       const sections =
-        normalizeSections(
-          onboarding.template.sections
+        await useZermattDocumentRequirements(
+          normalizeSections(
+            onboarding.template.sections
+          ),
+          req.auth.organizationId
         );
 
       const section =
@@ -1477,11 +1544,18 @@ router.post(
           new Date().toISOString(),
       };
 
+      const documentCategoryLabels =
+        await documentCategoryLabelsForOrganization(
+          req.auth.organizationId
+        );
+
       const completedItemKeys =
         buildCompletion(
           "documents",
           sectionData.documents,
-          documents
+          documents,
+          section?.items,
+          documentCategoryLabels
         );
 
       const updatedOnboarding =
@@ -1542,7 +1616,10 @@ async function recalculateDocumentsProgress({
     where: { organizationId, onboardingId },
   });
 
-  const sections = normalizeSections(onboarding.template.sections);
+  const sections = await useZermattDocumentRequirements(
+    normalizeSections(onboarding.template.sections),
+    organizationId
+  );
   const section = sections.find((item) => item.key === "documents");
 
   if (!section) return onboarding;
@@ -1553,10 +1630,17 @@ async function recalculateDocumentsProgress({
     lastUpdatedAt: new Date().toISOString(),
   };
 
+  const documentCategoryLabels =
+    await documentCategoryLabelsForOrganization(
+      organizationId
+    );
+
   const completedItemKeys = buildCompletion(
     "documents",
     sectionData.documents,
-    documents
+    documents,
+    section?.items,
+    documentCategoryLabels
   );
 
   return applySectionProgress({
@@ -1589,7 +1673,10 @@ router.post(
         });
       }
 
-      const sections = normalizeSections(onboarding.template.sections);
+      const sections = await useZermattDocumentRequirements(
+        normalizeSections(onboarding.template.sections),
+        req.auth.organizationId
+      );
       const section = sections.find((item) => item.key === "documents");
       if (!section) {
         return res.status(404).json({
@@ -1604,7 +1691,17 @@ router.post(
           onboardingId: onboarding.id,
         },
       });
-      const completedItemKeys = buildCompletion("documents", {}, documents);
+      const documentCategoryLabels =
+        await documentCategoryLabelsForOrganization(
+          req.auth.organizationId
+        );
+      const completedItemKeys = buildCompletion(
+        "documents",
+        {},
+        documents,
+        section?.items,
+        documentCategoryLabels
+      );
 
       if (completedItemKeys.length < section.items.length) {
         return res.status(400).json({
@@ -1862,8 +1959,11 @@ router.patch(
       }
 
       const sections =
-        normalizeSections(
-          onboarding.template.sections
+        await useZermattDocumentRequirements(
+          normalizeSections(
+            onboarding.template.sections
+          ),
+          req.auth.organizationId
         );
 
       const section =
@@ -2285,8 +2385,11 @@ router.post(
       }
 
       const sections =
-        normalizeSections(
-          onboarding.template.sections
+        await useZermattDocumentRequirements(
+          normalizeSections(
+            onboarding.template.sections
+          ),
+          req.auth.organizationId
         );
 
       const incompleteSections =
