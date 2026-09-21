@@ -94,6 +94,7 @@ jobs:
           node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeAssignmentSearchAcceptance.test.js
           node tests/employeeAssignmentSuccessResetAcceptance.test.js
+          node tests/unifiedOnboardingSidebarNavigationAcceptance.test.js
           node tests/employeeExportNameReconciliation.test.js
           node tests/employeeOnboardingNationalityAutofillAcceptance.test.mjs
           node tests/zermattOnboardingDocumentCatalogueAcceptance.test.mjs
