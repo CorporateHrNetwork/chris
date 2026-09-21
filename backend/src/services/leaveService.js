@@ -971,11 +971,33 @@ async function returnFromLeave({
   });
 }
 
-async function getLeaveRequests({ organizationId, status }) {
+async function getLeaveRequests({
+  organizationId,
+  status,
+  leaveYear = null,
+  locationId = null,
+}) {
+  const normalizedYear = Number(leaveYear);
+  const yearStart = Number.isInteger(normalizedYear)
+    ? new Date(Date.UTC(normalizedYear, 0, 1))
+    : null;
+  const nextYearStart = Number.isInteger(normalizedYear)
+    ? new Date(Date.UTC(normalizedYear + 1, 0, 1))
+    : null;
+
   return prisma.leaveRequest.findMany({
     where: {
       organizationId,
       ...(status ? { status } : {}),
+      ...(yearStart && nextYearStart
+        ? {
+            startDate: { lt: nextYearStart },
+            endDate: { gte: yearStart },
+          }
+        : {}),
+      ...(locationId
+        ? { employee: { is: { locationId } } }
+        : {}),
     },
     include: {
       employee: {
@@ -987,6 +1009,7 @@ async function getLeaveRequests({ organizationId, status }) {
           lastName: true,
           status: true,
           department: { select: { name: true } },
+          costCentre: { select: { code: true, name: true } },
           location: { select: { name: true } },
         },
       },
