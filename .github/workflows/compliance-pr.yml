@@ -88,6 +88,7 @@ jobs:
           node tests/exitRegister.test.js
           node tests/employeeEmploymentGovernanceAcceptance.test.js
           node tests/employeeDataOperations.test.js
+          node tests/zermattBulkEmployeePayrollReadinessAcceptance.test.js
           node tests/employeeExportNameReconciliation.test.js
           node tests/employeeOnboardingNationalityAutofillAcceptance.test.mjs
           node tests/zermattOnboardingDocumentCatalogueAcceptance.test.mjs
