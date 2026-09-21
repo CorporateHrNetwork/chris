@@ -1543,13 +1543,48 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   };
   const employeeNumberRange = payrollRange("Employee No");
   const branchRange = payrollRange("Branch");
+  const departmentRange = payrollRange("Department");
+  const costCentreRange = payrollRange("Cost Centre / Operating Unit");
+
+  const selectedCriteria = [
+    [branchRange, "$B$9"],
+    [departmentRange, "$B$10"],
+    [costCentreRange, "$B$11"],
+  ].filter(([range]) => Boolean(range));
+
+  const selectedCriterionFormula = (range, selectorCell) =>
+    `--(((${selectorCell}="ALL")+(${range}=${selectorCell}))>0)`;
+
   const selectedSumFormula = (header) => {
     const range = payrollRange(header);
-    if (!range || !branchRange) return null;
-    return `IF($B$9="ALL",SUM(${range}),SUMIF(${branchRange},$B$9,${range}))`;
+    if (!range) return null;
+    const criteria = selectedCriteria
+      .map(([criterionRange, selectorCell]) => selectedCriterionFormula(criterionRange, selectorCell));
+    return `SUMPRODUCT(${range}${criteria.length ? "," + criteria.join(",") : ""})`;
   };
+
+  const selectedHeadcountFormula = employeeNumberRange
+    ? `SUMPRODUCT(--(${employeeNumberRange}<>"" )${selectedCriteria.length ? "," + selectedCriteria.map(([criterionRange, selectorCell]) => selectedCriterionFormula(criterionRange, selectorCell)).join(",") : ""})`
+    : null;
+
   const formulaCell = (formula, value = 0, type = "n") =>
     formula ? { t: type, f: formula, v: type === "n" ? Number(value || 0) : String(value || "") } : value;
+
+  const groupBy = (key) => {
+    const groups = new Map();
+    for (const row of model.rows) {
+      const label = String(row[key] || "Unassigned").trim() || "Unassigned";
+      const current = groups.get(label) || [];
+      current.push(row);
+      groups.set(label, current);
+    }
+    return groups;
+  };
+
+  const departmentGroups = groupBy("department");
+  const costCentreGroups = groupBy("costCentre");
+  const departments = [...departmentGroups.keys()].sort((a, b) => a.localeCompare(b));
+  const costCentres = [...costCentreGroups.keys()].sort((a, b) => a.localeCompare(b));
 
   const branchSheetNames = new Map();
   const reservedSheetNames = new Set(["Payroll Dashboard", "Workflow Control", "Payroll Register"]);
@@ -1557,22 +1592,44 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     branchSheetNames.set(branch, payrollSheetName("Branch - " + branch, reservedSheetNames));
   }
 
-  const branchStats = branches.map((branch) => {
-    const rows = branchGroups.get(branch) || [];
+  const statForRows = (label, rows, extra = {}) => {
     const sumHeader = (header) => {
       const index = headerIndex[header];
       return rows.reduce((sum, row) => sum + Number(row.cells[index] || 0), 0);
     };
+    const grossValue = sumHeader("Gross Pay");
+    const employerStatutoryValue =
+      sumHeader("Employer Pension") +
+      sumHeader("NSITF Employer") +
+      sumHeader("ITF Employer");
     return {
-      branch,
+      label,
       headcount: rows.length,
-      gross: sumHeader("Gross Pay"),
+      gross: grossValue,
       net: sumHeader("Net Pay"),
+      deductions: sumHeader("Payroll Deductions") + sumHeader("Salary Advance") + sumHeader("Loan Recovery"),
       paye: sumHeader("PAYE"),
       employeePension: sumHeader("Employee Pension"),
       employerPension: sumHeader("Employer Pension"),
+      employerStatutory: employerStatutoryValue,
+      employerCost: grossValue + employerStatutoryValue,
+      ...extra,
     };
-  });
+  };
+
+  const branchStats = branches.map((branch) =>
+    statForRows(branch, branchGroups.get(branch) || [], { branch })
+  );
+  const departmentStats = departments
+    .map((department) => statForRows(department, departmentGroups.get(department) || [], { department }))
+    .sort((a, b) => b.gross - a.gross || a.department.localeCompare(b.department));
+  const costCentreStats = costCentres
+    .map((costCentre) => {
+      const rows = costCentreGroups.get(costCentre) || [];
+      const code = rows.find((row) => row.costCentreCode)?.costCentreCode || "";
+      return statForRows(costCentre, rows, { costCentre, code });
+    })
+    .sort((a, b) => b.gross - a.gross || a.costCentre.localeCompare(b.costCentre));
 
   const selectedEmployerStatutoryFormula = [
     selectedSumFormula("Employer Pension"),
@@ -1583,9 +1640,6 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     selectedSumFormula("Gross Pay"),
     selectedEmployerStatutoryFormula,
   ].filter(Boolean).join("+");
-  const selectedHeadcountFormula = employeeNumberRange && branchRange
-    ? `IF($B$9="ALL",COUNTA(${employeeNumberRange}),COUNTIF(${branchRange},$B$9))`
-    : null;
 
   const selectedKpis = [
     ["Employee Headcount", formulaCell(selectedHeadcountFormula, model.rows.length), "count"],
@@ -1614,41 +1668,90 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Generated At", new Date().toISOString()],
     [],
     ["INTERACTIVE DASHBOARD CONTROLS"],
-    ["Branch Focus", "ALL", "Edit B9: enter ALL or an exact branch name from the Branch Payroll Comparison table below."],
-    ["Active View", formulaCell('"Viewing: "&B9', "Viewing: ALL", "s"), "KPI and statutory values recalculate when the workbook opens in Excel."],
+    ["Branch Focus", "ALL", "Enter ALL or an exact branch name."],
+    ["Department Focus", "ALL", "Enter ALL or an exact department name."],
+    ["Cost Centre Focus", "ALL", "Enter ALL or an exact Cost Centre / Operating Unit name."],
+    ["Active View", formulaCell('"Viewing: "&B9&" | "&B10&" | "&B11', "Viewing: ALL | ALL | ALL", "s"), "KPIs and charts recalculate when Excel opens or a selector value changes."],
     [],
-    ["SELECTED BRANCH KPI VIEW"],
+    ["SELECTED VIEW KPI"],
     ["KPI", "Value", "Quick Link"],
   ];
 
   const selectedKpiRows = [];
+  const selectedKpiRowByLabel = new Map();
   for (const [label, value, kind] of selectedKpis) {
     const rowIndex = dashboardRows.length;
     dashboardRows.push([label, value, "Open Payroll Register"]);
-    selectedKpiRows.push({ rowIndex, kind });
+    selectedKpiRows.push({ rowIndex, kind, label });
+    selectedKpiRowByLabel.set(label, rowIndex);
+  }
+
+  dashboardRows.push([], ["SELECTED VIEW CHART DATA"]);
+  const selectedChartHeaderRowIndex = dashboardRows.length;
+  dashboardRows.push(["Metric", "Amount"]);
+  const selectedChartMetrics = [
+    ["Gross Payroll", gross],
+    ["Net Payroll", net],
+    ["Payroll Deductions", payrollDeductions],
+    ["PAYE", paye],
+    ["Employer Statutory Cost", employerStatutory],
+  ];
+  const selectedChartRowIndexes = [];
+  for (const [label, fallback] of selectedChartMetrics) {
+    const rowIndex = dashboardRows.length;
+    const sourceIndex = selectedKpiRowByLabel.get(label);
+    dashboardRows.push([
+      label,
+      sourceIndex == null
+        ? fallback
+        : formulaCell(`B${sourceIndex + 1}`, fallback),
+    ]);
+    selectedChartRowIndexes.push(rowIndex);
   }
 
   dashboardRows.push([], ["BRANCH PAYROLL COMPARISON"]);
   const branchHeaderRowIndex = dashboardRows.length;
   dashboardRows.push([
     "Branch", "Headcount", "Gross Payroll", "Net Payroll", "PAYE",
-    "Employee Pension", "Employer Pension", "Gross Visual", "Open Branch Sheet"
+    "Employee Pension", "Employer Pension", "Employer Cost", "Open Branch Sheet"
   ]);
-
-  const maxBranchGross = Math.max(...branchStats.map((row) => row.gross), 1);
   const branchDashboardLinks = [];
   for (const stat of branchStats) {
     const rowIndex = dashboardRows.length;
     dashboardRows.push([
       stat.branch, stat.headcount, stat.gross, stat.net, stat.paye,
-      stat.employeePension, stat.employerPension, payrollVisualBar(stat.gross, maxBranchGross), "Open Branch Sheet",
+      stat.employeePension, stat.employerPension, stat.employerCost, "Open Branch Sheet",
     ]);
     branchDashboardLinks.push({ rowIndex, branch: stat.branch });
   }
 
+  dashboardRows.push([], ["DEPARTMENT PAYROLL ALLOCATION"]);
+  const departmentHeaderRowIndex = dashboardRows.length;
+  dashboardRows.push(["Department", "Headcount", "Gross Payroll", "Net Payroll", "Deductions", "Employer Cost"]);
+  const departmentDashboardRows = [];
+  for (const stat of departmentStats) {
+    const rowIndex = dashboardRows.length;
+    dashboardRows.push([
+      stat.department, stat.headcount, stat.gross, stat.net, stat.deductions, stat.employerCost,
+    ]);
+    departmentDashboardRows.push({ rowIndex, stat });
+  }
+
+  dashboardRows.push([], ["COST CENTRE / OPERATING UNIT PAYROLL ALLOCATION"]);
+  const costCentreHeaderRowIndex = dashboardRows.length;
+  dashboardRows.push(["Cost Centre Code", "Cost Centre / Operating Unit", "Headcount", "Gross Payroll", "Net Payroll", "Deductions", "Employer Cost"]);
+  const costCentreDashboardRows = [];
+  for (const stat of costCentreStats) {
+    const rowIndex = dashboardRows.length;
+    dashboardRows.push([
+      stat.code, stat.costCentre, stat.headcount, stat.gross, stat.net, stat.deductions, stat.employerCost,
+    ]);
+    costCentreDashboardRows.push({ rowIndex, stat });
+  }
+
   dashboardRows.push([], ["STATUTORY COST COMPOSITION — SELECTED VIEW"]);
   const statutoryHeaderRowIndex = dashboardRows.length;
-  dashboardRows.push(["Statutory Item", "Amount", "Visual"]);
+  dashboardRows.push(["Statutory Item", "Amount"]);
   const statutoryMix = [
     ["PAYE", "PAYE", paye],
     ["Employee Pension", "Employee Pension", employeePension],
@@ -1657,27 +1760,26 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["NSITF Employer", "NSITF Employer", nsitf],
     ["ITF Employer", "ITF Employer", itf],
   ];
-  const maxStatutory = Math.max(...statutoryMix.map(([, , value]) => value), 1);
   const statutoryDashboardRows = [];
   for (const [label, header, value] of statutoryMix) {
     const rowIndex = dashboardRows.length;
-    dashboardRows.push([label, formulaCell(selectedSumFormula(header), value), payrollVisualBar(value, maxStatutory)]);
+    dashboardRows.push([label, formulaCell(selectedSumFormula(header), value)]);
     statutoryDashboardRows.push({ rowIndex, value });
   }
 
   dashboardRows.push(
     [],
     ["HOW TO USE THIS DASHBOARD"],
-    ["1", "Change Branch Focus in B9 to ALL or a branch name to recalculate the selected-view KPIs and statutory composition."],
-    ["2", "Use the filter arrows in Payroll Register and each branch register to drill into employees, components and statutory values."],
-    ["3", "Click Open Payroll Register or Open Branch Sheet links to move directly to the supporting detail."],
-    ["4", "The Branch Payroll Comparison table can be filtered and sorted independently without changing payroll data."],
+    ["1", "Set Branch, Department and Cost Centre Focus to ALL or an exact value. The selected-view KPIs and native Excel chart update when Excel recalculates."],
+    ["2", "Use the real Excel charts on the right side of this dashboard for interactive chart selection, legends, tooltips and chart controls."],
+    ["3", "Use filter arrows in Payroll Register and branch registers to drill into employees, departments, cost centres, components and statutory values."],
+    ["4", "Click Open Payroll Register or Open Branch Sheet links to move directly to supporting detail."],
   );
 
   const dashboard = XLSX.utils.aoa_to_sheet(dashboardRows);
   dashboard["!cols"] = [
-    { wch: 30 }, { wch: 22 }, { wch: 38 }, { wch: 20 },
-    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 34 }, { wch: 22 },
+    { wch: 32 }, { wch: 28 }, { wch: 38 }, { wch: 20 },
+    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 22 },
   ];
 
   if (branchStats.length) {
@@ -1689,12 +1791,18 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     };
   }
 
-  if (dashboard.B9) {
-    dashboard.B9.c = [{
+  const selectorComments = [
+    ["B9", branches, "branch"],
+    ["B10", departments, "department"],
+    ["B11", costCentres, "cost centre"],
+  ];
+  for (const [cell, values, label] of selectorComments) {
+    if (!dashboard[cell]) continue;
+    dashboard[cell].c = [{
       a: "CHRiS",
-      t: branches.length
-        ? `Enter ALL or one exact branch name: ${branches.join(", ")}`
-        : "Enter ALL. No branch-specific payroll rows are available in this export.",
+      t: values.length
+        ? `Enter ALL or one exact ${label}: ${values.join(", ")}`
+        : `Enter ALL. No ${label} values are available in this export.`,
     }];
   }
 
@@ -1707,6 +1815,11 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     }
   }
 
+  for (const rowIndex of selectedChartRowIndexes) {
+    const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: 1 });
+    if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
+  }
+
   for (const { rowIndex, branch } of branchDashboardLinks) {
     const branchCell = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
     const linkCell = XLSX.utils.encode_cell({ r: rowIndex, c: 8 });
@@ -1717,29 +1830,109 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     if (dashboard[linkCell] && branchSheet) {
       dashboard[linkCell].l = { Target: `#'${branchSheet}'!A1`, Tooltip: `Open ${branch} payroll register` };
     }
-    for (let column = 2; column <= 6; column += 1) {
+    for (let column = 2; column <= 7; column += 1) {
       const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: column });
       if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
     }
   }
 
-  const statutoryAmountStart = statutoryHeaderRowIndex + 1;
-  const statutoryAmountEnd = statutoryHeaderRowIndex + statutoryDashboardRows.length;
-  for (const { rowIndex, value } of statutoryDashboardRows) {
-    const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: 1 });
-    const visualCell = XLSX.utils.encode_cell({ r: rowIndex, c: 2 });
-    const excelRow = rowIndex + 1;
-    if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
-    if (dashboard[visualCell] && statutoryDashboardRows.length) {
-      dashboard[visualCell] = {
-        t: "s",
-        f: `IF(B${excelRow}<=0,"",REPT("█",MAX(1,ROUND(B${excelRow}/MAX($B$${statutoryAmountStart + 1}:$B$${statutoryAmountEnd + 1})*28,0))))`,
-        v: payrollVisualBar(value, maxStatutory),
-      };
+  for (const { rowIndex } of departmentDashboardRows) {
+    for (let column = 2; column <= 5; column += 1) {
+      const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: column });
+      if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
     }
   }
 
+  for (const { rowIndex } of costCentreDashboardRows) {
+    for (let column = 3; column <= 6; column += 1) {
+      const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: column });
+      if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
+    }
+  }
+
+  for (const { rowIndex } of statutoryDashboardRows) {
+    const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: 1 });
+    if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
+  }
+
   XLSX.utils.book_append_sheet(workbook, dashboard, "Payroll Dashboard");
+
+  const chartRange = (column, firstRowIndex, lastRowIndex) =>
+    `'Payroll Dashboard'!$${column}$${firstRowIndex + 1}:$${column}$${lastRowIndex + 1}`;
+
+  const selectedChartFirst = selectedChartRowIndexes[0];
+  const selectedChartLast = selectedChartRowIndexes[selectedChartRowIndexes.length - 1];
+
+  const departmentChartStats = departmentStats.slice(0, 12);
+  const departmentChartRows = departmentDashboardRows.slice(0, 12);
+  const costCentreChartRows = costCentreDashboardRows.slice(0, 8);
+
+  const nativeCharts = [
+    {
+      type: "bar",
+      title: "Selected View Payroll Metrics",
+      position: { from: { col: 10, row: 1 }, to: { col: 18, row: 15 } },
+      series: [{
+        name: "Amount",
+        categoriesRange: chartRange("A", selectedChartFirst, selectedChartLast),
+        valuesRange: chartRange("B", selectedChartFirst, selectedChartLast),
+        categories: selectedChartMetrics.map(([label]) => label),
+        values: selectedChartMetrics.map(([, fallback]) => fallback),
+        color: "2EE98B",
+        pointColors: ["2EE98B", "60A5FA", "F2CF57", "FB7185", "A78BFA"],
+      }],
+    },
+    ...(branchStats.length ? [{
+      type: "column",
+      title: "Payroll by Branch",
+      position: { from: { col: 10, row: 16 }, to: { col: 18, row: 31 } },
+      series: [
+        {
+          name: "Gross Payroll",
+          categoriesRange: chartRange("A", branchHeaderRowIndex + 1, branchHeaderRowIndex + branchStats.length),
+          valuesRange: chartRange("C", branchHeaderRowIndex + 1, branchHeaderRowIndex + branchStats.length),
+          categories: branchStats.map((row) => row.branch),
+          values: branchStats.map((row) => row.gross),
+          color: "2EE98B",
+        },
+        {
+          name: "Net Payroll",
+          categoriesRange: chartRange("A", branchHeaderRowIndex + 1, branchHeaderRowIndex + branchStats.length),
+          valuesRange: chartRange("D", branchHeaderRowIndex + 1, branchHeaderRowIndex + branchStats.length),
+          categories: branchStats.map((row) => row.branch),
+          values: branchStats.map((row) => row.net),
+          color: "F2CF57",
+        },
+      ],
+    }] : []),
+    ...(departmentChartRows.length ? [{
+      type: "bar",
+      title: "Gross Payroll by Department",
+      position: { from: { col: 19, row: 1 }, to: { col: 27, row: 18 } },
+      series: [{
+        name: "Gross Payroll",
+        categoriesRange: chartRange("A", departmentChartRows[0].rowIndex, departmentChartRows[departmentChartRows.length - 1].rowIndex),
+        valuesRange: chartRange("C", departmentChartRows[0].rowIndex, departmentChartRows[departmentChartRows.length - 1].rowIndex),
+        categories: departmentChartStats.map((row) => row.department),
+        values: departmentChartStats.map((row) => row.gross),
+        color: "60A5FA",
+        pointColors: ["60A5FA", "2EE98B", "F2CF57", "A78BFA", "22D3EE", "34D399", "F59E0B", "FB7185"],
+      }],
+    }] : []),
+    ...(costCentreChartRows.length ? [{
+      type: "pie",
+      title: "Gross Payroll by Cost Centre",
+      position: { from: { col: 19, row: 19 }, to: { col: 27, row: 35 } },
+      series: [{
+        name: "Gross Payroll",
+        categoriesRange: chartRange("B", costCentreChartRows[0].rowIndex, costCentreChartRows[costCentreChartRows.length - 1].rowIndex),
+        valuesRange: chartRange("D", costCentreChartRows[0].rowIndex, costCentreChartRows[costCentreChartRows.length - 1].rowIndex),
+        categories: costCentreChartRows.map(({ stat }) => stat.costCentre),
+        values: costCentreChartRows.map(({ stat }) => stat.gross),
+        pointColors: ["2EE98B", "F2CF57", "60A5FA", "FB7185", "A78BFA", "22D3EE", "34D399", "F59E0B"],
+      }],
+    }] : []),
+  ];
 
   const control = XLSX.utils.aoa_to_sheet([
     [title],
