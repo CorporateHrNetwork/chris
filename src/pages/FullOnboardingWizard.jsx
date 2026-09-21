@@ -39,6 +39,26 @@ const EMPLOYMENT_TYPES = [
   "Domestic Staff - Housekeeper",
 ];
 
+function workflowMatchesEmploymentType(template, employmentType) {
+  const candidate = `${template?.employmentType || ""} ${template?.name || ""}`.trim().toLowerCase();
+  const normalized = String(employmentType || "").trim().toLowerCase();
+  if (!candidate) return true;
+  if (normalized === "full-time") {
+    return candidate.includes("full-time") || candidate.includes("full time") || candidate.includes("permanent");
+  }
+  if (normalized === "part-time") {
+    return candidate.includes("part-time") || candidate.includes("part time");
+  }
+  if (normalized === "expatriate") return candidate.includes("expatriate");
+  if (normalized.includes("nysc") || normalized.includes("intern")) {
+    return candidate.includes("nysc") || candidate.includes("intern") || candidate.includes("trainee");
+  }
+  if (normalized.includes("domestic") || normalized.includes("housekeeper")) {
+    return candidate.includes("domestic") || candidate.includes("housekeeper");
+  }
+  return String(template?.employmentType || "").trim().toLowerCase() === normalized;
+}
+
 const initialForm = () => {
   const organization = getStoredOrganization() || {};
   const today = tenantLocalDate(organization.timezone || "Africa/Lagos");
@@ -114,11 +134,8 @@ export default function FullOnboardingWizard() {
       setTaskOwners(ownerResult.data || []);
       setForm((current) => {
         const matchingTemplate =
-          activeTemplates.find(
-            (template) =>
-              !template.employmentType ||
-              String(template.employmentType).toLowerCase() ===
-                String(current.employmentType).toLowerCase()
+          activeTemplates.find((template) =>
+            workflowMatchesEmploymentType(template, current.employmentType)
           ) || activeTemplates[0];
         const scopedLocationId =
           current.locationId ||
@@ -143,8 +160,9 @@ export default function FullOnboardingWizard() {
     (designation) => designation.departmentId === form.departmentId
   ), [designations, form.departmentId]);
   const matchingTemplates = useMemo(() => {
-    const matching = templates.filter((template) => !template.employmentType ||
-      String(template.employmentType).toLowerCase() === form.employmentType.toLowerCase());
+    const matching = templates.filter((template) =>
+      workflowMatchesEmploymentType(template, form.employmentType)
+    );
     return matching.length ? matching : templates;
   }, [templates, form.employmentType]);
 
@@ -173,6 +191,12 @@ export default function FullOnboardingWizard() {
   function set(field) {
     return (event) => {
       const value = event.target.value;
+      if (field === "salaryCurrency") {
+        setPayment((current) => ({
+          ...current,
+          payrollCurrency: value || current.payrollCurrency,
+        }));
+      }
       setForm((current) => {
         if (field === "departmentId") {
           const department = departments.find((row) => row.id === value);
@@ -192,12 +216,6 @@ export default function FullOnboardingWizard() {
                 ? value
                 : current.salaryEffectiveFrom,
           };
-        }
-        if (field === "salaryCurrency") {
-          setPayment((paymentCurrent) => ({
-            ...paymentCurrent,
-            payrollCurrency: value || paymentCurrent.payrollCurrency,
-          }));
         }
         return { ...current, [field]: value };
       });
@@ -378,7 +396,7 @@ export default function FullOnboardingWizard() {
     {createdEmployee && !complete && <div className="fo-note" role="status"><strong>Employee created successfully — {createdEmployee.employeeNumber} {createdEmployee.name || fullName}</strong><span>CHRiS is continuing the same onboarding transaction. The employee record will not be created again.</span></div>}
 
     <section className="fo-stack">
-      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[0] = node; }} tabIndex="-1">
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[0] = node; panelRef.current = node; }} tabIndex="-1">
         <div className="qa-panel-title"><div><small>1 · PERSONAL INFORMATION</small><h2>Identity & Contact</h2></div>{loading && <span>Loading setup…</span>}</div>
         <div className="qa-grid"><Field label="First Name"><input value={form.firstName} onChange={set("firstName")} /></Field><Field label="Middle Name" optional><input value={form.middleName} onChange={set("middleName")} /></Field><Field label="Surname"><input value={form.surname} onChange={set("surname")} /></Field><Field label="Gender"><select value={form.gender} onChange={set("gender")}><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option><option>Unspecified</option></select></Field><Field label="Phone"><input type="tel" value={form.phone} onChange={set("phone")} /></Field><Field label="Alternative Phone" optional><input type="tel" value={form.alternativePhone} onChange={set("alternativePhone")} /></Field><Field label="Email"><input type="email" value={form.email} onChange={set("email")} /></Field><Field label="Date of Birth" optional><input type="date" value={form.dateOfBirth} onChange={set("dateOfBirth")} /></Field><Field label="Marital Status" optional><select value={form.maritalStatus} onChange={set("maritalStatus")}><option value="">Select status</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></Field><Field label="Nationality" optional><input value={form.nationality} onChange={set("nationality")} /></Field><Field label="Country of Residence" optional><SearchableRegistrySelect ariaLabel="Country of Residence" value={COUNTRY_CATALOG.find((country) => country.name === form.country)?.code || "NG"} options={COUNTRY_CATALOG.map((country) => ({ value: country.code, label: country.name }))} onChange={(value) => { const country = COUNTRY_CATALOG.find((item) => item.code === value); setForm((current) => ({ ...current, country: country?.name || "Nigeria" })); setError(""); }} placeholder="Search country" /></Field><Field label="Residential Address" optional><textarea rows="2" value={form.residentialAddress} onChange={set("residentialAddress")} /></Field><Field label="ID Type"><select value={form.idType} onChange={set("idType")}><option value="">Select ID type</option><option value="NIN">National Identification Number (NIN)</option><option value="INTERNATIONAL_PASSPORT">International Passport</option><option value="DRIVERS_LICENSE">Driver's License</option><option value="VOTERS_CARD">Voter's Card</option></select></Field><Field label="ID Number"><input value={form.idNumber} onChange={set("idNumber")} /></Field><Field label="ID Expiry Date" optional><input type="date" value={form.idExpiryDate} onChange={set("idExpiryDate")} /></Field></div>
       </section>
