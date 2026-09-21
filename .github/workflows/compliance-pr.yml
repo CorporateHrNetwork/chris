@@ -51,6 +51,7 @@ jobs:
           node --check src/services/zermattVariablePayrollService.js
           node --check src/services/payrollPayslipEmailService.js
           node --check src/services/payrollApprovalComplianceService.js
+          node --check src/services/employeePayrollAuthoritySyncService.js
           node --check src/services/statutoryObligationService.js
           node --check src/services/statutoryRemittanceService.js
           node --check src/routes/payrollRoutes.js
@@ -89,6 +90,8 @@ jobs:
           node tests/employeeEmploymentGovernanceAcceptance.test.js
           node tests/employeeDataOperations.test.js
           node tests/zermattBulkEmployeePayrollReadinessAcceptance.test.js
+          node tests/unifiedEmployeeOnboardingAcceptance.test.js
+          node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeExportNameReconciliation.test.js
           node tests/employeeOnboardingNationalityAutofillAcceptance.test.mjs
           node tests/zermattOnboardingDocumentCatalogueAcceptance.test.mjs
