@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
+const { addNativeExcelCharts } = require("../services/excelNativeChartService");
 
 const prisma = require("../config/prisma");
 const {
@@ -1370,7 +1371,8 @@ function payrollWorkbookModel(lines, employeeMeta) {
   const deductionColumns = [...deductionLabels.entries()].sort((a,b) => a[1].localeCompare(b[1])).map(([key,label]) => ({ key,label }));
 
   const headers = [
-    "Employee No", "Employee Name", "Designation", "Employment Type", "Branch", "Email",
+    "Employee No", "Employee Name", "Designation", "Employment Type",
+    "Department", "Cost Centre Code", "Cost Centre / Operating Unit", "Branch", "Email",
     "Bank", "Account Name", "Account Number",
     "PFA", "Pension PIN", "TIN", "PAYE State",
     "Basic",
@@ -1388,6 +1390,41 @@ function payrollWorkbookModel(lines, employeeMeta) {
     const statutory = details.statutory || {};
     const structure = details.salaryStructure || {};
     const meta = employeeMeta.get(line.employeeId) || {};
+    const snapshot = details.organizationSnapshot || {};
+    const dimensionMeta = {
+      designation:
+        snapshot.designationName ||
+        meta.designation ||
+        "",
+      employmentType:
+        snapshot.employmentType ||
+        meta.employmentType ||
+        "",
+      department:
+        snapshot.departmentName ||
+        meta.department ||
+        "Unassigned",
+      departmentCode:
+        snapshot.departmentCode ||
+        meta.departmentCode ||
+        "",
+      costCentre:
+        snapshot.costCentreName ||
+        meta.costCentre ||
+        "Unassigned",
+      costCentreCode:
+        snapshot.costCentreCode ||
+        meta.costCentreCode ||
+        "",
+      branch:
+        snapshot.locationName ||
+        meta.branch ||
+        "Unassigned",
+      branchCode:
+        snapshot.locationCode ||
+        meta.branchCode ||
+        "",
+    };
     const allowanceValues = new Map((details.customAllowances || []).map((item) => [payrollComponentKey(item, "ALW"), Number(item.value || 0)]));
     const deductionValues = new Map((details.customDeductions || []).map((item) => [payrollComponentKey(item, "DED"), Number(item.value || 0)]));
     const employeePension = Number(statutory.employeePension || 0);
@@ -1395,13 +1432,20 @@ function payrollWorkbookModel(lines, employeeMeta) {
 
     return {
       employeeId: line.employeeId,
-      branch: payrollBranchLabel(meta),
+      branch: payrollBranchLabel(dimensionMeta),
+      department: dimensionMeta.department,
+      departmentCode: dimensionMeta.departmentCode,
+      costCentre: dimensionMeta.costCentre,
+      costCentreCode: dimensionMeta.costCentreCode,
       cells: [
         line.employeeNumber,
         line.employeeName,
-        meta.designation || "",
-        meta.employmentType || "",
-        payrollBranchLabel(meta),
+        dimensionMeta.designation,
+        dimensionMeta.employmentType,
+        dimensionMeta.department,
+        dimensionMeta.costCentreCode,
+        dimensionMeta.costCentre,
+        payrollBranchLabel(dimensionMeta),
         meta.email || "",
         meta.bankName || "",
         meta.accountName || "",
@@ -1838,7 +1882,9 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
     id: true,
     email: true,
     employmentType: true,
-    designation: { select: { name: true } },
+    department: { select: { name: true, code: true } },
+    designation: { select: { name: true, code: true } },
+    costCentre: { select: { name: true, code: true } },
     location: { select: { name: true, code: true } },
     onboardings: {
       orderBy: { updatedAt: "desc" },
@@ -1860,7 +1906,12 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
     const statutory = payrollSection(sectionData, "statutory-details", "statutoryDetails");
     return [employee.id, {
       designation: employee.designation?.name || "",
+      designationCode: employee.designation?.code || "",
       employmentType: employee.employmentType || "",
+      department: employee.department?.name || "Unassigned",
+      departmentCode: employee.department?.code || "",
+      costCentre: employee.costCentre?.name || "Unassigned",
+      costCentreCode: employee.costCentre?.code || "",
       branch: employee.location?.name || employee.location?.code || "Unassigned",
       branchCode: employee.location?.code || "",
       email: employee.email || "",
