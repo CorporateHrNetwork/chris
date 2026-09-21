@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { apiRequest } from "../../services/api";
+import { apiRequest, getStoredOrganization } from "../../services/api";
+import { ZERMATT_DOCUMENT_TYPES, isZermattOrganization } from "../../data/zermattOnboardingDocuments";
 
-const DOCUMENT_TYPES = [
+const DEFAULT_DOCUMENT_TYPES = [
   ["CV_RESUME", "CV / Resume"],
   ["OFFER_APPOINTMENT", "Offer / Appointment Letter"],
   ["VALID_ID", "Valid ID"],
@@ -11,6 +12,7 @@ const DOCUMENT_TYPES = [
 ];
 
 export default function OnboardingDocumentsForm({ record, onSaved, onCompleted, inputStyle }) {
+  const documentTypes = isZermattOrganization(getStoredOrganization()) ? ZERMATT_DOCUMENT_TYPES : DEFAULT_DOCUMENT_TYPES;
   const [category, setCategory] = useState("CV_RESUME");
   const [file, setFile] = useState(null);
   const [notes, setNotes] = useState("");
@@ -169,8 +171,8 @@ export default function OnboardingDocumentsForm({ record, onSaved, onCompleted, 
   }
 
   const completedCategories = new Set(documents.map((document) => document.category));
-  const requiredCount = DOCUMENT_TYPES.length;
-  const completedCount = DOCUMENT_TYPES.filter(([value]) => completedCategories.has(value)).length;
+  const requiredCount = documentTypes.length;
+  const completedCount = documentTypes.filter(([value]) => completedCategories.has(value)).length;
 
   return (
     <div style={wrapStyle}>
@@ -214,7 +216,7 @@ export default function OnboardingDocumentsForm({ record, onSaved, onCompleted, 
         <label style={fieldStyle}>
           <span style={labelStyle}>Document Type</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
-            {DOCUMENT_TYPES.map(([value, label]) => (
+            {documentTypes.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
