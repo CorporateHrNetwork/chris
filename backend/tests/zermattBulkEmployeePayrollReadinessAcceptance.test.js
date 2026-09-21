@@ -41,7 +41,7 @@ test("bulk import creates opening salary rate through the controlled payroll ser
   assert.ok(routes.includes('require("../services/payrollOperationsService")'));
   assert.ok(routes.includes("payroll.saveSalaryRate"));
   assert.ok(routes.includes('(req.auth.permissions || []).includes("payroll.manage")'));
-  assert.ok(routes.includes("Opening salary rate from bulk employee import"));
+  assert.ok(dataOps.includes("Opening salary rate from bulk employee import"));
 });
 
 test("bulk employee preview exposes salary and payroll-critical fields", () => {
