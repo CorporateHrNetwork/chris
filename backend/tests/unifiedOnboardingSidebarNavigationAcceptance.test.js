@@ -50,3 +50,13 @@ test("active onboarding section follows page scrolling", () => {
   assert.ok(jsx.includes("setStep(index)"));
   assert.ok(jsx.includes('rootMargin: "-12% 0px -68% 0px"'));
 });
+
+
+test("desktop sidebar does not clip the final Review & Create section", () => {
+  assert.ok(jsx.includes('"Review & Create"'));
+  assert.ok(css.includes("max-height:none"));
+  assert.ok(css.includes("overflow:visible"));
+  assert.ok(css.includes("min-height:40px"));
+  assert.ok(css.includes(".fo-section-nav{display:grid;gap:5px"));
+  assert.equal(css.includes("max-height:calc(100vh - 104px)"), false);
+});
