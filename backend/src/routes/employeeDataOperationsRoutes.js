@@ -6,7 +6,6 @@ const fs = require("fs");
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const { createEmployee } = require("../services/employeeCreationService");
-const payroll = require("../services/payrollOperationsService");
 const {
   EXPORT_COLUMN_CATALOG,
   DEFAULT_EXPORT_COLUMNS,
@@ -152,27 +151,11 @@ router.post(
           const employee = await createEmployee({
             organizationId: req.auth.organizationId,
             actorUserId: req.auth.userId,
-            input: row.input,
+            input: {
+              ...row.input,
+              openingSalaryRate: row.salaryRate || undefined,
+            },
           });
-
-          let salaryRate = null;
-          let warnings = [];
-          if (row.salaryRate) {
-            try {
-              salaryRate = await payroll.saveSalaryRate({
-                organizationId: req.auth.organizationId,
-                actorUserId: req.auth.userId,
-                input: {
-                  employeeNumber: employee.employeeNumber,
-                  ...row.salaryRate,
-                },
-              });
-            } catch (salaryError) {
-              warnings = [
-                `Employee created, but opening salary rate could not be saved: ${salaryError.message || "Unknown salary-rate error"}`,
-              ];
-            }
-          }
 
           results.push({
             rowNumber: row.rowNumber,
@@ -184,8 +167,13 @@ router.post(
                 .join(" "),
               email: employee.email,
             },
-            salaryRate,
-            warnings,
+            salaryRate: row.salaryRate
+              ? {
+                  employeeNumber: employee.employeeNumber,
+                  ...row.salaryRate,
+                }
+              : null,
+            warnings: [],
             errors: [],
           });
         } catch (error) {
