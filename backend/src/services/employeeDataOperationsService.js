@@ -192,7 +192,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     }),
     prisma.department.findMany({
       where: { organizationId, isActive: true },
-      select: { id: true, name: true, code: true },
+      select: { id: true, name: true, code: true, costCentreId: true },
     }),
     prisma.designation.findMany({
       where: { organizationId, isActive: true },
@@ -290,7 +290,13 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const department = findCatalogRow(departments, departmentInput);
     const designation = findCatalogRow(designations, designationInput);
     const location = findCatalogRow(locations, locationInput);
-    const costCentre = findCatalogRow(costCentres, costCentreInput);
+    const mappedCostCentre =
+      department?.costCentreId
+        ? costCentres.find((row) => row.id === department.costCentreId) || null
+        : null;
+    const costCentre =
+      findCatalogRow(costCentres, costCentreInput) ||
+      (!costCentreInput ? mappedCostCentre : null);
     const errors = [];
     const isZermatt =
       String(organization?.slug || "").trim().toLowerCase() ===
@@ -315,7 +321,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     }
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
     if (costCentreInput && !costCentre) errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
-    if (isZermatt && !costCentreInput) errors.push("Cost Centre / Operating Unit is required for ZERMATT payroll readiness.");
+    if (isZermatt && !costCentre) errors.push("Department has no mapped Cost Centre / Operating Unit. Configure the Department mapping or supply a valid Cost Centre.");
     if (isZermatt && !grossSalaryInput) errors.push("Monthly Gross Salary is required for ZERMATT payroll readiness.");
     if (grossSalaryInput && (!Number.isFinite(grossSalary) || grossSalary <= 0)) errors.push("Monthly Gross Salary must be greater than zero.");
     if (grossSalaryInput && !/^[A-Z]{3}$/.test(salaryCurrency)) errors.push("Salary Currency must be a 3-letter currency code such as NGN.");
@@ -371,6 +377,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
         designation: designation?.name || designationInput,
         location: location?.name || locationInput,
         costCentre: costCentre?.name || costCentreInput,
+        costCentreSource: costCentreInput ? "Workbook" : costCentre ? "Auto from Department" : "",
         grossSalary: grossSalary || null,
         salaryCurrency: salaryCurrency || "",
         salaryEffectiveFrom: grossSalary ? salaryEffectiveFrom : "",
