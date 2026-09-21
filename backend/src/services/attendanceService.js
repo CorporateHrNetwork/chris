@@ -614,6 +614,7 @@ async function getAttendanceReport({
   from,
   to,
   employeeNumber,
+  locationId = null,
 }) {
   const start =
     from
@@ -644,9 +645,10 @@ async function getAttendanceReport({
     }
   }
 
-  if (employeeNumber) {
+  if (employeeNumber || locationId) {
     where.employee = {
-      employeeNumber,
+      ...(employeeNumber ? { employeeNumber } : {}),
+      ...(locationId ? { locationId } : {}),
     };
   }
 
