@@ -37,10 +37,16 @@ test("Zermatt bulk employee validation requires payroll-critical authority", () 
   }
 });
 
-test("bulk import creates opening salary rate through the controlled payroll service", () => {
-  assert.ok(routes.includes('require("../services/payrollOperationsService")'));
-  assert.ok(routes.includes("payroll.saveSalaryRate"));
+test("bulk import creates opening salary rate atomically with employee creation", () => {
+  const employeeCreation = fs.readFileSync(
+    path.join(root, "backend/src/services/employeeCreationService.js"),
+    "utf8"
+  );
   assert.ok(routes.includes('(req.auth.permissions || []).includes("payroll.manage")'));
+  assert.ok(routes.includes("openingSalaryRate: row.salaryRate || undefined"));
+  assert.ok(employeeCreation.includes("normalizeOpeningSalaryRate"));
+  assert.ok(employeeCreation.includes('INSERT INTO "payroll_salary_rates"'));
+  assert.ok(employeeCreation.includes('entityType: "PayrollSalaryRate"'));
   assert.ok(dataOps.includes("Opening salary rate from bulk employee import"));
 });
 
