@@ -404,7 +404,7 @@ export default function FullOnboardingWizard() {
     !documents.length && "Documents",
   ].filter(Boolean);
 
-  return <section className="qa-page fo-page" data-operation-phase={operationPhase}>
+  return <section className="qa-page fo-page chris-module-dashboard" data-operation-phase={operationPhase}>
     <header className="qa-header">
       <div><b>EMPLOYEE ENTRY · UNIFIED ONBOARDING</b><h1>Add & Onboard Employee</h1><p className="fo-header-note">One employee journey. Mapped organization and payroll values are derived automatically; enter data once and create the employee, opening salary authority and onboarding record together.</p></div>
       <button className="qa-secondary" type="button" onClick={() => navigate("/employees/bulk-upload")}>Bulk Onboarding</button>
@@ -413,22 +413,26 @@ export default function FullOnboardingWizard() {
     {complete && completionEmployee && <section className="qa-success" role="status"><div><strong>Employee created and onboarding started successfully — {completionEmployee.employeeNumber} {completionEmployee.displayName || completionEmployee.name}</strong><p>The completed draft has been cleared.</p></div><div className="qa-actions"><button className="qa-primary" type="button" onClick={() => follow(`/employees/${encodeURIComponent(completionEmployee.employeeNumber)}`)}>View Employee</button><button className="qa-secondary" type="button" onClick={() => follow("/employees/onboarding")}>Onboarding Tracker</button><button className="qa-secondary" type="button" onClick={addAnother}>Add Another Employee</button></div></section>}
 
     <section className="fo-onboarding-layout">
-      <aside className="fo-section-sidebar" aria-label="Onboarding section navigation">
+      <aside className="fo-section-sidebar chris-analytics-panel" aria-label="Onboarding section navigation">
+        <div className="chris-dashboard-card__shine" aria-hidden="true" />
         <div className="fo-section-sidebar-head">
-          <small>ONBOARDING SECTIONS</small>
-          <strong>{step + 1} of {STEPS.length}</strong>
+          <div>
+            <small className="chris-module-dashboard__eyebrow">ONBOARDING SECTIONS</small>
+            <strong>Employee Journey</strong>
+          </div>
+          <span className="fo-section-progress">{step + 1} / {STEPS.length}</span>
         </div>
         <nav className="fo-section-nav" aria-label="Unified onboarding sections">
           {STEPS.map((label, index) => (
             <button
               key={label}
               type="button"
-              className={step === index ? "active" : ""}
+              className={`chris-panel-action fo-section-nav-button${step === index ? " fo-section-nav-button--active" : ""}`}
               onClick={() => jumpToSection(index)}
               aria-current={step === index ? "step" : undefined}
             >
-              <span>{index + 1}</span>
-              <span>{label}</span>
+              <span className="fo-section-number">{index + 1}</span>
+              <span className="fo-section-label">{label}</span>
             </button>
           ))}
         </nav>
