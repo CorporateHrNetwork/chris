@@ -21,6 +21,7 @@ const {
 } = require("../services/zermattHrFinancialAccessService");
 const variablePayroll = require("../services/zermattVariablePayrollService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+const { synchronizePayrollAuthorityFromMappings } = require("../services/employeePayrollAuthoritySyncService");
 
 const router = express.Router();
 const upload = multer({
@@ -1158,6 +1159,11 @@ router.get("/runs/:id/lines", requirePermission("payroll.view"), async (req, res
 
 router.post("/runs/draft", requirePermission("payroll.process"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
+    await synchronizePayrollAuthorityFromMappings({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+    });
+
     const readiness = await getPayrollReadiness({
       organizationId: req.auth.organizationId,
       periodId: req.body?.periodId || null,
