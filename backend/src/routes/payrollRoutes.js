@@ -64,7 +64,10 @@ router.get(
   requirePermission("payroll.view"),
   async (req, res) => {
     try {
-      const data = await getPayrollReadiness({ organizationId: req.auth.organizationId });
+      const data = await getPayrollReadiness({
+        organizationId: req.auth.organizationId,
+        periodId: req.query?.periodId || null,
+      });
       return res.json({ status: "success", data });
     } catch (error) {
       return sendError(res, error, "Unable to load payroll readiness.");
@@ -1155,7 +1158,10 @@ router.get("/runs/:id/lines", requirePermission("payroll.view"), async (req, res
 
 router.post("/runs/draft", requirePermission("payroll.process"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
-    const readiness = await getPayrollReadiness({ organizationId: req.auth.organizationId });
+    const readiness = await getPayrollReadiness({
+      organizationId: req.auth.organizationId,
+      periodId: req.body?.periodId || null,
+    });
     if (!readiness.executionEnabled) {
       const incompleteEmployees = (readiness.employees || [])
         .filter((employee) => !employee.readyForExecution)
