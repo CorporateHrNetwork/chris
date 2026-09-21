@@ -1488,9 +1488,12 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   workbook.Workbook = workbook.Workbook || {};
   workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
   const isApproved = stage === "APPROVED_PAYOUT";
+  const organizationName = String(
+    organization.legalName || organization.name || "Organisation"
+  ).replace(/\s*[—-]\s*SYNTHETIC STAGING ACCEPTANCE\s*$/i, "").trim();
   const title = isApproved
-    ? "CHRiS Approved Payroll — External Approval & Payout Pack"
-    : "CHRiS Draft Payroll — External HR Review Pack";
+    ? `${organizationName} Approved Payroll — External Approval & Payout Pack`
+    : `${organizationName} Draft Payroll — External HR Review Pack`;
   const controlLabel = isApproved
     ? "APPROVED IN CHRiS — EXTERNAL APPROVAL / PAYOUT HANDOFF"
     : "PRE-APPROVAL REVIEW — NOT FOR PAYOUT";
@@ -1652,12 +1655,13 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   ];
 
   const dashboardRows = [
-    ["CHRiS PAYROLL DASHBOARD & KPI REPORT"],
-    ["Organization", organization.legalName || organization.name || ""],
+    [`${organizationName.toUpperCase()} — PAYROLL DASHBOARD & KPI REPORT`],
+    ["Organization", organizationName],
     ["Payroll Period", run.periodCode || ""],
     ["Run Status", run.status || ""],
     ["Control", controlLabel],
     ["Generated At", new Date().toISOString()],
+    ["Platform", "Powered by CHRiS"],
     [],
     ["INTERACTIVE DASHBOARD CONTROLS"],
     ["Branch Focus", "ALL", "Enter ALL or an exact branch name."],
