@@ -19,6 +19,10 @@ export default function BulkEmployeeImport() {
     reason: "",
   });
   const [assignmentNotice, setAssignmentNotice] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeeMatches, setEmployeeMatches] = useState([]);
+  const [employeeSearchBusy, setEmployeeSearchBusy] = useState(false);
+  const [selectedAssignmentEmployee, setSelectedAssignmentEmployee] = useState(null);
   const [assignmentFile, setAssignmentFile] = useState(null);
   const [assignmentPreview, setAssignmentPreview] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
@@ -38,10 +42,64 @@ export default function BulkEmployeeImport() {
     };
   }, [mode]);
 
+  useEffect(() => {
+    if (mode !== "assign") return undefined;
+    const query = employeeSearch.trim();
+    const selectedLabel = selectedAssignmentEmployee
+      ? `${selectedAssignmentEmployee.employeeNumber} — ${selectedAssignmentEmployee.employeeName}`
+      : "";
+
+    if (query.length < 2 || query === selectedLabel) {
+      setEmployeeMatches([]);
+      setEmployeeSearchBusy(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setEmployeeSearchBusy(true);
+    const timer = window.setTimeout(() => {
+      apiRequest(`/api/employee-assignments/employees/search?q=${encodeURIComponent(query)}`)
+        .then((response) => {
+          if (!cancelled) setEmployeeMatches(response.data || []);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setEmployeeMatches([]);
+            setError(err.message || "Unable to search employees.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setEmployeeSearchBusy(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [mode, employeeSearch, selectedAssignmentEmployee]);
+
   const switchMode = (nextMode) => {
     setMode(nextMode);
     setError("");
     setAssignmentNotice("");
+    if (nextMode !== "assign") {
+      setEmployeeSearch("");
+      setEmployeeMatches([]);
+      setSelectedAssignmentEmployee(null);
+    }
+  };
+
+  const selectAssignmentEmployee = (employee) => {
+    setSelectedAssignmentEmployee(employee);
+    setEmployeeSearch(`${employee.employeeNumber} — ${employee.employeeName}`);
+    setEmployeeMatches([]);
+    setAssignment((current) => ({
+      ...current,
+      employeeNumber: employee.employeeNumber,
+    }));
+    setAssignmentNotice("");
+    setError("");
   };
 
   const downloadTemplate = async () => {
@@ -207,6 +265,13 @@ export default function BulkEmployeeImport() {
           assignment={assignment}
           setAssignment={setAssignment}
           assignmentNotice={assignmentNotice}
+          employeeSearch={employeeSearch}
+          setEmployeeSearch={setEmployeeSearch}
+          employeeMatches={employeeMatches}
+          employeeSearchBusy={employeeSearchBusy}
+          selectedAssignmentEmployee={selectedAssignmentEmployee}
+          setSelectedAssignmentEmployee={setSelectedAssignmentEmployee}
+          selectAssignmentEmployee={selectAssignmentEmployee}
           busy={busy}
           saveIndividualAssignment={saveIndividualAssignment}
           assignmentFile={assignmentFile}
@@ -303,6 +368,13 @@ function AssignmentWorkspace({
   assignment,
   setAssignment,
   assignmentNotice,
+  employeeSearch,
+  setEmployeeSearch,
+  employeeMatches,
+  employeeSearchBusy,
+  selectedAssignmentEmployee,
+  setSelectedAssignmentEmployee,
+  selectAssignmentEmployee,
   busy,
   saveIndividualAssignment,
   assignmentFile,
@@ -338,13 +410,56 @@ function AssignmentWorkspace({
         <Card number="1" title="Assign one existing employee">
           <p style={muted}>Use the employee number. Only the Employment Type and/or Cost Centre selected below will be updated.</p>
           <div style={formGrid}>
-            <Field label="Employee No">
-              <input
-                style={inputStyle}
-                value={assignment.employeeNumber}
-                placeholder="ZLL000139"
-                onChange={(event) => setAssignment((current) => ({ ...current, employeeNumber: event.target.value }))}
-              />
+            <Field label="Search Employee / Employee ID">
+              <div style={employeeSearchWrap}>
+                <input
+                  style={inputStyle}
+                  value={employeeSearch}
+                  placeholder="Type name or Employee ID, e.g. Priscilia or ZLL000313"
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setEmployeeSearch(event.target.value);
+                    setSelectedAssignmentEmployee(null);
+                    setAssignment((current) => ({ ...current, employeeNumber: "" }));
+                    setAssignmentNotice("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && employeeMatches[0]) {
+                      event.preventDefault();
+                      selectAssignmentEmployee(employeeMatches[0]);
+                    }
+                  }}
+                />
+                {employeeSearchBusy && <span style={employeeSearchHint}>Searching…</span>}
+                {!employeeSearchBusy && employeeSearch.trim().length >= 2 && !selectedAssignmentEmployee && employeeMatches.length === 0 && (
+                  <span style={employeeSearchHint}>No current employee match yet.</span>
+                )}
+                {!selectedAssignmentEmployee && employeeMatches.length > 0 && (
+                  <div style={employeeSearchResults} role="listbox" aria-label="Employee search results">
+                    {employeeMatches.map((employee) => (
+                      <button
+                        key={employee.employeeNumber}
+                        type="button"
+                        style={employeeSearchOption}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectAssignmentEmployee(employee)}
+                      >
+                        <strong>{employee.employeeNumber} — {employee.employeeName}</strong>
+                        <span>{employee.designation?.name || "No designation"} · {employee.department?.name || "No department"} · {employee.location?.name || "No location"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedAssignmentEmployee && (
+                <div style={selectedEmployeeCard}>
+                  <strong>{selectedAssignmentEmployee.employeeNumber} — {selectedAssignmentEmployee.employeeName}</strong>
+                  <span>
+                    Current Employment Type: {selectedAssignmentEmployee.employmentType || "Missing"} ·
+                    Current Cost Centre: {selectedAssignmentEmployee.costCentre?.name || "Missing"}
+                  </span>
+                </div>
+              )}
             </Field>
             <Field label="Employment Type">
               <select
@@ -536,3 +651,9 @@ const fieldLabel = { display: "grid", gap: 6, color: "#F7FAF8", fontSize: 12, fo
 const inputStyle = { width: "100%", boxSizing: "border-box", borderRadius: 8, border: "1px solid rgba(255,255,255,.18)", padding: "10px 11px", background: "rgba(255,255,255,.06)", color: "#F7FAF8" };
 const chipRow = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 };
 const chip = { padding: "6px 10px", borderRadius: 999, background: "rgba(212,175,55,.13)", border: "1px solid rgba(212,175,55,.45)", color: "#D4AF37", fontSize: 12, fontWeight: 800 };
+
+const employeeSearchWrap = { position: "relative", display: "grid", gap: 5 };
+const employeeSearchHint = { color: "#AFC0B6", fontSize: 11, fontWeight: 600 };
+const employeeSearchResults = { position: "absolute", top: "100%", left: 0, right: 0, zIndex: 30, marginTop: 4, maxHeight: 280, overflowY: "auto", border: "1px solid rgba(212,175,55,.45)", borderRadius: 10, background: "#071A11", boxShadow: "0 14px 32px rgba(0,0,0,.38)" };
+const employeeSearchOption = { width: "100%", display: "grid", gap: 3, padding: "11px 12px", border: 0, borderBottom: "1px solid rgba(255,255,255,.06)", background: "transparent", color: "#F7FAF8", textAlign: "left", cursor: "pointer" };
+const selectedEmployeeCard = { display: "grid", gap: 4, marginTop: 7, padding: "9px 10px", borderRadius: 8, border: "1px solid rgba(46,233,139,.28)", background: "rgba(46,233,139,.06)", color: "#D7E8DE", fontSize: 11 };
