@@ -1,4 +1,5 @@
 import { getStoredOrganization } from "../../services/api";
+import chrisLogo from "../../assets/images/chris-logo.png";
 import "./PrintableReportBranding.css";
 
 function safeLogoUrl(organization = {}) {
@@ -38,7 +39,11 @@ export function PrintableReportFooter({ generatedAt }) {
   return (
     <footer className="chris-print-report-footer">
       <span>{generatedAt ? "Generated " + new Date(generatedAt).toLocaleString("en-NG") : "Generated from authoritative organisation data"}</span>
-      <strong>Powered by CHRiS</strong>
+      <span className="chris-print-report-powered">
+        <span>Powered by</span>
+        <img src={chrisLogo} alt="CHRiS" />
+        <strong>CHRiS</strong>
+      </span>
     </footer>
   );
 }
