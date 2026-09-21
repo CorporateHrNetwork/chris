@@ -138,6 +138,84 @@ router.get(
 );
 
 router.get(
+  "/employees/search",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const query = String(req.query?.q || "").trim();
+      const tokens = query
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .slice(0, 4);
+
+      const tokenFilters = tokens.map((token) => ({
+        OR: [
+          { employeeNumber: { contains: token, mode: "insensitive" } },
+          { firstName: { contains: token, mode: "insensitive" } },
+          { middleName: { contains: token, mode: "insensitive" } },
+          { lastName: { contains: token, mode: "insensitive" } },
+          { email: { contains: token, mode: "insensitive" } },
+        ],
+      }));
+
+      const employees = await prisma.employee.findMany({
+        where: {
+          organizationId: req.auth.organizationId,
+          status: { in: ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"] },
+          ...(req.auth.activeLocationId
+            ? { locationId: req.auth.activeLocationId }
+            : {}),
+          ...(tokenFilters.length ? { AND: tokenFilters } : {}),
+        },
+        select: {
+          employeeNumber: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          email: true,
+          status: true,
+          employmentType: true,
+          costCentreId: true,
+          costCentre: {
+            select: { id: true, code: true, name: true },
+          },
+          department: {
+            select: { id: true, code: true, name: true },
+          },
+          designation: {
+            select: { id: true, code: true, name: true },
+          },
+          location: {
+            select: { id: true, code: true, name: true },
+          },
+        },
+        orderBy: [
+          { firstName: "asc" },
+          { lastName: "asc" },
+          { employeeNumber: "asc" },
+        ],
+        take: 20,
+      });
+
+      return res.json({
+        status: "success",
+        data: employees.map((employee) => ({
+          ...employee,
+          employeeName: [
+            employee.firstName,
+            employee.middleName,
+            employee.lastName,
+          ].filter(Boolean).join(" "),
+        })),
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to search employees.");
+    }
+  }
+);
+
+router.get(
   "/employment-level/:employeeNumber",
   requirePermission("employees.view"),
   async (req, res) => {
