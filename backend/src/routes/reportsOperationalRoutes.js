@@ -66,16 +66,10 @@ async function loadAttendance(req) {
     from: req.query.from,
     to: req.query.to,
     employeeNumber: req.query.employeeNumber,
+    locationId: req.auth.activeLocationId || null,
   });
 
-  const branchRows = await branchEmployees(req);
-  let records = report.records || [];
-  if (branchRows) {
-    const numbers = new Set(branchRows.map((row) => row.employeeNumber.toUpperCase()));
-    records = records.filter((row) =>
-      numbers.has(String(row.employee?.employeeNumber || "").toUpperCase())
-    );
-  }
+  const records = report.records || [];
 
   const totals = records.reduce(
     (acc, row) => {
@@ -114,7 +108,7 @@ async function loadAttendance(req) {
 async function loadLeave(req) {
   const leaveYear = Number(req.query.leaveYear || new Date().getFullYear());
   const locationId = req.auth.activeLocationId || null;
-  const [overview, balances, rawRequests, branchRows] = await Promise.all([
+  const [overview, balances, requests] = await Promise.all([
     getLeaveOverview({
       organizationId: req.auth.organizationId,
       locationId,
@@ -124,15 +118,12 @@ async function loadLeave(req) {
       leaveYear,
       locationId,
     }),
-    getLeaveRequests({ organizationId: req.auth.organizationId }),
-    branchEmployees(req),
+    getLeaveRequests({
+      organizationId: req.auth.organizationId,
+      leaveYear,
+      locationId,
+    }),
   ]);
-
-  let requests = rawRequests;
-  if (branchRows) {
-    const ids = new Set(branchRows.map((row) => row.id));
-    requests = requests.filter((row) => ids.has(row.employee?.id));
-  }
 
   const byStatus = {};
   const byLeaveType = {};
@@ -159,6 +150,8 @@ async function loadLeave(req) {
       employeeNumber: row.employee?.employeeNumber || null,
       employeeName: employeeName(row.employee),
       department: row.employee?.department?.name || null,
+      costCentreCode: row.employee?.costCentre?.code || null,
+      costCentre: row.employee?.costCentre?.name || null,
       branch: row.employee?.location?.name || null,
       leaveType: row.leaveType?.name || null,
       policy: row.leavePolicy?.name || null,
