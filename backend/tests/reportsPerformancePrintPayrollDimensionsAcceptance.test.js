@@ -125,3 +125,11 @@ test("bar-based report visuals use CHRiS white summary cards with readable title
   assert.ok(reportsCss.includes(".reports-panel--summary"));
   assert.ok(reportsCss.includes("color: #064e3b !important"));
 });
+
+
+test("compact headcount report tables do not force horizontal scrolling", () => {
+  assert.ok(reportsPage.includes("compactTableWrapStyle"));
+  assert.ok(reportsPage.includes("compactTableStyle"));
+  assert.ok(reportsPage.includes('minWidth: 0'));
+  assert.ok(reportsPage.includes('overflowX: "visible"'));
+});
