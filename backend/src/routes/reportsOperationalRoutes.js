@@ -13,6 +13,9 @@ const {
 } = require("../services/leaveOperationalService");
 const { getLeaveRequests } = require("../services/leaveService");
 const payroll = require("../services/payrollOperationsService");
+const {
+  appendReportCoverSheet,
+} = require("../services/reportWorkbookBrandingService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -472,10 +475,12 @@ async function auditExport(req, view, data, rowCount) {
 
 function sendWorkbook(res, workbook, view, scope) {
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-  const safeScope = String(scope.locationCode || scope.locationName || "CHRIS")
+  const safeScope = String(scope.locationCode || scope.locationName || "REPORT")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-");
+  const safeOrg = String(req.auth?.organization?.name || req.auth?.organization?.legalName || "Organisation")
     .replace(/[^a-zA-Z0-9_-]+/g, "-");
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", `attachment; filename="CHRIS_${safeScope}_${view}_report.xlsx"`);
+  res.setHeader("Content-Disposition", `attachment; filename="${safeOrg}_${safeScope}_${view}_report.xlsx"`);
   return res.status(200).send(buffer);
 }
 
@@ -486,6 +491,12 @@ router.get(
     try {
       const data = await loadAttendance(req);
       const workbook = XLSX.utils.book_new();
+      appendReportCoverSheet(workbook, {
+        organization: req.auth.organization,
+        reportTitle: "Attendance Report",
+        scope: data.scope,
+        generatedAt: data.generatedAt,
+      });
       appendSheet(workbook, [data.totals], "Attendance Summary");
       appendSheet(workbook, data.records, "Attendance Records");
       await auditExport(req, "attendance", data, data.records.length);
@@ -503,6 +514,12 @@ router.get(
     try {
       const data = await loadLeave(req);
       const workbook = XLSX.utils.book_new();
+      appendReportCoverSheet(workbook, {
+        organization: req.auth.organization,
+        reportTitle: "Leave Report",
+        scope: data.scope,
+        generatedAt: data.generatedAt,
+      });
       appendSheet(workbook, [data.overview], "Leave Summary");
       appendSheet(workbook, data.requests, "Leave Requests");
       appendSheet(workbook, data.balances, "Leave Balances");
@@ -521,6 +538,12 @@ router.get(
     try {
       const data = await loadPayroll(req);
       const workbook = XLSX.utils.book_new();
+      appendReportCoverSheet(workbook, {
+        organization: req.auth.organization,
+        reportTitle: "Payroll Report",
+        scope: data.scope,
+        generatedAt: data.generatedAt,
+      });
       appendSheet(workbook, [data.totals], "Payroll Summary");
       appendSheet(workbook, data.runs, "Payroll Runs");
       appendSheet(workbook, data.allocation?.byDepartment || [], "By Department");
