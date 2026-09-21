@@ -174,6 +174,20 @@ export default function BulkEmployeeImport() {
         }
       );
       setAssignmentNotice(response.message || "Employee assignment saved.");
+      setSelectedAssignmentEmployee((current) => {
+        if (!current || current.employeeNumber !== assignment.employeeNumber.trim()) return current;
+        const selectedCostCentre =
+          response.data?.costCentre ||
+          catalog.costCentres?.find((row) => row.id === response.data?.costCentreId) ||
+          current.costCentre ||
+          null;
+        return {
+          ...current,
+          employmentType: response.data?.employmentType || current.employmentType || null,
+          costCentreId: response.data?.costCentreId || current.costCentreId || null,
+          costCentre: selectedCostCentre,
+        };
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -408,7 +422,7 @@ function AssignmentWorkspace({
 
       <div style={stepsGrid}>
         <Card number="1" title="Assign one existing employee">
-          <p style={muted}>Use the employee number. Only the Employment Type and/or Cost Centre selected below will be updated.</p>
+          <p style={muted}>Search by employee name or Employee ID, select the employee, then update only the Employment Type and/or Cost Centre required.</p>
           <div style={formGrid}>
             <Field label="Search Employee / Employee ID">
               <div style={employeeSearchWrap}>
