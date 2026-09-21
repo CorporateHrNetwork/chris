@@ -60,6 +60,9 @@ const IMPORT_HEADERS = [
   "Designation",
   "Location",
   "Cost Centre / Operating Unit",
+  "Monthly Gross Salary",
+  "Salary Currency",
+  "Salary Effective From",
   "NIN",
 ];
 
@@ -128,6 +131,9 @@ function buildTemplateWorkbook() {
     ["Required: Employee Name, Department, Designation and Location. Email and Phone may be completed later by authorized HR."],
     ["Employment Type: Full-Time, Part-Time, Expatriate, NYSC / Internship, or Domestic Staff - Housekeeper."],
     ["Cost Centre / Operating Unit is validated independently from Department when supplied."],
+    ["For ZERMATT current employees, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary are payroll-readiness requirements and must be supplied."],
+    ["Monthly Gross Salary creates the employee's opening effective-dated salary authority during import. Salary Currency defaults to NGN."],
+    ["Salary Effective From: YYYY-MM-DD. If blank, CHRiS uses Hire Date; if Hire Date is blank, CHRiS uses the import date."],
     ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED."],
     ["Status: Active, Probation, Leave or Suspended. Blank defaults to Probation."],
     ["Hire Date: YYYY-MM-DD."],
@@ -154,6 +160,9 @@ function buildTemplateWorkbook() {
         "HR Officer",
         "Abuja",
         "HEAD OFFICE",
+        "450000",
+        "NGN",
+        "2026-08-30",
         "",
       ],
     ]),
@@ -176,7 +185,11 @@ function findCatalogRow(rows, value) {
 async function prepareBulkRows(prisma, { organizationId, buffer }) {
   const sourceRows = parseWorkbook(buffer);
   const now = new Date();
-  const [departments, designations, locations, costCentres, existingEmployees] = await Promise.all([
+  const [organization, departments, designations, locations, costCentres, existingEmployees] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { slug: true },
+    }),
     prisma.department.findMany({
       where: { organizationId, isActive: true },
       select: { id: true, name: true, code: true },
@@ -236,6 +249,28 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       "Operating Unit",
       "Cost Centre Code",
     ]);
+    const grossSalaryInput = getCell(row, [
+      "Monthly Gross Salary",
+      "Gross Salary",
+      "Salary Rate",
+      "Monthly Salary",
+    ]);
+    const normalizedGrossSalaryText = String(grossSalaryInput || "")
+      .replace(/[₦,\s]/g, "")
+      .trim();
+    const grossSalary = normalizedGrossSalaryText
+      ? Number(normalizedGrossSalaryText)
+      : null;
+    const salaryCurrency = (
+      getCell(row, ["Salary Currency", "Currency"]) ||
+      (grossSalaryInput ? "NGN" : "")
+    ).toUpperCase();
+    const salaryEffectiveFromInput = getCell(row, [
+      "Salary Effective From",
+      "Salary Start Date",
+      "Salary Effective Date",
+    ]);
+
     const rawLocationInput = getCell(row, ["Location", "Company Branch", "Branch", "Branch / Location", "Location Code"]);
     const locationAliases = {
       "ABUJA": "ABJ",
@@ -257,11 +292,19 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const location = findCatalogRow(locations, locationInput);
     const costCentre = findCatalogRow(costCentres, costCentreInput);
     const errors = [];
+    const isZermatt =
+      String(organization?.slug || "").trim().toLowerCase() ===
+      "zermatt-liquor-limited";
+    const defaultSalaryEffectiveFrom =
+      (/^\d{4}-\d{2}-\d{2}$/.test(hireDate) ? hireDate : now.toISOString().slice(0, 10));
+    const salaryEffectiveFrom =
+      salaryEffectiveFromInput || defaultSalaryEffectiveFrom;
 
     if (!name || name.trim().split(/\s+/).length < 2) errors.push("Employee Name must contain at least first and last name.");
     if (!["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(gender)) errors.push("Gender must be MALE, FEMALE, OTHER or UNSPECIFIED.");
     if (!status) errors.push("Status is invalid.");
     if (employmentTypeInput && !employmentType) errors.push("Employment Type is not in the authoritative CHRiS catalogue.");
+    if (isZermatt && !employmentTypeInput) errors.push("Employment Type is required for ZERMATT payroll readiness.");
     if (!department) errors.push("Department was not found in the active CHRiS structure.");
     if (!designation) errors.push("Designation was not found in the active CHRiS structure.");
     if (designation && department && designation.departmentId !== department.id) {
@@ -272,6 +315,11 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     }
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
     if (costCentreInput && !costCentre) errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
+    if (isZermatt && !costCentreInput) errors.push("Cost Centre / Operating Unit is required for ZERMATT payroll readiness.");
+    if (isZermatt && !grossSalaryInput) errors.push("Monthly Gross Salary is required for ZERMATT payroll readiness.");
+    if (grossSalaryInput && (!Number.isFinite(grossSalary) || grossSalary <= 0)) errors.push("Monthly Gross Salary must be greater than zero.");
+    if (grossSalaryInput && !/^[A-Z]{3}$/.test(salaryCurrency)) errors.push("Salary Currency must be a 3-letter currency code such as NGN.");
+    if (grossSalaryInput && !/^\d{4}-\d{2}-\d{2}$/.test(salaryEffectiveFrom)) errors.push("Salary Effective From must use YYYY-MM-DD.");
     if (hireDate && !/^\d{4}-\d{2}-\d{2}$/.test(hireDate)) errors.push("Hire Date must use YYYY-MM-DD.");
     if (nin && !/^\d{11}$/.test(nin.replace(/\D/g, ""))) errors.push("NIN must contain 11 digits.");
     if (email && (existingEmails.has(email) || seenEmails.has(email))) errors.push("Work Email already exists or is duplicated in this file.");
@@ -305,6 +353,16 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
               nationalIdentificationNumber: normalizedNin || "",
             }
           : null,
+      salaryRate:
+        errors.length === 0 && grossSalary
+          ? {
+              amount: grossSalary,
+              currency: salaryCurrency || "NGN",
+              effectiveFrom: salaryEffectiveFrom,
+              effectiveTo: null,
+              reason: "Opening salary rate from bulk employee import",
+            }
+          : null,
       display: {
         name,
         email,
@@ -313,6 +371,9 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
         designation: designation?.name || designationInput,
         location: location?.name || locationInput,
         costCentre: costCentre?.name || costCentreInput,
+        grossSalary: grossSalary || null,
+        salaryCurrency: salaryCurrency || "",
+        salaryEffectiveFrom: grossSalary ? salaryEffectiveFrom : "",
       },
     };
   });
