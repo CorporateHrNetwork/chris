@@ -17,6 +17,7 @@ import {
 } from "react-icons/fa";
 
 import "./Reports.css";
+import { PrintableReportHeader, PrintableReportFooter } from "../components/reporting/PrintableReportBranding";
 
 import {
   apiDownload,
@@ -236,11 +237,10 @@ function Reports() {
         ))}
       </div>
 
-      <div className="reports-print-header">
-        <div className="reports-print-brand">CHRiS · Reports & Analytics</div>
-        <h1>{VIEWS.find((view) => view.key === activeView)?.label || "Report"}</h1>
-        <div>{scopeLabel}</div>
-      </div>
+      <PrintableReportHeader
+        reportTitle={VIEWS.find((view) => view.key === activeView)?.label || "Report"}
+        scopeLabel={scopeLabel}
+      />
 
       {loading && <StatusPanel text="Loading authoritative report data..." />}
       {!loading && viewError && <StatusPanel text={viewError} error />}
@@ -277,9 +277,10 @@ function Reports() {
             <PayrollReport data={operational} />
           )}
 
-          <div className="reports-print-footer" style={footerNoteStyle}>
+          <div className="reports-screen-footer reports-no-print" style={footerNoteStyle}>
             Generated {formatDateTime(operational?.generatedAt || report?.generatedAt)}. Report scope is enforced by the authenticated CHRiS operating context.
           </div>
+          <PrintableReportFooter generatedAt={operational?.generatedAt || report?.generatedAt} />
         </div>
       )}
     </div>
@@ -323,13 +324,13 @@ function Overview({ report }) {
       <Panel title="Branch Headcount" subtitle="Current workforce by active operating branch.">
         <BranchTable rows={report.branches || []} compact />
       </Panel>
-      <Panel title="Largest Departments" subtitle="Current workforce concentration by department.">
+      <Panel variant="summary" title="Largest Departments" subtitle="Current workforce concentration by department.">
         <BreakdownBars rows={(report.headcount?.byDepartment || []).slice(0, 10)} total={report.headcount?.total || 0} />
       </Panel>
-      <Panel title="Employment Type Mix" subtitle="Current workforce by authoritative Employment Type.">
+      <Panel variant="summary" title="Employment Type Mix" subtitle="Current workforce by authoritative Employment Type.">
         <BreakdownBars rows={report.headcount?.byEmploymentType || []} total={report.headcount?.total || 0} />
       </Panel>
-      <Panel title="Gender Distribution" subtitle="Current workforce demographic coverage.">
+      <Panel variant="summary" title="Gender Distribution" subtitle="Current workforce demographic coverage.">
         <BreakdownBars rows={report.headcount?.byGender || []} total={report.headcount?.total || 0} />
       </Panel>
     </div>
@@ -339,16 +340,16 @@ function Overview({ report }) {
 function Workforce({ report }) {
   return (
     <div style={twoColumnStyle}>
-      <Panel title="Workforce Status" subtitle="Current workforce status distribution.">
+      <Panel variant="summary" title="Workforce Status" subtitle="Current workforce status distribution.">
         <BreakdownBars rows={report.headcount?.byStatus || []} total={report.headcount?.total || 0} />
       </Panel>
-      <Panel title="Gender" subtitle="Current workforce demographic distribution.">
+      <Panel variant="summary" title="Gender" subtitle="Current workforce demographic distribution.">
         <BreakdownBars rows={report.headcount?.byGender || []} total={report.headcount?.total || 0} />
       </Panel>
-      <Panel title="Employment Types" subtitle="Current workforce by employment arrangement.">
+      <Panel variant="summary" title="Employment Types" subtitle="Current workforce by employment arrangement.">
         <BreakdownBars rows={report.headcount?.byEmploymentType || []} total={report.headcount?.total || 0} />
       </Panel>
-      <Panel title="Department Distribution" subtitle="Headcount by department.">
+      <Panel variant="summary" title="Department Distribution" subtitle="Headcount by department.">
         <BreakdownBars rows={report.headcount?.byDepartment || []} total={report.headcount?.total || 0} maxRows={15} />
       </Panel>
     </div>
@@ -553,8 +554,23 @@ function SimpleBreakdownTable({ rows }) {
   return <div style={tableWrapStyle}><table style={tableStyle}><thead><tr><th style={thStyle}>Category</th><th style={thRightStyle}>Headcount</th></tr></thead><tbody>{rows.map((row) => <tr key={row.name}><td style={tdStyle}>{friendlyLabel(row.name)}</td><td style={tdRightStrongStyle}>{Number(row.count || 0).toLocaleString("en-NG")}</td></tr>)}</tbody></table></div>;
 }
 
-function Panel({ title, subtitle, actions, children }) {
-  return <section className="reports-panel" style={panelStyle}><div style={panelHeaderStyle}><div><h2 style={panelTitleStyle}>{title}</h2>{subtitle && <div style={panelSubtitleStyle}>{subtitle}</div>}</div>{actions}</div><div style={{ marginTop: 18 }}>{children}</div></section>;
+function Panel({ title, subtitle, actions, children, variant = "default" }) {
+  const summary = variant === "summary";
+  return (
+    <section
+      className={`reports-panel${summary ? " reports-panel--summary" : ""}`}
+      style={summary ? summaryPanelStyle : panelStyle}
+    >
+      <div style={panelHeaderStyle}>
+        <div>
+          <h2 style={summary ? summaryPanelTitleStyle : panelTitleStyle}>{title}</h2>
+          {subtitle && <div style={summary ? summaryPanelSubtitleStyle : panelSubtitleStyle}>{subtitle}</div>}
+        </div>
+        {actions}
+      </div>
+      <div style={{ marginTop: 18 }}>{children}</div>
+    </section>
+  );
 }
 
 function StatusBadge({ value }) {
@@ -613,9 +629,12 @@ const kpiValueGoldStyle = { ...kpiValueBaseStyle, color: "#F6D35D" };
 const metricSubtitleStyle = { marginTop: 5, color: "#91A99C", fontSize: 9 };
 const twoColumnStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(390px,1fr))", gap: 18, marginTop: 20 };
 const panelStyle = { marginTop: 20, border: "1px solid rgba(212,175,55,.20)", borderRadius: 17, padding: 20, background: "linear-gradient(145deg,rgba(6,55,34,.93),rgba(2,23,15,.95))", boxShadow: "0 12px 30px rgba(0,0,0,.18)", overflow: "hidden" };
+const summaryPanelStyle = { ...panelStyle, background: "#FFFFFF", border: "1px solid rgba(6,78,59,.18)", boxShadow: "0 10px 26px rgba(0,0,0,.12)" };
 const panelHeaderStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" };
 const panelTitleStyle = { margin: 0, color: "#F7FAF8", fontSize: 17 };
 const panelSubtitleStyle = { color: "#9EB7A9", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
+const summaryPanelTitleStyle = { margin: 0, color: "#064E3B", fontSize: 17, fontWeight: 900 };
+const summaryPanelSubtitleStyle = { color: "#64748B", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
 const tableWrapStyle = { width: "100%", overflowX: "auto", maxHeight: 620, overflowY: "auto" };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 720, fontSize: 11 };
 const thStyle = { textAlign: "left", color: "#F6D35D", padding: "10px 11px", borderBottom: "1px solid rgba(212,175,55,.22)", whiteSpace: "nowrap", fontSize: 9, textTransform: "uppercase", letterSpacing: ".045em", position: "sticky", top: 0, background: "#06321f", zIndex: 1 };
@@ -629,10 +648,10 @@ const filterRowStyle = { display: "flex", gap: 8, flexWrap: "wrap" };
 const filterLabelStyle = { display: "flex", alignItems: "center", gap: 7, color: "#AFC5B9", fontSize: 10, fontWeight: 800 };
 const dateInputStyle = { padding: "7px 9px", borderRadius: 8, border: "1px solid rgba(212,175,55,.24)", background: "#052719", color: "#F7FAF8" };
 const yearInputStyle = { ...dateInputStyle, width: 82 };
-const barLabelRowStyle = { display: "flex", justifyContent: "space-between", gap: 12, color: "#C9DCD2", fontSize: 11, marginBottom: 5 };
-const barTrackStyle = { height: 7, borderRadius: 999, background: "rgba(255,255,255,.07)", overflow: "hidden" };
+const barLabelRowStyle = { display: "flex", justifyContent: "space-between", gap: 12, color: "#243B31", fontSize: 11, marginBottom: 5 };
+const barTrackStyle = { height: 7, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" };
 const barFillStyle = { height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#087A43,#D4AF37)" };
-const emptyTextStyle = { color: "#91A99C", fontSize: 12 };
+const emptyTextStyle = { color: "#64748B", fontSize: 12 };
 const statusBadgeStyle = { display: "inline-flex", padding: "4px 8px", borderRadius: 999, background: "rgba(46,233,139,.10)", color: "#76F3B2", fontSize: 9, fontWeight: 900, whiteSpace: "nowrap" };
 const tableNoteStyle = { marginTop: 12, color: "#91A99C", fontSize: 10 };
 const controlNoteStyle = { marginBottom: 14, padding: "9px 11px", borderLeft: "3px solid #D4AF37", background: "rgba(212,175,55,.06)", color: "#AFC5B9", fontSize: 10, lineHeight: 1.5 };
