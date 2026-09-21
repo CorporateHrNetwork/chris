@@ -65,6 +65,7 @@ import CostCentres from "./pages/CostCentres";
 import MySupportRequests from "./pages/MySupportRequests";
 import SupportDesk from "./pages/SupportDesk";
 import RemittanceWorkspace from "./pages/statutories/RemittanceWorkspace";
+import OrganizationSetupChoice from "./pages/OrganizationSetupChoice";
 
 function ProtectedLayout({ children }) {
   return (
@@ -88,6 +89,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/organisation-setup" element={<PermissionLayout permission="settings.view"><OrganizationSetupChoice /></PermissionLayout>} />
         <Route path="/employee-invite/:token" element={<EmployeeSelfOnboardingPublic />} />
 
         <Route path="/" element={<PermissionLayout permission="dashboard.view"><Dashboard /></PermissionLayout>} />
