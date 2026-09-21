@@ -59,7 +59,7 @@ const EMPTY_PERSONAL_FORM = {
   gender: "UNSPECIFIED",
   dateOfBirth: "",
   maritalStatus: "",
-  nationality: "",
+  nationality: "Nigerian",
   residentialAddress: "",
   lga: "",
   state: "",
@@ -760,6 +760,38 @@ function EmployeeOnboarding({
             "personal-details"
           ] || {};
 
+        const savedNationality =
+          String(
+            saved.nationality ||
+            employee.nationality ||
+            ""
+          ).trim();
+
+        const citizenshipCountryCode =
+          saved.citizenshipCountryCode ||
+          COUNTRY_CATALOG.find(
+            (country) =>
+              String(
+                country.nationality ||
+                ""
+              )
+                .trim()
+                .toLowerCase() ===
+              savedNationality.toLowerCase()
+          )?.code ||
+          getCountryByName(
+            saved.country ||
+            "Nigeria"
+          )?.code ||
+          "NG";
+
+        const resolvedNationality =
+          savedNationality ||
+          getCountryByCode(
+            citizenshipCountryCode
+          )?.nationality ||
+          "";
+
         setSectionForm({
           ...EMPTY_PERSONAL_FORM,
           fullName:
@@ -795,8 +827,7 @@ function EmployeeOnboarding({
             saved.maritalStatus ||
             "",
           nationality:
-            saved.nationality ||
-            "",
+            resolvedNationality,
           residentialAddress:
             saved.residentialAddress ||
             "",
@@ -817,15 +848,7 @@ function EmployeeOnboarding({
             toDateInput(
               saved.idExpiryDate
             ),
-          citizenshipCountryCode:
-            saved.citizenshipCountryCode ||
-            getCountryByName(
-              saved.nationality ===
-              "Nigerian"
-                ? "Nigeria"
-                : saved.country
-            )?.code ||
-            "NG",
+          citizenshipCountryCode,
           residenceCountryCode:
             saved.residenceCountryCode ||
             getCountryByName(
