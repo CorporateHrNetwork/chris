@@ -26,6 +26,32 @@ const money = (value, currency = "NGN") => {
   }
 };
 
+const PAYROLL_READINESS_BLOCKER_LABELS = {
+  EMPLOYMENT_TYPE_MISSING: "Employment Type is missing",
+  COST_CENTRE_MISSING: "Cost Centre is missing",
+  AUTHORITATIVE_COMPENSATION_RATE_NOT_CONFIGURED: "effective salary rate is missing",
+  PAYMENT_PROFILE_INCOMPLETE: "payment profile is incomplete",
+};
+
+function payrollOperationErrorMessage(error, fallback) {
+  if (
+    error?.code === "PAYROLL_EXECUTION_READINESS_INCOMPLETE" &&
+    Array.isArray(error?.details?.employees) &&
+    error.details.employees.length
+  ) {
+    const employees = error.details.employees.slice(0, 5).map((employee) => {
+      const reasons = (employee.blockers || [])
+        .filter((blocker) => blocker !== "PAYMENT_PROFILE_INCOMPLETE")
+        .map((blocker) => PAYROLL_READINESS_BLOCKER_LABELS[blocker] || blocker)
+        .join(", ");
+      return `${employee.employeeNumber || "Employee"}: ${reasons || "payroll setup is incomplete"}`;
+    });
+    const remaining = Math.max(0, error.details.employees.length - employees.length);
+    return `${error.message || fallback} ${employees.join(" · ")}${remaining ? ` · +${remaining} more` : ""}`;
+  }
+  return error?.message || fallback;
+}
+
 function useLoad(path, initial = []) {
   const [data, setData] = useState(initial);
   const [loading, setLoading] = useState(true);
@@ -110,7 +136,7 @@ function ExecuteIntegrated() {
       setMessage("Payroll recalculated. Review all employee lines before submission.");
       await load();
     } catch (err) {
-      setError(err.message || "Unable to calculate payroll.");
+      setError(payrollOperationErrorMessage(err, "Unable to calculate payroll."));
     } finally {
       setBusy("");
     }
@@ -201,6 +227,12 @@ function ExecuteIntegrated() {
       setBusy("");
     }
   };
+
+  useEffect(() => {
+    if (!error) return undefined;
+    const timer = window.setTimeout(() => setError(""), 12000);
+    return () => window.clearTimeout(timer);
+  }, [error, setError]);
 
   useEffect(() => {
     if (!selectedPayslip) return;
