@@ -17,7 +17,9 @@ const STEPS = [
   "Organization Placement",
   "Compensation / Payment Setup",
   "Statutory Information",
+  "Next of Kin / Emergency",
   "Documents",
+  "Legal / Assets",
   "Onboarding Checklist",
   "Review & Create",
 ];
@@ -41,8 +43,9 @@ const initialForm = () => {
   const organization = getStoredOrganization() || {};
   const today = tenantLocalDate(organization.timezone || "Africa/Lagos");
   return {
-    firstName: "", middleName: "", surname: "", gender: "", phone: "", email: "",
-    dateOfBirth: "", maritalStatus: "", nationality: "Nigeria", residentialAddress: "",
+    firstName: "", middleName: "", surname: "", gender: "", phone: "", alternativePhone: "", email: "",
+    dateOfBirth: "", maritalStatus: "", nationality: "Nigerian", country: "Nigeria", residentialAddress: "",
+    idType: "", idNumber: "", idExpiryDate: "",
     status: "Probation", hireDate: today,
     employmentType: "Full-Time", templateId: "", departmentId: "", designationId: "", locationId: "", costCentreId: "",
     grossSalary: "", salaryCurrency: organization.currency || "NGN", salaryEffectiveFrom: today,
@@ -64,6 +67,10 @@ export default function FullOnboardingWizard() {
   const [form, setForm] = useState(initialForm);
   const [payment, setPayment] = useState({ payrollCurrency: organization.currency || "NGN", paymentMethod: "Bank Transfer" });
   const [statutory, setStatutory] = useState({});
+  const [nextOfKin, setNextOfKin] = useState({ phoneCountryCode: "NG" });
+  const [emergencyContact, setEmergencyContact] = useState({ phoneCountryCode: "NG", alternativePhoneCountryCode: "NG" });
+  const [legal, setLegal] = useState({});
+  const [assets, setAssets] = useState({});
   const [documents, setDocuments] = useState([]);
   const [documentDraft, setDocumentDraft] = useState({ category: "CV_RESUME", file: null, notes: "" });
   const [departments, setDepartments] = useState([]);
@@ -238,6 +245,10 @@ export default function FullOnboardingWizard() {
     setForm({ ...fresh, templateId: defaultTemplate?.id || "" });
     setPayment({ payrollCurrency: fresh.salaryCurrency || "NGN", paymentMethod: "Bank Transfer" });
     setStatutory({});
+    setNextOfKin({ phoneCountryCode: "NG" });
+    setEmergencyContact({ phoneCountryCode: "NG", alternativePhoneCountryCode: "NG" });
+    setLegal({});
+    setAssets({});
     setDocuments([]);
     setDocumentDraft({ category: "CV_RESUME", file: null, notes: "" });
     setTaskDrafts({});
@@ -282,9 +293,13 @@ export default function FullOnboardingWizard() {
         },
         templateId: form.templateId,
         sectionPayloads: [
-          { key: "personal-details", data: { fullName, email: form.email, phone: form.phone, gender: form.gender, dateOfBirth: form.dateOfBirth, maritalStatus: form.maritalStatus, nationality: form.nationality, residentialAddress: form.residentialAddress } },
+          { key: "personal-details", data: { fullName, email: form.email, phone: form.phone, alternativePhone: form.alternativePhone, gender: form.gender, dateOfBirth: form.dateOfBirth, maritalStatus: form.maritalStatus, nationality: form.nationality, country: form.country, residentialAddress: form.residentialAddress, idType: form.idType, idNumber: form.idNumber, idExpiryDate: form.idExpiryDate } },
           { key: "payment-details", data: payment },
           { key: "statutory-details", data: statutory },
+          { key: "next-of-kin", data: nextOfKin },
+          { key: "emergency-contact", data: emergencyContact },
+          { key: "legal", data: legal },
+          { key: "assets", data: assets },
         ],
         documents,
         completedSectionKeys: completedSectionKeys.current,
@@ -342,6 +357,8 @@ export default function FullOnboardingWizard() {
     zermattTenant && !form.grossSalary && "Opening salary",
     !payment.accountNumber && "Payment setup",
     !statutory.taxIdentificationNumber && "TIN/PAYE readiness",
+    !nextOfKin.name && "Next of Kin",
+    !emergencyContact.name && "Emergency Contact",
     !documents.length && "Documents",
   ].filter(Boolean);
 
