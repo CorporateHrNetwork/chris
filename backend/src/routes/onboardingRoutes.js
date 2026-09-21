@@ -1385,13 +1385,18 @@ router.get(
           },
         });
 
+      const documentCategoryLabels =
+        await documentCategoryLabelsForOrganization(
+          req.auth.organizationId
+        );
+
       return res.json({
         status: "success",
         data:
           data.map((document) => ({
             ...document,
             categoryLabel:
-              DOCUMENT_CATEGORY_LABELS[
+              documentCategoryLabels[
                 document.category
               ] || document.category,
           })),
@@ -1578,9 +1583,9 @@ router.post(
         data: {
           ...document,
           categoryLabel:
-            DOCUMENT_CATEGORY_LABELS[
+            documentCategoryLabels[
               document.category
-            ],
+            ] || document.category,
         },
         onboarding:
           updatedOnboarding,
@@ -1908,13 +1913,18 @@ router.post(
         userId: req.auth.userId,
       });
 
+      const documentCategoryLabels =
+        await documentCategoryLabelsForOrganization(
+          req.auth.organizationId
+        );
+
       return res.json({
         status: "success",
         message: "Employee document replaced successfully.",
         data: {
           ...updatedDocument,
           categoryLabel:
-            DOCUMENT_CATEGORY_LABELS[updatedDocument.category] ||
+            documentCategoryLabels[updatedDocument.category] ||
             updatedDocument.category,
         },
         onboarding: updatedOnboarding,
