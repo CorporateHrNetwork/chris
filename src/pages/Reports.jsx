@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   FaBuilding,
@@ -15,6 +15,8 @@ import {
   FaUsers,
   FaUserSlash,
 } from "react-icons/fa";
+
+import "./Reports.css";
 
 import {
   apiDownload,
@@ -54,7 +56,9 @@ function Reports() {
 
   const [report, setReport] = useState(null);
   const [operational, setOperational] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [coreLoading, setCoreLoading] = useState(true);
+  const [operationalLoading, setOperationalLoading] = useState(false);
+  const coreLoadedRef = useRef(false);
   const [error, setError] = useState("");
   const [operationalError, setOperationalError] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -63,47 +67,83 @@ function Reports() {
   const [attendanceTo, setAttendanceTo] = useState(() => localIsoDate(new Date()));
   const [leaveYear, setLeaveYear] = useState(() => new Date().getFullYear());
 
-  const loadReport = useCallback(async () => {
+  const loadCoreReport = useCallback(async ({ force = false } = {}) => {
+    if (coreLoadedRef.current && !force) return;
     try {
-      setLoading(true);
+      setCoreLoading(true);
       setError("");
-      setOperationalError("");
-
       const core = await apiRequest("/api/reports/release1");
       setReport(core?.data || null);
-      setOperational(null);
-
-      try {
-        if (activeView === "attendance") {
-          const result = await apiRequest(
-            `/api/reports/operational/attendance?from=${encodeURIComponent(attendanceFrom)}&to=${encodeURIComponent(attendanceTo)}`
-          );
-          setOperational(result?.data || null);
-        } else if (activeView === "leave") {
-          const result = await apiRequest(
-            `/api/reports/operational/leave?leaveYear=${encodeURIComponent(leaveYear)}`
-          );
-          setOperational(result?.data || null);
-        } else if (activeView === "payroll") {
-          const result = await apiRequest("/api/reports/operational/payroll");
-          setOperational(result?.data || null);
-        }
-      } catch (err) {
-        setOperationalError(err?.message || "Unable to load the selected operational report.");
-      }
+      coreLoadedRef.current = true;
     } catch (err) {
       setError(err?.message || "Unable to load Reports & Analytics.");
     } finally {
-      setLoading(false);
+      setCoreLoading(false);
+    }
+  }, []);
+
+  const loadOperationalReport = useCallback(async () => {
+    if (CORE_VIEWS.has(activeView)) {
+      setOperational(null);
+      setOperationalError("");
+      return;
+    }
+
+    try {
+      setOperationalLoading(true);
+      setOperationalError("");
+      let endpoint = "";
+      if (activeView === "attendance") {
+        endpoint = `/api/reports/operational/attendance?from=${encodeURIComponent(attendanceFrom)}&to=${encodeURIComponent(attendanceTo)}`;
+      } else if (activeView === "leave") {
+        endpoint = `/api/reports/operational/leave?leaveYear=${encodeURIComponent(leaveYear)}`;
+      } else if (activeView === "payroll") {
+        endpoint = "/api/reports/operational/payroll";
+      }
+      if (!endpoint) return;
+      const result = await apiRequest(endpoint);
+      setOperational(result?.data || null);
+    } catch (err) {
+      setOperationalError(err?.message || "Unable to load the selected operational report.");
+    } finally {
+      setOperationalLoading(false);
     }
   }, [activeView, attendanceFrom, attendanceTo, leaveYear]);
 
+  const loadReport = useCallback(async ({ forceCore = false } = {}) => {
+    if (CORE_VIEWS.has(activeView)) {
+      await loadCoreReport({ force: forceCore });
+      return;
+    }
+
+    const tasks = [loadOperationalReport()];
+    if (!coreLoadedRef.current || forceCore) {
+      tasks.push(loadCoreReport({ force: forceCore }));
+    }
+    await Promise.allSettled(tasks);
+  }, [activeView, loadCoreReport, loadOperationalReport]);
+
   useEffect(() => {
-    loadReport();
-    const handleLocationChange = () => loadReport();
+    const timer = window.setTimeout(() => {
+      loadReport();
+    }, CORE_VIEWS.has(activeView) ? 0 : 120);
+    return () => window.clearTimeout(timer);
+  }, [loadReport, activeView]);
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      coreLoadedRef.current = false;
+      setReport(null);
+      setOperational(null);
+      loadReport({ forceCore: true });
+    };
     window.addEventListener("chris:location-context-changed", handleLocationChange);
     return () => window.removeEventListener("chris:location-context-changed", handleLocationChange);
   }, [loadReport]);
+
+  const loading = CORE_VIEWS.has(activeView) ? coreLoading : operationalLoading;
+  const viewError = CORE_VIEWS.has(activeView) ? error : operationalError;
+  const viewData = CORE_VIEWS.has(activeView) ? report : operational;
 
   const filteredEmployees = useMemo(() => {
     const rows = report?.employees || [];
@@ -159,8 +199,8 @@ function Reports() {
     : `${scope?.locationName || "BRANCH"}${scope?.locationCode ? ` · ${scope.locationCode}` : ""}`;
 
   return (
-    <div style={pageStyle}>
-      <div style={headerStyle}>
+    <div className="chris-reports-page" style={pageStyle}>
+      <div className="reports-screen-header" style={headerStyle}>
         <div>
           <div style={eyebrowStyle}>REPORTING & INSIGHTS</div>
           <h1 style={titleStyle}>Reports & Analytics</h1>
@@ -169,9 +209,9 @@ function Reports() {
           </p>
         </div>
 
-        <div style={headerActionsStyle}>
+        <div className="reports-no-print" style={headerActionsStyle}>
           <span style={scopePillStyle}>{scopeLabel}</span>
-          <button type="button" style={secondaryButtonStyle} onClick={loadReport} disabled={loading}>
+          <button type="button" style={secondaryButtonStyle} onClick={() => loadReport({ forceCore: true })} disabled={loading}>
             <FaSyncAlt /> {loading ? "Refreshing" : "Refresh"}
           </button>
           <button type="button" style={secondaryButtonStyle} onClick={() => window.print()}>
@@ -183,7 +223,7 @@ function Reports() {
         </div>
       </div>
 
-      <div style={tabBarStyle}>
+      <div className="reports-no-print" style={tabBarStyle}>
         {VIEWS.map((view) => (
           <button
             key={view.key}
@@ -196,10 +236,16 @@ function Reports() {
         ))}
       </div>
 
+      <div className="reports-print-header">
+        <div className="reports-print-brand">CHRiS · Reports & Analytics</div>
+        <h1>{VIEWS.find((view) => view.key === activeView)?.label || "Report"}</h1>
+        <div>{scopeLabel}</div>
+      </div>
+
       {loading && <StatusPanel text="Loading authoritative report data..." />}
-      {!loading && error && <StatusPanel text={error} error />}
-      {!loading && !error && report && (
-        <>
+      {!loading && viewError && <StatusPanel text={viewError} error />}
+      {!loading && !viewError && viewData && (
+        <div className="reports-print-content">
           {CORE_VIEWS.has(activeView) && <KpiGrid summary={report.summary} />}
 
           {activeView === "overview" && <Overview report={report} />}
@@ -215,8 +261,7 @@ function Reports() {
           {activeView === "headcount" && <HeadcountReport report={report} />}
           {activeView === "branches" && <BranchReport rows={report.branches || []} />}
 
-          {operationalError && <StatusPanel text={operationalError} error />}
-          {!operationalError && activeView === "attendance" && operational && (
+          {activeView === "attendance" && operational && (
             <AttendanceReport
               data={operational}
               from={attendanceFrom}
@@ -225,17 +270,17 @@ function Reports() {
               onTo={setAttendanceTo}
             />
           )}
-          {!operationalError && activeView === "leave" && operational && (
+          {activeView === "leave" && operational && (
             <LeaveReport data={operational} year={leaveYear} onYear={setLeaveYear} />
           )}
-          {!operationalError && activeView === "payroll" && operational && (
+          {activeView === "payroll" && operational && (
             <PayrollReport data={operational} />
           )}
 
-          <div style={footerNoteStyle}>
-            Generated {formatDateTime(operational?.generatedAt || report.generatedAt)}. Report scope is enforced by the authenticated CHRiS operating context.
+          <div className="reports-print-footer" style={footerNoteStyle}>
+            Generated {formatDateTime(operational?.generatedAt || report?.generatedAt)}. Report scope is enforced by the authenticated CHRiS operating context.
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -255,9 +300,9 @@ function KpiGrid({ summary }) {
 
 function MetricCards({ cards }) {
   return (
-    <div style={kpiGridStyle}>
+    <div className="reports-kpi-grid" style={kpiGridStyle}>
       {cards.map((card) => (
-        <div key={card.title} style={kpiCardStyle}>
+        <div className="reports-kpi-card" key={card.title} style={kpiCardStyle}>
           <div style={kpiTopStyle}>
             <span style={kpiLabelStyle}>{card.title}</span>
             {card.icon && <span style={card.tone === "gold" ? iconGoldStyle : iconGreenStyle}>{card.icon}</span>}
@@ -409,10 +454,10 @@ function LeaveReport({ data, year, onYear }) {
       <MetricCards cards={cards} />
       <Panel title="Leave Requests" subtitle={`${data.summary?.requestCount || 0} leave request record(s) in the permitted scope.`} actions={<label style={filterLabelStyle}>Leave year<input type="number" min="2000" max="2100" value={year} onChange={(e) => onYear(Number(e.target.value) || new Date().getFullYear())} style={yearInputStyle} /></label>}>
         <div style={tableWrapStyle}><table style={tableStyle}>
-          <thead><tr>{["Employee", "Leave Type", "Policy", "Start", "End", "Units", "Status", "Branch"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Employee", "Department", "Cost Centre", "Leave Type", "Policy", "Start", "End", "Units", "Status", "Branch"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
           <tbody>{(data.requests || []).map((row) => <tr key={row.id}>
-            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td><td style={tdStyle}>{row.leaveType || "—"}</td><td style={tdStyle}>{row.policy || "—"}</td><td style={tdStyle}>{row.startDate || "—"}</td><td style={tdStyle}>{row.endDate || "—"}</td><td style={tdStyle}>{row.requestedUnits}</td><td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{row.branch || "—"}</td>
-          </tr>)}{!data.requests?.length && <tr><td colSpan={8} style={emptyCellStyle}>No leave requests are available in this scope.</td></tr>}</tbody>
+            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td><td style={tdStyle}>{row.department || "—"}</td><td style={tdStyle}>{row.costCentreCode ? `${row.costCentreCode} · ${row.costCentre || ""}` : (row.costCentre || "—")}</td><td style={tdStyle}>{row.leaveType || "—"}</td><td style={tdStyle}>{row.policy || "—"}</td><td style={tdStyle}>{row.startDate || "—"}</td><td style={tdStyle}>{row.endDate || "—"}</td><td style={tdStyle}>{row.requestedUnits}</td><td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{row.branch || "—"}</td>
+          </tr>)}{!data.requests?.length && <tr><td colSpan={10} style={emptyCellStyle}>No leave requests are available in this scope.</td></tr>}</tbody>
         </table></div>
       </Panel>
       <Panel title={`${year} Leave Balances`} subtitle="Entitlement, usage, committed requests and available balance.">
@@ -427,6 +472,34 @@ function LeaveReport({ data, year, onYear }) {
   );
 }
 
+function PayrollAllocationTable({ title, rows, showCode = false }) {
+  return (
+    <Panel title={title} subtitle="Latest payroll allocation by authoritative organisational ownership.">
+      <div style={tableWrapStyle}><table style={tableStyle}>
+        <thead><tr>{[
+          ...(showCode ? ["Code"] : []),
+          "Allocation", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"
+        ].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+        <tbody>
+          {(rows || []).map((row) => <tr key={`${row.code || ""}:${row.label}`}>
+            {showCode && <td style={tdStyle}>{row.code || "—"}</td>}
+            <td style={tdStrongStyle}>{row.label}</td>
+            <td style={tdStyle}>{Number(row.headcount || 0).toLocaleString("en-NG")}</td>
+            <td style={tdStyle}>{formatMoney(row.grossPayroll)}</td>
+            <td style={tdStyle}>{formatMoney(row.deductions)}</td>
+            <td style={tdRightStrongStyle}>{formatMoney(row.netPayroll)}</td>
+            <td style={tdStyle}>{formatMoney(row.paye)}</td>
+            <td style={tdStyle}>{formatMoney(row.employerPension)}</td>
+            <td style={tdStyle}>{formatMoney(row.employerStatutoryCost)}</td>
+            <td style={tdRightStrongStyle}>{formatMoney(row.totalEmployerCost)}</td>
+          </tr>)}
+          {!rows?.length && <tr><td colSpan={showCode ? 10 : 9} style={emptyCellStyle}>No payroll allocation records are available.</td></tr>}
+        </tbody>
+      </table></div>
+    </Panel>
+  );
+}
+
 function PayrollReport({ data }) {
   const latest = data.latest;
   const cards = [
@@ -434,10 +507,14 @@ function PayrollReport({ data }) {
     { title: "Gross Payroll", value: data.totals?.latestGrossPayroll, icon: <FaMoneyBillWave />, tone: "green", format: "money" },
     { title: "Deductions", value: data.totals?.latestDeductions, icon: <FaMoneyBillWave />, tone: "gold", format: "money" },
     { title: "Net Payroll", value: data.totals?.latestNetPayroll, icon: <FaMoneyBillWave />, tone: "green", format: "money" },
+    { title: "Employer Statutory Cost", value: data.totals?.latestEmployerStatutoryCost, icon: <FaMoneyBillWave />, tone: "gold", format: "money" },
+    { title: "Total Employer Cost", value: data.totals?.latestTotalEmployerCost, icon: <FaMoneyBillWave />, tone: "green", format: "money" },
   ];
   return (
     <>
       <MetricCards cards={cards} />
+      <PayrollAllocationTable title="Payroll by Department" rows={data.allocation?.byDepartment || []} />
+      <PayrollAllocationTable title="Payroll by Cost Centre / Operating Unit" rows={data.allocation?.byCostCentre || []} showCode />
       <Panel title="Payroll Run History" subtitle={latest ? `Latest: ${latest.periodName || latest.periodCode || "Payroll period"} · ${friendlyLabel(latest.status)}` : "No payroll run has been calculated yet."}>
         <div style={controlNoteStyle}>{data.control}</div>
         <div style={tableWrapStyle}><table style={tableStyle}>
@@ -477,7 +554,7 @@ function SimpleBreakdownTable({ rows }) {
 }
 
 function Panel({ title, subtitle, actions, children }) {
-  return <section style={panelStyle}><div style={panelHeaderStyle}><div><h2 style={panelTitleStyle}>{title}</h2>{subtitle && <div style={panelSubtitleStyle}>{subtitle}</div>}</div>{actions}</div><div style={{ marginTop: 18 }}>{children}</div></section>;
+  return <section className="reports-panel" style={panelStyle}><div style={panelHeaderStyle}><div><h2 style={panelTitleStyle}>{title}</h2>{subtitle && <div style={panelSubtitleStyle}>{subtitle}</div>}</div>{actions}</div><div style={{ marginTop: 18 }}>{children}</div></section>;
 }
 
 function StatusBadge({ value }) {
@@ -485,7 +562,7 @@ function StatusBadge({ value }) {
 }
 
 function StatusPanel({ text, error = false }) {
-  return <div style={{ ...statusPanelStyle, ...(error ? { borderColor: "rgba(239,68,68,.45)", color: "#FCA5A5" } : {}) }}>{text}</div>;
+  return <div className="reports-status-panel reports-no-print" style={{ ...statusPanelStyle, ...(error ? { borderColor: "rgba(239,68,68,.45)", color: "#FCA5A5" } : {}) }}>{text}</div>;
 }
 
 function friendlyLabel(value) {
