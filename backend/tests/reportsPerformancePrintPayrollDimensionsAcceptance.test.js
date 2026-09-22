@@ -117,13 +117,14 @@ test("printable reports are owned by the client organisation and credit CHRiS in
   assert.equal(reportsPage.includes("CHRiS · Reports & Analytics"), false);
 });
 
-test("bar-based report visuals use CHRiS white summary cards with readable titles", () => {
+test("bar-based report visuals use CHRiS summary cards and inherit readable global print colours", () => {
   assert.ok(reportsPage.includes('variant="summary"'));
   assert.ok(reportsPage.includes('background: "#FFFFFF"'));
   assert.ok(reportsPage.includes('color: "#064E3B"'));
   assert.ok(reportsPage.includes('color: "#64748B"'));
   assert.ok(reportsCss.includes(".reports-panel--summary"));
-  assert.ok(reportsCss.includes("color: #064e3b !important"));
+  assert.ok(reportsCss.includes("var(--chris-print-green)"));
+  assert.ok(reportsCss.includes("var(--chris-print-paper)"));
 });
 
 
