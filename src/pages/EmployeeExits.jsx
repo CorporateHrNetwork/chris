@@ -878,7 +878,7 @@ export default function EmployeeExits() {
                   <h2 style={sectionTitle}>{titleCase(settlementExit.exitProcess?.financialStatus || "PENDING")}</h2>
                 </div>
                 <div style={settlementHeaderActions}>
-                  {settlement && settlement.status !== "WAIVED" ? (
+                  {accountEmployee && accountExit ? (
                     <button
                       type="button"
                       className="exit-settlement-print-button"
@@ -970,6 +970,94 @@ export default function EmployeeExits() {
                   </div>
                   <div style={footer}><span style={muted}>System-derived items are locked and pulled from CHRiS source accounts/rules. Only HR-designated settlement inputs are editable.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy || !settlementPreview}>{busy ? "Calculating..." : "Calculate Exit Settlement Account"}</button></div>
                 </form>
+              ) : null}
+
+              {!settlement && accountEmployee && accountExit ? (
+                <section className="exit-settlement-print-document">
+                  <PrintableReportHeader
+                    reportTitle="Employee Exit Settlement Account — Draft"
+                    scopeLabel={`${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}`}
+                  />
+
+                  <div className="exit-settlement-print-meta">
+                    <div><span>Employee No.</span><strong>{accountEmployee.employeeNumber || "—"}</strong></div>
+                    <div><span>Employee Name</span><strong>{accountEmployee.employeeName || "—"}</strong></div>
+                    <div><span>Designation</span><strong>{accountEmployee.designation || "—"}</strong></div>
+                    <div><span>Department</span><strong>{accountEmployee.department || "—"}</strong></div>
+                    <div><span>Cost Centre</span><strong>{accountEmployee.costCentreCode ? `${accountEmployee.costCentreCode} · ${accountEmployee.costCentre || ""}` : (accountEmployee.costCentre || "—")}</strong></div>
+                    <div><span>Branch</span><strong>{accountEmployee.branch || "—"}</strong></div>
+                    <div><span>Exit Type</span><strong>{titleCase(accountExit.exitType)}</strong></div>
+                    <div><span>Notice Date</span><strong>{dateText(accountExit.noticeDate)}</strong></div>
+                    <div><span>Final Working Day</span><strong>{dateText(accountExit.lastWorkingDay)}</strong></div>
+                    <div><span>Entitled Notice</span><strong>{settlementPreview?.hrInputs?.entitledNoticeDays ?? 0} days</strong></div>
+                    <div><span>Notice Days Given</span><strong>{settlementPreview?.hrInputs?.noticeDaysGiven ?? 0} days</strong></div>
+                    <div><span>Notice Deficiency</span><strong>{settlementPreview?.hrInputs?.noticeDeficiencyDays ?? 0} days</strong></div>
+                    <div className="exit-settlement-print-meta-wide"><span>Exit Reason</span><strong>{accountExit.reason || "—"}</strong></div>
+                  </div>
+
+                  <div className="exit-settlement-print-account">
+                    <PrintableSettlementTable
+                      title="CREDIT — EMPLOYEE ENTITLEMENTS"
+                      items={[
+                        ["Gratuity / EoSB", accountCredits?.gratuityEosb],
+                        ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
+                        ["Full / Prorated Outstanding Salary", accountCredits?.outstandingSalary],
+                        ["Public Holiday Days", accountCredits?.publicHolidayDays],
+                        ["Extra Day Work Overtime", accountCredits?.extraDayOvertime],
+                        ["Extra Hours Work Overtime", accountCredits?.extraHoursOvertime],
+                        ["Bonus / Gift", accountCredits?.bonusGift],
+                        ["In Lieu of Notice Pay", accountCredits?.noticePay],
+                        ["Previous Salary Short Paid", accountCredits?.previousSalaryShortPaid],
+                      ]}
+                      currency={accountSalary?.currency}
+                    />
+                    <PrintableSettlementTable
+                      title="DEBIT — EMPLOYEE RECOVERIES"
+                      items={[
+                        ["Loan Balance", accountDebits?.loanBalance],
+                        ["Salary Advance", accountDebits?.salaryAdvance],
+                        ["In Lieu of Notice Deduction", accountDebits?.noticeDeduction],
+                        ["Unreturned Uniform", accountDebits?.unreturnedUniform],
+                        ["Previous Salary Overpaid", accountDebits?.previousSalaryOverpaid],
+                      ]}
+                      currency={accountSalary?.currency}
+                    />
+                  </div>
+
+                  <div className="exit-settlement-print-totals">
+                    <div><span>Total Credits</span><strong>{moneyText(accountTotals?.totalCredits, accountSalary?.currency)}</strong></div>
+                    <div><span>Total Debits</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency)}</strong></div>
+                    <div className="net"><span>Net Exit Settlement</span><strong>{moneyText(accountTotals?.netSettlement, accountSalary?.currency)}</strong></div>
+                  </div>
+
+                  <section className="exit-settlement-print-calculation-note">
+                    <h3>Calculation Basis</h3>
+                    <pre>{calculationNote}</pre>
+                  </section>
+
+                  <section className="exit-settlement-headhr-approval">
+                    <h3>Internal CHRiS Approval</h3>
+                    <div className="exit-settlement-headhr-line">
+                      <div><span>Prepared By</span><strong>Head, Human Resources</strong></div>
+                      <div><span>CHRiS Status</span><strong>Draft Preview</strong></div>
+                      <div><span>Approval Date</span><strong>Pending</strong></div>
+                    </div>
+                  </section>
+
+                  <section className="exit-settlement-external-workflow">
+                    <div className="exit-settlement-external-title">
+                      <h3>External Signatory Workflow</h3>
+                      <p>For use after Head HR approval. Draft preview only.</p>
+                    </div>
+                    <div className="exit-settlement-signatory-grid">
+                      <ExternalSignatoryBlock step="1" title="Auditor Review" fields={["Auditor Name", "Signature", "Date", "Review Remarks"]} />
+                      <ExternalSignatoryBlock step="2" title="GM Payout Approval" fields={["General Manager Name", "Signature", "Date", "Approval / Remarks"]} />
+                      <ExternalSignatoryBlock step="3" title="Accounts Team Payout Processing" fields={["Processed By", "Signature", "Processing Date", "Payment Reference / Voucher No."]} />
+                    </div>
+                  </section>
+
+                  <PrintableReportFooter generatedAt={new Date().toISOString()} />
+                </section>
               ) : null}
 
               {settlement ? (
