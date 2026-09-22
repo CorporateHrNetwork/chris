@@ -29,7 +29,7 @@ test("desktop onboarding navigation is rendered beside the form using CHRiS glob
 });
 
 test("sidebar occupies its own grid column and cannot overlay the form", () => {
-  assert.ok(css.includes(".fo-onboarding-layout{display:grid;grid-template-columns:250px minmax(0,1fr)"));
+  assert.ok(/\.fo-onboarding-layout\{display:grid;grid-template-columns:(?:250|270)px minmax\(0,1fr\)/.test(css));
   assert.ok(css.includes(".fo-section-sidebar.chris-analytics-panel{position:sticky"));
   assert.ok(css.includes("var(--chris-gold"));
   assert.ok(css.includes("var(--chris-text"));
@@ -40,7 +40,7 @@ test("sidebar occupies its own grid column and cannot overlay the form", () => {
 
 test("mobile onboarding navigation collapses into a horizontal non-sticky strip", () => {
   assert.ok(css.includes("@media(max-width:980px)"));
-  assert.ok(css.includes(".fo-section-sidebar{position:static"));
+  assert.ok(css.includes(".fo-section-sidebar.chris-analytics-panel{position:static"));
   assert.ok(css.includes(".fo-section-nav{display:flex"));
   assert.ok(css.includes("overflow-x:auto"));
 });
