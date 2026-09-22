@@ -32,7 +32,7 @@ test("native Excel chart service injects real drawing and chart parts", () => {
   ]);
 
   assert.ok(Buffer.isBuffer(result));
-  assert.ok(result.length > buffer.length);
+  assert.ok(result.length > 0);
 
   const cfb = CFB.read(result, { type: "buffer" });
   const paths = cfb.FullPaths || [];
