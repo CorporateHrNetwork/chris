@@ -51,7 +51,7 @@ test("additional exit documents can be added during clearance", () => {
 test("exit document API is audited and linked to the specific exit process", () => {
   for (const expected of [
     '"/:id/documents"',
-    'upload.single("document")',
+    'exitDocumentUpload.single("document")',
     "exitProcessId: exitProcess.id",
     "EXIT_DOCUMENT_UPLOADED",
     "EXIT_DOCUMENT_DELETED",
