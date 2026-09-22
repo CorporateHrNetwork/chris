@@ -1005,7 +1005,7 @@ export default function EmployeeExits() {
               ) : null}
 
               {!settlement && accountEmployee && accountExit ? (
-                <section className="chris-print-document exit-settlement-print-document">
+                <section className="chris-print-document exit-settlement-print-document" data-settlement-print-state={settlementPreview ? "preview" : "loading"}>
                   <PrintableReportHeader
                     reportTitle="Employee Exit Settlement Account — Draft"
                     scopeLabel={`${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}`}
@@ -1134,7 +1134,7 @@ export default function EmployeeExits() {
                   {["PAID", "WAIVED"].includes(settlement.status) ? <div style={closureNotice}>Financial closure complete. The HR-effective exit date and employment history remain unchanged.</div> : null}
 
                   {settlement.status !== "WAIVED" ? (
-                    <section className="chris-print-document exit-settlement-print-document">
+                    <section className="chris-print-document exit-settlement-print-document" data-settlement-print-state="record">
                       <PrintableReportHeader
                         reportTitle="Employee Exit Settlement Account"
                         scopeLabel={accountEmployee ? `${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}` : "Employee Exit Settlement"}
