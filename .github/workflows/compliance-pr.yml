@@ -100,6 +100,7 @@ jobs:
           node tests/employeeExitNoticeInitiationAcceptance.test.js
           node tests/employeeExitDocumentUploadAcceptance.test.js
           node tests/employeeExitMultiDocumentPaymentProofAcceptance.test.js
+          node tests/employeeExitSettlementPresentationAcceptance.test.js
           node tests/employeeAssignmentSearchAcceptance.test.js
           node tests/employeeAssignmentSuccessResetAcceptance.test.js
           node tests/unifiedOnboardingSidebarNavigationAcceptance.test.js
