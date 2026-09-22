@@ -139,3 +139,17 @@ test("printable settlement carries the external signatory workflow outside CHRiS
   }
   assert.ok(frontend.includes("completed externally on the printed settlement document"));
 });
+
+
+test("Employee Exits exposes a dedicated Exit Settlement Account workspace", () => {
+  for (const expected of [
+    "Exit Settlement Account",
+    'section=settlements',
+    "Employee Exit Settlement Accounts",
+    "Open Settlement Account",
+    "FINANCIAL CLOSURE",
+    "Head HR prepares and approves in CHRiS",
+  ]) {
+    assert.ok(frontend.includes(expected), `Missing settlement workspace navigation: ${expected}`);
+  }
+});
