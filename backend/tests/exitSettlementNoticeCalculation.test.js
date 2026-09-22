@@ -1,5 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL || "postgresql://chris:chris@127.0.0.1:5432/chris_test";
+
 const {
   noticeDaysBetween,
   resolveNoticePosition,
