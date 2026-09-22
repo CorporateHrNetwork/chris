@@ -158,9 +158,7 @@ const PRINT_CSS = String.raw`
   .chris-print-report-header {
     position: relative !important;
     z-index: 3 !important;
-    display: grid !important;
-    grid-template-columns: 72px minmax(0, 1fr) 72px !important;
-    align-items: center !important;
+    display: block !important;
     padding: 0 0 5px !important;
     margin: 0 0 5px !important;
     border-bottom: 2px solid #064e3b !important;
@@ -168,18 +166,16 @@ const PRINT_CSS = String.raw`
   }
 
   .chris-print-report-logo {
-    grid-column: 1 !important;
     display: block !important;
     width: auto !important;
     height: auto !important;
-    max-width: 62px !important;
-    max-height: 34px !important;
-    margin: 0 !important;
+    max-width: 72px !important;
+    max-height: 38px !important;
+    margin: 0 auto 2px !important;
     object-fit: contain !important;
   }
 
   .chris-print-report-heading {
-    grid-column: 2 !important;
     position: relative !important;
     z-index: 3 !important;
     text-align: center !important;
@@ -262,7 +258,7 @@ const PRINT_CSS = String.raw`
 
   .exit-settlement-print-meta > div {
     display: grid !important;
-    grid-template-columns: 145px minmax(0, 1fr) !important;
+    grid-template-columns: 165px minmax(0, 1fr) !important;
     gap: 5px !important;
     align-items: baseline !important;
     min-width: 0 !important;
@@ -277,6 +273,7 @@ const PRINT_CSS = String.raw`
     font-size: 12pt !important;
     font-weight: 700 !important;
     line-height: 1.02 !important;
+    white-space: nowrap !important;
     text-transform: uppercase !important;
     letter-spacing: 0 !important;
   }
@@ -571,8 +568,8 @@ const PRINT_CSS = String.raw`
   }
 
   .chris-print-report-powered img {
-    width: 18px !important;
-    height: 18px !important;
+    width: 28px !important;
+    height: 28px !important;
     object-fit: contain !important;
     background: transparent !important;
   }
@@ -602,12 +599,21 @@ const PRINT_CSS = String.raw`
 `;
 
 export default function openExitSettlementPrint() {
-  const source = document.querySelector(
-    ".employee-exit-settlement-page .exit-settlement-print-document"
+  const printNodes = Array.from(
+    document.querySelectorAll(
+      ".employee-exit-settlement-page .exit-settlement-print-document"
+    )
   );
 
+  const source =
+    printNodes.find((node) => node.dataset.settlementPrintState === "record") ||
+    printNodes.find((node) => node.dataset.settlementPrintState === "preview") ||
+    null;
+
   if (!source) {
-    window.alert("The Employee Exit Settlement Account is not available for printing.");
+    window.alert(
+      "The Employee Exit Settlement Account is still loading or has no calculated preview yet. Please wait for the settlement data to load before printing."
+    );
     return;
   }
 
