@@ -50,38 +50,26 @@ const EMPTY_REHIRE = {
 };
 
 const EMPTY_SETTLEMENT = {
-  finalSalary: "",
-  finalSalaryReference: "",
-  allowancePayable: "",
-  leavePayable: "",
-  leaveReference: "",
-  noticePay: "",
-  noticePayReference: "",
-  gratuitySeverance: "",
-  gratuityReference: "",
-  taxAdjustment: "",
-  pensionAdjustment: "",
-  otherRecovery: "",
+  bonusGift: "",
+  noticePayDays: "",
+  previousSalaryShortPaid: "",
+  noticeDeductionDays: "",
+  unreturnedUniform: "",
+  previousSalaryOverpaid: "",
   currency: "NGN",
   notes: "",
 };
 
 function settlementFormFromRecord(record) {
   if (!record) return EMPTY_SETTLEMENT;
-  const evidence = record.calculationSnapshot?.evidenceReferences || {};
+  const hrInputs = record.calculationSnapshot?.hrInputs || {};
   return {
-    finalSalary: String(record.finalSalary || ""),
-    finalSalaryReference: evidence.finalSalary || "",
-    allowancePayable: String(record.allowancePayable || ""),
-    leavePayable: String(record.leavePayable || ""),
-    leaveReference: evidence.leave || "",
-    noticePay: String(record.noticePay || ""),
-    noticePayReference: evidence.noticePay || "",
-    gratuitySeverance: String(record.gratuitySeverance || ""),
-    gratuityReference: evidence.gratuity || "",
-    taxAdjustment: String(record.taxAdjustment || ""),
-    pensionAdjustment: String(record.pensionAdjustment || ""),
-    otherRecovery: String(record.otherRecovery || ""),
+    bonusGift: String(hrInputs.bonusGift || ""),
+    noticePayDays: String(hrInputs.noticePayDays || ""),
+    previousSalaryShortPaid: String(hrInputs.previousSalaryShortPaid || ""),
+    noticeDeductionDays: String(hrInputs.noticeDeductionDays || ""),
+    unreturnedUniform: String(hrInputs.unreturnedUniform || ""),
+    previousSalaryOverpaid: String(hrInputs.previousSalaryOverpaid || ""),
     currency: record.currency || "NGN",
     notes: record.notes || "",
   };
@@ -147,6 +135,7 @@ export default function EmployeeExits() {
   const [feedback, setFeedback] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
   const [settlement, setSettlement] = useState(null);
+  const [settlementPreview, setSettlementPreview] = useState(null);
   const [settlementForm, setSettlementForm] = useState(EMPTY_SETTLEMENT);
   const [settlementPayment, setSettlementPayment] = useState("");
   const [settlementDecisionNotes, setSettlementDecisionNotes] = useState("");
@@ -185,16 +174,58 @@ export default function EmployeeExits() {
     if (!settlementExitId) {
       return undefined;
     }
-    apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`)
-      .then((result) => {
+    Promise.all([
+      apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`),
+      apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview`),
+    ])
+      .then(([settlementResult, previewResult]) => {
         if (!active) return;
-        const record = result?.data || null;
+        const record = settlementResult?.data || null;
         setSettlement(record);
         if (record) setSettlementForm(settlementFormFromRecord(record));
+        setSettlementPreview(previewResult?.data || null);
       })
       .catch((error) => { if (active) setFeedback(error?.message || "Unable to load the exit settlement."); });
     return () => { active = false; };
   }, [settlementExitId]);
+
+  useEffect(() => {
+    if (!settlementExitId) return undefined;
+    if (settlement && !["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status)) return undefined;
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        bonusGift: String(settlementForm.bonusGift || 0),
+        noticePayDays: String(settlementForm.noticePayDays || 0),
+        previousSalaryShortPaid: String(settlementForm.previousSalaryShortPaid || 0),
+        noticeDeductionDays: String(settlementForm.noticeDeductionDays || 0),
+        unreturnedUniform: String(settlementForm.unreturnedUniform || 0),
+        previousSalaryOverpaid: String(settlementForm.previousSalaryOverpaid || 0),
+      });
+      apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview?${params.toString()}`)
+        .then((result) => {
+          if (active) setSettlementPreview(result?.data || null);
+        })
+        .catch((error) => {
+          if (active) setFeedback(error?.message || "Unable to refresh the exit settlement preview.");
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    settlementExitId,
+    settlement?.status,
+    settlementForm.bonusGift,
+    settlementForm.noticePayDays,
+    settlementForm.previousSalaryShortPaid,
+    settlementForm.noticeDeductionDays,
+    settlementForm.unreturnedUniform,
+    settlementForm.previousSalaryOverpaid,
+  ]);
   useEffect(() => {
     let active = true;
     if (!employeeNumber) {
@@ -505,7 +536,14 @@ export default function EmployeeExits() {
 
   function calculateExitSettlement(event) {
     event.preventDefault();
-    const amountFields = ["finalSalary", "allowancePayable", "leavePayable", "noticePay", "gratuitySeverance", "taxAdjustment", "pensionAdjustment", "otherRecovery"];
+    const amountFields = [
+      "bonusGift",
+      "noticePayDays",
+      "previousSalaryShortPaid",
+      "noticeDeductionDays",
+      "unreturnedUniform",
+      "previousSalaryOverpaid",
+    ];
     const body = { ...settlementForm };
     for (const key of amountFields) body[key] = Number(body[key] || 0);
     runSettlementAction("calculate", body);
