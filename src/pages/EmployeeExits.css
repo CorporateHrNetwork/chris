@@ -284,7 +284,7 @@
 }
 
 
-@media (max-width: 900px) {
+@media (max-width: 620px) {
   .exit-settlement-account-columns {
     grid-template-columns: minmax(0, 1fr) !important;
   }
