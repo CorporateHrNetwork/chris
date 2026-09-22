@@ -59,7 +59,7 @@ test("settlement provides Print / Download PDF from preview stage and prints the
   assert.ok(frontend.includes("Employee Exit Settlement Account — Draft"));
   assert.ok(frontend.includes("Draft Preview"));
   assert.ok(frontend.includes("printExitSettlementDocument"));
-  assert.ok(frontend.includes('import("../utils/exitSettlementPrint")'));
+  assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(printUtility.includes("printWindow.print()"));
   assert.ok(printUtility.includes("Print / Download PDF"));
   assert.ok(frontend.includes("exit-settlement-print-calculation-note"));
@@ -87,7 +87,7 @@ test("settlement standalone print provides visible controls and Head of HR signa
 });
 
 test("settlement print is isolated from EmployeeExits page rendering", () => {
-  assert.ok(frontend.includes('import("../utils/exitSettlementPrint")'));
+  assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(frontend.includes("async function printExitSettlementDocument()"));
   assert.equal(frontend.includes("const PRINT_CSS"), false);
   assert.ok(printUtility.includes("export default function openExitSettlementPrint()"));
