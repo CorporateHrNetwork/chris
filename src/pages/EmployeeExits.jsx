@@ -174,18 +174,28 @@ export default function EmployeeExits() {
     if (!settlementExitId) {
       return undefined;
     }
-    Promise.all([
+    Promise.allSettled([
       apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`),
       apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview`),
-    ])
-      .then(([settlementResult, previewResult]) => {
-        if (!active) return;
-        const record = settlementResult?.data || null;
+    ]).then(([settlementResult, previewResult]) => {
+      if (!active) return;
+
+      if (settlementResult.status === "fulfilled") {
+        const record = settlementResult.value?.data || null;
         setSettlement(record);
         if (record) setSettlementForm(settlementFormFromRecord(record));
-        setSettlementPreview(previewResult?.data || null);
-      })
-      .catch((error) => { if (active) setFeedback(error?.message || "Unable to load the exit settlement."); });
+      }
+
+      if (previewResult.status === "fulfilled") {
+        setSettlementPreview(previewResult.value?.data || null);
+      } else if (settlementResult.status === "rejected") {
+        setFeedback(
+          previewResult.reason?.message ||
+          settlementResult.reason?.message ||
+          "Unable to load the exit settlement."
+        );
+      }
+    });
     return () => { active = false; };
   }, [settlementExitId]);
 
