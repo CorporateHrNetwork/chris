@@ -168,7 +168,7 @@ function calculateNoticePreview({ noticeDate, lastWorkingDay, entitledNoticeDays
 
 async function printExitSettlementDocument() {
   try {
-    const module = await import("../utils/exitSettlementPrint");
+    const module = await import("../utils/exitSettlementPrint.js");
     module.default();
   } catch (error) {
     console.error("Unable to open Employee Exit Settlement print view.", error);
