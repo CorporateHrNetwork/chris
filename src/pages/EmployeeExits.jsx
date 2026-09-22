@@ -330,6 +330,91 @@ export default function EmployeeExits() {
     [selectedEmployee, exits]
   );
 
+  const loadExitDocuments = useCallback(async (exitProcessId) => {
+    if (!exitProcessId) {
+      setExitDocuments([]);
+      return;
+    }
+    const result = await apiRequest(
+      `/api/exits/${encodeURIComponent(exitProcessId)}/documents`
+    );
+    setExitDocuments(result?.data || []);
+  }, []);
+
+  async function uploadExitDocument(exitProcessId, draft = exitDocumentDraft) {
+    if (!exitProcessId || !draft?.file) return null;
+
+    const body = new FormData();
+    body.append("document", draft.file);
+    body.append("category", draft.category || "OTHER_EXIT_DOCUMENT");
+    body.append("notes", draft.notes || "");
+
+    const result = await apiRequest(
+      `/api/exits/${encodeURIComponent(exitProcessId)}/documents`,
+      { method: "POST", body }
+    );
+    return result?.data || null;
+  }
+
+  async function saveExitDocument() {
+    if (!activeExit?.id) {
+      setFeedback("Initiate the exit process before uploading additional exit documents.");
+      return;
+    }
+    if (!exitDocumentDraft.file) {
+      setFeedback("Choose an exit document to upload.");
+      return;
+    }
+
+    setDocumentBusy(true);
+    setFeedback("");
+    try {
+      await uploadExitDocument(activeExit.id);
+      setExitDocumentDraft({
+        category: defaultExitDocumentType(activeExit.exitType),
+        file: null,
+        notes: "",
+      });
+      await loadExitDocuments(activeExit.id);
+      setFeedback("Exit document uploaded successfully.");
+    } catch (error) {
+      setFeedback(error?.message || "Unable to upload exit document.");
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
+  async function deleteExitDocument(documentId) {
+    if (!activeExit?.id || !documentId) return;
+    if (!window.confirm("Delete this exit document? This cannot be undone.")) return;
+
+    setDocumentBusy(true);
+    setFeedback("");
+    try {
+      await apiRequest(
+        `/api/exits/${encodeURIComponent(activeExit.id)}/documents/${encodeURIComponent(documentId)}`,
+        { method: "DELETE" }
+      );
+      await loadExitDocuments(activeExit.id);
+      setFeedback("Exit document deleted.");
+    } catch (error) {
+      setFeedback(error?.message || "Unable to delete exit document.");
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
+
+  useEffect(() => {
+    if (!activeExit?.id) {
+      setExitDocuments([]);
+      return;
+    }
+    loadExitDocuments(activeExit.id).catch((error) => {
+      setFeedback(error?.message || "Unable to load exit documents.");
+    });
+  }, [activeExit?.id, loadExitDocuments]);
+
   const exitedEmployees = exitRegister;
 
   const settlementExit = useMemo(
@@ -412,8 +497,27 @@ export default function EmployeeExits() {
         },
       });
 
-      setFeedback(result?.message || "Exit process initiated.");
+      const createdExit = result?.data || null;
+      const hadDocument = Boolean(exitDocumentDraft.file);
+
+      if (createdExit?.id && hadDocument) {
+        await uploadExitDocument(createdExit.id);
+        setExitDocumentDraft({
+          category: defaultExitDocumentType(createdExit.exitType),
+          file: null,
+          notes: "",
+        });
+      }
+
+      setFeedback(
+        hadDocument
+          ? "Exit process initiated and exit document uploaded successfully."
+          : (result?.message || "Exit process initiated.")
+      );
       await loadData();
+      if (createdExit?.id) {
+        await loadExitDocuments(createdExit.id);
+      }
     } catch (error) {
       setFeedback(error?.message || "Unable to initiate exit.");
     } finally {
