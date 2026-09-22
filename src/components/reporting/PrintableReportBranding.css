@@ -79,3 +79,12 @@
     letter-spacing: .025em;
   }
 }
+
+
+@media print {
+  .chris-print-report-header,
+  .chris-print-report-footer {
+    background: var(--chris-print-paper) !important;
+    background-image: none !important;
+  }
+}
