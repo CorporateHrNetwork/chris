@@ -1,17 +1,18 @@
 :root {
   --chris-print-paper: #f7f3e8;
   --chris-print-paper-strong: #fffdf7;
-  --chris-print-ink: #1f2d26;
-  --chris-print-muted: #5f6f66;
+  --chris-print-ink: #17211c;
+  --chris-print-muted: #64748b;
   --chris-print-green: #064e3b;
   --chris-print-green-soft: #e6f0ea;
-  --chris-print-gold: #a77b12;
+  --chris-print-gold: #9a7410;
   --chris-print-gold-soft: #f8eed0;
   --chris-print-border: #c7cec9;
 }
 
 @media print {
   @page {
+    size: A4 portrait;
     margin: 10mm;
   }
 
@@ -24,17 +25,36 @@
     print-color-adjust: exact !important;
   }
 
+  .chris-print-document,
   .chris-print-report-header,
   .chris-print-report-footer,
   .exit-settlement-print-document,
   .chris-reports-page,
-  .chris-print-document {
+  .reports-print-content {
     background: var(--chris-print-paper) !important;
     color: var(--chris-print-ink) !important;
+    background-image: none !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
+  /*
+   * Authoritative CHRiS print/download visual language.
+   * Derived from the accepted payslip print view:
+   * A4 portrait, off-white paper, centred organisation branding,
+   * green/gold used as ink/borders only, and no coloured panel fills.
+   */
+  .chris-print-document *,
+  .chris-print-report-header,
+  .chris-print-report-footer,
+  .chris-reports-page *,
+  .reports-print-content *,
+  .exit-settlement-print-document * {
+    background-color: var(--chris-print-paper) !important;
+    background-image: none !important;
   }
 
   .chris-print-report-header {
-    border-bottom-color: var(--chris-print-green) !important;
+    border-bottom: 2px solid var(--chris-print-green) !important;
   }
 
   .chris-print-report-owner {
@@ -55,29 +75,17 @@
     color: var(--chris-print-green) !important;
   }
 
-  table {
-    border-color: var(--chris-print-border);
+  .chris-print-document table,
+  .reports-print-content table,
+  .exit-settlement-print-document table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--chris-print-paper) !important;
   }
 
-  a[href]::after {
-    content: none !important;
-  }
-}
-
-
-@media print {
-  /* Global CHRiS rule: no coloured background fills on printable/downloadable documents. */
-  .chris-print-document *,
-  .chris-print-report-header,
-  .chris-print-report-footer,
-  .chris-reports-page *,
-  .reports-print-content *,
-  .exit-settlement-print-document * {
-    background-color: var(--chris-print-paper) !important;
-    background-image: none !important;
-  }
-
-  th,
+  .chris-print-document th,
+  .reports-print-content th,
+  .exit-settlement-print-document th,
   thead,
   thead tr,
   .reports-panel,
@@ -87,8 +95,20 @@
     background-image: none !important;
   }
 
-  th {
+  .chris-print-document th,
+  .reports-print-content th,
+  .exit-settlement-print-document th {
     color: var(--chris-print-green) !important;
     border-bottom: 2px solid var(--chris-print-green) !important;
+  }
+
+  .chris-print-document td,
+  .reports-print-content td,
+  .exit-settlement-print-document td {
+    color: var(--chris-print-ink) !important;
+  }
+
+  a[href]::after {
+    content: none !important;
   }
 }
