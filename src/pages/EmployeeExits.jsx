@@ -23,6 +23,29 @@ const NOTICE_STATUSES = [
   ["NOT_REQUIRED", "Not Required"],
 ];
 
+const EXIT_DOCUMENT_TYPES = [
+  ["RESIGNATION_LETTER", "Resignation Letter"],
+  ["TERMINATION_LETTER", "Termination Letter"],
+  ["RETIREMENT_NOTICE", "Retirement Notice"],
+  ["END_OF_CONTRACT_NOTICE", "End of Contract Notice"],
+  ["REDUNDANCY_NOTICE", "Redundancy Notice"],
+  ["EXIT_ACCEPTANCE_LETTER", "Exit / Resignation Acceptance Letter"],
+  ["CLEARANCE_DOCUMENT", "Exit Clearance Document"],
+  ["HANDOVER_DOCUMENT", "Handover Document"],
+  ["OTHER_EXIT_DOCUMENT", "Other Exit Document"],
+];
+
+function defaultExitDocumentType(exitType) {
+  const map = {
+    RESIGNATION: "RESIGNATION_LETTER",
+    TERMINATION: "TERMINATION_LETTER",
+    RETIREMENT: "RETIREMENT_NOTICE",
+    END_OF_CONTRACT: "END_OF_CONTRACT_NOTICE",
+    REDUNDANCY: "REDUNDANCY_NOTICE",
+  };
+  return map[String(exitType || "").toUpperCase()] || "OTHER_EXIT_DOCUMENT";
+}
+
 const CLEARANCE_ITEMS = [
   ["assetsReturned", "Company Assets Returned"],
   ["accessDisabled", "System / Access Disabled"],
@@ -137,6 +160,13 @@ export default function EmployeeExits() {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
+  const [exitDocuments, setExitDocuments] = useState([]);
+  const [exitDocumentDraft, setExitDocumentDraft] = useState({
+    category: defaultExitDocumentType(EMPTY_EXIT.exitType),
+    file: null,
+    notes: "",
+  });
+  const [documentBusy, setDocumentBusy] = useState(false);
   const [settlement, setSettlement] = useState(null);
   const [settlementPreview, setSettlementPreview] = useState(null);
   const [settlementForm, setSettlementForm] = useState(EMPTY_SETTLEMENT);
@@ -350,6 +380,12 @@ export default function EmployeeExits() {
 
   function setExitField(name, value) {
     setExitForm((current) => ({ ...current, [name]: value }));
+    if (name === "exitType") {
+      setExitDocumentDraft((current) => ({
+        ...current,
+        category: defaultExitDocumentType(value),
+      }));
+    }
   }
 
   function setRehireField(name, value) {
