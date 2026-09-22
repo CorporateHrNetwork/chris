@@ -36,11 +36,13 @@ test("shared report branding and reports inherit the global CHRiS print palette"
 });
 
 test("settlement accounting orientation never stacks credit above debit", () => {
-  assert.ok(exitsCss.includes("Authoritative settlement accounting orientation"));
-  assert.ok(exitsCss.includes("flex-flow: row nowrap !important"));
-  assert.ok(exitsCss.includes(".exit-settlement-credit-column { order: 1 !important; }"));
-  assert.ok(exitsCss.includes(".exit-settlement-debit-column { order: 2 !important; }"));
-  assert.ok(exitsCss.includes("overflow-x: auto !important"));
+  assert.ok(exitsCss.includes("Authoritative settlement workspace and accounting orientation"));
+  assert.ok(exitsCss.includes("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important"));
+  assert.ok(exitsCss.includes(".exit-settlement-credit-column"));
+  assert.ok(exitsCss.includes("grid-column: 1 !important"));
+  assert.ok(exitsCss.includes(".exit-settlement-debit-column"));
+  assert.ok(exitsCss.includes("grid-column: 2 !important"));
+  assert.equal(exitsCss.includes("flex-flow: row nowrap !important"), false);
 });
 
 test("global CHRiS print culture prohibits coloured background fills", () => {
