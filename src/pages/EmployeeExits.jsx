@@ -444,18 +444,18 @@ export default function EmployeeExits() {
     }
   }
 
-  async function deleteExitDocument(documentId) {
-    if (!activeExit?.id || !documentId) return;
+  async function deleteExitDocument(documentId, exitProcessId = activeExit?.id) {
+    if (!exitProcessId || !documentId) return;
     if (!window.confirm("Delete this exit document? This cannot be undone.")) return;
 
     setDocumentBusy(true);
     setFeedback("");
     try {
       await apiRequest(
-        `/api/exits/${encodeURIComponent(activeExit.id)}/documents/${encodeURIComponent(documentId)}`,
+        `/api/exits/${encodeURIComponent(exitProcessId)}/documents/${encodeURIComponent(documentId)}`,
         { method: "DELETE" }
       );
-      await loadExitDocuments(activeExit.id);
+      await loadExitDocuments(exitProcessId);
       setFeedback("Exit document deleted.");
     } catch (error) {
       setFeedback(error?.message || "Unable to delete exit document.");
@@ -474,6 +474,13 @@ export default function EmployeeExits() {
       setFeedback(error?.message || "Unable to load exit documents.");
     });
   }, [activeExit?.id, loadExitDocuments]);
+
+  useEffect(() => {
+    if (!settlementExitId) return;
+    loadExitDocuments(settlementExitId).catch((error) => {
+      setFeedback(error?.message || "Unable to load settlement payment proof.");
+    });
+  }, [settlementExitId, loadExitDocuments]);
 
   const exitedEmployees = exitRegister;
 
@@ -722,6 +729,44 @@ export default function EmployeeExits() {
     }
   }
 
+  async function saveSettlementPaymentProof() {
+    if (!settlementExitId) return;
+
+    const queue = exitDocumentDraft.queue || [];
+    if (!queue.length) {
+      setFeedback("Choose one or more settlement payment proof files.");
+      return;
+    }
+    if (exitDocuments.length + queue.length > 10) {
+      setFeedback(`Zermatt exit policy allows a maximum of 10 documents. ${10 - exitDocuments.length} upload slot(s) remain.`);
+      return;
+    }
+
+    setDocumentBusy(true);
+    setFeedback("");
+    try {
+      await uploadExitDocument(settlementExitId, {
+        ...exitDocumentDraft,
+        queue: queue.map((item) => ({
+          ...item,
+          category: "EXIT_SETTLEMENT_PAYMENT_PROOF",
+        })),
+      });
+      setExitDocumentDraft({
+        category: "EXIT_SETTLEMENT_PAYMENT_PROOF",
+        file: null,
+        notes: "",
+        queue: [],
+      });
+      await loadExitDocuments(settlementExitId);
+      setFeedback("Exit settlement payment proof uploaded successfully.");
+    } catch (error) {
+      setFeedback(error?.message || "Unable to upload settlement payment proof.");
+    } finally {
+      setDocumentBusy(false);
+    }
+  }
+
   function setSettlementField(name, value) {
     setSettlementForm((current) => ({ ...current, [name]: value }));
   }
@@ -908,6 +953,23 @@ export default function EmployeeExits() {
                     <div style={settlementAction}>
                       <div style={closureNotice}>Head HR approval is complete. Auditor review, GM payout approval and Accounts Team payout processing are completed externally on the printed settlement document.</div>
                       <button type="button" className="exit-settlement-print-button" style={primaryButton} onClick={() => window.print()}><FaPrint /> Print Settlement Account</button>
+                    </div>
+                  ) : null}
+                  {["PAYMENT_PENDING", "PARTIALLY_PAID", "PAID"].includes(settlement.status) ? (
+                    <div style={{ marginTop: 16 }}>
+                      <ExitDocumentSection
+                        draft={exitDocumentDraft}
+                        setDraft={setExitDocumentDraft}
+                        documents={exitDocuments.filter((document) => document.category === "EXIT_SETTLEMENT_PAYMENT_PROOF")}
+                        busy={documentBusy}
+                        canUpdate={canManagePayroll}
+                        onUpload={saveSettlementPaymentProof}
+                        onDelete={(documentId) => deleteExitDocument(documentId, settlementExitId)}
+                        forcedCategory="EXIT_SETTLEMENT_PAYMENT_PROOF"
+                        title="Exit Settlement Payment Proof"
+                        description="Attach payment advice, transfer confirmation, voucher, receipt or other Accounts payout evidence after the external payout process. These files remain part of the employee's audited exit record."
+                        totalDocumentCount={exitDocuments.length}
+                      />
                     </div>
                   ) : null}
                   {["APPROVED", "PAYMENT_PENDING"].includes(settlement.status) ? <div style={settlementAction}><Field label="Waiver Reason"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive Settlement</button></div> : null}
@@ -1580,9 +1642,11 @@ function ExitDocumentSection({
   forcedCategory = null,
   title = "Supporting Exit Documents",
   description = null,
+  totalDocumentCount = null,
 }) {
   const queue = Array.isArray(draft.queue) ? draft.queue : [];
-  const remainingSlots = Math.max(0, 10 - Number(documents?.length || 0));
+  const persistedCount = totalDocumentCount == null ? Number(documents?.length || 0) : Number(totalDocumentCount || 0);
+  const remainingSlots = Math.max(0, 10 - persistedCount);
   const availableToQueue = Math.max(0, remainingSlots - queue.length);
 
   function queueFiles(fileList) {
@@ -1633,7 +1697,7 @@ function ExitDocumentSection({
           </div>
         </div>
         <span style={countBadge}>
-          {beforeInitiation ? queue.length : documents.length + queue.length}/10
+          {beforeInitiation ? queue.length : persistedCount + queue.length}/10
         </span>
       </div>
 
