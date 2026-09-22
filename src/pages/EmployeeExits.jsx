@@ -239,7 +239,7 @@ function printExitSettlementDocument() {
     ".exit-settlement-signatory-heading strong{color:#064e3b!important;font-size:12pt!important}",
     ".exit-settlement-sign-line{margin-top:4px!important}",
     ".exit-settlement-sign-line div{height:11px!important;border-bottom:1px solid #64748b!important}",
-    ".chris-print-report-footer{position:relative;z-index:3;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;margin-top:6px!important;padding-top:5px!important;border-top:1px solid #94a3b8!important;color:#64748b!important;font-size:10pt!important;break-before:avoid!important}",
+    ".chris-print-report-footer{position:relative;z-index:3;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;margin-top:6px!important;padding-top:5px!important;border-top:1px solid #94a3b8!important;color:#64748b!important;font-size:12pt!important;break-before:avoid!important}",
     ".chris-print-report-powered{display:inline-flex!important;align-items:center!important;gap:4px!important;color:#64748b!important}",
     ".chris-print-report-powered img{width:18px!important;height:18px!important;object-fit:contain!important;background:transparent!important}",
     ".chris-print-report-powered strong{display:none!important}",
