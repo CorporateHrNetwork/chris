@@ -59,6 +59,7 @@ const EMPTY_EXIT = {
   exitType: "RESIGNATION",
   noticeDate: "",
   noticeStatus: "IN_PROGRESS",
+  entitledNoticeDays: "",
   lastWorkingDay: "",
   reason: "",
   notes: "",
@@ -134,6 +135,37 @@ function moneyText(value, currency = "NGN") {
   }
 }
 
+function calculateNoticePreview({ noticeDate, lastWorkingDay, entitledNoticeDays, noticeStatus }) {
+  const required = Number(entitledNoticeDays || 0);
+  const normalizedStatus = String(noticeStatus || "").toUpperCase();
+  const waived = ["WAIVED", "NOT_REQUIRED"].includes(normalizedStatus);
+
+  if (!noticeDate || !lastWorkingDay) {
+    return {
+      requiredDays: required,
+      daysGiven: null,
+      deficiencyDays: null,
+      excessDays: null,
+      waived,
+    };
+  }
+
+  const start = new Date(noticeDate + "T00:00:00Z");
+  const end = new Date(lastWorkingDay + "T00:00:00Z");
+  const valid = !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime());
+  const daysGiven = valid && end > start
+    ? Math.floor((end.getTime() - start.getTime()) / 86400000)
+    : 0;
+
+  return {
+    requiredDays: required,
+    daysGiven,
+    deficiencyDays: waived ? 0 : Math.max(0, required - daysGiven),
+    excessDays: Math.max(0, daysGiven - required),
+    waived,
+  };
+}
+
 export default function EmployeeExits() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -155,6 +187,15 @@ export default function EmployeeExits() {
   const [designations, setDesignations] = useState([]);
   const [locations, setLocations] = useState([]);
   const [exitForm, setExitForm] = useState(EMPTY_EXIT);
+  const noticePreview = useMemo(
+    () => calculateNoticePreview(exitForm),
+    [
+      exitForm.noticeDate,
+      exitForm.lastWorkingDay,
+      exitForm.entitledNoticeDays,
+      exitForm.noticeStatus,
+    ]
+  );
   const [rehireForm, setRehireForm] = useState(EMPTY_REHIRE);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -1011,6 +1052,52 @@ export default function EmployeeExits() {
                       <input type="date" value={exitForm.lastWorkingDay} onChange={(e) => setExitField("lastWorkingDay", e.target.value)} style={input} required />
                     </Field>
 
+                    <Field label="Entitled Notice Period (Days)">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={exitForm.entitledNoticeDays}
+                        onChange={(e) => setExitField("entitledNoticeDays", e.target.value)}
+                        style={input}
+                        required={!["WAIVED", "NOT_REQUIRED"].includes(String(exitForm.noticeStatus || "").toUpperCase())}
+                        placeholder="e.g. 30"
+                      />
+                    </Field>
+
+                    <div style={full}>
+                      <section style={exitNoticePreviewCard}>
+                        <div style={exitNoticePreviewHeader}>
+                          <div>
+                            <div style={eyebrow}>NOTICE PERIOD ANALYSIS</div>
+                            <strong>Automatic Notice Position</strong>
+                          </div>
+                          <span style={noticePreview.waived ? noticeStateNeutral : (Number(noticePreview.deficiencyDays || 0) > 0 ? noticeStateWarning : noticeStateGood)}>
+                            {noticePreview.waived
+                              ? "Deduction Waived"
+                              : noticePreview.daysGiven == null
+                                ? "Enter dates"
+                                : Number(noticePreview.deficiencyDays || 0) > 0
+                                  ? "Deficient Notice"
+                                  : "Notice Satisfied"}
+                          </span>
+                        </div>
+
+                        <div style={exitNoticePreviewGrid}>
+                          <div><span>Notice Date</span><strong>{exitForm.noticeDate ? dateText(exitForm.noticeDate) : "—"}</strong></div>
+                          <div><span>Last Working Day</span><strong>{exitForm.lastWorkingDay ? dateText(exitForm.lastWorkingDay) : "—"}</strong></div>
+                          <div><span>Entitled Notice</span><strong>{Number(exitForm.entitledNoticeDays || 0)} days</strong></div>
+                          <div><span>Notice Days Given</span><strong>{noticePreview.daysGiven == null ? "—" : `${noticePreview.daysGiven} days`}</strong></div>
+                          <div><span>Deficiency</span><strong>{noticePreview.deficiencyDays == null ? "—" : `${noticePreview.deficiencyDays} days`}</strong></div>
+                          <div><span>Excess</span><strong>{noticePreview.excessDays == null ? "—" : `${noticePreview.excessDays} days`}</strong></div>
+                        </div>
+
+                        <div style={noticePreviewHelp}>
+                          CHRiS calculates Notice Days Given from Notice Date to Last Working Day. The saved deficiency flows automatically into the Exit Settlement Account for monetary valuation.
+                        </div>
+                      </section>
+                    </div>
+
                     <div style={full}>
                       <Field label="Exit Reason">
                         <textarea value={exitForm.reason} onChange={(e) => setExitField("reason", e.target.value)} style={textarea} required />
@@ -1052,6 +1139,7 @@ export default function EmployeeExits() {
                   <div style={processMeta}>
                     <span>Exit Type: <strong>{titleCase(activeExit.exitType)}</strong></span>
                     <span>Last Working Day: <strong>{dateText(activeExit.lastWorkingDay)}</strong></span>
+                    <span>Entitled Notice: <strong>{activeExit.entitledNoticeDays ?? 0} days</strong></span>
                     <span>Process: <strong>{titleCase(activeExit.status)}</strong></span>
                   </div>
 
@@ -1743,6 +1831,61 @@ const noticeDeductionRow = {
   color: "#F6D35D",
   fontSize: 11,
   fontWeight: 900,
+};
+
+const exitNoticePreviewCard = {
+  padding: 13,
+  border: "1px solid rgba(212,175,55,.24)",
+  borderRadius: 12,
+  background: "linear-gradient(145deg,rgba(6,55,34,.58),rgba(2,23,15,.72))",
+};
+
+const exitNoticePreviewHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+  marginBottom: 10,
+  color: "#F7FAF8",
+};
+
+const exitNoticePreviewGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))",
+  gap: 8,
+};
+
+const noticePreviewHelp = {
+  marginTop: 10,
+  paddingTop: 9,
+  borderTop: "1px solid rgba(255,255,255,.07)",
+  color: "#8EA89A",
+  fontSize: 9.5,
+  lineHeight: 1.45,
+};
+
+const noticeStateGood = {
+  padding: "5px 8px",
+  borderRadius: 999,
+  background: "rgba(46,233,139,.10)",
+  border: "1px solid rgba(46,233,139,.32)",
+  color: "#2EE98B",
+  fontSize: 9,
+  fontWeight: 900,
+};
+
+const noticeStateWarning = {
+  ...noticeStateGood,
+  background: "rgba(246,211,93,.10)",
+  border: "1px solid rgba(246,211,93,.34)",
+  color: "#F6D35D",
+};
+
+const noticeStateNeutral = {
+  ...noticeStateGood,
+  background: "rgba(148,163,184,.10)",
+  border: "1px solid rgba(148,163,184,.30)",
+  color: "#CBD5E1",
 };
 
 const exitDocumentPanel = {
