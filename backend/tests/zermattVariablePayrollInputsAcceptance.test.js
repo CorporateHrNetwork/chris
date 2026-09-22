@@ -70,8 +70,16 @@ expect(nigeriaPayroll, '"installmentAmount" > 0', "Only salary advances with a v
 expect(nigeriaPayroll, 'legacyOtherComponentCarryForward: organization.slug !== "zermatt-liquor-limited"', "Indefinite legacy Other components must not carry forward for ZERMATT.");
 expect(payrollOps, "postDeductionInstallments(tx", "Payroll approval must post scheduled installments.");
 expect(reopen, "reverseDeductionInstallments(tx", "Approved-payroll reopen must restore scheduled installments.");
-expect(exitSettlement, "scheduledDeductionRecovery", "Outstanding scheduled deductions must be surfaced in exit settlement.");
-expect(exitSettlement, '"payroll_deduction_plans"', "Exit settlement must read authoritative finite-deduction balances.");
+assert.equal(
+  exitSettlement.includes("scheduledDeductionRecovery"),
+  false,
+  "Generic scheduled deduction balances must not be swept into the approved exit settlement account."
+);
+assert.equal(
+  exitSettlement.includes('"payroll_deduction_plans"'),
+  false,
+  "Exit settlement must use only the approved debit sources, not generic payroll deduction plans."
+);
 
 for (const route of [
   '"/variable-components"',
