@@ -777,7 +777,7 @@ router.get("/:id/settlement/preview", requirePermission("employees.view"), async
           bonusGift: req.query?.bonusGift,
           noticePayDays: req.query?.noticePayDays,
           previousSalaryShortPaid: req.query?.previousSalaryShortPaid,
-          noticeDeductionDays: req.query?.noticeDeductionDays,
+          entitledNoticeDays: req.query?.entitledNoticeDays,
           unreturnedUniform: req.query?.unreturnedUniform,
           previousSalaryOverpaid: req.query?.previousSalaryOverpaid,
         },
