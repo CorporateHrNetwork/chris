@@ -23,7 +23,7 @@ test("payroll export uses numeric loanRecovery and numeric loanRecoveryTotal fal
   assert.ok(routes.includes("Number(line.loanRecovery ?? details.loanRecoveryTotal ?? 0)"));
   assert.equal(routes.includes("Number(line.loanRecovery || details.loanRecovery || 0)"), false);
   assert.ok(routes.includes('"Loan Recovery"'));
-  assert.ok(routes.includes('["Loan Recoveries", loans]'));
+  assert.ok(routes.includes('["Loan Recoveries", formulaCell(selectedSumFormula("Loan Recovery"), loans), "money"]'));
 });
 
 test("loan recovery migration stores run-line values before export", () => {
