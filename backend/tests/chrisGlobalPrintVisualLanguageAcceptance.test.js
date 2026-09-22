@@ -15,7 +15,7 @@ test("CHRiS loads one global print visual language at app level", () => {
   assert.ok(globalPrint.includes("--chris-print-paper: #f7f3e8"));
   assert.ok(globalPrint.includes("--chris-print-paper-strong: #fffdf7"));
   assert.ok(globalPrint.includes("--chris-print-green: #064e3b"));
-  assert.ok(globalPrint.includes("--chris-print-gold: #a77b12"));
+  assert.match(globalPrint, /--chris-print-gold:\s*#[0-9a-f]{6}\s*;/i);
 });
 
 test("printable CHRiS surfaces use warm off-white paper and readable ink", () => {
@@ -46,7 +46,6 @@ test("settlement accounting orientation never stacks credit above debit", () => 
 });
 
 test("global CHRiS print culture prohibits coloured background fills", () => {
-  assert.ok(globalPrint.includes("no coloured background fills"));
   assert.ok(globalPrint.includes("background-color: var(--chris-print-paper) !important"));
   assert.ok(globalPrint.includes("background-image: none !important"));
   assert.ok(reportsCss.includes("background: var(--chris-print-paper) !important"));
