@@ -1577,6 +1577,44 @@ function ExitDocumentSection({
   );
 }
 
+function SettlementNoticeSummary({
+  noticeDate,
+  lastWorkingDay,
+  requiredDays,
+  daysGiven,
+  deficiencyDays,
+  excessDays,
+  waived,
+  deduction,
+  currency = "NGN",
+}) {
+  const required = Number(requiredDays || 0);
+  const given = Number(daysGiven || 0);
+  const deficiency = Number(deficiencyDays || 0);
+  const excess = Number(excessDays || 0);
+
+  return (
+    <section style={noticeSummaryCard}>
+      <div style={noticeSummaryHeader}>
+        <strong>Notice Period Analysis</strong>
+        <span>{waived ? "Deduction Waived" : deficiency > 0 ? "Deficient Notice" : "Notice Satisfied"}</span>
+      </div>
+      <div style={noticeSummaryGrid}>
+        <div><span>Notice Date</span><strong>{dateText(noticeDate)}</strong></div>
+        <div><span>Last Working Day</span><strong>{dateText(lastWorkingDay)}</strong></div>
+        <div><span>Entitled Notice</span><strong>{required} days</strong></div>
+        <div><span>Notice Days Given</span><strong>{given} days</strong></div>
+        <div><span>Deficiency</span><strong>{deficiency} days</strong></div>
+        <div><span>Excess</span><strong>{excess} days</strong></div>
+      </div>
+      <div style={noticeDeductionRow}>
+        <span>In Lieu of Notice Deduction</span>
+        <strong>{moneyText(deduction, currency)}</strong>
+      </div>
+    </section>
+  );
+}
+
 function PrintableSettlementTable({ title, items, currency = "NGN" }) {
   return (
     <section className="exit-settlement-print-table-section">
@@ -1646,6 +1684,7 @@ function SettlementInputLine({
   onChange,
   amount,
   currency = "NGN",
+  hideAmount = false,
 }) {
   return (
     <div style={settlementInputLine}>
@@ -1663,11 +1702,48 @@ function SettlementInputLine({
           style={settlementMiniInput}
           aria-label={`${label} ${inputLabel}`}
         />
-        <strong style={settlementLineAmount}>{moneyText(amount, currency)}</strong>
+        {!hideAmount ? <strong style={settlementLineAmount}>{moneyText(amount, currency)}</strong> : null}
       </div>
     </div>
   );
 }
+
+const noticeSummaryCard = {
+  margin: "8px 10px 10px",
+  padding: 10,
+  border: "1px solid rgba(212,175,55,.24)",
+  borderRadius: 10,
+  background: "rgba(0,0,0,.14)",
+};
+
+const noticeSummaryHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  alignItems: "center",
+  marginBottom: 9,
+  color: "#F7FAF8",
+  fontSize: 10,
+};
+
+const noticeSummaryGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+  gap: 7,
+};
+
+const noticeDeductionRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  alignItems: "center",
+  marginTop: 9,
+  paddingTop: 8,
+  borderTop: "1px solid rgba(255,255,255,.07)",
+  color: "#F6D35D",
+  fontSize: 11,
+  fontWeight: 900,
+};
 
 const exitDocumentPanel = {
   padding: 14,
