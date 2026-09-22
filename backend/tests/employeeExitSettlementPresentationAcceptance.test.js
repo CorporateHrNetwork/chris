@@ -82,3 +82,20 @@ test("settlement standalone print provides visible controls and Head of HR signa
   assert.ok(frontend.includes("exit-settlement-headhr-signature-grid"));
   assert.ok(frontend.includes("exit-settlement-headhr-signature-line"));
 });
+
+
+test("formal settlement print omits nil ledger rows without changing account classification", () => {
+  assert.ok(frontend.includes('querySelectorAll(".exit-settlement-print-table-section")'));
+  assert.ok(frontend.includes("Math.abs(numeric) < 0.005"));
+  assert.ok(frontend.includes("Nil-value settlement items are omitted from the printed statement."));
+  assert.ok(frontend.includes('title="CREDIT — BENEFITS / ENTITLEMENTS"'));
+  assert.ok(frontend.includes('title="DEBIT — DEDUCTIONS / RECOVERIES"'));
+});
+
+test("settlement print is optimized for one-sheet A4 landscape at 12pt minimum", () => {
+  assert.ok(frontend.includes("@page{size:A4 landscape;margin:7mm}"));
+  assert.ok(frontend.includes("font-size:12pt!important"));
+  assert.ok(frontend.includes("exit-settlement-print-lower-grid"));
+  assert.ok(frontend.includes("exit-settlement-external-approval-table"));
+  assert.ok(frontend.includes("grid-template-columns:130px minmax(0,1fr)"));
+});
