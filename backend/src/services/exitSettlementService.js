@@ -694,12 +694,9 @@ async function approveSettlement({ organizationId, actorUserId, exitProcessId, n
     if (!settlement || settlement.status !== "PENDING_APPROVAL") {
       throw settlementError("SETTLEMENT_NOT_PENDING_APPROVAL", "Settlement must be pending approval.");
     }
-    if (settlement.calculatedByUserId === actorUserId) {
-      throw settlementError(
-        "SETTLEMENT_MAKER_CHECKER_REQUIRED",
-        "The settlement calculator cannot approve the same settlement."
-      );
-    }
+    // Employee Exit Settlement is a Head HR prepare-and-approve control.
+    // External Auditor review, GM payout approval and Accounts payout processing
+    // occur on the printed settlement document outside CHRiS.
     const zeroBalance = Math.round(Number(settlement.netSettlement || 0) * 100) / 100 === 0;
     const updated = await tx.exitSettlement.update({
       where: { id: settlement.id },
