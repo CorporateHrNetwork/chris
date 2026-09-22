@@ -20,11 +20,11 @@ const schema = fs.readFileSync(
 test("exit workflow provides dedicated supporting-document upload controls", () => {
   for (const expected of [
     "EXIT DOCUMENTS",
-    "Supporting Exit Document",
-    "Document Type",
-    "Choose File",
-    "Document Notes",
-    "Upload Exit Document",
+    "Supporting Exit Documents",
+    "Default Document Type",
+    "Choose File(s)",
+    "Optional reference / note",
+    "Upload ",
     "RESIGNATION_LETTER",
     "TERMINATION_LETTER",
     "RETIREMENT_NOTICE",
@@ -39,7 +39,7 @@ test("exit workflow provides dedicated supporting-document upload controls", () 
 test("document can be staged before initiation and linked after exit process creation", () => {
   assert.ok(frontend.includes("createdExit?.id && hadDocument"));
   assert.ok(frontend.includes("await uploadExitDocument(createdExit.id)"));
-  assert.ok(frontend.includes("Exit process initiated and exit document uploaded successfully."));
+  assert.ok(frontend.includes("Exit process initiated and"));
 });
 
 test("additional exit documents can be added during clearance", () => {
@@ -51,9 +51,9 @@ test("additional exit documents can be added during clearance", () => {
 test("exit document API is audited and linked to the specific exit process", () => {
   for (const expected of [
     '"/:id/documents"',
-    'exitDocumentUpload.single("document")',
+    'exitDocumentUpload.array("documents", MAX_EXIT_DOCUMENTS)',
     "exitProcessId: exitProcess.id",
-    "EXIT_DOCUMENT_UPLOADED",
+    "EXIT_DOCUMENTS_UPLOADED",
     "EXIT_DOCUMENT_DELETED",
     "exitProcessId: req.params.id",
   ]) {

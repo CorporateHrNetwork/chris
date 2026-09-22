@@ -32,6 +32,7 @@ const EXIT_DOCUMENT_TYPES = [
   ["EXIT_ACCEPTANCE_LETTER", "Exit / Resignation Acceptance Letter"],
   ["CLEARANCE_DOCUMENT", "Exit Clearance Document"],
   ["HANDOVER_DOCUMENT", "Handover Document"],
+  ["EXIT_SETTLEMENT_PAYMENT_PROOF", "Exit Settlement Payment Proof"],
   ["OTHER_EXIT_DOCUMENT", "Other Exit Document"],
 ];
 
@@ -204,6 +205,7 @@ export default function EmployeeExits() {
     category: defaultExitDocumentType(EMPTY_EXIT.exitType),
     file: null,
     notes: "",
+    queue: [],
   });
   const [documentBusy, setDocumentBusy] = useState(false);
   const [settlement, setSettlement] = useState(null);
@@ -379,12 +381,27 @@ export default function EmployeeExits() {
   }, []);
 
   async function uploadExitDocument(exitProcessId, draft = exitDocumentDraft) {
-    if (!exitProcessId || !draft?.file) return null;
+    if (!exitProcessId) return null;
+
+    const queuedItems = Array.isArray(draft?.queue) && draft.queue.length
+      ? draft.queue
+      : draft?.file
+        ? [{ file: draft.file, category: draft.category, notes: draft.notes }]
+        : [];
+
+    if (!queuedItems.length) return null;
 
     const body = new FormData();
-    body.append("document", draft.file);
-    body.append("category", draft.category || "OTHER_EXIT_DOCUMENT");
-    body.append("notes", draft.notes || "");
+    queuedItems.forEach((item) => body.append("documents", item.file));
+    body.append(
+      "metadata",
+      JSON.stringify(
+        queuedItems.map((item) => ({
+          category: item.category || draft.category || "OTHER_EXIT_DOCUMENT",
+          notes: item.notes || "",
+        }))
+      )
+    );
 
     const result = await apiRequest(
       `/api/exits/${encodeURIComponent(exitProcessId)}/documents`,
@@ -398,8 +415,13 @@ export default function EmployeeExits() {
       setFeedback("Initiate the exit process before uploading additional exit documents.");
       return;
     }
-    if (!exitDocumentDraft.file) {
-      setFeedback("Choose an exit document to upload.");
+    const queuedCount = exitDocumentDraft.queue?.length || (exitDocumentDraft.file ? 1 : 0);
+    if (!queuedCount) {
+      setFeedback("Choose one or more exit documents to upload.");
+      return;
+    }
+    if (exitDocuments.length + queuedCount > 10) {
+      setFeedback(`Zermatt exit policy allows a maximum of 10 documents. ${10 - exitDocuments.length} upload slot(s) remain.`);
       return;
     }
 
@@ -411,9 +433,10 @@ export default function EmployeeExits() {
         category: defaultExitDocumentType(activeExit.exitType),
         file: null,
         notes: "",
+        queue: [],
       });
       await loadExitDocuments(activeExit.id);
-      setFeedback("Exit document uploaded successfully.");
+      setFeedback(`${queuedCount} exit document${queuedCount === 1 ? "" : "s"} uploaded successfully.`);
     } catch (error) {
       setFeedback(error?.message || "Unable to upload exit document.");
     } finally {
@@ -421,18 +444,18 @@ export default function EmployeeExits() {
     }
   }
 
-  async function deleteExitDocument(documentId) {
-    if (!activeExit?.id || !documentId) return;
+  async function deleteExitDocument(documentId, exitProcessId = activeExit?.id) {
+    if (!exitProcessId || !documentId) return;
     if (!window.confirm("Delete this exit document? This cannot be undone.")) return;
 
     setDocumentBusy(true);
     setFeedback("");
     try {
       await apiRequest(
-        `/api/exits/${encodeURIComponent(activeExit.id)}/documents/${encodeURIComponent(documentId)}`,
+        `/api/exits/${encodeURIComponent(exitProcessId)}/documents/${encodeURIComponent(documentId)}`,
         { method: "DELETE" }
       );
-      await loadExitDocuments(activeExit.id);
+      await loadExitDocuments(exitProcessId);
       setFeedback("Exit document deleted.");
     } catch (error) {
       setFeedback(error?.message || "Unable to delete exit document.");
@@ -451,6 +474,13 @@ export default function EmployeeExits() {
       setFeedback(error?.message || "Unable to load exit documents.");
     });
   }, [activeExit?.id, loadExitDocuments]);
+
+  useEffect(() => {
+    if (!settlementExitId) return;
+    loadExitDocuments(settlementExitId).catch((error) => {
+      setFeedback(error?.message || "Unable to load settlement payment proof.");
+    });
+  }, [settlementExitId, loadExitDocuments]);
 
   const exitedEmployees = exitRegister;
 
@@ -535,7 +565,8 @@ export default function EmployeeExits() {
       });
 
       const createdExit = result?.data || null;
-      const hadDocument = Boolean(exitDocumentDraft.file);
+      const queuedDocumentCount = exitDocumentDraft.queue?.length || (exitDocumentDraft.file ? 1 : 0);
+      const hadDocument = queuedDocumentCount > 0;
 
       if (createdExit?.id && hadDocument) {
         await uploadExitDocument(createdExit.id);
@@ -543,12 +574,13 @@ export default function EmployeeExits() {
           category: defaultExitDocumentType(createdExit.exitType),
           file: null,
           notes: "",
+          queue: [],
         });
       }
 
       setFeedback(
         hadDocument
-          ? "Exit process initiated and exit document uploaded successfully."
+          ? `Exit process initiated and ${queuedDocumentCount} exit document${queuedDocumentCount === 1 ? "" : "s"} uploaded successfully.`
           : (result?.message || "Exit process initiated.")
       );
       await loadData();
@@ -694,6 +726,44 @@ export default function EmployeeExits() {
       setFeedback(error?.message || "Unable to rehire employee.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function saveSettlementPaymentProof() {
+    if (!settlementExitId) return;
+
+    const queue = exitDocumentDraft.queue || [];
+    if (!queue.length) {
+      setFeedback("Choose one or more settlement payment proof files.");
+      return;
+    }
+    if (exitDocuments.length + queue.length > 10) {
+      setFeedback(`Zermatt exit policy allows a maximum of 10 documents. ${10 - exitDocuments.length} upload slot(s) remain.`);
+      return;
+    }
+
+    setDocumentBusy(true);
+    setFeedback("");
+    try {
+      await uploadExitDocument(settlementExitId, {
+        ...exitDocumentDraft,
+        queue: queue.map((item) => ({
+          ...item,
+          category: "EXIT_SETTLEMENT_PAYMENT_PROOF",
+        })),
+      });
+      setExitDocumentDraft({
+        category: "EXIT_SETTLEMENT_PAYMENT_PROOF",
+        file: null,
+        notes: "",
+        queue: [],
+      });
+      await loadExitDocuments(settlementExitId);
+      setFeedback("Exit settlement payment proof uploaded successfully.");
+    } catch (error) {
+      setFeedback(error?.message || "Unable to upload settlement payment proof.");
+    } finally {
+      setDocumentBusy(false);
     }
   }
 
@@ -883,6 +953,23 @@ export default function EmployeeExits() {
                     <div style={settlementAction}>
                       <div style={closureNotice}>Head HR approval is complete. Auditor review, GM payout approval and Accounts Team payout processing are completed externally on the printed settlement document.</div>
                       <button type="button" className="exit-settlement-print-button" style={primaryButton} onClick={() => window.print()}><FaPrint /> Print Settlement Account</button>
+                    </div>
+                  ) : null}
+                  {["PAYMENT_PENDING", "PARTIALLY_PAID", "PAID"].includes(settlement.status) ? (
+                    <div style={{ marginTop: 16 }}>
+                      <ExitDocumentSection
+                        draft={exitDocumentDraft}
+                        setDraft={setExitDocumentDraft}
+                        documents={exitDocuments.filter((document) => document.category === "EXIT_SETTLEMENT_PAYMENT_PROOF")}
+                        busy={documentBusy}
+                        canUpdate={canManagePayroll}
+                        onUpload={saveSettlementPaymentProof}
+                        onDelete={(documentId) => deleteExitDocument(documentId, settlementExitId)}
+                        forcedCategory="EXIT_SETTLEMENT_PAYMENT_PROOF"
+                        title="Exit Settlement Payment Proof"
+                        description="Attach payment advice, transfer confirmation, voucher, receipt or other Accounts payout evidence after the external payout process. These files remain part of the employee's audited exit record."
+                        totalDocumentCount={exitDocuments.length}
+                      />
                     </div>
                   ) : null}
                   {["APPROVED", "PAYMENT_PENDING"].includes(settlement.status) ? <div style={settlementAction}><Field label="Waiver Reason"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive Settlement</button></div> : null}
@@ -1552,81 +1639,160 @@ function ExitDocumentSection({
   onUpload,
   onDelete,
   beforeInitiation = false,
+  forcedCategory = null,
+  title = "Supporting Exit Documents",
+  description = null,
+  totalDocumentCount = null,
 }) {
+  const queue = Array.isArray(draft.queue) ? draft.queue : [];
+  const persistedCount = totalDocumentCount == null ? Number(documents?.length || 0) : Number(totalDocumentCount || 0);
+  const remainingSlots = Math.max(0, 10 - persistedCount);
+  const availableToQueue = Math.max(0, remainingSlots - queue.length);
+
+  function queueFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const accepted = files.slice(0, availableToQueue);
+    setDraft((current) => ({
+      ...current,
+      file: null,
+      queue: [
+        ...(current.queue || []),
+        ...accepted.map((file) => ({
+          id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+          file,
+          category: forcedCategory || current.category || "OTHER_EXIT_DOCUMENT",
+          notes: "",
+        })),
+      ],
+    }));
+  }
+
+  function updateQueueItem(id, patch) {
+    setDraft((current) => ({
+      ...current,
+      queue: (current.queue || []).map((item) =>
+        item.id === id ? { ...item, ...patch } : item
+      ),
+    }));
+  }
+
+  function removeQueueItem(id) {
+    setDraft((current) => ({
+      ...current,
+      queue: (current.queue || []).filter((item) => item.id !== id),
+    }));
+  }
+
   return (
     <section style={exitDocumentPanel}>
       <div style={exitDocumentHeader}>
         <div>
           <div style={eyebrow}>EXIT DOCUMENTS</div>
-          <h3 style={exitDocumentTitle}>Supporting Exit Document</h3>
+          <h3 style={exitDocumentTitle}>{title}</h3>
           <div style={muted}>
-            {beforeInitiation
-              ? "Attach the employee's exit document now. CHRiS will link it to the exit process when you click Initiate Exit."
-              : "Upload and retain resignation, termination, retirement, clearance, handover or other separation documents for this exit record."}
+            {description || (beforeInitiation
+              ? "Select up to 10 supporting exit documents. CHRiS will link the complete queue to the exit process when you click Initiate Exit."
+              : "Upload and retain up to 10 resignation, termination, retirement, clearance, handover, settlement-payment or other separation documents for this exit record.")}
           </div>
         </div>
-        {!beforeInitiation ? <span style={countBadge}>{documents.length} file{documents.length === 1 ? "" : "s"}</span> : null}
+        <span style={countBadge}>
+          {beforeInitiation ? queue.length : persistedCount + queue.length}/10
+        </span>
       </div>
 
       <div style={exitDocumentGrid}>
-        <Field label="Document Type">
-          <select
-            value={draft.category}
-            onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}
-            style={input}
-            disabled={!canUpdate || busy}
-          >
-            {EXIT_DOCUMENT_TYPES.map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </Field>
+        {!forcedCategory ? (
+          <Field label="Default Document Type">
+            <select
+              value={draft.category}
+              onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}
+              style={input}
+              disabled={!canUpdate || busy}
+            >
+              {EXIT_DOCUMENT_TYPES.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
 
-        <Field label="Choose File">
+        <Field label={forcedCategory ? "Choose Payment Proof File(s)" : "Choose File(s)"}>
           <input
-            key={draft.file ? draft.file.name : "empty-exit-document"}
+            key={queue.map((item) => item.id).join("|") || "empty-exit-documents"}
             type="file"
+            multiple
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-            onChange={(event) => setDraft((current) => ({
-              ...current,
-              file: event.target.files?.[0] || null,
-            }))}
+            onChange={(event) => {
+              queueFiles(event.target.files);
+              event.target.value = "";
+            }}
             style={fileInput}
-            disabled={!canUpdate || busy}
+            disabled={!canUpdate || busy || availableToQueue <= 0}
           />
         </Field>
-
-        <div style={full}>
-          <Field label="Document Notes">
-            <input
-              value={draft.notes}
-              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-              style={input}
-              placeholder="Optional document description / reference"
-              disabled={!canUpdate || busy}
-            />
-          </Field>
-        </div>
       </div>
 
-      {draft.file ? (
-        <div style={selectedExitDocument}>
-          <strong>{draft.file.name}</strong>
-          <span>{Math.max(1, Math.round(Number(draft.file.size || 0) / 1024))} KB · ready to upload</span>
+      <div style={{ ...muted, marginTop: 8 }}>
+        Maximum 10 documents per exit process · Maximum 10 MB per file · {remainingSlots} slot{remainingSlots === 1 ? "" : "s"} remaining.
+      </div>
+
+      {queue.length ? (
+        <div style={exitDocumentQueue}>
+          {queue.map((item, index) => (
+            <div key={item.id} style={exitDocumentQueueRow}>
+              <div style={exitDocumentQueueIndex}>{index + 1}</div>
+              <div style={exitDocumentQueueFields}>
+                <div>
+                  <strong style={{ color: "#F7FAF8" }}>{item.file.name}</strong>
+                  <div style={muted}>{Math.max(1, Math.round(Number(item.file.size || 0) / 1024))} KB</div>
+                </div>
+                {!forcedCategory ? (
+                  <select
+                    value={item.category}
+                    onChange={(event) => updateQueueItem(item.id, { category: event.target.value })}
+                    style={compactInput}
+                    disabled={!canUpdate || busy}
+                  >
+                    {EXIT_DOCUMENT_TYPES.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <strong style={{ color: "#F6D35D", fontSize: 10 }}>Exit Settlement Payment Proof</strong>
+                )}
+                <input
+                  value={item.notes || ""}
+                  onChange={(event) => updateQueueItem(item.id, { notes: event.target.value })}
+                  style={compactInput}
+                  placeholder="Optional reference / note"
+                  disabled={!canUpdate || busy}
+                />
+              </div>
+              <button
+                type="button"
+                style={dangerButton}
+                onClick={() => removeQueueItem(item.id)}
+                disabled={!canUpdate || busy}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
 
       {!beforeInitiation ? (
         <>
           <div style={exitDocumentActions}>
-            <span style={muted}>Maximum file size: 10 MB.</span>
+            <span style={muted}>{queue.length ? `${queue.length} document${queue.length === 1 ? "" : "s"} ready` : "Select files to add to the upload queue."}</span>
             <button
               type="button"
               style={secondaryButton}
-              disabled={!canUpdate || busy || !draft.file}
+              disabled={!canUpdate || busy || !queue.length}
               onClick={onUpload}
             >
-              {busy ? "Uploading..." : "Upload Exit Document"}
+              {busy ? "Uploading..." : `Upload ${queue.length || ""} Document${queue.length === 1 ? "" : "s"}`}
             </button>
           </div>
 
@@ -1920,6 +2086,55 @@ const fileInput = {
   color: "#F5F7F6",
   padding: "8px 10px",
   fontSize: 13,
+};
+
+const exitDocumentQueue = {
+  display: "grid",
+  gap: 8,
+  marginTop: 12,
+};
+
+const exitDocumentQueueRow = {
+  display: "grid",
+  gridTemplateColumns: "28px minmax(0,1fr) auto",
+  gap: 9,
+  alignItems: "center",
+  padding: "9px 10px",
+  border: "1px solid rgba(46,233,139,.18)",
+  borderRadius: 9,
+  background: "rgba(46,233,139,.045)",
+};
+
+const exitDocumentQueueIndex = {
+  display: "grid",
+  placeItems: "center",
+  width: 24,
+  height: 24,
+  borderRadius: 999,
+  background: "rgba(212,175,55,.14)",
+  color: "#F6D35D",
+  fontSize: 9,
+  fontWeight: 900,
+};
+
+const exitDocumentQueueFields = {
+  display: "grid",
+  gridTemplateColumns: "minmax(160px,1.3fr) minmax(145px,1fr) minmax(160px,1fr)",
+  gap: 8,
+  alignItems: "center",
+};
+
+const compactInput = {
+  width: "100%",
+  minHeight: 34,
+  boxSizing: "border-box",
+  border: "1px solid rgba(212,175,55,.18)",
+  borderRadius: 7,
+  outline: "none",
+  background: "#061A11",
+  color: "#F5F7F6",
+  padding: "6px 8px",
+  fontSize: 10,
 };
 
 const selectedExitDocument = {
