@@ -107,7 +107,15 @@ test("staff details, exit type and exit reason are captured in the settlement ac
 test("settlement exposes a live preview and uses Head HR prepare-and-approve workflow", () => {
   assert.ok(routes.includes('"/:id/settlement/preview"'));
   assert.ok(frontend.includes("/settlement/preview?"));
-  assert.equal(service.includes("SETTLEMENT_MAKER_CHECKER_REQUIRED"), false);
+  const approveStart = service.indexOf("async function approveSettlement");
+  const paymentStart = service.indexOf("async function recordSettlementPayment", approveStart);
+  const approveBlock = service.slice(approveStart, paymentStart);
+  assert.ok(approveStart >= 0 && paymentStart > approveStart);
+  assert.equal(
+    approveBlock.includes("SETTLEMENT_MAKER_CHECKER_REQUIRED"),
+    false,
+    "Head HR approval must not require a second internal approver."
+  );
   assert.ok(frontend.includes("Approve & Prepare for Print"));
   assert.ok(service.includes("Head HR prepare-and-approve control"));
   assert.ok(service.includes("EXIT_SETTLEMENT_ACCOUNT_CALCULATED"));
