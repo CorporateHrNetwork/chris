@@ -179,6 +179,44 @@ function printExitSettlementDocument() {
   const clone = source.cloneNode(true);
   clone.querySelectorAll(".chris-print-report-powered strong").forEach((node) => node.remove());
 
+  // Keep the operational workspace complete, but make the formal statement
+  // concise: zero-value ledger rows do not represent settlement postings.
+  clone.querySelectorAll(".exit-settlement-print-table-section").forEach((section) => {
+    const body = section.querySelector("tbody");
+    if (!body) return;
+
+    const rows = Array.from(body.querySelectorAll("tr"));
+    let retained = 0;
+    rows.forEach((row) => {
+      const amountCell = row.querySelector("td:last-child");
+      const numeric = Number(
+        String(amountCell?.textContent || "")
+          .replace(/[^0-9.-]/g, "")
+      );
+      if (Number.isFinite(numeric) && Math.abs(numeric) < 0.005) {
+        row.remove();
+      } else {
+        retained += 1;
+      }
+    });
+
+    if (!retained) {
+      const row = document.createElement("tr");
+      row.className = "exit-settlement-print-empty-row";
+      const cell = document.createElement("td");
+      cell.colSpan = 2;
+      cell.textContent = "No applicable settlement entries";
+      row.appendChild(cell);
+      body.appendChild(row);
+    }
+  });
+
+  const nilNote = document.createElement("div");
+  nilNote.className = "exit-settlement-print-nil-note";
+  nilNote.textContent = "Nil-value settlement items are omitted from the printed statement.";
+  const totalsBlock = clone.querySelector(".exit-settlement-print-totals");
+  if (totalsBlock) totalsBlock.insertAdjacentElement("afterend", nilNote);
+
   // The calculation basis is stored as a full audit note. For the printed
   // settlement statement, remove the duplicate title/summary and lay out only
   // the active calculation lines in a compact two-column audit grid.
@@ -271,7 +309,7 @@ function printExitSettlementDocument() {
     ".exit-settlement-print-totals{position:relative;z-index:3;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:12px!important;margin:5px 0 0!important;padding:5px 0 0!important;border-top:2px solid #9a7410!important;break-inside:avoid!important}",
     ".exit-settlement-print-totals>div{display:grid!important;grid-template-columns:1fr auto!important;align-items:baseline!important;gap:8px!important;padding:2px 0!important;border:0!important;border-radius:0!important}",
     ".exit-settlement-print-totals .net{border:0!important}",
-    ".exit-settlement-print-totals strong{color:#064e3b!important;font-size:13pt!important;font-weight:900!important;font-variant-numeric:tabular-nums!important}",
+    ".exit-settlement-print-totals strong{color:#064e3b!important;font-size:13pt!important;font-weight:900!important;font-variant-numeric:tabular-nums!important}.exit-settlement-print-nil-note{position:relative!important;z-index:3!important;margin:2px 0 0!important;color:#64748b!important;font-size:12pt!important;line-height:1.05!important;font-style:italic!important}.exit-settlement-print-empty-row td{text-align:left!important;color:#64748b!important;font-style:italic!important}",
     ".exit-settlement-print-calculation-note,.exit-settlement-headhr-approval,.exit-settlement-external-workflow{position:relative;z-index:3;margin-top:5px!important}",
     ".exit-settlement-print-lower-grid{position:relative!important;z-index:3!important;display:grid!important;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr)!important;gap:18px!important;align-items:start!important;margin-top:5px!important;padding-top:5px!important;border-top:1px solid #c7cec9!important;break-inside:avoid!important;page-break-inside:avoid!important}.exit-settlement-print-calculation-note{padding:0!important;margin:0!important;border:0!important;border-radius:0!important;break-inside:avoid!important}",
     ".exit-settlement-print-calculation-note h3,.exit-settlement-headhr-approval h3,.exit-settlement-external-title h3{margin:0 0 4px!important;color:#064e3b!important;font-size:13pt!important;font-weight:900!important;letter-spacing:.02em!important}",
