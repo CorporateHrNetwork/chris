@@ -75,13 +75,17 @@ test("system settlement items use authoritative CHRiS source accounts and existi
   }
 });
 
-test("notice pay and notice deduction are HR-entered days valued by the system daily rate", () => {
-  assert.ok(service.includes("noticePayDays"));
-  assert.ok(service.includes("noticeDeductionDays"));
-  assert.ok(service.includes("system.salary.dayRate * noticePayDays"));
-  assert.ok(service.includes("system.salary.dayRate * noticeDeductionDays"));
-  assert.ok(frontend.includes('inputLabel="Days"'));
-  assert.ok(frontend.includes('inputLabel="Deficient Days"'));
+test("notice days given and deficiency are calculated automatically from notice dates and HR entitlement", () => {
+  assert.ok(service.includes("noticeDaysBetween"));
+  assert.ok(service.includes("resolveNoticePosition"));
+  assert.ok(service.includes("entitledNoticeDays"));
+  assert.ok(service.includes("noticeDaysGiven"));
+  assert.ok(service.includes("noticeDeficiencyDays"));
+  assert.ok(service.includes("system.salary.dayRate * noticePosition.noticeDeficiencyDays"));
+  assert.ok(frontend.includes("Entitled Notice Period"));
+  assert.ok(frontend.includes("Notice Days Given"));
+  assert.ok(frontend.includes("Notice Deficiency"));
+  assert.equal(frontend.includes('setSettlementField("noticeDeductionDays"'), false);
 });
 
 test("staff details, exit type and exit reason are captured in the settlement account", () => {
