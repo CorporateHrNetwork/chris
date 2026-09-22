@@ -118,6 +118,7 @@ export default function EmployeeExits() {
   const employeeNumber = searchParams.get("employeeNumber");
   const rehireNumber = searchParams.get("rehire");
   const settlementExitId = searchParams.get("settlement");
+  const exitSection = searchParams.get("section") === "settlements" ? "settlements" : "register";
 
   const { hasPermission } = useAuthorization();
   const canUpdate = hasPermission("employees.update");
@@ -1072,16 +1073,102 @@ export default function EmployeeExits() {
     );
   }
 
+  const settlementEmployees = exitedEmployees.filter((employee) => employee.exitProcess?.id);
+
   return (
     <div>
       <PageHero
         eyebrow="EMPLOYEE LIFECYCLE"
-        title="Exited Employees"
-        subtitle="Current-state exit register for employees whose employment relationship has concluded."
+        title={exitSection === "settlements" ? "Employee Exit Settlement Account" : "Exited Employees"}
+        subtitle={exitSection === "settlements"
+          ? "Prepare, approve and print employee exit settlement accounts from one dedicated workspace."
+          : "Current-state exit register for employees whose employment relationship has concluded."}
       />
+
+      <div style={exitWorkspaceTabs}>
+        <button
+          type="button"
+          style={exitSection === "register" ? exitWorkspaceTabActive : exitWorkspaceTab}
+          onClick={() => navigate("/employees/exits")}
+        >
+          Exit Register
+        </button>
+        <button
+          type="button"
+          style={exitSection === "settlements" ? exitWorkspaceTabActive : exitWorkspaceTab}
+          onClick={() => navigate("/employees/exits?section=settlements")}
+        >
+          Exit Settlement Account
+          <span style={tabCountBadge}>{settlementEmployees.length}</span>
+        </button>
+      </div>
 
       {feedback ? <div style={feedbackStyle}>{feedback}</div> : null}
 
+      {exitSection === "settlements" ? (
+        <section style={panel}>
+          <div style={sectionHeader}>
+            <div>
+              <div style={eyebrow}>FINANCIAL CLOSURE</div>
+              <h2 style={sectionTitle}>Employee Exit Settlement Accounts</h2>
+              <div style={muted}>Head HR prepares and approves in CHRiS. Auditor review, GM payout approval and Accounts payout processing continue externally on the printed document.</div>
+            </div>
+            <span style={countBadge}>
+              {loading ? "..." : settlementEmployees.length} account{settlementEmployees.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          {loading ? (
+            <div style={empty}>Loading exit settlement accounts...</div>
+          ) : settlementEmployees.length ? (
+            <div style={tableWrap}>
+              <table style={table}>
+                <thead>
+                  <tr>
+                    <th style={th}>Employee</th>
+                    <th style={th}>Department</th>
+                    <th style={th}>Exit Type</th>
+                    <th style={th}>Exit Date</th>
+                    <th style={th}>Financial Status</th>
+                    <th style={th}>Net Settlement</th>
+                    <th style={th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {settlementEmployees.map((employee) => (
+                    <tr key={employee.employeeId}>
+                      <td style={td}>
+                        <strong style={{ color: "#F7FAF8" }}>{nameOf(employee)}</strong>
+                        <div style={muted}>{employee.employeeNumber}</div>
+                      </td>
+                      <td style={td}>{employee.department?.name || "-"}</td>
+                      <td style={td}>{titleCase(employee.exitProcess?.exitType)}</td>
+                      <td style={td}>{dateText(employee.exitProcess?.effectiveDate || employee.exitDate)}</td>
+                      <td style={td}><strong>{titleCase(employee.exitProcess?.financialStatus || "NOT_STARTED")}</strong></td>
+                      <td style={td}>
+                        {employee.exitProcess?.settlement
+                          ? moneyText(employee.exitProcess.settlement.netSettlement, employee.exitProcess.settlement.currency)
+                          : "Not calculated"}
+                      </td>
+                      <td style={td}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/employees/exits?settlement=${encodeURIComponent(employee.exitProcess.id)}`)}
+                          style={primaryButton}
+                        >
+                          Open Settlement Account
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={empty}>No exited employee currently has an exit process available for settlement.</div>
+          )}
+        </section>
+      ) : (
       <section style={panel}>
         <div style={sectionHeader}>
           <div>
@@ -1143,6 +1230,7 @@ export default function EmployeeExits() {
           <div style={empty}>No exited employee records yet.</div>
         )}
       </section>
+      )}
     </div>
   );
 }
@@ -1386,6 +1474,50 @@ const settlementMiniInput = {
   color: "#F7FAF8",
   outline: "none",
   textAlign: "right",
+};
+
+const exitWorkspaceTabs = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginBottom: 16,
+  padding: 7,
+  border: "1px solid rgba(212,175,55,.20)",
+  borderRadius: 12,
+  background: "rgba(5,40,26,.58)",
+};
+
+const exitWorkspaceTab = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "9px 13px",
+  borderRadius: 9,
+  border: "1px solid rgba(212,175,55,.18)",
+  background: "rgba(255,255,255,.025)",
+  color: "#A9BDB2",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const exitWorkspaceTabActive = {
+  ...exitWorkspaceTab,
+  borderColor: "#D4AF37",
+  background: "linear-gradient(145deg,rgba(8,122,67,.30),rgba(4,48,29,.82))",
+  color: "#F6D35D",
+};
+
+const tabCountBadge = {
+  display: "inline-grid",
+  placeItems: "center",
+  minWidth: 22,
+  height: 22,
+  padding: "0 6px",
+  borderRadius: 999,
+  background: "rgba(212,175,55,.14)",
+  color: "#F6D35D",
+  fontSize: 10,
+  fontWeight: 900,
 };
 
 const hero = {
