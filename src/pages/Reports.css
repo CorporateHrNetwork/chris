@@ -191,3 +191,23 @@
     content: none !important;
   }
 }
+
+
+@media print {
+  .reports-kpi-card,
+  .reports-panel,
+  .reports-panel--summary,
+  .reports-panel table,
+  .reports-panel thead,
+  .reports-panel thead tr,
+  .reports-panel th,
+  .reports-panel td {
+    background: var(--chris-print-paper) !important;
+    background-image: none !important;
+  }
+
+  .reports-panel th {
+    color: var(--chris-print-green) !important;
+    border-bottom: 2px solid var(--chris-print-green) !important;
+  }
+}
