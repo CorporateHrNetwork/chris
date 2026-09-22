@@ -85,3 +85,122 @@
 /* === CHRIS BRAND THEME END === */
 
 
+
+/* ============================================================
+   CHRIS UNIFIED PREMIUM DESIGN SYSTEM
+   HARD RULE: use these tokens across every CHRIS module.
+   ============================================================ */
+
+:root {
+  /* Brand */
+  --chris-green: #087A43;
+  --chris-green-bright: #0B8F58;
+  --chris-green-deep: #032B1C;
+  --chris-green-darker: #021A11;
+
+  --chris-gold: #D4AF37;
+  --chris-gold-bright: #E4C54A;
+  --chris-gold-deep: #B88A16;
+
+  /* Premium dark module surfaces */
+  --chris-page-bg: #06110C;
+  --chris-page-bg-deep: #030A07;
+  --chris-panel-bg: rgba(8, 28, 19, 0.96);
+  --chris-panel-bg-soft: rgba(12, 38, 26, 0.90);
+  --chris-input-bg: rgba(255,255,255,0.045);
+
+  /* Text */
+  --chris-font-family: "Segoe UI", "Inter", Arial, sans-serif;
+  --chris-text-main: #F8FAFC;
+  --chris-text-secondary: #A7B8AF;
+  --chris-text-muted: #7E9589;
+  --chris-text-gold: #D4AF37;
+
+  /* Type scale */
+  --chris-font-xs: 11px;
+  --chris-font-sm: 12px;
+  --chris-font-md: 14px;
+  --chris-font-lg: 16px;
+  --chris-font-xl: 20px;
+  --chris-font-2xl: 30px;
+
+  /* Shape */
+  --chris-radius-sm: 8px;
+  --chris-radius-md: 10px;
+  --chris-radius-card: 18px;
+  --chris-radius-pill: 999px;
+
+  /* Borders */
+  --chris-border-soft: rgba(255,255,255,0.08);
+  --chris-border-green: rgba(8,122,67,0.30);
+  --chris-border-gold: rgba(212,175,55,0.20);
+
+  /* Shadows */
+  --chris-shadow-card: 0 18px 45px rgba(0,0,0,0.20);
+  --chris-shadow-soft: 0 8px 24px rgba(0,0,0,0.16);
+
+  /* Status */
+  --chris-success: #34D399;
+  --chris-warning: #F6D365;
+  --chris-danger: #FB7185;
+  --chris-info: #60A5FA;
+
+  /* Standard spacing */
+  --chris-space-1: 6px;
+  --chris-space-2: 10px;
+  --chris-space-3: 14px;
+  --chris-space-4: 18px;
+  --chris-space-5: 22px;
+  --chris-space-6: 28px;
+}
+/* ============================================================
+   CHRIS VISUAL STANDARD V1
+   Time & Attendance is the reference visual language.
+   HARD RULE: all modules/pages inherit these tokens.
+   ============================================================ */
+
+:root {
+  --chris-green: #087A43;
+  --chris-green-bright: #0B8F58;
+  --chris-green-deep: #064E32;
+  --chris-green-darker: #031B12;
+
+  --chris-gold: #D4AF37;
+  --chris-gold-bright: #E4C54A;
+  --chris-gold-deep: #B88A16;
+
+  --chris-page-bg: #07110C;
+  --chris-page-bg-deep: #030A07;
+  --chris-panel-bg: rgba(8, 28, 19, 0.96);
+  --chris-panel-bg-soft: rgba(12, 38, 26, 0.90);
+  --chris-input-bg: rgba(255,255,255,0.045);
+
+  --chris-text-main: #F8FAFC;
+  --chris-text-secondary: #A7B8AF;
+  --chris-text-muted: #7E9589;
+
+  --chris-font-family: "Segoe UI", "Inter", Arial, sans-serif;
+  --chris-font-xs: 11px;
+  --chris-font-sm: 12px;
+  --chris-font-md: 14px;
+  --chris-font-lg: 16px;
+  --chris-font-xl: 20px;
+  --chris-font-2xl: 30px;
+
+  --chris-radius-sm: 8px;
+  --chris-radius-md: 10px;
+  --chris-radius-card: 18px;
+  --chris-radius-pill: 999px;
+
+  --chris-border-soft: rgba(255,255,255,0.08);
+  --chris-border-green: rgba(8,122,67,0.30);
+  --chris-border-gold: rgba(212,175,55,0.20);
+
+  --chris-shadow-card: 0 18px 45px rgba(0,0,0,0.20);
+  --chris-shadow-soft: 0 8px 24px rgba(0,0,0,0.16);
+
+  --chris-success: #34D399;
+  --chris-warning: #F6D365;
+  --chris-danger: #FB7185;
+  --chris-info: #60A5FA;
+}

@@ -1,0 +1,232 @@
+const express = require("express");
+
+const prisma = require("../config/prisma");
+const { requireAuth } = require("../middleware/authMiddleware");
+const { validateLoanPurpose } = require("../services/loanPolicyService");
+const { assessLoanCollateral } = require("../services/eosbService");
+const loanService = require("../services/loanService");
+const {
+  recordApprovedDisbursedLoan,
+  applyApprovedDisbursedLoanTopUp,
+  recordApprovedDisbursedSalaryAdvance,
+} = require("../services/zermattFinancialSupportService");
+const { deleteUnusedLoan } = require("../services/zermattLoanControlService");
+const {
+  isZermatt,
+  canManageLoans,
+  requireEmployeeFinancialInputEditor,
+  requireLoanEditor,
+  requireHeadHrFinancialControl,
+  assertEmployeeNumberAccess,
+  assertLoanRecordAccess,
+} = require("../services/zermattHrFinancialAccessService");
+
+const router = express.Router();
+router.use(requireAuth);
+
+function sendError(res, error, fallback = "Unable to record approved financial support.") {
+  if (error?.code) {
+    return res.status(error.statusCode || 400).json({
+      status: "error",
+      code: error.code,
+      message: error.message || fallback,
+      details: error.details,
+    });
+  }
+  console.error("Zermatt financial support error:", error);
+  return res.status(500).json({ status: "error", message: error?.message || fallback });
+}
+
+function zermattOnly(req, res, next) {
+  if (!isZermatt(req)) return next("route");
+  return next();
+}
+
+function rejectLegacyLoanOrigination(req, res) {
+  return res.status(409).json({
+    status: "error",
+    code: "ZERMATT_MANUAL_GM_APPROVAL_POLICY",
+    message: "Zermatt loans are approved manually by the GM and paid by Accounts outside CHRiS. Authorized HR should record the already approved/disbursed amount for payroll recovery instead.",
+  });
+}
+
+function rejectLegacyLoanWorkflowMutation(req, res) {
+  return res.status(409).json({
+    status: "error",
+    code: "ZERMATT_LEGACY_LOAN_WORKFLOW_RETIRED",
+    message: "The former CHRiS loan verification, GM approval and disbursement workflow is retired for Zermatt. Historical records remain available for review, but new decisions and disbursement actions must not be processed inside CHRiS.",
+  });
+}
+
+router.get("/zermatt/financial-support-policy", zermattOnly, (req, res) => {
+  return res.json({
+    status: "success",
+    data: {
+      approval: "MANUAL_GM_OUTSIDE_CHRIS",
+      payment: "ACCOUNTS_OUTSIDE_CHRIS",
+      recorder: "BRANCH_HR_OR_HEAD_HR_WITH_LOCATION_SCOPE",
+      canRecord: canManageLoans(req),
+      systemPurpose: "PAYROLL_RECOVERY_RECORD_ONLY",
+      loanTopUp: "MERGE_INTO_EXISTING_LOAN_ACCOUNT",
+      appliesTo: ["LOAN", "SALARY_ADVANCE"],
+    },
+  });
+});
+
+// Zermatt no longer originates loan approval inside CHRiS. Both historical
+// creation surfaces are blocked so an older client or direct API call cannot
+// bypass the revised manual-GM/external-Accounts policy.
+router.post("/loans", zermattOnly, rejectLegacyLoanOrigination);
+router.post("/loans/applications", zermattOnly, rejectLegacyLoanOrigination);
+
+// Historical workflow records remain readable, but all obsolete workflow
+// mutations are blocked before the legacy router can process them.
+router.post("/loans/:id/application-form", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/submit-for-hr-verification", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/hr-verification", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/gm-decision", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.post("/loans/:id/disbursement", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.patch("/loans/:id/decision", zermattOnly, rejectLegacyLoanWorkflowMutation);
+router.patch("/loans/:id/disburse", zermattOnly, rejectLegacyLoanWorkflowMutation);
+
+router.post("/loans/approved-disbursed", zermattOnly, requireLoanEditor, async (req, res) => {
+  try {
+    await assertEmployeeNumberAccess({ req, employeeNumber: req.body?.employeeNumber, prismaClient: prisma });
+    const purpose = await validateLoanPurpose({
+      organizationId: req.auth.organizationId,
+      purpose: req.body?.purpose,
+      prismaClient: prisma,
+    });
+    const approvedAmount = req.body?.approvedAmount ?? req.body?.principalAmount;
+    const collateral = await assessLoanCollateral({
+      organizationId: req.auth.organizationId,
+      employeeNumber: req.body?.employeeNumber,
+      requestedAmount: approvedAmount,
+      suretyEmployeeNumber: req.body?.suretyEmployeeNumber,
+      prismaClient: prisma,
+    });
+    const data = await recordApprovedDisbursedLoan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      input: { ...(req.body || {}), purpose },
+      collateralAssessment: collateral,
+      prismaClient: prisma,
+    });
+    return res.status(201).json({
+      status: "success",
+      message: "GM-approved loan recorded as already disbursed. Payroll recovery is now scheduled from the selected month.",
+      data,
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to record the approved/disbursed loan.");
+  }
+});
+
+router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor, async (req, res) => {
+  try {
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    const existingRows = await prisma.$queryRawUnsafe(
+      `SELECT l."id",l."loanNumber",l."purpose",l."status",e."employeeNumber"
+         FROM "payroll_loans" l
+         JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
+        WHERE l."organizationId"=$1 AND l."id"=$2 LIMIT 1`,
+      req.auth.organizationId,
+      req.params.id
+    );
+    const existing = existingRows[0];
+    if (!existing) {
+      const error = new Error("Loan account not found.");
+      error.code = "LOAN_NOT_FOUND";
+      error.statusCode = 404;
+      throw error;
+    }
+    const purpose = await validateLoanPurpose({
+      organizationId: req.auth.organizationId,
+      purpose: req.body?.purpose || existing.purpose,
+      prismaClient: prisma,
+    });
+    const topUpAmount = req.body?.topUpAmount ?? req.body?.principalAmount;
+    const collateral = await assessLoanCollateral({
+      organizationId: req.auth.organizationId,
+      employeeNumber: existing.employeeNumber,
+      requestedAmount: topUpAmount,
+      suretyEmployeeNumber: req.body?.suretyEmployeeNumber,
+      prismaClient: prisma,
+    });
+    const data = await applyApprovedDisbursedLoanTopUp({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      input: { ...(req.body || {}), purpose },
+      collateralAssessment: collateral,
+      prismaClient: prisma,
+    });
+    return res.json({
+      status: "success",
+      message: "Approved top-up merged into the existing loan account. No second loan account was created.",
+      data,
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to merge the approved top-up into the existing loan account.");
+  }
+});
+
+router.patch("/loans/:id/status", zermattOnly, requireLoanEditor, async (req, res) => {
+  try {
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    const data = await loanService.updateLoanStatus({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      action: req.body?.action,
+      reason: req.body?.reason,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to update loan status.");
+  }
+});
+
+router.delete("/loans/:id", zermattOnly, requireHeadHrFinancialControl, async (req, res) => {
+  try {
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    const data = await deleteUnusedLoan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      reason: req.body?.reason,
+      prismaClient: prisma,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to delete the unused loan record.");
+  }
+});
+
+// Salary advances use the same external approval/payment policy. Branch HR may
+// record assigned-branch employees; Head HR has organization-wide authority.
+router.post(
+  "/payroll/salary-advances",
+  zermattOnly,
+  requireEmployeeFinancialInputEditor,
+  async (req, res) => {
+    try {
+      await assertEmployeeNumberAccess({ req, employeeNumber: req.body?.employeeNumber, prismaClient: prisma });
+      const data = await recordApprovedDisbursedSalaryAdvance({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        input: req.body || {},
+        prismaClient: prisma,
+      });
+      return res.status(201).json({
+        status: "success",
+        message: "GM-approved salary advance recorded as already paid externally. Payroll recovery is now scheduled from the selected month.",
+        data,
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to record the approved/disbursed salary advance.");
+    }
+  }
+);
+
+module.exports = router;

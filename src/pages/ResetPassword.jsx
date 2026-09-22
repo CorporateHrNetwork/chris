@@ -9,6 +9,7 @@ import {
 
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
+import { API_BASE_URL } from "../services/api";
 
 function ResetPassword() {
   const navigate = useNavigate();
@@ -90,7 +91,7 @@ function ResetPassword() {
       }
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/reset-password",
+        `${API_BASE_URL}/api/auth/reset-password`,
         {
           method: "POST",
 

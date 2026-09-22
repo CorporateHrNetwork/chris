@@ -1,0 +1,509 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import OnboardingSectionDataForm from "../components/employees/OnboardingSectionDataForm";
+import SearchableRegistrySelect from "../components/common/SearchableRegistrySelect";
+import { COUNTRY_CATALOG } from "../data/countryCatalog";
+import { apiRequest, getActiveLocationId, getStoredOrganization } from "../services/api";
+import { ZERMATT_DOCUMENT_TYPES, isZermattOrganization } from "../data/zermattOnboardingDocuments";
+import { tenantLocalDate } from "./QuickAddEmployeeWizard";
+import { runFullOnboarding } from "../utils/fullOnboardingOrchestration";
+import "./QuickAddEmployeeWizard.css";
+import "./FullOnboardingWizard.css";
+
+const STEPS = [
+  "Personal Information",
+  "Employment Information",
+  "Organization Placement",
+  "Compensation / Payment Setup",
+  "Statutory Information",
+  "Next of Kin / Emergency",
+  "Documents",
+  "Legal / Assets",
+  "Onboarding Checklist",
+  "Review & Create",
+];
+const DEFAULT_DOCUMENT_TYPES = [
+  ["CV_RESUME", "CV / Resume"],
+  ["OFFER_APPOINTMENT", "Offer / Appointment Letter"],
+  ["VALID_ID", "Valid ID"],
+  ["CERTIFICATES", "Certificates"],
+  ["PASSPORT_PHOTO", "Passport Photograph"],
+  ["OTHER", "Other Required Document"],
+];
+const EMPLOYMENT_TYPES = [
+  "Full-Time",
+  "Part-Time",
+  "Expatriate",
+  "NYSC / Internship",
+  "Domestic Staff - Housekeeper",
+];
+
+function workflowMatchesEmploymentType(template, employmentType) {
+  const candidate = `${template?.employmentType || ""} ${template?.name || ""}`.trim().toLowerCase();
+  const normalized = String(employmentType || "").trim().toLowerCase();
+  if (!candidate) return true;
+  if (normalized === "full-time") {
+    return candidate.includes("full-time") || candidate.includes("full time") || candidate.includes("permanent");
+  }
+  if (normalized === "part-time") {
+    return candidate.includes("part-time") || candidate.includes("part time");
+  }
+  if (normalized === "expatriate") return candidate.includes("expatriate");
+  if (normalized.includes("nysc") || normalized.includes("intern")) {
+    return candidate.includes("nysc") || candidate.includes("intern") || candidate.includes("trainee");
+  }
+  if (normalized.includes("domestic") || normalized.includes("housekeeper")) {
+    return candidate.includes("domestic") || candidate.includes("housekeeper");
+  }
+  return String(template?.employmentType || "").trim().toLowerCase() === normalized;
+}
+
+const initialForm = () => {
+  const organization = getStoredOrganization() || {};
+  const today = tenantLocalDate(organization.timezone || "Africa/Lagos");
+  return {
+    firstName: "", middleName: "", surname: "", gender: "", phone: "", alternativePhone: "", email: "",
+    dateOfBirth: "", maritalStatus: "", nationality: "Nigerian", country: "Nigeria", residentialAddress: "",
+    idType: "", idNumber: "", idExpiryDate: "",
+    status: "Probation", hireDate: today,
+    employmentType: "Full-Time", templateId: "", departmentId: "", designationId: "", locationId: "", costCentreId: "",
+    grossSalary: "", salaryCurrency: organization.currency || "NGN", salaryEffectiveFrom: today,
+  };
+};
+
+export default function FullOnboardingWizard() {
+  const navigate = useNavigate();
+  const organization = getStoredOrganization() || {};
+  const zermattTenant = isZermattOrganization(organization);
+  const documentTypes = zermattTenant ? ZERMATT_DOCUMENT_TYPES : DEFAULT_DOCUMENT_TYPES;
+  const panelRef = useRef(null);
+  const sectionRefs = useRef([]);
+  const successTimer = useRef(null);
+  const uploadedDocumentIds = useRef(new Set());
+  const completedSectionKeys = useRef(new Set());
+  const completedTaskKeys = useRef(new Set());
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState(initialForm);
+  const [payment, setPayment] = useState({ payrollCurrency: organization.currency || "NGN", paymentMethod: "Bank Transfer" });
+  const [statutory, setStatutory] = useState({});
+  const [nextOfKin, setNextOfKin] = useState({ phoneCountryCode: "NG" });
+  const [emergencyContact, setEmergencyContact] = useState({ phoneCountryCode: "NG", alternativePhoneCountryCode: "NG" });
+  const [legal, setLegal] = useState({});
+  const [assets, setAssets] = useState({});
+  const [documents, setDocuments] = useState([]);
+  const [documentDraft, setDocumentDraft] = useState({ category: "CV_RESUME", file: null, notes: "" });
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [costCentres, setCostCentres] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [taskOwners, setTaskOwners] = useState([]);
+  const [taskDrafts, setTaskDrafts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [createdEmployee, setCreatedEmployee] = useState(null);
+  const [onboardingRecord, setOnboardingRecord] = useState(null);
+  const [complete, setComplete] = useState(false);
+  const [completionEmployee, setCompletionEmployee] = useState(null);
+  const [operationPhase, setOperationPhase] = useState("DRAFT");
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiRequest("/api/employees/career/departments"),
+      apiRequest("/api/employees/career/catalog"),
+      apiRequest("/api/location-catalog"),
+      apiRequest("/api/employees/career/cost-centres"),
+      apiRequest("/api/employees/onboarding/templates"),
+      apiRequest("/api/employees/onboarding/task-owners"),
+    ]).then(([departmentResult, designationResult, locationResult, costCentreResult, templateResult, ownerResult]) => {
+      if (cancelled) return;
+      const activeDepartments = (departmentResult.data || []).filter((row) => row.isActive !== false);
+      const activeDesignations = (designationResult.data || []).filter((row) => row.isActive !== false && row.departmentId);
+      const activeLocations = (locationResult.data || []).filter((row) => row.isActive !== false);
+      const activeCostCentres = costCentreResult.data || [];
+      const activeTemplates = (templateResult.data || []).filter((row) => row.isActive !== false);
+      const activeLocationId = getActiveLocationId();
+      setDepartments(activeDepartments);
+      setDesignations(activeDesignations);
+      setLocations(activeLocations);
+      setCostCentres(activeCostCentres);
+      setTemplates(activeTemplates);
+      setTaskOwners(ownerResult.data || []);
+      setForm((current) => {
+        const matchingTemplate =
+          activeTemplates.find((template) =>
+            workflowMatchesEmploymentType(template, current.employmentType)
+          ) || activeTemplates[0];
+        const scopedLocationId =
+          current.locationId ||
+          (activeLocationId && activeLocations.some((row) => row.id === activeLocationId)
+            ? activeLocationId
+            : "");
+        return {
+          ...current,
+          templateId: current.templateId || matchingTemplate?.id || "",
+          locationId: scopedLocationId,
+        };
+      });
+    }).catch((failure) => setError(failure.message || "Unable to load onboarding setup."))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+      if (successTimer.current) window.clearTimeout(successTimer.current);
+    };
+  }, []);
+
+  const availableDesignations = useMemo(() => designations.filter(
+    (designation) => designation.departmentId === form.departmentId
+  ), [designations, form.departmentId]);
+  const matchingTemplates = useMemo(() => {
+    const matching = templates.filter((template) =>
+      workflowMatchesEmploymentType(template, form.employmentType)
+    );
+    return matching.length ? matching : templates;
+  }, [templates, form.employmentType]);
+
+  useEffect(() => {
+    const matching = matchingTemplates[0];
+    if (!matching) return;
+    setForm((current) => {
+      if (matchingTemplates.some((template) => template.id === current.templateId)) {
+        return current;
+      }
+      return { ...current, templateId: matching.id };
+    });
+  }, [matchingTemplates]);
+
+  useEffect(() => {
+    setPayment((current) => ({
+      ...current,
+      payrollCurrency: current.payrollCurrency || form.salaryCurrency || organization.currency || "NGN",
+      paymentMethod: current.paymentMethod || "Bank Transfer",
+    }));
+  }, [form.salaryCurrency, organization.currency]);
+  const designation = designations.find((row) => row.id === form.designationId);
+  const template = templates.find((row) => row.id === form.templateId);
+  const fullName = [form.firstName, form.middleName, form.surname].map((value) => value.trim()).filter(Boolean).join(" ");
+
+  function set(field) {
+    return (event) => {
+      const value = event.target.value;
+      if (field === "salaryCurrency") {
+        setPayment((current) => ({
+          ...current,
+          payrollCurrency: value || current.payrollCurrency,
+        }));
+      }
+      setForm((current) => {
+        if (field === "departmentId") {
+          const department = departments.find((row) => row.id === value);
+          return {
+            ...current,
+            departmentId: value,
+            designationId: "",
+            costCentreId: department?.costCentreId || "",
+          };
+        }
+        if (field === "hireDate") {
+          return {
+            ...current,
+            hireDate: value,
+            salaryEffectiveFrom:
+              !current.salaryEffectiveFrom || current.salaryEffectiveFrom === current.hireDate
+                ? value
+                : current.salaryEffectiveFrom,
+          };
+        }
+        return { ...current, [field]: value };
+      });
+      setError("");
+    };
+  }
+
+  function jumpToSection(index) {
+    setStep(index);
+    window.setTimeout(() => {
+      sectionRefs.current[index]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      sectionRefs.current[index]?.focus?.({ preventScroll: true });
+    }, 0);
+  }
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return undefined;
+    const observed = sectionRefs.current.filter(Boolean);
+    if (!observed.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const index = sectionRefs.current.indexOf(visible.target);
+        if (index >= 0) setStep(index);
+      },
+      {
+        rootMargin: "-12% 0px -68% 0px",
+        threshold: [0.08, 0.2, 0.4],
+      }
+    );
+
+    observed.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [loading]);
+
+  function validationFor(targetStep) {
+    if (targetStep === 0 && (!form.firstName.trim() || !form.surname.trim() || !form.gender || !form.phone.trim() || !form.email.trim())) return "Complete First Name, Surname, Gender, Phone and Email.";
+    if (targetStep === 1 && (!form.hireDate || !["Active", "Probation"].includes(form.status))) return "Select a valid initial status and Hire Date.";
+    if (targetStep === 1 && !EMPLOYMENT_TYPES.includes(form.employmentType)) return "Select a valid Employment Type.";
+    if (targetStep === 1 && !form.templateId) return "Select an active onboarding workflow.";
+    if (targetStep === 2 && (!form.departmentId || !form.designationId || !form.locationId || !form.costCentreId)) return "Department, Designation, Work Location and Cost Centre / Operating Unit are required. Mapped Cost Centre values are filled automatically.";
+    if (targetStep === 2 && !Number.isInteger(designation?.careerLevel)) return "The selected Designation has no Employment Level. Configure its career level before continuing.";
+    if (targetStep === 3 && zermattTenant && (!Number.isFinite(Number(form.grossSalary)) || Number(form.grossSalary) <= 0)) return "Enter the employee's Monthly Gross Salary so the employee is payroll-ready at creation.";
+    if (targetStep === 3 && zermattTenant && !form.salaryEffectiveFrom) return "Salary Effective From is required.";
+    return "";
+  }
+
+  function addDocument() {
+    if (!documentDraft.file) { setError("Choose a document file before adding it."); return; }
+    setDocuments((current) => [...current, { ...documentDraft, id: `${Date.now()}-${documentDraft.file.name}` }]);
+    setDocumentDraft({ category: "CV_RESUME", file: null, notes: "" });
+    setError("");
+  }
+
+  function resetWizardDraft() {
+    setStep(0);
+    const fresh = initialForm();
+    const defaultTemplate =
+      templates.find(
+        (template) =>
+          !template.employmentType ||
+          String(template.employmentType).toLowerCase() ===
+            String(fresh.employmentType).toLowerCase()
+      ) || templates[0];
+    setForm({ ...fresh, templateId: defaultTemplate?.id || "" });
+    setPayment({ payrollCurrency: fresh.salaryCurrency || "NGN", paymentMethod: "Bank Transfer" });
+    setStatutory({});
+    setNextOfKin({ phoneCountryCode: "NG" });
+    setEmergencyContact({ phoneCountryCode: "NG", alternativePhoneCountryCode: "NG" });
+    setLegal({});
+    setAssets({});
+    setDocuments([]);
+    setDocumentDraft({ category: "CV_RESUME", file: null, notes: "" });
+    setTaskDrafts({});
+    setCreatedEmployee(null);
+    setOnboardingRecord(null);
+    completedSectionKeys.current = new Set();
+    completedTaskKeys.current = new Set();
+    uploadedDocumentIds.current = new Set();
+  }
+
+  async function submit() {
+    for (let index = 0; index < 4; index += 1) {
+      const message = validationFor(index);
+      if (message) {
+        setError(message);
+        jumpToSection(index);
+        return;
+      }
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await runFullOnboarding({
+        apiRequest,
+        employee: createdEmployee,
+        onboardingRecord,
+        employeePayload: {
+          name: fullName, departmentId: form.departmentId, designationId: form.designationId,
+          locationId: form.locationId, costCentreId: form.costCentreId, employmentType: form.employmentType,
+          email: form.email, phone: form.phone,
+          gender: form.gender, status: form.status, hireDate: form.hireDate,
+          ...(Number(form.grossSalary) > 0
+            ? {
+                openingSalaryRate: {
+                  amount: Number(form.grossSalary),
+                  currency: form.salaryCurrency || organization.currency || "NGN",
+                  effectiveFrom: form.salaryEffectiveFrom || form.hireDate,
+                  reason: "Opening salary rate from unified employee onboarding",
+                },
+              }
+            : {}),
+        },
+        templateId: form.templateId,
+        sectionPayloads: [
+          { key: "personal-details", data: { fullName, email: form.email, phone: form.phone, alternativePhone: form.alternativePhone, gender: form.gender, dateOfBirth: form.dateOfBirth, maritalStatus: form.maritalStatus, nationality: form.nationality, country: form.country, residentialAddress: form.residentialAddress, idType: form.idType, idNumber: form.idNumber, idExpiryDate: form.idExpiryDate } },
+          { key: "payment-details", data: payment },
+          { key: "statutory-details", data: statutory },
+          { key: "next-of-kin", data: nextOfKin },
+          { key: "emergency-contact", data: emergencyContact },
+          { key: "legal", data: legal },
+          { key: "assets", data: assets },
+        ],
+        documents,
+        completedSectionKeys: completedSectionKeys.current,
+        uploadedDocumentIds: uploadedDocumentIds.current,
+        taskUpdates: checklistItems.map((item) => ({
+          itemKey: item.itemKey,
+          data: {
+            status: taskDrafts[item.itemKey]?.status || "NOT_STARTED",
+            ownerUserId: taskDrafts[item.itemKey]?.ownerUserId || null,
+            dueDate: taskDrafts[item.itemKey]?.dueDate || null,
+            notes: taskDrafts[item.itemKey]?.notes || null,
+          },
+        })),
+        completedTaskKeys: completedTaskKeys.current,
+        onEmployeeCreated: (employee) => { setCreatedEmployee(employee); setOperationPhase("EMPLOYEE_CREATED"); },
+        onOnboardingStarted: (record) => { setOnboardingRecord(record); setOperationPhase("ONBOARDING_STARTED"); },
+        onOnboardingUpdated: setOnboardingRecord,
+      });
+      setCompletionEmployee({ ...result.employee, displayName: fullName });
+      setOperationPhase("COMPLETE");
+      setComplete(true);
+      resetWizardDraft();
+      successTimer.current = window.setTimeout(() => { setComplete(false); successTimer.current = null; }, 8000);
+    } catch (failure) {
+      const recovery = failure.onboardingRecovery || {};
+      if (recovery.employee) setCreatedEmployee(recovery.employee);
+      if (recovery.onboardingRecord) setOnboardingRecord(recovery.onboardingRecord);
+      setOperationPhase(recovery.phase || "DRAFT");
+      setError(recovery.employee
+        ? `Employee created — complete onboarding. ${failure.message || "The remaining onboarding operation could not be completed."} Employee creation will not run again.`
+        : failure.message || "Unable to create employee and start onboarding.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const follow = (path) => { if (successTimer.current) window.clearTimeout(successTimer.current); setComplete(false); navigate(path); };
+  const addAnother = () => {
+    if (successTimer.current) window.clearTimeout(successTimer.current);
+    setComplete(false);
+    setCompletionEmployee(null);
+    setOperationPhase("DRAFT");
+    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const sections = Array.isArray(template?.sections) ? template.sections : [];
+  const checklistItems = sections.flatMap((section, sectionIndex) =>
+    (section.items || []).map((title, itemIndex) => ({
+      itemKey: `${section.key || `section-${sectionIndex + 1}`}:${itemIndex + 1}`,
+      title,
+      category: section.label || section.key,
+      isRequired: section.required !== false,
+    }))
+  );
+  const incomplete = [
+    zermattTenant && !form.grossSalary && "Opening salary",
+    !payment.accountNumber && "Payment setup",
+    !statutory.taxIdentificationNumber && "TIN/PAYE readiness",
+    !nextOfKin.name && "Next of Kin",
+    !emergencyContact.name && "Emergency Contact",
+    !documents.length && "Documents",
+  ].filter(Boolean);
+
+  return <section className="qa-page fo-page chris-module-dashboard" data-operation-phase={operationPhase}>
+    <header className="qa-header">
+      <div><b>EMPLOYEE ENTRY · UNIFIED ONBOARDING</b><h1>Add & Onboard Employee</h1><p className="fo-header-note">One employee journey. Mapped organization and payroll values are derived automatically; enter data once and create the employee, opening salary authority and onboarding record together.</p></div>
+      <button className="qa-secondary" type="button" onClick={() => navigate("/employees/bulk-upload")}>Bulk Onboarding</button>
+    </header>
+
+    {complete && completionEmployee && <section className="qa-success" role="status"><div><strong>Employee created and onboarding started successfully — {completionEmployee.employeeNumber} {completionEmployee.displayName || completionEmployee.name}</strong><p>The completed draft has been cleared.</p></div><div className="qa-actions"><button className="qa-primary" type="button" onClick={() => follow(`/employees/${encodeURIComponent(completionEmployee.employeeNumber)}`)}>View Employee</button><button className="qa-secondary" type="button" onClick={() => follow("/employees/onboarding")}>Onboarding Tracker</button><button className="qa-secondary" type="button" onClick={addAnother}>Add Another Employee</button></div></section>}
+
+    <section className="fo-onboarding-layout">
+      <aside className="fo-section-sidebar chris-analytics-panel" aria-label="Onboarding section navigation">
+        <div className="chris-dashboard-card__shine" aria-hidden="true" />
+        <div className="fo-section-sidebar-head">
+          <div>
+            <small className="chris-module-dashboard__eyebrow">ONBOARDING SECTIONS</small>
+            <strong>Employee Journey</strong>
+          </div>
+          <span className="fo-section-progress">{step + 1} / {STEPS.length}</span>
+        </div>
+        <nav className="fo-section-nav" aria-label="Unified onboarding sections">
+          {STEPS.map((label, index) => (
+            <button
+              key={label}
+              type="button"
+              className={`chris-panel-action fo-section-nav-button${step === index ? " fo-section-nav-button--active" : ""}`}
+              onClick={() => jumpToSection(index)}
+              aria-current={step === index ? "step" : undefined}
+            >
+              <span className="fo-section-number">{index + 1}</span>
+              <span className="fo-section-label">{label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="fo-onboarding-main">
+        {error && <div className="qa-error fo-global-error" role="alert">{error}</div>}
+        {createdEmployee && !complete && <div className="fo-note" role="status"><strong>Employee created successfully — {createdEmployee.employeeNumber} {createdEmployee.name || fullName}</strong><span>CHRiS is continuing the same onboarding transaction. The employee record will not be created again.</span></div>}
+
+        <section className="fo-stack">
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[0] = node; panelRef.current = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>1 · PERSONAL INFORMATION</small><h2>Identity & Contact</h2></div>{loading && <span>Loading setup…</span>}</div>
+        <div className="qa-grid"><Field label="First Name"><input value={form.firstName} onChange={set("firstName")} /></Field><Field label="Middle Name" optional><input value={form.middleName} onChange={set("middleName")} /></Field><Field label="Surname"><input value={form.surname} onChange={set("surname")} /></Field><Field label="Gender"><select value={form.gender} onChange={set("gender")}><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option><option>Unspecified</option></select></Field><Field label="Phone"><input type="tel" value={form.phone} onChange={set("phone")} /></Field><Field label="Alternative Phone" optional><input type="tel" value={form.alternativePhone} onChange={set("alternativePhone")} /></Field><Field label="Email"><input type="email" value={form.email} onChange={set("email")} /></Field><Field label="Date of Birth" optional><input type="date" value={form.dateOfBirth} onChange={set("dateOfBirth")} /></Field><Field label="Marital Status" optional><select value={form.maritalStatus} onChange={set("maritalStatus")}><option value="">Select status</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></Field><Field label="Nationality" optional><input value={form.nationality} onChange={set("nationality")} /></Field><Field label="Country of Residence" optional><SearchableRegistrySelect ariaLabel="Country of Residence" value={COUNTRY_CATALOG.find((country) => country.name === form.country)?.code || "NG"} options={COUNTRY_CATALOG.map((country) => ({ value: country.code, label: country.name }))} onChange={(value) => { const country = COUNTRY_CATALOG.find((item) => item.code === value); setForm((current) => ({ ...current, country: country?.name || "Nigeria" })); setError(""); }} placeholder="Search country" /></Field><Field label="Residential Address" optional><textarea rows="2" value={form.residentialAddress} onChange={set("residentialAddress")} /></Field><Field label="ID Type"><select value={form.idType} onChange={set("idType")}><option value="">Select ID type</option><option value="NIN">National Identification Number (NIN)</option><option value="INTERNATIONAL_PASSPORT">International Passport</option><option value="DRIVERS_LICENSE">Driver's License</option><option value="VOTERS_CARD">Voter's Card</option></select></Field><Field label="ID Number"><input value={form.idNumber} onChange={set("idNumber")} /></Field><Field label="ID Expiry Date" optional><input type="date" value={form.idExpiryDate} onChange={set("idExpiryDate")} /></Field></div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[1] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>2 · EMPLOYMENT INFORMATION</small><h2>Employment Authority</h2></div><span className="fo-auto-badge">Workflow auto-matched</span></div>
+        <div className="qa-grid"><Field label="Employment Status"><select value={form.status} onChange={set("status")}><option>Probation</option><option>Active</option></select></Field><Field label="Hire / Start Date"><input type="date" value={form.hireDate} onChange={set("hireDate")} /></Field><Field label="Employment Type"><select value={form.employmentType} onChange={set("employmentType")}>{EMPLOYMENT_TYPES.map((employmentType) => <option key={employmentType} value={employmentType}>{employmentType}</option>)}</select></Field><Field label="Onboarding Workflow (auto-matched)"><select value={form.templateId} onChange={set("templateId")}><option value="">Select active workflow</option>{matchingTemplates.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></Field></div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[2] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>3 · ORGANIZATION PLACEMENT</small><h2>Placement & Structure</h2></div><span className="fo-auto-badge">Mapped fields auto-fill</span></div>
+        <div className="qa-grid"><Field label="Department"><select value={form.departmentId} onChange={set("departmentId")}><option value="">Select department</option>{departments.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></Field><Field label="Designation"><select value={form.designationId} onChange={set("designationId")} disabled={!form.departmentId}><option value="">{form.departmentId ? "Select designation" : "Select department first"}</option>{availableDesignations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></Field><Field label="Employment Level (auto)" optional><input readOnly value={Number.isInteger(designation?.careerLevel) ? `Level ${designation.careerLevel} — derived from Designation` : "Select a mapped Designation"} /></Field><Field label="Work Location"><select value={form.locationId} onChange={set("locationId")}><option value="">Select location</option>{locations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></Field><Field label={departments.find((row) => row.id === form.departmentId)?.costCentreId ? "Cost Centre / Operating Unit (auto-filled)" : "Cost Centre / Operating Unit"}><select value={form.costCentreId} onChange={set("costCentreId")}><option value="">Select Cost Centre / Operating Unit</option>{costCentres.map((row) => <option key={row.id} value={row.id}>{row.code ? `${row.code} — ` : ""}{row.name}</option>)}</select></Field></div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[3] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>4 · COMPENSATION & PAYMENT</small><h2>Payroll Readiness</h2></div><span className="fo-auto-badge">Opening salary created with employee</span></div>
+        <div className="fo-note"><strong>Enter compensation once</strong><span>CHRiS creates the effective salary authority in the same employee-creation transaction. Payroll should not require a separate Salary Rates setup for a newly onboarded employee.</span></div>
+        <div className="qa-grid"><Field label="Monthly Gross Salary" optional={!zermattTenant}><input type="number" min="0.01" step="0.01" value={form.grossSalary} onChange={set("grossSalary")} placeholder="e.g. 450000" /></Field><Field label="Salary Currency"><select value={form.salaryCurrency} onChange={set("salaryCurrency")}><option value={organization.currency || "NGN"}>{organization.currency || "NGN"}</option>{organization.currency !== "NGN" && <option value="NGN">NGN</option>}</select></Field><Field label="Salary Effective From"><input type="date" value={form.salaryEffectiveFrom} onChange={set("salaryEffectiveFrom")} /></Field></div>
+        <OnboardingSectionDataForm sectionKey="payment-details" value={payment} onChange={setPayment} inputStyle={inputStyle} />
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[4] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>5 · STATUTORY INFORMATION</small><h2>Statutory Details</h2></div><span>Partial entries are preserved</span></div>
+        <OnboardingSectionDataForm sectionKey="statutory-details" countryContext={form.nationality} value={statutory} onChange={setStatutory} inputStyle={inputStyle} textareaStyle={textareaStyle} />
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[5] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>6 · NEXT OF KIN / EMERGENCY</small><h2>Employee Contacts</h2></div><span>Saved in the same onboarding record</span></div>
+        <div className="fo-subsection"><h3>Next of Kin</h3><OnboardingSectionDataForm sectionKey="next-of-kin" value={nextOfKin} onChange={setNextOfKin} inputStyle={inputStyle} textareaStyle={textareaStyle} /></div>
+        <div className="fo-subsection"><h3>Emergency Contact</h3><OnboardingSectionDataForm sectionKey="emergency-contact" value={emergencyContact} onChange={setEmergencyContact} inputStyle={inputStyle} textareaStyle={textareaStyle} /></div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[6] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>7 · DOCUMENTS</small><h2>Employee Documents</h2></div><span>{documents.length} staged</span></div>
+        <div className="fo-documents"><div className="fo-note"><strong>Submitted documents</strong><span>Files remain in this same onboarding page and upload automatically after the employee/onboarding record is created.</span></div><div className="qa-grid"><Field label="Document Type"><select value={documentDraft.category} onChange={(event) => setDocumentDraft((current) => ({ ...current, category: event.target.value }))}>{documentTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field><Field label="File"><input type="file" onChange={(event) => setDocumentDraft((current) => ({ ...current, file: event.target.files?.[0] || null }))} /></Field><Field label="Notes" optional><input value={documentDraft.notes} onChange={(event) => setDocumentDraft((current) => ({ ...current, notes: event.target.value }))} /></Field></div><button type="button" className="qa-secondary" onClick={addDocument}>Add document</button>{documents.map((item) => <div className="fo-document" key={item.id}><span>{documentTypes.find(([value]) => value === item.category)?.[1]} · {item.file.name}</span><button type="button" onClick={() => setDocuments((current) => current.filter((row) => row.id !== item.id))}>Remove</button></div>)}</div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[7] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>8 · LEGAL / ASSETS</small><h2>Compliance & Company Property</h2></div><span>Complete what applies</span></div>
+        <div className="fo-subsection"><h3>Legal & Policy Acknowledgements</h3><OnboardingSectionDataForm sectionKey="legal" value={legal} onChange={setLegal} inputStyle={inputStyle} textareaStyle={textareaStyle} /></div>
+        <div className="fo-subsection"><h3>Assigned Assets</h3><OnboardingSectionDataForm sectionKey="assets" value={assets} onChange={setAssets} inputStyle={inputStyle} textareaStyle={textareaStyle} /></div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[8] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>9 · ONBOARDING CHECKLIST</small><h2>Tasks & Ownership</h2></div><span>{checklistItems.length} task(s)</span></div>
+        <div className="fo-checklist">{checklistItems.map((item) => { const draft = taskDrafts[item.itemKey] || {}; const update = (field, value) => setTaskDrafts((current) => ({ ...current, [item.itemKey]: { ...current[item.itemKey], [field]: value } })); return <article key={item.itemKey} className="fo-task"><div><strong>{item.title}</strong><span>{item.category} · {item.isRequired ? "Required" : "Optional"}</span></div><div className="qa-grid"><Field label="Owner" optional><select value={draft.ownerUserId || ""} onChange={(event) => update("ownerUserId", event.target.value)}><option value="">Unassigned</option>{taskOwners.map((owner) => <option key={owner.id} value={owner.id}>{[owner.firstName, owner.lastName].filter(Boolean).join(" ") || owner.email}</option>)}</select></Field><Field label="Due Date" optional><input type="date" value={draft.dueDate || ""} onChange={(event) => update("dueDate", event.target.value)} /></Field><Field label="Status"><select value={draft.status || "NOT_STARTED"} onChange={(event) => update("status", event.target.value)}><option value="NOT_STARTED">Not Started</option><option value="IN_PROGRESS">In Progress</option><option value="COMPLETED">Completed</option><option value="NOT_APPLICABLE">Not Applicable</option></select></Field><Field label="Notes" optional><input value={draft.notes || ""} onChange={(event) => update("notes", event.target.value)} placeholder={draft.status === "NOT_APPLICABLE" ? "Reason required" : "Task notes"} /></Field></div></article>; })}</div>
+      </section>
+
+      <section className="qa-panel fo-stack-section" ref={(node) => { sectionRefs.current[9] = node; }} tabIndex="-1">
+        <div className="qa-panel-title"><div><small>10 · REVIEW & CREATE</small><h2>Review Once, Submit Once</h2></div></div>
+        <div className="fo-review"><Review title="Personal" rows={[["Name", fullName], ["Gender", form.gender], ["Phone", form.phone], ["Email", form.email], ["Nationality", form.nationality]]}/><Review title="Employment" rows={[["Status", form.status], ["Hire Date", form.hireDate], ["Employment Type", form.employmentType], ["Workflow", template?.name]]}/><Review title="Organization" rows={[["Department", departments.find((row) => row.id === form.departmentId)?.name], ["Designation", designation?.name], ["Employment Level", Number.isInteger(designation?.careerLevel) ? `Level ${designation.careerLevel}` : "Missing"], ["Location", locations.find((row) => row.id === form.locationId)?.name], ["Cost Centre / Operating Unit", costCentres.find((row) => row.id === form.costCentreId)?.name]]}/><Review title="Compensation & Payment" rows={[["Monthly Gross", form.grossSalary ? `${form.salaryCurrency} ${Number(form.grossSalary).toLocaleString()}` : "—"], ["Salary Effective From", form.salaryEffectiveFrom], ["Bank", payment.bankName], ["Account Name", payment.accountName], ["Payroll Currency", payment.payrollCurrency], ["Method", payment.paymentMethod]]}/><Review title="Statutory Information" rows={[["TIN", statutory.taxIdentificationNumber], ["PAYE State", statutory.payeState], ["PFA", statutory.pensionPfa], ["RSA PIN", statutory.pensionPin], ["NHIA", statutory.nhiaNumber]]}/><Review title="Employee Contacts" rows={[["Next of Kin", nextOfKin.name], ["Relationship", nextOfKin.relationship], ["Emergency Contact", emergencyContact.name], ["Emergency Phone", emergencyContact.phoneNumber]]}/><Review title="Legal / Assets" rows={[["Employment Contract", legal.employmentContractStatus], ["Data Privacy Consent", legal.dataPrivacyConsentStatus], ["Laptop / Computer", assets.laptopComputer], ["ID / Access Card", assets.accessCard]]}/><Review title="Documents" rows={[["Staged", `${documents.length} document(s)`]]}/><Review title="Onboarding Checklist" rows={[["Template sections", `${sections.length}`], ["Tasks", `${checklistItems.length}`]]}/>{incomplete.length > 0 && <div className="fo-warning"><strong>Still outstanding</strong><span>{incomplete.join(" · ")}. CHRiS will preserve partial onboarding data; payroll-critical Zermatt fields are validated before employee creation.</span></div>}</div>
+        <footer className="qa-footer fo-final-footer"><button type="button" className="qa-secondary" disabled={busy} onClick={() => navigate("/employees/directory")}>Cancel</button><button type="button" className="qa-primary" disabled={busy || loading} onClick={submit}>{busy ? (createdEmployee ? "Completing onboarding…" : "Creating employee…") : createdEmployee ? "Complete Remaining Onboarding" : "Create Employee & Start Onboarding"}</button></footer>
+      </section>
+        </section>
+      </main>
+    </section>
+  </section>;
+}
+
+const inputStyle = { width: "100%", minHeight: 43, padding: "0 12px", border: "1px solid #315746", borderRadius: 9, background: "#0d261b", color: "#fff" };
+const textareaStyle = { ...inputStyle, minHeight: 72, padding: 10 };
+function Field({ label, optional = false, children }) { return <label className="qa-field"><span>{label}{!optional && <b> *</b>}</span>{children}</label>; }
+function Review({ title, rows }) { return <article><h3>{title}</h3>{rows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value || "—"}</strong></div>)}</article>; }

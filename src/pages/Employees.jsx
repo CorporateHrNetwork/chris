@@ -1,24 +1,39 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 import EmployeeTable from "../components/employees/EmployeeTable";
 import AddEmployee from "../components/employees/AddEmployee";
+import EmployeeDataOperationsLauncher from "../components/employees/EmployeeDataOperationsLauncher";
+import EmployeeExportModal from "../components/employees/EmployeeExportModal";
 
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 
-function Employees() {
+function Employees({
+  initialAddEmployee = false,
+}) {
+  const navigate = useNavigate();
   const [showAddEmployee, setShowAddEmployee] =
-    useState(false);
+    useState(initialAddEmployee);
+  const [showEntryLauncher, setShowEntryLauncher] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
+  const [createdEmployee, setCreatedEmployee] = useState(null);
+  const successTimer = useRef(null);
 
   const [summary, setSummary] = useState({
     total: 0,
     active: 0,
     leave: 0,
     probation: 0,
+    male: 0,
+    female: 0,
+    genderPending: 0,
   });
 
   const [summaryLoading, setSummaryLoading] =
@@ -34,6 +49,9 @@ function Employees() {
 
   const canCreateEmployee =
     hasPermission("employees.create");
+
+  const canExportEmployees =
+    hasPermission("employees.update");
 
   const loadEmployeeSummary = useCallback(
     async () => {
@@ -64,6 +82,11 @@ function Employees() {
             (employee) =>
               employee.status === "PROBATION"
           ).length,
+          male: employees.filter((employee) => employee.gender === "MALE").length,
+          female: employees.filter((employee) => employee.gender === "FEMALE").length,
+          genderPending: employees.filter(
+            (employee) => !employee.gender || employee.gender === "UNSPECIFIED"
+          ).length,
         });
       } catch (error) {
         console.error(
@@ -86,7 +109,25 @@ function Employees() {
     loadEmployeeSummary();
   }, [loadEmployeeSummary]);
 
-  const handleEmployeeSaved = async () => {
+  useEffect(() => {
+    if (!createdEmployee) return undefined;
+    successTimer.current = window.setTimeout(() => {
+      setCreatedEmployee(null);
+      successTimer.current = null;
+    }, 7500);
+    return () => {
+      if (successTimer.current) window.clearTimeout(successTimer.current);
+      successTimer.current = null;
+    };
+  }, [createdEmployee]);
+
+  const followCreationAction = (path) => {
+    setCreatedEmployee(null);
+    navigate(path);
+  };
+
+  const handleEmployeeSaved = async (employee) => {
+    setCreatedEmployee(employee);
     setShowAddEmployee(false);
 
     await loadEmployeeSummary();
@@ -175,6 +216,19 @@ function Employees() {
 
   return (
     <div>
+      {createdEmployee && (
+        <section role="status" style={successNoticeStyle}>
+          <div>
+            <strong>Employee created successfully — {createdEmployee.employeeNumber} {[createdEmployee.firstName, createdEmployee.middleName, createdEmployee.lastName].filter(Boolean).join(" ")}</strong>
+            <p style={{ margin: "5px 0 0", color: "#C7D3CC" }}>The employee record, employment episode and required entitlement provisioning committed successfully.</p>
+          </div>
+          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+            <button type="button" style={successSecondaryButton} onClick={() => followCreationAction(`/employees/${createdEmployee.employeeNumber}`)}>View Employee Profile</button>
+            <button type="button" style={successPrimaryButton} onClick={() => followCreationAction(`/employees/${encodeURIComponent(createdEmployee.employeeNumber)}/onboarding`)}>Continue Onboarding</button>
+            <button type="button" aria-label="Dismiss employee creation confirmation" style={successDismissButton} onClick={() => setCreatedEmployee(null)}>×</button>
+          </div>
+        </section>
+      )}
       {/* PAGE HEADER */}
       <div
         style={{
@@ -225,15 +279,41 @@ function Employees() {
           canCreateEmployee && (
             <button
               type="button"
-              onClick={() =>
-                setShowAddEmployee(true)
-              }
+              onClick={() => setShowEntryLauncher(true)}
               style={addButtonStyle}
             >
               + Add Employee
             </button>
           )}
+        {!authorizationLoading && canExportEmployees && (
+          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+            <button type="button" style={exportButtonStyle} onClick={() => setShowExportModal(true)}>Export</button>
+            <button type="button" style={exportButtonStyle} onClick={() => navigate("/employees/export-queue")}>Export Queue</button>
+            <button type="button" style={exportButtonStyle} onClick={() => navigate("/employees/governance")}>Employment Governance</button>
+          </div>
+        )}
       </div>
+
+      {exportNotice && <div role="status" style={successNoticeStyle}>{exportNotice}</div>}
+
+      {showEntryLauncher && (
+        <EmployeeDataOperationsLauncher
+          onClose={() => setShowEntryLauncher(false)}
+          onSingle={() => navigate("/employees/add?mode=quick")}
+          onBulk={() => navigate("/employees/bulk-upload")}
+          onInvite={() => navigate("/employees/invitations")}
+        />
+      )}
+
+      {showExportModal && (
+        <EmployeeExportModal
+          onClose={() => setShowExportModal(false)}
+          onCreated={() => {
+            setExportNotice("Employee export completed and added to the Export Queue.");
+            window.setTimeout(() => setExportNotice(""), 5000);
+          }}
+        />
+      )}
 
       {summaryError && (
         <div style={errorStyle}>
@@ -281,6 +361,9 @@ function Employees() {
           subtitle="Currently on leave"
         />
 
+        <SummaryCard title="Male Employees" value={summaryLoading ? "..." : summary.male} subtitle="Recorded male employees" />
+        <SummaryCard title="Female Employees" value={summaryLoading ? "..." : summary.female} subtitle="Recorded female employees" />
+        <SummaryCard title="Gender Data Pending" value={summaryLoading ? "..." : summary.genderPending} subtitle="Employee records requiring gender data" />
         <SummaryCard
           title="Probation"
           value={
@@ -293,7 +376,9 @@ function Employees() {
       </div>
 
       {/* EMPLOYEE DIRECTORY */}
-      <EmployeeTable />
+      <div className="chris-employee-directory-skin">
+        <EmployeeTable />
+      </div>
     </div>
   );
 }
@@ -306,15 +391,17 @@ function SummaryCard({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        borderRadius: "16px",
+        position: "relative",
+        overflow: "hidden",
+        background:
+          "radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, #063722, #02170f)",
+        border:
+          "1px solid rgba(212,175,55,0.88)",
+        borderRadius: "20px",
         padding: "22px",
         minHeight: "125px",
-
         boxShadow:
-          "0 6px 20px rgba(15,23,42,0.05)",
-
+          "0 18px 42px rgba(0,0,0,0.34)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
@@ -322,13 +409,11 @@ function SummaryCard({
     >
       <div
         style={{
-          color: "#64748B",
+          color: "#F7FAF8",
           fontSize: "13px",
-          fontWeight: "700",
-
+          fontWeight: "900",
           textTransform: "uppercase",
-
-          letterSpacing: "0.03em",
+          letterSpacing: "0.04em",
         }}
       >
         {title}
@@ -336,9 +421,9 @@ function SummaryCard({
 
       <div
         style={{
-          color: "#087A43",
-          fontSize: "30px",
-          fontWeight: "800",
+          color: "#2EE98B",
+          fontSize: "34px",
+          fontWeight: "900",
           lineHeight: 1,
           marginTop: "10px",
         }}
@@ -348,7 +433,7 @@ function SummaryCard({
 
       <div
         style={{
-          color: "#94A3B8",
+          color: "#C7D3CC",
           fontSize: "12px",
           marginTop: "8px",
         }}
@@ -376,6 +461,8 @@ const addButtonStyle = {
   boxShadow:
     "0 6px 15px rgba(11,94,59,0.18)",
 };
+
+const exportButtonStyle = { ...addButtonStyle, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.65)", boxShadow: "none" };
 
 const backButtonStyle = {
   border: "none",
@@ -422,5 +509,10 @@ const accessDeniedStyle = {
 
   maxWidth: "600px",
 };
+
+const successNoticeStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20, padding: "16px 18px", border: "1px solid rgba(212,175,55,.65)", borderRadius: 13, background: "linear-gradient(145deg,#06452b,#031c13)", color: "#F7FAF8", boxShadow: "0 12px 28px rgba(0,0,0,.25)" };
+const successPrimaryButton = { ...addButtonStyle, background: "#D4AF37", color: "#07140D", padding: "10px 13px" };
+const successSecondaryButton = { ...successPrimaryButton, background: "transparent", color: "#D4AF37", border: "1px solid rgba(212,175,55,.6)" };
+const successDismissButton = { ...successSecondaryButton, padding: "7px 11px", fontSize: 18 };
 
 export default Employees;

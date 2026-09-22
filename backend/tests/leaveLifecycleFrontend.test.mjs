@@ -1,0 +1,14 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const requests = fs.readFileSync(new URL("../../src/pages/LeaveRequests.jsx", import.meta.url), "utf8");
+const returns = fs.readFileSync(new URL("../../src/pages/LeaveReturns.jsx", import.meta.url), "utf8");
+const profile = fs.readFileSync(new URL("../../src/components/employees/EmployeeProfile.jsx", import.meta.url), "utf8");
+assert.match(requests, /Approved\s+-\s+Ready to Commence/);
+assert.match(requests, /!due && !early/);
+assert.match(returns, /status=ACTIVE/);
+assert.match(returns, /Confirm Return/);
+assert.match(requests, /request\.status\s*===\s*"APPROVED"[\s\S]*Commence Leave/);
+assert.match(requests, /Completed\s+-\s+Returned/);
+assert.match(profile, /profile\.activeLeave/);
+assert.match(profile, /Leave period:/);
+console.log("PASS: CHRIS leave lifecycle frontend semantic tests passed.");

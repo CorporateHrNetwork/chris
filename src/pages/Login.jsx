@@ -18,8 +18,22 @@ import {
 
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
+import { API_BASE_URL } from "../services/api";
 
+/*
+  CHRIS_TENANT_AWARE_LOGIN
+
+  Tenant is resolved from:
+    /login?organization=<organization-slug>
+
+  CorporateHr Network remains the safe development fallback.
+*/
 function Login() {
+  const organizationSlug =
+    new URLSearchParams(
+      window.location.search
+    ).get("organization") ||
+    "corporatehr-network";
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
@@ -155,7 +169,7 @@ function Login() {
       setNotice("");
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/login",
+        `${API_BASE_URL}/api/auth/login`,
         {
           method: "POST",
 
@@ -170,8 +184,7 @@ function Login() {
 
             password,
 
-            organizationSlug:
-              "corporatehr-network",
+            organizationSlug,
           }),
         }
       );
@@ -269,7 +282,7 @@ function Login() {
         }
 
         const response = await fetch(
-          "http://localhost:5000/api/auth/forgot-password",
+          `${API_BASE_URL}/api/auth/forgot-password`,
           {
             method: "POST",
 
@@ -281,8 +294,7 @@ function Login() {
             body: JSON.stringify({
               email: normalizedEmail,
 
-              organizationSlug:
-                "corporatehr-network",
+              organizationSlug,
             }),
           }
         );

@@ -1,0 +1,344 @@
+/* ============================================================
+   CHRIS VISUAL STANDARD V2
+   Global canonical visual language
+   Scope: authenticated CHRIS application pages inside <main>
+   ============================================================ */
+
+:root {
+  --chris-black: #020b07;
+  --chris-bg: #04110b;
+  --chris-bg-deep: #021a10;
+  --chris-panel: #052a1a;
+  --chris-panel-deep: #02170f;
+  --chris-panel-soft: #073723;
+
+  --chris-green: #087a43;
+  --chris-green-bright: #2ee98b;
+  --chris-green-soft: #a7f3d0;
+
+  --chris-gold: #d4af37;
+  --chris-gold-bright: #f2cf57;
+  --chris-gold-soft: #ffe89a;
+
+  --chris-text: #f7faf8;
+  --chris-text-soft: #dde7e1;
+  --chris-muted: #c7d3cc;
+  --chris-muted-2: #9fb1a7;
+  --chris-muted-3: #7f988b;
+
+  --chris-border: rgba(212, 175, 55, 0.52);
+  --chris-border-strong: rgba(212, 175, 55, 0.88);
+  --chris-line: rgba(255, 255, 255, 0.08);
+
+  --chris-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.34);
+  --chris-shadow-soft:
+    0 12px 30px rgba(0, 0, 0, 0.24);
+
+  --chris-radius-card: 20px;
+  --chris-radius-panel: 16px;
+  --chris-radius-control: 10px;
+}
+
+/* ------------------------------------------------------------
+   PAGE TYPOGRAPHY
+   ------------------------------------------------------------ */
+
+main {
+  color: var(--chris-muted);
+}
+
+main h1,
+main h2,
+main h3,
+main h4,
+main h5,
+main h6 {
+  color: var(--chris-text) !important;
+}
+
+main p {
+  color: var(--chris-muted-2);
+}
+
+main [style*="#0F172A"],
+main [style*="#111827"] {
+  color: var(--chris-text) !important;
+}
+
+main [style*="#334155"],
+main [style*="#475569"] {
+  color: var(--chris-muted) !important;
+}
+
+main [style*="#64748B"],
+main [style*="#6B7280"] {
+  color: var(--chris-muted-2) !important;
+}
+
+main [style*="#94A3B8"] {
+  color: var(--chris-muted-3) !important;
+}
+
+/* Old CHRIS green: keep as metric/accent colour, never as a large heading. */
+main div[style*="#087A43"],
+main span[style*="#087A43"],
+main strong[style*="#087A43"] {
+  color: var(--chris-green-bright) !important;
+}
+
+main h1[style*="#087A43"],
+main h2[style*="#087A43"],
+main h3[style*="#087A43"],
+main h4[style*="#087A43"] {
+  color: var(--chris-text) !important;
+}
+
+/* ------------------------------------------------------------
+   LIGHT / WHITE LEGACY CARDS -> CHRIS PREMIUM DARK CARDS
+   ------------------------------------------------------------ */
+
+main div[style*="#FFFFFF"],
+main div[style*="#FFF"],
+main div[style*="rgba(255,255,255"],
+main div[style*="rgba(255, 255, 255"],
+main section[style*="#FFFFFF"],
+main section[style*="#FFF"],
+main section[style*="rgba(255,255,255"],
+main section[style*="rgba(255, 255, 255"] {
+  background:
+    radial-gradient(
+      circle at 16% 0%,
+      rgba(46, 233, 139, 0.10),
+      transparent 30%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(6, 55, 34, 0.98),
+      rgba(2, 23, 15, 0.99)
+    ) !important;
+
+  border-color: var(--chris-border) !important;
+  box-shadow: var(--chris-shadow-soft) !important;
+  color: var(--chris-muted) !important;
+}
+
+/* Older near-white backgrounds */
+main div[style*="#F8FAFC"],
+main div[style*="#F9FAFB"],
+main div[style*="#F3F6F4"],
+main div[style*="#F7FAF8"],
+main div[style*="#F6FAF7"] {
+  background: rgba(3, 42, 25, 0.88) !important;
+  border-color: rgba(212, 175, 55, 0.28) !important;
+  color: var(--chris-muted) !important;
+}
+
+/* Gold top-edge language on card-like legacy blocks */
+main div[style*="borderRadius"][style*="background"],
+main section[style*="borderRadius"][style*="background"] {
+  border-color: rgba(212, 175, 55, 0.42) !important;
+}
+
+/* ------------------------------------------------------------
+   CANONICAL DASHBOARD CARD COMPONENTS
+   ------------------------------------------------------------ */
+
+main .chris-dashboard-card,
+main .chris-analytics-panel,
+main .chris-quick-action-card,
+main .chris-module-dashboard-shell,
+main [class*="chris-dashboard"] {
+  color: var(--chris-muted);
+}
+
+main .chris-dashboard-card,
+main .chris-analytics-panel,
+main .chris-quick-action-card {
+  background:
+    radial-gradient(
+      circle at 18% 0%,
+      rgba(46, 233, 139, 0.11),
+      transparent 32%
+    ),
+    linear-gradient(
+      145deg,
+      var(--chris-panel-soft),
+      var(--chris-panel-deep)
+    ) !important;
+
+  border-color: var(--chris-border) !important;
+  box-shadow: var(--chris-shadow-soft) !important;
+}
+
+/* ------------------------------------------------------------
+   MAIN DASHBOARD PLACEHOLDER / ANALYTIC PANELS
+   ------------------------------------------------------------ */
+
+/* Legacy dashboard panels often carry min-height + white background */
+main div[style*="minHeight"][style*="#FFFFFF"],
+main div[style*="min-height"][style*="#FFFFFF"],
+main div[style*="minHeight"][style*="rgba(255"],
+main div[style*="min-height"][style*="rgba(255"] {
+  background:
+    radial-gradient(
+      circle at 84% 20%,
+      rgba(212, 175, 55, 0.06),
+      transparent 30%
+    ),
+    linear-gradient(
+      145deg,
+      #052d1c,
+      #02170f
+    ) !important;
+
+  border: 1px solid var(--chris-border) !important;
+  color: var(--chris-muted) !important;
+  box-shadow: var(--chris-shadow-soft) !important;
+}
+
+/* ------------------------------------------------------------
+   TABLES
+   ------------------------------------------------------------ */
+
+main table {
+  color: var(--chris-muted) !important;
+  border-color: var(--chris-line) !important;
+}
+
+main thead,
+main thead tr {
+  background: #021d13 !important;
+}
+
+main th {
+  color: var(--chris-text-soft) !important;
+  border-color: rgba(212, 175, 55, 0.20) !important;
+}
+
+main td {
+  color: var(--chris-muted) !important;
+  border-color: var(--chris-line) !important;
+}
+
+main tbody tr {
+  border-color: var(--chris-line) !important;
+}
+
+main tbody tr:hover {
+  background: rgba(8, 122, 67, 0.10) !important;
+}
+
+/* ------------------------------------------------------------
+   INPUTS / CONTROLS
+   ------------------------------------------------------------ */
+
+main input,
+main select,
+main textarea {
+  background: rgba(3, 34, 22, 0.90) !important;
+  color: var(--chris-text) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+}
+
+main input::placeholder,
+main textarea::placeholder {
+  color: var(--chris-muted-3) !important;
+}
+
+main select option {
+  background: #062219;
+  color: var(--chris-text);
+}
+
+main input:focus,
+main select:focus,
+main textarea:focus {
+  outline: none !important;
+  border-color: var(--chris-gold) !important;
+  box-shadow:
+    0 0 0 3px rgba(212, 175, 55, 0.10) !important;
+}
+
+/* ------------------------------------------------------------
+   BUTTON LANGUAGE
+   ------------------------------------------------------------ */
+
+main button {
+  font-family: inherit;
+  font-weight: 800;
+}
+
+main button:not(:disabled) {
+  transition:
+    transform 0.16s ease,
+    filter 0.16s ease,
+    border-color 0.16s ease;
+}
+
+main button:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* Preserve red / green / blue semantic buttons.
+   Only normalize generic white/neutral buttons. */
+main button[style*="#FFFFFF"]:not([style*="#B91C1C"]):not([style*="#DC2626"]),
+main button[style*="#FFF"]:not([style*="#B91C1C"]):not([style*="#DC2626"]) {
+  background: rgba(255, 255, 255, 0.055) !important;
+  color: var(--chris-text) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* ------------------------------------------------------------
+   KPI / METRIC FONT LANGUAGE
+   ------------------------------------------------------------ */
+
+main [class*="kpi"] h3,
+main [class*="Kpi"] h3,
+main [class*="metric"] h3,
+main [class*="Metric"] h3 {
+  color: var(--chris-text) !important;
+}
+
+main [class*="kpi"] strong,
+main [class*="Kpi"] strong,
+main [class*="metric"] strong,
+main [class*="Metric"] strong {
+  color: var(--chris-green-bright);
+}
+
+/* ------------------------------------------------------------
+   SCROLLBARS
+   ------------------------------------------------------------ */
+
+main * {
+  scrollbar-width: thin;
+  scrollbar-color:
+    rgba(212, 175, 55, 0.34)
+    rgba(255, 255, 255, 0.025);
+}
+
+main *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+main *::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+main *::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.34);
+  border-radius: 999px;
+}
+
+/* ------------------------------------------------------------
+   RESPONSIVE
+   ------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  main h1 {
+    font-size: clamp(28px, 6vw, 38px) !important;
+  }
+}

@@ -41,3 +41,17 @@ textarea {
   background: #bdbdbd;
   border-radius: 20px;
 }
+.employee-workflow :is(input, select, textarea, button):focus-visible {
+  outline: 2px solid var(--chris-gold) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .employee-workflow {
+    padding: 18px !important;
+  }
+
+  .employee-workflow button {
+    min-height: 42px;
+  }
+}

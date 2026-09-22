@@ -1,0 +1,81 @@
+.chris-print-report-header,
+.chris-print-report-footer {
+  display: none;
+}
+
+@media print {
+  .chris-print-report-header {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 0 0 10px;
+    margin: 0 0 12px;
+    border-bottom: 2px solid #087a43;
+    color: #111827;
+    background: #ffffff;
+    break-after: avoid;
+  }
+
+  .chris-print-report-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    flex: 0 0 auto;
+  }
+
+  .chris-print-report-heading { min-width: 0; }
+
+  .chris-print-report-owner {
+    color: #064e3b !important;
+    font-size: 12pt;
+    font-weight: 900;
+    line-height: 1.15;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+  }
+
+  .chris-print-report-heading h1 {
+    margin: 3px 0 2px !important;
+    color: #9a7410 !important;
+    font-size: 17pt !important;
+    line-height: 1.15;
+  }
+
+  .chris-print-report-scope {
+    color: #475569 !important;
+    font-size: 8.5pt;
+    font-weight: 700;
+  }
+
+  .chris-print-report-footer {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    padding-top: 7px;
+    border-top: 1px solid #94a3b8;
+    color: #64748b !important;
+    font-size: 7pt;
+    break-before: avoid;
+  }
+
+  .chris-print-report-powered {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #64748b !important;
+  }
+
+  .chris-print-report-powered img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+  }
+
+  .chris-print-report-footer strong {
+    color: #064e3b !important;
+    font-weight: 900;
+    letter-spacing: .025em;
+  }
+}

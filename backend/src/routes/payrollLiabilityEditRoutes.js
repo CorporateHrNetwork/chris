@@ -1,0 +1,169 @@
+const express = require("express");
+const prisma = require("../config/prisma");
+const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
+const { updateSalaryAdvance, updateLoan } = require("../services/payrollLiabilityEditService");
+const { cancelSalaryAdvance, deleteSalaryAdvance } = require("../services/salaryAdvanceControlService");
+const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+const { validateLoanPurpose } = require("../services/loanPolicyService");
+const {
+  isZermatt,
+  canDeleteEmployeeFinancialInputs,
+  requireEmployeeFinancialInputEditor,
+  requireLoanEditor,
+  requireHeadHrFinancialControl,
+  assertEmployeeNumberAccess,
+  assertSalaryAdvanceAccess,
+  assertLoanRecordAccess,
+  capabilitySnapshot,
+} = require("../services/zermattHrFinancialAccessService");
+const payrollDraftFreshnessRoutes = require("./payrollDraftFreshnessRoutes");
+
+const router = express.Router();
+router.use(requireAuth);
+router.use(payrollDraftFreshnessRoutes);
+
+function sendError(res, error, fallback) {
+  if (error?.code) {
+    return res.status(error.statusCode || 400).json({
+      status: "error",
+      code: error.code,
+      message: error.message || fallback,
+      details: error.details,
+    });
+  }
+  console.error("Payroll liability edit error:", error);
+  return res.status(500).json({ status: "error", message: error?.message || fallback });
+}
+
+const payrollManage = requirePermission("payroll.manage");
+const payrollView = requirePermission("payroll.view");
+
+function requireSalaryAdvanceEditor(req, res, next) {
+  if (isZermatt(req)) return requireEmployeeFinancialInputEditor(req, res, next);
+  return payrollManage(req, res, next);
+}
+
+function requireLoanLiabilityEditor(req, res, next) {
+  if (isZermatt(req)) return requireLoanEditor(req, res, next);
+  return payrollManage(req, res, next);
+}
+
+function requireSalaryAdvanceDeleteControl(req, res, next) {
+  if (isZermatt(req)) return requireHeadHrFinancialControl(req, res, next);
+  return payrollManage(req, res, next);
+}
+
+router.get("/payroll/salary-advances/control-capabilities", payrollView, (req, res) => {
+  const capabilities = capabilitySnapshot(req);
+  return res.json({
+    status: "success",
+    data: {
+      ...capabilities,
+      canEdit: isZermatt(req) ? capabilities.canManageEmployeeFinancialInputs : (req.auth?.permissions || []).includes("payroll.manage"),
+      canCancelDelete: isZermatt(req) ? canDeleteEmployeeFinancialInputs(req) : false,
+      deleteRule: "UNUSED_ONLY",
+      cancelRule: "ACTIVE_OR_PAUSED",
+      historicalRecoveryImmutable: true,
+    },
+  });
+});
+
+router.patch("/payroll/salary-advances/:id", requireSalaryAdvanceEditor, async (req, res) => {
+  try {
+    if (isZermatt(req)) {
+      await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
+      if (req.body?.employeeNumber) {
+        await assertEmployeeNumberAccess({ req, employeeNumber: req.body.employeeNumber, prismaClient: prisma });
+      }
+    }
+    const data = await updateSalaryAdvance({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      advanceId: req.params.id,
+      input: req.body || {},
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Salary Advance ${req.params.id} was edited and payroll drafts must be recalculated.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
+  } catch (error) {
+    return sendError(res, error, "Unable to edit salary advance.");
+  }
+});
+
+router.post("/payroll/salary-advances/:id/cancel", requireSalaryAdvanceDeleteControl, async (req, res) => {
+  try {
+    if (isZermatt(req)) await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
+    const data = await cancelSalaryAdvance({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      advanceId: req.params.id,
+      reason: req.body?.reason,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Salary Advance ${req.params.id} was cancelled by authorized HR control and payroll drafts must be recalculated.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
+  } catch (error) {
+    return sendError(res, error, "Unable to cancel salary advance.");
+  }
+});
+
+router.delete("/payroll/salary-advances/:id", requireSalaryAdvanceDeleteControl, async (req, res) => {
+  try {
+    if (isZermatt(req)) await assertSalaryAdvanceAccess({ req, advanceId: req.params.id, prismaClient: prisma });
+    const data = await deleteSalaryAdvance({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      advanceId: req.params.id,
+      reason: req.body?.reason,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Salary Advance ${req.params.id} was deleted by authorized HR control and payroll drafts must be recalculated.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
+  } catch (error) {
+    return sendError(res, error, "Unable to delete salary advance.");
+  }
+});
+
+router.patch("/loans/:id", requireLoanLiabilityEditor, async (req, res) => {
+  try {
+    if (isZermatt(req)) {
+      await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+      if (req.body?.employeeNumber) {
+        await assertEmployeeNumberAccess({ req, employeeNumber: req.body.employeeNumber, prismaClient: prisma });
+      }
+    }
+    const input = { ...(req.body || {}) };
+    if (input.purpose !== undefined) {
+      input.purpose = await validateLoanPurpose({
+        organizationId: req.auth.organizationId,
+        purpose: input.purpose,
+        prismaClient: prisma,
+      });
+    }
+    const data = await updateLoan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      input,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Loan ${req.params.id} was edited and payroll drafts must be recalculated.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
+  } catch (error) {
+    return sendError(res, error, "Unable to edit loan.");
+  }
+});
+
+module.exports = router;

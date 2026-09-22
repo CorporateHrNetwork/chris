@@ -279,17 +279,29 @@ router.post(
         }
       );
 
-      return res.status(200).json({
+      const responseBody = {
         ...genericResponse,
+      };
 
-        /*
-          DEVELOPMENT ONLY.
-        */
-        data: {
+      /*
+        Local development keeps the existing browser-assisted
+        reset flow. Production never returns the raw reset token
+        through the API response; delivery must happen through an
+        approved out-of-band channel.
+      */
+      if (
+        (process.env.NODE_ENV || "development") !==
+        "production"
+      ) {
+        responseBody.data = {
           resetToken: rawToken,
           expiresAt,
-        },
-      });
+        };
+      }
+
+      return res
+        .status(200)
+        .json(responseBody);
     } catch (error) {
       console.error(
         "Forgot password error:",
@@ -492,12 +504,33 @@ router.get(
           permissions:
             req.auth.permissions || [],
 
+          locationScope:
+            req.auth.locationScope,
+
+          activeLocationId:
+            req.auth.activeLocationId || null,
+
+          consolidatedOrganization:
+            Boolean(req.auth.consolidatedOrganization),
+
+          consolidatedHeadOffice:
+            Boolean(req.auth.consolidatedHeadOffice),
+
+          availableLocations:
+            req.auth.availableLocations || [],
+
           organization: {
             id:
               req.auth.organization.id,
 
             name:
               req.auth.organization.name,
+
+            legalName:
+              req.auth.organization.legalName,
+
+            logoUrl:
+              req.auth.organization.logoUrl,
 
             slug:
               req.auth.organization.slug,

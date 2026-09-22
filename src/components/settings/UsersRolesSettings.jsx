@@ -14,6 +14,7 @@ import {
   FaToggleOn,
   FaToggleOff,
 } from "react-icons/fa";
+import "./UsersRolesSettings.chris.css";
 
 import {
   apiRequest,
@@ -25,6 +26,8 @@ import CreateUserForm from "./CreateUserForm";
 import EditUserForm from "./EditUserForm";
 import RolePermissionsEditor from "./RolePermissionsEditor";
 
+
+import "./chris-settings-visual.css";
 function UsersRolesSettings() {
   const [
     activeTab,
@@ -435,7 +438,7 @@ function UsersRolesSettings() {
     ).length;
 
   return (
-    <div>
+    <div className="chris-users-roles">
       {/* HEADER */}
       <div
         style={{

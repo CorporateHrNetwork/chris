@@ -4,6 +4,17 @@ const {
 } = require("../config/careerStructureTemplates");
 const express = require("express");
 const prisma = require("../config/prisma");
+const {
+  listEmploymentLevels,
+  ensureEmploymentLevels,
+  saveEmploymentLevel,
+  resolveEmploymentLevelFromDesignation,
+  listEmploymentLevelExceptions,
+} = require("../services/designationEmploymentLevelService");
+const {
+  createEmployee,
+} = require("../services/employeeCreationService");
+const { assertTenantNinAvailable } = require("../services/employeeIdentityService");
 
 const {
   requireAuth,
@@ -13,6 +24,12 @@ const {
 const router = express.Router();
 
 router.use(requireAuth);
+
+router.get("/career/levels",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEmploymentLevels({organizationId:req.auth.organizationId})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase(),details:error.details})}});
+router.post("/career/levels",requirePermission("employees.update"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:req.body})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
+router.patch("/career/levels/:levelNumber",requirePermission("employees.update"),async(req,res)=>{try{return res.json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:{...req.body,levelNumber:req.params.levelNumber}})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
+router.get("/career/employment-level-exceptions",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEmploymentLevelExceptions({organizationId:req.auth.organizationId})})}catch(error){return res.status(500).json({status:"error",message:"Unable to load Employment Level exceptions."})}});
+router.get("/career/designations/:designationId/employment-level",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await resolveEmploymentLevelFromDesignation({organizationId:req.auth.organizationId,designationId:req.params.designationId})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase(),details:error.details})}});
 
 /*
 ============================================================
@@ -37,6 +54,17 @@ const EXIT_STATUSES = [
   "RETIRED",
 ];
 
+const REHIRE_STATUSES = [
+  ...EXIT_STATUSES,
+  "INACTIVE",
+];
+
+function normalizeEmployeeGender(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(normalized)
+    ? normalized
+    : "UNSPECIFIED";
+}
 function normalizeEmployeeName(name) {
   const nameParts = name
     .trim()
@@ -75,9 +103,22 @@ async function getEmployee(
 
     include: {
       department: true,
-      designation: true,
+      designation: { include: { employmentLevel: true } },
       location: true,
       user: true,
+      leaveRequests: {
+        where: { status: "ACTIVE" },
+        orderBy: { commencementDate: "desc" },
+        take: 1,
+        include: { leaveType: true },
+      },
+      lineManagerAssignments: {
+        where: { effectiveTo: null },
+        take: 1,
+        include: {
+          manager: { include: { department: true, designation: true } },
+        },
+      },
     },
   });
 }
@@ -105,8 +146,15 @@ router.get(
 
           include: {
             department: true,
-            designation: true,
+            designation: { include: { employmentLevel: true } },
             location: true,
+            lineManagerAssignments: {
+              where: { effectiveTo: null },
+              take: 1,
+              include: {
+                manager: { include: { department: true, designation: true } },
+              },
+            },
 
             user: {
               select: {
@@ -610,10 +658,12 @@ router.put(
         email,
         phone,
         status,
+        gender,
         hireDate,
         confirmationDate,
         exitDate,
         locationId,
+        nationalIdentificationNumber,
       } = req.body;
 
       if (
@@ -679,6 +729,23 @@ router.put(
           message:
             "Another employee already uses this email address.",
         });
+      }
+
+      let normalizedNin = existingEmployee.nationalIdentificationNumber || null;
+      if (String(nationalIdentificationNumber || "").trim()) {
+        try {
+          normalizedNin = await assertTenantNinAvailable(prisma, {
+            organizationId,
+            employeeId: existingEmployee.id,
+            value: nationalIdentificationNumber,
+          });
+        } catch (identityError) {
+          return res.status(identityError.code === "DUPLICATE_EMPLOYEE_NIN" ? 409 : 400).json({
+            status: "error",
+            code: identityError.code || "INVALID_NIN",
+            message: identityError.message,
+          });
+        }
       }
 
       const normalizedName =
@@ -876,6 +943,11 @@ router.put(
                   phone:
                     phone.trim(),
 
+                  nationalIdentificationNumber: normalizedNin,
+
+                  gender:
+                    normalizeEmployeeGender(gender),
+
                   status:
                     nextStatus,
 
@@ -1012,6 +1084,12 @@ router.patch(
         reason,
         notes,
       } = req.body || {};
+
+      return res.status(409).json({
+        status: "error",
+        code: "CONTROLLED_EXIT_WORKFLOW_REQUIRED",
+        message: "Direct employee exit is disabled. Initiate and complete the controlled /api/exits workflow so governance, clearance and settlement controls cannot be bypassed.",
+      });
 
 
       /*
@@ -3709,9 +3787,10 @@ router.patch(
       }
 
       if (
-        !EXIT_STATUSES.includes(
+        !REHIRE_STATUSES.includes(
           existingEmployee.status
-        )
+        ) ||
+        !existingEmployee.exitDate
       ) {
         return res.status(409).json({
           status:
@@ -3721,7 +3800,7 @@ router.patch(
             "EMPLOYEE_NOT_ELIGIBLE_FOR_REHIRE",
 
           message:
-            "Only resigned, terminated or retired employees can be rehired.",
+            "Only employees with a completed exit can be rehired.",
         });
       }
 
@@ -3811,6 +3890,9 @@ router.patch(
             departmentId:
               true,
 
+            careerLevel:
+              true,
+
             isActive:
               true,
           },
@@ -3826,6 +3908,14 @@ router.patch(
 
           message:
             "Select an active designation mapped to the selected department.",
+        });
+      }
+
+      if (designationRecord.careerLevel == null) {
+        return res.status(400).json({
+          status: "error",
+          code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+          message: "This designation has no Employment Level configured. Configure the designation before creating the employee.",
         });
       }
 
@@ -4326,6 +4416,15 @@ router.get(
             code: true,
             description: true,
             isActive: true,
+            costCentreId: true,
+            costCentre: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                status: true,
+              },
+            },
 
             _count: {
               select: {
@@ -4401,6 +4500,7 @@ router.post(
         name,
         code,
         description,
+        isActive,
       } = req.body || {};
 
       const normalizedName =
@@ -4481,9 +4581,8 @@ router.post(
       }
 
 
-      const department =
-        await prisma.department.create({
-          data: {
+      const department = await prisma.$transaction(async (tx) => {
+        const created = await tx.department.create({ data: {
             organizationId,
 
             name:
@@ -4495,10 +4594,11 @@ router.post(
             description:
               normalizedDescription,
 
-            isActive:
-              true,
-          },
-        });
+            isActive: isActive !== false,
+          } });
+        await tx.organizationAudit.create({ data: { organizationId, actorUserId: req.auth.userId, entityType: "DEPARTMENT", entityId: created.id, action: "CREATED", previousValue: null, newValue: created, reason: "Department created from Organization structure administration" } });
+        return created;
+      });
 
 
       return res.status(201).json({
@@ -6453,6 +6553,24 @@ router.patch(
         });
       }
 
+      await ensureEmploymentLevels({ organizationId });
+      await prisma.organizationEmploymentLevel.upsert({
+        where: {
+          organizationId_levelNumber: {
+            organizationId,
+            levelNumber: normalizedCareerLevel,
+          },
+        },
+        update: {},
+        create: {
+          organizationId,
+          levelNumber: normalizedCareerLevel,
+          name: `Level ${normalizedCareerLevel}`,
+          code: `LEVEL_${normalizedCareerLevel}`,
+          displayOrder: normalizedCareerLevel,
+        },
+      });
+
 
       /*
       ----------------------------------------------------------
@@ -7457,6 +7575,24 @@ router.patch(
         });
       }
 
+      let resolvedTargetLevel;
+      try {
+        resolvedTargetLevel = await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: targetDesignation.id,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "The selected designation must have an active Employment Level before the job change can proceed.",
+          });
+        }
+        throw levelError;
+      }
+
 
       /*
       --------------------------------------------------------
@@ -7695,6 +7831,10 @@ router.patch(
 
             reason:
               String(reason).trim(),
+            resolvedEmploymentLevel:
+              resolvedTargetLevel.employmentLevel,
+            entitlementReconciliation:
+              "NOT_APPLIED",
           },
         },
       });
@@ -7887,6 +8027,24 @@ router.patch(
         });
       }
 
+      let resolvedCurrentLevel;
+      try {
+        resolvedCurrentLevel = await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: currentDesignation.id,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "The employee's current designation must resolve to an active Employment Level before promotion.",
+          });
+        }
+        throw levelError;
+      }
+
 
       /*
       ----------------------------------------------------------
@@ -7939,6 +8097,24 @@ router.patch(
           message:
             "The selected designation has not been configured in the career hierarchy.",
         });
+      }
+
+      let resolvedTargetLevel;
+      try {
+        resolvedTargetLevel = await resolveEmploymentLevelFromDesignation({
+          organizationId,
+          designationId: targetDesignation.id,
+        });
+      } catch (levelError) {
+        if (["EMPLOYMENT_LEVEL_MAPPING_REQUIRED", "DESIGNATION_REQUIRED"].includes(levelError.message)) {
+          return res.status(400).json({
+            status: "error",
+            code: "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+            message:
+              "The promotion designation must resolve to an active Employment Level.",
+          });
+        }
+        throw levelError;
       }
 
 
@@ -8105,7 +8281,16 @@ router.patch(
             currentDesignation.careerLevel,
 
           newLevel:
-            targetDesignation.careerLevel,
+            resolvedTargetLevel.levelNumber,
+
+          previousEmploymentLevel:
+            resolvedCurrentLevel.employmentLevel,
+
+          newEmploymentLevel:
+            resolvedTargetLevel.employmentLevel,
+
+          entitlementReconciliation:
+            "NOT_APPLIED",
 
           previousDesignation: {
             id:
@@ -8442,497 +8627,46 @@ Controlled employee creation:
 
 router.post(
   "/",
-  requirePermission(
-    "employees.create"
-  ),
+  requirePermission("employees.create"),
   async (req, res) => {
     try {
-      const organizationId =
-        req.auth.organizationId;
-
-      const {
-        name,
-        departmentId,
-        designationId,
-        locationId,
-        email,
-        phone,
-        status = "Active",
-      } = req.body || {};
-
-
-      /*
-      ------------------------------------------------------------
-      REQUIRED FIELDS
-      ------------------------------------------------------------
-      */
-
-      if (
-        !name?.trim() ||
-        !departmentId ||
-        !designationId ||
-        !locationId ||
-        !email?.trim() ||
-        !phone?.trim()
-      ) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_REQUIRED_FIELDS_MISSING",
-
-          message:
-            "Please complete all required employee fields.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      NORMALIZE EMPLOYEE IDENTITY DATA
-      ------------------------------------------------------------
-      */
-
-      const normalizedEmail =
-        email
-          .trim()
-          .toLowerCase();
-
-      const normalizedName =
-        normalizeEmployeeName(
-          name
-        );
-
-      if (!normalizedName) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_NAME",
-
-          message:
-            "Please enter at least the employee's first and last name.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      DUPLICATE EMPLOYEE EMAIL
-      ------------------------------------------------------------
-      */
-
-      const duplicateEmail =
-        await prisma.employee.findFirst({
-          where: {
-            organizationId,
-
-            email:
-              normalizedEmail,
-          },
-
-          select: {
-            id:
-              true,
-
-            employeeNumber:
-              true,
-          },
-        });
-
-      if (duplicateEmail) {
-        return res.status(409).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_EMAIL_ALREADY_EXISTS",
-
-          message:
-            "An employee with this email address already exists.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      VALIDATE DEPARTMENT
-      ------------------------------------------------------------
-      */
-
-      const departmentRecord =
-        await prisma.department.findFirst({
-          where: {
-            id:
-              String(
-                departmentId
-              ).trim(),
-
-            organizationId,
-
-            isActive:
-              true,
-          },
-
-          select: {
-            id:
-              true,
-
-            name:
-              true,
-
-            code:
-              true,
-
-            isActive:
-              true,
-          },
-        });
-
-      if (!departmentRecord) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_DEPARTMENT",
-
-          message:
-            "Select an active department from your organization's CHRIS structure.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      VALIDATE DESIGNATION + DEPARTMENT MAPPING
-      ------------------------------------------------------------
-      */
-
-      const designationRecord =
-        await prisma.designation.findFirst({
-          where: {
-            id:
-              String(
-                designationId
-              ).trim(),
-
-            organizationId,
-
-            departmentId:
-              departmentRecord.id,
-
-            isActive:
-              true,
-          },
-
-          select: {
-            id:
-              true,
-
-            name:
-              true,
-
-            code:
-              true,
-
-            departmentId:
-              true,
-
-            isActive:
-              true,
-          },
-        });
-
-      if (!designationRecord) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_DESIGNATION",
-
-          message:
-            "Select an active designation mapped to the selected department.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      VALIDATE WORK LOCATION / BRANCH
-      ------------------------------------------------------------
-      */
-
-      const locationRecord =
-        await prisma.organizationLocation.findFirst({
-          where: {
-            id:
-              String(
-                locationId
-              ).trim(),
-
-            organizationId,
-
-            isActive:
-              true,
-          },
-
-          select: {
-            id:
-              true,
-
-            name:
-              true,
-
-            code:
-              true,
-
-            type:
-              true,
-
-            city:
-              true,
-
-            state:
-              true,
-
-            country:
-              true,
-
-            isActive:
-              true,
-          },
-        });
-
-      if (!locationRecord) {
-        return res.status(400).json({
-          status:
-            "error",
-
-          code:
-            "INVALID_EMPLOYEE_LOCATION",
-
-          message:
-            "Select an active work location from your organization's CHRIS location catalogue.",
-        });
-      }
-
-
-      /*
-      ------------------------------------------------------------
-      PERMANENT EMPLOYEE NUMBER ALLOCATION
-      ------------------------------------------------------------
-
-      The Organization owns a monotonically increasing sequence.
-
-      Once issued:
-      - an Employee ID is never recycled
-      - exit does not release it
-      - reinstatement keeps it
-      - future rehire keeps the employee's permanent ID
-
-      The sequence increment and Employee creation happen in the
-      same database transaction.
-      ------------------------------------------------------------
-      */
-
-      const employee =
-        await prisma.$transaction(
-          async (tx) => {
-            const sequenceOwner =
-              await tx.organization.update({
-                where: {
-                  id:
-                    organizationId,
-                },
-
-                data: {
-                  employeeNumberSequence: {
-                    increment:
-                      1,
-                  },
-                },
-
-                select: {
-                  employeeNumberSequence:
-                    true,
-                },
-              });
-
-            const nextNumber =
-              sequenceOwner
-                .employeeNumberSequence;
-
-            if (
-              nextNumber >
-              999999
-            ) {
-              throw new Error(
-                "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED"
-              );
-            }
-
-            const employeeNumber =
-              `CHR${String(
-                nextNumber
-              ).padStart(
-                6,
-                "0"
-              )}`;
-
-            const createdEmployee =
-              await tx.employee.create({
-                data: {
-                  organizationId,
-
-                  departmentId:
-                    departmentRecord.id,
-
-                  designationId:
-                    designationRecord.id,
-
-                  locationId:
-                    locationRecord.id,
-
-                  employeeNumber,
-
-                  firstName:
-                    normalizedName.firstName,
-
-                  middleName:
-                    normalizedName.middleName,
-
-                  lastName:
-                    normalizedName.lastName,
-
-                  email:
-                    normalizedEmail,
-
-                  phone:
-                    phone.trim(),
-
-                  status:
-                    STATUS_MAP[status] ||
-                    "ACTIVE",
-                },
-
-                include: {
-                  department:
-                    true,
-
-                  designation:
-                    true,
-
-                  location:
-                    true,
-                },
-              });
-
-
-            /*
-            ------------------------------------------------------
-            EMPLOYMENT EPISODE 1
-
-            A genuine new hire always starts Episode 1.
-            The permanent Employee record stores current state;
-            Employment Episodes store service periods.
-            ------------------------------------------------------
-            */
-
-            await tx.employeeEmploymentEpisode.create({
-              data: {
-                organizationId,
-
-                employeeId:
-                  createdEmployee.id,
-
-                sequenceNumber:
-                  1,
-
-                startDate:
-                  createdEmployee.hireDate ||
-                  createdEmployee.createdAt,
-
-                startStatus:
-                  createdEmployee.status,
-
-                startDepartmentId:
-                  createdEmployee.departmentId,
-
-                startDesignationId:
-                  createdEmployee.designationId,
-
-                startLocationId:
-                  createdEmployee.locationId,
-
-                startReason:
-                  "Initial employment",
-              },
-            });
-
-
-            return createdEmployee;
-          }
-        );
-
+      const employee = await createEmployee({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        input: req.body,
+      });
 
       return res.status(201).json({
-        status:
-          "success",
-
-        message:
-          `Employee created successfully with permanent Employee ID ${employee.employeeNumber}.`,
-
-        data:
-          employee,
+        status: "success",
+        message: `Employee created successfully with permanent Employee ID ${employee.employeeNumber}.`,
+        data: employee,
       });
     } catch (error) {
-      console.error(
-        "Employee creation error:",
-        error
-      );
+      console.error("Employee creation error:", error);
 
-      if (
-        error.message ===
-        "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED"
-      ) {
-        return res.status(409).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_NUMBER_SEQUENCE_EXHAUSTED",
-
-          message:
-            "The current CHRIS employee number range has been exhausted. Extend the employee number format before creating another employee.",
+      if (error.isEmployeeCreationError) {
+        return res.status(error.statusCode).json({
+          status: "error",
+          code: error.code,
+          message: error.safeMessage,
         });
       }
 
-      if (
-        error.code ===
-        "P2002"
-      ) {
+      if (error.code === "P2002") {
+        if (Array.isArray(error.meta?.target) && error.meta.target.includes("nationalIdentificationNumber")) {
+          return res.status(409).json({ status: "error", code: "DUPLICATE_EMPLOYEE_NIN", message: "This NIN is already assigned to another employee." });
+        }
         return res.status(409).json({
-          status:
-            "error",
-
-          code:
-            "EMPLOYEE_UNIQUE_CONFLICT",
-
+          status: "error",
+          code: "EMPLOYEE_UNIQUE_CONFLICT",
           message:
             "The employee could not be created because a unique employee record already exists.",
         });
       }
 
       return res.status(500).json({
-        status:
-          "error",
-
-        message:
-          "Unable to create employee.",
+        status: "error",
+        message: "Unable to create employee.",
       });
     }
   }

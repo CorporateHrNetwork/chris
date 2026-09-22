@@ -1,4 +1,6 @@
-﻿import {
+import { formatEmployeeStatus } from "../../utils/employeeStatus";
+import EmployeeStatusBadge from "../common/StatusBadge";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -287,6 +289,20 @@ function EmployeeTable() {
                     ?.name ||
                   "-",
 
+                employmentLevel:
+                  employee.designation?.employmentLevel?.name ||
+                  (Number.isInteger(employee.designation?.careerLevel)
+                    ? `Level ${employee.designation.careerLevel}`
+                    : "Not Configured"),
+
+                lineManager:
+                  employee.lineManagerAssignments?.[0]?.manager
+                    ? [
+                        employee.lineManagerAssignments[0].manager.firstName,
+                        employee.lineManagerAssignments[0].manager.lastName,
+                      ].filter(Boolean).join(" ")
+                    : "Not Assigned",
+
                 locationId:
                   employee.location
                     ?.id ||
@@ -319,7 +335,7 @@ function EmployeeTable() {
                   employee.status,
 
                 status:
-                  formatStatus(
+                  formatEmployeeStatus(
                     employee.status
                   ),
 
@@ -866,38 +882,14 @@ function EmployeeTable() {
 
   const openExitForm =
     (employee) => {
-      setReinstateEmployee(
-        null
-      );
-
-      setRehireEmployee(
-        null
-      );
-
-      setExitEmployee(
-        employee
-      );
-
-      setExitStatus(
-        "RESIGNED"
-      );
-
-      setExitDate(
-        new Date()
-          .toISOString()
-          .slice(0, 10)
-      );
-
-      setExitReason(
-        ""
-      );
-
-      setExitNotes(
-        ""
-      );
-
       setError("");
       setSuccess("");
+
+      navigate(
+        `/employees/exits?employeeNumber=${encodeURIComponent(
+          employee.id
+        )}`
+      );
     };
 
   /*
@@ -1630,7 +1622,7 @@ function EmployeeTable() {
                   "translateY(-50%)",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 pointerEvents:
                   "none",
@@ -1667,7 +1659,7 @@ function EmployeeTable() {
                   "700",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
               }}
             >
               {locations.map(
@@ -1833,7 +1825,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "10px",
@@ -1860,7 +1852,7 @@ function EmployeeTable() {
                   "2px",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "15px",
@@ -1967,7 +1959,7 @@ function EmployeeTable() {
                   "0 0 5px",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "18px",
@@ -1979,7 +1971,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -2285,7 +2277,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -2301,7 +2293,7 @@ function EmployeeTable() {
                   "7px",
 
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "12px",
@@ -2542,7 +2534,7 @@ function EmployeeTable() {
                   "0 0 5px",
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "18px",
@@ -2554,7 +2546,7 @@ function EmployeeTable() {
             <div
               style={{
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -2570,7 +2562,7 @@ function EmployeeTable() {
                   "7px",
 
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "12px",
@@ -3012,7 +3004,7 @@ function EmployeeTable() {
                 margin: 0,
 
                 color:
-                  "#087A43",
+                  "#2EE98B",
 
                 fontSize:
                   "20px",
@@ -3033,7 +3025,7 @@ function EmployeeTable() {
                   "5px 0 0",
 
                 color:
-                  "#64748B",
+                  "#9FB1A7",
 
                 fontSize:
                   "13px",
@@ -3104,6 +3096,14 @@ function EmployeeTable() {
                 </th>
 
                 <th style={th}>
+                  Employment Level
+                </th>
+
+                <th style={th}>
+                  Line Manager
+                </th>
+
+                <th style={th}>
                   Location
                 </th>
 
@@ -3131,7 +3131,7 @@ function EmployeeTable() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={directoryMode === "EXITED" ? 8 : 7}
+                    colSpan={directoryMode === "EXITED" ? 9 : 8}
 
                     style={
                       emptyCellStyle
@@ -3197,6 +3197,14 @@ function EmployeeTable() {
                         </td>
 
                         <td style={td}>
+                          {employee.employmentLevel}
+                        </td>
+
+                        <td style={td}>
+                          {employee.lineManager}
+                        </td>
+
+                        <td style={td}>
                           <div
                             style={{
                               display:
@@ -3249,7 +3257,7 @@ function EmployeeTable() {
                         </td>
 
                         <td style={td}>
-                          <StatusBadge
+                          <EmployeeStatusBadge
                             status={
                               employee.status
                             }
@@ -3438,7 +3446,7 @@ function EmployeeTable() {
               ) : (
                 <tr>
                   <td
-                    colSpan={directoryMode === "EXITED" ? 8 : 7}
+                    colSpan={directoryMode === "EXITED" ? 9 : 8}
 
                     style={
                       emptyCellStyle
@@ -3489,40 +3497,6 @@ function FilterLabel({
   );
 }
 
-function formatStatus(
-  status
-) {
-  const labels = {
-    ACTIVE:
-      "Active",
-
-    PROBATION:
-      "Probation",
-
-    LEAVE:
-      "Leave",
-
-    SUSPENDED:
-      "Suspended",
-
-    TERMINATED:
-      "Terminated",
-
-    RESIGNED:
-      "Resigned",
-
-    RETIRED:
-      "Retired",
-
-    INACTIVE:
-      "Inactive",
-  };
-
-  return (
-    labels[status] ||
-    status
-  );
-}
 
 function formatDirectoryDate(
   value
@@ -3558,106 +3532,6 @@ function formatDirectoryDate(
 }
 
 
-function StatusBadge({
-  status,
-}) {
-  let background =
-    "#F1F5F9";
-
-  let color =
-    "#475569";
-
-  if (
-    status ===
-    "Active"
-  ) {
-    background =
-      "#E8F8F0";
-
-    color =
-      "#087443";
-  }
-
-  if (
-    status ===
-    "Leave"
-  ) {
-    background =
-      "#FFF4E5";
-
-    color =
-      "#B45309";
-  }
-
-  if (
-    status ===
-    "Probation"
-  ) {
-    background =
-      "#F0E9FF";
-
-    color =
-      "#6D28D9";
-  }
-
-  if (
-    status ===
-    "Suspended"
-  ) {
-    background =
-      "#FEF2F2";
-
-    color =
-      "#B91C1C";
-  }
-
-  if (
-    [
-      "Terminated",
-      "Resigned",
-      "Retired",
-      "Inactive",
-    ].includes(
-      status
-    )
-  ) {
-    background =
-      "#F1F5F9";
-
-    color =
-      "#475569";
-  }
-
-  return (
-    <span
-      style={{
-        display:
-          "inline-flex",
-
-        alignItems:
-          "center",
-
-        padding:
-          "6px 10px",
-
-        borderRadius:
-          "999px",
-
-        background,
-
-        color,
-
-        fontSize:
-          "12px",
-
-        fontWeight:
-          "700",
-      }}
-    >
-      {status}
-    </span>
-  );
-}
 
 const workforceTabsStyle = {
   display:
@@ -3725,13 +3599,13 @@ const workforceTabButtonStyle = {
 
 const workforceTabActiveStyle = {
   background:
-    "#ECFDF5",
+    "linear-gradient(145deg, rgba(8,122,67,.40), rgba(3,42,25,.78))",
 
   border:
-    "1px solid #A7F3D0",
+    "1px solid rgba(212,175,55,0.72)",
 
   color:
-    "#047857",
+    "#F2CF57",
 };
 
 const workforceCountStyle = {
@@ -3856,16 +3730,16 @@ const locationSummaryStyle = {
     "18px",
 
   padding:
-    "13px 16px",
+    "14px 16px",
 
   background:
-    "#F0FDF4",
+    "linear-gradient(145deg, rgba(5,60,34,.92), rgba(2,28,17,.96))",
 
   border:
-    "1px solid #BBF7D0",
+    "1px solid rgba(212,175,55,.42)",
 
   borderRadius:
-    "12px",
+    "14px",
 };
 
 const locationIconStyle = {

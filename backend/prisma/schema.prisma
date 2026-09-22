@@ -10,15 +10,22 @@ datasource db {
 }
 
 model Organization {
-  id        String  @id @default(uuid())
-  name      String
-  slug      String  @unique
-  legalName String?
-  email     String?
-  phone     String?
-  country   String?
-  timezone  String  @default("Africa/Lagos")
-  currency  String  @default("NGN")
+  id                 String  @id @default(uuid())
+  name               String
+  slug               String  @unique
+  legalName          String?
+  email              String?
+  phone              String?
+  country            String?
+  timezone           String  @default("Africa/Lagos")
+  currency           String  @default("NGN")
+  code               String?
+  registrationNumber String?
+  taxNumber          String?
+  industry           String?
+  organizationType   String?
+  website            String?
+  logoUrl            String?
 
   // Permanent organization-level Employee ID sequence.
   // Once a number is issued, it is never reused.
@@ -26,20 +33,120 @@ model Organization {
 
   status OrganizationStatus @default(ACTIVE)
 
-  users                      User[]
-  roles                      Role[]
-  departments                Department[]
-  designations               Designation[]
-  employees                  Employee[]
-  locations                  OrganizationLocation[]
-  employmentEpisodes         EmployeeEmploymentEpisode[]
-  employeeLifecycleEvents    EmployeeLifecycleEvent[]
-  designationLifecycleEvents DesignationLifecycleEvent[]
+  users                              User[]
+  roles                              Role[]
+  departments                        Department[]
+  designations                       Designation[]
+  employmentLevels                   OrganizationEmploymentLevel[]
+  employees                          Employee[]
+  locations                          OrganizationLocation[]
+  employmentEpisodes                 EmployeeEmploymentEpisode[]
+  employeeLifecycleEvents            EmployeeLifecycleEvent[]
+  attendancePayrollSetting           AttendancePayrollSetting?
+  attendancePayrollInputs            AttendancePayrollInput[]
+  designationLifecycleEvents         DesignationLifecycleEvent[]
+  leaveTypes                         LeaveType[]
+  leavePolicies                      LeavePolicy[]
+  leavePolicyAudits                  LeavePolicyAudit[]
+  leaveBalances                      LeaveBalance[]
+  leaveRequests                      LeaveRequest[]
+  leaveEntitlementAdjustments        LeaveEntitlementAdjustment[]
+  leaveEntitlementMatrixRules        LeaveEntitlementMatrixRule[]
+  leaveEntitlementAllocations        LeaveEntitlementAllocation[]
+  workShifts                         WorkShift[]
+  employeeShiftAssignments           EmployeeShiftAssignment[]
+  attendanceRecords                  AttendanceRecord[]
+  onboardingWorkflowTemplates        OnboardingWorkflowTemplate[]
+  employeeOnboardings                EmployeeOnboarding[]
+  employeeOnboardingTasks            EmployeeOnboardingTask[]
+  employeeDocuments                  EmployeeDocument[]
+  employeeExitProcesses              EmployeeExitProcess[]
+  lineManagerAssignments             EmployeeLineManagerAssignment[]
+  employeeEmploymentLevelAssignments EmployeeEmploymentLevelAssignment[]
+  workforceSnapshots                 WorkforceSnapshot[]
+  organizationAudits                 OrganizationAudit[]
+  employeeExportJobs                 EmployeeExportJob[]
+  employeeSelfOnboardingInvites      EmployeeSelfOnboardingInvite[]
+  costCentres                        CostCentre[]
+  complianceRules                    ComplianceRule[]
+  complianceRuleEvents               ComplianceRuleEvent[]
+  statutoryObligations               StatutoryObligation[]
+  statutoryRemittanceBatches         StatutoryRemittanceBatch[]
+  statutoryLifecycleEvents           StatutoryLifecycleEvent[]
+  exitSettlements                    ExitSettlement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("organizations")
+}
+
+model OrganizationAudit {
+  id             String   @id @default(uuid())
+  organizationId String
+  actorUserId    String?
+  entityType     String
+  entityId       String
+  action         String
+  previousValue  Json?
+  newValue       Json?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("OrganizationAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, entityType, entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("organization_audits")
+}
+
+model CostCentre {
+  id             String           @id @default(uuid())
+  organizationId String
+  code           String
+  name           String
+  description    String?
+  status         CostCentreStatus @default(ACTIVE)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departments  Department[]
+  employees    Employee[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("cost_centres")
+}
+
+model WorkforceSnapshot {
+  id             String   @id @default(uuid())
+  organizationId String
+  snapshotDate   DateTime
+
+  totalCurrent    Int
+  activeCount     Int
+  probationCount  Int
+  leaveCount      Int
+  suspendedCount  Int
+  totalHistorical Int
+  exitedCount     Int
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, snapshotDate])
+  @@index([organizationId, snapshotDate])
+  @@map("workforce_snapshots")
 }
 
 model OrganizationLocation {
@@ -113,8 +220,47 @@ model User {
   passwordResetTokens PasswordResetToken[]
   userLocations       UserLocation[]
 
-  performedLifecycleEvents            EmployeeLifecycleEvent[]    @relation("LifecyclePerformedBy")
-  performedDesignationLifecycleEvents DesignationLifecycleEvent[] @relation("DesignationLifecyclePerformedBy")
+  performedLifecycleEvents             EmployeeLifecycleEvent[]            @relation("LifecyclePerformedBy")
+  performedDesignationLifecycleEvents  DesignationLifecycleEvent[]         @relation("DesignationLifecyclePerformedBy")
+  attendancePayrollSettingsUpdated     AttendancePayrollSetting[]          @relation("AttendancePayrollSettingUpdatedBy")
+  attendancePayrollInputsRecorded      AttendancePayrollInput[]            @relation("AttendancePayrollInputRecordedBy")
+  createdLeaveRequests                 LeaveRequest[]                      @relation("LeaveRequestCreatedBy")
+  reviewedLeaveRequests                LeaveRequest[]                      @relation("LeaveRequestReviewedBy")
+  leavePoliciesCreated                 LeavePolicy[]                       @relation("LeavePolicyCreatedBy")
+  leavePoliciesApproved                LeavePolicy[]                       @relation("LeavePolicyApprovedBy")
+  leavePolicyAudits                    LeavePolicyAudit[]
+  leaveEntitlementAdjustmentsCreated   LeaveEntitlementAdjustment[]        @relation("LeaveEntitlementAdjustmentCreatedBy")
+  leaveEntitlementMatrixRulesCreated   LeaveEntitlementMatrixRule[]        @relation("LeaveEntitlementMatrixRuleCreatedBy")
+  leaveEntitlementAllocationsCreated   LeaveEntitlementAllocation[]        @relation("LeaveEntitlementAllocationCreatedBy")
+  commencedLeaveRequests               LeaveRequest[]                      @relation("LeaveRequestCommencedBy")
+  returnedLeaveRequests                LeaveRequest[]                      @relation("LeaveRequestReturnedBy")
+  recordedAttendanceRecords            AttendanceRecord[]                  @relation("AttendanceRecordedBy")
+  onboardingTemplatesCreated           OnboardingWorkflowTemplate[]        @relation("OnboardingTemplateCreatedBy")
+  employeeOnboardingsAssigned          EmployeeOnboarding[]                @relation("EmployeeOnboardingAssignedTo")
+  employeeOnboardingsCreated           EmployeeOnboarding[]                @relation("EmployeeOnboardingCreatedBy")
+  employeeOnboardingsCompleted         EmployeeOnboarding[]                @relation("EmployeeOnboardingCompletedBy")
+  employeeDocumentsUploaded            EmployeeDocument[]                  @relation("EmployeeDocumentUploadedBy")
+  onboardingTasksOwned                 EmployeeOnboardingTask[]            @relation("EmployeeOnboardingTaskOwner")
+  onboardingTasksCompleted             EmployeeOnboardingTask[]            @relation("EmployeeOnboardingTaskCompletedBy")
+  employeeExitProcessesInitiated       EmployeeExitProcess[]               @relation("EmployeeExitInitiatedBy")
+  employeeExitProcessesCompleted       EmployeeExitProcess[]               @relation("EmployeeExitCompletedBy")
+  complianceRulesCreated               ComplianceRule[]                    @relation("ComplianceRuleCreatedBy")
+  complianceRulesReviewed              ComplianceRule[]                    @relation("ComplianceRuleReviewedBy")
+  complianceRulesApproved              ComplianceRule[]                    @relation("ComplianceRuleApprovedBy")
+  complianceRuleEvents                 ComplianceRuleEvent[]
+  remittanceBatchesCreated             StatutoryRemittanceBatch[]          @relation("RemittanceCreatedBy")
+  remittanceBatchesApproved            StatutoryRemittanceBatch[]          @relation("RemittanceApprovedBy")
+  statutoryLifecycleEvents             StatutoryLifecycleEvent[]
+  exitSettlementsCalculated            ExitSettlement[]                    @relation("ExitSettlementCalculatedBy")
+  exitSettlementsApproved              ExitSettlement[]                    @relation("ExitSettlementApprovedBy")
+  exitSettlementsPaid                  ExitSettlement[]                    @relation("ExitSettlementPaidBy")
+  employeeExitTerminationAuthorities   EmployeeExitProcess[]               @relation("EmployeeExitTerminationAuthority")
+  employeeExitProcessesCancelled       EmployeeExitProcess[]               @relation("EmployeeExitCancelledBy")
+  lineManagerAssignmentsPerformed      EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentPerformedBy")
+  employmentLevelAssignmentsPerformed  EmployeeEmploymentLevelAssignment[] @relation("EmploymentLevelAssignmentPerformedBy")
+  organizationAuditsPerformed          OrganizationAudit[]                 @relation("OrganizationAuditActor")
+  employeeExportJobsRequested          EmployeeExportJob[]                 @relation("EmployeeExportRequestedBy")
+  employeeSelfOnboardingInvitesCreated EmployeeSelfOnboardingInvite[]      @relation("EmployeeInviteCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -224,8 +370,10 @@ model Department {
   code           String?
   description    String?
   isActive       Boolean @default(true)
+  costCentreId   String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  costCentre   CostCentre?  @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
 
   employees    Employee[]
   designations Designation[]
@@ -243,6 +391,7 @@ model Department {
   @@unique([organizationId, code])
   @@unique([organizationId, id])
   @@index([organizationId])
+  @@index([costCentreId])
   @@map("departments")
 }
 
@@ -285,7 +434,8 @@ model Designation {
   // organizationId + departmentId guarantees that a designation
   // cannot be linked to another tenant's department.
 
-  department Department? @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  department      Department?                  @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Restrict)
+  employmentLevel OrganizationEmploymentLevel? @relation(fields: [organizationId, careerLevel], references: [organizationId, levelNumber], onDelete: Restrict)
 
   employees Employee[]
 
@@ -317,20 +467,57 @@ model Designation {
   @@map("designations")
 }
 
+/// Tenant-owned metadata for the configured Employment Level hierarchy.
+/// Designation.careerLevel is the employee's default level; an active
+/// EmployeeEmploymentLevelAssignment is authoritative for an individual override.
+model OrganizationEmploymentLevel {
+  organizationId String
+  levelNumber    Int
+  name           String
+  code           String
+  description    String?
+  displayOrder   Int     @default(0)
+  isActive       Boolean @default(true)
+
+  organization        Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  designations        Designation[]
+  employeeAssignments EmployeeEmploymentLevelAssignment[]
+  matrixRules         LeaveEntitlementMatrixRule[]
+  allocations         LeaveEntitlementAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([organizationId, levelNumber])
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@map("organization_employment_levels")
+}
+
+enum EmployeeGender {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
 model Employee {
   id             String  @id @default(uuid())
   organizationId String
   departmentId   String?
   designationId  String?
   locationId     String?
+  costCentreId   String?
+  employmentType String?
 
   employeeNumber String
   firstName      String
   middleName     String?
   lastName       String
 
-  email String?
-  phone String?
+  email  String?
+  phone  String?
+  gender EmployeeGender @default(UNSPECIFIED)
 
   status EmployeeStatus @default(ACTIVE)
 
@@ -351,24 +538,99 @@ model Employee {
   // Locations with historical employee records should
   // normally be deactivated rather than deleted.
 
-  location OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  location   OrganizationLocation? @relation(fields: [organizationId, locationId], references: [organizationId, id], onDelete: Restrict)
+  costCentre CostCentre?           @relation(fields: [organizationId, costCentreId], references: [organizationId, id], onDelete: Restrict)
 
   user User?
 
-  employmentEpisodes EmployeeEmploymentEpisode[]
-  lifecycleEvents    EmployeeLifecycleEvent[]
+  employmentEpisodes          EmployeeEmploymentEpisode[]
+  lifecycleEvents             EmployeeLifecycleEvent[]
+  attendancePayrollInputs     AttendancePayrollInput[]
+  leaveBalances               LeaveBalance[]
+  leaveRequests               LeaveRequest[]
+  leaveEntitlementAdjustments LeaveEntitlementAdjustment[]
+  leaveEntitlementAllocations LeaveEntitlementAllocation[]
+  shiftAssignments            EmployeeShiftAssignment[]
+  attendanceRecords           AttendanceRecord[]
+  onboardings                 EmployeeOnboarding[]
+  documents                   EmployeeDocument[]
+  exitProcesses               EmployeeExitProcess[]
+  lineManagerAssignments      EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentEmployee")
+  managedEmployeeAssignments  EmployeeLineManagerAssignment[]     @relation("LineManagerAssignmentManager")
+  employmentLevelAssignments  EmployeeEmploymentLevelAssignment[]
+  statutoryObligations        StatutoryObligation[]
+  exitSettlements             ExitSettlement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  nationalIdentificationNumber String?
+
+  @@unique([organizationId, nationalIdentificationNumber])
   @@unique([organizationId, employeeNumber])
   @@unique([organizationId, id])
   @@index([organizationId])
   @@index([departmentId])
   @@index([designationId])
   @@index([locationId])
+  @@index([costCentreId])
+  @@index([employmentType])
   @@index([status])
   @@map("employees")
+}
+
+model EmployeeEmploymentLevelAssignment {
+  id                String    @id @default(uuid())
+  organizationId    String
+  employeeId        String
+  levelNumber       Int
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  reason            String
+  notes             String?
+  performedByUserId String?
+
+  organization    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee        Employee                    @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
+  performedBy     User?                       @relation("EmploymentLevelAssignmentPerformedBy", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, employeeId, effectiveFrom])
+  @@index([organizationId, levelNumber])
+  @@index([employeeId, effectiveTo])
+  @@index([performedByUserId])
+  @@map("employee_employment_level_assignments")
+}
+
+model EmployeeLineManagerAssignment {
+  id                String    @id @default(uuid())
+  organizationId    String
+  employeeId        String
+  managerEmployeeId String
+  effectiveFrom     DateTime
+  effectiveTo       DateTime?
+  reason            String?
+  notes             String?
+  performedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation("LineManagerAssignmentEmployee", fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  manager      Employee     @relation("LineManagerAssignmentManager", fields: [organizationId, managerEmployeeId], references: [organizationId, id], onDelete: Restrict)
+  performedBy  User?        @relation("LineManagerAssignmentPerformedBy", fields: [performedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, managerEmployeeId])
+  @@index([employeeId, effectiveFrom])
+  @@index([managerEmployeeId, effectiveTo])
+  @@index([performedByUserId])
+  @@map("employee_line_manager_assignments")
 }
 
 model EmployeeEmploymentEpisode {
@@ -464,7 +726,7 @@ model EmployeeLifecycleEvent {
   // Location movement information.
   //
   // These fields allow the same history table to record
-  // Head Office ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Lagos ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Port Harcourt transfers.
+  // Head Office — Lagos — Port Harcourt transfers.
 
   fromLocationId String?
   toLocationId   String?
@@ -531,6 +793,639 @@ model EmployeeLifecycleEvent {
   @@map("employee_lifecycle_events")
 }
 
+// ============================================================
+// LEAVE & ATTENDANCE MANAGEMENT
+// Sprint 2A Foundation
+// ============================================================
+
+model LeaveType {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  code        String
+  description String?
+
+  unit LeaveUnit @default(DAYS)
+
+  isPaid   Boolean @default(true)
+  isActive Boolean @default(true)
+
+  requiresAttachment Boolean @default(false)
+  allowsHalfDay      Boolean @default(false)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  policies               LeavePolicy[]
+  balances               LeaveBalance[]
+  requests               LeaveRequest[]
+  entitlementAdjustments LeaveEntitlementAdjustment[]
+  entitlementMatrixRules LeaveEntitlementMatrixRule[]
+  entitlementAllocations LeaveEntitlementAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, name])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("leave_types")
+}
+
+model LeavePolicyTemplate {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  category      String?
+  jurisdiction  String?
+  configuration Json
+  previewText   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("leave_policy_templates")
+}
+
+model LeavePolicy {
+  id             String @id @default(uuid())
+  organizationId String
+  leaveTypeId    String
+
+  name         String
+  code         String?
+  description  String?
+  category     String?
+  jurisdiction String?
+
+  status             LeavePolicyStatus     @default(ACTIVE)
+  origin             LeavePolicyOrigin     @default(ORGANIZATION)
+  complianceStatus   LeaveComplianceStatus @default(CUSTOM_NOT_ASSESSED)
+  complianceNotes    String?
+  versionGroupId     String?
+  versionNumber      Int                   @default(1)
+  changeReason       String?
+  sourceTemplateCode String?
+  createdByUserId    String?
+  approvedByUserId   String?
+  approvedAt         DateTime?
+
+  eligibilityRules   Json    @default("{}")
+  entitlementRules   Json    @default("{}")
+  serviceBands       Json    @default("[]")
+  balanceRules       Json    @default("{}")
+  requestRules       Json    @default("{}")
+  approvalWorkflow   Json    @default("{}")
+  lifecycleRules     Json    @default("{}")
+  payrollRules       Json    @default("{}")
+  attendanceRules    Json    @default("{}")
+  calendarRules      Json    @default("{}")
+  documentationRules Json    @default("{}")
+  overlapRules       Json    @default("{}")
+  coverageRules      Json    @default("{}")
+  previewText        String?
+
+  entitlementDays Decimal @db.Decimal(8, 2)
+
+  accrualMethod LeaveAccrualMethod @default(ANNUAL)
+  accrualRate   Decimal?           @db.Decimal(8, 4)
+
+  minimumServiceDays Int               @default(0)
+  serviceBasis       LeaveServiceBasis @default(CURRENT_EPISODE)
+
+  allowCarryForward   Boolean  @default(false)
+  maxCarryForwardDays Decimal? @db.Decimal(8, 2)
+
+  allowNegativeBalance Boolean  @default(false)
+  maxNegativeDays      Decimal? @db.Decimal(8, 2)
+
+  noticeDays Int @default(0)
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  isActive Boolean @default(true)
+
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy              User?                        @relation("LeavePolicyCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedBy             User?                        @relation("LeavePolicyApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  leaveType              LeaveType                    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  requests               LeaveRequest[]
+  audits                 LeavePolicyAudit[]
+  entitlementAdjustments LeaveEntitlementAdjustment[]
+  entitlementMatrixRules LeaveEntitlementMatrixRule[]
+  entitlementAllocations LeaveEntitlementAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code, versionNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([leaveTypeId])
+  @@index([status])
+  @@index([versionGroupId])
+  @@index([createdByUserId])
+  @@index([approvedByUserId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@index([isActive])
+  @@map("leave_policies")
+}
+
+model LeavePolicyAudit {
+  id             String                 @id @default(uuid())
+  organizationId String
+  leavePolicyId  String
+  actorUserId    String?
+  action         LeavePolicyAuditAction
+  previousValue  Json?
+  newValue       Json?
+  reason         String?
+  createdAt      DateTime               @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leavePolicy  LeavePolicy  @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([leavePolicyId])
+  @@index([actorUserId])
+  @@index([action])
+  @@map("leave_policy_audits")
+}
+
+model LeaveComplianceFloor {
+  id                         String    @id @default(uuid())
+  jurisdiction               String
+  ruleCategory               String
+  applicableEmployeeCategory String?
+  effectiveFrom              DateTime
+  effectiveTo                DateTime?
+  minimumEntitlement         Decimal?  @db.Decimal(8, 2)
+  entitlementUnit            String?
+  payRequirement             String?
+  documentationRule          String?
+  legalSource                String
+  complianceNotes            String?
+  isActive                   Boolean   @default(true)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@index([jurisdiction, ruleCategory, effectiveFrom])
+  @@index([isActive])
+  @@map("leave_compliance_floors")
+}
+
+model LeaveBalance {
+  id             String @id @default(uuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+
+  leaveYear Int
+
+  openingBalance Decimal @default(0) @db.Decimal(8, 2)
+  accrued        Decimal @default(0) @db.Decimal(8, 2)
+  carriedForward Decimal @default(0) @db.Decimal(8, 2)
+  used           Decimal @default(0) @db.Decimal(8, 2)
+  adjusted       Decimal @default(0) @db.Decimal(8, 2)
+
+  organization           Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee               Employee                     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  leaveType              LeaveType                    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  entitlementAdjustments LeaveEntitlementAdjustment[]
+  entitlementAllocations LeaveEntitlementAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, employeeId, leaveTypeId, leaveYear])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([leaveYear])
+  @@map("leave_balances")
+}
+
+enum LeaveEntitlementAllocationMethod {
+  LEVEL_DEFAULT
+  POLICY_DEFAULT
+  PRORATED
+  MANUAL_OVERRIDE
+  BASELINE_REPROVISION
+  AUTOMATIC_NEW_HIRE
+}
+
+enum NewHireEntitlementTreatment {
+  FULL
+  PRORATED
+  MANUAL
+}
+
+/// Effective-dated tenant default linking designation level to a policy.
+model LeaveEntitlementMatrixRule {
+  id                 String                      @id @default(uuid())
+  organizationId     String
+  levelNumber        Int
+  leavePolicyId      String
+  leaveTypeId        String
+  defaultEntitlement Decimal                     @db.Decimal(8, 2)
+  unit               String
+  newHireTreatment   NewHireEntitlementTreatment @default(FULL)
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  isActive           Boolean                     @default(true)
+  createdByUserId    String?
+
+  organization    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
+  leavePolicy     LeavePolicy                 @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
+  leaveType       LeaveType                   @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       User?                       @relation("LeaveEntitlementMatrixRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, levelNumber, leavePolicyId, effectiveFrom])
+  @@index([organizationId, levelNumber, isActive])
+  @@index([leavePolicyId])
+  @@index([leaveTypeId])
+  @@map("leave_entitlement_matrix_rules")
+}
+
+/// Append-only record of the employee's approved policy/year allocation.
+model LeaveEntitlementAllocation {
+  id                   String                           @id @default(uuid())
+  organizationId       String
+  employeeId           String
+  leaveBalanceId       String
+  leavePolicyId        String
+  leaveTypeId          String
+  levelNumber          Int
+  leaveYear            Int
+  baseEntitlement      Decimal                          @db.Decimal(8, 2)
+  allocatedEntitlement Decimal                          @db.Decimal(8, 2)
+  method               LeaveEntitlementAllocationMethod
+  effectiveDate        DateTime
+  reason               String
+  createdByUserId      String?
+  createdAt            DateTime                         @default(now())
+
+  organization    Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee        Employee                    @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  leaveBalance    LeaveBalance                @relation(fields: [leaveBalanceId], references: [id], onDelete: Restrict)
+  leavePolicy     LeavePolicy                 @relation(fields: [organizationId, leavePolicyId], references: [organizationId, id], onDelete: Restrict)
+  leaveType       LeaveType                   @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  employmentLevel OrganizationEmploymentLevel @relation(fields: [organizationId, levelNumber], references: [organizationId, levelNumber], onDelete: Restrict)
+  createdBy       User?                       @relation("LeaveEntitlementAllocationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId, leaveYear])
+  @@index([leaveBalanceId, createdAt])
+  @@index([leavePolicyId])
+  @@index([leaveTypeId])
+  @@index([createdByUserId])
+  @@map("leave_entitlement_allocations")
+}
+
+/// Append-only audit ledger. Corrections are recorded as new offsetting rows.
+model LeaveEntitlementAdjustment {
+  id              String   @id @default(uuid())
+  organizationId  String
+  employeeId      String
+  leaveBalanceId  String
+  leaveTypeId     String
+  leavePolicyId   String?
+  leaveYear       Int
+  amount          Decimal  @db.Decimal(8, 2)
+  balanceBefore   Decimal  @db.Decimal(8, 2)
+  balanceAfter    Decimal  @db.Decimal(8, 2)
+  reason          String
+  effectiveDate   DateTime
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  leaveBalance LeaveBalance @relation(fields: [leaveBalanceId], references: [id], onDelete: Restrict)
+  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  leavePolicy  LeavePolicy? @relation(fields: [leavePolicyId], references: [id], onDelete: Restrict)
+  createdBy    User?        @relation("LeaveEntitlementAdjustmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, employeeId, leaveYear])
+  @@index([organizationId, leavePolicyId])
+  @@index([leaveBalanceId, createdAt])
+  @@index([createdByUserId])
+  @@map("leave_entitlement_adjustments")
+}
+
+model LeaveRequest {
+  id             String  @id @default(uuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+  leavePolicyId  String?
+
+  startDate DateTime
+  endDate   DateTime
+
+  requestedUnits Decimal @db.Decimal(8, 2)
+
+  reason        String?
+  attachmentUrl String?
+
+  status LeaveRequestStatus @default(PENDING)
+
+  submittedAt DateTime @default(now())
+
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  reviewNotes      String?
+
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledByUserId  String?
+
+  // Approved dates remain historical; these fields record the actual lifecycle.
+  commencedAt                  DateTime?
+  commencementDate             DateTime?
+  commencedByUserId            String?
+  returnedAt                   DateTime?
+  actualReturnDate             DateTime?
+  returnedByUserId             String?
+  preLeaveStatus               EmployeeStatus?
+  returnDocumentationUrl       String?
+  fitnessCertificateUrl        String?
+  administrativeReconstruction Boolean         @default(false)
+  reconstructionReason         String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  leaveType    LeaveType    @relation(fields: [organizationId, leaveTypeId], references: [organizationId, id], onDelete: Restrict)
+  leavePolicy  LeavePolicy? @relation(fields: [leavePolicyId], references: [id], onDelete: Restrict)
+
+  createdBy   User? @relation("LeaveRequestCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy  User? @relation("LeaveRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  commencedBy User? @relation("LeaveRequestCommencedBy", fields: [commencedByUserId], references: [id], onDelete: SetNull)
+  returnedBy  User? @relation("LeaveRequestReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([leaveTypeId])
+  @@index([leavePolicyId])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdByUserId])
+  @@index([reviewedByUserId])
+  @@index([commencedByUserId])
+  @@index([returnedByUserId])
+  @@index([commencementDate])
+  @@index([actualReturnDate])
+  @@map("leave_requests")
+}
+
+model WorkShift {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name String
+  code String
+
+  startTime String
+  endTime   String
+
+  breakMinutes Int @default(0)
+  graceMinutes Int @default(0)
+
+  crossesMidnight Boolean @default(false)
+  isActive        Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  assignments       EmployeeShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, name])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("work_shifts")
+}
+
+model EmployeeShiftAssignment {
+  id             String @id @default(uuid())
+  organizationId String
+  employeeId     String
+  shiftId        String
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  shift        WorkShift    @relation(fields: [organizationId, shiftId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([shiftId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@map("employee_shift_assignments")
+}
+
+model AttendanceRecord {
+  id             String  @id @default(uuid())
+  organizationId String
+  employeeId     String
+  shiftId        String?
+
+  attendanceDate DateTime
+
+  clockIn  DateTime?
+  clockOut DateTime?
+
+  status AttendanceStatus @default(PRESENT)
+
+  lateMinutes     Int @default(0)
+  overtimeMinutes Int @default(0)
+
+  source AttendanceSource @default(MANUAL)
+
+  notes String?
+
+  recordedByUserId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  shift        WorkShift?   @relation(fields: [organizationId, shiftId], references: [organizationId, id], onDelete: Restrict)
+
+  recordedBy User? @relation("AttendanceRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, employeeId, attendanceDate])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([shiftId])
+  @@index([attendanceDate])
+  @@index([status])
+  @@index([recordedByUserId])
+  @@map("attendance_records")
+}
+
+enum LeavePolicyStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+enum LeavePolicyOrigin {
+  ORGANIZATION
+  CHRIS_TEMPLATE
+  CLONED_TEMPLATE
+}
+
+enum LeaveComplianceStatus {
+  COMPLIANT
+  REVIEW_REQUIRED
+  BELOW_STATUTORY_FLOOR
+  CUSTOM_NOT_ASSESSED
+}
+
+enum LeavePolicyAuditAction {
+  CREATED
+  CLONED
+  CHANGED
+  ACTIVATED
+  SUSPENDED
+  RETIRED
+  ENTITLEMENT_CHANGED
+  ELIGIBILITY_CHANGED
+  APPROVAL_WORKFLOW_CHANGED
+  COMPLIANCE_OVERRIDE
+}
+
+enum LeaveUnit {
+  DAYS
+  HOURS
+}
+
+enum LeaveAccrualMethod {
+  ANNUAL
+  MONTHLY
+  NONE
+}
+
+enum LeaveServiceBasis {
+  CURRENT_EPISODE
+  CUMULATIVE
+}
+
+enum LeaveRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  ACTIVE
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  ON_LEAVE
+  REST_DAY
+  HOLIDAY
+}
+
+enum AttendanceSource {
+  MANUAL
+  WEB
+  MOBILE
+  IMPORT
+  INTEGRATION
+}
+
+model EmployeeExportJob {
+  id                String    @id @default(uuid())
+  organizationId    String
+  requestedByUserId String
+  status            String    @default("QUEUED")
+  format            String    @default("XLSX")
+  filters           Json      @default("{}")
+  columns           Json      @default("[]")
+  rowCount          Int?
+  fileName          String?
+  storagePath       String?
+  errorMessage      String?
+  completedAt       DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User         @relation("EmployeeExportRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([requestedByUserId])
+  @@map("employee_export_jobs")
+}
+
+model EmployeeSelfOnboardingInvite {
+  id               String         @id @default(uuid())
+  organizationId   String
+  createdByUserId  String
+  employeeId       String?
+  tokenHash        String         @unique
+  recipientEmail   String
+  departmentId     String
+  designationId    String
+  locationId       String
+  employmentStatus EmployeeStatus @default(PROBATION)
+  hireDate         DateTime?
+  status           String         @default("PENDING")
+  expiresAt        DateTime
+  openedAt         DateTime?
+  submittedAt      DateTime?
+  completedAt      DateTime?
+  revokedAt        DateTime?
+  submittedData    Json           @default("{}")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("EmployeeInviteCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([recipientEmail])
+  @@index([expiresAt])
+  @@map("employee_self_onboarding_invites")
+}
+
 model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String
@@ -553,6 +1448,11 @@ enum OrganizationStatus {
   INACTIVE
 }
 
+enum CostCentreStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum EmployeeStatus {
   ACTIVE
   PROBATION
@@ -562,6 +1462,56 @@ enum EmployeeStatus {
   RESIGNED
   RETIRED
   INACTIVE
+}
+
+model EmployeeExitProcess {
+  id                         String              @id @default(uuid())
+  organizationId             String
+  employeeId                 String
+  exitType                   String
+  targetStatus               EmployeeStatus
+  noticeDate                 DateTime?
+  noticeStatus               String              @default("IN_PROGRESS")
+  lastWorkingDay             DateTime
+  reason                     String
+  notes                      String?
+  clearance                  Json                @default("{}")
+  status                     String              @default("IN_PROGRESS")
+  financialStatus            ExitFinancialStatus @default(NOT_STARTED)
+  finalClosureAt             DateTime?
+  terminationReasonClass     String?
+  terminationAuthorityUserId String?
+  disciplinaryCaseId         String?
+
+  initiatedByUserId String?
+  completedByUserId String?
+  completedAt       DateTime?
+
+  cancellationReason String?
+  cancelledAt        DateTime?
+  cancelledByUserId  String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+
+  initiatedBy          User?             @relation("EmployeeExitInitiatedBy", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+  completedBy          User?             @relation("EmployeeExitCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy          User?             @relation("EmployeeExitCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  terminationAuthority User?             @relation("EmployeeExitTerminationAuthority", fields: [terminationAuthorityUserId], references: [id], onDelete: SetNull)
+  disciplinaryCase     DisciplinaryCase? @relation(fields: [organizationId, disciplinaryCaseId], references: [organizationId, id], onDelete: Restrict)
+  settlement           ExitSettlement?
+  documents            EmployeeDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([lastWorkingDay])
+  @@index([cancelledByUserId])
+  @@map("employee_exit_processes")
 }
 
 enum EmployeeLifecycleEventType {
@@ -576,6 +1526,8 @@ enum EmployeeLifecycleEventType {
   EXITED
   REINSTATED
   REHIRED
+  LEAVE_COMMENCED
+  RETURNED_FROM_LEAVE
 }
 
 enum LocationType {
@@ -626,4 +1578,713 @@ model DesignationLifecycleEvent {
 enum DesignationLifecycleEventType {
   ACTIVATED
   DEACTIVATED
+}
+
+model PublicHoliday {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  holidayDate    DateTime @db.Date
+  isRecurring    Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, holidayDate, name])
+  @@index([organizationId, holidayDate])
+  @@map("public_holidays")
+}
+
+enum AttendancePayrollBasis {
+  SYSTEM
+  ADMIN_ENTERED
+}
+
+model AttendancePayrollSetting {
+  id              String                 @id @default(uuid())
+  organizationId  String                 @unique
+  basis           AttendancePayrollBasis @default(SYSTEM)
+  updatedByUserId String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy    User?        @relation("AttendancePayrollSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([basis])
+  @@map("attendance_payroll_settings")
+}
+
+model AttendancePayrollInput {
+  id               String   @id @default(uuid())
+  organizationId   String
+  employeeId       String
+  periodStart      DateTime @db.Date
+  periodEnd        DateTime @db.Date
+  workedHours      Float?
+  workedDays       Float?
+  notes            String?
+  recordedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  recordedBy   User?        @relation("AttendancePayrollInputRecordedBy", fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, employeeId, periodStart, periodEnd])
+  @@index([organizationId, periodStart, periodEnd])
+  @@index([employeeId])
+  @@index([recordedByUserId])
+  @@map("attendance_payroll_inputs")
+}
+
+enum OnboardingStatus {
+  DRAFT
+  IN_PROGRESS
+  AWAITING_EMPLOYEE
+  AWAITING_HR
+  READY_FOR_ACTIVATION
+  COMPLETED
+  BLOCKED
+}
+
+enum EmployeeOnboardingTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  NOT_APPLICABLE
+}
+
+model OnboardingWorkflowTemplate {
+  id              String  @id @default(uuid())
+  organizationId  String
+  name            String
+  code            String
+  employmentType  String?
+  sections        Json
+  isActive        Boolean @default(true)
+  createdByUserId String?
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy           User?                @relation("OnboardingTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  employeeOnboardings EmployeeOnboarding[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([employmentType])
+  @@index([isActive])
+  @@index([createdByUserId])
+  @@map("onboarding_workflow_templates")
+}
+
+model EmployeeOnboarding {
+  id                String           @id @default(uuid())
+  organizationId    String
+  employeeId        String
+  templateId        String
+  status            OnboardingStatus @default(DRAFT)
+  completionPercent Int              @default(0)
+  currentStage      String?
+  sectionProgress   Json
+  sectionData       Json             @default("{}")
+  assignedToUserId  String?
+  createdByUserId   String?
+  completedByUserId String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee                   @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  template     OnboardingWorkflowTemplate @relation(fields: [organizationId, templateId], references: [organizationId, id], onDelete: Restrict)
+  assignedTo   User?                      @relation("EmployeeOnboardingAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdBy    User?                      @relation("EmployeeOnboardingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  completedBy  User?                      @relation("EmployeeOnboardingCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  documents    EmployeeDocument[]
+  tasks        EmployeeOnboardingTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([templateId])
+  @@index([status])
+  @@index([assignedToUserId])
+  @@index([createdByUserId])
+  @@index([completedByUserId])
+  @@map("employee_onboardings")
+}
+
+model EmployeeOnboardingTask {
+  id                String                       @id @default(uuid())
+  organizationId    String
+  onboardingId      String
+  itemKey           String
+  title             String
+  category          String
+  isRequired        Boolean                      @default(true)
+  status            EmployeeOnboardingTaskStatus @default(NOT_STARTED)
+  ownerUserId       String?
+  dueDate           DateTime?
+  completedAt       DateTime?
+  completedByUserId String?
+  notes             String?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboarding   EmployeeOnboarding @relation(fields: [organizationId, onboardingId], references: [organizationId, id], onDelete: Cascade)
+  owner        User?              @relation("EmployeeOnboardingTaskOwner", fields: [organizationId, ownerUserId], references: [organizationId, id], onDelete: Restrict)
+  completedBy  User?              @relation("EmployeeOnboardingTaskCompletedBy", fields: [organizationId, completedByUserId], references: [organizationId, id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([onboardingId, itemKey])
+  @@index([organizationId, onboardingId])
+  @@index([organizationId, ownerUserId])
+  @@index([organizationId, status])
+  @@index([dueDate])
+  @@map("employee_onboarding_tasks")
+}
+
+model EmployeeDocument {
+  id               String  @id @default(uuid())
+  organizationId   String
+  employeeId       String
+  onboardingId     String?
+  exitProcessId    String?
+  category         String
+  originalName     String
+  storedName       String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String
+  notes            String?
+  uploadedByUserId String?
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee            @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
+  onboarding   EmployeeOnboarding? @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  exitProcess  EmployeeExitProcess? @relation(fields: [exitProcessId], references: [id], onDelete: Cascade)
+  uploadedBy   User?               @relation("EmployeeDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([onboardingId])
+  @@index([exitProcessId])
+  @@index([category])
+  @@index([uploadedByUserId])
+  @@map("employee_documents")
+}
+
+// ============================================================
+// EMPLOYMENT GOVERNANCE & EMPLOYEE RELATIONS
+// 31 AUGUST 2026 Nigeria HR judicial/compliance architecture
+// ============================================================
+
+model EmploymentContractLifecycle {
+  id                      String    @id @default(uuid())
+  organizationId          String
+  employeeId              String?
+  referenceCode           String
+  firstName               String
+  lastName                String
+  email                   String?
+  currentState            String    @default("APPLICANT")
+  effectiveEmploymentDate DateTime?
+  createdByUserId         String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  transitions EmploymentContractTransition[]
+  documents   EmploymentContractDocument[]
+
+  @@unique([organizationId, referenceCode])
+  @@index([organizationId, currentState])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, email])
+  @@map("employment_contract_lifecycles")
+}
+
+model EmploymentContractTransition {
+  id                String   @id @default(uuid())
+  organizationId    String
+  lifecycleId       String
+  fromState         String?
+  toState           String
+  effectiveDate     DateTime
+  actorUserId       String?
+  authority         String
+  reason            String?
+  documentReference String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  lifecycle EmploymentContractLifecycle @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, lifecycleId, effectiveDate])
+  @@index([organizationId, toState])
+  @@map("employment_contract_transitions")
+}
+
+model EmploymentContractDocument {
+  id                String   @id @default(uuid())
+  organizationId    String
+  lifecycleId       String
+  documentType      String
+  documentReference String
+  templateName      String?
+  templateVersion   String?
+  contentHash       String?
+  createdByUserId   String?
+  createdAt         DateTime @default(now())
+
+  lifecycle EmploymentContractLifecycle       @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+  events    EmploymentContractDocumentEvent[]
+
+  @@index([organizationId, lifecycleId])
+  @@index([organizationId, documentType])
+  @@map("employment_contract_documents")
+}
+
+model EmploymentContractDocumentEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  documentId     String
+  eventType      String
+  eventAt        DateTime
+  actorUserId    String?
+  authority      String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  document EmploymentContractDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, documentId])
+  @@index([organizationId, eventType])
+  @@map("employment_contract_document_events")
+}
+
+model DisciplinaryCase {
+  id              String    @id @default(uuid())
+  organizationId  String
+  employeeId      String
+  employeeNumber  String
+  caseNumber      String
+  incidentSummary String
+  allegation      String
+  policyReference String?
+  policyVersion   String?
+  status          String    @default("OPEN")
+  outcome         String?
+  openedAt        DateTime
+  decidedAt       DateTime?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  evidenceVersions    DisciplinaryEvidenceVersion[]
+  processEvents       DisciplinaryProcessEvent[]
+  externalProceedings DisciplinaryExternalProceeding[]
+  terminationExits    EmployeeExitProcess[]
+
+  @@unique([organizationId, caseNumber])
+  @@unique([organizationId, id])
+  @@index([organizationId, employeeId])
+  @@index([organizationId, employeeNumber])
+  @@index([organizationId, status])
+  @@map("disciplinary_cases")
+}
+
+model DisciplinaryEvidenceVersion {
+  id                 String    @id @default(uuid())
+  organizationId     String
+  disciplinaryCaseId String
+  logicalEvidenceKey String
+  category           String
+  versionNumber      Int
+  title              String
+  content            Json?
+  documentReference  String?
+  contentHash        String
+  finalizedAt        DateTime?
+  createdByUserId    String?
+  createdAt          DateTime  @default(now())
+
+  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([disciplinaryCaseId, logicalEvidenceKey, versionNumber])
+  @@index([organizationId, disciplinaryCaseId])
+  @@index([organizationId, category])
+  @@map("disciplinary_evidence_versions")
+}
+
+model DisciplinaryProcessEvent {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  disciplinaryCaseId String
+  eventType          String
+  occurredAt         DateTime
+  participant        String?
+  actorUserId        String?
+  notes              String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, disciplinaryCaseId, occurredAt])
+  @@index([organizationId, eventType])
+  @@map("disciplinary_process_events")
+}
+
+model DisciplinaryExternalProceeding {
+  id                 String    @id @default(uuid())
+  organizationId     String
+  disciplinaryCaseId String
+  proceedingType     String
+  authority          String
+  referenceNumber    String?
+  status             String
+  outcome            String?
+  openedAt           DateTime?
+  closedAt           DateTime?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  disciplinaryCase DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, disciplinaryCaseId])
+  @@index([organizationId, status])
+  @@map("disciplinary_external_proceedings")
+}
+
+model ExternalVerificationRecord {
+  id               String    @id @default(uuid())
+  organizationId   String
+  employeeId       String?
+  subjectReference String?
+  identifierType   String
+  maskedIdentifier String
+  provider         String
+  status           String
+  attemptedAt      DateTime
+  verifiedAt       DateTime?
+  nextRetryAt      DateTime?
+  errorCode        String?
+  errorMessage     String?
+  responseMetadata Json?
+  createdByUserId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([organizationId, employeeId])
+  @@index([organizationId, identifierType])
+  @@index([organizationId, status])
+  @@index([organizationId, nextRetryAt])
+  @@map("external_verification_records")
+}
+
+enum ComplianceRuleStatus {
+  WATCH
+  DRAFT
+  REVIEWED
+  APPROVED
+  ACTIVE
+  SUPERSEDED
+  RETIRED
+  REJECTED
+}
+
+enum StatutoryObligationStatus {
+  DRAFT_CALCULATED
+  CONFIRMED
+  DUE
+  PARTIALLY_REMITTED
+  REMITTED
+  RECONCILED
+  OVERDUE
+  DISPUTED
+  REVERSED
+  ADJUSTMENT_REQUIRED
+}
+
+enum StatutoryRemittanceStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PAID
+  PARTIALLY_ALLOCATED
+  ALLOCATED
+  RECONCILED
+  FAILED
+  REVERSED
+}
+
+enum StatutoryReconciliationStatus {
+  OPEN
+  MATCHED
+  SHORTFALL
+  OVERPAYMENT
+  UNMATCHED
+  RESOLVED
+}
+
+enum ExitSettlementStatus {
+  DRAFT
+  CALCULATED
+  PENDING_APPROVAL
+  APPROVED
+  PAYMENT_PENDING
+  PARTIALLY_PAID
+  PAID
+  WAIVED
+  DISPUTED
+}
+
+enum ExitFinancialStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  PAID
+  WAIVED
+}
+
+model ComplianceRule {
+  id               String               @id @default(uuid())
+  organizationId   String
+  ruleKey          String
+  name             String
+  category         String
+  jurisdiction     String               @default("NG")
+  version          Int
+  status           ComplianceRuleStatus @default(DRAFT)
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  legalAuthority   String?
+  sourceReference  String?
+  payload          Json
+  payloadHash      String
+  createdByUserId  String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  activatedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                 @relation("ComplianceRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy   User?                 @relation("ComplianceRuleReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  approvedBy   User?                 @relation("ComplianceRuleApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  events       ComplianceRuleEvent[]
+  obligations  StatutoryObligation[]
+
+  @@unique([organizationId, ruleKey, jurisdiction, version])
+  @@unique([organizationId, id])
+  @@index([organizationId, ruleKey, jurisdiction, status, effectiveFrom, effectiveTo])
+  @@map("compliance_rules")
+}
+
+model ComplianceRuleEvent {
+  id               String   @id @default(uuid())
+  organizationId   String
+  complianceRuleId String
+  eventType        String
+  actorUserId      String?
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  complianceRule ComplianceRule @relation(fields: [organizationId, complianceRuleId], references: [organizationId, id], onDelete: Cascade)
+  actor          User?          @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, complianceRuleId, createdAt])
+  @@map("compliance_rule_events")
+}
+
+model StatutoryObligation {
+  id                  String                    @id @default(uuid())
+  organizationId      String
+  employeeId          String
+  payrollRunId        String
+  payrollRunLineId    String?
+  obligationType      String
+  jurisdiction        String                    @default("NG")
+  periodYear          Int
+  periodMonth         Int
+  ruleId              String?
+  currency            String                    @default("NGN")
+  assessableBase      Decimal                   @default(0) @db.Decimal(18, 2)
+  employeeAmount      Decimal                   @default(0) @db.Decimal(18, 2)
+  employerAmount      Decimal                   @default(0) @db.Decimal(18, 2)
+  totalLiability      Decimal                   @default(0) @db.Decimal(18, 2)
+  amountRemitted      Decimal                   @default(0) @db.Decimal(18, 2)
+  status              StatutoryObligationStatus @default(DRAFT_CALCULATED)
+  dueDate             DateTime?
+  confirmedAt         DateTime?
+  exceptionCode       String?
+  exceptionReason     String?
+  calculationSnapshot Json
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  organization Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee                        @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  rule         ComplianceRule?                 @relation(fields: [organizationId, ruleId], references: [organizationId, id], onDelete: Restrict)
+  allocations  StatutoryRemittanceAllocation[]
+
+  @@unique([organizationId, payrollRunLineId, obligationType])
+  @@unique([organizationId, id])
+  @@index([organizationId, payrollRunId, status])
+  @@index([organizationId, periodYear, periodMonth, obligationType, status])
+  @@index([organizationId, employeeId, periodYear, periodMonth])
+  @@map("statutory_obligations")
+}
+
+model StatutoryRemittanceBatch {
+  id                String                    @id @default(uuid())
+  organizationId    String
+  reference         String
+  obligationType    String
+  jurisdiction      String                    @default("NG")
+  authorityName     String
+  periodYear        Int
+  periodMonth       Int
+  currency          String                    @default("NGN")
+  declaredAmount    Decimal                   @db.Decimal(18, 2)
+  allocatedAmount   Decimal                   @default(0) @db.Decimal(18, 2)
+  status            StatutoryRemittanceStatus @default(DRAFT)
+  paymentReference  String?
+  paymentDate       DateTime?
+  evidenceReference String?
+  createdByUserId   String?
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  organization   Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User?                           @relation("RemittanceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvedBy     User?                           @relation("RemittanceApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  allocations    StatutoryRemittanceAllocation[]
+  reconciliation StatutoryReconciliation?
+
+  @@unique([organizationId, reference])
+  @@unique([organizationId, id])
+  @@index([organizationId, periodYear, periodMonth, obligationType, status])
+  @@map("statutory_remittance_batches")
+}
+
+model StatutoryRemittanceAllocation {
+  id             String   @id @default(uuid())
+  organizationId String
+  batchId        String
+  obligationId   String
+  amount         Decimal  @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+
+  batch      StatutoryRemittanceBatch @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+  obligation StatutoryObligation      @relation(fields: [organizationId, obligationId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([batchId, obligationId])
+  @@index([organizationId, obligationId])
+  @@map("statutory_remittance_allocations")
+}
+
+model StatutoryReconciliation {
+  id                 String                        @id @default(uuid())
+  organizationId     String
+  batchId            String                        @unique
+  expectedAmount     Decimal                       @db.Decimal(18, 2)
+  paidAmount         Decimal                       @db.Decimal(18, 2)
+  varianceAmount     Decimal                       @db.Decimal(18, 2)
+  status             StatutoryReconciliationStatus @default(OPEN)
+  notes              String?
+  reconciledByUserId String?
+  reconciledAt       DateTime?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  batch StatutoryRemittanceBatch @relation(fields: [organizationId, batchId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, batchId])
+  @@index([organizationId, status])
+  @@map("statutory_reconciliations")
+}
+
+model StatutoryLifecycleEvent {
+  id             String   @id @default(uuid())
+  organizationId String
+  subjectType    String
+  subjectId      String
+  eventType      String
+  actorUserId    String?
+  previousStatus String?
+  newStatus      String?
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, subjectType, subjectId, createdAt])
+  @@map("statutory_lifecycle_events")
+}
+
+model ExitSettlement {
+  id                    String               @id @default(uuid())
+  organizationId        String
+  exitProcessId         String               @unique
+  employeeId            String
+  currency              String               @default("NGN")
+  finalSalary           Decimal              @default(0) @db.Decimal(18, 2)
+  allowancePayable      Decimal              @default(0) @db.Decimal(18, 2)
+  leavePayable          Decimal              @default(0) @db.Decimal(18, 2)
+  noticePay             Decimal              @default(0) @db.Decimal(18, 2)
+  gratuitySeverance     Decimal              @default(0) @db.Decimal(18, 2)
+  taxAdjustment         Decimal              @default(0) @db.Decimal(18, 2)
+  pensionAdjustment     Decimal              @default(0) @db.Decimal(18, 2)
+  loanRecovery          Decimal              @default(0) @db.Decimal(18, 2)
+  salaryAdvanceRecovery Decimal              @default(0) @db.Decimal(18, 2)
+  otherRecovery         Decimal              @default(0) @db.Decimal(18, 2)
+  grossPayable          Decimal              @default(0) @db.Decimal(18, 2)
+  totalRecovery         Decimal              @default(0) @db.Decimal(18, 2)
+  netSettlement         Decimal              @default(0) @db.Decimal(18, 2)
+  amountPaid            Decimal              @default(0) @db.Decimal(18, 2)
+  status                ExitSettlementStatus @default(DRAFT)
+  calculationSnapshot   Json
+  notes                 String?
+  calculatedByUserId    String?
+  calculatedAt          DateTime?
+  approvedByUserId      String?
+  approvedAt            DateTime?
+  paidByUserId          String?
+  paidAt                DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  exitProcess  EmployeeExitProcess @relation(fields: [organizationId, exitProcessId], references: [organizationId, id], onDelete: Restrict)
+  employee     Employee            @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+  calculatedBy User?               @relation("ExitSettlementCalculatedBy", fields: [calculatedByUserId], references: [id], onDelete: SetNull)
+  approvedBy   User?               @relation("ExitSettlementApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  paidBy       User?               @relation("ExitSettlementPaidBy", fields: [paidByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, exitProcessId])
+  @@index([organizationId, employeeId, status])
+  @@map("exit_settlements")
 }

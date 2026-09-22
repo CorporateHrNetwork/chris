@@ -54,3 +54,6 @@ Designations-*.txt
 
 # Local CHRIS development backups
 .chris-backups/
+
+# Local uploaded employee/onboarding documents
+/backend/uploads/
