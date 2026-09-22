@@ -11,8 +11,8 @@
     padding: 0 0 10px;
     margin: 0 0 12px;
     border-bottom: 2px solid #087a43;
-    color: #111827;
-    background: #ffffff;
+    color: var(--chris-print-ink);
+    background: var(--chris-print-paper);
     break-after: avoid;
   }
 
@@ -26,7 +26,7 @@
   .chris-print-report-heading { min-width: 0; }
 
   .chris-print-report-owner {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     font-size: 12pt;
     font-weight: 900;
     line-height: 1.15;
@@ -36,7 +36,7 @@
 
   .chris-print-report-heading h1 {
     margin: 3px 0 2px !important;
-    color: #9a7410 !important;
+    color: var(--chris-print-gold) !important;
     font-size: 17pt !important;
     line-height: 1.15;
   }
@@ -55,7 +55,7 @@
     margin-top: 10px;
     padding-top: 7px;
     border-top: 1px solid #94a3b8;
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
     font-size: 7pt;
     break-before: avoid;
   }
@@ -64,7 +64,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
   }
 
   .chris-print-report-powered img {
@@ -74,7 +74,7 @@
   }
 
   .chris-print-report-footer strong {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     font-weight: 900;
     letter-spacing: .025em;
   }
