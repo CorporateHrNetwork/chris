@@ -96,7 +96,7 @@ test("settlement print is isolated from EmployeeExits page rendering", () => {
 });
 
 test("formal settlement print remains readable and compact", () => {
-  assert.ok(printUtility.includes("@page { size: A4 landscape; margin: 7mm; }"));
+  assert.ok(printUtility.includes("@page { size: A4 portrait; margin: 7mm; }"));
   assert.ok(printUtility.includes("font-size: 12pt !important"));
   assert.ok(printUtility.includes("removeNilLedgerRows"));
   assert.ok(printUtility.includes("exit-settlement-print-lower-grid"));
@@ -106,8 +106,8 @@ test("formal settlement print remains readable and compact", () => {
 });
 
 
-test("settlement print never forces the content box beyond printable A4 landscape width", () => {
-  assert.ok(printUtility.includes("@page { size: A4 landscape; margin: 7mm; }"));
+test("settlement print never forces the content box beyond printable A4 portrait width", () => {
+  assert.ok(printUtility.includes("@page { size: A4 portrait; margin: 7mm; }"));
   assert.equal(printUtility.includes("width: 297mm"), false);
   assert.ok(printUtility.includes("width: auto !important"));
 });
@@ -131,7 +131,7 @@ test("settlement print refuses fallback loading shells and prefers authoritative
 
 test("settlement print centers organisation branding and prevents metadata label wrapping", () => {
   assert.ok(printUtility.includes("margin: 0 auto 2px !important"));
-  assert.ok(printUtility.includes("flex: 0 0 165px !important"));
+  assert.ok(printUtility.includes(".exit-settlement-print-meta span"));
   assert.ok(printUtility.includes("white-space: nowrap !important"));
   assert.ok(printUtility.includes("width: 28px !important"));
 });

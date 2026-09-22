@@ -119,7 +119,7 @@ function compactLowerApprovals(clone) {
 }
 
 const PRINT_CSS = String.raw`
-  @page { size: A4 landscape; margin: 7mm; }
+  @page { size: A4 portrait; margin: 7mm; }
 
   * { box-sizing: border-box; }
 
@@ -293,9 +293,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-meta-table td > div {
-    display: flex !important;
-    gap: 5px !important;
-    align-items: baseline !important;
+    display: block !important;
     min-width: 0 !important;
     padding: 1px 0 !important;
     border-bottom: 1px solid #e0ddd2 !important;
@@ -314,7 +312,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-meta span {
-    flex: 0 0 165px !important;
+    display: block !important;
   }
 
   .exit-settlement-print-meta strong,
@@ -327,6 +325,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-meta strong {
+    display: block !important;
     min-width: 0 !important;
   }
 
@@ -433,10 +432,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-totals > div {
-    display: grid !important;
-    grid-template-columns: 1fr auto !important;
-    gap: 8px !important;
-    align-items: baseline !important;
+    display: block !important;
     padding: 1px 0 !important;
     border: 0 !important;
     border-radius: 0 !important;
@@ -451,6 +447,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-totals strong {
+    display: block !important;
     color: #064e3b !important;
     font-size: 13pt !important;
     font-weight: 900 !important;
@@ -539,7 +536,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-headhr-signature-line {
-    height: 18px !important;
+    height: 30px !important;
     border-bottom: 1px solid #475569 !important;
   }
 
@@ -566,7 +563,7 @@ const PRINT_CSS = String.raw`
 
   .exit-settlement-external-approval-table th,
   .exit-settlement-external-approval-table td {
-    height: 26px !important;
+    height: 38px !important;
     padding: 1px 4px !important;
     border: 1px solid #c7cec9 !important;
     color: #17211c !important;
