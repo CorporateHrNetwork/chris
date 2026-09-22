@@ -550,6 +550,21 @@ export default function EmployeeExits() {
   }
 
   if (settlementExitId) {
+    const snapshot = settlement?.calculationSnapshot || {};
+    const accountEmployee = settlementPreview?.employee || snapshot.employee || null;
+    const accountExit = settlementPreview?.exit || snapshot.exit || null;
+    const accountSalary = settlementPreview?.salary || snapshot.salary || null;
+    const accountCredits = settlementPreview?.credits || Object.fromEntries(
+      Object.entries(snapshot.creditItems || {}).map(([key, item]) => [key, Number(item?.amount || 0)])
+    );
+    const accountDebits = settlementPreview?.debits || Object.fromEntries(
+      Object.entries(snapshot.debitItems || {}).map(([key, item]) => [key, Number(item?.amount || 0)])
+    );
+    const accountTotals = settlementPreview?.totals || snapshot.totals || {
+      totalCredits: Number(settlement?.grossPayable || 0),
+      totalDebits: Number(settlement?.totalRecovery || 0),
+      netSettlement: Number(settlement?.netSettlement || 0),
+    };
     return (
       <div>
         <PageHero
@@ -569,18 +584,53 @@ export default function EmployeeExits() {
                 {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
               </div>
 
+              {accountEmployee && accountExit ? (
+                <section style={exitAccountMeta}>
+                  <div><span style={metaLabel}>Employee</span><strong>{accountEmployee.employeeNumber} · {accountEmployee.employeeName}</strong></div>
+                  <div><span style={metaLabel}>Designation</span><strong>{accountEmployee.designation || "—"}</strong></div>
+                  <div><span style={metaLabel}>Department</span><strong>{accountEmployee.department || "—"}</strong></div>
+                  <div><span style={metaLabel}>Cost Centre</span><strong>{accountEmployee.costCentreCode ? `${accountEmployee.costCentreCode} · ${accountEmployee.costCentre || ""}` : (accountEmployee.costCentre || "—")}</strong></div>
+                  <div><span style={metaLabel}>Branch</span><strong>{accountEmployee.branchCode || accountEmployee.branch || "—"}</strong></div>
+                  <div><span style={metaLabel}>Employment Type</span><strong>{accountEmployee.employmentType || "—"}</strong></div>
+                  <div><span style={metaLabel}>Exit Type</span><strong>{titleCase(accountExit.exitType)}</strong></div>
+                  <div><span style={metaLabel}>Final Working Day</span><strong>{dateText(accountExit.lastWorkingDay)}</strong></div>
+                  <div style={full}><span style={metaLabel}>Exit Reason</span><strong>{accountExit.reason || "—"}</strong></div>
+                  {accountSalary ? <div style={full}><span style={metaLabel}>Settlement Salary Basis</span><strong>{moneyText(accountSalary.monthlyGross, accountSalary.currency)} monthly gross · Daily rate {moneyText(accountSalary.dayRate, accountSalary.currency)} · Hourly rate {moneyText(accountSalary.hourRate, accountSalary.currency)}</strong></div> : null}
+                </section>
+              ) : null}
+
               {!settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status) ? (
-                <form onSubmit={calculateExitSettlement} style={formGrid}>
-                  <SettlementAmount label="Final Salary" amountKey="finalSalary" referenceKey="finalSalaryReference" form={settlementForm} setField={setSettlementField} />
-                  <Field label="Allowance Payable"><input type="number" min="0" step="0.01" value={settlementForm.allowancePayable} onChange={(event) => setSettlementField("allowancePayable", event.target.value)} style={input} /></Field>
-                  <SettlementAmount label="Leave Payable" amountKey="leavePayable" referenceKey="leaveReference" form={settlementForm} setField={setSettlementField} />
-                  <SettlementAmount label="Notice Pay" amountKey="noticePay" referenceKey="noticePayReference" form={settlementForm} setField={setSettlementField} />
-                  <SettlementAmount label="Gratuity / Severance" amountKey="gratuitySeverance" referenceKey="gratuityReference" form={settlementForm} setField={setSettlementField} />
-                  <Field label="Tax Adjustment / Recovery"><input type="number" min="0" step="0.01" value={settlementForm.taxAdjustment} onChange={(event) => setSettlementField("taxAdjustment", event.target.value)} style={input} /></Field>
-                  <Field label="Pension Adjustment / Recovery"><input type="number" min="0" step="0.01" value={settlementForm.pensionAdjustment} onChange={(event) => setSettlementField("pensionAdjustment", event.target.value)} style={input} /></Field>
-                  <Field label="Other Recovery"><input type="number" min="0" step="0.01" value={settlementForm.otherRecovery} onChange={(event) => setSettlementField("otherRecovery", event.target.value)} style={input} /></Field>
-                  <div style={full}><Field label="Calculation Notes"><textarea value={settlementForm.notes} onChange={(event) => setSettlementField("notes", event.target.value)} style={textarea} /></Field></div>
-                  <div style={footer}><span style={muted}>Loan and salary-advance recoveries are read from authoritative outstanding balances and cannot be overridden here.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy}>{busy ? "Calculating..." : "Calculate Settlement"}</button></div>
+                <form onSubmit={calculateExitSettlement}>
+                  <div style={accountColumns}>
+                    <SettlementAccountSection title="CREDIT" tone="credit">
+                      <SettlementLine label="Gratuity / EoSB" value={accountCredits?.gratuityEosb} currency={accountSalary?.currency} source="System · EoSB Account" />
+                      <SettlementLine label="Full / Prorated Annual Leave Allowance" value={accountCredits?.annualLeaveAllowance} currency={accountSalary?.currency} source="System · Leave Allowance formula" />
+                      <SettlementLine label="Full / Prorated Outstanding Salary" value={accountCredits?.outstandingSalary} currency={accountSalary?.currency} source="System · Payroll to exit date" />
+                      <SettlementLine label="Public Holiday Days" value={accountCredits?.publicHolidayDays} currency={accountSalary?.currency} source="System · Recorded payroll rule" />
+                      <SettlementLine label="Extra Day Work Overtime" value={accountCredits?.extraDayOvertime} currency={accountSalary?.currency} source="System · Recorded payroll rule" />
+                      <SettlementLine label="Extra Hours Work Overtime" value={accountCredits?.extraHoursOvertime} currency={accountSalary?.currency} source="System · Recorded payroll rule" />
+                      <SettlementInputLine label="Bonus / Gift" value={settlementForm.bonusGift} onChange={(value) => setSettlementField("bonusGift", value)} amount={accountCredits?.bonusGift} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="In Lieu of Notice Pay" inputLabel="Days" value={settlementForm.noticePayDays} onChange={(value) => setSettlementField("noticePayDays", value)} amount={accountCredits?.noticePay} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Previous Salary Short Paid" value={settlementForm.previousSalaryShortPaid} onChange={(value) => setSettlementField("previousSalaryShortPaid", value)} amount={accountCredits?.previousSalaryShortPaid} currency={accountSalary?.currency} />
+                    </SettlementAccountSection>
+
+                    <SettlementAccountSection title="DEBIT" tone="debit">
+                      <SettlementLine label="Loan Balance" value={accountDebits?.loanBalance} currency={accountSalary?.currency} source="System · Loan Account" />
+                      <SettlementLine label="Salary Advance" value={accountDebits?.salaryAdvance} currency={accountSalary?.currency} source="System · Salary Advance Account" />
+                      <SettlementInputLine label="In Lieu of Notice Deduction" inputLabel="Deficient Days" value={settlementForm.noticeDeductionDays} onChange={(value) => setSettlementField("noticeDeductionDays", value)} amount={accountDebits?.noticeDeduction} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Unreturned Uniform" value={settlementForm.unreturnedUniform} onChange={(value) => setSettlementField("unreturnedUniform", value)} amount={accountDebits?.unreturnedUniform} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Previous Salary Overpaid" value={settlementForm.previousSalaryOverpaid} onChange={(value) => setSettlementField("previousSalaryOverpaid", value)} amount={accountDebits?.previousSalaryOverpaid} currency={accountSalary?.currency} />
+                    </SettlementAccountSection>
+                  </div>
+
+                  <div style={settlementSummary}>
+                    <Info label="Total Credits" value={moneyText(accountTotals?.totalCredits, accountSalary?.currency || settlement?.currency)} />
+                    <Info label="Total Debits" value={moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement?.currency)} />
+                    <Info label="Net Exit Settlement" value={moneyText(accountTotals?.netSettlement, accountSalary?.currency || settlement?.currency)} />
+                  </div>
+
+                  <div style={{ ...full, marginTop: 14 }}><Field label="Calculation Notes"><textarea value={settlementForm.notes} onChange={(event) => setSettlementField("notes", event.target.value)} style={textarea} /></Field></div>
+                  <div style={footer}><span style={muted}>System-derived items are locked and pulled from CHRiS source accounts/rules. Only HR-designated settlement inputs are editable.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy || !settlementPreview}>{busy ? "Calculating..." : "Calculate Exit Settlement Account"}</button></div>
                 </form>
               ) : null}
 
