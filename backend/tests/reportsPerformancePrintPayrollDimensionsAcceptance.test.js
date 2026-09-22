@@ -78,7 +78,6 @@ test("print preview isolates the report and removes application chrome", () => {
     ".chris-shell-ambient",
     ".chris-standalone-back-wrap",
     ".reports-no-print",
-    ".reports-print-header",
     "overflow: visible !important",
     "height: auto !important",
     "max-height: none !important",
@@ -86,7 +85,8 @@ test("print preview isolates the report and removes application chrome", () => {
     assert.ok(reportsCss.includes(expected), `Missing print-preview correction: ${expected}`);
   }
   assert.ok(reportsPage.includes('className="reports-print-content"'));
-  assert.ok(reportsPage.includes('className="reports-print-header"'));
+  assert.ok(reportsPage.includes("PrintableReportHeader"));
+  assert.ok(printableBrandingCss.includes(".chris-print-report-header"));
 });
 
 test("payroll Excel dashboard uses native chart objects and no cell-bar pseudo charts", () => {
