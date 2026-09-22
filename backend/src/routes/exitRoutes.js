@@ -27,8 +27,11 @@ const EXIT_DOCUMENT_TYPES = {
   EXIT_ACCEPTANCE_LETTER: "Exit / Resignation Acceptance Letter",
   CLEARANCE_DOCUMENT: "Exit Clearance Document",
   HANDOVER_DOCUMENT: "Handover Document",
+  EXIT_SETTLEMENT_PAYMENT_PROOF: "Exit Settlement Payment Proof",
   OTHER_EXIT_DOCUMENT: "Other Exit Document",
 };
+
+const MAX_EXIT_DOCUMENTS = 10;
 
 const exitUploadRoot = path.join(process.cwd(), "uploads", "exit-documents");
 fs.mkdirSync(exitUploadRoot, { recursive: true });
@@ -85,6 +88,8 @@ router.get(
         status: "success",
         data: documents.map(mapExitDocument),
         documentTypes: EXIT_DOCUMENT_TYPES,
+        limit: MAX_EXIT_DOCUMENTS,
+        count: documents.length,
       });
     } catch (error) {
       console.error("Load exit documents error:", error);
@@ -96,8 +101,9 @@ router.get(
 router.post(
   "/:id/documents",
   requirePermission("employees.update"),
-  exitDocumentUpload.single("document"),
+  exitDocumentUpload.array("documents", MAX_EXIT_DOCUMENTS),
   async (req, res) => {
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
     try {
       const exitProcess = await prisma.employeeExitProcess.findFirst({
         where: {
@@ -113,35 +119,74 @@ router.post(
       });
 
       if (!exitProcess) {
-        if (req.file?.path) fs.unlink(req.file.path, () => {});
+        uploadedFiles.forEach((file) => file?.path && fs.unlink(file.path, () => {}));
         return res.status(404).json({ status: "error", message: "Exit process not found." });
       }
 
-      const category = String(req.body?.category || "").trim().toUpperCase();
-      if (!EXIT_DOCUMENT_TYPES[category]) {
-        if (req.file?.path) fs.unlink(req.file.path, () => {});
-        return res.status(400).json({ status: "error", message: "Select a valid exit document type." });
-      }
-      if (!req.file) {
-        return res.status(400).json({ status: "error", message: "Choose an exit document to upload." });
+      if (!uploadedFiles.length) {
+        return res.status(400).json({ status: "error", message: "Choose at least one exit document to upload." });
       }
 
-      const document = await prisma.$transaction(async (tx) => {
-        const created = await tx.employeeDocument.create({
-          data: {
-            organizationId: req.auth.organizationId,
-            employeeId: exitProcess.employeeId,
-            exitProcessId: exitProcess.id,
-            category,
-            originalName: req.file.originalname,
-            storedName: req.file.filename,
-            mimeType: req.file.mimetype,
-            sizeBytes: req.file.size,
-            storagePath: req.file.path,
-            notes: req.body?.notes ? String(req.body.notes).trim() : null,
-            uploadedByUserId: req.auth.userId || null,
-          },
+      const currentCount = await prisma.employeeDocument.count({
+        where: {
+          organizationId: req.auth.organizationId,
+          exitProcessId: exitProcess.id,
+        },
+      });
+
+      if (currentCount + uploadedFiles.length > MAX_EXIT_DOCUMENTS) {
+        uploadedFiles.forEach((file) => file?.path && fs.unlink(file.path, () => {}));
+        return res.status(409).json({
+          status: "error",
+          code: "EXIT_DOCUMENT_LIMIT_EXCEEDED",
+          message: `A maximum of ${MAX_EXIT_DOCUMENTS} documents can be attached to one employee exit. ${currentCount} already exist.`,
+          limit: MAX_EXIT_DOCUMENTS,
+          existingCount: currentCount,
+          attemptedCount: uploadedFiles.length,
         });
+      }
+
+      let metadata = [];
+      try {
+        metadata = JSON.parse(String(req.body?.metadata || "[]"));
+      } catch {
+        metadata = [];
+      }
+      if (!Array.isArray(metadata)) metadata = [];
+
+      const createdDocuments = await prisma.$transaction(async (tx) => {
+        const created = [];
+        for (let index = 0; index < uploadedFiles.length; index += 1) {
+          const file = uploadedFiles[index];
+          const meta = metadata[index] || {};
+          const category = String(meta.category || req.body?.category || "OTHER_EXIT_DOCUMENT")
+            .trim()
+            .toUpperCase();
+
+          if (!EXIT_DOCUMENT_TYPES[category]) {
+            throw Object.assign(new Error("Select a valid exit document type."), {
+              statusCode: 400,
+              code: "INVALID_EXIT_DOCUMENT_TYPE",
+            });
+          }
+
+          const document = await tx.employeeDocument.create({
+            data: {
+              organizationId: req.auth.organizationId,
+              employeeId: exitProcess.employeeId,
+              exitProcessId: exitProcess.id,
+              category,
+              originalName: file.originalname,
+              storedName: file.filename,
+              mimeType: file.mimetype,
+              sizeBytes: file.size,
+              storagePath: file.path,
+              notes: meta.notes ? String(meta.notes).trim() : null,
+              uploadedByUserId: req.auth.userId || null,
+            },
+          });
+          created.push(document);
+        }
 
         await tx.organizationAudit.create({
           data: {
@@ -149,14 +194,18 @@ router.post(
             actorUserId: req.auth.userId || null,
             entityType: "EmployeeExitProcess",
             entityId: exitProcess.id,
-            action: "EXIT_DOCUMENT_UPLOADED",
+            action: "EXIT_DOCUMENTS_UPLOADED",
             newValue: {
-              documentId: created.id,
-              category,
-              originalName: created.originalName,
+              documentIds: created.map((document) => document.id),
+              documents: created.map((document) => ({
+                id: document.id,
+                category: document.category,
+                originalName: document.originalName,
+              })),
               employeeId: exitProcess.employeeId,
+              totalDocumentsAfterUpload: currentCount + created.length,
             },
-            reason: "Exit supporting document uploaded",
+            reason: "Exit supporting documents uploaded",
           },
         });
 
@@ -165,13 +214,19 @@ router.post(
 
       return res.status(201).json({
         status: "success",
-        message: "Exit document uploaded successfully.",
-        data: mapExitDocument(document),
+        message: `${createdDocuments.length} exit document${createdDocuments.length === 1 ? "" : "s"} uploaded successfully.`,
+        data: createdDocuments.map(mapExitDocument),
+        limit: MAX_EXIT_DOCUMENTS,
+        totalCount: currentCount + createdDocuments.length,
       });
     } catch (error) {
-      if (req.file?.path) fs.unlink(req.file.path, () => {});
+      uploadedFiles.forEach((file) => file?.path && fs.unlink(file.path, () => {}));
       console.error("Upload exit document error:", error);
-      return res.status(500).json({ status: "error", message: "Unable to upload exit document." });
+      return res.status(error.statusCode || 500).json({
+        status: "error",
+        code: error.code,
+        message: error.message || "Unable to upload exit documents.",
+      });
     }
   }
 );
