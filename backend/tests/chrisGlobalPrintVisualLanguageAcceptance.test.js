@@ -36,8 +36,17 @@ test("shared report branding and reports inherit the global CHRiS print palette"
 });
 
 test("settlement accounting orientation never stacks credit above debit", () => {
-  assert.ok(exitsCss.includes("Settlement accounting orientation is fixed"));
-  const matches = exitsCss.match(/grid-template-columns:\s*minmax\(360px, 1fr\) minmax\(360px, 1fr\)/g) || [];
-  assert.ok(matches.length >= 2);
-  assert.ok(exitsCss.includes("overflow-x: auto"));
+  assert.ok(exitsCss.includes("Authoritative settlement accounting orientation"));
+  assert.ok(exitsCss.includes("flex-flow: row nowrap !important"));
+  assert.ok(exitsCss.includes(".exit-settlement-credit-column { order: 1 !important; }"));
+  assert.ok(exitsCss.includes(".exit-settlement-debit-column { order: 2 !important; }"));
+  assert.ok(exitsCss.includes("overflow-x: auto !important"));
+});
+
+test("global CHRiS print culture prohibits coloured background fills", () => {
+  assert.ok(globalPrint.includes("no coloured background fills"));
+  assert.ok(globalPrint.includes("background-color: var(--chris-print-paper) !important"));
+  assert.ok(globalPrint.includes("background-image: none !important"));
+  assert.ok(reportsCss.includes("background: var(--chris-print-paper) !important"));
+  assert.ok(exitsCss.includes("CHRiS global print culture: off-white backgrounds only."));
 });

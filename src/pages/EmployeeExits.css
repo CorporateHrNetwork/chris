@@ -421,3 +421,68 @@
     gap: 8px !important;
   }
 }
+
+
+/* Authoritative settlement accounting orientation */
+.exit-settlement-account-columns {
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  align-items: flex-start !important;
+  gap: 14px !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.exit-settlement-credit-column,
+.exit-settlement-debit-column {
+  flex: 0 0 calc(50% - 7px) !important;
+  width: calc(50% - 7px) !important;
+  min-width: 360px !important;
+}
+
+.exit-settlement-credit-column { order: 1 !important; }
+.exit-settlement-debit-column { order: 2 !important; }
+
+@media print {
+  /* CHRiS global print culture: off-white backgrounds only. */
+  .exit-settlement-print-document,
+  .exit-settlement-print-document *,
+  .exit-settlement-print-document section,
+  .exit-settlement-print-document table,
+  .exit-settlement-print-document thead,
+  .exit-settlement-print-document tbody,
+  .exit-settlement-print-document tr,
+  .exit-settlement-print-document th,
+  .exit-settlement-print-document td,
+  .exit-settlement-print-document div {
+    background: var(--chris-print-paper) !important;
+    background-image: none !important;
+  }
+
+  .exit-settlement-print-table-section h3,
+  .exit-settlement-signatory-heading > span {
+    background: var(--chris-print-paper) !important;
+    color: var(--chris-print-green) !important;
+    border: 1px solid var(--chris-print-green) !important;
+  }
+
+  .exit-settlement-print-table-section th {
+    background: var(--chris-print-paper) !important;
+    color: var(--chris-print-green) !important;
+    border-bottom: 2px solid var(--chris-print-green) !important;
+  }
+
+  .exit-settlement-print-totals > div,
+  .exit-settlement-print-totals .net,
+  .exit-settlement-headhr-line > div,
+  .exit-settlement-signatory-block,
+  .exit-settlement-print-calculation-note,
+  .exit-settlement-print-meta {
+    background: var(--chris-print-paper) !important;
+  }
+
+  .exit-settlement-print-account {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+}

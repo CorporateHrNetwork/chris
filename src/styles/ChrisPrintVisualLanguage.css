@@ -63,3 +63,32 @@
     content: none !important;
   }
 }
+
+
+@media print {
+  /* Global CHRiS rule: no coloured background fills on printable/downloadable documents. */
+  .chris-print-document *,
+  .chris-print-report-header,
+  .chris-print-report-footer,
+  .chris-reports-page *,
+  .reports-print-content *,
+  .exit-settlement-print-document * {
+    background-color: var(--chris-print-paper) !important;
+    background-image: none !important;
+  }
+
+  th,
+  thead,
+  thead tr,
+  .reports-panel,
+  .reports-panel--summary,
+  .reports-kpi-card {
+    background: var(--chris-print-paper) !important;
+    background-image: none !important;
+  }
+
+  th {
+    color: var(--chris-print-green) !important;
+    border-bottom: 2px solid var(--chris-print-green) !important;
+  }
+}

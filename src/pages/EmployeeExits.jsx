@@ -911,7 +911,8 @@ export default function EmployeeExits() {
 
               {!settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status) ? (
                 <form onSubmit={calculateExitSettlement}>
-                  <div className="exit-settlement-account-columns" style={accountColumns}>
+                  <div className="exit-settlement-account-columns">
+                    <div className="exit-settlement-credit-column">
                     <SettlementAccountSection title="CREDIT" tone="credit">
                       <SettlementLine label="Gratuity / EoSB" value={accountCredits?.gratuityEosb} currency={accountSalary?.currency} source="System · EoSB Account" />
                       <SettlementLine label="Full / Prorated Annual Leave Allowance" value={accountCredits?.annualLeaveAllowance} currency={accountSalary?.currency} source="System · Leave Allowance formula" />
@@ -923,7 +924,9 @@ export default function EmployeeExits() {
                       <SettlementInputLine label="In Lieu of Notice Pay" inputLabel="Days" value={settlementForm.noticePayDays} onChange={(value) => setSettlementField("noticePayDays", value)} amount={accountCredits?.noticePay} currency={accountSalary?.currency} />
                       <SettlementInputLine label="Previous Salary Short Paid" value={settlementForm.previousSalaryShortPaid} onChange={(value) => setSettlementField("previousSalaryShortPaid", value)} amount={accountCredits?.previousSalaryShortPaid} currency={accountSalary?.currency} />
                     </SettlementAccountSection>
+                    </div>
 
+                    <div className="exit-settlement-debit-column">
                     <SettlementAccountSection title="DEBIT" tone="debit">
                       <SettlementLine label="Loan Balance" value={accountDebits?.loanBalance} currency={accountSalary?.currency} source="System · Loan Account" />
                       <SettlementLine label="Salary Advance" value={accountDebits?.salaryAdvance} currency={accountSalary?.currency} source="System · Salary Advance Account" />
@@ -941,6 +944,7 @@ export default function EmployeeExits() {
                       <SettlementInputLine label="Unreturned Uniform" value={settlementForm.unreturnedUniform} onChange={(value) => setSettlementField("unreturnedUniform", value)} amount={accountDebits?.unreturnedUniform} currency={accountSalary?.currency} />
                       <SettlementInputLine label="Previous Salary Overpaid" value={settlementForm.previousSalaryOverpaid} onChange={(value) => setSettlementField("previousSalaryOverpaid", value)} amount={accountDebits?.previousSalaryOverpaid} currency={accountSalary?.currency} />
                     </SettlementAccountSection>
+                    </div>
                   </div>
 
                   <div style={settlementSummary}>
