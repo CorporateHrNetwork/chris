@@ -559,6 +559,33 @@ router.post(
   }
 );
 
+router.get("/:id/settlement/preview", requirePermission("employees.view"), async (req, res) => {
+  try {
+    return res.json({
+      status: "success",
+      data: await settlements.getSettlementPreview({
+        organizationId: req.auth.organizationId,
+        exitProcessId: req.params.id,
+        input: {
+          bonusGift: req.query?.bonusGift,
+          noticePayDays: req.query?.noticePayDays,
+          previousSalaryShortPaid: req.query?.previousSalaryShortPaid,
+          noticeDeductionDays: req.query?.noticeDeductionDays,
+          unreturnedUniform: req.query?.unreturnedUniform,
+          previousSalaryOverpaid: req.query?.previousSalaryOverpaid,
+        },
+      }),
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      status: "error",
+      code: error.code,
+      message: error.message,
+      details: error.details,
+    });
+  }
+});
+
 router.get("/:id/settlement", requirePermission("employees.view"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.getSettlement({ organizationId: req.auth.organizationId, exitProcessId: req.params.id }) }); }
   catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
