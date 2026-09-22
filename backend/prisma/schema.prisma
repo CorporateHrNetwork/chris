@@ -1500,6 +1500,7 @@ model EmployeeExitProcess {
   terminationAuthority User?             @relation("EmployeeExitTerminationAuthority", fields: [terminationAuthorityUserId], references: [id], onDelete: SetNull)
   disciplinaryCase     DisciplinaryCase? @relation(fields: [organizationId, disciplinaryCaseId], references: [organizationId, id], onDelete: Restrict)
   settlement           ExitSettlement?
+  documents            EmployeeDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1757,6 +1758,7 @@ model EmployeeDocument {
   organizationId   String
   employeeId       String
   onboardingId     String?
+  exitProcessId    String?
   category         String
   originalName     String
   storedName       String
@@ -1769,6 +1771,7 @@ model EmployeeDocument {
   organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employee     Employee            @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Cascade)
   onboarding   EmployeeOnboarding? @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  exitProcess  EmployeeExitProcess? @relation(fields: [exitProcessId], references: [id], onDelete: Cascade)
   uploadedBy   User?               @relation("EmployeeDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
@@ -1777,6 +1780,7 @@ model EmployeeDocument {
   @@index([organizationId])
   @@index([employeeId])
   @@index([onboardingId])
+  @@index([exitProcessId])
   @@index([category])
   @@index([uploadedByUserId])
   @@map("employee_documents")
