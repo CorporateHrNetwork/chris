@@ -33,15 +33,17 @@ test("auto calculation note is persisted separately from optional HR commentary"
   assert.ok(frontend.includes("record.calculationSnapshot?.hrSupplementaryNote ||"));
 });
 
-test("settlement account keeps CREDIT left and DEBIT right on desktop", () => {
+test("settlement account structurally locks CREDIT left and DEBIT right", () => {
   assert.ok(frontend.includes('className="exit-settlement-account-columns"'));
-  assert.ok(frontend.includes('gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)"'));
+  assert.ok(frontend.includes('className="exit-settlement-credit-column"'));
+  assert.ok(frontend.includes('className="exit-settlement-debit-column"'));
   const creditIndex = frontend.indexOf('<SettlementAccountSection title="CREDIT"');
   const debitIndex = frontend.indexOf('<SettlementAccountSection title="DEBIT"');
   assert.ok(creditIndex >= 0 && debitIndex > creditIndex);
-  assert.ok(css.includes(".exit-settlement-account-columns"));
-  assert.ok(css.includes("@media (max-width: 620px)"));
-  assert.ok(css.includes("grid-template-columns: minmax(0, 1fr) !important"));
+  assert.ok(css.includes("flex-flow: row nowrap !important"));
+  assert.ok(css.includes(".exit-settlement-credit-column { order: 1 !important; }"));
+  assert.ok(css.includes(".exit-settlement-debit-column { order: 2 !important; }"));
+  assert.ok(css.includes("overflow-x: auto !important"));
 });
 
 test("settlement provides Print / Download PDF from preview stage and prints the calculation basis", () => {
