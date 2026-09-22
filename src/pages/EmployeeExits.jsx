@@ -1051,14 +1051,162 @@ function Field({ label, children }) {
   );
 }
 
-function SettlementAmount({ label, amountKey, referenceKey, form, setField }) {
+function SettlementAccountSection({ title, tone, children }) {
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <Field label={label}><input type="number" min="0" step="0.01" value={form[amountKey]} onChange={(event) => setField(amountKey, event.target.value)} style={input} /></Field>
-      <Field label={`${label} Source Reference`}><input value={form[referenceKey]} onChange={(event) => setField(referenceKey, event.target.value)} style={input} placeholder="Payroll, leave or approval reference" /></Field>
+    <section style={tone === "credit" ? settlementCreditCard : settlementDebitCard}>
+      <div style={settlementAccountHeader}>
+        <span>{title}</span>
+        <span>{tone === "credit" ? "Employee Entitlements" : "Employee Recoveries"}</span>
+      </div>
+      <div>{children}</div>
+    </section>
+  );
+}
+
+function SettlementLine({ label, value, currency = "NGN", source }) {
+  return (
+    <div style={settlementLine}>
+      <div>
+        <strong style={settlementLineLabel}>{label}</strong>
+        {source ? <span style={settlementLineSource}>{source}</span> : null}
+      </div>
+      <strong style={settlementLineAmount}>{moneyText(value, currency)}</strong>
     </div>
   );
 }
+
+function SettlementInputLine({
+  label,
+  inputLabel = "Amount",
+  value,
+  onChange,
+  amount,
+  currency = "NGN",
+}) {
+  return (
+    <div style={settlementInputLine}>
+      <div>
+        <strong style={settlementLineLabel}>{label}</strong>
+        <span style={settlementLineSource}>HR Entry · {inputLabel}</span>
+      </div>
+      <div style={settlementInputValue}>
+        <input
+          type="number"
+          min="0"
+          step={inputLabel.toLowerCase().includes("day") ? "0.5" : "0.01"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          style={settlementMiniInput}
+          aria-label={`${label} ${inputLabel}`}
+        />
+        <strong style={settlementLineAmount}>{moneyText(amount, currency)}</strong>
+      </div>
+    </div>
+  );
+}
+
+const exitAccountMeta = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(185px,1fr))",
+  gap: 10,
+  padding: 14,
+  marginBottom: 16,
+  border: "1px solid rgba(212,175,55,.20)",
+  borderRadius: 13,
+  background: "rgba(255,255,255,.025)",
+};
+
+const metaLabel = {
+  display: "block",
+  marginBottom: 4,
+  color: "#8EA89A",
+  fontSize: 9,
+  fontWeight: 900,
+  letterSpacing: ".05em",
+  textTransform: "uppercase",
+};
+
+const accountColumns = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))",
+  gap: 14,
+};
+
+const settlementCreditCard = {
+  border: "1px solid rgba(46,233,139,.28)",
+  borderRadius: 14,
+  overflow: "hidden",
+  background: "rgba(5,48,30,.62)",
+};
+
+const settlementDebitCard = {
+  border: "1px solid rgba(212,175,55,.32)",
+  borderRadius: 14,
+  overflow: "hidden",
+  background: "rgba(38,31,8,.30)",
+};
+
+const settlementAccountHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "11px 13px",
+  background: "rgba(0,0,0,.20)",
+  color: "#F7FAF8",
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: ".06em",
+};
+
+const settlementLine = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "11px 13px",
+  borderBottom: "1px solid rgba(255,255,255,.055)",
+};
+
+const settlementInputLine = {
+  ...settlementLine,
+  alignItems: "flex-end",
+};
+
+const settlementLineLabel = {
+  display: "block",
+  color: "#F1F8F4",
+  fontSize: 11,
+};
+
+const settlementLineSource = {
+  display: "block",
+  marginTop: 3,
+  color: "#8EA89A",
+  fontSize: 8.5,
+};
+
+const settlementLineAmount = {
+  color: "#F6D35D",
+  fontSize: 12,
+  whiteSpace: "nowrap",
+};
+
+const settlementInputValue = {
+  display: "grid",
+  justifyItems: "end",
+  gap: 5,
+};
+
+const settlementMiniInput = {
+  width: 120,
+  padding: "7px 8px",
+  borderRadius: 8,
+  border: "1px solid rgba(212,175,55,.30)",
+  background: "#061F15",
+  color: "#F7FAF8",
+  outline: "none",
+  textAlign: "right",
+};
 
 const hero = {
   display: "flex",
