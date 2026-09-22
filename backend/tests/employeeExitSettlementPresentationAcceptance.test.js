@@ -116,3 +116,19 @@ test("settlement print keeps all point-based document typography at 12pt or larg
   assert.ok(allSizes.length > 0);
   assert.ok(allSizes.every((size) => size >= 12), \`Found print typography below 12pt: \${allSizes.filter((size) => size < 12).join(", ")}\`);
 });
+
+
+test("settlement print refuses fallback loading shells and prefers authoritative record", () => {
+  assert.ok(frontend.includes('data-settlement-print-state={settlementPreview ? "preview" : "loading"}'));
+  assert.ok(frontend.includes('data-settlement-print-state="record"'));
+  assert.ok(printUtility.includes('node.dataset.settlementPrintState === "record"'));
+  assert.ok(printUtility.includes('node.dataset.settlementPrintState === "preview"'));
+  assert.ok(printUtility.includes("still loading or has no calculated preview yet"));
+});
+
+test("settlement print centers organisation branding and prevents metadata label wrapping", () => {
+  assert.ok(printUtility.includes("margin: 0 auto 2px !important"));
+  assert.ok(printUtility.includes("grid-template-columns: 165px minmax(0, 1fr) !important"));
+  assert.ok(printUtility.includes("white-space: nowrap !important"));
+  assert.ok(printUtility.includes("width: 28px !important"));
+});
