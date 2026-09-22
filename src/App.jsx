@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
+import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
