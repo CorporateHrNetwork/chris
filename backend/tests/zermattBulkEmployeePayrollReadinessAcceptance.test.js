@@ -30,7 +30,7 @@ test("bulk employee template includes opening salary authority columns", () => {
 test("Zermatt bulk employee validation requires payroll-critical authority", () => {
   for (const expected of [
     "Employment Type is required for ZERMATT payroll readiness.",
-    "Cost Centre / Operating Unit is required for ZERMATT payroll readiness.",
+    "Department has no mapped Cost Centre / Operating Unit. Configure the Department mapping or supply a valid Cost Centre.",
     "Monthly Gross Salary is required for ZERMATT payroll readiness.",
   ]) {
     assert.ok(dataOps.includes(expected), `Missing Zermatt payroll-readiness validation: ${expected}`);
