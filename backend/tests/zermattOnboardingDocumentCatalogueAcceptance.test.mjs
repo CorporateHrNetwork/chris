@@ -52,7 +52,9 @@ test("both Zermatt document upload experiences use the tenant catalogue", () => 
   assert.ok(documentForm.includes("ZERMATT_DOCUMENT_TYPES"));
   assert.ok(documentForm.includes("isZermattOrganization(getStoredOrganization())"));
   assert.ok(fullWizard.includes("ZERMATT_DOCUMENT_TYPES"));
-  assert.ok(fullWizard.includes("isZermattOrganization(getStoredOrganization())"));
+  assert.ok(fullWizard.includes("const organization = getStoredOrganization() || {};"));
+  assert.ok(fullWizard.includes("const zermattTenant = isZermattOrganization(organization);"));
+  assert.ok(fullWizard.includes("const documentTypes = zermattTenant ? ZERMATT_DOCUMENT_TYPES : DEFAULT_DOCUMENT_TYPES;"));
   assert.ok(onboardingPage.includes("ZERMATT_DOCUMENT_ITEMS"));
 });
 
