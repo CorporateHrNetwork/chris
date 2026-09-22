@@ -339,6 +339,12 @@ router.post(
       const employeeId = text(req.body?.employeeId);
       const exitType = String(req.body?.exitType || "").trim().toUpperCase();
       const lastWorkingDay = date(req.body?.lastWorkingDay);
+      const noticeStatus = text(req.body?.noticeStatus) || "IN_PROGRESS";
+      const entitledNoticeDaysRaw = req.body?.entitledNoticeDays;
+      const entitledNoticeDays =
+        entitledNoticeDaysRaw === "" || entitledNoticeDaysRaw == null
+          ? null
+          : Number(entitledNoticeDaysRaw);
       const reason = text(req.body?.reason);
       const terminationReasonClass = text(req.body?.terminationReasonClass)?.toUpperCase() || null;
       const terminationAuthorityUserId = text(req.body?.terminationAuthorityUserId);
@@ -354,6 +360,26 @@ router.post(
 
       if (!lastWorkingDay) {
         return res.status(400).json({ status: "error", message: "Enter the last working day." });
+      }
+
+      if (
+        entitledNoticeDays != null &&
+        (!Number.isInteger(entitledNoticeDays) || entitledNoticeDays < 0)
+      ) {
+        return res.status(400).json({
+          status: "error",
+          message: "Entitled notice period must be a whole number of days.",
+        });
+      }
+
+      if (
+        !["WAIVED", "NOT_REQUIRED"].includes(String(noticeStatus).toUpperCase()) &&
+        (!Number.isInteger(entitledNoticeDays) || entitledNoticeDays <= 0)
+      ) {
+        return res.status(400).json({
+          status: "error",
+          message: "Enter the employee's entitled notice period in days.",
+        });
       }
 
       if (!reason) {
@@ -400,7 +426,8 @@ router.post(
           exitType,
           targetStatus: EXIT_TYPES[exitType],
           noticeDate: date(req.body?.noticeDate),
-          noticeStatus: text(req.body?.noticeStatus) || "IN_PROGRESS",
+          noticeStatus,
+          entitledNoticeDays,
           lastWorkingDay,
           reason,
           notes: text(req.body?.notes),
