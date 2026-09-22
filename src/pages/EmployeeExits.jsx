@@ -96,7 +96,7 @@ function settlementFormFromRecord(record) {
     unreturnedUniform: String(hrInputs.unreturnedUniform || ""),
     previousSalaryOverpaid: String(hrInputs.previousSalaryOverpaid || ""),
     currency: record.currency || "NGN",
-    notes: record.notes || "",
+    notes: record.calculationSnapshot?.hrSupplementaryNote || "",
   };
 }
 
@@ -853,6 +853,11 @@ export default function EmployeeExits() {
       totalDebits: Number(settlement?.totalRecovery || 0),
       netSettlement: Number(settlement?.netSettlement || 0),
     };
+    const calculationNote =
+      settlementPreview?.calculationNote ||
+      snapshot.calculationNote ||
+      settlement?.notes ||
+      "";
     return (
       <div className="employee-exit-settlement-page">
         <PageHero
@@ -868,8 +873,23 @@ export default function EmployeeExits() {
             <EmployeeCard employee={settlementExit} />
             <section style={panel}>
               <div style={sectionHeader}>
-                <div><div style={eyebrow}>FINANCIAL STATUS</div><h2 style={sectionTitle}>{titleCase(settlementExit.exitProcess?.financialStatus || "PENDING")}</h2></div>
-                {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
+                <div>
+                  <div style={eyebrow}>FINANCIAL STATUS</div>
+                  <h2 style={sectionTitle}>{titleCase(settlementExit.exitProcess?.financialStatus || "PENDING")}</h2>
+                </div>
+                <div style={settlementHeaderActions}>
+                  {settlement && settlement.status !== "WAIVED" ? (
+                    <button
+                      type="button"
+                      className="exit-settlement-print-button"
+                      style={secondaryButton}
+                      onClick={() => window.print()}
+                    >
+                      <FaPrint /> Print / Download PDF
+                    </button>
+                  ) : null}
+                  {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
+                </div>
               </div>
 
               {accountEmployee && accountExit ? (
@@ -891,7 +911,7 @@ export default function EmployeeExits() {
 
               {!settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status) ? (
                 <form onSubmit={calculateExitSettlement}>
-                  <div style={accountColumns}>
+                  <div className="exit-settlement-account-columns" style={accountColumns}>
                     <SettlementAccountSection title="CREDIT" tone="credit">
                       <SettlementLine label="Gratuity / EoSB" value={accountCredits?.gratuityEosb} currency={accountSalary?.currency} source="System · EoSB Account" />
                       <SettlementLine label="Full / Prorated Annual Leave Allowance" value={accountCredits?.annualLeaveAllowance} currency={accountSalary?.currency} source="System · Leave Allowance formula" />
@@ -929,7 +949,25 @@ export default function EmployeeExits() {
                     <Info label="Net Exit Settlement" value={moneyText(accountTotals?.netSettlement, accountSalary?.currency || settlement?.currency)} />
                   </div>
 
-                  <div style={{ ...full, marginTop: 14 }}><Field label="Calculation Notes"><textarea value={settlementForm.notes} onChange={(event) => setSettlementField("notes", event.target.value)} style={textarea} /></Field></div>
+                  <div style={{ ...full, marginTop: 14 }}>
+                    <Field label="Calculation Notes — Auto-filled by CHRiS">
+                      <textarea
+                        value={calculationNote}
+                        readOnly
+                        style={{ ...textarea, minHeight: 180, background: "rgba(255,255,255,.035)", color: "#DDE9E2" }}
+                      />
+                    </Field>
+                  </div>
+                  <div style={{ ...full, marginTop: 10 }}>
+                    <Field label="HR Supplementary Note (Optional)">
+                      <textarea
+                        value={settlementForm.notes}
+                        onChange={(event) => setSettlementField("notes", event.target.value)}
+                        style={textarea}
+                        placeholder="Add only any additional HR explanation not already covered by the CHRiS calculation basis."
+                      />
+                    </Field>
+                  </div>
                   <div style={footer}><span style={muted}>System-derived items are locked and pulled from CHRiS source accounts/rules. Only HR-designated settlement inputs are editable.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy || !settlementPreview}>{busy ? "Calculating..." : "Calculate Exit Settlement Account"}</button></div>
                 </form>
               ) : null}
@@ -951,8 +989,7 @@ export default function EmployeeExits() {
                   ) : null}
                   {["PAYMENT_PENDING", "PARTIALLY_PAID"].includes(settlement.status) ? (
                     <div style={settlementAction}>
-                      <div style={closureNotice}>Head HR approval is complete. Auditor review, GM payout approval and Accounts Team payout processing are completed externally on the printed settlement document.</div>
-                      <button type="button" className="exit-settlement-print-button" style={primaryButton} onClick={() => window.print()}><FaPrint /> Print Settlement Account</button>
+                      <div style={closureNotice}>Head HR approval is complete. Auditor review, GM payout approval and Accounts Team payout processing are completed externally on the printed settlement document. Use the Print / Download PDF button above for the settlement document.</div>
                     </div>
                   ) : null}
                   {["PAYMENT_PENDING", "PARTIALLY_PAID", "PAID"].includes(settlement.status) ? (
@@ -1032,6 +1069,16 @@ export default function EmployeeExits() {
                         <div><span>Total Debits</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement.currency)}</strong></div>
                         <div className="net"><span>Net Exit Settlement</span><strong>{moneyText(accountTotals?.netSettlement, accountSalary?.currency || settlement.currency)}</strong></div>
                       </div>
+
+                      <section className="exit-settlement-print-calculation-note">
+                        <h3>Calculation Basis</h3>
+                        <pre>{snapshot.calculationNote || calculationNote}</pre>
+                        {snapshot.hrSupplementaryNote ? (
+                          <div className="exit-settlement-print-hr-note">
+                            <strong>HR Supplementary Note:</strong> {snapshot.hrSupplementaryNote}
+                          </div>
+                        ) : null}
+                      </section>
 
                       <section className="exit-settlement-headhr-approval">
                         <h3>Internal CHRiS Approval</h3>
@@ -2200,8 +2247,17 @@ const metaLabel = {
 
 const accountColumns = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))",
+  gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
   gap: 14,
+  alignItems: "start",
+};
+
+const settlementHeaderActions = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 8,
+  flexWrap: "wrap",
 };
 
 const settlementCreditCard = {

@@ -282,3 +282,44 @@
     margin-top: 12px !important;
   }
 }
+
+
+@media (max-width: 900px) {
+  .exit-settlement-account-columns {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media print {
+  .exit-settlement-print-calculation-note {
+    margin-top: 10px;
+    padding: 8px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #ffffff !important;
+    break-inside: avoid;
+  }
+
+  .exit-settlement-print-calculation-note h3 {
+    margin: 0 0 6px;
+    color: #064e3b !important;
+    font-size: 9pt;
+  }
+
+  .exit-settlement-print-calculation-note pre {
+    margin: 0;
+    color: #334155 !important;
+    background: transparent !important;
+    font: 7.2pt/1.45 Arial, Helvetica, sans-serif;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .exit-settlement-print-hr-note {
+    margin-top: 7px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+    color: #475569 !important;
+    font-size: 7.5pt;
+  }
+}
