@@ -1,4 +1,7 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
 
 const prisma = require("../config/prisma");
 const {
@@ -15,6 +18,210 @@ const settlements = require("../services/exitSettlementService");
 
 const router = express.Router();
 router.use(requireAuth);
+const EXIT_DOCUMENT_TYPES = {
+  RESIGNATION_LETTER: "Resignation Letter",
+  TERMINATION_LETTER: "Termination Letter",
+  RETIREMENT_NOTICE: "Retirement Notice",
+  END_OF_CONTRACT_NOTICE: "End of Contract Notice",
+  REDUNDANCY_NOTICE: "Redundancy Notice",
+  EXIT_ACCEPTANCE_LETTER: "Exit / Resignation Acceptance Letter",
+  CLEARANCE_DOCUMENT: "Exit Clearance Document",
+  HANDOVER_DOCUMENT: "Handover Document",
+  OTHER_EXIT_DOCUMENT: "Other Exit Document",
+};
+
+const exitUploadRoot = path.join(process.cwd(), "uploads", "exit-documents");
+fs.mkdirSync(exitUploadRoot, { recursive: true });
+
+const exitDocumentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, callback) => callback(null, exitUploadRoot),
+    filename: (req, file, callback) => {
+      const safeOriginal = String(file.originalname || "exit-document")
+        .replace(/[^A-Za-z0-9._-]+/g, "_")
+        .slice(-120);
+      callback(
+        null,
+        `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeOriginal}`
+      );
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+function mapExitDocument(document) {
+  return {
+    ...document,
+    categoryLabel: EXIT_DOCUMENT_TYPES[document.category] || document.category,
+  };
+}
+
+
+router.get(
+  "/:id/documents",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const exitProcess = await prisma.employeeExitProcess.findFirst({
+        where: {
+          id: req.params.id,
+          organizationId: req.auth.organizationId,
+        },
+        select: { id: true },
+      });
+      if (!exitProcess) {
+        return res.status(404).json({ status: "error", message: "Exit process not found." });
+      }
+
+      const documents = await prisma.employeeDocument.findMany({
+        where: {
+          organizationId: req.auth.organizationId,
+          exitProcessId: exitProcess.id,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return res.json({
+        status: "success",
+        data: documents.map(mapExitDocument),
+        documentTypes: EXIT_DOCUMENT_TYPES,
+      });
+    } catch (error) {
+      console.error("Load exit documents error:", error);
+      return res.status(500).json({ status: "error", message: "Unable to load exit documents." });
+    }
+  }
+);
+
+router.post(
+  "/:id/documents",
+  requirePermission("employees.update"),
+  exitDocumentUpload.single("document"),
+  async (req, res) => {
+    try {
+      const exitProcess = await prisma.employeeExitProcess.findFirst({
+        where: {
+          id: req.params.id,
+          organizationId: req.auth.organizationId,
+        },
+        select: {
+          id: true,
+          employeeId: true,
+          exitType: true,
+          status: true,
+        },
+      });
+
+      if (!exitProcess) {
+        if (req.file?.path) fs.unlink(req.file.path, () => {});
+        return res.status(404).json({ status: "error", message: "Exit process not found." });
+      }
+
+      const category = String(req.body?.category || "").trim().toUpperCase();
+      if (!EXIT_DOCUMENT_TYPES[category]) {
+        if (req.file?.path) fs.unlink(req.file.path, () => {});
+        return res.status(400).json({ status: "error", message: "Select a valid exit document type." });
+      }
+      if (!req.file) {
+        return res.status(400).json({ status: "error", message: "Choose an exit document to upload." });
+      }
+
+      const document = await prisma.$transaction(async (tx) => {
+        const created = await tx.employeeDocument.create({
+          data: {
+            organizationId: req.auth.organizationId,
+            employeeId: exitProcess.employeeId,
+            exitProcessId: exitProcess.id,
+            category,
+            originalName: req.file.originalname,
+            storedName: req.file.filename,
+            mimeType: req.file.mimetype,
+            sizeBytes: req.file.size,
+            storagePath: req.file.path,
+            notes: req.body?.notes ? String(req.body.notes).trim() : null,
+            uploadedByUserId: req.auth.userId || null,
+          },
+        });
+
+        await tx.organizationAudit.create({
+          data: {
+            organizationId: req.auth.organizationId,
+            actorUserId: req.auth.userId || null,
+            entityType: "EmployeeExitProcess",
+            entityId: exitProcess.id,
+            action: "EXIT_DOCUMENT_UPLOADED",
+            newValue: {
+              documentId: created.id,
+              category,
+              originalName: created.originalName,
+              employeeId: exitProcess.employeeId,
+            },
+            reason: "Exit supporting document uploaded",
+          },
+        });
+
+        return created;
+      });
+
+      return res.status(201).json({
+        status: "success",
+        message: "Exit document uploaded successfully.",
+        data: mapExitDocument(document),
+      });
+    } catch (error) {
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+      console.error("Upload exit document error:", error);
+      return res.status(500).json({ status: "error", message: "Unable to upload exit document." });
+    }
+  }
+);
+
+router.delete(
+  "/:id/documents/:documentId",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const document = await prisma.employeeDocument.findFirst({
+        where: {
+          id: req.params.documentId,
+          organizationId: req.auth.organizationId,
+          exitProcessId: req.params.id,
+        },
+      });
+      if (!document) {
+        return res.status(404).json({ status: "error", message: "Exit document not found." });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.employeeDocument.delete({ where: { id: document.id } });
+        await tx.organizationAudit.create({
+          data: {
+            organizationId: req.auth.organizationId,
+            actorUserId: req.auth.userId || null,
+            entityType: "EmployeeExitProcess",
+            entityId: req.params.id,
+            action: "EXIT_DOCUMENT_DELETED",
+            previousValue: {
+              documentId: document.id,
+              category: document.category,
+              originalName: document.originalName,
+            },
+            reason: "Exit supporting document deleted",
+          },
+        });
+      });
+
+      if (document.storagePath && fs.existsSync(document.storagePath)) {
+        fs.unlink(document.storagePath, () => {});
+      }
+
+      return res.json({ status: "success", message: "Exit document deleted." });
+    } catch (error) {
+      console.error("Delete exit document error:", error);
+      return res.status(500).json({ status: "error", message: "Unable to delete exit document." });
+    }
+  }
+);
 
 router.get("/register", requirePermission("employees.view"), async (req, res) => {
   try {
