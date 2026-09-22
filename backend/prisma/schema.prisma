@@ -1472,6 +1472,7 @@ model EmployeeExitProcess {
   targetStatus               EmployeeStatus
   noticeDate                 DateTime?
   noticeStatus               String              @default("IN_PROGRESS")
+  entitledNoticeDays         Int?
   lastWorkingDay             DateTime
   reason                     String
   notes                      String?
