@@ -1680,8 +1680,16 @@ const exitDocumentGrid = {
 };
 
 const fileInput = {
-  ...input,
+  width: "100%",
+  minHeight: 43,
+  boxSizing: "border-box",
+  border: "1px solid rgba(212,175,55,.20)",
+  borderRadius: 9,
+  outline: "none",
+  background: "#061A11",
+  color: "#F5F7F6",
   padding: "8px 10px",
+  fontSize: 13,
 };
 
 const selectedExitDocument = {
