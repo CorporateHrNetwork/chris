@@ -78,7 +78,7 @@ const EMPTY_SETTLEMENT = {
   bonusGift: "",
   noticePayDays: "",
   previousSalaryShortPaid: "",
-  noticeDeductionDays: "",
+  entitledNoticeDays: "",
   unreturnedUniform: "",
   previousSalaryOverpaid: "",
   currency: "NGN",
@@ -92,7 +92,7 @@ function settlementFormFromRecord(record) {
     bonusGift: String(hrInputs.bonusGift || ""),
     noticePayDays: String(hrInputs.noticePayDays || ""),
     previousSalaryShortPaid: String(hrInputs.previousSalaryShortPaid || ""),
-    noticeDeductionDays: String(hrInputs.noticeDeductionDays || ""),
+    entitledNoticeDays: String(hrInputs.entitledNoticeDays || ""),
     unreturnedUniform: String(hrInputs.unreturnedUniform || ""),
     previousSalaryOverpaid: String(hrInputs.previousSalaryOverpaid || ""),
     currency: record.currency || "NGN",
@@ -241,7 +241,7 @@ export default function EmployeeExits() {
         bonusGift: String(settlementForm.bonusGift || 0),
         noticePayDays: String(settlementForm.noticePayDays || 0),
         previousSalaryShortPaid: String(settlementForm.previousSalaryShortPaid || 0),
-        noticeDeductionDays: String(settlementForm.noticeDeductionDays || 0),
+        entitledNoticeDays: String(settlementForm.entitledNoticeDays || 0),
         unreturnedUniform: String(settlementForm.unreturnedUniform || 0),
         previousSalaryOverpaid: String(settlementForm.previousSalaryOverpaid || 0),
       });
@@ -264,7 +264,7 @@ export default function EmployeeExits() {
     settlementForm.bonusGift,
     settlementForm.noticePayDays,
     settlementForm.previousSalaryShortPaid,
-    settlementForm.noticeDeductionDays,
+    settlementForm.entitledNoticeDays,
     settlementForm.unreturnedUniform,
     settlementForm.previousSalaryOverpaid,
   ]);
@@ -722,7 +722,7 @@ export default function EmployeeExits() {
       "bonusGift",
       "noticePayDays",
       "previousSalaryShortPaid",
-      "noticeDeductionDays",
+      "entitledNoticeDays",
       "unreturnedUniform",
       "previousSalaryOverpaid",
     ];
@@ -775,7 +775,9 @@ export default function EmployeeExits() {
                   <div><span style={metaLabel}>Branch</span><strong>{accountEmployee.branchCode || accountEmployee.branch || "—"}</strong></div>
                   <div><span style={metaLabel}>Employment Type</span><strong>{accountEmployee.employmentType || "—"}</strong></div>
                   <div><span style={metaLabel}>Exit Type</span><strong>{titleCase(accountExit.exitType)}</strong></div>
+                  <div><span style={metaLabel}>Notice Date</span><strong>{dateText(accountExit.noticeDate)}</strong></div>
                   <div><span style={metaLabel}>Final Working Day</span><strong>{dateText(accountExit.lastWorkingDay)}</strong></div>
+                  <div><span style={metaLabel}>Notice Days Given</span><strong>{settlementPreview?.hrInputs?.noticeDaysGiven ?? snapshot.hrInputs?.noticeDaysGiven ?? "—"} days</strong></div>
                   <div style={full}><span style={metaLabel}>Exit Reason</span><strong>{accountExit.reason || "—"}</strong></div>
                   {accountSalary ? <div style={full}><span style={metaLabel}>Settlement Salary Basis</span><strong>{moneyText(accountSalary.monthlyGross, accountSalary.currency)} monthly gross · Daily rate {moneyText(accountSalary.dayRate, accountSalary.currency)} · Hourly rate {moneyText(accountSalary.hourRate, accountSalary.currency)}</strong></div> : null}
                 </section>
@@ -799,7 +801,18 @@ export default function EmployeeExits() {
                     <SettlementAccountSection title="DEBIT" tone="debit">
                       <SettlementLine label="Loan Balance" value={accountDebits?.loanBalance} currency={accountSalary?.currency} source="System · Loan Account" />
                       <SettlementLine label="Salary Advance" value={accountDebits?.salaryAdvance} currency={accountSalary?.currency} source="System · Salary Advance Account" />
-                      <SettlementInputLine label="In Lieu of Notice Deduction" inputLabel="Deficient Days" value={settlementForm.noticeDeductionDays} onChange={(value) => setSettlementField("noticeDeductionDays", value)} amount={accountDebits?.noticeDeduction} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Entitled Notice Period" inputLabel="Days" value={settlementForm.entitledNoticeDays} onChange={(value) => setSettlementField("entitledNoticeDays", value)} amount={0} currency={accountSalary?.currency} hideAmount />
+                      <SettlementNoticeSummary
+                        noticeDate={accountExit?.noticeDate}
+                        lastWorkingDay={accountExit?.lastWorkingDay}
+                        requiredDays={settlementPreview?.hrInputs?.entitledNoticeDays ?? snapshot.hrInputs?.entitledNoticeDays}
+                        daysGiven={settlementPreview?.hrInputs?.noticeDaysGiven ?? snapshot.hrInputs?.noticeDaysGiven}
+                        deficiencyDays={settlementPreview?.hrInputs?.noticeDeficiencyDays ?? snapshot.hrInputs?.noticeDeficiencyDays}
+                        excessDays={settlementPreview?.hrInputs?.noticeExcessDays ?? snapshot.hrInputs?.noticeExcessDays}
+                        waived={settlementPreview?.hrInputs?.noticeDeductionWaived ?? snapshot.hrInputs?.noticeDeductionWaived}
+                        deduction={accountDebits?.noticeDeduction}
+                        currency={accountSalary?.currency}
+                      />
                       <SettlementInputLine label="Unreturned Uniform" value={settlementForm.unreturnedUniform} onChange={(value) => setSettlementField("unreturnedUniform", value)} amount={accountDebits?.unreturnedUniform} currency={accountSalary?.currency} />
                       <SettlementInputLine label="Previous Salary Overpaid" value={settlementForm.previousSalaryOverpaid} onChange={(value) => setSettlementField("previousSalaryOverpaid", value)} amount={accountDebits?.previousSalaryOverpaid} currency={accountSalary?.currency} />
                     </SettlementAccountSection>
@@ -855,7 +868,11 @@ export default function EmployeeExits() {
                         <div><span>Cost Centre</span><strong>{accountEmployee?.costCentreCode ? `${accountEmployee.costCentreCode} · ${accountEmployee.costCentre || ""}` : (accountEmployee?.costCentre || "—")}</strong></div>
                         <div><span>Branch</span><strong>{accountEmployee?.branch || "—"}</strong></div>
                         <div><span>Exit Type</span><strong>{titleCase(accountExit?.exitType)}</strong></div>
+                        <div><span>Notice Date</span><strong>{dateText(accountExit?.noticeDate)}</strong></div>
                         <div><span>Final Working Day</span><strong>{dateText(accountExit?.lastWorkingDay)}</strong></div>
+                        <div><span>Entitled Notice</span><strong>{settlementPreview?.hrInputs?.entitledNoticeDays ?? snapshot.hrInputs?.entitledNoticeDays ?? 0} days</strong></div>
+                        <div><span>Notice Days Given</span><strong>{settlementPreview?.hrInputs?.noticeDaysGiven ?? snapshot.hrInputs?.noticeDaysGiven ?? 0} days</strong></div>
+                        <div><span>Notice Deficiency</span><strong>{settlementPreview?.hrInputs?.noticeDeficiencyDays ?? snapshot.hrInputs?.noticeDeficiencyDays ?? 0} days</strong></div>
                         <div className="exit-settlement-print-meta-wide"><span>Exit Reason</span><strong>{accountExit?.reason || "—"}</strong></div>
                       </div>
 
