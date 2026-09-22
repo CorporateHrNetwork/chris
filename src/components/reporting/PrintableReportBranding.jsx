@@ -45,7 +45,6 @@ export function PrintableReportFooter({ generatedAt }) {
       <span className="chris-print-report-powered">
         <span>Powered by</span>
         <img src={chrisLogo} alt="CHRiS" />
-        <strong>CHRiS</strong>
       </span>
     </footer>
   );
