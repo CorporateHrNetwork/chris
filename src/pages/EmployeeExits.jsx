@@ -1006,6 +1006,17 @@ export default function EmployeeExits() {
                       </Field>
                     </div>
 
+                    <div style={full}>
+                      <ExitDocumentSection
+                        draft={exitDocumentDraft}
+                        setDraft={setExitDocumentDraft}
+                        documents={[]}
+                        busy={documentBusy}
+                        canUpdate={canUpdate}
+                        beforeInitiation
+                      />
+                    </div>
+
                     <div style={footer}>
                       <span style={muted}>
                         Initiating the exit does not remove the employee. Complete clearance below before final exit.
@@ -1040,6 +1051,18 @@ export default function EmployeeExits() {
                         {label}
                       </label>
                     ))}
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <ExitDocumentSection
+                      draft={exitDocumentDraft}
+                      setDraft={setExitDocumentDraft}
+                      documents={exitDocuments}
+                      busy={documentBusy}
+                      canUpdate={canUpdate}
+                      onUpload={saveExitDocument}
+                      onDelete={deleteExitDocument}
+                    />
                   </div>
 
                   <div style={{ marginTop: 18 }}>
@@ -1421,6 +1444,122 @@ function Field({ label, children }) {
   );
 }
 
+function ExitDocumentSection({
+  draft,
+  setDraft,
+  documents,
+  busy,
+  canUpdate,
+  onUpload,
+  onDelete,
+  beforeInitiation = false,
+}) {
+  return (
+    <section style={exitDocumentPanel}>
+      <div style={exitDocumentHeader}>
+        <div>
+          <div style={eyebrow}>EXIT DOCUMENTS</div>
+          <h3 style={exitDocumentTitle}>Supporting Exit Document</h3>
+          <div style={muted}>
+            {beforeInitiation
+              ? "Attach the employee's exit document now. CHRiS will link it to the exit process when you click Initiate Exit."
+              : "Upload and retain resignation, termination, retirement, clearance, handover or other separation documents for this exit record."}
+          </div>
+        </div>
+        {!beforeInitiation ? <span style={countBadge}>{documents.length} file{documents.length === 1 ? "" : "s"}</span> : null}
+      </div>
+
+      <div style={exitDocumentGrid}>
+        <Field label="Document Type">
+          <select
+            value={draft.category}
+            onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}
+            style={input}
+            disabled={!canUpdate || busy}
+          >
+            {EXIT_DOCUMENT_TYPES.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Choose File">
+          <input
+            key={draft.file ? draft.file.name : "empty-exit-document"}
+            type="file"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            onChange={(event) => setDraft((current) => ({
+              ...current,
+              file: event.target.files?.[0] || null,
+            }))}
+            style={fileInput}
+            disabled={!canUpdate || busy}
+          />
+        </Field>
+
+        <div style={full}>
+          <Field label="Document Notes">
+            <input
+              value={draft.notes}
+              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+              style={input}
+              placeholder="Optional document description / reference"
+              disabled={!canUpdate || busy}
+            />
+          </Field>
+        </div>
+      </div>
+
+      {draft.file ? (
+        <div style={selectedExitDocument}>
+          <strong>{draft.file.name}</strong>
+          <span>{Math.max(1, Math.round(Number(draft.file.size || 0) / 1024))} KB · ready to upload</span>
+        </div>
+      ) : null}
+
+      {!beforeInitiation ? (
+        <>
+          <div style={exitDocumentActions}>
+            <span style={muted}>Maximum file size: 10 MB.</span>
+            <button
+              type="button"
+              style={secondaryButton}
+              disabled={!canUpdate || busy || !draft.file}
+              onClick={onUpload}
+            >
+              {busy ? "Uploading..." : "Upload Exit Document"}
+            </button>
+          </div>
+
+          {documents.length ? (
+            <div style={exitDocumentList}>
+              {documents.map((document) => (
+                <div key={document.id} style={exitDocumentRow}>
+                  <div>
+                    <strong>{document.categoryLabel || titleCase(document.category)}</strong>
+                    <div style={muted}>{document.originalName}</div>
+                    {document.notes ? <div style={muted}>{document.notes}</div> : null}
+                  </div>
+                  <button
+                    type="button"
+                    style={dangerButton}
+                    disabled={!canUpdate || busy}
+                    onClick={() => onDelete?.(document.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ ...muted, marginTop: 10 }}>No exit documents uploaded yet.</div>
+          )}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function PrintableSettlementTable({ title, items, currency = "NGN" }) {
   return (
     <section className="exit-settlement-print-table-section">
@@ -1512,6 +1651,78 @@ function SettlementInputLine({
     </div>
   );
 }
+
+const exitDocumentPanel = {
+  padding: 14,
+  border: "1px solid rgba(212,175,55,.24)",
+  borderRadius: 13,
+  background: "rgba(5,43,27,.50)",
+};
+
+const exitDocumentHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  marginBottom: 12,
+};
+
+const exitDocumentTitle = {
+  margin: "3px 0 4px",
+  color: "#F7FAF8",
+  fontSize: 14,
+};
+
+const exitDocumentGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: 10,
+};
+
+const fileInput = {
+  ...input,
+  padding: "8px 10px",
+};
+
+const selectedExitDocument = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  flexWrap: "wrap",
+  marginTop: 10,
+  padding: "9px 10px",
+  border: "1px solid rgba(46,233,139,.24)",
+  borderRadius: 9,
+  background: "rgba(46,233,139,.06)",
+  color: "#DCECE3",
+  fontSize: 10,
+};
+
+const exitDocumentActions = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+  marginTop: 12,
+};
+
+const exitDocumentList = {
+  display: "grid",
+  gap: 7,
+  marginTop: 12,
+};
+
+const exitDocumentRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "9px 10px",
+  border: "1px solid rgba(255,255,255,.07)",
+  borderRadius: 9,
+  background: "rgba(255,255,255,.025)",
+};
 
 const exitAccountMeta = {
   display: "grid",
