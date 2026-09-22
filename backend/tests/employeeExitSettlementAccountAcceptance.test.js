@@ -135,8 +135,8 @@ test("printable settlement carries the external signatory workflow outside CHRiS
     "Auditor Name",
     "General Manager Name",
     "Payment Reference / Voucher No.",
-    "Prepared & Approved By",
-    "Head, Human Resources",
+    "Head of HR Approval & Signature",
+    "Head of Human Resources",
     "Print / Download PDF",
   ]) {
     assert.ok(frontend.includes(expected), `Missing printable settlement control: ${expected}`);

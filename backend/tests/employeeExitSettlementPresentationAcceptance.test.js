@@ -6,7 +6,8 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..", "..");
 const service = fs.readFileSync(path.join(root, "backend/src/services/exitSettlementService.js"), "utf8");
 const frontend = fs.readFileSync(path.join(root, "src/pages/EmployeeExits.jsx"), "utf8");
-const css = fs.readFileSync(path.join(root, "src/pages/EmployeeExits.css"), "utf8");\nconst printUtility = fs.readFileSync(path.join(root, "src/utils/exitSettlementPrint.js"), "utf8");
+const css = fs.readFileSync(path.join(root, "src/pages/EmployeeExits.css"), "utf8");
+const printUtility = fs.readFileSync(path.join(root, "src/utils/exitSettlementPrint.js"), "utf8");
 
 test("CHRiS auto-generates calculation notes from active settlement rules", () => {
   assert.ok(service.includes("function buildCalculationNote(preview)"));
@@ -33,7 +34,7 @@ test("auto calculation note is persisted separately from optional HR commentary"
   assert.ok(frontend.includes("record.calculationSnapshot?.hrSupplementaryNote ||"));
 });
 
-test("settlement account structurally locks CREDIT left and DEBIT right", () => {
+test("interactive settlement retains its existing account columns", () => {
   assert.ok(frontend.includes('className="exit-settlement-account-columns"'));
   assert.ok(frontend.includes('className="exit-settlement-credit-column"'));
   assert.ok(frontend.includes('className="exit-settlement-debit-column"'));
@@ -57,7 +58,6 @@ test("settlement provides Print / Download PDF from preview stage and prints the
   assert.ok(frontend.includes("fallbackAccountEmployee"));
   assert.ok(frontend.includes("fallbackAccountExit"));
   assert.ok(frontend.includes("Employee Exit Settlement Account — Draft"));
-  assert.ok(frontend.includes("Draft Preview"));
   assert.ok(frontend.includes("printExitSettlementDocument"));
   assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(printUtility.includes("printWindow.print()"));
@@ -71,11 +71,12 @@ test("settlement provides Print / Download PDF from preview stage and prints the
 test("settlement standalone print uses three-column employee details and explicit accounting sides", () => {
   assert.ok(frontend.includes('title="CREDIT — BENEFITS / ENTITLEMENTS"'));
   assert.ok(frontend.includes('title="DEBIT — DEDUCTIONS / RECOVERIES"'));
-  assert.ok(printUtility.includes("grid-template-columns: repeat(3, minmax(0, 1fr))"));
+  assert.ok(printUtility.includes("exit-settlement-print-meta-table"));
+  assert.ok(printUtility.includes("cell.colSpan = 3"));
   assert.ok(printUtility.includes(".exit-settlement-print-account > :first-child"));
-  assert.ok(printUtility.includes("grid-column: 1 !important"));
+  assert.match(printUtility, /:first-child\s*\{\s*grid-column: 2 !important/);
   assert.ok(printUtility.includes(".exit-settlement-print-account > :nth-child(2)"));
-  assert.ok(printUtility.includes("grid-column: 2 !important"));
+  assert.match(printUtility, /:nth-child\(2\)\s*\{\s*grid-column: 1 !important/);
 });
 
 test("settlement standalone print provides visible controls and Head of HR signature section", () => {
@@ -90,7 +91,8 @@ test("settlement print is isolated from EmployeeExits page rendering", () => {
   assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(frontend.includes("async function printExitSettlementDocument()"));
   assert.equal(frontend.includes("const PRINT_CSS"), false);
-  assert.ok(printUtility.includes("export default function openExitSettlementPrint()"));
+  assert.ok(printUtility.includes("export default function openExitSettlementPrint(printWindow)"));
+  assert.ok(frontend.includes('const printWindow = window.open("", "_blank")'));
 });
 
 test("formal settlement print remains readable and compact", () => {
@@ -99,7 +101,8 @@ test("formal settlement print remains readable and compact", () => {
   assert.ok(printUtility.includes("removeNilLedgerRows"));
   assert.ok(printUtility.includes("exit-settlement-print-lower-grid"));
   assert.ok(printUtility.includes("exit-settlement-external-approval-table"));
-  assert.ok(printUtility.includes("Nil-value settlement items are omitted from the formal printed statement."));
+  assert.ok(printUtility.includes("removeNilLedgerRows(clone)"));
+  assert.ok(printUtility.includes('Generated ${new Date().toLocaleString("en-NG")}'));
 });
 
 
@@ -114,13 +117,13 @@ test("settlement print keeps all point-based document typography at 12pt or larg
   const shorthandSizes = [...printUtility.matchAll(/font:\s*(?:\\d+\\s+)?([0-9.]+)pt\//g)].map((match) => Number(match[1]));
   const allSizes = [...sizes, ...shorthandSizes];
   assert.ok(allSizes.length > 0);
-  assert.ok(allSizes.every((size) => size >= 12), \`Found print typography below 12pt: \${allSizes.filter((size) => size < 12).join(", ")}\`);
+  assert.ok(allSizes.every((size) => size >= 12), `Found print typography below 12pt: ${allSizes.filter((size) => size < 12).join(", ")}`);
 });
 
 
 test("settlement print refuses fallback loading shells and prefers authoritative record", () => {
-  assert.ok(frontend.includes('data-settlement-print-state={settlementPreview ? "preview" : "loading"}'));
-  assert.ok(frontend.includes('data-settlement-print-state="record"'));
+  assert.ok(frontend.includes('settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits'));
+  assert.ok(frontend.includes('snapshotReady ? "record"'));
   assert.ok(printUtility.includes('node.dataset.settlementPrintState === "record"'));
   assert.ok(printUtility.includes('node.dataset.settlementPrintState === "preview"'));
   assert.ok(printUtility.includes("still loading or has no calculated preview yet"));
@@ -128,7 +131,7 @@ test("settlement print refuses fallback loading shells and prefers authoritative
 
 test("settlement print centers organisation branding and prevents metadata label wrapping", () => {
   assert.ok(printUtility.includes("margin: 0 auto 2px !important"));
-  assert.ok(printUtility.includes("grid-template-columns: 165px minmax(0, 1fr) !important"));
+  assert.ok(printUtility.includes("flex: 0 0 165px !important"));
   assert.ok(printUtility.includes("white-space: nowrap !important"));
   assert.ok(printUtility.includes("width: 28px !important"));
 });

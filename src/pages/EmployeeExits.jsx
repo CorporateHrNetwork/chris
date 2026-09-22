@@ -167,10 +167,16 @@ function calculateNoticePreview({ noticeDate, lastWorkingDay, entitledNoticeDays
 
 
 async function printExitSettlementDocument() {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.alert("Allow pop-ups to print or download the Employee Exit Settlement Account.");
+    return;
+  }
   try {
     const module = await import("../utils/exitSettlementPrint.js");
-    module.default();
+    module.default(printWindow);
   } catch (error) {
+    printWindow.close();
     console.error("Unable to open Employee Exit Settlement print view.", error);
     window.alert("Unable to open the Employee Exit Settlement print view. Please refresh and try again.");
   }
@@ -866,25 +872,22 @@ export default function EmployeeExits() {
       lastWorkingDay: settlementExit.exitProcess.effectiveDate || settlementExit.exitDate || null,
       reason: settlementExit.exitProcess.reason || "",
     } : null;
-    const accountEmployee = settlementPreview?.employee || snapshot.employee || fallbackAccountEmployee;
-    const accountExit = settlementPreview?.exit || snapshot.exit || fallbackAccountExit;
-    const accountSalary = settlementPreview?.salary || snapshot.salary || null;
-    const accountCredits = settlementPreview?.credits || Object.fromEntries(
-      Object.entries(snapshot.creditItems || {}).map(([key, item]) => [key, Number(item?.amount || 0)])
-    );
-    const accountDebits = settlementPreview?.debits || Object.fromEntries(
-      Object.entries(snapshot.debitItems || {}).map(([key, item]) => [key, Number(item?.amount || 0)])
-    );
-    const accountTotals = settlementPreview?.totals || snapshot.totals || {
+    const snapshotReady = Boolean(settlement && snapshot.employee && snapshot.exit && snapshot.creditItems && snapshot.debitItems && snapshot.totals);
+    const accountEmployee = snapshotReady ? snapshot.employee : settlementPreview?.employee || fallbackAccountEmployee;
+    const accountExit = snapshotReady ? snapshot.exit : settlementPreview?.exit || fallbackAccountExit;
+    const accountSalary = snapshotReady ? snapshot.salary : settlementPreview?.salary || null;
+    const accountCredits = snapshotReady ? Object.fromEntries(
+      Object.entries(snapshot.creditItems).map(([key, item]) => [key, Number(item?.amount || 0)])
+    ) : settlementPreview?.credits || {};
+    const accountDebits = snapshotReady ? Object.fromEntries(
+      Object.entries(snapshot.debitItems).map(([key, item]) => [key, Number(item?.amount || 0)])
+    ) : settlementPreview?.debits || {};
+    const accountTotals = snapshotReady ? snapshot.totals : settlementPreview?.totals || {
       totalCredits: Number(settlement?.grossPayable || 0),
       totalDebits: Number(settlement?.totalRecovery || 0),
       netSettlement: Number(settlement?.netSettlement || 0),
     };
-    const calculationNote =
-      settlementPreview?.calculationNote ||
-      snapshot.calculationNote ||
-      settlement?.notes ||
-      "";
+    const calculationNote = snapshotReady ? snapshot.calculationNote || "" : settlementPreview?.calculationNote || "";
     return (
       <div className="employee-exit-settlement-page">
         <PageHero
@@ -1005,7 +1008,7 @@ export default function EmployeeExits() {
               ) : null}
 
               {!settlement && accountEmployee && accountExit ? (
-                <section className="chris-print-document exit-settlement-print-document" data-settlement-print-state={settlementPreview ? "preview" : "loading"}>
+                <section className="chris-print-document exit-settlement-print-document" data-settlement-print-state={settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals ? "preview" : "loading"}>
                   <PrintableReportHeader
                     reportTitle="Employee Exit Settlement Account — Draft"
                     scopeLabel={`${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}`}
@@ -1134,7 +1137,7 @@ export default function EmployeeExits() {
                   {["PAID", "WAIVED"].includes(settlement.status) ? <div style={closureNotice}>Financial closure complete. The HR-effective exit date and employment history remain unchanged.</div> : null}
 
                   {settlement.status !== "WAIVED" ? (
-                    <section className="chris-print-document exit-settlement-print-document" data-settlement-print-state="record">
+                    <section className="chris-print-document exit-settlement-print-document" data-settlement-print-state={snapshotReady ? "record" : settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals ? "preview" : "loading"}>
                       <PrintableReportHeader
                         reportTitle="Employee Exit Settlement Account"
                         scopeLabel={accountEmployee ? `${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}` : "Employee Exit Settlement"}
@@ -1150,9 +1153,9 @@ export default function EmployeeExits() {
                         <div><span>Exit Type</span><strong>{titleCase(accountExit?.exitType)}</strong></div>
                         <div><span>Notice Date</span><strong>{dateText(accountExit?.noticeDate)}</strong></div>
                         <div><span>Final Working Day</span><strong>{dateText(accountExit?.lastWorkingDay)}</strong></div>
-                        <div><span>Entitled Notice</span><strong>{settlementPreview?.hrInputs?.entitledNoticeDays ?? snapshot.hrInputs?.entitledNoticeDays ?? 0} days</strong></div>
-                        <div><span>Notice Days Given</span><strong>{settlementPreview?.hrInputs?.noticeDaysGiven ?? snapshot.hrInputs?.noticeDaysGiven ?? 0} days</strong></div>
-                        <div><span>Notice Deficiency</span><strong>{settlementPreview?.hrInputs?.noticeDeficiencyDays ?? snapshot.hrInputs?.noticeDeficiencyDays ?? 0} days</strong></div>
+                        <div><span>Entitled Notice</span><strong>{snapshotReady ? snapshot.hrInputs?.entitledNoticeDays ?? 0 : settlementPreview?.hrInputs?.entitledNoticeDays ?? 0} days</strong></div>
+                        <div><span>Notice Days Given</span><strong>{snapshotReady ? snapshot.hrInputs?.noticeDaysGiven ?? 0 : settlementPreview?.hrInputs?.noticeDaysGiven ?? 0} days</strong></div>
+                        <div><span>Notice Deficiency</span><strong>{snapshotReady ? snapshot.hrInputs?.noticeDeficiencyDays ?? 0 : settlementPreview?.hrInputs?.noticeDeficiencyDays ?? 0} days</strong></div>
                         <div className="exit-settlement-print-meta-wide"><span>Exit Reason</span><strong>{accountExit?.reason || "—"}</strong></div>
                       </div>
 

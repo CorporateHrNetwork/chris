@@ -26,6 +26,33 @@ function removeNilLedgerRows(clone) {
   });
 }
 
+function arrangeEmployeeDetails(clone) {
+  const meta = clone.querySelector(".exit-settlement-print-meta");
+  if (!meta) return;
+  const fields = Array.from(meta.children);
+  meta.replaceChildren();
+  const table = document.createElement("table");
+  table.className = "exit-settlement-print-meta-table";
+  for (let index = 0; index < fields.length; index += 3) {
+    const row = document.createElement("tr");
+    if (fields[index].classList.contains("exit-settlement-print-meta-wide")) {
+      const cell = document.createElement("td");
+      cell.colSpan = 3;
+      cell.appendChild(fields[index]);
+      row.appendChild(cell);
+      index -= 2;
+    } else {
+      fields.slice(index, index + 3).forEach((field) => {
+        const cell = document.createElement("td");
+        cell.appendChild(field);
+        row.appendChild(cell);
+      });
+    }
+    table.appendChild(row);
+  }
+  meta.appendChild(table);
+}
+
 function compactCalculationBasis(clone) {
   const pre = clone.querySelector(".exit-settlement-print-calculation-note pre");
   if (!pre) return;
@@ -71,7 +98,7 @@ function compactLowerApprovals(clone) {
   if (external) {
     external.innerHTML = [
       '<div class="exit-settlement-external-title">',
-      '<h3>External Signatory Workflow</h3>',
+      '<h3>External Approvals</h3>',
       '</div>',
       '<table class="exit-settlement-external-approval-table">',
       '<thead><tr>',
@@ -141,7 +168,7 @@ const PRINT_CSS = String.raw`
     width: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
-    padding: 0 0 10mm !important;
+    padding: 0 !important;
     overflow: visible !important;
     background: #f7f3e8 !important;
     color: #17211c !important;
@@ -245,10 +272,7 @@ const PRINT_CSS = String.raw`
   .exit-settlement-print-meta {
     position: relative !important;
     z-index: 3 !important;
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    column-gap: 16px !important;
-    row-gap: 0 !important;
+    display: block !important;
     padding: 1px 0 3px !important;
     margin: 0 0 4px !important;
     border: 0 !important;
@@ -256,13 +280,24 @@ const PRINT_CSS = String.raw`
     border-radius: 0 !important;
   }
 
-  .exit-settlement-print-meta > div {
-    display: grid !important;
-    grid-template-columns: 165px minmax(0, 1fr) !important;
+  .exit-settlement-print-meta-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .exit-settlement-print-meta-table td {
+    width: 33.333% !important;
+    padding: 0 5px 0 0 !important;
+    vertical-align: top !important;
+  }
+
+  .exit-settlement-print-meta-table td > div {
+    display: flex !important;
     gap: 5px !important;
     align-items: baseline !important;
     min-width: 0 !important;
-    padding: 0 0 1px !important;
+    padding: 1px 0 !important;
     border-bottom: 1px solid #e0ddd2 !important;
   }
 
@@ -278,6 +313,10 @@ const PRINT_CSS = String.raw`
     letter-spacing: 0 !important;
   }
 
+  .exit-settlement-print-meta span {
+    flex: 0 0 165px !important;
+  }
+
   .exit-settlement-print-meta strong,
   .exit-settlement-headhr-signature-grid strong {
     color: #17211c !important;
@@ -287,8 +326,12 @@ const PRINT_CSS = String.raw`
     overflow-wrap: anywhere !important;
   }
 
+  .exit-settlement-print-meta strong {
+    min-width: 0 !important;
+  }
+
   .exit-settlement-print-meta-wide {
-    grid-column: 1 / -1 !important;
+    width: 100% !important;
   }
 
   .exit-settlement-print-account {
@@ -305,12 +348,12 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-account > :first-child {
-    grid-column: 1 !important;
+    grid-column: 2 !important;
     grid-row: 1 !important;
   }
 
   .exit-settlement-print-account > :nth-child(2) {
-    grid-column: 2 !important;
+    grid-column: 1 !important;
     grid-row: 1 !important;
   }
 
@@ -400,7 +443,11 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-totals .net {
-    border: 0 !important;
+    border-bottom: 2px solid #064e3b !important;
+  }
+
+  .exit-settlement-print-totals .net span {
+    color: #064e3b !important;
   }
 
   .exit-settlement-print-totals strong {
@@ -410,14 +457,8 @@ const PRINT_CSS = String.raw`
     font-variant-numeric: tabular-nums !important;
   }
 
-  .exit-settlement-print-nil-note {
-    position: relative !important;
-    z-index: 3 !important;
-    margin: 1px 0 0 !important;
-    color: #64748b !important;
-    font-size: 12pt !important;
-    line-height: 1.02 !important;
-    font-style: italic !important;
+  .exit-settlement-print-totals .net strong {
+    font-size: 15pt !important;
   }
 
   .exit-settlement-print-lower-grid {
@@ -498,7 +539,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-headhr-signature-line {
-    height: 8px !important;
+    height: 18px !important;
     border-bottom: 1px solid #475569 !important;
   }
 
@@ -525,7 +566,7 @@ const PRINT_CSS = String.raw`
 
   .exit-settlement-external-approval-table th,
   .exit-settlement-external-approval-table td {
-    height: 18px !important;
+    height: 26px !important;
     padding: 1px 4px !important;
     border: 1px solid #c7cec9 !important;
     color: #17211c !important;
@@ -565,6 +606,7 @@ const PRINT_CSS = String.raw`
     align-items: center !important;
     gap: 5px !important;
     color: #64748b !important;
+    white-space: nowrap !important;
   }
 
   .chris-print-report-powered img {
@@ -598,7 +640,7 @@ const PRINT_CSS = String.raw`
   }
 `;
 
-export default function openExitSettlementPrint() {
+export default function openExitSettlementPrint(printWindow) {
   const printNodes = Array.from(
     document.querySelectorAll(
       ".employee-exit-settlement-page .exit-settlement-print-document"
@@ -611,6 +653,7 @@ export default function openExitSettlementPrint() {
     null;
 
   if (!source) {
+    printWindow.close();
     window.alert(
       "The Employee Exit Settlement Account is still loading or has no calculated preview yet. Please wait for the settlement data to load before printing."
     );
@@ -623,22 +666,13 @@ export default function openExitSettlementPrint() {
     .querySelectorAll(".chris-print-report-powered strong")
     .forEach((node) => node.remove());
 
+  const generated = clone.querySelector(".chris-print-report-footer > span:first-child");
+  if (generated) generated.textContent = `Generated ${new Date().toLocaleString("en-NG")}`;
+
   removeNilLedgerRows(clone);
+  arrangeEmployeeDetails(clone);
   compactCalculationBasis(clone);
   compactLowerApprovals(clone);
-
-  const nilNote = document.createElement("div");
-  nilNote.className = "exit-settlement-print-nil-note";
-  nilNote.textContent =
-    "Nil-value settlement items are omitted from the formal printed statement.";
-  const totals = clone.querySelector(".exit-settlement-print-totals");
-  if (totals) totals.insertAdjacentElement("afterend", nilNote);
-
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    window.alert("Allow pop-ups to print or download the Employee Exit Settlement Account.");
-    return;
-  }
 
   const baseHref = window.location.origin + "/";
 
