@@ -396,6 +396,43 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   };
 }
 
+function calculate(input = {}) {
+  const values = {
+    finalSalary: money(input.finalSalary),
+    allowancePayable: money(input.allowancePayable),
+    leavePayable: money(input.leavePayable),
+    noticePay: money(input.noticePay),
+    gratuitySeverance: money(input.gratuitySeverance),
+    taxAdjustment: money(input.taxAdjustment),
+    pensionAdjustment: money(input.pensionAdjustment),
+    loanRecovery: money(input.loanRecovery),
+    salaryAdvanceRecovery: money(input.salaryAdvanceRecovery),
+    otherRecovery: money(input.otherRecovery),
+  };
+
+  const grossPayable = money(
+    values.finalSalary +
+    values.allowancePayable +
+    values.leavePayable +
+    values.noticePay +
+    values.gratuitySeverance
+  );
+  const totalRecovery = money(
+    values.taxAdjustment +
+    values.pensionAdjustment +
+    values.loanRecovery +
+    values.salaryAdvanceRecovery +
+    values.otherRecovery
+  );
+
+  return {
+    ...values,
+    grossPayable,
+    totalRecovery,
+    netSettlement: Math.round((grossPayable - totalRecovery) * 100) / 100,
+  };
+}
+
 function calculateAccount(system, input) {
   const noticePayDays = quantity(input.noticePayDays, "In Lieu of Notice Pay days");
   const noticePosition = resolveNoticePosition({
@@ -848,6 +885,7 @@ module.exports = {
   resolveNoticePosition,
   countPayrollDaysThroughDate,
   serviceYearProration,
+  calculate,
   calculateAccount,
   getSettlementPreview,
   calculateSettlement,
