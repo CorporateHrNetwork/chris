@@ -11,7 +11,7 @@
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .chris-mobile-sidebar-wrap,
@@ -44,7 +44,7 @@
     overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .exit-settlement-print-document {
@@ -53,8 +53,8 @@
     top: 0;
     left: 0;
     width: 100% !important;
-    color: #1f2937 !important;
-    background: #ffffff !important;
+    color: var(--chris-print-ink) !important;
+    background: var(--chris-print-paper) !important;
     font-family: Arial, Helvetica, sans-serif;
   }
 
@@ -64,7 +64,7 @@
     gap: 7px 14px;
     padding: 9px 10px;
     margin-bottom: 10px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--chris-print-border);
     border-radius: 6px;
     break-inside: avoid;
   }
@@ -75,14 +75,14 @@
   }
 
   .exit-settlement-print-meta span {
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
     font-size: 7.5pt;
     font-weight: 700;
     text-transform: uppercase;
   }
 
   .exit-settlement-print-meta strong {
-    color: #1f2937 !important;
+    color: var(--chris-print-ink) !important;
     font-size: 9pt;
   }
 
@@ -104,8 +104,8 @@
   .exit-settlement-print-table-section h3 {
     margin: 0;
     padding: 7px 8px;
-    color: #ffffff !important;
-    background: #064e3b !important;
+    color: var(--chris-print-paper) !important;
+    background: var(--chris-print-green) !important;
     font-size: 9pt;
     letter-spacing: .03em;
   }
@@ -119,11 +119,11 @@
   .exit-settlement-print-table-section th,
   .exit-settlement-print-table-section td {
     padding: 5px 6px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--chris-print-border);
   }
 
   .exit-settlement-print-table-section th {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     background: #ecfdf5 !important;
     text-align: left;
   }
@@ -146,26 +146,26 @@
     display: grid;
     gap: 4px;
     padding: 8px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--chris-print-border);
     border-radius: 5px;
-    background: #f8fafc !important;
+    background: var(--chris-print-paper-strong) !important;
   }
 
   .exit-settlement-print-totals span {
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
     font-size: 7.5pt;
     font-weight: 800;
     text-transform: uppercase;
   }
 
   .exit-settlement-print-totals strong {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     font-size: 10pt;
   }
 
   .exit-settlement-print-totals .net {
     border-color: #d4af37;
-    background: #fffbeb !important;
+    background: var(--chris-print-gold-soft) !important;
   }
 
   .exit-settlement-headhr-approval,
@@ -177,7 +177,7 @@
   .exit-settlement-headhr-approval h3,
   .exit-settlement-external-title h3 {
     margin: 0 0 5px;
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     font-size: 10pt;
   }
 
@@ -191,18 +191,18 @@
     display: grid;
     gap: 3px;
     padding: 7px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--chris-print-border);
   }
 
   .exit-settlement-headhr-line span {
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
     font-size: 7pt;
     font-weight: 700;
     text-transform: uppercase;
   }
 
   .exit-settlement-headhr-line strong {
-    color: #1f2937 !important;
+    color: var(--chris-print-ink) !important;
     font-size: 8.5pt;
   }
 
@@ -217,7 +217,7 @@
 
   .exit-settlement-external-title p {
     margin: 0;
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
     font-size: 7.5pt;
   }
 
@@ -233,7 +233,7 @@
     padding: 8px;
     border: 1px solid #94a3b8;
     border-radius: 5px;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
     break-inside: avoid;
   }
 
@@ -250,14 +250,14 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    color: #ffffff !important;
-    background: #064e3b !important;
+    color: var(--chris-print-paper) !important;
+    background: var(--chris-print-green) !important;
     font-size: 7pt;
     font-weight: 900;
   }
 
   .exit-settlement-signatory-heading strong {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     font-size: 8.5pt;
   }
 
@@ -267,7 +267,7 @@
 
   .exit-settlement-sign-line span {
     display: block;
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
     font-size: 6.8pt;
     font-weight: 700;
     text-transform: uppercase;
@@ -294,21 +294,21 @@
   .exit-settlement-print-calculation-note {
     margin-top: 10px;
     padding: 8px 9px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--chris-print-border);
     border-radius: 5px;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
     break-inside: avoid;
   }
 
   .exit-settlement-print-calculation-note h3 {
     margin: 0 0 6px;
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
     font-size: 9pt;
   }
 
   .exit-settlement-print-calculation-note pre {
     margin: 0;
-    color: #334155 !important;
+    color: var(--chris-print-ink) !important;
     background: transparent !important;
     font: 7.2pt/1.45 Arial, Helvetica, sans-serif;
     white-space: pre-wrap;
@@ -319,7 +319,105 @@
     margin-top: 7px;
     padding-top: 6px;
     border-top: 1px solid #e2e8f0;
-    color: #475569 !important;
+    color: var(--chris-print-muted) !important;
     font-size: 7.5pt;
+  }
+}
+
+
+/* Settlement accounting orientation is fixed: CREDIT left, DEBIT right. */
+.exit-settlement-account-columns {
+  display: grid !important;
+  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr) !important;
+  gap: 14px !important;
+  align-items: start !important;
+  overflow-x: auto;
+}
+
+/* Never stack the accounting sides; narrow screens may scroll horizontally. */
+@media (max-width: 620px) {
+  .exit-settlement-account-columns {
+    grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr) !important;
+    overflow-x: auto !important;
+  }
+}
+
+@media print {
+  .exit-settlement-print-document {
+    background: var(--chris-print-paper) !important;
+    color: var(--chris-print-ink) !important;
+  }
+
+  .exit-settlement-print-document,
+  .exit-settlement-print-document section,
+  .exit-settlement-print-document table,
+  .exit-settlement-print-document tbody,
+  .exit-settlement-print-document tr,
+  .exit-settlement-print-document td {
+    background: var(--chris-print-paper) !important;
+    color: var(--chris-print-ink) !important;
+  }
+
+  .exit-settlement-print-meta,
+  .exit-settlement-headhr-line > div,
+  .exit-settlement-signatory-block,
+  .exit-settlement-print-calculation-note {
+    background: var(--chris-print-paper-strong) !important;
+    color: var(--chris-print-ink) !important;
+    border-color: var(--chris-print-border) !important;
+  }
+
+  .exit-settlement-print-table-section h3 {
+    background: var(--chris-print-green) !important;
+    color: #fffdf7 !important;
+  }
+
+  .exit-settlement-print-table-section th {
+    background: var(--chris-print-green-soft) !important;
+    color: var(--chris-print-green) !important;
+    border-color: var(--chris-print-border) !important;
+  }
+
+  .exit-settlement-print-table-section td {
+    background: var(--chris-print-paper-strong) !important;
+    color: var(--chris-print-ink) !important;
+    border-color: var(--chris-print-border) !important;
+  }
+
+  .exit-settlement-print-totals > div {
+    background: var(--chris-print-paper-strong) !important;
+    color: var(--chris-print-ink) !important;
+  }
+
+  .exit-settlement-print-totals .net {
+    background: var(--chris-print-gold-soft) !important;
+    border-color: var(--chris-print-gold) !important;
+  }
+
+  .exit-settlement-print-totals span,
+  .exit-settlement-print-meta span,
+  .exit-settlement-headhr-line span,
+  .exit-settlement-external-title p,
+  .exit-settlement-sign-line span {
+    color: var(--chris-print-muted) !important;
+  }
+
+  .exit-settlement-print-totals strong,
+  .exit-settlement-print-meta strong,
+  .exit-settlement-headhr-line strong,
+  .exit-settlement-print-calculation-note pre {
+    color: var(--chris-print-ink) !important;
+  }
+
+  .exit-settlement-headhr-approval h3,
+  .exit-settlement-external-title h3,
+  .exit-settlement-print-calculation-note h3,
+  .exit-settlement-signatory-heading strong {
+    color: var(--chris-print-green) !important;
+  }
+
+  .exit-settlement-print-account {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
   }
 }
