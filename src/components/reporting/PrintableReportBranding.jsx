@@ -25,6 +25,9 @@ export function PrintableReportHeader({ reportTitle, scopeLabel, organization: o
   const logoUrl = safeLogoUrl(organization);
   return (
     <header className="chris-print-report-header">
+      {logoUrl
+        ? <img className="chris-print-document-watermark" src={logoUrl} alt="" aria-hidden="true" />
+        : <div className="chris-print-document-watermark-text" aria-hidden="true">{organizationName}</div>}
       {logoUrl && <img className="chris-print-report-logo" src={logoUrl} alt={organizationName + " logo"} />}
       <div className="chris-print-report-heading">
         <div className="chris-print-report-owner">{organizationName}</div>

@@ -42,7 +42,7 @@ test("screen and print payslips retain CHRiS identity fields and move running lo
   assert.ok(!ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p>'));
 });
 
-test("preview uses CHRiS global dark-green and gold visual language while print remains compact A4", () => {
+test("preview keeps CHRiS screen language while print follows compact A4 off-white culture", () => {
   const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
   for (const expected of [
     'background: "linear-gradient(145deg,#082F20,#031A11)"',
@@ -50,7 +50,8 @@ test("preview uses CHRiS global dark-green and gold visual language while print 
     'color: "#F7FAF8"',
     'color: "#F7D66A"',
     '@page{size:A4 portrait;margin:0}',
-    '.payslip{position:relative;width:210mm;height:297mm;padding:10mm 14mm 9mm;overflow:hidden}',
+    '.payslip{position:relative;width:210mm;height:297mm;padding:10mm 14mm 9mm;overflow:hidden;background:#f7f3e8}',
+    'th{background:#f7f3e8!important;color:#064e3b!important',
     'th,td{padding:5px 8px',
     '.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px',
   ]) assert.ok(ui.includes(expected), `Missing preview/one-page print control: ${expected}`);
