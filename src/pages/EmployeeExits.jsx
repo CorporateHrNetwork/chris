@@ -1195,6 +1195,44 @@ function Field({ label, children }) {
   );
 }
 
+function PrintableSettlementTable({ title, items, currency = "NGN" }) {
+  return (
+    <section className="exit-settlement-print-table-section">
+      <h3>{title}</h3>
+      <table>
+        <thead>
+          <tr><th>Settlement Item</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+          {items.map(([label, value]) => (
+            <tr key={label}>
+              <td>{label}</td>
+              <td>{moneyText(value, currency)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function ExternalSignatoryBlock({ step, title, fields }) {
+  return (
+    <section className="exit-settlement-signatory-block">
+      <div className="exit-settlement-signatory-heading">
+        <span>{step}</span>
+        <strong>{title}</strong>
+      </div>
+      {fields.map((field) => (
+        <div className="exit-settlement-sign-line" key={field}>
+          <span>{field}</span>
+          <div />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function SettlementAccountSection({ title, tone, children }) {
   return (
     <section style={tone === "credit" ? settlementCreditCard : settlementDebitCard}>
