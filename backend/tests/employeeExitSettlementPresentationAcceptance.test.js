@@ -40,11 +40,15 @@ test("settlement account keeps CREDIT left and DEBIT right on desktop", () => {
   const debitIndex = frontend.indexOf('<SettlementAccountSection title="DEBIT"');
   assert.ok(creditIndex >= 0 && debitIndex > creditIndex);
   assert.ok(css.includes(".exit-settlement-account-columns"));
+  assert.ok(css.includes("@media (max-width: 620px)"));
   assert.ok(css.includes("grid-template-columns: minmax(0, 1fr) !important"));
 });
 
-test("settlement provides Print / Download PDF and prints the calculation basis", () => {
+test("settlement provides Print / Download PDF from preview stage and prints the calculation basis", () => {
   assert.ok(frontend.includes("Print / Download PDF"));
+  assert.ok(frontend.includes("accountEmployee && accountExit ?"));
+  assert.ok(frontend.includes("Employee Exit Settlement Account — Draft"));
+  assert.ok(frontend.includes("Draft Preview"));
   assert.ok(frontend.includes("window.print()"));
   assert.ok(frontend.includes("exit-settlement-print-calculation-note"));
   assert.ok(frontend.includes("<h3>Calculation Basis</h3>"));
