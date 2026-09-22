@@ -104,10 +104,30 @@ test("staff details, exit type and exit reason are captured in the settlement ac
   assert.ok(frontend.includes("Settlement Salary Basis"));
 });
 
-test("settlement exposes a live preview and preserves maker-checker approval", () => {
+test("settlement exposes a live preview and uses Head HR prepare-and-approve workflow", () => {
   assert.ok(routes.includes('"/:id/settlement/preview"'));
   assert.ok(frontend.includes("/settlement/preview?"));
-  assert.ok(service.includes("SETTLEMENT_MAKER_CHECKER_REQUIRED"));
+  assert.equal(service.includes("SETTLEMENT_MAKER_CHECKER_REQUIRED"), false);
+  assert.ok(frontend.includes("Approve & Prepare for Print"));
+  assert.ok(service.includes("Head HR prepare-and-approve control"));
   assert.ok(service.includes("EXIT_SETTLEMENT_ACCOUNT_CALCULATED"));
   assert.ok(service.includes('version: "EXIT_SETTLEMENT_ACCOUNT_V2"'));
+});
+
+test("printable settlement carries the external signatory workflow outside CHRiS", () => {
+  for (const expected of [
+    "External Signatory Workflow",
+    "Auditor Review",
+    "GM Payout Approval",
+    "Accounts Team Payout Processing",
+    "Auditor Name",
+    "General Manager Name",
+    "Payment Reference / Voucher No.",
+    "Prepared & Approved By",
+    "Head, Human Resources",
+    "Print Settlement Account",
+  ]) {
+    assert.ok(frontend.includes(expected), `Missing printable settlement control: ${expected}`);
+  }
+  assert.ok(frontend.includes("completed externally on the printed settlement document"));
 });
