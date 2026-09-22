@@ -177,8 +177,6 @@ function printExitSettlementDocument() {
   }
 
   const clone = source.cloneNode(true);
-
-  // The platform name must not appear as duplicate plain text in document branding.
   clone.querySelectorAll(".chris-print-report-powered strong").forEach((node) => node.remove());
 
   const printWindow = window.open("", "_blank");
@@ -192,55 +190,60 @@ function printExitSettlementDocument() {
     "@page{size:A4 portrait;margin:0}",
     "*{box-sizing:border-box}",
     "html,body{margin:0;padding:0;background:#f7f3e8!important;color:#17211c;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}",
-    ".exit-settlement-print-document{display:block!important;position:relative!important;width:210mm!important;min-height:297mm!important;margin:0!important;padding:10mm 14mm 9mm!important;overflow:visible!important;background:#f7f3e8!important;color:#17211c!important}",
+    ".print-toolbar{position:sticky;top:0;z-index:50;display:flex;justify-content:center;gap:10px;padding:10px 14px;background:#fffdf7!important;border-bottom:1px solid #d8c788!important;box-shadow:0 2px 10px rgba(0,0,0,.08)!important}",
+    ".print-toolbar button{border:1px solid #064e3b;border-radius:7px;padding:8px 14px;background:#064e3b!important;color:#fffdf7!important;font:700 13px Arial,Helvetica,sans-serif;cursor:pointer}",
+    ".print-toolbar button.secondary{background:#fffdf7!important;color:#064e3b!important}",
+    ".exit-settlement-print-document{display:block!important;position:relative!important;width:210mm!important;min-height:297mm!important;margin:0!important;padding:7mm 10mm 7mm!important;overflow:visible!important;background:#f7f3e8!important;color:#17211c!important}",
     ".exit-settlement-print-document *{background-color:#f7f3e8!important;background-image:none!important;box-shadow:none!important}",
-    ".chris-print-report-header{position:relative;display:block!important;text-align:center!important;padding:0 0 8px!important;margin:0 0 10px!important;border-bottom:2px solid #064e3b!important;background:#f7f3e8!important}",
-    ".chris-print-report-logo{display:block!important;width:auto!important;height:auto!important;max-width:92px!important;max-height:48px!important;margin:0 auto 5px!important;object-fit:contain!important}",
+    ".chris-print-report-header{position:relative;display:block!important;text-align:center!important;padding:0 0 6px!important;margin:0 0 7px!important;border-bottom:2px solid #064e3b!important;background:#f7f3e8!important}",
+    ".chris-print-report-logo{display:block!important;width:auto!important;height:auto!important;max-width:82px!important;max-height:40px!important;margin:0 auto 3px!important;object-fit:contain!important}",
     ".chris-print-report-heading{text-align:center!important;position:relative!important;z-index:3!important}",
-    ".chris-print-report-owner{margin:0!important;color:#064e3b!important;font-size:13pt!important;font-weight:900!important;line-height:1.18!important;text-transform:uppercase!important;letter-spacing:.02em!important}",
-    ".chris-print-report-heading h1{margin:4px 0 0!important;color:#9a7410!important;font-size:11pt!important;font-weight:900!important;letter-spacing:.08em!important;text-transform:uppercase!important;line-height:1.2!important}",
-    ".chris-print-report-scope{margin-top:4px!important;color:#64748b!important;font-size:8pt!important;font-weight:700!important}",
-    ".chris-print-document-watermark{position:fixed!important;z-index:2!important;top:52%!important;left:50%!important;width:46%!important;max-width:300px!important;max-height:300px!important;transform:translate(-50%,-50%)!important;object-fit:contain!important;opacity:.08!important;filter:grayscale(100%)!important;mix-blend-mode:multiply!important;pointer-events:none!important;background:transparent!important}",
-    ".chris-print-document-watermark-text{position:fixed!important;z-index:2!important;top:52%!important;left:50%!important;transform:translate(-50%,-50%) rotate(-28deg)!important;width:78%!important;text-align:center!important;color:#064e3b!important;opacity:.07!important;font-size:38pt!important;font-weight:900!important;letter-spacing:.08em!important;mix-blend-mode:multiply!important;pointer-events:none!important;background:transparent!important}",
-    ".exit-settlement-print-meta{position:relative;z-index:3;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px 14px!important;padding:9px 10px!important;margin-bottom:10px!important;border:1px solid #d8c788!important;border-radius:6px!important;break-inside:avoid!important}",
-    ".exit-settlement-print-meta>div{display:grid!important;gap:2px!important}",
-    ".exit-settlement-print-meta span,.exit-settlement-print-totals span,.exit-settlement-headhr-line span,.exit-settlement-sign-line span{color:#64748b!important;font-size:7pt!important;font-weight:700!important;text-transform:uppercase!important}",
-    ".exit-settlement-print-meta strong,.exit-settlement-headhr-line strong{color:#17211c!important;font-size:8.5pt!important}",
+    ".chris-print-report-owner{margin:0!important;color:#064e3b!important;font-size:11.5pt!important;font-weight:900!important;line-height:1.12!important;text-transform:uppercase!important;letter-spacing:.02em!important}",
+    ".chris-print-report-heading h1{margin:3px 0 0!important;color:#9a7410!important;font-size:9.5pt!important;font-weight:900!important;letter-spacing:.07em!important;text-transform:uppercase!important;line-height:1.15!important}",
+    ".chris-print-report-scope{margin-top:2px!important;color:#64748b!important;font-size:7pt!important;font-weight:700!important}",
+    ".chris-print-document-watermark{position:fixed!important;z-index:2!important;top:52%!important;left:50%!important;width:42%!important;max-width:270px!important;max-height:270px!important;transform:translate(-50%,-50%)!important;object-fit:contain!important;opacity:.07!important;filter:grayscale(100%)!important;mix-blend-mode:multiply!important;pointer-events:none!important;background:transparent!important}",
+    ".chris-print-document-watermark-text{position:fixed!important;z-index:2!important;top:52%!important;left:50%!important;transform:translate(-50%,-50%) rotate(-28deg)!important;width:75%!important;text-align:center!important;color:#064e3b!important;opacity:.06!important;font-size:34pt!important;font-weight:900!important;letter-spacing:.07em!important;mix-blend-mode:multiply!important;pointer-events:none!important;background:transparent!important}",
+    ".exit-settlement-print-meta{position:relative;z-index:3;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:4px 10px!important;padding:7px 8px!important;margin-bottom:7px!important;border:1px solid #d8c788!important;border-radius:5px!important;break-inside:avoid!important}",
+    ".exit-settlement-print-meta>div{display:grid!important;gap:1px!important;min-width:0!important}",
+    ".exit-settlement-print-meta span,.exit-settlement-print-totals span,.exit-settlement-headhr-signature-grid span,.exit-settlement-sign-line span{color:#64748b!important;font-size:6.1pt!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.025em!important}",
+    ".exit-settlement-print-meta strong,.exit-settlement-headhr-signature-grid strong{color:#17211c!important;font-size:7.6pt!important;line-height:1.2!important;overflow-wrap:anywhere!important}",
     ".exit-settlement-print-meta-wide{grid-column:1/-1!important}",
-    ".exit-settlement-print-account{position:relative;z-index:3;display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;grid-template-rows:auto!important;gap:10px!important;align-items:start!important;width:100%!important;direction:ltr!important}",
+    ".exit-settlement-print-account{position:relative;z-index:3;display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;grid-template-rows:auto!important;gap:8px!important;align-items:start!important;width:100%!important;direction:ltr!important}",
     ".exit-settlement-print-account>:first-child{grid-column:1!important;grid-row:1!important}",
     ".exit-settlement-print-account>:nth-child(2){grid-column:2!important;grid-row:1!important}",
     ".exit-settlement-print-table-section{min-width:0!important;break-inside:avoid!important}",
-    ".exit-settlement-print-table-section h3{margin:0!important;padding:6px 8px!important;color:#064e3b!important;border:1px solid #c7cec9!important;border-bottom:2px solid #064e3b!important;font-size:8.5pt!important;font-weight:900!important;letter-spacing:.04em!important;text-transform:uppercase!important}",
+    ".exit-settlement-print-table-section h3{margin:0!important;padding:4px 6px!important;color:#064e3b!important;border:1px solid #c7cec9!important;border-bottom:2px solid #064e3b!important;font-size:7.5pt!important;font-weight:900!important;letter-spacing:.035em!important;text-transform:uppercase!important;line-height:1.15!important}",
     ".exit-settlement-print-table-section table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}",
-    ".exit-settlement-print-table-section th,.exit-settlement-print-table-section td{padding:5px 6px!important;border:1px solid #c7cec9!important;color:#17211c!important;font-size:7.8pt!important;overflow-wrap:anywhere!important}",
-    ".exit-settlement-print-table-section th{color:#064e3b!important;border-bottom:2px solid #064e3b!important;text-align:left!important;text-transform:uppercase!important;letter-spacing:.04em!important}",
+    ".exit-settlement-print-table-section th,.exit-settlement-print-table-section td{padding:3.2px 5px!important;border:1px solid #c7cec9!important;color:#17211c!important;font-size:6.7pt!important;line-height:1.2!important;overflow-wrap:anywhere!important}",
+    ".exit-settlement-print-table-section th{color:#064e3b!important;border-bottom:2px solid #064e3b!important;text-align:left!important;text-transform:uppercase!important;letter-spacing:.035em!important}",
     ".exit-settlement-print-table-section th:last-child,.exit-settlement-print-table-section td:last-child{width:34%!important;text-align:right!important;white-space:nowrap!important}",
-    ".exit-settlement-print-totals{position:relative;z-index:3;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;margin-top:10px!important;break-inside:avoid!important}",
-    ".exit-settlement-print-totals>div{display:grid!important;gap:4px!important;padding:8px!important;border:1px solid #c7cec9!important;border-radius:5px!important}",
+    ".exit-settlement-print-totals{position:relative;z-index:3;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;margin-top:7px!important;break-inside:avoid!important}",
+    ".exit-settlement-print-totals>div{display:grid!important;gap:2px!important;padding:6px!important;border:1px solid #c7cec9!important;border-radius:5px!important}",
     ".exit-settlement-print-totals .net{border:2px solid #9a7410!important}",
-    ".exit-settlement-print-totals strong{color:#064e3b!important;font-size:9.5pt!important}",
-    ".exit-settlement-print-calculation-note,.exit-settlement-headhr-approval,.exit-settlement-external-workflow{position:relative;z-index:3;margin-top:10px!important;break-inside:avoid!important}",
-    ".exit-settlement-print-calculation-note{padding:8px 9px!important;border:1px solid #c7cec9!important;border-radius:5px!important}",
-    ".exit-settlement-print-calculation-note h3,.exit-settlement-headhr-approval h3,.exit-settlement-external-title h3{margin:0 0 6px!important;color:#064e3b!important;font-size:9pt!important}",
-    ".exit-settlement-print-calculation-note pre{margin:0!important;color:#17211c!important;background:transparent!important;font:7.2pt/1.45 Arial,Helvetica,sans-serif!important;white-space:pre-wrap!important;word-break:break-word!important}",
-    ".exit-settlement-print-hr-note{margin-top:7px!important;padding-top:6px!important;border-top:1px solid #c7cec9!important;color:#64748b!important;font-size:7.5pt!important}",
-    ".exit-settlement-headhr-line{display:grid!important;grid-template-columns:1.4fr .8fr .8fr!important;gap:8px!important}",
-    ".exit-settlement-headhr-line>div{display:grid!important;gap:3px!important;padding:7px!important;border:1px solid #c7cec9!important}",
-    ".exit-settlement-external-workflow{padding-top:10px!important;border-top:2px solid #9a7410!important}",
-    ".exit-settlement-external-title p{margin:0!important;color:#64748b!important;font-size:7.5pt!important}",
-    ".exit-settlement-signatory-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;align-items:stretch!important}",
-    ".exit-settlement-signatory-block{min-height:145px!important;padding:8px!important;border:1px solid #94a3b8!important;border-radius:5px!important;break-inside:avoid!important}",
-    ".exit-settlement-signatory-heading{display:flex!important;align-items:center!important;gap:6px!important;margin-bottom:10px!important}",
-    ".exit-settlement-signatory-heading>span{display:inline-grid!important;place-items:center!important;width:18px!important;height:18px!important;border:1px solid #064e3b!important;border-radius:50%!important;color:#064e3b!important;font-size:7pt!important;font-weight:900!important}",
-    ".exit-settlement-signatory-heading strong{color:#064e3b!important;font-size:8.2pt!important}",
-    ".exit-settlement-sign-line{margin-top:8px!important}",
-    ".exit-settlement-sign-line div{height:18px!important;border-bottom:1px solid #64748b!important}",
-    ".chris-print-report-footer{position:relative;z-index:3;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;margin-top:10px!important;padding-top:7px!important;border-top:1px solid #94a3b8!important;color:#64748b!important;font-size:7pt!important;break-before:avoid!important}",
-    ".chris-print-report-powered{display:inline-flex!important;align-items:center!important;gap:5px!important;color:#64748b!important}",
-    ".chris-print-report-powered img{width:22px!important;height:22px!important;object-fit:contain!important;background:transparent!important}",
+    ".exit-settlement-print-totals strong{color:#064e3b!important;font-size:8.3pt!important}",
+    ".exit-settlement-print-calculation-note,.exit-settlement-headhr-approval,.exit-settlement-external-workflow{position:relative;z-index:3;margin-top:7px!important;break-inside:avoid!important}",
+    ".exit-settlement-print-calculation-note{padding:6px 7px!important;border:1px solid #c7cec9!important;border-radius:5px!important}",
+    ".exit-settlement-print-calculation-note h3,.exit-settlement-headhr-approval h3,.exit-settlement-external-title h3{margin:0 0 4px!important;color:#064e3b!important;font-size:7.8pt!important}",
+    ".exit-settlement-print-calculation-note pre{margin:0!important;color:#17211c!important;background:transparent!important;font:6.2pt/1.3 Arial,Helvetica,sans-serif!important;white-space:pre-wrap!important;word-break:break-word!important}",
+    ".exit-settlement-print-hr-note{margin-top:4px!important;padding-top:4px!important;border-top:1px solid #c7cec9!important;color:#64748b!important;font-size:6.3pt!important}",
+    ".exit-settlement-headhr-signature-grid{display:grid!important;grid-template-columns:1.1fr 1.2fr 1.2fr .8fr!important;gap:6px!important;align-items:end!important}",
+    ".exit-settlement-headhr-signature-grid>div{display:grid!important;gap:2px!important;padding:5px 6px!important;border:1px solid #c7cec9!important;min-height:38px!important}",
+    ".exit-settlement-headhr-signature-line{height:15px!important;border-bottom:1px solid #64748b!important}",
+    ".exit-settlement-external-workflow{padding-top:7px!important;border-top:2px solid #9a7410!important}",
+    ".exit-settlement-external-title{margin-bottom:5px!important}",
+    ".exit-settlement-external-title p{margin:0!important;color:#64748b!important;font-size:6.3pt!important}",
+    ".exit-settlement-signatory-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;align-items:stretch!important}",
+    ".exit-settlement-signatory-block{min-height:90px!important;padding:6px!important;border:1px solid #94a3b8!important;border-radius:5px!important;break-inside:avoid!important}",
+    ".exit-settlement-signatory-heading{display:flex!important;align-items:center!important;gap:5px!important;margin-bottom:5px!important}",
+    ".exit-settlement-signatory-heading>span{display:inline-grid!important;place-items:center!important;width:15px!important;height:15px!important;border:1px solid #064e3b!important;border-radius:50%!important;color:#064e3b!important;font-size:6pt!important;font-weight:900!important}",
+    ".exit-settlement-signatory-heading strong{color:#064e3b!important;font-size:7pt!important}",
+    ".exit-settlement-sign-line{margin-top:4px!important}",
+    ".exit-settlement-sign-line div{height:11px!important;border-bottom:1px solid #64748b!important}",
+    ".chris-print-report-footer{position:relative;z-index:3;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;margin-top:6px!important;padding-top:5px!important;border-top:1px solid #94a3b8!important;color:#64748b!important;font-size:6pt!important;break-before:avoid!important}",
+    ".chris-print-report-powered{display:inline-flex!important;align-items:center!important;gap:4px!important;color:#64748b!important}",
+    ".chris-print-report-powered img{width:18px!important;height:18px!important;object-fit:contain!important;background:transparent!important}",
     ".chris-print-report-powered strong{display:none!important}",
-    "@media print{html,body{width:210mm!important;min-height:297mm!important}}"
+    "@media print{.print-toolbar{display:none!important}html,body{width:210mm!important;background:#f7f3e8!important}.exit-settlement-print-document{margin:0!important}}"
   ].join("\n");
 
   printWindow.document.open();
@@ -250,11 +253,37 @@ function printExitSettlementDocument() {
       '"><title></title><style>' +
       printCss +
       '</style></head><body>' +
+      '<div class="print-toolbar" role="toolbar" aria-label="Settlement print controls">' +
+      '<button id="printSettlementDocument" type="button">Print / Download PDF</button>' +
+      '<button id="closeSettlementDocument" class="secondary" type="button">Close</button>' +
+      '</div>' +
       clone.outerHTML +
-      '<script>(function(){var images=Array.from(document.images);Promise.all(images.map(function(img){if(img.complete){return Promise.resolve();}return new Promise(function(resolve){img.onload=resolve;img.onerror=resolve;});})).then(function(){setTimeout(function(){window.print();},200);});})();<\\/script></body></html>'
+      '</body></html>'
   );
   printWindow.document.close();
   printWindow.opener = null;
+
+  const printButton = printWindow.document.getElementById("printSettlementDocument");
+  const closeButton = printWindow.document.getElementById("closeSettlementDocument");
+  printButton?.addEventListener("click", () => {
+    printWindow.focus();
+    printWindow.print();
+  });
+  closeButton?.addEventListener("click", () => printWindow.close());
+
+  const images = Array.from(printWindow.document.images);
+  Promise.all(
+    images.map((img) => {
+      if (img.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      });
+    })
+  ).then(() => {
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 250);
+  });
 }
 
 export default function EmployeeExits() {
@@ -1110,7 +1139,7 @@ export default function EmployeeExits() {
 
                   <div className="exit-settlement-print-account">
                     <PrintableSettlementTable
-                      title="CREDIT — EMPLOYEE ENTITLEMENTS"
+                      title="CREDIT — BENEFITS / ENTITLEMENTS"
                       items={[
                         ["Gratuity / EoSB", accountCredits?.gratuityEosb],
                         ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
@@ -1125,7 +1154,7 @@ export default function EmployeeExits() {
                       currency={accountSalary?.currency}
                     />
                     <PrintableSettlementTable
-                      title="DEBIT — EMPLOYEE RECOVERIES"
+                      title="DEBIT — DEDUCTIONS / RECOVERIES"
                       items={[
                         ["Loan Balance", accountDebits?.loanBalance],
                         ["Salary Advance", accountDebits?.salaryAdvance],
@@ -1149,11 +1178,12 @@ export default function EmployeeExits() {
                   </section>
 
                   <section className="exit-settlement-headhr-approval">
-                    <h3>Internal CHRiS Approval</h3>
-                    <div className="exit-settlement-headhr-line">
-                      <div><span>Prepared By</span><strong>Head, Human Resources</strong></div>
-                      <div><span>CHRiS Status</span><strong>Draft Preview</strong></div>
-                      <div><span>Approval Date</span><strong>Pending</strong></div>
+                    <h3>Head of HR Approval & Signature</h3>
+                    <div className="exit-settlement-headhr-signature-grid">
+                      <div><span>Role</span><strong>Head of Human Resources</strong></div>
+                      <div><span>Name</span><div className="exit-settlement-headhr-signature-line" /></div>
+                      <div><span>Signature</span><div className="exit-settlement-headhr-signature-line" /></div>
+                      <div><span>Date</span><strong>Pending</strong></div>
                     </div>
                   </section>
 
@@ -1238,7 +1268,7 @@ export default function EmployeeExits() {
 
                       <div className="exit-settlement-print-account">
                         <PrintableSettlementTable
-                          title="CREDIT — EMPLOYEE ENTITLEMENTS"
+                          title="CREDIT — BENEFITS / ENTITLEMENTS"
                           items={[
                             ["Gratuity / EoSB", accountCredits?.gratuityEosb],
                             ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
@@ -1253,7 +1283,7 @@ export default function EmployeeExits() {
                           currency={accountSalary?.currency || settlement.currency}
                         />
                         <PrintableSettlementTable
-                          title="DEBIT — EMPLOYEE RECOVERIES"
+                          title="DEBIT — DEDUCTIONS / RECOVERIES"
                           items={[
                             ["Loan Balance", accountDebits?.loanBalance],
                             ["Salary Advance", accountDebits?.salaryAdvance],
@@ -1282,11 +1312,12 @@ export default function EmployeeExits() {
                       </section>
 
                       <section className="exit-settlement-headhr-approval">
-                        <h3>Internal CHRiS Approval</h3>
-                        <div className="exit-settlement-headhr-line">
-                          <div><span>Prepared & Approved By</span><strong>Head, Human Resources</strong></div>
-                          <div><span>CHRiS Status</span><strong>{titleCase(settlement.status)}</strong></div>
-                          <div><span>Approval Date</span><strong>{dateText(settlement.approvedAt || settlement.calculatedAt)}</strong></div>
+                        <h3>Head of HR Approval & Signature</h3>
+                        <div className="exit-settlement-headhr-signature-grid">
+                          <div><span>Role</span><strong>Head of Human Resources</strong></div>
+                          <div><span>Name</span><div className="exit-settlement-headhr-signature-line" /></div>
+                          <div><span>Signature</span><div className="exit-settlement-headhr-signature-line" /></div>
+                          <div><span>Date</span><strong>{dateText(settlement.approvedAt || settlement.calculatedAt)}</strong></div>
                         </div>
                       </section>
 
