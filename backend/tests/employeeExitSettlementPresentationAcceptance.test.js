@@ -101,3 +101,18 @@ test("formal settlement print remains readable and compact", () => {
   assert.ok(printUtility.includes("exit-settlement-external-approval-table"));
   assert.ok(printUtility.includes("Nil-value settlement items are omitted from the formal printed statement."));
 });
+
+
+test("settlement print never forces the content box beyond printable A4 landscape width", () => {
+  assert.ok(printUtility.includes("@page { size: A4 landscape; margin: 7mm; }"));
+  assert.equal(printUtility.includes("width: 297mm"), false);
+  assert.ok(printUtility.includes("width: auto !important"));
+});
+
+test("settlement print keeps all point-based document typography at 12pt or larger", () => {
+  const sizes = [...printUtility.matchAll(/font-size:\s*([0-9.]+)pt/g)].map((match) => Number(match[1]));
+  const shorthandSizes = [...printUtility.matchAll(/font:\s*(?:\\d+\\s+)?([0-9.]+)pt\//g)].map((match) => Number(match[1]));
+  const allSizes = [...sizes, ...shorthandSizes];
+  assert.ok(allSizes.length > 0);
+  assert.ok(allSizes.every((size) => size >= 12), \`Found print typography below 12pt: \${allSizes.filter((size) => size < 12).join(", ")}\`);
+});
