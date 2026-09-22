@@ -1,9 +1,11 @@
 import EmployeeStatusBadge from "../components/common/StatusBadge";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaArrowLeft, FaCheckCircle, FaRedo, FaSignOutAlt } from "react-icons/fa";
+import { FaArrowLeft, FaCheckCircle, FaPrint, FaRedo, FaSignOutAlt } from "react-icons/fa";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
+import { PrintableReportHeader, PrintableReportFooter } from "../components/reporting/PrintableReportBranding";
+import "./EmployeeExits.css";
 
 const EXIT_TYPES = [
   ["RESIGNATION", "Resignation"],
@@ -522,6 +524,37 @@ export default function EmployeeExits() {
     setSettlementForm((current) => ({ ...current, [name]: value }));
   }
 
+  async function approveHeadHrSettlement() {
+    if (!settlementExitId) return;
+    setBusy(true);
+    setFeedback("");
+    try {
+      let current = settlement;
+      if (current?.status === "CALCULATED") {
+        const submitted = await apiRequest(
+          `/api/exits/${encodeURIComponent(settlementExitId)}/settlement/submit`,
+          { method: "POST" }
+        );
+        current = submitted?.data || current;
+      }
+      if (current?.status !== "PENDING_APPROVAL") {
+        throw new Error("Calculate the settlement before Head HR approval.");
+      }
+      const approved = await apiRequest(
+        `/api/exits/${encodeURIComponent(settlementExitId)}/settlement/approve`,
+        { method: "POST", body: { notes: settlementDecisionNotes } }
+      );
+      setSettlement(approved?.data || null);
+      setSettlementDecisionNotes("");
+      setFeedback("Employee Exit Settlement Account approved by Head HR and ready for printing.");
+      await loadData();
+    } catch (error) {
+      setFeedback(error?.message || "Unable to approve the exit settlement.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runSettlementAction(action, body) {
     if (!settlementExitId) return;
     setBusy(true);
@@ -652,11 +685,112 @@ export default function EmployeeExits() {
                     <Info label="Net Settlement" value={moneyText(settlement.netSettlement, settlement.currency)} />
                     <Info label="Amount Paid / Recovered" value={moneyText(settlement.amountPaid, settlement.currency)} />
                   </div>
-                  {settlement.status === "CALCULATED" ? <div style={footer}><span style={muted}>Submitting locks the calculation for independent approval.</span><button type="button" style={primaryButton} disabled={!canUpdate || busy} onClick={() => runSettlementAction("submit")}>Submit for Approval</button></div> : null}
-                  {settlement.status === "PENDING_APPROVAL" ? <div style={settlementAction}><Field label="Approval / Waiver Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={primaryButton} disabled={!canManagePayroll || busy} onClick={() => runSettlementAction("approve", { notes: settlementDecisionNotes })}>Approve Settlement</button><button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive with Reason</button></div> : null}
-                  {["PAYMENT_PENDING", "PARTIALLY_PAID"].includes(settlement.status) ? <div style={settlementAction}><Field label="Payment / Recovery Amount"><input type="number" min="0.01" step="0.01" value={settlementPayment} onChange={(event) => setSettlementPayment(event.target.value)} style={input} /></Field><Field label="Payment Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={primaryButton} disabled={!canManagePayroll || busy || !Number(settlementPayment)} onClick={() => runSettlementAction("payment", { amount: Number(settlementPayment), notes: settlementDecisionNotes })}>Record Payment / Recovery</button></div> : null}
+                  {["CALCULATED", "PENDING_APPROVAL"].includes(settlement.status) ? (
+                    <div style={settlementAction}>
+                      <Field label="Head HR Approval Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field>
+                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
+                      {settlement.status === "PENDING_APPROVAL" ? <button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive with Reason</button> : null}
+                    </div>
+                  ) : null}
+                  {["PAYMENT_PENDING", "PARTIALLY_PAID"].includes(settlement.status) ? (
+                    <div style={settlementAction}>
+                      <div style={closureNotice}>Head HR approval is complete. Auditor review, GM payout approval and Accounts Team payout processing are completed externally on the printed settlement document.</div>
+                      <button type="button" className="exit-settlement-print-button" style={primaryButton} onClick={() => window.print()}><FaPrint /> Print Settlement Account</button>
+                    </div>
+                  ) : null}
                   {["APPROVED", "PAYMENT_PENDING"].includes(settlement.status) ? <div style={settlementAction}><Field label="Waiver Reason"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field><button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive Settlement</button></div> : null}
                   {["PAID", "WAIVED"].includes(settlement.status) ? <div style={closureNotice}>Financial closure complete. The HR-effective exit date and employment history remain unchanged.</div> : null}
+
+                  {settlement.status !== "WAIVED" ? (
+                    <section className="exit-settlement-print-document">
+                      <PrintableReportHeader
+                        reportTitle="Employee Exit Settlement Account"
+                        scopeLabel={accountEmployee ? `${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}` : "Employee Exit Settlement"}
+                      />
+
+                      <div className="exit-settlement-print-meta">
+                        <div><span>Employee No.</span><strong>{accountEmployee?.employeeNumber || "—"}</strong></div>
+                        <div><span>Employee Name</span><strong>{accountEmployee?.employeeName || "—"}</strong></div>
+                        <div><span>Designation</span><strong>{accountEmployee?.designation || "—"}</strong></div>
+                        <div><span>Department</span><strong>{accountEmployee?.department || "—"}</strong></div>
+                        <div><span>Cost Centre</span><strong>{accountEmployee?.costCentreCode ? `${accountEmployee.costCentreCode} · ${accountEmployee.costCentre || ""}` : (accountEmployee?.costCentre || "—")}</strong></div>
+                        <div><span>Branch</span><strong>{accountEmployee?.branch || "—"}</strong></div>
+                        <div><span>Exit Type</span><strong>{titleCase(accountExit?.exitType)}</strong></div>
+                        <div><span>Final Working Day</span><strong>{dateText(accountExit?.lastWorkingDay)}</strong></div>
+                        <div className="exit-settlement-print-meta-wide"><span>Exit Reason</span><strong>{accountExit?.reason || "—"}</strong></div>
+                      </div>
+
+                      <div className="exit-settlement-print-account">
+                        <PrintableSettlementTable
+                          title="CREDIT — EMPLOYEE ENTITLEMENTS"
+                          items={[
+                            ["Gratuity / EoSB", accountCredits?.gratuityEosb],
+                            ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
+                            ["Full / Prorated Outstanding Salary", accountCredits?.outstandingSalary],
+                            ["Public Holiday Days", accountCredits?.publicHolidayDays],
+                            ["Extra Day Work Overtime", accountCredits?.extraDayOvertime],
+                            ["Extra Hours Work Overtime", accountCredits?.extraHoursOvertime],
+                            ["Bonus / Gift", accountCredits?.bonusGift],
+                            ["In Lieu of Notice Pay", accountCredits?.noticePay],
+                            ["Previous Salary Short Paid", accountCredits?.previousSalaryShortPaid],
+                          ]}
+                          currency={accountSalary?.currency || settlement.currency}
+                        />
+                        <PrintableSettlementTable
+                          title="DEBIT — EMPLOYEE RECOVERIES"
+                          items={[
+                            ["Loan Balance", accountDebits?.loanBalance],
+                            ["Salary Advance", accountDebits?.salaryAdvance],
+                            ["In Lieu of Notice Deduction", accountDebits?.noticeDeduction],
+                            ["Unreturned Uniform", accountDebits?.unreturnedUniform],
+                            ["Previous Salary Overpaid", accountDebits?.previousSalaryOverpaid],
+                          ]}
+                          currency={accountSalary?.currency || settlement.currency}
+                        />
+                      </div>
+
+                      <div className="exit-settlement-print-totals">
+                        <div><span>Total Credits</span><strong>{moneyText(accountTotals?.totalCredits, accountSalary?.currency || settlement.currency)}</strong></div>
+                        <div><span>Total Debits</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement.currency)}</strong></div>
+                        <div className="net"><span>Net Exit Settlement</span><strong>{moneyText(accountTotals?.netSettlement, accountSalary?.currency || settlement.currency)}</strong></div>
+                      </div>
+
+                      <section className="exit-settlement-headhr-approval">
+                        <h3>Internal CHRiS Approval</h3>
+                        <div className="exit-settlement-headhr-line">
+                          <div><span>Prepared & Approved By</span><strong>Head, Human Resources</strong></div>
+                          <div><span>CHRiS Status</span><strong>{titleCase(settlement.status)}</strong></div>
+                          <div><span>Approval Date</span><strong>{dateText(settlement.approvedAt || settlement.calculatedAt)}</strong></div>
+                        </div>
+                      </section>
+
+                      <section className="exit-settlement-external-workflow">
+                        <div className="exit-settlement-external-title">
+                          <h3>External Signatory Workflow</h3>
+                          <p>To be completed outside CHRiS after Head HR approval and printing.</p>
+                        </div>
+                        <div className="exit-settlement-signatory-grid">
+                          <ExternalSignatoryBlock
+                            step="1"
+                            title="Auditor Review"
+                            fields={["Auditor Name", "Signature", "Date", "Review Remarks"]}
+                          />
+                          <ExternalSignatoryBlock
+                            step="2"
+                            title="GM Payout Approval"
+                            fields={["General Manager Name", "Signature", "Date", "Approval / Remarks"]}
+                          />
+                          <ExternalSignatoryBlock
+                            step="3"
+                            title="Accounts Team Payout Processing"
+                            fields={["Processed By", "Signature", "Processing Date", "Payment Reference / Voucher No."]}
+                          />
+                        </div>
+                      </section>
+
+                      <PrintableReportFooter generatedAt={settlement.approvedAt || settlement.calculatedAt} />
+                    </section>
+                  ) : null}
                 </div>
               ) : null}
             </section>
