@@ -39,21 +39,24 @@ test("comprehensive payroll workbook includes statutory identifiers, employer/em
   ]) assert.ok(routes.includes(expected), "Missing comprehensive payroll export field: " + expected);
 });
 
-test("payroll workbook includes executive dashboard, KPI visuals and separate branch worksheets", () => {
+test("payroll workbook includes interactive executive dashboard, native charts and separate branch worksheets", () => {
   for (const expected of [
     '"Payroll Dashboard"',
-    '"KEY PAYROLL INDICATORS"',
+    '"SELECTED VIEW KPI"',
     '"BRANCH PAYROLL COMPARISON"',
-    '"STATUTORY COST COMPOSITION"',
-    "payrollVisualBar",
+    '"DEPARTMENT PAYROLL ALLOCATION"',
+    '"COST CENTRE / OPERATING UNIT PAYROLL ALLOCATION"',
+    '"STATUTORY COST COMPOSITION — SELECTED VIEW"',
     '"Total Employer Cost"',
     '"Employer Statutory Cost"',
     '"Branch - " + branch',
-    "payrollBranchRank",
-    'if (value === "ABUJA") return 0',
-    'if (value === "LAGOS") return 1',
-    'if (value === "PHC") return 2',
+    "addNativeExcelCharts(workbookBuffer, nativeCharts)",
+    'title: "Selected View Payroll Metrics"',
+    'title: "Payroll by Branch"',
+    'title: "Gross Payroll by Department"',
+    'title: "Gross Payroll by Cost Centre"',
   ]) assert.ok(routes.includes(expected), "Missing dashboard/branch workbook control: " + expected);
+  assert.equal(routes.includes("payrollVisualBar"), false, "Legacy cell-bar visuals must not return.");
 });
 
 test("approved payroll export requires CHRiS approval and includes controlled payout register", () => {
