@@ -839,8 +839,24 @@ export default function EmployeeExits() {
 
   if (settlementExitId) {
     const snapshot = settlement?.calculationSnapshot || {};
-    const accountEmployee = settlementPreview?.employee || snapshot.employee || null;
-    const accountExit = settlementPreview?.exit || snapshot.exit || null;
+    const fallbackAccountEmployee = settlementExit ? {
+      employeeNumber: settlementExit.employeeNumber,
+      employeeName: nameOf(settlementExit),
+      designation: settlementExit.designation?.name || "",
+      department: settlementExit.department?.name || "",
+      branch: settlementExit.location?.name || "",
+      costCentre: "",
+      costCentreCode: "",
+      employmentType: "",
+    } : null;
+    const fallbackAccountExit = settlementExit?.exitProcess ? {
+      exitType: settlementExit.exitProcess.exitType,
+      noticeDate: null,
+      lastWorkingDay: settlementExit.exitProcess.effectiveDate || settlementExit.exitDate || null,
+      reason: settlementExit.exitProcess.reason || "",
+    } : null;
+    const accountEmployee = settlementPreview?.employee || snapshot.employee || fallbackAccountEmployee;
+    const accountExit = settlementPreview?.exit || snapshot.exit || fallbackAccountExit;
     const accountSalary = settlementPreview?.salary || snapshot.salary || null;
     const accountCredits = settlementPreview?.credits || Object.fromEntries(
       Object.entries(snapshot.creditItems || {}).map(([key, item]) => [key, Number(item?.amount || 0)])
@@ -869,21 +885,22 @@ export default function EmployeeExits() {
 
         {feedback ? <div style={feedbackStyle}>{feedback}</div> : null}
         {loading ? <div style={panel}>Loading settlement workflow...</div> : !settlementExit ? <div style={warning}>The completed exit could not be found.</div> : (
-          <div style={twoColumn}>
+          <div className="exit-settlement-workspace" style={twoColumn}>
             <EmployeeCard employee={settlementExit} />
-            <section style={panel}>
+            <section className="exit-settlement-panel" style={panel}>
               <div style={sectionHeader}>
                 <div>
                   <div style={eyebrow}>FINANCIAL STATUS</div>
                   <h2 style={sectionTitle}>{titleCase(settlementExit.exitProcess?.financialStatus || "PENDING")}</h2>
                 </div>
                 <div style={settlementHeaderActions}>
-                  {accountEmployee && accountExit ? (
+                  {settlementExit ? (
                     <button
                       type="button"
                       className="exit-settlement-print-button"
                       style={secondaryButton}
                       onClick={() => window.print()}
+                      aria-label="Print or download Employee Exit Settlement Account as PDF"
                     >
                       <FaPrint /> Print / Download PDF
                     </button>
@@ -977,7 +994,7 @@ export default function EmployeeExits() {
               ) : null}
 
               {!settlement && accountEmployee && accountExit ? (
-                <section className="exit-settlement-print-document">
+                <section className="chris-print-document exit-settlement-print-document">
                   <PrintableReportHeader
                     reportTitle="Employee Exit Settlement Account — Draft"
                     scopeLabel={`${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}`}
@@ -1105,7 +1122,7 @@ export default function EmployeeExits() {
                   {["PAID", "WAIVED"].includes(settlement.status) ? <div style={closureNotice}>Financial closure complete. The HR-effective exit date and employment history remain unchanged.</div> : null}
 
                   {settlement.status !== "WAIVED" ? (
-                    <section className="exit-settlement-print-document">
+                    <section className="chris-print-document exit-settlement-print-document">
                       <PrintableReportHeader
                         reportTitle="Employee Exit Settlement Account"
                         scopeLabel={accountEmployee ? `${accountEmployee.employeeNumber} · ${accountEmployee.employeeName}` : "Employee Exit Settlement"}

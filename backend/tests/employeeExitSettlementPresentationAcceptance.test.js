@@ -37,18 +37,25 @@ test("settlement account structurally locks CREDIT left and DEBIT right", () => 
   assert.ok(frontend.includes('className="exit-settlement-account-columns"'));
   assert.ok(frontend.includes('className="exit-settlement-credit-column"'));
   assert.ok(frontend.includes('className="exit-settlement-debit-column"'));
+  assert.ok(frontend.includes('className="exit-settlement-workspace"'));
+  assert.ok(frontend.includes('className="exit-settlement-panel"'));
   const creditIndex = frontend.indexOf('<SettlementAccountSection title="CREDIT"');
   const debitIndex = frontend.indexOf('<SettlementAccountSection title="DEBIT"');
   assert.ok(creditIndex >= 0 && debitIndex > creditIndex);
-  assert.ok(css.includes("flex-flow: row nowrap !important"));
-  assert.ok(css.includes(".exit-settlement-credit-column { order: 1 !important; }"));
-  assert.ok(css.includes(".exit-settlement-debit-column { order: 2 !important; }"));
-  assert.ok(css.includes("overflow-x: auto !important"));
+  assert.ok(css.includes("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important"));
+  assert.ok(css.includes(".exit-settlement-credit-column"));
+  assert.ok(css.includes("grid-column: 1 !important"));
+  assert.ok(css.includes(".exit-settlement-debit-column"));
+  assert.ok(css.includes("grid-column: 2 !important"));
+  assert.equal(css.includes("flex-flow: row nowrap !important"), false);
 });
 
 test("settlement provides Print / Download PDF from preview stage and prints the calculation basis", () => {
   assert.ok(frontend.includes("Print / Download PDF"));
-  assert.ok(frontend.includes("accountEmployee && accountExit ?"));
+  assert.ok(frontend.includes("settlementExit ? ("));
+  assert.ok(frontend.includes('className="chris-print-document exit-settlement-print-document"'));
+  assert.ok(frontend.includes("fallbackAccountEmployee"));
+  assert.ok(frontend.includes("fallbackAccountExit"));
   assert.ok(frontend.includes("Employee Exit Settlement Account — Draft"));
   assert.ok(frontend.includes("Draft Preview"));
   assert.ok(frontend.includes("window.print()"));
