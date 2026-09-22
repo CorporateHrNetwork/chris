@@ -58,8 +58,27 @@ test("settlement provides Print / Download PDF from preview stage and prints the
   assert.ok(frontend.includes("fallbackAccountExit"));
   assert.ok(frontend.includes("Employee Exit Settlement Account — Draft"));
   assert.ok(frontend.includes("Draft Preview"));
-  assert.ok(frontend.includes("window.print()"));
+  assert.ok(frontend.includes("printExitSettlementDocument"));
+  assert.ok(frontend.includes("printWindow.print()"));
+  assert.ok(frontend.includes("Print / Download PDF"));
   assert.ok(frontend.includes("exit-settlement-print-calculation-note"));
   assert.ok(frontend.includes("<h3>Calculation Basis</h3>"));
   assert.ok(css.includes(".exit-settlement-print-calculation-note"));
+});
+
+
+test("settlement standalone print uses compact three-column employee details and explicit accounting sides", () => {
+  assert.ok(frontend.includes("grid-template-columns:repeat(3,minmax(0,1fr))"));
+  assert.ok(frontend.includes('title="CREDIT — BENEFITS / ENTITLEMENTS"'));
+  assert.ok(frontend.includes('title="DEBIT — DEDUCTIONS / RECOVERIES"'));
+  assert.ok(frontend.includes(".exit-settlement-print-account>:first-child{grid-column:1!important"));
+  assert.ok(frontend.includes(".exit-settlement-print-account>:nth-child(2){grid-column:2!important"));
+});
+
+test("settlement standalone print provides visible controls and Head of HR signature section", () => {
+  assert.ok(frontend.includes('id="printSettlementDocument"'));
+  assert.ok(frontend.includes('id="closeSettlementDocument"'));
+  assert.ok(frontend.includes("Head of HR Approval & Signature"));
+  assert.ok(frontend.includes("exit-settlement-headhr-signature-grid"));
+  assert.ok(frontend.includes("exit-settlement-headhr-signature-line"));
 });
