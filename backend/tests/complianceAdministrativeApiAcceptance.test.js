@@ -200,7 +200,7 @@ test("administrative UI exposes remittance operations and exit financial closure
     "runSettlementAction(\"calculate\"",
     "approveHeadHrSettlement",
     "Approve & Prepare for Print",
-    "Print Settlement Account",
+    "Print / Download PDF",
     "External Signatory Workflow",
     "Auditor Review",
     "GM Payout Approval",
