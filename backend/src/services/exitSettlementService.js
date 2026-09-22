@@ -481,6 +481,105 @@ function calculateAccount(system, input) {
   };
 }
 
+function formatSettlementNumber(value) {
+  return Number(value || 0).toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function buildCalculationNote(preview) {
+  const currency = preview?.salary?.currency || "NGN";
+  const lines = [];
+  const push = (label, amount, basis) => {
+    const numeric = Number(amount || 0);
+    if (numeric === 0) return;
+    lines.push(
+      `${label}: ${currency} ${formatSettlementNumber(numeric)} — ${basis}`
+    );
+  };
+
+  push(
+    "Gratuity / EoSB",
+    preview.credits.gratuityEosb,
+    preview.systemItems.credits.gratuityEosb.formula
+  );
+  push(
+    "Annual Leave Allowance",
+    preview.credits.annualLeaveAllowance,
+    `${preview.systemItems.credits.annualLeaveAllowance.formula}; proration factor ${preview.systemItems.credits.annualLeaveAllowance.prorationFactor}`
+  );
+  push(
+    "Outstanding Salary",
+    preview.credits.outstandingSalary,
+    preview.systemItems.credits.outstandingSalary.formula
+  );
+  push(
+    "Public Holiday Days",
+    preview.credits.publicHolidayDays,
+    `${preview.systemItems.credits.publicHolidayDays.formula}; quantity ${preview.systemItems.credits.publicHolidayDays.quantity}`
+  );
+  push(
+    "Extra Day Work Overtime",
+    preview.credits.extraDayOvertime,
+    `${preview.systemItems.credits.extraDayOvertime.formula}; quantity ${preview.systemItems.credits.extraDayOvertime.quantity}`
+  );
+  push(
+    "Extra Hours Work Overtime",
+    preview.credits.extraHoursOvertime,
+    `${preview.systemItems.credits.extraHoursOvertime.formula}; quantity ${preview.systemItems.credits.extraHoursOvertime.quantity}`
+  );
+  push(
+    "Bonus / Gift",
+    preview.credits.bonusGift,
+    "HR-entered approved settlement credit"
+  );
+  push(
+    "In Lieu of Notice Pay",
+    preview.credits.noticePay,
+    `Gross ÷ 26 × ${preview.hrInputs.noticePayDays} HR-entered notice pay day(s)`
+  );
+  push(
+    "Previous Salary Short Paid",
+    preview.credits.previousSalaryShortPaid,
+    "HR-entered prior salary short-payment adjustment"
+  );
+
+  push(
+    "Loan Balance",
+    preview.debits.loanBalance,
+    "authoritative outstanding Loan Account balance"
+  );
+  push(
+    "Salary Advance",
+    preview.debits.salaryAdvance,
+    "authoritative outstanding Salary Advance Account balance"
+  );
+  push(
+    "In Lieu of Notice Deduction",
+    preview.debits.noticeDeduction,
+    `Gross ÷ 26 × ${preview.hrInputs.noticeDeficiencyDays} deficient notice day(s); entitled ${preview.hrInputs.entitledNoticeDays} day(s), notice given ${preview.hrInputs.noticeDaysGiven} day(s)`
+  );
+  push(
+    "Unreturned Uniform",
+    preview.debits.unreturnedUniform,
+    "HR-entered recovery"
+  );
+  push(
+    "Previous Salary Overpaid",
+    preview.debits.previousSalaryOverpaid,
+    "HR-entered prior salary overpayment recovery"
+  );
+
+  const summary = `Total Credits: ${currency} ${formatSettlementNumber(preview.totals.totalCredits)}; Total Debits: ${currency} ${formatSettlementNumber(preview.totals.totalDebits)}; Net Exit Settlement: ${currency} ${formatSettlementNumber(preview.totals.netSettlement)}.`;
+
+  return [
+    "CHRiS Exit Settlement Calculation Basis",
+    ...lines.map((line, index) => `${index + 1}. ${line}`),
+    summary,
+  ].join("\n");
+}
+
 async function getSettlementPreview({
   organizationId,
   exitProcessId,
@@ -510,7 +609,7 @@ async function getSettlementPreview({
   });
   const account = calculateAccount(system, input);
 
-  return {
+  const preview = {
     employee: {
       id: exit.employee.id,
       employeeNumber: exit.employee.employeeNumber,
@@ -560,6 +659,9 @@ async function getSettlementPreview({
       netSettlement: account.netSettlement,
     },
   };
+
+  preview.calculationNote = buildCalculationNote(preview);
+  return preview;
 }
 
 async function calculateSettlement({
@@ -713,6 +815,8 @@ async function calculateSettlement({
       },
       hrInputs: preview.hrInputs,
       totals: preview.totals,
+      calculationNote: preview.calculationNote,
+      hrSupplementaryNote: text(input.notes) || null,
       calculatedAt: new Date().toISOString(),
     };
 
@@ -726,7 +830,10 @@ async function calculateSettlement({
         ...values,
         status: "CALCULATED",
         calculationSnapshot: snapshot,
-        notes: text(input.notes) || null,
+        notes: [
+          preview.calculationNote,
+          text(input.notes) ? `HR Supplementary Note: ${text(input.notes)}` : null,
+        ].filter(Boolean).join("\n\n"),
         calculatedByUserId: actorUserId,
         calculatedAt: new Date(),
       },
@@ -735,7 +842,10 @@ async function calculateSettlement({
         ...values,
         status: "CALCULATED",
         calculationSnapshot: snapshot,
-        notes: text(input.notes) || null,
+        notes: [
+          preview.calculationNote,
+          text(input.notes) ? `HR Supplementary Note: ${text(input.notes)}` : null,
+        ].filter(Boolean).join("\n\n"),
         calculatedByUserId: actorUserId,
         calculatedAt: new Date(),
         approvedByUserId: null,
