@@ -96,7 +96,7 @@ function settlementFormFromRecord(record) {
     unreturnedUniform: String(hrInputs.unreturnedUniform || ""),
     previousSalaryOverpaid: String(hrInputs.previousSalaryOverpaid || ""),
     currency: record.currency || "NGN",
-    notes: record.notes || "",
+    notes: record.calculationSnapshot?.hrSupplementaryNote || "",
   };
 }
 
