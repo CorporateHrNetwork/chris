@@ -392,6 +392,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
       noticeDate: dateText(exit.noticeDate),
       lastWorkingDay: dateText(exit.lastWorkingDay),
       noticeStatus: exit.noticeStatus || null,
+      entitledNoticeDays: exit.entitledNoticeDays ?? null,
     },
   };
 }
@@ -439,7 +440,10 @@ function calculateAccount(system, input) {
     noticeDate: system.notice?.noticeDate,
     lastWorkingDay: system.notice?.lastWorkingDay,
     noticeStatus: system.notice?.noticeStatus,
-    entitledNoticeDays: input.entitledNoticeDays,
+    entitledNoticeDays:
+      system.notice?.entitledNoticeDays != null
+        ? system.notice.entitledNoticeDays
+        : input.entitledNoticeDays,
   });
 
   const credits = {
