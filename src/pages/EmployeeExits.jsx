@@ -59,7 +59,6 @@ const EMPTY_EXIT = {
   exitType: "RESIGNATION",
   noticeDate: "",
   noticeStatus: "IN_PROGRESS",
-  entitledNoticeDays: "",
   lastWorkingDay: "",
   reason: "",
   notes: "",
@@ -93,7 +92,6 @@ function settlementFormFromRecord(record) {
     bonusGift: String(hrInputs.bonusGift || ""),
     noticePayDays: String(hrInputs.noticePayDays || ""),
     previousSalaryShortPaid: String(hrInputs.previousSalaryShortPaid || ""),
-    entitledNoticeDays: String(hrInputs.entitledNoticeDays || ""),
     unreturnedUniform: String(hrInputs.unreturnedUniform || ""),
     previousSalaryOverpaid: String(hrInputs.previousSalaryOverpaid || ""),
     currency: record.currency || "NGN",
@@ -282,7 +280,6 @@ export default function EmployeeExits() {
         bonusGift: String(settlementForm.bonusGift || 0),
         noticePayDays: String(settlementForm.noticePayDays || 0),
         previousSalaryShortPaid: String(settlementForm.previousSalaryShortPaid || 0),
-        entitledNoticeDays: String(settlementForm.entitledNoticeDays || 0),
         unreturnedUniform: String(settlementForm.unreturnedUniform || 0),
         previousSalaryOverpaid: String(settlementForm.previousSalaryOverpaid || 0),
       });
@@ -305,7 +302,6 @@ export default function EmployeeExits() {
     settlementForm.bonusGift,
     settlementForm.noticePayDays,
     settlementForm.previousSalaryShortPaid,
-    settlementForm.entitledNoticeDays,
     settlementForm.unreturnedUniform,
     settlementForm.previousSalaryOverpaid,
   ]);
@@ -763,7 +759,6 @@ export default function EmployeeExits() {
       "bonusGift",
       "noticePayDays",
       "previousSalaryShortPaid",
-      "entitledNoticeDays",
       "unreturnedUniform",
       "previousSalaryOverpaid",
     ];
@@ -842,7 +837,6 @@ export default function EmployeeExits() {
                     <SettlementAccountSection title="DEBIT" tone="debit">
                       <SettlementLine label="Loan Balance" value={accountDebits?.loanBalance} currency={accountSalary?.currency} source="System · Loan Account" />
                       <SettlementLine label="Salary Advance" value={accountDebits?.salaryAdvance} currency={accountSalary?.currency} source="System · Salary Advance Account" />
-                      <SettlementInputLine label="Entitled Notice Period" inputLabel="Days" value={settlementForm.entitledNoticeDays} onChange={(value) => setSettlementField("entitledNoticeDays", value)} amount={0} currency={accountSalary?.currency} hideAmount />
                       <SettlementNoticeSummary
                         noticeDate={accountExit?.noticeDate}
                         lastWorkingDay={accountExit?.lastWorkingDay}
