@@ -11,7 +11,7 @@
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
   }
 
   body {
@@ -24,7 +24,7 @@
     width: 100% !important;
     height: auto !important;
     overflow: visible !important;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .chris-mobile-sidebar-wrap,
@@ -43,7 +43,7 @@
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .chris-main-content {
@@ -53,28 +53,28 @@
     min-height: 0 !important;
     overflow: visible !important;
     padding: 0 !important;
-    background: #ffffff !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .chris-main-content > .chris-page {
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
-    color: #111827 !important;
+    color: var(--chris-print-ink) !important;
   }
 
   .chris-reports-page {
     width: 100% !important;
     max-width: none !important;
     padding: 0 !important;
-    color: #111827 !important;
-    background: #ffffff !important;
+    color: var(--chris-print-ink) !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .reports-print-content {
     display: block !important;
     width: 100% !important;
-    color: #111827 !important;
+    color: var(--chris-print-ink) !important;
   }
 
   .reports-kpi-grid {
@@ -87,15 +87,15 @@
 
   .reports-kpi-card,
   .reports-panel {
-    background: #ffffff !important;
-    color: #243b31 !important;
-    border: 1px solid #cbd5e1 !important;
+    background: var(--chris-print-paper) !important;
+    color: var(--chris-print-ink) !important;
+    border: 1px solid var(--chris-print-border) !important;
     box-shadow: none !important;
   }
 
   .reports-panel--summary {
-    background: #ffffff !important;
-    border-color: #cbd5e1 !important;
+    background: var(--chris-print-paper) !important;
+    border-color: var(--chris-print-border) !important;
   }
 
   .reports-kpi-card {
@@ -105,7 +105,7 @@
 
   .reports-kpi-card span,
   .reports-kpi-card div {
-    color: #111827 !important;
+    color: var(--chris-print-ink) !important;
   }
 
   .reports-panel {
@@ -118,22 +118,22 @@
 
   .reports-panel h2,
   .reports-panel h3 {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
   }
 
   .reports-panel p,
   .reports-panel div,
   .reports-panel span,
   .reports-panel label {
-    color: #334155 !important;
+    color: var(--chris-print-ink) !important;
   }
 
   .reports-panel--summary h2 {
-    color: #064e3b !important;
+    color: var(--chris-print-green) !important;
   }
 
   .reports-panel--summary > div:first-child div:last-child {
-    color: #64748b !important;
+    color: var(--chris-print-muted) !important;
   }
 
   .reports-panel--summary [style*="background: linear-gradient"] {
@@ -157,23 +157,23 @@
     table-layout: auto !important;
     border-collapse: collapse !important;
     font-size: 7.5pt !important;
-    color: #111827 !important;
-    background: #ffffff !important;
+    color: var(--chris-print-ink) !important;
+    background: var(--chris-print-paper) !important;
   }
 
   .reports-panel thead,
   .reports-panel thead tr,
   .reports-panel th {
     position: static !important;
-    background: #e8f3ed !important;
-    color: #064e32 !important;
+    background: var(--chris-print-green-soft) !important;
+    color: var(--chris-print-green) !important;
   }
 
   .reports-panel th,
   .reports-panel td {
     padding: 5px 6px !important;
-    border: 1px solid #d1d5db !important;
-    color: #243b31 !important;
+    border: 1px solid var(--chris-print-border) !important;
+    color: var(--chris-print-ink) !important;
     white-space: normal !important;
     word-break: break-word;
   }
