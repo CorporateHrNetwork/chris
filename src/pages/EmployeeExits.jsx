@@ -139,7 +139,6 @@ export default function EmployeeExits() {
   const [settlement, setSettlement] = useState(null);
   const [settlementPreview, setSettlementPreview] = useState(null);
   const [settlementForm, setSettlementForm] = useState(EMPTY_SETTLEMENT);
-  const [settlementPayment, setSettlementPayment] = useState("");
   const [settlementDecisionNotes, setSettlementDecisionNotes] = useState("");
 
   const loadData = useCallback(async () => {
@@ -565,10 +564,9 @@ export default function EmployeeExits() {
         { method: "POST", ...(body === undefined ? {} : { body }) }
       );
       setSettlement(result?.data || null);
-      const actionLabel = action === "calculate" ? "calculated" : action === "payment" ? "payment recorded" : action === "submit" ? "submitted" : action === "approve" ? "approved" : "waived";
+      const actionLabel = action === "calculate" ? "calculated" : action === "submit" ? "submitted" : action === "approve" ? "approved" : "waived";
       setFeedback(`Exit settlement ${actionLabel} successfully.`);
       if (["approve", "payment", "waive"].includes(action)) await loadData();
-      if (action === "payment") setSettlementPayment("");
       if (["approve", "waive"].includes(action)) setSettlementDecisionNotes("");
     } catch (error) {
       setFeedback(error?.message || "Unable to update the exit settlement.");
