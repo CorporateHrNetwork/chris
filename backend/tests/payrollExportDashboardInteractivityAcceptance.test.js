@@ -50,7 +50,7 @@ test("native Excel chart service writes OOXML chart and drawing parts", () => {
     'xl/drawings/drawing1.xml',
     'xl/drawings/_rels/drawing1.xml.rels',
     'xl/charts/chart',
-    '<c:barChart>',
+    'const tag = chart.type === "line" ? "lineChart" : "barChart";',
     '<c:pieChart>',
     'a:srgbClr',
   ]) assert.ok(chartService.includes(expected), `Missing OOXML chart capability: ${expected}`);
