@@ -19,9 +19,17 @@
   .chris-topbar-shell,
   .chris-shell-ambient,
   .chris-standalone-back-wrap,
-  .chris-main-content > .chris-page > *:not(.exit-settlement-print-document),
   .exit-settlement-print-button {
     display: none !important;
+  }
+
+  .employee-exit-settlement-page > * {
+    visibility: hidden !important;
+  }
+
+  .exit-settlement-print-document,
+  .exit-settlement-print-document * {
+    visibility: visible !important;
   }
 
   .chris-shell,
@@ -41,6 +49,9 @@
 
   .exit-settlement-print-document {
     display: block !important;
+    position: absolute !important;
+    top: 0;
+    left: 0;
     width: 100% !important;
     color: #1f2937 !important;
     background: #ffffff !important;
