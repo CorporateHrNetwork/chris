@@ -77,6 +77,38 @@ function variableValue(calculationType, monthlyGross, units) {
   }
 }
 
+function noticeDaysBetween(noticeDate, lastWorkingDay) {
+  if (!noticeDate || !lastWorkingDay) return 0;
+  const start = new Date(noticeDate);
+  const end = new Date(lastWorkingDay);
+  if ([start, end].some((value) => Number.isNaN(value.getTime()))) return 0;
+  if (end <= start) return 0;
+
+  const UTC_DAY = 86400000;
+  const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  return Math.max(0, Math.floor((endUtc - startUtc) / UTC_DAY));
+}
+
+function resolveNoticePosition({ noticeDate, lastWorkingDay, noticeStatus, entitledNoticeDays }) {
+  const requiredDays = quantity(entitledNoticeDays, "Entitled Notice Period");
+  const normalizedStatus = String(noticeStatus || "").trim().toUpperCase();
+  const daysGiven = noticeDaysBetween(noticeDate, lastWorkingDay);
+  const waived = ["WAIVED", "NOT_REQUIRED"].includes(normalizedStatus);
+  const deficiencyDays = waived ? 0 : Math.max(0, round4(requiredDays - daysGiven));
+
+  return {
+    entitledNoticeDays: requiredDays,
+    noticeDaysGiven: daysGiven,
+    noticeDeficiencyDays: deficiencyDays,
+    noticeExcessDays: Math.max(0, round4(daysGiven - requiredDays)),
+    noticeStatus: normalizedStatus || null,
+    noticeDate: dateText(noticeDate),
+    lastWorkingDay: dateText(lastWorkingDay),
+    deductionWaived: waived,
+  };
+}
+
 function countPayrollDaysThroughDate(lastWorkingDay) {
   const exit = new Date(lastWorkingDay);
   if (Number.isNaN(exit.getTime())) return 0;
@@ -356,12 +388,22 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         source: "SALARY_ADVANCE_ACCOUNT",
       },
     },
+    notice: {
+      noticeDate: dateText(exit.noticeDate),
+      lastWorkingDay: dateText(exit.lastWorkingDay),
+      noticeStatus: exit.noticeStatus || null,
+    },
   };
 }
 
 function calculateAccount(system, input) {
   const noticePayDays = quantity(input.noticePayDays, "In Lieu of Notice Pay days");
-  const noticeDeductionDays = quantity(input.noticeDeductionDays, "In Lieu of Notice Deduction days");
+  const noticePosition = resolveNoticePosition({
+    noticeDate: system.notice?.noticeDate,
+    lastWorkingDay: system.notice?.lastWorkingDay,
+    noticeStatus: system.notice?.noticeStatus,
+    entitledNoticeDays: input.entitledNoticeDays,
+  });
 
   const credits = {
     gratuityEosb: money(system.credits.gratuityEosb.amount),
@@ -378,7 +420,7 @@ function calculateAccount(system, input) {
   const debits = {
     loanBalance: money(system.debits.loanBalance.amount),
     salaryAdvance: money(system.debits.salaryAdvance.amount),
-    noticeDeduction: money(system.salary.dayRate * noticeDeductionDays),
+    noticeDeduction: money(system.salary.dayRate * noticePosition.noticeDeficiencyDays),
     unreturnedUniform: money(input.unreturnedUniform),
     previousSalaryOverpaid: money(input.previousSalaryOverpaid),
   };
@@ -394,7 +436,7 @@ function calculateAccount(system, input) {
     totalDebits,
     netSettlement,
     noticePayDays,
-    noticeDeductionDays,
+    noticePosition,
   };
 }
 
@@ -461,7 +503,11 @@ async function getSettlementPreview({
       bonusGift: money(input.bonusGift),
       noticePayDays: account.noticePayDays,
       previousSalaryShortPaid: money(input.previousSalaryShortPaid),
-      noticeDeductionDays: account.noticeDeductionDays,
+      entitledNoticeDays: account.noticePosition.entitledNoticeDays,
+      noticeDaysGiven: account.noticePosition.noticeDaysGiven,
+      noticeDeficiencyDays: account.noticePosition.noticeDeficiencyDays,
+      noticeExcessDays: account.noticePosition.noticeExcessDays,
+      noticeDeductionWaived: account.noticePosition.deductionWaived,
       unreturnedUniform: money(input.unreturnedUniform),
       previousSalaryOverpaid: money(input.previousSalaryOverpaid),
     },
@@ -604,10 +650,14 @@ async function calculateSettlement({
         noticeDeduction: {
           label: "In Lieu of Notice Deduction",
           amount: preview.debits.noticeDeduction,
-          days: preview.hrInputs.noticeDeductionDays,
+          entitledNoticeDays: preview.hrInputs.entitledNoticeDays,
+          noticeDaysGiven: preview.hrInputs.noticeDaysGiven,
+          deficiencyDays: preview.hrInputs.noticeDeficiencyDays,
+          excessDays: preview.hrInputs.noticeExcessDays,
+          deductionWaived: preview.hrInputs.noticeDeductionWaived,
           dailyRate: preview.salary.dayRate,
-          formula: "Gross ÷ 26 × HR-entered deficient notice days",
-          entryMode: "HR_DAYS_SYSTEM_VALUE",
+          formula: "Gross ÷ 26 × system-calculated deficient notice days",
+          entryMode: "HR_ENTITLEMENT_SYSTEM_CALCULATION",
         },
         unreturnedUniform: {
           label: "Unreturned Uniform",
@@ -794,6 +844,8 @@ async function getSettlement({ organizationId, exitProcessId, prismaClient = pri
 module.exports = {
   SYSTEM_VARIABLE_CODES,
   variableValue,
+  noticeDaysBetween,
+  resolveNoticePosition,
   countPayrollDaysThroughDate,
   serviceYearProration,
   calculateAccount,
