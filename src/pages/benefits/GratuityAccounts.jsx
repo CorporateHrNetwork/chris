@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../../services/api";
+import { PrintableReportHeader, PrintableReportFooter } from "../../components/reporting/PrintableReportBranding";
+import "./GratuityAccounts.css";
 
 function money(value) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 2 }).format(Number(value || 0));
@@ -15,6 +17,7 @@ export default function GratuityAccounts() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [printMode, setPrintMode] = useState("");
 
   async function load() {
     try {
@@ -30,6 +33,17 @@ export default function GratuityAccounts() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const clearPrintMode = () => setPrintMode("");
+    window.addEventListener("afterprint", clearPrintMode);
+    return () => window.removeEventListener("afterprint", clearPrintMode);
+  }, []);
+
+  function printDocument(mode) {
+    setPrintMode(mode);
+    window.setTimeout(() => window.print(), 0);
+  }
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -68,7 +82,7 @@ export default function GratuityAccounts() {
   }
 
   return (
-    <div style={page}>
+    <div className={`eosb-gratuity-page ${printMode ? `eosb-print-${printMode}` : ""}`} style={page}>
       <section style={hero}>
         <div style={eyebrow}>BENEFITS · END OF SERVICE BENEFIT</div>
         <h1 style={title}>EoSB / Gratuity Accounts</h1>
@@ -89,7 +103,7 @@ export default function GratuityAccounts() {
         <div style={toolbar}>
           <input style={input} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search employee, branch, department or designation" />
           <button type="button" style={secondary} onClick={exportCsv} disabled={loading}>Export CSV</button>
-          <button type="button" style={secondary} onClick={() => window.print()} disabled={loading}>Print</button>
+          <button type="button" style={secondary} onClick={() => printDocument("register")} disabled={loading}>Print / Save PDF</button>
         </div>
 
         {loading ? <p style={muted}>Loading EoSB accounts…</p> : (
@@ -114,15 +128,49 @@ export default function GratuityAccounts() {
         )}
       </section>
 
-      {selected ? <Statement account={selected} onClose={() => setSelected(null)} /> : null}
+      <section className="chris-print-document eosb-print-document eosb-register-print-document">
+        <PrintableReportHeader
+          reportTitle="EoSB / Gratuity Accounts"
+          scopeLabel="Zermatt gratuity register · fixed 30-day month basis · 7.5% factor"
+        />
+        <div className="eosb-print-summary">
+          <div><span>Eligible Employees</span><strong>{summary.eligible}</strong></div>
+          <div><span>Calculation Ready</span><strong>{summary.ready}</strong></div>
+          <div><span>Total EoSB Liability</span><strong>{money(summary.total)}</strong></div>
+          <div><span>Available Loan Collateral</span><strong>{money(summary.collateral)}</strong></div>
+        </div>
+        <div className="eosb-print-formula">Gross Monthly Salary × (Actual Service Days ÷ 30) × 7.5%</div>
+        <table className="eosb-print-table">
+          <thead>
+            <tr>
+              <th>Employee</th><th>Service Days</th><th>Gross Salary</th><th>EoSB</th><th>Available Collateral</th><th>Mode</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => (
+              <tr key={`print-${row.employee.employeeNumber}`}>
+                <td><strong>{row.employee.name}</strong><br/><small>{row.employee.employeeNumber} · {row.employee.location || "—"}</small></td>
+                <td>{row.service.serviceDays}<br/><small>{row.service.equivalentMonths} fixed-month equivalents</small></td>
+                <td>{row.salary ? money(row.salary.grossMonthlySalary) : "Missing rate"}</td>
+                <td>{money(row.eosb.accruedValue)}</td>
+                <td>{money(row.loanCollateral.availableCollateral)}</td>
+                <td>{row.loanCollateral.mode === "EOSB" ? "EoSB-backed" : "Surety required"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <PrintableReportFooter generatedAt={new Date().toISOString()} />
+      </section>
+
+      {selected ? <Statement account={selected} onClose={() => setSelected(null)} onPrint={() => printDocument("statement")} /> : null}
     </div>
   );
 }
 
-function Statement({ account, onClose }) {
+function Statement({ account, onClose, onPrint }) {
   return (
-    <div style={overlay}>
-      <div style={statement}>
+    <div className="eosb-statement-overlay" style={overlay}>
+      <div className="eosb-statement-screen" style={statement}>
         <div style={statementHeader}>
           <div><div style={eyebrow}>CHRiS · ZERMATT LIQUOR LIMITED</div><h2 style={{ margin: "6px 0 0" }}>EoSB Account Statement</h2></div>
           <button type="button" style={secondary} onClick={onClose}>Close</button>
@@ -147,8 +195,36 @@ function Statement({ account, onClose }) {
         {account.eosb.missingReason ? <div style={warningBox}>{account.eosb.missingReason}</div> : null}
         {account.loanCollateral.reason ? <div style={note}>{account.loanCollateral.reason}</div> : null}
         <div style={formula}>{account.policy.formula}</div>
-        <div style={{ marginTop: 16 }}><button type="button" style={primary} onClick={() => window.print()}>Print Statement</button></div>
+        <div style={{ marginTop: 16 }}><button type="button" style={primary} onClick={onPrint}>Print / Download PDF</button></div>
       </div>
+
+      <section className="chris-print-document eosb-print-document eosb-statement-print-document">
+        <PrintableReportHeader
+          reportTitle="EoSB / Gratuity Account Statement"
+          scopeLabel={`${account.employee.employeeNumber} · ${account.employee.name}`}
+        />
+        <div className="eosb-statement-print-grid">
+          <Item label="Employee" value={`${account.employee.name} (${account.employee.employeeNumber})`} />
+          <Item label="Employment Type" value={account.employee.employmentType || "—"} />
+          <Item label="Branch" value={account.employee.location || "—"} />
+          <Item label="Department" value={account.employee.department || "—"} />
+          <Item label="Designation" value={account.employee.designation || "—"} />
+          <Item label="Service Start" value={account.service.serviceStartDate || "—"} />
+          <Item label="Calculation Date" value={account.service.calculationDate || "—"} />
+          <Item label="Actual Service Days" value={account.service.serviceDays} />
+          <Item label="Fixed-Month Equivalent" value={account.service.equivalentMonths} />
+          <Item label="Gross Monthly Salary" value={account.salary ? money(account.salary.grossMonthlySalary) : "Missing effective salary rate"} />
+          <Item label="Gratuity Factor" value="7.5%" />
+          <Item label="Accrued EoSB" value={money(account.eosb.accruedValue)} />
+          <Item label="Existing Loan Exposure" value={money(account.loanCollateral.existingLoanExposure)} />
+          <Item label="Available Loan Collateral" value={money(account.loanCollateral.availableCollateral)} />
+          <Item label="Loan Access Basis" value={account.loanCollateral.mode === "EOSB" ? "EoSB collateral" : "Internal employee surety required"} />
+        </div>
+        {account.eosb.missingReason ? <div className="eosb-print-note">{account.eosb.missingReason}</div> : null}
+        {account.loanCollateral.reason ? <div className="eosb-print-note">{account.loanCollateral.reason}</div> : null}
+        <div className="eosb-print-formula">{account.policy.formula}</div>
+        <PrintableReportFooter generatedAt={new Date().toISOString()} />
+      </section>
     </div>
   );
 }
