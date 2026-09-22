@@ -609,7 +609,7 @@ export default function EmployeeExits() {
       netSettlement: Number(settlement?.netSettlement || 0),
     };
     return (
-      <div>
+      <div className="employee-exit-settlement-page">
         <PageHero
           eyebrow="EXIT FINANCIAL CLOSURE"
           title="Exit Settlement"
