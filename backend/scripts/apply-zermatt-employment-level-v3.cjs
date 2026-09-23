@@ -26,36 +26,38 @@ function parseArgs() {
   };
 }
 
-async function resolveOrganizationAndActor() {
+async function resolveOrganizationAndActor({ requireActor = false } = {}) {
   const organization = await prisma.organization.findUnique({
     where: { slug: ZERMATT_SLUG },
     select: { id: true, name: true, slug: true },
   });
   if (!organization) throw new Error("ZERMATT_ORGANIZATION_NOT_FOUND");
 
+  const requestedActorEmail = String(process.env.ZERMATT_V3_ACTOR_EMAIL || "")
+    .trim()
+    .toLowerCase();
+
+  if (!requireActor) {
+    return { organization, actor: null };
+  }
+
+  if (!requestedActorEmail) {
+    throw new Error("ZERMATT_V3_ACTOR_EMAIL_REQUIRED");
+  }
+
   const actor = await prisma.user.findFirst({
     where: {
       organizationId: organization.id,
       isActive: true,
-      userRoles: {
-        some: {
-          role: {
-            name: {
-              in: [
-                "Super User",
-                "SuperUser",
-                "Super Admin",
-                "SuperAdmin",
-                "Organization Super User",
-              ],
-            },
-          },
-        },
-      },
+      email: requestedActorEmail,
     },
     select: { id: true, email: true },
   });
-  if (!actor) throw new Error("ZERMATT_SUPERUSER_NOT_FOUND");
+
+  if (!actor) {
+    throw new Error("ZERMATT_V3_ACTOR_NOT_FOUND");
+  }
+
   return { organization, actor };
 }
 
@@ -394,7 +396,9 @@ async function applyV3({ organization, actor, leaveYear }) {
 
 async function main() {
   const { apply, leaveYear } = parseArgs();
-  const { organization, actor } = await resolveOrganizationAndActor();
+  const { organization, actor } = await resolveOrganizationAndActor({
+    requireActor: apply,
+  });
   const source = await inspectState(organization.id);
   assertDesignationCoverage(source.designations);
 
@@ -402,7 +406,7 @@ async function main() {
   console.log("ZERMATT EMPLOYMENT LEVEL V3 — CONTROLLED ACTIVATION");
   console.log("============================================================");
   console.log(`Organization: ${organization.name}`);
-  console.log(`Actor: ${actor.email}`);
+  console.log(`Actor: ${actor?.email || "Not required for preview"}`);
   console.log(`Leave Year: ${leaveYear}`);
   console.log(`Mode: ${apply ? "APPLY" : "PREVIEW_ONLY"}`);
   console.table(hierarchySummary());
