@@ -69,6 +69,22 @@ jobs:
       - name: Run compliance administrative API and UI acceptance
         run: npm run test:compliance:api
 
+      - name: Run Zermatt client-readiness acceptance
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/chris_test
+        run: |
+          node --test \
+            tests/zermattBranchHrAccessAcceptance.test.js \
+            tests/zermattBranchHrFinancialInputAndTopUpSafetyAcceptance.test.js \
+            tests/zermattEmploymentResourcesAcceptance.test.js \
+            tests/zermattLeaveAttendanceBranchIntegrationAcceptance.test.js \
+            tests/zermattLoanOriginationPayrollReopenAcceptance.test.js \
+            tests/zermattLeaveAllowanceAcceptance.test.js \
+            tests/zermattPayrollActivationRelease1Acceptance.test.js \
+            tests/zermattPartTimePayrollExemptionAcceptance.test.js \
+            tests/zermattReportingSecurityRelease1Acceptance.test.js \
+            tests/zermattWorkforceControlsAndConnectedModulesAcceptance.test.js
+
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js

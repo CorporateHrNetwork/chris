@@ -31,7 +31,8 @@ test("ZERMATT Full-Time leave, manual worked days and branch context integrate s
     "entitlementDays: 6",
     "entitlementDays: 90",
     "femaleOnly: true",
-    'employmentTypes: ["Full-Time"]',
+    "employmentTypes: eligibleEmploymentTypes",
+    'return ["Full-Time"]',
     "FULL_TIME_ONLY",
   ]) assert.ok(leavePolicy.includes(expected), `missing ZERMATT leave control: ${expected}`);
 
@@ -73,8 +74,9 @@ test("ZERMATT Full-Time leave, manual worked days and branch context integrate s
   assert.ok(auth.includes("availableLocations"), "authenticated user must have available branch list");
   assert.ok(auth.includes("consolidatedHeadOffice"), "Head Office consolidated context missing");
   assert.ok(apiClient.includes('"X-CHRiS-Location-Id"'), "frontend API client must send active branch context");
-  assert.ok(branchSelector.includes("Head Office · Consolidated All Branches"), "branch selector must expose consolidated Head Office");
-  assert.ok(branchSelector.includes("Branch-specific operational context"), "branch selector must expose branch mode");
+  assert.ok(branchSelector.includes('<option value="">HEAD OFFICE</option>'), "branch selector must expose consolidated Head Office");
+  assert.ok(branchSelector.includes("Consolidated organization-wide view"), "branch selector must disclose consolidated scope");
+  assert.ok(branchSelector.includes("Operating in ${activeLocation.name}"), "branch selector must expose branch-specific context");
   assert.ok(analytics.includes("req.auth.activeLocationId"), "workforce analytics must use active branch context");
   assert.ok(employeeOptions.includes("locationId: req.auth.activeLocationId"), "employee selector must restrict choices to active branch");
 

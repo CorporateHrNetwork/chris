@@ -67,7 +67,7 @@ test("ZERMATT part-time employees have no employee statutory deductions", () => 
   );
 
   const payrollStart = sidebar.search(/id:\s*"payroll"/);
-  const payrollEnd = sidebar.indexOf("COMPENSATION & REWARDS", payrollStart);
+  const payrollEnd = sidebar.slice(payrollStart + 1).search(/id:\s*"compensation"/) + payrollStart + 1;
   assert.ok(payrollStart >= 0 && payrollEnd > payrollStart, "Payroll sidebar block must exist.");
   const payrollBlock = sidebar.slice(payrollStart, payrollEnd);
 

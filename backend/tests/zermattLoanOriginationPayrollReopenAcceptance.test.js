@@ -111,8 +111,8 @@ test("ZERMATT preserves historical loan workflow records while new financial sup
 
   includesAll(payrollUi, [
     "Reopen for Correction",
-    "recalculated, submitted and approved again",
-    "Draft and Submitted payroll affect Net Pay preview only",
+    "recalculate before submission/approval",
+    "balances reduce only on payroll approval",
   ], "Payroll UI");
 
   console.log("PASS: ZERMATT scoped-HR financial-support + historical workflow preservation gate passed.");
