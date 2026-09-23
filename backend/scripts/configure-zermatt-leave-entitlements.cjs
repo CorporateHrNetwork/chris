@@ -37,7 +37,13 @@ async function main() {
     fullTimeEmployeesProvisioned: result.fullTimeEmployees,
     employeeProfilesUpdated: result.results.length,
     controls: {
-      annual: "L11=30; L9-L10=28; L5-L8=21; L1-L4=14",
+      hierarchyVersion: result.hierarchyVersion,
+      annual:
+        result.hierarchyVersion === "V3"
+          ? "L7=35; L6=30; L5=28; L4=24; L3=21; L2=16; L1=14"
+          : result.hierarchyVersion === "V2"
+            ? "L7=30; L6=28; L5=24; L4=22; L3=21; L2=14; L1=14"
+            : "L11=30; L9-L10=28; L5-L8=21; L1-L4=14",
       sick: 12,
       unpaidCasual: 5,
       compassionate: 6,
