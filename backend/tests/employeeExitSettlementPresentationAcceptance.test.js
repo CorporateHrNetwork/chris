@@ -61,7 +61,7 @@ test("settlement provides Print / Download PDF from preview stage and prints the
   assert.ok(frontend.includes("printExitSettlementDocument"));
   assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(printUtility.includes("printWindow.print()"));
-  assert.ok(printUtility.includes("Print / Download PDF"));
+  assert.ok(printUtility.includes("printDocument.fonts.ready"));
   assert.ok(frontend.includes("exit-settlement-print-calculation-note"));
   assert.ok(frontend.includes("<h3>Calculation Basis</h3>"));
   assert.ok(css.includes(".exit-settlement-print-calculation-note"));
@@ -79,9 +79,16 @@ test("settlement standalone print uses three-column employee details and explici
   assert.match(printUtility, /:nth-child\(2\)\s*\{\s*grid-column: 1 !important/);
 });
 
-test("settlement standalone print provides visible controls and Head of HR signature section", () => {
-  assert.ok(printUtility.includes('id="printSettlementDocument"'));
-  assert.ok(printUtility.includes('id="closeSettlementDocument"'));
+test("settlement print enters browser preview directly without an intermediate tab", () => {
+  assert.equal(frontend.includes('window.open("", "_blank")'), false);
+  assert.ok(printUtility.includes('document.createElement("iframe")'));
+  assert.ok(printUtility.includes('frame.setAttribute("aria-hidden", "true")'));
+  assert.equal(printUtility.includes('class="print-toolbar"'), false);
+  assert.ok(printUtility.includes("printWindow.print()"));
+  assert.ok(printUtility.includes('printWindow.addEventListener("afterprint"'));
+});
+
+test("settlement document includes Head of HR signature section", () => {
   assert.ok(frontend.includes("Head of HR Approval & Signature"));
   assert.ok(frontend.includes("exit-settlement-headhr-signature-grid"));
   assert.ok(frontend.includes("exit-settlement-headhr-signature-line"));
@@ -91,8 +98,8 @@ test("settlement print is isolated from EmployeeExits page rendering", () => {
   assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(frontend.includes("async function printExitSettlementDocument()"));
   assert.equal(frontend.includes("const PRINT_CSS"), false);
-  assert.ok(printUtility.includes("export default function openExitSettlementPrint(printWindow)"));
-  assert.ok(frontend.includes('const printWindow = window.open("", "_blank")'));
+  assert.ok(printUtility.includes("export default async function openExitSettlementPrint()"));
+  assert.ok(frontend.includes("await module.default()"));
 });
 
 test("formal settlement print remains readable and compact", () => {
