@@ -102,6 +102,8 @@ jobs:
           node tests/employeeExitMultiDocumentPaymentProofAcceptance.test.js
           node tests/employeeExitSettlementPresentationAcceptance.test.js
           node tests/chrisGlobalPrintVisualLanguageAcceptance.test.js
+          node tests/documentsWorkspaceAcceptance.test.js
+          node tests/zermattGapClosureAcceptance.test.mjs
           node tests/chrisPayslipPrintCultureAcceptance.test.js
           node tests/employeeAssignmentSearchAcceptance.test.js
           node tests/employeeAssignmentSuccessResetAcceptance.test.js

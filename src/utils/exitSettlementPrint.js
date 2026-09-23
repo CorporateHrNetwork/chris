@@ -134,34 +134,6 @@ const PRINT_CSS = String.raw`
     print-color-adjust: exact !important;
   }
 
-  .print-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-    padding: 11px 16px;
-    background: #fffdf7 !important;
-    border-bottom: 1px solid #d8c788;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
-  }
-
-  .print-toolbar button {
-    border: 1px solid #064e3b;
-    border-radius: 8px;
-    padding: 9px 16px;
-    background: #064e3b !important;
-    color: #fffdf7 !important;
-    font: 700 13px Arial, Helvetica, sans-serif;
-    cursor: pointer;
-  }
-
-  .print-toolbar button.secondary {
-    background: #fffdf7 !important;
-    color: #064e3b !important;
-  }
-
   .exit-settlement-print-document {
     position: relative !important;
     display: block !important;
@@ -347,12 +319,12 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-account > :first-child {
-    grid-column: 2 !important;
+    grid-column: 1 !important;
     grid-row: 1 !important;
   }
 
   .exit-settlement-print-account > :nth-child(2) {
-    grid-column: 1 !important;
+    grid-column: 2 !important;
     grid-row: 1 !important;
   }
 
@@ -618,8 +590,6 @@ const PRINT_CSS = String.raw`
   }
 
   @media print {
-    .print-toolbar { display: none !important; }
-
     html,
     body {
       background: #f7f3e8 !important;
@@ -637,7 +607,7 @@ const PRINT_CSS = String.raw`
   }
 `;
 
-export default function openExitSettlementPrint(printWindow) {
+export default async function openExitSettlementPrint() {
   const printNodes = Array.from(
     document.querySelectorAll(
       ".employee-exit-settlement-page .exit-settlement-print-document"
@@ -650,7 +620,6 @@ export default function openExitSettlementPrint(printWindow) {
     null;
 
   if (!source) {
-    printWindow.close();
     window.alert(
       "The Employee Exit Settlement Account is still loading or has no calculated preview yet. Please wait for the settlement data to load before printing."
     );
@@ -673,43 +642,46 @@ export default function openExitSettlementPrint(printWindow) {
 
   const baseHref = window.location.origin + "/";
 
-  printWindow.document.open();
-  printWindow.document.write(
+  const frame = document.createElement("iframe");
+  frame.setAttribute("title", "Employee Exit Settlement print document");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;";
+  document.body.appendChild(frame);
+
+  const printDocument = frame.contentDocument;
+  const printWindow = frame.contentWindow;
+  if (!printDocument || !printWindow) {
+    frame.remove();
+    throw new Error("The settlement print frame could not be created.");
+  }
+
+  printDocument.open();
+  printDocument.write(
     '<!doctype html><html><head><meta charset="utf-8"><base href="' +
       baseHref +
-      '"><title></title><style>' +
+      '"><title>Employee Exit Settlement Account</title><style>' +
       PRINT_CSS +
       '</style></head><body>' +
-      '<div class="print-toolbar" role="toolbar" aria-label="Settlement print controls">' +
-      '<button id="printSettlementDocument" type="button">Print / Download PDF</button>' +
-      '<button id="closeSettlementDocument" class="secondary" type="button">Close</button>' +
-      '</div>' +
       clone.outerHTML +
       '</body></html>'
   );
-  printWindow.document.close();
-  printWindow.opener = null;
+  printDocument.close();
 
-  const printButton = printWindow.document.getElementById("printSettlementDocument");
-  const closeButton = printWindow.document.getElementById("closeSettlementDocument");
-
-  printButton?.addEventListener("click", () => {
-    printWindow.focus();
-    printWindow.print();
-  });
-
-  closeButton?.addEventListener("click", () => printWindow.close());
-
-  const images = Array.from(printWindow.document.images);
-  Promise.all(
-    images.map((img) => {
+  try {
+    await Promise.all(Array.from(printDocument.images, (img) => {
       if (img.complete) return Promise.resolve();
       return new Promise((resolve) => {
         img.addEventListener("load", resolve, { once: true });
         img.addEventListener("error", resolve, { once: true });
       });
-    })
-  ).then(() => {
+    }));
+    if (printDocument.fonts?.ready) await printDocument.fonts.ready;
+    await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    printWindow.addEventListener("afterprint", () => frame.remove(), { once: true });
     printWindow.focus();
-  });
+    printWindow.print();
+  } catch (error) {
+    frame.remove();
+    throw error;
+  }
 }
