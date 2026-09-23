@@ -167,18 +167,12 @@ function calculateNoticePreview({ noticeDate, lastWorkingDay, entitledNoticeDays
 
 
 async function printExitSettlementDocument() {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    window.alert("Allow pop-ups to print or download the Employee Exit Settlement Account.");
-    return;
-  }
   try {
     const module = await import("../utils/exitSettlementPrint.js");
-    module.default(printWindow);
+    await module.default();
   } catch (error) {
-    printWindow.close();
     console.error("Unable to open Employee Exit Settlement print view.", error);
-    window.alert("Unable to open the Employee Exit Settlement print view. Please refresh and try again.");
+    window.alert("Unable to open the Employee Exit Settlement print preview. Please refresh and try again.");
   }
 }
 
