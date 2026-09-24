@@ -10,7 +10,8 @@
     "test:compliance:api": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceAdministrativeApiAcceptance.test.js",
     "test:migration:compliance": "node scripts/complianceMigrationAcceptance.js",
     "test:leave:runtime": "node scripts/leaveRuntimeAcceptance.js",
-    "staging:provision:zermatt": "node scripts/provision-synthetic-zermatt-staging.cjs"
+    "staging:provision:zermatt": "node scripts/provision-synthetic-zermatt-staging.cjs",
+    "staging:provision:exit-print": "node scripts/provision-synthetic-zermatt-exit-print.cjs"
   },
   "keywords": [],
   "author": "",
