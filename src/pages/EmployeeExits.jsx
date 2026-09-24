@@ -1,5 +1,5 @@
 import EmployeeStatusBadge from "../components/common/StatusBadge";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaArrowLeft, FaCheckCircle, FaPrint, FaRedo, FaSignOutAlt } from "react-icons/fa";
 import { apiRequest } from "../services/api";
@@ -122,6 +122,16 @@ function dateText(value) {
   });
 }
 
+function employmentDays(hireDate, lastWorkingDay) {
+  const start = String(hireDate || "").slice(0, 10);
+  const end = String(lastWorkingDay || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return "—";
+  const from = Date.parse(`${start}T00:00:00Z`);
+  const to = Date.parse(`${end}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return "—";
+  return `${Math.round((to - from) / 86400000) + 1} days`;
+}
+
 function moneyText(value, currency = "NGN") {
   try {
     return new Intl.NumberFormat("en-NG", {
@@ -221,6 +231,8 @@ export default function EmployeeExits() {
   const [documentBusy, setDocumentBusy] = useState(false);
   const [settlement, setSettlement] = useState(null);
   const [settlementPreview, setSettlementPreview] = useState(null);
+  const [settlementPreviewError, setSettlementPreviewError] = useState("");
+  const settlementPreviewRequestId = useRef(0);
   const [settlementForm, setSettlementForm] = useState(EMPTY_SETTLEMENT);
   const [settlementDecisionNotes, setSettlementDecisionNotes] = useState("");
 
@@ -258,28 +270,28 @@ export default function EmployeeExits() {
     if (!settlementExitId) {
       return undefined;
     }
-    Promise.allSettled([
-      apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`),
-      apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview`),
-    ]).then(([settlementResult, previewResult]) => {
-      if (!active) return;
-
-      if (settlementResult.status === "fulfilled") {
-        const record = settlementResult.value?.data || null;
+    apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`)
+      .then((result) => {
+        if (!active) return;
+        const record = result?.data || null;
         setSettlement(record);
         if (record) setSettlementForm(settlementFormFromRecord(record));
-      }
-
-      if (previewResult.status === "fulfilled") {
-        setSettlementPreview(previewResult.value?.data || null);
-      } else if (settlementResult.status === "rejected") {
-        setFeedback(
-          previewResult.reason?.message ||
-          settlementResult.reason?.message ||
-          "Unable to load the exit settlement."
-        );
-      }
-    });
+      })
+      .catch((error) => {
+        if (active) setFeedback(error?.message || "Unable to load the exit settlement.");
+      });
+    const requestId = ++settlementPreviewRequestId.current;
+    apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview`)
+      .then((result) => {
+        if (!active || requestId !== settlementPreviewRequestId.current) return;
+        setSettlementPreview(result?.data || null);
+        setSettlementPreviewError(result?.data ? "" : "The settlement preview returned no data.");
+      })
+      .catch((error) => {
+        if (active && requestId === settlementPreviewRequestId.current) {
+          setSettlementPreviewError(error?.message || "Unable to load the settlement preview.");
+        }
+      });
     return () => { active = false; };
   }, [settlementExitId]);
 
@@ -289,6 +301,7 @@ export default function EmployeeExits() {
 
     let active = true;
     const timer = window.setTimeout(() => {
+      const requestId = ++settlementPreviewRequestId.current;
       const params = new URLSearchParams({
         bonusGift: String(settlementForm.bonusGift || 0),
         noticePayDays: String(settlementForm.noticePayDays || 0),
@@ -298,10 +311,14 @@ export default function EmployeeExits() {
       });
       apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview?${params.toString()}`)
         .then((result) => {
-          if (active) setSettlementPreview(result?.data || null);
+          if (!active || requestId !== settlementPreviewRequestId.current) return;
+          setSettlementPreview(result?.data || null);
+          setSettlementPreviewError(result?.data ? "" : "The settlement preview returned no data.");
         })
         .catch((error) => {
-          if (active) setFeedback(error?.message || "Unable to refresh the exit settlement preview.");
+          if (active && requestId === settlementPreviewRequestId.current) {
+            setSettlementPreviewError(error?.message || "Unable to refresh the exit settlement preview.");
+          }
         });
     }, 250);
 
@@ -852,6 +869,7 @@ export default function EmployeeExits() {
     const snapshot = settlement?.calculationSnapshot || {};
     const fallbackAccountEmployee = settlementExit ? {
       employeeNumber: settlementExit.employeeNumber,
+      hireDate: settlementExit.hireDate,
       employeeName: nameOf(settlementExit),
       designation: settlementExit.designation?.name || "",
       department: settlementExit.department?.name || "",
@@ -867,6 +885,7 @@ export default function EmployeeExits() {
       reason: settlementExit.exitProcess.reason || "",
     } : null;
     const snapshotReady = Boolean(settlement && snapshot.employee && snapshot.exit && snapshot.creditItems && snapshot.debitItems && snapshot.totals);
+    const previewReady = Boolean(settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals);
     const accountEmployee = snapshotReady ? snapshot.employee : settlementPreview?.employee || fallbackAccountEmployee;
     const accountExit = snapshotReady ? snapshot.exit : settlementPreview?.exit || fallbackAccountExit;
     const accountSalary = snapshotReady ? snapshot.salary : settlementPreview?.salary || null;
@@ -908,6 +927,7 @@ export default function EmployeeExits() {
                       className="exit-settlement-print-button"
                       style={secondaryButton}
                       onClick={printExitSettlementDocument}
+                      disabled={!snapshotReady && !previewReady}
                       aria-label="Print or download Employee Exit Settlement Account as PDF"
                     >
                       <FaPrint /> Print / Download PDF
@@ -916,6 +936,14 @@ export default function EmployeeExits() {
                   {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
                 </div>
               </div>
+
+              {!snapshotReady && !previewReady ? (
+                <div role={settlementPreviewError ? "alert" : "status"} style={settlementPreviewError ? warning : muted}>
+                  {settlementPreviewError
+                    ? `Settlement print preview unavailable: ${settlementPreviewError}`
+                    : "Preparing settlement print preview..."}
+                </div>
+              ) : null}
 
               {accountEmployee && accountExit ? (
                 <section style={exitAccountMeta}>
@@ -929,6 +957,7 @@ export default function EmployeeExits() {
                   <div><span style={metaLabel}>Notice Date</span><strong>{dateText(accountExit.noticeDate)}</strong></div>
                   <div><span style={metaLabel}>Final Working Day</span><strong>{dateText(accountExit.lastWorkingDay)}</strong></div>
                   <div><span style={metaLabel}>Notice Days Given</span><strong>{settlementPreview?.hrInputs?.noticeDaysGiven ?? snapshot.hrInputs?.noticeDaysGiven ?? "—"} days</strong></div>
+                  <div><span style={metaLabel}>Notice Deficiency</span><strong>{settlementPreview?.hrInputs?.noticeDeficiencyDays ?? snapshot.hrInputs?.noticeDeficiencyDays ?? "—"} days</strong></div>
                   <div style={full}><span style={metaLabel}>Exit Reason</span><strong>{accountExit.reason || "—"}</strong></div>
                   {accountSalary ? <div style={full}><span style={metaLabel}>Settlement Salary Basis</span><strong>{moneyText(accountSalary.monthlyGross, accountSalary.currency)} monthly gross · Daily rate {moneyText(accountSalary.dayRate, accountSalary.currency)} · Hourly rate {moneyText(accountSalary.hourRate, accountSalary.currency)}</strong></div> : null}
                 </section>
@@ -938,7 +967,7 @@ export default function EmployeeExits() {
                 <form onSubmit={calculateExitSettlement}>
                   <div className="exit-settlement-account-columns">
                     <div className="exit-settlement-credit-column">
-                    <SettlementAccountSection title="CREDIT" tone="credit">
+                    <SettlementAccountSection title="Benefits" tone="credit">
                       <SettlementLine label="Gratuity / EoSB" value={accountCredits?.gratuityEosb} currency={accountSalary?.currency} source="System · EoSB Account" />
                       <SettlementLine label="Full / Prorated Annual Leave Allowance" value={accountCredits?.annualLeaveAllowance} currency={accountSalary?.currency} source="System · Leave Allowance formula" />
                       <SettlementLine label="Full / Prorated Outstanding Salary" value={accountCredits?.outstandingSalary} currency={accountSalary?.currency} source="System · Payroll to exit date" />
@@ -952,7 +981,7 @@ export default function EmployeeExits() {
                     </div>
 
                     <div className="exit-settlement-debit-column">
-                    <SettlementAccountSection title="DEBIT" tone="debit">
+                    <SettlementAccountSection title="Deductions" tone="debit">
                       <SettlementLine label="Loan Balance" value={accountDebits?.loanBalance} currency={accountSalary?.currency} source="System · Loan Account" />
                       <SettlementLine label="Salary Advance" value={accountDebits?.salaryAdvance} currency={accountSalary?.currency} source="System · Salary Advance Account" />
                       <SettlementNoticeSummary
@@ -973,8 +1002,8 @@ export default function EmployeeExits() {
                   </div>
 
                   <div style={settlementSummary}>
-                    <Info label="Total Credits" value={moneyText(accountTotals?.totalCredits, accountSalary?.currency || settlement?.currency)} />
-                    <Info label="Total Debits" value={moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement?.currency)} />
+                    <Info label="Total Benefits" value={moneyText(accountTotals?.totalCredits, accountSalary?.currency || settlement?.currency)} />
+                    <Info label="Total Deductions" value={moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement?.currency)} />
                     <Info label="Net Exit Settlement" value={moneyText(accountTotals?.netSettlement, accountSalary?.currency || settlement?.currency)} />
                   </div>
 
@@ -1009,24 +1038,19 @@ export default function EmployeeExits() {
                   />
 
                   <div className="exit-settlement-print-meta">
-                    <div><span>Employee No.</span><strong>{accountEmployee.employeeNumber || "—"}</strong></div>
                     <div><span>Employee Name</span><strong>{accountEmployee.employeeName || "—"}</strong></div>
+                    <div><span>Employee No.</span><strong>{accountEmployee.employeeNumber || "—"}</strong></div>
                     <div><span>Designation</span><strong>{accountEmployee.designation || "—"}</strong></div>
                     <div><span>Department</span><strong>{accountEmployee.department || "—"}</strong></div>
-                    <div><span>Cost Centre</span><strong>{accountEmployee.costCentreCode ? `${accountEmployee.costCentreCode} · ${accountEmployee.costCentre || ""}` : (accountEmployee.costCentre || "—")}</strong></div>
-                    <div><span>Branch</span><strong>{accountEmployee.branch || "—"}</strong></div>
-                    <div><span>Exit Type</span><strong>{titleCase(accountExit.exitType)}</strong></div>
-                    <div><span>Notice Date</span><strong>{dateText(accountExit.noticeDate)}</strong></div>
+                    <div><span>Date Employed</span><strong>{dateText(accountEmployee.hireDate)}</strong></div>
                     <div><span>Final Working Day</span><strong>{dateText(accountExit.lastWorkingDay)}</strong></div>
-                    <div><span>Entitled Notice</span><strong>{settlementPreview?.hrInputs?.entitledNoticeDays ?? 0} days</strong></div>
-                    <div><span>Notice Days Given</span><strong>{settlementPreview?.hrInputs?.noticeDaysGiven ?? 0} days</strong></div>
-                    <div><span>Notice Deficiency</span><strong>{settlementPreview?.hrInputs?.noticeDeficiencyDays ?? 0} days</strong></div>
-                    <div className="exit-settlement-print-meta-wide"><span>Exit Reason</span><strong>{accountExit.reason || "—"}</strong></div>
+                    <div><span>Total Days In Employment</span><strong>{employmentDays(accountEmployee.hireDate, accountExit.lastWorkingDay)}</strong></div>
+                    <div><span>Exit Type</span><strong>{titleCase(accountExit.exitType)}</strong></div>
                   </div>
 
                   <div className="exit-settlement-print-account">
                     <PrintableSettlementTable
-                      title="CREDIT — BENEFITS / ENTITLEMENTS"
+                      title="Benefits"
                       items={[
                         ["Gratuity / EoSB", accountCredits?.gratuityEosb],
                         ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
@@ -1041,7 +1065,7 @@ export default function EmployeeExits() {
                       currency={accountSalary?.currency}
                     />
                     <PrintableSettlementTable
-                      title="DEBIT — DEDUCTIONS / RECOVERIES"
+                      title="Deductions"
                       items={[
                         ["Loan Balance", accountDebits?.loanBalance],
                         ["Salary Advance", accountDebits?.salaryAdvance],
@@ -1054,8 +1078,8 @@ export default function EmployeeExits() {
                   </div>
 
                   <div className="exit-settlement-print-totals">
-                    <div><span>Total Credits</span><strong>{moneyText(accountTotals?.totalCredits, accountSalary?.currency)}</strong></div>
-                    <div><span>Total Debits</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency)}</strong></div>
+                    <div><span>Total Benefits</span><strong>{moneyText(accountTotals?.totalCredits, accountSalary?.currency)}</strong></div>
+                    <div><span>Total Deductions</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency)}</strong></div>
                     <div className="net"><span>Net Exit Settlement</span><strong>{moneyText(accountTotals?.netSettlement, accountSalary?.currency)}</strong></div>
                   </div>
 
@@ -1138,24 +1162,19 @@ export default function EmployeeExits() {
                       />
 
                       <div className="exit-settlement-print-meta">
-                        <div><span>Employee No.</span><strong>{accountEmployee?.employeeNumber || "—"}</strong></div>
-                        <div><span>Employee Name</span><strong>{accountEmployee?.employeeName || "—"}</strong></div>
-                        <div><span>Designation</span><strong>{accountEmployee?.designation || "—"}</strong></div>
-                        <div><span>Department</span><strong>{accountEmployee?.department || "—"}</strong></div>
-                        <div><span>Cost Centre</span><strong>{accountEmployee?.costCentreCode ? `${accountEmployee.costCentreCode} · ${accountEmployee.costCentre || ""}` : (accountEmployee?.costCentre || "—")}</strong></div>
-                        <div><span>Branch</span><strong>{accountEmployee?.branch || "—"}</strong></div>
-                        <div><span>Exit Type</span><strong>{titleCase(accountExit?.exitType)}</strong></div>
-                        <div><span>Notice Date</span><strong>{dateText(accountExit?.noticeDate)}</strong></div>
-                        <div><span>Final Working Day</span><strong>{dateText(accountExit?.lastWorkingDay)}</strong></div>
-                        <div><span>Entitled Notice</span><strong>{snapshotReady ? snapshot.hrInputs?.entitledNoticeDays ?? 0 : settlementPreview?.hrInputs?.entitledNoticeDays ?? 0} days</strong></div>
-                        <div><span>Notice Days Given</span><strong>{snapshotReady ? snapshot.hrInputs?.noticeDaysGiven ?? 0 : settlementPreview?.hrInputs?.noticeDaysGiven ?? 0} days</strong></div>
-                        <div><span>Notice Deficiency</span><strong>{snapshotReady ? snapshot.hrInputs?.noticeDeficiencyDays ?? 0 : settlementPreview?.hrInputs?.noticeDeficiencyDays ?? 0} days</strong></div>
-                        <div className="exit-settlement-print-meta-wide"><span>Exit Reason</span><strong>{accountExit?.reason || "—"}</strong></div>
-                      </div>
+                    <div><span>Employee Name</span><strong>{accountEmployee?.employeeName || "—"}</strong></div>
+                    <div><span>Employee No.</span><strong>{accountEmployee?.employeeNumber || "—"}</strong></div>
+                    <div><span>Designation</span><strong>{accountEmployee?.designation || "—"}</strong></div>
+                    <div><span>Department</span><strong>{accountEmployee?.department || "—"}</strong></div>
+                    <div><span>Date Employed</span><strong>{dateText(accountEmployee?.hireDate || settlementExit?.hireDate)}</strong></div>
+                    <div><span>Final Working Day</span><strong>{dateText(accountExit?.lastWorkingDay)}</strong></div>
+                    <div><span>Total Days In Employment</span><strong>{employmentDays(accountEmployee?.hireDate || settlementExit?.hireDate, accountExit?.lastWorkingDay)}</strong></div>
+                    <div><span>Exit Type</span><strong>{titleCase(accountExit?.exitType)}</strong></div>
+                  </div>
 
                       <div className="exit-settlement-print-account">
                         <PrintableSettlementTable
-                          title="CREDIT — BENEFITS / ENTITLEMENTS"
+                          title="Benefits"
                           items={[
                             ["Gratuity / EoSB", accountCredits?.gratuityEosb],
                             ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
@@ -1170,7 +1189,7 @@ export default function EmployeeExits() {
                           currency={accountSalary?.currency || settlement.currency}
                         />
                         <PrintableSettlementTable
-                          title="DEBIT — DEDUCTIONS / RECOVERIES"
+                          title="Deductions"
                           items={[
                             ["Loan Balance", accountDebits?.loanBalance],
                             ["Salary Advance", accountDebits?.salaryAdvance],
@@ -1183,8 +1202,8 @@ export default function EmployeeExits() {
                       </div>
 
                       <div className="exit-settlement-print-totals">
-                        <div><span>Total Credits</span><strong>{moneyText(accountTotals?.totalCredits, accountSalary?.currency || settlement.currency)}</strong></div>
-                        <div><span>Total Debits</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement.currency)}</strong></div>
+                        <div><span>Total Benefits</span><strong>{moneyText(accountTotals?.totalCredits, accountSalary?.currency || settlement.currency)}</strong></div>
+                        <div><span>Total Deductions</span><strong>{moneyText(accountTotals?.totalDebits, accountSalary?.currency || settlement.currency)}</strong></div>
                         <div className="net"><span>Net Exit Settlement</span><strong>{moneyText(accountTotals?.netSettlement, accountSalary?.currency || settlement.currency)}</strong></div>
                       </div>
 
