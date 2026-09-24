@@ -70,7 +70,7 @@ async function main() {
       id: EXIT_ID, organizationId: organization.id, employeeId: employee.id,
       exitType: "RESIGNATION", targetStatus: "RESIGNED",
       noticeDate: new Date("2026-08-01T00:00:00.000Z"), noticeStatus: "WAIVED",
-      entitledNoticeDays: 0, lastWorkingDay: EXIT,
+      lastWorkingDay: EXIT,
       reason: "Synthetic staging settlement print acceptance", notes: MARKER,
       clearance: { assetsReturned: true, accessDisabled: true, handoverCompleted: true,
         financeCleared: true, payrollCleared: true, hrCleared: true },
