@@ -548,6 +548,8 @@ const PRINT_CSS = String.raw`
   .exit-settlement-headhr-signature-grid span { font-size: 9pt !important; letter-spacing: .03em !important; }
   .exit-settlement-print-meta strong,
   .exit-settlement-headhr-signature-grid strong { font-size: 10pt !important; line-height: 1.3 !important; }
+  .exit-settlement-print-meta-table td > .exit-settlement-print-meta-wide { margin-top: 5px !important; padding-top: 7px !important; border-top: 1px solid #c7cec9 !important; }
+  .exit-settlement-print-meta-wide strong { color: #064e3b !important; font-size: 11pt !important; }
   .exit-settlement-print-account { display: block !important; }
   .exit-settlement-print-account > section + section { margin-top: 14px !important; }
   .exit-settlement-print-table-section h3 { padding: 0 0 5px !important; margin-bottom: 6px !important; font-size: 11pt !important; }

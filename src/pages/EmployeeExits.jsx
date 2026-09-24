@@ -1046,6 +1046,7 @@ export default function EmployeeExits() {
                     <div><span>Final Working Day</span><strong>{dateText(accountExit.lastWorkingDay)}</strong></div>
                     <div><span>Total Days In Employment</span><strong>{employmentDays(accountEmployee.hireDate, accountExit.lastWorkingDay)}</strong></div>
                     <div><span>Exit Type</span><strong>{titleCase(accountExit.exitType)}</strong></div>
+                    <div className="exit-settlement-print-meta-wide"><span>Gross Monthly Salary (Calculation Basis)</span><strong>{accountSalary?.monthlyGross == null ? "—" : moneyText(accountSalary.monthlyGross, accountSalary.currency)}</strong></div>
                   </div>
 
                   <div className="exit-settlement-print-account">
@@ -1170,6 +1171,7 @@ export default function EmployeeExits() {
                     <div><span>Final Working Day</span><strong>{dateText(accountExit?.lastWorkingDay)}</strong></div>
                     <div><span>Total Days In Employment</span><strong>{employmentDays(accountEmployee?.hireDate || settlementExit?.hireDate, accountExit?.lastWorkingDay)}</strong></div>
                     <div><span>Exit Type</span><strong>{titleCase(accountExit?.exitType)}</strong></div>
+                    <div className="exit-settlement-print-meta-wide"><span>Gross Monthly Salary (Calculation Basis)</span><strong>{accountSalary?.monthlyGross == null ? "—" : moneyText(accountSalary.monthlyGross, accountSalary.currency)}</strong></div>
                   </div>
 
                       <div className="exit-settlement-print-account">

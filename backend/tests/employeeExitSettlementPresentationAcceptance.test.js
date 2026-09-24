@@ -73,6 +73,9 @@ test("settlement standalone print presents employee details with benefits and de
   assert.ok(frontend.includes('title="Deductions"'));
   assert.ok(frontend.includes("<span>Date Employed</span>"));
   assert.ok(frontend.includes("<span>Total Days In Employment</span>"));
+  assert.equal(frontend.split("<span>Gross Monthly Salary (Calculation Basis)</span>").length - 1, 2);
+  assert.ok(frontend.includes('accountSalary?.monthlyGross == null ? "—" : moneyText(accountSalary.monthlyGross, accountSalary.currency)'));
+  assert.ok(service.includes("monthlyGross = money(rate.amount)"));
   assert.ok(frontend.includes("employmentDays(accountEmployee?.hireDate || settlementExit?.hireDate, accountExit?.lastWorkingDay)"));
   assert.ok(service.includes("hireDate: dateText(exit.employee.hireDate)"));
   assert.ok(printUtility.includes("calculation?.remove()"));
