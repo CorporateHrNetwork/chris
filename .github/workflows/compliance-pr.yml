@@ -9,6 +9,15 @@ on:
       - "package-lock.json"
       - ".github/workflows/compliance-pr.yml"
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Zermatt pilot database operation
+        type: choice
+        required: true
+        default: verify
+        options:
+          - verify
+          - copy
 
 permissions:
   contents: read
@@ -22,7 +31,7 @@ jobs:
     name: Copy Zermatt to isolated Supabase pilot
     # Manual, single-branch transfer. Configure an environment restricted to this
     # branch; its secrets must never be available to a pull_request job.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'copy'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: zermatt-db-transfer
@@ -139,6 +148,59 @@ jobs:
           path: ${{ runner.temp }}/zermatt.dump.enc
           if-no-files-found: ignore
           retention-days: 14
+
+  zermatt-pilot-verify:
+    name: Verify Zermatt pilot copy without writes
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'verify'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: zermatt-db-transfer
+    env:
+      SOURCE_URL: ${{ secrets.ZERMATT_RENDER_DATABASE_URL }}
+      SUPABASE_PASSWORD: ${{ secrets.ZERMATT_SUPABASE_PASSWORD }}
+      PGSSLMODE: require
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare approved read-only connections
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import quote, urlsplit
+          source = urlsplit(os.environ.get('SOURCE_URL', ''))
+          if not source.hostname or not source.hostname.endswith('.render.com') or not source.password:
+              raise SystemExit('Source must be the approved Render PostgreSQL connection.')
+          password = os.environ.get('SUPABASE_PASSWORD', '')
+          if not password or '\n' in password:
+              raise SystemExit('Missing or invalid pilot password.')
+          target = ('postgresql://postgres.ldmwsptljgnspwtwcdtm:' + quote(password, safe='')
+                    + '@aws-0-eu-central-1.pooler.supabase.com:5432/postgres')
+          print('::add-mask::' + target)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('TARGET_URL=' + target + '\n')
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+      - name: Compare all public table row fingerprints and migration records
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A single repeatable-read snapshot per database prevents the check
+          # from observing different points in time within one connection.
+          psql "$SOURCE_URL" -X -q -A -t -v ON_ERROR_STOP=1 -f backend/scripts/zermatt-pilot-fingerprint.sql > "$RUNNER_TEMP/source.fingerprint"
+          psql "$TARGET_URL" -X -q -A -t -v ON_ERROR_STOP=1 -f backend/scripts/zermatt-pilot-fingerprint.sql > "$RUNNER_TEMP/pilot.fingerprint"
+          if ! diff -u <(cut -f 1,2 "$RUNNER_TEMP/source.fingerprint") <(cut -f 1,2 "$RUNNER_TEMP/pilot.fingerprint"); then
+            echo 'Application table names or row counts differ. Keep Render live.'
+            exit 1
+          fi
+          # Report only the table names that differ; row hashes and financial
+          # values stay inside the runner. Source writes after the copy are expected.
+          if ! cmp -s "$RUNNER_TEMP/source.fingerprint" "$RUNNER_TEMP/pilot.fingerprint"; then
+            join -t $'\t' "$RUNNER_TEMP/source.fingerprint" "$RUNNER_TEMP/pilot.fingerprint" | awk -F '\t' '$3 != $5 { print "Changed table: " $1 }'
+            echo 'A final copy during a write freeze is required before cutover.'
+            exit 1
+          fi
+          echo "Verified identical contents for $(wc -l < "$RUNNER_TEMP/source.fingerprint") application tables. Render remains active."
+          rm -f "$RUNNER_TEMP/source.fingerprint" "$RUNNER_TEMP/pilot.fingerprint"
 
   backend-compliance:
     name: Backend compliance acceptance
