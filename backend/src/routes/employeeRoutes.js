@@ -780,7 +780,7 @@ router.put(
       }
 
       const departmentRecord =
-        await prisma.department.upsert({
+        existingEmployee.department || await prisma.department.upsert({
           where: {
             organizationId_name: {
               organizationId,
@@ -801,7 +801,7 @@ router.put(
         });
 
       const designationRecord =
-        await prisma.designation.upsert({
+        existingEmployee.designation || await prisma.designation.upsert({
           where: {
             organizationId_name: {
               organizationId,

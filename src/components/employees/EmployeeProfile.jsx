@@ -3162,9 +3162,10 @@ useEffect(() => {
               </button>
 
               <button
-                type="submit"
+                type={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "button" : "submit"}
+                onClick={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? reviewEditJobChange : undefined}
                 disabled={
-                  saving
+                  saving || (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && !formData.designationId
                 }
                 style={{
                   ...saveButtonStyle,
@@ -3174,9 +3175,8 @@ useEffect(() => {
                       : 1,
                 }}
               >
-                {saving
-                  ? "Saving..."
-                  : "Save Changes"}
+                {saving ? "Saving..." :
+                  formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "Review Job Change" : "Save Changes"}
               </button>
             </div>
           </div>
