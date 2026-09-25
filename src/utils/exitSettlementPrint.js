@@ -33,16 +33,16 @@ function arrangeEmployeeDetails(clone) {
   meta.replaceChildren();
   const table = document.createElement("table");
   table.className = "exit-settlement-print-meta-table";
-  for (let index = 0; index < fields.length; index += 3) {
+  for (let index = 0; index < fields.length; index += 2) {
     const row = document.createElement("tr");
     if (fields[index].classList.contains("exit-settlement-print-meta-wide")) {
       const cell = document.createElement("td");
-      cell.colSpan = 3;
+      cell.colSpan = 2;
       cell.appendChild(fields[index]);
       row.appendChild(cell);
-      index -= 2;
+      index -= 1;
     } else {
-      fields.slice(index, index + 3).forEach((field) => {
+      fields.slice(index, index + 2).forEach((field) => {
         const cell = document.createElement("td");
         cell.appendChild(field);
         row.appendChild(cell);
@@ -53,65 +53,30 @@ function arrangeEmployeeDetails(clone) {
   meta.appendChild(table);
 }
 
-function compactCalculationBasis(clone) {
-  const pre = clone.querySelector(".exit-settlement-print-calculation-note pre");
-  if (!pre) return;
-
-  const lines = String(pre.textContent || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => line !== "CHRiS Exit Settlement Calculation Basis")
-    .filter((line) => !line.startsWith("Total Credits:"));
-
-  const grid = document.createElement("div");
-  grid.className = "exit-settlement-print-calculation-grid";
-
-  if (!lines.length) {
-    const empty = document.createElement("div");
-    empty.textContent = "No additional calculation lines.";
-    grid.appendChild(empty);
-  } else {
-    lines.forEach((line) => {
-      const item = document.createElement("div");
-      item.textContent = line.replace(/^\d+\.\s*/, "");
-      grid.appendChild(item);
-    });
-  }
-
-  pre.replaceWith(grid);
-}
-
 function compactLowerApprovals(clone) {
   const calculation = clone.querySelector(".exit-settlement-print-calculation-note");
   const headHr = clone.querySelector(".exit-settlement-headhr-approval");
   const external = clone.querySelector(".exit-settlement-external-workflow");
-
-  if (calculation && headHr) {
-    const lowerGrid = document.createElement("div");
-    lowerGrid.className = "exit-settlement-print-lower-grid";
-    calculation.parentNode.insertBefore(lowerGrid, calculation);
-    lowerGrid.appendChild(calculation);
-    lowerGrid.appendChild(headHr);
-  }
+  // The audit calculation remains in CHRiS; the employee copy follows the payslip.
+  calculation?.remove();
+  if (headHr) headHr.querySelectorAll(".exit-settlement-headhr-signature-grid > div:first-child").forEach((node) => node.remove());
 
   if (external) {
     external.innerHTML = [
       '<div class="exit-settlement-external-title">',
-      '<h3>External Approvals</h3>',
+      '<h3>Approval Record</h3>',
       '</div>',
       '<table class="exit-settlement-external-approval-table">',
       '<thead><tr>',
       '<th>Approval Stage</th>',
-      '<th>Name / Processed By</th>',
+      '<th>Name</th>',
       '<th>Signature</th>',
       '<th>Date</th>',
-      '<th>Remarks / Reference</th>',
       '</tr></thead>',
       '<tbody>',
-      '<tr><td>1. Auditor Review</td><td></td><td></td><td></td><td></td></tr>',
-      '<tr><td>2. GM Payout Approval</td><td></td><td></td><td></td><td></td></tr>',
-      '<tr><td>3. Accounts Payout Processing</td><td></td><td></td><td></td><td></td></tr>',
+      '<tr><td>Auditor Review</td><td></td><td></td><td></td></tr>',
+      '<tr><td>GM Payout Approval</td><td></td><td></td><td></td></tr>',
+      '<tr><td>Accounts Payout Processing</td><td></td><td></td><td></td></tr>',
       '</tbody>',
       '</table>',
     ].join("");
@@ -119,7 +84,7 @@ function compactLowerApprovals(clone) {
 }
 
 const PRINT_CSS = String.raw`
-  @page { size: A4 portrait; margin: 7mm; }
+  @page { size: A4 portrait; margin: 12mm 14mm; }
 
   * { box-sizing: border-box; }
 
@@ -134,34 +99,6 @@ const PRINT_CSS = String.raw`
     print-color-adjust: exact !important;
   }
 
-  .print-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-    padding: 11px 16px;
-    background: #fffdf7 !important;
-    border-bottom: 1px solid #d8c788;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
-  }
-
-  .print-toolbar button {
-    border: 1px solid #064e3b;
-    border-radius: 8px;
-    padding: 9px 16px;
-    background: #064e3b !important;
-    color: #fffdf7 !important;
-    font: 700 13px Arial, Helvetica, sans-serif;
-    cursor: pointer;
-  }
-
-  .print-toolbar button.secondary {
-    background: #fffdf7 !important;
-    color: #064e3b !important;
-  }
-
   .exit-settlement-print-document {
     position: relative !important;
     display: block !important;
@@ -172,8 +109,8 @@ const PRINT_CSS = String.raw`
     overflow: visible !important;
     background: #f7f3e8 !important;
     color: #17211c !important;
-    font-size: 12pt !important;
-    line-height: 1.08 !important;
+    font-size: 10pt !important;
+    line-height: 1.35 !important;
   }
 
   .exit-settlement-print-document * {
@@ -196,8 +133,8 @@ const PRINT_CSS = String.raw`
     display: block !important;
     width: auto !important;
     height: auto !important;
-    max-width: 72px !important;
-    max-height: 38px !important;
+    max-width: 92px !important;
+    max-height: 48px !important;
     margin: 0 auto 2px !important;
     object-fit: contain !important;
   }
@@ -211,7 +148,7 @@ const PRINT_CSS = String.raw`
   .chris-print-report-owner {
     margin: 0 !important;
     color: #064e3b !important;
-    font-size: 14pt !important;
+    font-size: 15pt !important;
     font-weight: 900 !important;
     line-height: 1.05 !important;
     text-transform: uppercase !important;
@@ -221,7 +158,7 @@ const PRINT_CSS = String.raw`
   .chris-print-report-heading h1 {
     margin: 2px 0 0 !important;
     color: #9a7410 !important;
-    font-size: 13pt !important;
+    font-size: 11pt !important;
     font-weight: 900 !important;
     line-height: 1.05 !important;
     text-transform: uppercase !important;
@@ -287,7 +224,7 @@ const PRINT_CSS = String.raw`
   }
 
   .exit-settlement-print-meta-table td {
-    width: 33.333% !important;
+    width: 50% !important;
     padding: 0 5px 0 0 !important;
     vertical-align: top !important;
   }
@@ -336,24 +273,9 @@ const PRINT_CSS = String.raw`
   .exit-settlement-print-account {
     position: relative !important;
     z-index: 3 !important;
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-    grid-template-rows: auto !important;
-    gap: 18px !important;
-    align-items: start !important;
+    display: block !important;
     width: 100% !important;
-    margin: 0 !important;
     direction: ltr !important;
-  }
-
-  .exit-settlement-print-account > :first-child {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-  }
-
-  .exit-settlement-print-account > :nth-child(2) {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
   }
 
   .exit-settlement-print-table-section {
@@ -617,9 +539,40 @@ const PRINT_CSS = String.raw`
     display: none !important;
   }
 
-  @media print {
-    .print-toolbar { display: none !important; }
+  /* The same quiet identity / ledger / total rhythm used by the payslip. */
+  .exit-settlement-print-meta { margin: 10px 0 16px !important; padding: 0 0 10px !important; }
+  .exit-settlement-print-meta-table td { padding: 0 14px 0 0 !important; }
+  .exit-settlement-print-meta-table td > div { padding: 4px 0 !important; border: 0 !important; }
+  .exit-settlement-print-meta span,
+  .exit-settlement-print-totals span,
+  .exit-settlement-headhr-signature-grid span { font-size: 9pt !important; letter-spacing: .03em !important; }
+  .exit-settlement-print-meta strong,
+  .exit-settlement-headhr-signature-grid strong { font-size: 10pt !important; line-height: 1.3 !important; }
+  .exit-settlement-print-meta-table td > .exit-settlement-print-meta-wide { margin-top: 5px !important; padding-top: 7px !important; border-top: 1px solid #c7cec9 !important; }
+  .exit-settlement-print-meta-wide strong { color: #064e3b !important; font-size: 11pt !important; }
+  .exit-settlement-print-account { display: block !important; }
+  .exit-settlement-print-account > section + section { margin-top: 14px !important; }
+  .exit-settlement-print-table-section h3 { padding: 0 0 5px !important; margin-bottom: 6px !important; font-size: 11pt !important; }
+  .exit-settlement-print-table-section th,
+  .exit-settlement-print-table-section td { padding: 5px 2px !important; font-size: 9pt !important; line-height: 1.25 !important; }
+  .exit-settlement-print-table-section th:last-child,
+  .exit-settlement-print-table-section td:last-child { width: 25% !important; }
+  .exit-settlement-print-totals { margin: 14px 0 18px !important; padding-top: 10px !important; gap: 18px !important; }
+  .exit-settlement-print-totals strong { font-size: 11pt !important; }
+  .exit-settlement-print-totals .net strong { font-size: 14pt !important; }
+  .exit-settlement-headhr-approval { padding: 8px 0 !important; border: 0 !important; border-top: 1px solid #c7cec9 !important; }
+  .exit-settlement-headhr-signature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 18px !important; }
+  .exit-settlement-headhr-signature-line { height: 22px !important; }
+  .exit-settlement-external-workflow { margin-top: 10px !important; padding-top: 10px !important; }
+  .exit-settlement-external-approval-table th,
+  .exit-settlement-external-approval-table td { height: 28px !important; padding: 4px 5px !important; font-size: 9pt !important; }
+  .exit-settlement-external-approval-table th:nth-child(1) { width: 36% !important; }
+  .exit-settlement-external-approval-table th:nth-child(2) { width: 24% !important; }
+  .exit-settlement-external-approval-table th:nth-child(3) { width: 24% !important; }
+  .exit-settlement-external-approval-table th:nth-child(4) { width: 16% !important; }
+  .chris-print-report-footer { margin-top: 14px !important; font-size: 9pt !important; }
 
+  @media print {
     html,
     body {
       background: #f7f3e8 !important;
@@ -637,7 +590,7 @@ const PRINT_CSS = String.raw`
   }
 `;
 
-export default function openExitSettlementPrint(printWindow) {
+export default async function openExitSettlementPrint() {
   const printNodes = Array.from(
     document.querySelectorAll(
       ".employee-exit-settlement-page .exit-settlement-print-document"
@@ -650,7 +603,6 @@ export default function openExitSettlementPrint(printWindow) {
     null;
 
   if (!source) {
-    printWindow.close();
     window.alert(
       "The Employee Exit Settlement Account is still loading or has no calculated preview yet. Please wait for the settlement data to load before printing."
     );
@@ -668,48 +620,50 @@ export default function openExitSettlementPrint(printWindow) {
 
   removeNilLedgerRows(clone);
   arrangeEmployeeDetails(clone);
-  compactCalculationBasis(clone);
   compactLowerApprovals(clone);
 
   const baseHref = window.location.origin + "/";
 
-  printWindow.document.open();
-  printWindow.document.write(
+  const frame = document.createElement("iframe");
+  frame.setAttribute("title", "Employee Exit Settlement print document");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;";
+  document.body.appendChild(frame);
+
+  const printDocument = frame.contentDocument;
+  const printWindow = frame.contentWindow;
+  if (!printDocument || !printWindow) {
+    frame.remove();
+    throw new Error("The settlement print frame could not be created.");
+  }
+
+  printDocument.open();
+  printDocument.write(
     '<!doctype html><html><head><meta charset="utf-8"><base href="' +
       baseHref +
-      '"><title></title><style>' +
+      '"><title>Employee Exit Settlement Account</title><style>' +
       PRINT_CSS +
       '</style></head><body>' +
-      '<div class="print-toolbar" role="toolbar" aria-label="Settlement print controls">' +
-      '<button id="printSettlementDocument" type="button">Print / Download PDF</button>' +
-      '<button id="closeSettlementDocument" class="secondary" type="button">Close</button>' +
-      '</div>' +
       clone.outerHTML +
       '</body></html>'
   );
-  printWindow.document.close();
-  printWindow.opener = null;
+  printDocument.close();
 
-  const printButton = printWindow.document.getElementById("printSettlementDocument");
-  const closeButton = printWindow.document.getElementById("closeSettlementDocument");
-
-  printButton?.addEventListener("click", () => {
-    printWindow.focus();
-    printWindow.print();
-  });
-
-  closeButton?.addEventListener("click", () => printWindow.close());
-
-  const images = Array.from(printWindow.document.images);
-  Promise.all(
-    images.map((img) => {
+  try {
+    await Promise.all(Array.from(printDocument.images, (img) => {
       if (img.complete) return Promise.resolve();
       return new Promise((resolve) => {
         img.addEventListener("load", resolve, { once: true });
         img.addEventListener("error", resolve, { once: true });
       });
-    })
-  ).then(() => {
+    }));
+    if (printDocument.fonts?.ready) await printDocument.fonts.ready;
+    await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    printWindow.addEventListener("afterprint", () => frame.remove(), { once: true });
     printWindow.focus();
-  });
+    printWindow.print();
+  } catch (error) {
+    frame.remove();
+    throw error;
+  }
 }

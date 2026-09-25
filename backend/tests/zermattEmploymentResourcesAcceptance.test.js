@@ -66,13 +66,16 @@ test("Zermatt Documents employment resource library is complete and designation-
 });
 
 test("Documents module activates the employment resources child workspace", () => {
-  const dashboard = read("src/components/dashboard/ModuleDashboard.jsx");
+  const documents = read("src/pages/documents/DocumentsWorkspace.jsx");
+  const routeSelection = read("src/utils/documentWorkspaceRoute.js");
   const workspace = read("src/pages/documents/ZermattEmploymentResources.jsx");
   const routes = read("backend/src/routes/zermattOperationsRoutes.js");
   const sopService = read("backend/src/services/zermattSopResourceService.js");
 
-  assert.ok(dashboard.includes('moduleKey === "documents"'));
-  assert.ok(dashboard.includes("ZermattEmploymentResources"));
+  assert.ok(documents.includes("ZermattEmploymentResources"));
+  assert.ok(documents.includes('tab === "resources"'));
+  assert.ok(routeSelection.includes('resources: "/documents?workspace=resources"'));
+  assert.ok(routeSelection.includes('get("workspace") === "resources"'));
   assert.ok(workspace.includes("Nigerian Employment Resources"));
   assert.ok(workspace.includes("Employment Policy"));
   assert.ok(workspace.includes("Employment Offer"));

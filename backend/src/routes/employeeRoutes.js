@@ -691,6 +691,8 @@ router.put(
           include: {
             user: true,
             location: true,
+            department: true,
+            designation: true,
           },
         });
 
@@ -699,6 +701,21 @@ router.put(
           status: "error",
           message:
             "Employee not found.",
+        });
+      }
+
+      // Master-data edits must not silently bypass the audited Job Change
+      // transaction or create a free-text designation without a level.
+      const sameName = (left, right) =>
+        String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+      if (
+        (existingEmployee.departmentId && !sameName(department, existingEmployee.department?.name)) ||
+        (existingEmployee.designationId && !sameName(designation, existingEmployee.designation?.name))
+      ) {
+        return res.status(409).json({
+          status: "error",
+          code: "JOB_CHANGE_REQUIRED",
+          message: "Use Job Change to update Department or Designation with an effective date and reason.",
         });
       }
 
@@ -763,7 +780,7 @@ router.put(
       }
 
       const departmentRecord =
-        await prisma.department.upsert({
+        existingEmployee.department || await prisma.department.upsert({
           where: {
             organizationId_name: {
               organizationId,
@@ -784,7 +801,7 @@ router.put(
         });
 
       const designationRecord =
-        await prisma.designation.upsert({
+        existingEmployee.designation || await prisma.designation.upsert({
           where: {
             organizationId_name: {
               organizationId,
