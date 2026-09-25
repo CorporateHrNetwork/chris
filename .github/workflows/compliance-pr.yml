@@ -28,10 +28,25 @@ jobs:
     environment: zermatt-db-transfer
     env:
       SOURCE_URL: ${{ secrets.ZERMATT_RENDER_DATABASE_URL }}
-      TARGET_URL: ${{ secrets.ZERMATT_SUPABASE_SESSION_URL }}
+      SUPABASE_PASSWORD: ${{ secrets.ZERMATT_SUPABASE_PASSWORD }}
       BACKUP_PASSPHRASE: ${{ secrets.ZERMATT_BACKUP_PASSPHRASE }}
       PGSSLMODE: require
     steps:
+      - name: Construct the approved pilot Session pooler URL privately
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          password = os.environ.get('SUPABASE_PASSWORD', '')
+          if not password or '\n' in password:
+              raise SystemExit('Missing or invalid Supabase database password.')
+          url = ('postgresql://postgres.ldmwsptljgnspwtwcdtm:' + quote(password, safe='')
+                 + '@aws-0-eu-central-1.pooler.supabase.com:5432/postgres')
+          print('::add-mask::' + url)
+          with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+              env_file.write('TARGET_URL=' + url + '\n')
+          PY
+
       - name: Install PostgreSQL 16 client
         run: |
           sudo apt-get update -qq
