@@ -15,7 +15,9 @@
     "test:zermatt:employment-level:v3": "node --test tests/zermattEmploymentLevelV3Acceptance.test.js",
     "zermatt:employment-level:v3:preview": "node scripts/apply-zermatt-employment-level-v3.cjs",
     "zermatt:employment-level:v3:apply": "node scripts/apply-zermatt-employment-level-v3.cjs --apply",
-    "zermatt:employment-level:v3:verify": "node scripts/verify-zermatt-employment-level-v3.cjs"
+    "zermatt:employment-level:v3:verify": "node scripts/verify-zermatt-employment-level-v3.cjs",
+    "zermatt:role-grades:preview": "node scripts/reconcile-zermatt-v3-role-grades.cjs",
+    "zermatt:role-grades:apply": "node scripts/reconcile-zermatt-v3-role-grades.cjs --apply"
   },
   "keywords": [],
   "author": "",

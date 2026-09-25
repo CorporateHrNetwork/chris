@@ -120,6 +120,9 @@ jobs:
           node tests/chrisGlobalPrintVisualLanguageAcceptance.test.js
           node tests/documentsWorkspaceAcceptance.test.js
           node tests/zermattGapClosureAcceptance.test.mjs
+          node --test tests/zermattEmploymentLevelV3Acceptance.test.js
+          node --test tests/zermattRoleGradeReconciliationAcceptance.test.js
+          node --check scripts/reconcile-zermatt-v3-role-grades.cjs
           node tests/chrisPayslipPrintCultureAcceptance.test.js
           node tests/employeeAssignmentSearchAcceptance.test.js
           node tests/employeeAssignmentSuccessResetAcceptance.test.js
