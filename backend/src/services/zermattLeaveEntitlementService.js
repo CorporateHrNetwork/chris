@@ -6,6 +6,11 @@ const {
   isZermattV2InternalLevel,
 } = require("../config/zermattEmploymentLevelsV2");
 const {
+  ZERMATT_EMPLOYMENT_LEVELS_V3,
+  resolveZermattV3Level,
+  isZermattV3InternalLevel,
+} = require("../config/zermattEmploymentLevelsV3");
+const {
   resolveEffectiveEmploymentLevel,
 } = require("./employeeEmploymentLevelAssignmentService");
 
@@ -13,6 +18,7 @@ const ZERMATT_SLUG = "zermatt-liquor-limited";
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 const EFFECTIVE_FROM = new Date("2026-01-01T00:00:00.000Z");
 const V2_SENTINEL_LEVEL_NUMBER = 101;
+const V3_SENTINEL_LEVEL_NUMBER = 201;
 
 const POLICY_DEFINITIONS = [
   {
@@ -26,6 +32,9 @@ const POLICY_DEFINITIONS = [
     entitlementDays: 30,
     femaleOnly: false,
     entitlementForLevel(level, hierarchyVersion = "V1") {
+      if (hierarchyVersion === "V3") {
+        return resolveZermattV3Level(level)?.annualLeaveDays ?? null;
+      }
       if (hierarchyVersion === "V2") {
         return resolveZermattV2Level(level)?.annualLeaveDays ?? null;
       }
@@ -98,11 +107,11 @@ function isExpatriate(value) {
 }
 
 function isAnnualEligibleEmploymentType(value, hierarchyVersion = "V1") {
-  return isFullTime(value) || (hierarchyVersion === "V2" && isExpatriate(value));
+  return isFullTime(value) || (["V2", "V3"].includes(hierarchyVersion) && isExpatriate(value));
 }
 
 function eligibleEmploymentTypesForDefinition(definition, hierarchyVersion) {
-  if (definition.key === "ANNUAL" && hierarchyVersion === "V2") {
+  if (definition.key === "ANNUAL" && ["V2", "V3"].includes(hierarchyVersion)) {
     return ["Full-Time", "Expatriate"];
   }
   return ["Full-Time"];
@@ -145,11 +154,27 @@ async function isZermattV2Active({ organizationId, tx = prisma }) {
   return Boolean(sentinel?.isActive && sentinel.code === "L1");
 }
 
+async function isZermattV3Active({ organizationId, tx = prisma }) {
+  const sentinel = await tx.organizationEmploymentLevel.findUnique({
+    where: {
+      organizationId_levelNumber: {
+        organizationId,
+        levelNumber: V3_SENTINEL_LEVEL_NUMBER,
+      },
+    },
+    select: { code: true, isActive: true },
+  });
+  return Boolean(sentinel?.isActive && sentinel.code === "L1");
+}
+
 async function resolveHierarchy({ organizationId, tx = prisma }) {
-  const v2 = await isZermattV2Active({ organizationId, tx });
-  return v2
-    ? { version: "V2", levels: ZERMATT_EMPLOYMENT_LEVELS_V2 }
-    : { version: "V1", levels: ZERMATT_EMPLOYMENT_LEVELS };
+  if (await isZermattV3Active({ organizationId, tx })) {
+    return { version: "V3", levels: ZERMATT_EMPLOYMENT_LEVELS_V3 };
+  }
+  if (await isZermattV2Active({ organizationId, tx })) {
+    return { version: "V2", levels: ZERMATT_EMPLOYMENT_LEVELS_V2 };
+  }
+  return { version: "V1", levels: ZERMATT_EMPLOYMENT_LEVELS };
 }
 
 async function ensureEmploymentLevels({ organizationId, tx = prisma, hierarchy = null }) {
@@ -230,7 +255,7 @@ async function ensurePolicyDefinition({
     hierarchy.version
   );
   const policyName =
-    hierarchy.version === "V2" && definition.v2PolicyName
+    ["V2", "V3"].includes(hierarchy.version) && definition.v2PolicyName
       ? definition.v2PolicyName
       : definition.policyName;
   const eligibilityDescription = eligibleEmploymentTypes.join(" and ");
@@ -400,9 +425,11 @@ async function provisionEmployeeWithConfigured({
   });
   const levelNumber = Number(effectiveLevel.levelNumber || 0);
   const validLevel =
-    hierarchyVersion === "V2"
-      ? isZermattV2InternalLevel(levelNumber)
-      : Number.isInteger(levelNumber) && levelNumber >= 1 && levelNumber <= 11;
+    hierarchyVersion === "V3"
+      ? isZermattV3InternalLevel(levelNumber)
+      : hierarchyVersion === "V2"
+        ? isZermattV2InternalLevel(levelNumber)
+        : Number.isInteger(levelNumber) && levelNumber >= 1 && levelNumber <= 11;
 
   if (!validLevel) {
     throw new Error(`EMPLOYMENT_LEVEL_MAPPING_REQUIRED:${employeeNumber}`);
@@ -422,7 +449,7 @@ async function provisionEmployeeWithConfigured({
       skippedPolicies.push({
         policyCode: item.policy.code,
         reason:
-          item.definition.key === "ANNUAL" && hierarchyVersion === "V2"
+          item.definition.key === "ANNUAL" && ["V2", "V3"].includes(hierarchyVersion)
             ? "ANNUAL_ELIGIBLE_EMPLOYMENT_TYPES_FULL_TIME_OR_EXPATRIATE"
             : "FULL_TIME_ONLY",
       });
@@ -526,9 +553,11 @@ async function provisionEmployeeWithConfigured({
           reason:
             effectiveLevel.source === "EMPLOYEE_OVERRIDE"
               ? "Employee-specific Employment Level override applied to ZERMATT leave entitlement"
-              : hierarchyVersion === "V2"
-                ? "ZERMATT V2 designation-default Employment Level leave entitlement mapping"
-                : "ZERMATT Full-Time leave entitlement mapping",
+              : hierarchyVersion === "V3"
+                ? "ZERMATT V3 designation-default Employment Level leave entitlement mapping"
+                : hierarchyVersion === "V2"
+                  ? "ZERMATT V2 designation-default Employment Level leave entitlement mapping"
+                  : "ZERMATT Full-Time leave entitlement mapping",
           createdByUserId: actorUserId || null,
         },
       });
@@ -615,9 +644,11 @@ async function provisionAllCurrentFullTimeEmployees({
         employeeId: employee.id,
       });
       const level = Number(effectiveLevel.levelNumber || 0);
-      const valid = hierarchyVersion === "V2"
-        ? isZermattV2InternalLevel(level)
-        : Number.isInteger(level) && level >= 1 && level <= 11;
+      const valid = hierarchyVersion === "V3"
+        ? isZermattV3InternalLevel(level)
+        : hierarchyVersion === "V2"
+          ? isZermattV2InternalLevel(level)
+          : Number.isInteger(level) && level >= 1 && level <= 11;
       if (!valid) invalidLevels.push(employee.employeeNumber);
     } catch (error) {
       if (
@@ -676,6 +707,7 @@ module.exports = {
   isExpatriate,
   isAnnualEligibleEmploymentType,
   isZermattV2Active,
+  isZermattV3Active,
   resolveHierarchy,
   configureZermattLeavePolicies,
   provisionZermattEmployeeLeaveProfile,

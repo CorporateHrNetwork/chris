@@ -5,13 +5,17 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "npx prisma migrate deploy && node src/server.js",
+    "start": "npx prisma migrate deploy && node scripts/start-with-zermatt-v3.cjs",
     "test:compliance": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceFutureReadiness.test.js",
     "test:compliance:api": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceAdministrativeApiAcceptance.test.js",
     "test:migration:compliance": "node scripts/complianceMigrationAcceptance.js",
     "test:leave:runtime": "node scripts/leaveRuntimeAcceptance.js",
     "staging:provision:zermatt": "node scripts/provision-synthetic-zermatt-staging.cjs",
-    "staging:provision:exit-print": "node scripts/provision-synthetic-zermatt-exit-print.cjs"
+    "staging:provision:exit-print": "node scripts/provision-synthetic-zermatt-exit-print.cjs",
+    "test:zermatt:employment-level:v3": "node --test tests/zermattEmploymentLevelV3Acceptance.test.js",
+    "zermatt:employment-level:v3:preview": "node scripts/apply-zermatt-employment-level-v3.cjs",
+    "zermatt:employment-level:v3:apply": "node scripts/apply-zermatt-employment-level-v3.cjs --apply",
+    "zermatt:employment-level:v3:verify": "node scripts/verify-zermatt-employment-level-v3.cjs"
   },
   "keywords": [],
   "author": "",

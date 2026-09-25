@@ -3,6 +3,10 @@ const {
   resolveZermattV2Level,
   isZermattV2InternalLevel,
 } = require("../config/zermattEmploymentLevelsV2");
+const {
+  resolveZermattV3Level,
+  isZermattV3InternalLevel,
+} = require("../config/zermattEmploymentLevelsV3");
 
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const CURRENT_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
@@ -95,12 +99,20 @@ async function synchronizeZermattEmployeeLevelLive(
     employeeId: employee.id,
   });
   const levelNumber = Number(effective.levelNumber || 0);
-  if (!isZermattV2InternalLevel(levelNumber)) {
-    throw new Error("ZERMATT_V2_EMPLOYMENT_LEVEL_REQUIRED");
+  const hierarchyVersion = isZermattV3InternalLevel(levelNumber)
+    ? "V3"
+    : isZermattV2InternalLevel(levelNumber)
+      ? "V2"
+      : null;
+  if (!hierarchyVersion) {
+    throw new Error("ZERMATT_CURRENT_EMPLOYMENT_LEVEL_REQUIRED");
   }
 
-  const publicLevel = resolveZermattV2Level(levelNumber);
-  if (!publicLevel) throw new Error("ZERMATT_V2_EMPLOYMENT_LEVEL_REQUIRED");
+  const publicLevel =
+    hierarchyVersion === "V3"
+      ? resolveZermattV3Level(levelNumber)
+      : resolveZermattV2Level(levelNumber);
+  if (!publicLevel) throw new Error("ZERMATT_CURRENT_EMPLOYMENT_LEVEL_REQUIRED");
 
   const result = {
     applied: true,
@@ -110,6 +122,7 @@ async function synchronizeZermattEmployeeLevelLive(
       .filter(Boolean)
       .join(" "),
     employmentLevel: {
+      hierarchyVersion,
       levelNumber,
       code: effective.employmentLevel?.code || publicLevel.code,
       name: effective.employmentLevel?.name || publicLevel.name,
