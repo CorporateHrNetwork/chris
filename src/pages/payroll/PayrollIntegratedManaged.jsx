@@ -525,8 +525,37 @@ function DashboardEmpty({ children }) {
   return <div style={dashboardEmptyStyle}>{children}</div>;
 }
 
+function payrollLineComponentKey(item = {}, prefix = "CMP") {
+  return String(item.code || item.name || item.inputId || item.installmentId || prefix).trim();
+}
+
+function payrollLineComponentLabel(item = {}) {
+  const code = String(item.code || "").trim();
+  const name = String(item.name || "").trim();
+  return [code, name].filter(Boolean).join(" — ") || "Payroll Component";
+}
+
+function payrollComponentColumns(rows = [], key) {
+  const map = new Map();
+  for (const row of rows || []) {
+    for (const item of row.details?.[key] || []) {
+      map.set(payrollLineComponentKey(item), payrollLineComponentLabel(item));
+    }
+  }
+  return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([id, label]) => ({ id, label }));
+}
+
 function PayrollLines({ rows, onViewPayslip }) {
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
+  const allowanceColumns = payrollComponentColumns(rows, "customAllowances");
+  const deductionColumns = payrollComponentColumns(rows, "customDeductions");
+  const columns = [
+    "Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic",
+    ...allowanceColumns.map((item) => item.label),
+    "PAYE", "Pension",
+    ...deductionColumns.map((item) => item.label),
+    "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip",
+  ];
   return (
     <EmployeeBatchSelector
       rows={rows || []}
@@ -540,15 +569,15 @@ function PayrollLines({ rows, onViewPayslip }) {
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
-        <DataTable columns={["Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip"]}>
+        <DataTable columns={columns}>
           <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
           {displayRows.map((row) => {
             const details = row.details || {};
             const statutory = details.statutory || {};
             const structure = details.salaryStructure || {};
             const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-            const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-            const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+            const allowanceValues = new Map((details.customAllowances || []).map((item) => [payrollLineComponentKey(item), Number(item.value || 0)]));
+            const deductionValues = new Map((details.customDeductions || []).map((item) => [payrollLineComponentKey(item), Number(item.value || 0)]));
             return (
               <tr key={row.id}>
                 <Td><input type="checkbox" aria-label={`Select ${row.employeeNumber} ${row.employeeName}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
@@ -558,10 +587,10 @@ function PayrollLines({ rows, onViewPayslip }) {
                 <Td>{details.attendance?.payableDays ?? "—"}{details.attendanceRecalculationRequired ? " *" : ""}</Td>
                 <Td>{details.attendance?.source ? String(details.attendance.source).replaceAll("_", " ") : "—"}</Td>
                 <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
-                <Td>{money(customAllowances, row.currency)}</Td>
+                {allowanceColumns.map((item) => <Td key={`a-${item.id}`}>{money(allowanceValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(statutory.payeTax, row.currency)}</Td>
                 <Td>{money(statutory.employeePension, row.currency)}</Td>
-                <Td>{money(customDeductions, row.currency)}</Td>
+                {deductionColumns.map((item) => <Td key={`d-${item.id}`}>{money(deductionValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(row.advanceRecovery, row.currency)}</Td>
                 <Td>{money(row.loanRecovery, row.currency)}</Td>
                 <Td>{leaveAllowance ? `${money(leaveAllowance, row.currency)} · After tax` : "—"}</Td>
@@ -755,8 +784,8 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
   const structure = details.salaryStructure || {};
   const attendance = details.attendance || {};
   const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-  const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const customAllowances = details.customAllowances || [];
+  const customDeductions = details.customDeductions || [];
   const organizationName = payslipOrganizationName(organization);
   const logoUrl = payslipLogoUrl(organization);
   return (
@@ -795,11 +824,11 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
             {Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => (
               <PayslipLedgerRow key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={money(value, row.currency)} />
             ))}
-            <PayslipLedgerRow label="Other Earnings" value={money(customAllowances, row.currency)} />
+            {customAllowances.map((item) => <PayslipLedgerRow key={`allowance-${payrollLineComponentKey(item)}`} label={payrollLineComponentLabel(item)} value={money(item.value, row.currency)} />)}
             <PayslipLedgerRow label="Taxable Gross Pay" value={money(row.grossPay, row.currency)} strong />
             <PayslipLedgerRow label="PAYE" value={money(statutory.payeTax, row.currency)} />
             <PayslipLedgerRow label="Pension" value={money(statutory.employeePension, row.currency)} />
-            <PayslipLedgerRow label="Other Deductions" value={money(customDeductions, row.currency)} />
+            {customDeductions.map((item) => <PayslipLedgerRow key={`deduction-${payrollLineComponentKey(item)}`} label={payrollLineComponentLabel(item)} value={money(item.value, row.currency)} />)}
             <PayslipLedgerRow label="Salary Advance Recovery" value={money(row.advanceRecovery, row.currency)} />
             <PayslipLedgerRow label="Loan Recovery" value={money(row.loanRecovery, row.currency)} />
             {leaveAllowance > 0 && <PayslipLedgerRow label="Leave Allowance · After Tax / Non-taxable" value={money(leaveAllowance, row.currency)} strong />}
@@ -867,18 +896,18 @@ async function printPayslip(row, organization = {}) {
   const structure = details.salaryStructure || {};
   const attendance = details.attendance || {};
   const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-  const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const customAllowances = details.customAllowances || [];
+  const customDeductions = details.customDeductions || [];
   const organizationName = payslipOrganizationName(organization);
   const logoUrl = payslipLogoUrl(organization);
   const rows = [
     ["Basic", money(structure.basic ?? row.baseSalary, row.currency)],
     ...Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => [key.charAt(0).toUpperCase() + key.slice(1), money(value, row.currency)]),
-    ["Other Earnings", money(customAllowances, row.currency)],
+    ...customAllowances.map((item) => [payrollLineComponentLabel(item), money(item.value, row.currency)]),
     ["Taxable Gross Pay", money(row.grossPay, row.currency), true],
     ["PAYE", money(statutory.payeTax, row.currency)],
     ["Pension", money(statutory.employeePension, row.currency)],
-    ["Other Deductions", money(customDeductions, row.currency)],
+    ...customDeductions.map((item) => [payrollLineComponentLabel(item), money(item.value, row.currency)]),
     ["Salary Advance Recovery", money(row.advanceRecovery, row.currency)],
     ["Loan Recovery", money(row.loanRecovery, row.currency)],
     ...(leaveAllowance > 0 ? [["Leave Allowance · After Tax / Non-taxable", money(leaveAllowance, row.currency), true]] : []),
