@@ -478,6 +478,7 @@ function Loans() {
           <QuickActionCard key="record" title="Record Approved Loan" subtitle="Record an already approved/disbursed employee loan" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
           <QuickActionCard key="advances" title="Salary Advances" subtitle="Same manual GM approval / external payment policy" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
           ...(capabilities.canBulkPayrollInputs ? [<QuickActionCard key="bulk" title="Opening Loan Upload" subtitle="Maintain legacy/opening payroll balances" icon={<FaDownload />} onClick={() => setShowBulkUpload(true)} />] : []),
+          <QuickActionCard key="unpause" title="Unpause Loan" subtitle="Show paused loan accounts and restore payroll recovery" icon={<FaHandHoldingUsd />} onClick={() => { setLoanSearch("PAUSED"); window.requestAnimationFrame(() => document.getElementById("loan-register")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />,
           <QuickActionCard key="history" title="Recovery History" subtitle="Review posted payroll loan deductions" icon={<FaHistory />} onClick={() => document.getElementById("loan-recovery-history")?.scrollIntoView({ behavior: "smooth" })} />,
         ]}
       />
@@ -561,7 +562,7 @@ function Loans() {
         </AnalyticsPanel>
       </section>
 
-      <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
+      <section id="loan-register" style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px", scrollMarginTop: 96 }}>
         <AnalyticsPanel title="Loan Register" subtitle="One running loan account per facility. Approved top-ups increase the same account rather than creating a second loan." icon={<FaHandHoldingUsd />}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
             <input style={{ ...inputStyle, maxWidth: 360 }} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Search Loan / Employee — employee number, employee name, loan number, policy or status" />
