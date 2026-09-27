@@ -95,6 +95,25 @@ jobs:
           print('Read-only preflight passed: exact Zermatt API, running state, and matching original database identity verified.')
           PY
 
+  zermatt-client-tooling:
+    name: Validate PostgreSQL 17 backup tooling
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message != 'ops: execute guarded Zermatt pilot cutover'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Install the supported PostgreSQL client from official packages
+        run: |
+          sudo apt-get install -y -qq ca-certificates curl
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_restore --version
+
   zermatt-cutover-suspend:
     name: Freeze the exact Zermatt API before final copy
     if: >-
@@ -307,6 +326,11 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write('TARGET_URL=' + target + '\n')
           PY
+          sudo apt-get install -y -qq ca-certificates curl
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
           echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
