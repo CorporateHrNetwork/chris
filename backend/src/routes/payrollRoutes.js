@@ -806,6 +806,30 @@ router.post("/variable-inputs", requirePermission("payroll.manage"), async (req,
   }
 });
 
+router.patch("/variable-inputs/:id", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    if (req.body?.employeeNumber) await assertPayrollInputEmployeeScope(req, req.body.employeeNumber);
+    const data = await variablePayroll.updateVariableInput({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      inputId: req.params.id,
+      input: req.body || {},
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Payroll input ${req.params.id} was corrected; affected draft payroll must be recalculated.`,
+    });
+    return res.json({
+      status: "success",
+      message: "Deduction corrected. Any affected draft payroll is marked for recalculation.",
+      data: { input: data, payrollDraftFreshness: freshness },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to correct payroll input.");
+  }
+});
+
 router.get("/deduction-plans", requirePermission("payroll.view"), async (req, res) => {
   try {
     const data = await variablePayroll.listDeductionPlans({ organizationId: req.auth.organizationId });
@@ -837,6 +861,31 @@ router.post("/deduction-plans", requirePermission("payroll.manage"), async (req,
     return sendError(res, error, "Unable to create recurring deduction schedule.");
   }
 });
+
+router.patch("/deduction-plans/:id", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    if (req.body?.employeeNumber) await assertPayrollInputEmployeeScope(req, req.body.employeeNumber);
+    const data = await variablePayroll.updateDeductionPlan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      planId: req.params.id,
+      input: req.body || {},
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Recurring deduction plan ${req.params.id} was corrected; affected draft payroll must be recalculated.`,
+    });
+    return res.json({
+      status: "success",
+      message: "Recurring deduction corrected. Any affected draft payroll is marked for recalculation.",
+      data: { plan: data, payrollDraftFreshness: freshness },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to correct recurring deduction.");
+  }
+});
+
 
 function variableInputTemplateBuffer(kind) {
   const normalizedKind = String(kind || "ALLOWANCE").trim().toUpperCase() === "DEDUCTION" ? "DEDUCTION" : "ALLOWANCE";
