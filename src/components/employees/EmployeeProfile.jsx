@@ -446,12 +446,17 @@ function EmployeeProfile() {
         designationId: employee.designationId || "",
         employmentType: employee.employmentType || "",
 
-        employmentLevel:
-          levelResult?.data?.effective?.name ||
-          employee.designation?.employmentLevel?.name ||
-          (Number.isInteger(employee.designation?.careerLevel)
-            ? `Level ${employee.designation.careerLevel}`
-            : "Not Configured"),
+        employmentLevel: (() => {
+          const level = levelResult?.data?.effective || employee.designation?.employmentLevel;
+          if (level) {
+            return [level.code || `L${level.levelNumber ?? employee.designation?.careerLevel}`, level.name]
+              .filter(Boolean)
+              .join(" — ");
+          }
+          return Number.isInteger(employee.designation?.careerLevel)
+            ? `L${employee.designation.careerLevel}`
+            : "Not Configured";
+        })(),
 
         employmentLevelNumber:
           levelResult?.data?.effective?.levelNumber ??
@@ -3408,7 +3413,7 @@ useEffect(() => {
                   ))}
               </select>
               <p style={promotionFieldHintStyle}>
-                Current: {employmentLevelState?.effective?.code || ""} {employmentLevelState?.effective?.name || profile.employmentLevel}
+                Current: {employmentLevelState?.effective ? [employmentLevelState.effective.code || `L${employmentLevelState.effective.levelNumber}`, employmentLevelState.effective.name].filter(Boolean).join(" — ") : profile.employmentLevel}
                 {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
               </p>
               <input
