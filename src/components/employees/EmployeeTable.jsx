@@ -289,11 +289,18 @@ function EmployeeTable() {
                     ?.name ||
                   "-",
 
-                employmentLevel:
-                  employee.designation?.employmentLevel?.name ||
-                  (Number.isInteger(employee.designation?.careerLevel)
-                    ? `Level ${employee.designation.careerLevel}`
-                    : "Not Configured"),
+                employmentLevel: (() => {
+                  const override = employee.employmentLevelAssignments?.[0]?.employmentLevel;
+                  const level = override || employee.designation?.employmentLevel;
+                  if (level) {
+                    return [level.code || `L${level.levelNumber}`, level.name]
+                      .filter(Boolean)
+                      .join(" — ");
+                  }
+                  return Number.isInteger(employee.designation?.careerLevel)
+                    ? `L${employee.designation.careerLevel}`
+                    : "Not Configured";
+                })(),
 
                 lineManager:
                   employee.lineManagerAssignments?.[0]?.manager
