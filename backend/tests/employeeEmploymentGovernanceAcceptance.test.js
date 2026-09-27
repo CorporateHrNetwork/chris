@@ -143,7 +143,8 @@ expect(governedProfileRoutes, "defaultEmploymentLevel: designationDefault", "Des
 expect(governedProfileRoutes, "employmentLevel: effectiveEmploymentLevel", "Employee profile is not exposing the effective Employment Level through its established display field.");
 expect(governedProfileRoutes, "effectiveEmploymentLevel: effectiveSummary", "Explicit effective Employment Level profile metadata missing.");
 expect(governedProfileRoutes, "STRUCTURE_CHANGE_REQUIRES_CONTROLLED_JOB_CHANGE", "Legacy free-text Department/Designation structural-change guard missing.");
-expect(employeeProfile, "employee.designation?.employmentLevel?.name", "Employee Profile no longer consumes its established Employment Level display field.");
+expect(employeeProfile, "const level = levelResult?.data?.effective || employee.designation?.employmentLevel;", "Employee Profile no longer resolves the effective Employment Level with designation default fallback.");
+expect(employeeProfile, ".join(\" — \")", "Employee Profile no longer presents Employment Level as L-code — description.");
 
 const governedMount = appSource.indexOf('app.use("/api/employees", employeeProfileGovernanceRoutes);');
 const legacyEmployeeMount = appSource.indexOf('app.use("/api/employees", employeeRoutes);');
