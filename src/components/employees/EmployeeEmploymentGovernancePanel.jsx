@@ -11,7 +11,7 @@ function designationLabel(item) {
     item?.name,
     item?.department?.name || "No department",
     item?.employmentLevel
-      ? `${item.employmentLevel.code} · ${item.employmentLevel.name}`
+      ? `${item.employmentLevel.code || `L${item.employmentLevel.levelNumber}`} — ${item.employmentLevel.name}`
       : "Level not configured",
   ]
     .filter(Boolean)
@@ -19,7 +19,7 @@ function designationLabel(item) {
 }
 
 function levelLabel(item) {
-  return [item?.code, item?.name].filter(Boolean).join(" · ");
+  return [item?.code || (item?.levelNumber != null ? `L${item.levelNumber}` : null), item?.name].filter(Boolean).join(" — ");
 }
 
 export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onChanged }) {
