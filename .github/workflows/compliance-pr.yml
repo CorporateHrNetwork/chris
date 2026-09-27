@@ -1,11 +1,6 @@
 name: CHRiS Compliance PR Gate
 
 on:
-  push:
-    branches:
-      - fix/zermatt-supabase-pilot-transfer
-    paths:
-      - .github/workflows/compliance-pr.yml
   pull_request:
     paths:
       - "backend/**"
@@ -26,6 +21,11 @@ on:
           - refresh
           - render-preflight
           - backup
+          - restore
+      backup_run_id:
+        description: GitHub Actions run ID containing the encrypted snapshot to restore in a disposable database
+        type: string
+        required: false
       confirm_write_freeze:
         description: Enter ZERMATT_WRITE_FROZEN only after the live Zermatt API is suspended
         type: string
@@ -41,7 +41,7 @@ concurrency:
 jobs:
   zermatt-live-backup:
     name: Encrypted read-only Zermatt live snapshot
-    if: github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'backup'))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'backup'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: zermatt-db-transfer
@@ -112,7 +112,7 @@ jobs:
 
   zermatt-backup-restore-drill:
     name: Restore encrypted Zermatt snapshot to disposable PostgreSQL
-    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'restore' && inputs.backup_run_id != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: zermatt-db-transfer
@@ -143,8 +143,8 @@ jobs:
       - name: Download prior encrypted live snapshot
         uses: actions/download-artifact@v4
         with:
-          name: zermatt-live-encrypted-36347090602
-          run-id: 36347090602
+          name: zermatt-live-encrypted-${{ inputs.backup_run_id }}
+          run-id: ${{ inputs.backup_run_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/restore-drill
       - name: Install PostgreSQL 17 client
