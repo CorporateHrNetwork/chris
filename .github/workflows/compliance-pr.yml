@@ -1,6 +1,11 @@
 name: CHRiS Compliance PR Gate
 
 on:
+  push:
+    branches:
+      - fix/zermatt-supabase-pilot-transfer
+    paths:
+      - .github/workflows/compliance-pr.yml
   pull_request:
     paths:
       - "backend/**"
@@ -36,7 +41,7 @@ concurrency:
 jobs:
   zermatt-live-backup:
     name: Encrypted read-only Zermatt live snapshot
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'backup'
+    if: github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'backup'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: zermatt-db-transfer
