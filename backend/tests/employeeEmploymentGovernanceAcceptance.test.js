@@ -146,6 +146,7 @@ expect(governedProfileRoutes, "STRUCTURE_CHANGE_REQUIRES_CONTROLLED_JOB_CHANGE",
 expect(employeeProfile, "const level = levelResult?.data?.effective || employee.designation?.employmentLevel;", "Employee Profile no longer resolves the effective Employment Level with designation default fallback.");
 expect(employeeProfile, ".join(\" — \")", "Employee Profile no longer presents Employment Level as L-code — description.");
 expect(employeeProfile, 'apiRequest("/api/employees/career/employment-levels")', "Employee Profile edit must load the active assignable Employment Level catalogue.");
+expect(employeeProfile, "effectiveFrom: employmentLevelForm.effectiveDate", "Employee Profile must send Employment Level effectiveFrom to the governed API.");
 
 const governedMount = appSource.indexOf('app.use("/api/employees", employeeProfileGovernanceRoutes);');
 const legacyEmployeeMount = appSource.indexOf('app.use("/api/employees", employeeRoutes);');
