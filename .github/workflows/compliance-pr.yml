@@ -1,11 +1,6 @@
 name: CHRiS Compliance PR Gate
 
 on:
-  push:
-    branches:
-      - fix/zermatt-supabase-pilot-transfer
-    paths:
-      - .github/workflows/compliance-pr.yml
   pull_request:
     paths:
       - "backend/**"
@@ -40,7 +35,7 @@ concurrency:
 jobs:
   zermatt-render-preflight:
     name: Verify Render cutover access without changes
-    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'render-preflight') || (github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message == 'Verify Render internal and external database identity')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'render-preflight'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: zermatt-db-transfer
