@@ -154,6 +154,12 @@ export default function PayrollComponentsManaged({ kind }) {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   const selectedComponent = useMemo(
     () => components.find((component) => component.code === form.componentCode) || null,
     [components, form.componentCode]
