@@ -181,8 +181,8 @@ for (const expected of [
   '"/runs/:id/audit-pack.xlsx"',
   "PAYROLL_AUDIT_PACK_REQUIRES_APPROVAL",
   "Payroll Register",
-  "Management Summary",
-  "Branch Analysis",
+  "Payroll Dashboard",
+  "Branch / Department / Cost Centre analysis",
   "External Handoff",
   "External Auditor Confirmation",
   "GM Approval",
@@ -190,8 +190,8 @@ for (const expected of [
 ]) {
   expect(payrollRoutes, expected, `Payroll audit-pack contract is missing ${expected}.`);
 }
-expect(payrollUi, "Export Audit Pack", "Approved payroll UI must expose the audit-pack export.");
-expect(payrollUi, "external auditor confirmation, GM approval and Accounts & Finance payout processing", "Payroll UI must describe the external handoff lifecycle.");
+expect(payrollUi, "Export Approved Payout", "Approved payroll UI must expose the approved payout pack export.");
+expect(payrollUi, "external auditor / management approval and Accounts & Finance payout workflow", "Payroll UI must describe the external handoff lifecycle.");
 
 // Synthetic ZERMATT staging must remain isolated, explicit and free of embedded credentials.
 for (const expected of [
@@ -205,7 +205,7 @@ for (const expected of [
   '"Head of HR"',
   '"HR & Admin Officer - Branch"',
   '"STG-ZLL-SEP-2026"',
-  '"ZLL-NG-PAYROLL"',
+  "ZLL-NG-PAYROLL",
   '"ADMIN_ENTERED"',
   "Refusing to overwrite an existing non-synthetic",
 ]) {
@@ -214,7 +214,8 @@ for (const expected of [
 for (const secret of ["ChangeMe123!", "Password123", "Synthetic123"]) {
   assert.ok(!stagingFixture.includes(secret), "Synthetic staging fixture must not embed reusable passwords.");
 }
-expect(stagingFixture, "Passwords are supplied only through Render environment variables and are never printed.", "Fixture must keep staging passwords out of source and logs.");
+expect(stagingFixture, "Passwords remain in Render environment variables.", "Fixture must keep staging passwords in environment configuration.");
+assert.equal(stagingFixture.includes("console.log(PASSWORDS"), false, "Fixture must never print staging passwords.");
 
 const stagingHeadPermissionStart = stagingFixture.indexOf("const HEAD_PERMISSIONS = [");
 const stagingHeadPermissionEnd = stagingFixture.indexOf("];", stagingHeadPermissionStart);

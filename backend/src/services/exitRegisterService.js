@@ -1,9 +1,5 @@
-const { EXITED_EMPLOYEE_STATUSES } = require("./employeeStatusSemantics");
-
-const completedExitOrder = { completedAt: "desc" };
-
-function serializeExitRegisterEmployee(employee) {
-  const process = employee.exitProcesses?.[0] || null;
+function serializeExitRegisterProcess(process) {
+  const employee = process.employee || {};
   return {
     employeeId: employee.id,
     employeeNumber: employee.employeeNumber,
@@ -15,7 +11,7 @@ function serializeExitRegisterEmployee(employee) {
     department: employee.department,
     designation: employee.designation,
     location: employee.location,
-    exitProcess: process ? {
+    exitProcess: {
       id: process.id,
       status: process.status,
       exitType: process.exitType,
@@ -25,56 +21,65 @@ function serializeExitRegisterEmployee(employee) {
       financialStatus: process.financialStatus,
       finalClosureAt: process.finalClosureAt,
       settlement: process.settlement || null,
-    } : null,
+    },
   };
 }
 
 async function getExitRegister(prisma, organizationId) {
   if (!organizationId) throw new Error("organizationId is required");
-  const employees = await prisma.employee.findMany({
+
+  // A completed exit process is the authoritative historical record.
+  // Do not depend on the employee's current status: legacy status drift or a
+  // later rehire must never make a completed exit disappear from the register.
+  const processes = await prisma.employeeExitProcess.findMany({
     where: {
       organizationId,
-      status: { in: EXITED_EMPLOYEE_STATUSES },
+      status: "COMPLETED",
+      completedAt: { not: null },
+      cancelledAt: null,
     },
     select: {
       id: true,
-      employeeNumber: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
       status: true,
-      exitDate: true,
-      department: { select: { id: true, name: true } },
-      designation: { select: { id: true, name: true } },
-      location: { select: { id: true, name: true } },
-      exitProcesses: {
-        where: { status: "COMPLETED", completedAt: { not: null }, cancelledAt: null },
+      exitType: true,
+      reason: true,
+      lastWorkingDay: true,
+      completedAt: true,
+      financialStatus: true,
+      finalClosureAt: true,
+      employee: {
+        select: {
+          id: true,
+          employeeNumber: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          status: true,
+          exitDate: true,
+          department: { select: { id: true, name: true } },
+          designation: { select: { id: true, name: true } },
+          location: { select: { id: true, name: true } },
+        },
+      },
+      settlement: {
         select: {
           id: true,
           status: true,
-          exitType: true,
-          reason: true,
-          lastWorkingDay: true,
-          completedAt: true,
-          financialStatus: true,
-          finalClosureAt: true,
-          settlement: {
-            select: {
-              id: true,
-              status: true,
-              currency: true,
-              netSettlement: true,
-              amountPaid: true,
-            },
-          },
+          currency: true,
+          netSettlement: true,
+          amountPaid: true,
         },
-        orderBy: completedExitOrder,
-        take: 1,
       },
     },
-    orderBy: [{ exitDate: "desc" }, { lastName: "asc" }],
+    orderBy: [{ completedAt: "desc" }, { lastWorkingDay: "desc" }],
   });
-  return employees.map(serializeExitRegisterEmployee);
+
+  return processes.map(serializeExitRegisterProcess);
 }
 
-module.exports = { getExitRegister, serializeExitRegisterEmployee };
+module.exports = {
+  getExitRegister,
+  serializeExitRegisterProcess,
+  // Backward-compatible alias for existing focused tests/imports.
+  serializeExitRegisterEmployee: serializeExitRegisterProcess,
+};

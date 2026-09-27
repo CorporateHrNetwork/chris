@@ -54,6 +54,21 @@ function EmployeeProfile() {
   const [editing, setEditing] =
     useState(false);
 
+  const [editCatalog, setEditCatalog] = useState([]);
+  const [employmentTypes, setEmploymentTypes] = useState([]);
+  const [employmentTypeReason, setEmploymentTypeReason] = useState("");
+  const [employmentTypeSaving, setEmploymentTypeSaving] = useState(false);
+  const [employmentLevels, setEmploymentLevels] = useState([]);
+  const [employmentLevelState, setEmploymentLevelState] = useState(null);
+  const [employmentLevelSaving, setEmploymentLevelSaving] = useState(false);
+  const [employmentLevelForm, setEmploymentLevelForm] = useState({
+    levelNumber: "",
+    useDesignationDefault: false,
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: "",
+    notes: "",
+  });
+
   const [error, setError] =
     useState("");
 
@@ -386,6 +401,7 @@ function EmployeeProfile() {
       const [
         result,
         lineManagerResult,
+        levelResult,
       ] = await Promise.all([
         apiRequest(
           `/api/employees/${encodeURIComponent(
@@ -395,6 +411,9 @@ function EmployeeProfile() {
         apiRequest(
           `/api/line-managers/employees/${encodeURIComponent(employeeNumber)}`
         ),
+        apiRequest(
+          `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`
+        ).catch(() => ({ data: null })),
       ]);
 
       const employee =
@@ -423,11 +442,29 @@ function EmployeeProfile() {
           employee.designation
             ?.name || "",
 
-        employmentLevel:
-          employee.designation?.employmentLevel?.name ||
-          (Number.isInteger(employee.designation?.careerLevel)
-            ? `Level ${employee.designation.careerLevel}`
-            : "Not Configured"),
+        departmentId: employee.departmentId || "",
+        designationId: employee.designationId || "",
+        employmentType: employee.employmentType || "",
+
+        employmentLevel: (() => {
+          const level = levelResult?.data?.effective || employee.designation?.employmentLevel;
+          if (level) {
+            return [level.code || `L${level.levelNumber ?? employee.designation?.careerLevel}`, level.name]
+              .filter(Boolean)
+              .join(" — ");
+          }
+          return Number.isInteger(employee.designation?.careerLevel)
+            ? `L${employee.designation.careerLevel}`
+            : "Not Configured";
+        })(),
+
+        employmentLevelNumber:
+          levelResult?.data?.effective?.levelNumber ??
+          employee.designation?.careerLevel ??
+          null,
+
+        employmentLevelSource:
+          levelResult?.data?.effective?.source || "DESIGNATION_DEFAULT",
 
         email:
           employee.email || "",
@@ -483,6 +520,7 @@ function EmployeeProfile() {
       setProfile(
         normalizedProfile
       );
+      setEmploymentLevelState(levelResult?.data || null);
 
       apiRequest("/api/employees/onboarding/status")
         .then((onboardingResult) => {
@@ -502,6 +540,10 @@ function EmployeeProfile() {
 
         designation:
           normalizedProfile.designation,
+
+        departmentId: normalizedProfile.departmentId,
+        designationId: normalizedProfile.designationId,
+        employmentType: normalizedProfile.employmentType,
 
         locationId:
           normalizedProfile.locationId,
@@ -636,7 +678,7 @@ useEffect(() => {
     loadLifecycleHistory();
     loadEmploymentEpisodes();
   }, [employeeNumber]);
-const handleChange = (
+  const handleChange = (
     event
   ) => {
     const {
@@ -645,10 +687,17 @@ const handleChange = (
     } = event.target;
 
     setFormData(
-      (current) => ({
-        ...current,
-        [name]: value,
-      })
+      (current) => {
+        if (name === "departmentId") {
+          const department = editCatalog.find((item) => item.department?.id === value)?.department;
+          return { ...current, departmentId: value, department: department?.name || "", designationId: "", designation: "" };
+        }
+        if (name === "designationId") {
+          const designation = editCatalog.find((item) => item.id === value);
+          return { ...current, designationId: value, designation: designation?.name || "" };
+        }
+        return { ...current, [name]: value };
+      }
     );
   };
 
@@ -656,6 +705,15 @@ const handleChange = (
     event
   ) => {
     event.preventDefault();
+
+    if (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) {
+      setError("Use Review Job Change below to record the selected department and designation with an effective date and reason.");
+      return;
+    }
+    if (formData.employmentType !== profile.employmentType) {
+      setError("Save the Employment Type change with its reason using the button below before saving other details.");
+      return;
+    }
 
     if (
       !profile.locationId &&
@@ -711,6 +769,85 @@ const handleChange = (
     }
   };
 
+  const reviewEditJobChange = async () => {
+    const { departmentId, designationId } = formData;
+    if (await openJobChangeForm()) {
+      setJobChangeForm((current) => ({ ...current, departmentId, designationId }));
+    }
+  };
+
+  const saveEditEmploymentType = async () => {
+    if (!formData.employmentType || !employmentTypeReason.trim()) {
+      setError("Select an Employment Type and enter the reason for the change.");
+      return;
+    }
+    try {
+      const pendingEdit = { ...formData };
+      setEmploymentTypeSaving(true);
+      setError("");
+      const result = await apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-type`, {
+        method: "PUT",
+        body: JSON.stringify({ employmentType: formData.employmentType, reason: employmentTypeReason.trim() }),
+      });
+      await loadProfile();
+      // Preserve any other unsaved master-data selections in the open form.
+      setFormData(pendingEdit);
+      setEmploymentTypeReason("");
+      setSuccess(result.message || "Employment Type updated and audited.");
+    } catch (err) {
+      setError(err.message || "CHRiS could not update Employment Type.");
+    } finally {
+      setEmploymentTypeSaving(false);
+    }
+  };
+
+  const saveEditEmploymentLevel = async () => {
+    const reason = String(employmentLevelForm.reason || "").trim();
+    if (!employmentLevelForm.effectiveDate || !reason) {
+      setError("Select an effective date and enter the reason for the Employment Level change.");
+      return;
+    }
+    if (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber) {
+      setError("Select an Employment Level.");
+      return;
+    }
+
+    try {
+      setEmploymentLevelSaving(true);
+      setError("");
+      const result = await apiRequest(
+        `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`,
+        {
+          method: "PUT",
+          body: {
+            levelNumber: employmentLevelForm.useDesignationDefault
+              ? undefined
+              : Number(employmentLevelForm.levelNumber),
+            useDesignationDefault: employmentLevelForm.useDesignationDefault,
+            effectiveDate: employmentLevelForm.effectiveDate,
+            reason,
+            notes: employmentLevelForm.notes,
+          },
+        }
+      );
+      setEmploymentLevelState(result?.data || null);
+      setEmploymentLevelForm((current) => ({
+        ...current,
+        levelNumber: String(result?.data?.effective?.levelNumber || ""),
+        useDesignationDefault: false,
+        effectiveDate: new Date().toISOString().slice(0, 10),
+        reason: "",
+        notes: "",
+      }));
+      await loadProfile();
+      setSuccess(result?.message || "Employment Level updated and audited.");
+    } catch (err) {
+      setError(err.message || "CHRiS could not update Employment Level.");
+    } finally {
+      setEmploymentLevelSaving(false);
+    }
+  };
+
   const handleCancel = () => {
     setEditing(false);
 
@@ -726,6 +863,10 @@ const handleChange = (
 
       designation:
         profile.designation,
+
+      departmentId: profile.departmentId,
+      designationId: profile.designationId,
+      employmentType: profile.employmentType,
 
       locationId:
         profile.locationId || "",
@@ -794,6 +935,25 @@ const handleChange = (
               "",
           })
         );
+
+        const [careerResult, typeResult, levelCatalogResult, employeeLevelResult] = await Promise.all([
+          apiRequest("/api/employees/career/catalog"),
+          apiRequest("/api/employees/employment-types/catalog"),
+          apiRequest("/api/employees/career/levels"),
+          apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
+        ]);
+        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id));
+        setEmploymentTypes(typeResult.data?.employmentTypes || []);
+        setEmploymentTypeReason("");
+        setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
+        setEmploymentLevelState(employeeLevelResult.data || null);
+        setEmploymentLevelForm({
+          levelNumber: String(employeeLevelResult.data?.effective?.levelNumber || ""),
+          useDesignationDefault: false,
+          effectiveDate: new Date().toISOString().slice(0, 10),
+          reason: "",
+          notes: "",
+        });
 
         if (
           !profile.locationId
@@ -1217,6 +1377,7 @@ const handleChange = (
               currentDepartmentId,
           })
         );
+        return true;
       } catch (err) {
         console.error(
           "Job Change catalogue load error:",
@@ -1226,11 +1387,13 @@ const handleChange = (
         setJobChangeCatalog(
           []
         );
+        setJobChangeOpen(false);
 
         setError(
           err.message ||
             "CHRIS could not load valid job-change positions."
         );
+        return false;
       } finally {
         setJobChangeCatalogLoading(
           false
@@ -3086,9 +3249,10 @@ const handleChange = (
               </button>
 
               <button
-                type="submit"
+                type={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "button" : "submit"}
+                onClick={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? reviewEditJobChange : undefined}
                 disabled={
-                  saving
+                  saving || (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && !formData.designationId
                 }
                 style={{
                   ...saveButtonStyle,
@@ -3098,9 +3262,8 @@ const handleChange = (
                       : 1,
                 }}
               >
-                {saving
-                  ? "Saving..."
-                  : "Save Changes"}
+                {saving ? "Saving..." :
+                  formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "Review Job Change" : "Save Changes"}
               </button>
             </div>
           </div>
@@ -3177,35 +3340,113 @@ const handleChange = (
             </div>
 
 
-            <FormField
-              label="Department"
-              name="department"
-              value={
-                formData.department
-              }
-              onChange={
-                handleChange
-              }
-              required
-              disabled={
-                saving
-              }
-            />
+            <div>
+              <label style={labelStyle}>Department *</label>
+              <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
+                <option value="">Select department</option>
+                {Array.from(new Map(editCatalog.map((item) => [item.department.id, item.department])).values())
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+              </select>
+            </div>
 
-            <FormField
-              label="Designation"
-              name="designation"
-              value={
-                formData.designation
-              }
-              onChange={
-                handleChange
-              }
-              required
-              disabled={
-                saving
-              }
-            />
+            <div>
+              <label style={labelStyle}>Designation *</label>
+              <select name="designationId" value={formData.designationId || ""} onChange={handleChange} required disabled={saving || !formData.departmentId} style={fieldStyle}>
+                <option value="">Select designation</option>
+                {editCatalog.filter((item) => item.department.id === formData.departmentId)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((designation) => <option key={designation.id} value={designation.id}>{designation.name}</option>)}
+              </select>
+              {(formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && (
+                <button type="button" onClick={reviewEditJobChange} disabled={!formData.departmentId || !formData.designationId || saving} style={actionButtonStyle}>
+                  Review Job Change
+                </button>
+              )}
+              <p style={promotionFieldHintStyle}>Department and designation changes require an effective date and reason. Review Job Change records them in Employment History.</p>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Employment Type</label>
+              <select name="employmentType" value={formData.employmentType || ""} onChange={handleChange} disabled={saving || employmentTypeSaving} style={fieldStyle}>
+                <option value="">Select employment type</option>
+                {employmentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              {formData.employmentType !== profile.employmentType && (
+                <>
+                  <input aria-label="Reason for Employment Type change" placeholder="Reason for Employment Type change" value={employmentTypeReason} onChange={(event) => setEmploymentTypeReason(event.target.value)} style={fieldStyle} disabled={employmentTypeSaving} />
+                  <button type="button" onClick={saveEditEmploymentType} disabled={!formData.employmentType || !employmentTypeReason.trim() || employmentTypeSaving} style={actionButtonStyle}>
+                    {employmentTypeSaving ? "Saving…" : "Save Employment Type"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div>
+              <label style={labelStyle}>Employment Level</label>
+              <select
+                value={employmentLevelForm.useDesignationDefault ? "DEFAULT" : employmentLevelForm.levelNumber}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEmploymentLevelForm((current) => ({
+                    ...current,
+                    useDesignationDefault: value === "DEFAULT",
+                    levelNumber: value === "DEFAULT" ? "" : value,
+                  }));
+                }}
+                disabled={saving || employmentLevelSaving}
+                style={fieldStyle}
+              >
+                <option value="">Select employment level</option>
+                {employmentLevelState?.currentOverride && (
+                  <option value="DEFAULT">
+                    Use designation default — {employmentLevelState?.designationDefault?.code || ""} {employmentLevelState?.designationDefault?.name || ""}
+                  </option>
+                )}
+                {employmentLevels
+                  .slice()
+                  .sort((a, b) => Number(b.levelNumber) - Number(a.levelNumber))
+                  .map((level) => (
+                    <option key={level.levelNumber} value={String(level.levelNumber)}>
+                      {level.code || `L${level.levelNumber}`} — {level.name}
+                    </option>
+                  ))}
+              </select>
+              <p style={promotionFieldHintStyle}>
+                Current: {employmentLevelState?.effective ? [employmentLevelState.effective.code || `L${employmentLevelState.effective.levelNumber}`, employmentLevelState.effective.name].filter(Boolean).join(" — ") : profile.employmentLevel}
+                {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
+              </p>
+              <input
+                type="date"
+                aria-label="Employment Level effective date"
+                value={employmentLevelForm.effectiveDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, effectiveDate: event.target.value }))}
+                style={fieldStyle}
+                disabled={employmentLevelSaving}
+              />
+              <input
+                aria-label="Reason for Employment Level change"
+                placeholder="Reason for Employment Level change"
+                value={employmentLevelForm.reason}
+                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
+                style={fieldStyle}
+                disabled={employmentLevelSaving}
+              />
+              <button
+                type="button"
+                onClick={saveEditEmploymentLevel}
+                disabled={
+                  employmentLevelSaving ||
+                  !employmentLevelForm.effectiveDate ||
+                  !employmentLevelForm.reason.trim() ||
+                  (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber)
+                }
+                style={actionButtonStyle}
+              >
+                {employmentLevelSaving ? "Saving…" : employmentLevelForm.useDesignationDefault ? "Reset Employment Level" : "Save Employment Level"}
+              </button>
+            </div>
 
             <div>
               <label
@@ -3463,6 +3704,10 @@ const handleChange = (
             <InfoRow
               label="Employment Level"
               value={profile.employmentLevel}
+            />
+            <InfoRow
+              label="Employment Level Source"
+              value={profile.employmentLevelSource === "EMPLOYEE_OVERRIDE" ? "Employee Override" : "Designation Default"}
             />
             <InfoRow
               label="Gender"

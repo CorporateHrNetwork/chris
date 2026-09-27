@@ -29,7 +29,7 @@ test("ZERMATT V3 uses the approved seven-level employment and annual leave struc
       annualLeaveDays: level.annualLeaveDays,
     })),
     [
-      { code: "L1", internal: 201, name: "Operations Support", annualLeaveDays: 14 },
+      { code: "L1", internal: 201, name: "Operations Support / Junior", annualLeaveDays: 14 },
       { code: "L2", internal: 202, name: "Branch Junior Officers and Team Leadership", annualLeaveDays: 16 },
       { code: "L3", internal: 203, name: "Senior Officers and Branch Supervisors", annualLeaveDays: 21 },
       { code: "L4", internal: 204, name: "Assistant Branch Management", annualLeaveDays: 24 },
@@ -71,6 +71,7 @@ test("approved named ZERMATT roles map to the intended V3 levels", () => {
   assert.equal(byCode("EXEC-PAES").levelCode, "L3");
   assert.equal(byCode("BBO-FOS").levelCode, "L3");
   assert.equal(byCode("ZOP-FOS").levelCode, "L3");
+  assert.equal(byCode("PROC-CCO").levelCode, "L3");
 
   assert.equal(byCode("FIN-AO").levelCode, "L2");
   assert.equal(byCode("PROC-OFF").levelCode, "L2");
@@ -80,6 +81,8 @@ test("approved named ZERMATT roles map to the intended V3 levels", () => {
   assert.equal(byCode("BBO-TA").levelCode, "L1");
   assert.equal(byCode("BBO-WTR").levelCode, "L1");
   assert.equal(byCode("WHSE-LOAD").levelCode, "L1");
+  assert.equal(byCode("ZOP-SR").levelCode, "L1");
+  assert.equal(byCode("ZOP-SSR").levelCode, "L1");
 });
 
 test("V3 leave services prefer V3 while preserving V1/V2 compatibility", () => {

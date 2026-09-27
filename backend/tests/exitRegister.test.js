@@ -38,28 +38,83 @@ for (const status of EXITED_EMPLOYEE_STATUSES) {
   assert.equal(summarizeEmployeeStatuses([{ status }]).exited, 1, `${status} is exited/non-current`);
 }
 
-const completedProcess = {
-  id: "xp1", status: "COMPLETED", exitType: "TERMINATION", reason: "Role ended",
-  lastWorkingDay: new Date("2026-08-01"), completedAt: new Date("2026-08-02"),
-};
-const terminalEmployees = [
-  { id: "e1", employeeNumber: "CHR1", firstName: "Ada", middleName: null, lastName: "A", status: "TERMINATED", exitDate: new Date("2026-08-01"), department: { id: "d1", name: "People" }, designation: { id: "j1", name: "Lead" }, location: { id: "l1", name: "Lagos" }, exitProcesses: [completedProcess] },
-  { id: "e2", employeeNumber: "CHR2", firstName: "Ben", middleName: null, lastName: "B", status: "RESIGNED", exitDate: null, department: null, designation: null, location: null, exitProcesses: [] },
+const completedProcesses = [
+  {
+    id: "xp1",
+    organizationId: "org-a",
+    status: "COMPLETED",
+    exitType: "TERMINATION",
+    reason: "Role ended",
+    lastWorkingDay: new Date("2026-08-01"),
+    completedAt: new Date("2026-08-02"),
+    cancelledAt: null,
+    financialStatus: "NOT_APPLICABLE",
+    finalClosureAt: null,
+    settlement: null,
+    employee: {
+      id: "e1",
+      employeeNumber: "CHR1",
+      firstName: "Ada",
+      middleName: null,
+      lastName: "A",
+      status: "TERMINATED",
+      exitDate: new Date("2026-08-01"),
+      department: { id: "d1", name: "People" },
+      designation: { id: "j1", name: "Lead" },
+      location: { id: "l1", name: "Lagos" },
+    },
+  },
+  {
+    id: "xp2",
+    organizationId: "org-a",
+    status: "COMPLETED",
+    exitType: "RESIGNATION",
+    reason: "Personal",
+    lastWorkingDay: new Date("2026-07-15"),
+    completedAt: new Date("2026-07-16"),
+    cancelledAt: null,
+    financialStatus: "NOT_APPLICABLE",
+    finalClosureAt: null,
+    settlement: null,
+    employee: {
+      id: "e2",
+      employeeNumber: "CHR2",
+      firstName: "Ben",
+      middleName: null,
+      lastName: "B",
+      status: "ACTIVE",
+      exitDate: null,
+      department: null,
+      designation: null,
+      location: null,
+    },
+  },
 ];
+
 let capturedQuery;
-const prisma = { employee: { findMany: async (query) => { capturedQuery = query; return terminalEmployees; } } };
+const prisma = {
+  employeeExitProcess: {
+    findMany: async (query) => {
+      capturedQuery = query;
+      return completedProcesses;
+    },
+  },
+};
 
 (async () => {
   const register = await getExitRegister(prisma, "org-a");
-  assert.equal(register.length, 2, "terminal employees are deduplicated by the employee query");
-  assert.equal(register[0].exitProcess.id, "xp1", "completed metadata is included");
-  assert.equal(register[1].exitProcess, null, "a missing workflow remains null");
+  assert.equal(register.length, 2, "completed exit processes are authoritative historical register rows");
+  assert.equal(register[0].exitProcess.id, "xp1", "completed process metadata is included");
+  assert.equal(register[1].status, "ACTIVE", "a later employee status change or rehire does not hide a completed exit");
   assert.equal(capturedQuery.where.organizationId, "org-a", "register is tenant scoped");
-  assert.deepEqual(capturedQuery.where.status.in, EXITED_EMPLOYEE_STATUSES);
-  assert.equal(capturedQuery.select.exitProcesses.where.status, "COMPLETED");
-  assert.equal(capturedQuery.select.exitProcesses.where.cancelledAt, null, "cancelled workflow metadata is excluded");
-  assert.equal(capturedQuery.select.exitProcesses.take, 1, "one latest completed workflow prevents duplicates");
-  const empty = await getExitRegister({ employee: { findMany: async () => [] } }, "org-empty");
+  assert.equal(capturedQuery.where.status, "COMPLETED");
+  assert.deepEqual(capturedQuery.where.completedAt, { not: null });
+  assert.equal(capturedQuery.where.cancelledAt, null, "cancelled exit processes are excluded");
+  assert.equal(capturedQuery.select.employee.select.employeeNumber, true, "employee snapshot data is selected with the process");
+  const empty = await getExitRegister(
+    { employeeExitProcess: { findMany: async () => [] } },
+    "org-empty"
+  );
   assert.deepEqual(empty, []);
-  console.log("PASS: CHRIS current-state exit register tests passed.");
+  console.log("PASS: CHRIS completed-process exit register tests passed.");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -195,7 +195,8 @@ test("administrative UI exposes remittance operations and exit financial closure
   assert.match(app, /statutories\/remittances.*ConsolidatedComplianceRoute.*RemittanceWorkspace/);
   for (const contract of ["consolidatedOrganization", "activeLocationId", "Consolidated access required"]) assert.ok(consolidatedRoute.includes(contract) || authRoutes.includes(contract), `frontend consolidated-scope gate missing ${contract}`);
   for (const contract of ["/api/compliance/remittances", "/api/compliance/obligations", "Record Payment", "Record Allocation", "Reconcile", "Reverse Batch"]) assert.ok(remittance.includes(contract), `remittance UI missing ${contract}`);
-  for (const contract of ["organization-logo", "organization-name", "watermark", "Employee Payslip", "window.open(\"\", \"_blank\");"]) assert.ok(payroll.includes(contract), `payslip print document missing ${contract}`);
+  for (const contract of ["organization-logo", "organization-name", "watermark", "Employee Payslip", "document.createElement(\"iframe\")", "contentWindow", ".print()"]) assert.ok(payroll.includes(contract), `payslip print document missing ${contract}`);
+  assert.ok(!payroll.includes("window.open(\"\", \"_blank\");"), "payslip print must not open an intermediate browser tab/window");
   for (const contract of [
     "runSettlementAction(\"calculate\"",
     "approveHeadHrSettlement",

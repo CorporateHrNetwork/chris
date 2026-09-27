@@ -89,8 +89,9 @@ test("ZERMATT R1 reporting and security release gate", () => {
   assert.match(frontendApp, /permission="reports\.view"/);
 
   assert.match(reports, /apiDownload/);
-  assert.match(reports, /employee-reports\/workforce\?format=csv/);
-  assert.match(reports, /navigate\("\/attendance"\)/);
-  assert.match(reports, /navigate\("\/leave"\)/);
-  assert.match(reports, /navigate\("\/employees\/export-queue"\)/);
+  assert.match(reports, /\/api\/reports\/release1\/export\.xlsx\?view=/);
+  assert.match(reports, /\/api\/reports\/operational\/attendance\/export\.xlsx/);
+  assert.match(reports, /\/api\/reports\/operational\/leave\/export\.xlsx/);
+  assert.match(reports, /\/api\/reports\/operational\/payroll\/export\.xlsx/);
+  assert.match(reports, /setSearchParams/);
 });

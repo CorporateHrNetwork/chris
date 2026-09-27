@@ -201,6 +201,14 @@ function Login() {
 
       clearExistingSession();
 
+      // Preserve the authenticated tenant for future protected-route redirects.
+      if (result.data.organization?.slug) {
+        localStorage.setItem(
+          "chris_last_organization_slug",
+          result.data.organization.slug
+        );
+      }
+
       /*
         Remember Me checked:
         localStorage survives browser restart.

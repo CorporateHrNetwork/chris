@@ -17,8 +17,8 @@ const ZERMATT_EMPLOYMENT_LEVELS_V3 = [
   {
     publicLevelNumber: 1,
     code: "L1",
-    name: "Operations Support",
-    roleScope: "Operations Support Staff",
+    name: "Operations Support / Junior",
+    roleScope: "Operations Support Staff; Sales Representatives",
     description: "Performs frontline and support duties within an assigned team or branch.",
     annualLeaveDays: 14,
   },
@@ -120,6 +120,7 @@ const SENIOR_OFFICER_AND_SUPERVISOR_CODES = new Set([
   "HRA-SRO",
   "HRA-OFF",
   "PROC-SRO",
+  "PROC-CCO",
   "SEC-SSO",
   "EXEC-EA",
   "EXEC-PAES",
@@ -130,6 +131,11 @@ const SENIOR_OFFICER_AND_SUPERVISOR_CODES = new Set([
   "SEC-SUP",
   "HKF-AHS",
 ]);
+
+// Sales representatives are frontline operations support, including the
+// historical Senior Sales Representative title. Do not classify by title
+// keyword alone when the tenant-approved grade is explicit.
+const OPERATIONS_SUPPORT_CODES = new Set(["ZOP-SR", "ZOP-SSR"]);
 
 const TEAM_LEADER_CODES = new Set([
   "BBO-BTL",
@@ -164,6 +170,7 @@ function isOfficerOrProfessional(reference) {
 function resolveV3PublicLevel(reference) {
   const code = normalize(reference?.code);
 
+  if (OPERATIONS_SUPPORT_CODES.has(code)) return 1;
   if (GENERAL_MANAGEMENT_CODES.has(code)) return 7;
   if (SENIOR_MANAGEMENT_CODES.has(code)) return 6;
   if (BRANCH_MANAGEMENT_CODES.has(code)) return 5;
@@ -223,6 +230,7 @@ module.exports = {
   BRANCH_MANAGEMENT_CODES,
   ASSISTANT_BRANCH_MANAGEMENT_CODES,
   SENIOR_OFFICER_AND_SUPERVISOR_CODES,
+  OPERATIONS_SUPPORT_CODES,
   TEAM_LEADER_CODES,
   resolveV3PublicLevel,
   resolveZermattV3DesignationLevel,

@@ -39,16 +39,21 @@ test("Documents, Statutories and Performance child routes no longer use the plan
   const moduleDashboard = read("src/components/dashboard/ModuleDashboard.jsx");
   const performance = read("src/pages/Performance.jsx");
   const documents = read("src/pages/documents/DocumentsWorkspace.jsx");
+  const documentRoutes = read("src/utils/documentWorkspaceRoute.js");
   const operational = read("backend/src/routes/operationalControlRoutes.js");
+  const compactPlanned = planned.replace(/\s+/g, "");
 
   assert.ok(planned.includes('pathname.startsWith("/documents/")'));
   assert.ok(planned.includes('module="STATUTORIES"'));
   assert.ok(planned.includes('module="PERFORMANCE"'));
-  assert.ok(planned.includes('pathname === "/compensation/reviews"'));
+  assert.ok(compactPlanned.includes('pathname==="/compensation/reviews"'));
   assert.ok(moduleDashboard.includes('moduleKey === "statutories"'));
   assert.ok(performance.includes('module="PERFORMANCE"'));
   for (const label of ["Employee Documents", "HR Documents", "Company Policies", "Templates", "Document Categories", "Expiry Tracking", "Document Requests"]) {
     assert.ok(documents.includes(label), `Missing Documents child: ${label}`);
+  }
+  for (const path of ["/documents/employee", "/documents/hr", "/documents/policies", "/documents/templates", "/documents/categories", "/documents/expiry-tracking", "/documents/requests"]) {
+    assert.ok(documentRoutes.includes(path), `Missing Documents route mapping: ${path}`);
   }
   for (const area of ["PAYE_TAX", "PENSION_COMPLIANCE", "NHIA", "NSITF", "ITF", "REMITTANCES", "REPORTS", "GOALS_KPIS", "CYCLES", "REVIEWS", "APPRAISALS", "IMPROVEMENT_PLANS"]) {
     assert.ok(operational.includes(area), `Missing operational area: ${area}`);

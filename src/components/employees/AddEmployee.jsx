@@ -736,7 +736,7 @@ function AddEmployee({
                         ? ` (${designation.code})`
                         : ""}
                       {Number.isInteger(designation.careerLevel)
-                        ? ` — Level ${designation.careerLevel}`
+                        ? ` — ${designation.employmentLevel?.code || `L${designation.careerLevel}`} — ${designation.employmentLevel?.name || "Employment Level"}`
                         : " — Employment Level required"}
                     </option>
                   )
@@ -745,7 +745,7 @@ function AddEmployee({
 
               {formData.designationId && (
                 <p style={helperWarningStyle}>
-                  Employment Level: {Number.isInteger(selectedDesignationForDisplay?.careerLevel) ? `Level ${selectedDesignationForDisplay.careerLevel} (derived from designation)` : "Not configured"}
+                  Employment Level: {Number.isInteger(selectedDesignationForDisplay?.careerLevel) ? `${selectedDesignationForDisplay?.employmentLevel?.code || `L${selectedDesignationForDisplay.careerLevel}`} — ${selectedDesignationForDisplay?.employmentLevel?.name || "Employment Level"} (derived from designation)` : "Not configured"}
                 </p>
               )}
 

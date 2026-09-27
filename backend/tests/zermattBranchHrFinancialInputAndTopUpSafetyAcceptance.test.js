@@ -145,9 +145,10 @@ test("ZERMATT Branch HR financial input scope, Head HR audit controls and top-up
     "loans.apply",
     'ON CONFLICT ("roleId","permissionId") DO NOTHING',
   ], "Branch HR loan-input migration");
-  assert.equal(migration.includes("payroll.manage"), false, "Branch HR must not receive payroll.manage through this migration");
-  assert.equal(migration.includes("loans.approve"), false, "Branch HR must not receive in-system loan approval authority");
-  assert.equal(migration.includes("loans.disburse"), false, "Branch HR must not receive CHRiS disbursement authority");
+  const executableMigration = migration.replace(/--.*$/gm, "");
+  assert.equal(executableMigration.includes("payroll.manage"), false, "Branch HR must not receive payroll.manage through this migration");
+  assert.equal(executableMigration.includes("loans.approve"), false, "Branch HR must not receive in-system loan approval authority");
+  assert.equal(executableMigration.includes("loans.disburse"), false, "Branch HR must not receive CHRiS disbursement authority");
 
   const scopeMount = app.indexOf('app.use("/api", activeBranchScopeRoutes);');
   const financialMount = app.indexOf('app.use("/api", zermattFinancialSupportRoutes);');

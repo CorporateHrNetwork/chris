@@ -40,8 +40,8 @@ test("interactive settlement retains its existing account columns", () => {
   assert.ok(frontend.includes('className="exit-settlement-debit-column"'));
   assert.ok(frontend.includes('className="exit-settlement-workspace"'));
   assert.ok(frontend.includes('className="exit-settlement-panel"'));
-  const creditIndex = frontend.indexOf('<SettlementAccountSection title="CREDIT"');
-  const debitIndex = frontend.indexOf('<SettlementAccountSection title="DEBIT"');
+  const creditIndex = frontend.indexOf('<SettlementAccountSection title="Benefits"');
+  const debitIndex = frontend.indexOf('<SettlementAccountSection title="Deductions"');
   assert.ok(creditIndex >= 0 && debitIndex > creditIndex);
   assert.ok(css.includes("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important"));
   assert.ok(css.includes(".exit-settlement-credit-column"));
@@ -61,27 +61,41 @@ test("settlement provides Print / Download PDF from preview stage and prints the
   assert.ok(frontend.includes("printExitSettlementDocument"));
   assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(printUtility.includes("printWindow.print()"));
-  assert.ok(printUtility.includes("Print / Download PDF"));
+  assert.ok(printUtility.includes("printDocument.fonts.ready"));
   assert.ok(frontend.includes("exit-settlement-print-calculation-note"));
   assert.ok(frontend.includes("<h3>Calculation Basis</h3>"));
   assert.ok(css.includes(".exit-settlement-print-calculation-note"));
 });
 
 
-test("settlement standalone print uses three-column employee details and explicit accounting sides", () => {
-  assert.ok(frontend.includes('title="CREDIT — BENEFITS / ENTITLEMENTS"'));
-  assert.ok(frontend.includes('title="DEBIT — DEDUCTIONS / RECOVERIES"'));
+test("settlement standalone print presents employee details with benefits and deductions", () => {
+  assert.ok(frontend.includes('title="Benefits"'));
+  assert.ok(frontend.includes('title="Deductions"'));
+  assert.ok(frontend.includes("<span>Date Employed</span>"));
+  assert.ok(frontend.includes("<span>Total Days In Employment</span>"));
+  assert.equal(frontend.split("<span>Gross Monthly Salary (Calculation Basis)</span>").length - 1, 2);
+  assert.ok(frontend.includes('accountSalary?.monthlyGross == null ? "—" : moneyText(accountSalary.monthlyGross, accountSalary.currency)'));
+  assert.ok(service.includes("monthlyGross = money(rate.amount)"));
+  assert.ok(frontend.includes("employmentDays(accountEmployee?.hireDate || settlementExit?.hireDate, accountExit?.lastWorkingDay)"));
+  assert.ok(service.includes("hireDate: dateText(exit.employee.hireDate)"));
+  assert.ok(printUtility.includes("calculation?.remove()"));
+  assert.ok(printUtility.includes("Approval Record"));
   assert.ok(printUtility.includes("exit-settlement-print-meta-table"));
-  assert.ok(printUtility.includes("cell.colSpan = 3"));
-  assert.ok(printUtility.includes(".exit-settlement-print-account > :first-child"));
-  assert.match(printUtility, /:first-child\s*\{\s*grid-column: 2 !important/);
-  assert.ok(printUtility.includes(".exit-settlement-print-account > :nth-child(2)"));
-  assert.match(printUtility, /:nth-child\(2\)\s*\{\s*grid-column: 1 !important/);
+  assert.ok(printUtility.includes("cell.colSpan = 2"));
+  assert.ok(printUtility.includes(".exit-settlement-print-account { display: block !important; }"));
+  assert.ok(printUtility.includes(".exit-settlement-print-account > section + section"));
 });
 
-test("settlement standalone print provides visible controls and Head of HR signature section", () => {
-  assert.ok(printUtility.includes('id="printSettlementDocument"'));
-  assert.ok(printUtility.includes('id="closeSettlementDocument"'));
+test("settlement print enters browser preview directly without an intermediate tab", () => {
+  assert.equal(frontend.includes('window.open("", "_blank")'), false);
+  assert.ok(printUtility.includes('document.createElement("iframe")'));
+  assert.ok(printUtility.includes('frame.setAttribute("aria-hidden", "true")'));
+  assert.equal(printUtility.includes('class="print-toolbar"'), false);
+  assert.ok(printUtility.includes("printWindow.print()"));
+  assert.ok(printUtility.includes('printWindow.addEventListener("afterprint"'));
+});
+
+test("settlement document includes Head of HR signature section", () => {
   assert.ok(frontend.includes("Head of HR Approval & Signature"));
   assert.ok(frontend.includes("exit-settlement-headhr-signature-grid"));
   assert.ok(frontend.includes("exit-settlement-headhr-signature-line"));
@@ -91,15 +105,15 @@ test("settlement print is isolated from EmployeeExits page rendering", () => {
   assert.ok(frontend.includes('import("../utils/exitSettlementPrint.js")'));
   assert.ok(frontend.includes("async function printExitSettlementDocument()"));
   assert.equal(frontend.includes("const PRINT_CSS"), false);
-  assert.ok(printUtility.includes("export default function openExitSettlementPrint(printWindow)"));
-  assert.ok(frontend.includes('const printWindow = window.open("", "_blank")'));
+  assert.ok(printUtility.includes("export default async function openExitSettlementPrint()"));
+  assert.ok(frontend.includes("await module.default()"));
 });
 
 test("formal settlement print remains readable and compact", () => {
-  assert.ok(printUtility.includes("@page { size: A4 portrait; margin: 7mm; }"));
-  assert.ok(printUtility.includes("font-size: 12pt !important"));
+  assert.ok(printUtility.includes("@page { size: A4 portrait; margin: 12mm 14mm; }"));
+  assert.ok(printUtility.includes("font-size: 10pt !important"));
   assert.ok(printUtility.includes("removeNilLedgerRows"));
-  assert.ok(printUtility.includes("exit-settlement-print-lower-grid"));
+  assert.ok(printUtility.includes("exit-settlement-headhr-approval"));
   assert.ok(printUtility.includes("exit-settlement-external-approval-table"));
   assert.ok(printUtility.includes("removeNilLedgerRows(clone)"));
   assert.ok(printUtility.includes('Generated ${new Date().toLocaleString("en-NG")}'));
@@ -107,17 +121,17 @@ test("formal settlement print remains readable and compact", () => {
 
 
 test("settlement print never forces the content box beyond printable A4 portrait width", () => {
-  assert.ok(printUtility.includes("@page { size: A4 portrait; margin: 7mm; }"));
+  assert.ok(printUtility.includes("@page { size: A4 portrait; margin: 12mm 14mm; }"));
   assert.equal(printUtility.includes("width: 297mm"), false);
   assert.ok(printUtility.includes("width: auto !important"));
 });
 
-test("settlement print keeps all point-based document typography at 12pt or larger", () => {
+test("settlement print keeps document typography at 9pt or larger", () => {
   const sizes = [...printUtility.matchAll(/font-size:\s*([0-9.]+)pt/g)].map((match) => Number(match[1]));
   const shorthandSizes = [...printUtility.matchAll(/font:\s*(?:\\d+\\s+)?([0-9.]+)pt\//g)].map((match) => Number(match[1]));
   const allSizes = [...sizes, ...shorthandSizes];
   assert.ok(allSizes.length > 0);
-  assert.ok(allSizes.every((size) => size >= 12), `Found print typography below 12pt: ${allSizes.filter((size) => size < 12).join(", ")}`);
+  assert.ok(allSizes.every((size) => size >= 9), `Found print typography below 9pt: ${allSizes.filter((size) => size < 9).join(", ")}`);
 });
 
 

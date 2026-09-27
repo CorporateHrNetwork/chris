@@ -24,6 +24,7 @@ test("18 September 2026 hire is not due in September 2026", () => {
     hireDate: "2026-09-18",
     periodStart: "2026-09-01",
     periodEnd: "2026-09-30",
+    employmentType: "Full-Time",
   });
   assert.equal(result.eligible, false);
   assert.equal(result.firstEligibleYear, 2027);
@@ -34,6 +35,7 @@ test("18 September 2026 hire is first due in September 2027 and recurs each Sept
     hireDate: "2026-09-18",
     periodStart: "2027-09-01",
     periodEnd: "2027-09-30",
+    employmentType: "Full-Time",
   });
   assert.equal(first.eligible, true);
   assert.equal(first.entitlementYear, 2027);
@@ -43,6 +45,7 @@ test("18 September 2026 hire is first due in September 2027 and recurs each Sept
     hireDate: "2026-09-18",
     periodStart: "2028-09-01",
     periodEnd: "2028-09-30",
+    employmentType: "Full-Time",
   });
   assert.equal(next.eligible, true);
   assert.equal(next.entitlementYear, 2028);
@@ -57,6 +60,7 @@ test("entry month controls annual entitlement month", () => {
       hireDate: "2026-09-18",
       periodStart,
       periodEnd,
+      employmentType: "Full-Time",
     });
     assert.equal(result.eligible, false);
   }
@@ -112,7 +116,7 @@ test("Zermatt Leave Allowance remains wired through Benefits, payroll, approved 
     "ZERMATT_LEAVE_ALLOWANCE_APPLIED",
     "ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR",
     "Basic Monthly Salary × 12 × 10%",
-    "pr.status='APPROVED'",
+    'pr."status"=\'APPROVED\'',
     "benefitEarnings",
   ]) {
     assert.ok(service.includes(expected), `Leave Allowance service control missing: ${expected}`);

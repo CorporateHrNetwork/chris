@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
+import { DOCUMENT_PATH_BY_TAB, documentTabFromLocation } from "../../utils/documentWorkspaceRoute";
 import ZermattEmploymentResources from "./ZermattEmploymentResources";
 
 const TABS = [
@@ -14,9 +16,13 @@ const TABS = [
 ];
 const KIND_BY_TAB = { employee: "EMPLOYEE_DOCUMENT", hr: "HR_DOCUMENT", policies: "COMPANY_POLICY", templates: "TEMPLATE", categories: "CATEGORY" };
 const LABEL_BY_KIND = { EMPLOYEE_DOCUMENT: "Employee document", HR_DOCUMENT: "HR document", COMPANY_POLICY: "Company policy", TEMPLATE: "Template", CATEGORY: "Document category" };
-
 export default function DocumentsWorkspace() {
-  const [tab, setTab] = useState("employee");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const tab = useMemo(
+    () => documentTabFromLocation(location.pathname, location.search),
+    [location.pathname, location.search]
+  );
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -31,6 +37,10 @@ export default function DocumentsWorkspace() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const selectTab = useCallback((nextTab) => {
+    navigate(DOCUMENT_PATH_BY_TAB[nextTab] || "/documents");
+  }, [navigate]);
 
   const rows = useMemo(() => {
     const kind = KIND_BY_TAB[tab];
@@ -96,7 +106,7 @@ export default function DocumentsWorkspace() {
     } catch (err) { setError(err.message || "Unable to update document request."); }
   }
 
-  if (tab === "resources") return <div><BackTabs tab={tab} setTab={setTab} /><ZermattEmploymentResources /></div>;
+  if (tab === "resources") return <div><BackTabs tab={tab} setTab={selectTab} /><ZermattEmploymentResources /></div>;
 
   return <div style={{ color: "var(--chris-text-main)" }}>
     <div style={{ marginBottom: 20 }}>
@@ -115,7 +125,7 @@ export default function DocumentsWorkspace() {
       <Metric label="Open Requests" value={data?.summary?.openRequests} />
     </div>
 
-    <BackTabs tab={tab} setTab={setTab} />
+    <BackTabs tab={tab} setTab={selectTab} />
     {error && <div style={errorStyle}>{error}</div>}
     {notice && <div style={noticeStyle}>{notice}</div>}
     {!data && !error && <section style={panel}>Loading document controls…</section>}
