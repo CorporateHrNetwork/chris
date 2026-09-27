@@ -607,7 +607,7 @@ function Loans() {
                       {capabilities.canManageLoans && current && <button style={loanActionButtonStyle} onClick={() => startTopUp(loan)}>Top-Up</button>}
                       {capabilities.canManageLoans && current && Number(loan.outstandingAmount || 0) > 0 && <button style={loanPrimaryActionStyle} disabled={Boolean(busy)} onClick={() => completeExternally(loan)}>Mark Completed</button>}
                       {capabilities.canManageLoans && loan.status === "ACTIVE" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
-                      {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Resume</button>}
+                      {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Unpause Loan</button>}
                       {capabilities.canDeleteEmployeeFinancialInputs && recovered <= 0 && loan.status !== "COMPLETED" && <button style={loanDangerActionStyle} disabled={Boolean(busy)} onClick={() => deleteLoan(loan)}>Delete</button>}
                     </div></td>
                   </tr>;
