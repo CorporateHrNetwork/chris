@@ -719,6 +719,132 @@ async function updateDeductionPlan({ organizationId, actorUserId, planId, input,
   };
 }
 
+async function cancelVariableInput({ organizationId, actorUserId, inputId, reason, prismaClient = prisma }) {
+  const rows = await prismaClient.$queryRawUnsafe(
+    `SELECT pvi."id",pvi."payrollPeriodId",pvi."status",pvi."manualAmount",pvi."quantity",pvi."reference",pvi."remarks",
+            e."employeeNumber",pvc."code" AS "componentCode",pvc."name" AS "componentName",pp."code" AS "payrollPeriodCode"
+       FROM "payroll_variable_inputs" pvi
+       JOIN "employees" e ON e."id"=pvi."employeeId" AND e."organizationId"=pvi."organizationId"
+       JOIN "payroll_variable_components" pvc ON pvc."id"=pvi."componentId" AND pvc."organizationId"=pvi."organizationId"
+       JOIN "payroll_periods" pp ON pp."id"=pvi."payrollPeriodId" AND pp."organizationId"=pvi."organizationId"
+      WHERE pvi."organizationId"=$1 AND pvi."id"=$2
+      LIMIT 1`,
+    organizationId,
+    inputId
+  );
+  const existing = rows[0];
+  if (!existing) throw payrollInputError("VARIABLE_INPUT_NOT_FOUND", "The payroll input was not found.", 404);
+  if (existing.status !== "ACTIVE") {
+    throw payrollInputError("VARIABLE_INPUT_NOT_EDITABLE", "Only an active payroll input can be deleted.", 409);
+  }
+  const period = await getPeriod(prismaClient, organizationId, existing.payrollPeriodId);
+  await assertPeriodAcceptsPayrollInputs(prismaClient, organizationId, period);
+
+  await prismaClient.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE "payroll_variable_inputs"
+          SET "status"='CANCELLED',"updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1 AND "id"=$2 AND "status"='ACTIVE'`,
+      organizationId,
+      inputId
+    );
+    await tx.organizationAudit.create({
+      data: {
+        organizationId,
+        actorUserId: actorUserId || null,
+        entityType: "PayrollVariableInput",
+        entityId: inputId,
+        action: "CANCELLED",
+        previousValue: {
+          employeeNumber: existing.employeeNumber,
+          componentCode: existing.componentCode,
+          componentName: existing.componentName,
+          payrollPeriodCode: existing.payrollPeriodCode,
+          manualAmount: existing.manualAmount,
+          quantity: existing.quantity,
+          reference: existing.reference,
+          remarks: existing.remarks,
+          status: existing.status,
+        },
+        newValue: { status: "CANCELLED" },
+        reason: text(reason) || "Payroll input deleted before payroll posting",
+      },
+    });
+  });
+  return { id: inputId, status: "CANCELLED", employeeNumber: existing.employeeNumber, componentCode: existing.componentCode, componentName: existing.componentName };
+}
+
+async function cancelDeductionPlan({ organizationId, actorUserId, planId, reason, prismaClient = prisma }) {
+  const plans = await prismaClient.$queryRawUnsafe(
+    `SELECT pdp."id",pdp."status",pdp."totalAmount",pdp."outstandingAmount",pdp."reference",pdp."remarks",
+            e."employeeNumber",pvc."code" AS "componentCode",pvc."name" AS "componentName"
+       FROM "payroll_deduction_plans" pdp
+       JOIN "employees" e ON e."id"=pdp."employeeId" AND e."organizationId"=pdp."organizationId"
+       JOIN "payroll_variable_components" pvc ON pvc."id"=pdp."componentId" AND pvc."organizationId"=pdp."organizationId"
+      WHERE pdp."organizationId"=$1 AND pdp."id"=$2
+      LIMIT 1`,
+    organizationId,
+    planId
+  );
+  const existing = plans[0];
+  if (!existing) throw payrollInputError("DEDUCTION_PLAN_NOT_FOUND", "The recurring deduction plan was not found.", 404);
+  if (existing.status === "CANCELLED") return { id: planId, status: "CANCELLED" };
+
+  const posted = await prismaClient.$queryRawUnsafe(
+    `SELECT COUNT(*)::int AS "count"
+       FROM "payroll_deduction_installments"
+      WHERE "organizationId"=$1 AND "planId"=$2 AND "status"='POSTED'`,
+    organizationId,
+    planId
+  );
+  if (Number(posted[0]?.count || 0) > 0) {
+    throw payrollInputError(
+      "DEDUCTION_PLAN_POSTED_LOCKED",
+      "This deduction plan has posted payroll installments. Reopen/reverse the affected payroll before deleting the plan.",
+      409
+    );
+  }
+
+  await prismaClient.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE "payroll_deduction_plans"
+          SET "status"='CANCELLED',"updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1 AND "id"=$2`,
+      organizationId,
+      planId
+    );
+    await tx.$executeRawUnsafe(
+      `UPDATE "payroll_deduction_installments"
+          SET "status"='CANCELLED',"updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1 AND "planId"=$2 AND "status"='SCHEDULED'`,
+      organizationId,
+      planId
+    );
+    await tx.organizationAudit.create({
+      data: {
+        organizationId,
+        actorUserId: actorUserId || null,
+        entityType: "PayrollDeductionPlan",
+        entityId: planId,
+        action: "CANCELLED",
+        previousValue: {
+          employeeNumber: existing.employeeNumber,
+          componentCode: existing.componentCode,
+          componentName: existing.componentName,
+          totalAmount: Number(existing.totalAmount || 0),
+          outstandingAmount: Number(existing.outstandingAmount || 0),
+          status: existing.status,
+          reference: existing.reference,
+          remarks: existing.remarks,
+        },
+        newValue: { status: "CANCELLED" },
+        reason: text(reason) || "Recurring deduction plan deleted before payroll posting",
+      },
+    });
+  });
+  return { id: planId, status: "CANCELLED", employeeNumber: existing.employeeNumber, componentCode: existing.componentCode, componentName: existing.componentName };
+}
+
 async function listVariableInputs({ organizationId, kind, prismaClient = prisma }) {
   await ensureZermattComponentCatalogue({ organizationId, prismaClient });
   const normalizedKind = kind ? upper(kind) : null;
@@ -961,8 +1087,10 @@ module.exports = {
   createVariableComponent,
   createVariableInput,
   updateVariableInput,
+  cancelVariableInput,
   createDeductionPlan,
   updateDeductionPlan,
+  cancelDeductionPlan,
   listVariableInputs,
   listDeductionPlans,
   loadPeriodVariableItems,
