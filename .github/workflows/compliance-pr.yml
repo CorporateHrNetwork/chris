@@ -188,14 +188,14 @@ jobs:
           # from observing different points in time within one connection.
           psql "$SOURCE_URL" -X -q -A -t -v ON_ERROR_STOP=1 -f backend/scripts/zermatt-pilot-fingerprint.sql > "$RUNNER_TEMP/source.fingerprint"
           psql "$TARGET_URL" -X -q -A -t -v ON_ERROR_STOP=1 -f backend/scripts/zermatt-pilot-fingerprint.sql > "$RUNNER_TEMP/pilot.fingerprint"
-          if ! diff -u <(cut -f 1,2 "$RUNNER_TEMP/source.fingerprint") <(cut -f 1,2 "$RUNNER_TEMP/pilot.fingerprint"); then
-            echo 'Application table names or row counts differ. Keep Render live.'
+          if ! diff -u <(cut -f 1 "$RUNNER_TEMP/source.fingerprint") <(cut -f 1 "$RUNNER_TEMP/pilot.fingerprint"); then
+            echo 'Application table names differ. Keep Render live.'
             exit 1
           fi
           # Report only the table names that differ; row hashes and financial
           # values stay inside the runner. Source writes after the copy are expected.
           if ! cmp -s "$RUNNER_TEMP/source.fingerprint" "$RUNNER_TEMP/pilot.fingerprint"; then
-            join -t $'\t' "$RUNNER_TEMP/source.fingerprint" "$RUNNER_TEMP/pilot.fingerprint" | awk -F '\t' '$3 != $5 { print "Changed table: " $1 }'
+            join -t $'\t' "$RUNNER_TEMP/source.fingerprint" "$RUNNER_TEMP/pilot.fingerprint" | awk -F '\t' '$2 != $4 || $3 != $5 { print "Changed table: " $1 " (source rows " $2 ", pilot rows " $4 ")" }'
             echo 'A final copy during a write freeze is required before cutover.'
             exit 1
           fi
