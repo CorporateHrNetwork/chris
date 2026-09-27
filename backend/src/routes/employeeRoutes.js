@@ -15,6 +15,12 @@ const {
   createEmployee,
 } = require("../services/employeeCreationService");
 const { assertTenantNinAvailable } = require("../services/employeeIdentityService");
+const {
+  parseEffectiveDate: parseEmploymentLevelEffectiveDate,
+  getEmploymentLevelState,
+  setEmploymentLevelOverride,
+  removeEmploymentLevelOverride,
+} = require("../services/employeeEmploymentLevelAssignmentService");
 
 const {
   requireAuth,
@@ -30,6 +36,91 @@ router.post("/career/levels",requirePermission("employees.update"),async(req,res
 router.patch("/career/levels/:levelNumber",requirePermission("employees.update"),async(req,res)=>{try{return res.json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:{...req.body,levelNumber:req.params.levelNumber}})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
 router.get("/career/employment-level-exceptions",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEmploymentLevelExceptions({organizationId:req.auth.organizationId})})}catch(error){return res.status(500).json({status:"error",message:"Unable to load Employment Level exceptions."})}});
 router.get("/career/designations/:designationId/employment-level",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await resolveEmploymentLevelFromDesignation({organizationId:req.auth.organizationId,designationId:req.params.designationId})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase(),details:error.details})}});
+
+router.get(
+  "/:employeeNumber/employment-level",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const data = await getEmploymentLevelState(prisma, {
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.params.employeeNumber,
+      });
+      return res.json({ status: "success", data });
+    } catch (error) {
+      return res.status(error.message === "EMPLOYEE_NOT_FOUND" ? 404 : 400).json({
+        status: "error",
+        code: error.message,
+        message: String(error.message || "Unable to load Employment Level.").replaceAll("_", " ").toLowerCase(),
+        details: error.details,
+      });
+    }
+  }
+);
+
+router.put(
+  "/:employeeNumber/employment-level",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const effectiveDate = parseEmploymentLevelEffectiveDate(req.body?.effectiveDate);
+      if (!effectiveDate) {
+        return res.status(400).json({
+          status: "error",
+          code: "INVALID_EFFECTIVE_DATE",
+          message: "Select a valid Employment Level effective date.",
+        });
+      }
+
+      const useDesignationDefault = req.body?.useDesignationDefault === true;
+      const common = {
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.params.employeeNumber,
+        reason: req.body?.reason,
+        notes: req.body?.notes,
+        performedByUserId: req.auth.userId || null,
+      };
+
+      const data = useDesignationDefault
+        ? await removeEmploymentLevelOverride(prisma, {
+            ...common,
+            effectiveTo: effectiveDate,
+          })
+        : await setEmploymentLevelOverride(prisma, {
+            ...common,
+            levelNumber: Number(req.body?.levelNumber),
+            effectiveFrom: effectiveDate,
+          });
+
+      return res.json({
+        status: "success",
+        message: useDesignationDefault
+          ? "Employment Level reset to the designation default and audited."
+          : "Employment Level updated and audited.",
+        data,
+      });
+    } catch (error) {
+      const known = new Set([
+        "EMPLOYEE_NOT_FOUND",
+        "EMPLOYEE_NOT_CURRENT",
+        "EMPLOYMENT_LEVEL_NOT_ACTIVE",
+        "DESIGNATION_REQUIRED",
+        "INVALID_EMPLOYMENT_LEVEL",
+        "INVALID_EFFECTIVE_DATE",
+        "FUTURE_EFFECTIVE_DATE",
+        "EMPLOYMENT_LEVEL_REASON_REQUIRED",
+        "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+        "CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND",
+      ]);
+      return res.status(error.message === "EMPLOYEE_NOT_FOUND" ? 404 : known.has(error.message) ? 400 : 500).json({
+        status: "error",
+        code: error.message,
+        message: String(error.message || "Unable to update Employment Level.").replaceAll("_", " ").toLowerCase(),
+        details: error.details,
+      });
+    }
+  }
+);
 
 /*
 ============================================================
