@@ -1,9 +1,6 @@
 name: Daily protected Zermatt database backup
 
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/zermatt-backup-schedule.yml"]
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
