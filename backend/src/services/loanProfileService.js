@@ -237,6 +237,81 @@ function buildAmortizationSchedule({
   return applyExternalSettlementToSchedule(schedule, externalSettlement);
 }
 
+async function reactivatePausedLegacyInstallment({ organizationId, loanId, periodStart, actorUserId, reason, prismaClient = prisma }) {
+  const period = dateText(periodStart);
+  if (!period) {
+    const error = new Error("A valid paused installment period is required.");
+    error.code = "LOAN_PERIOD_REQUIRED";
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const loanRows = await prismaClient.$queryRawUnsafe(
+    `SELECT l."id",l."loanNumber",e."employeeNumber",o."slug" AS "organizationSlug"
+       FROM "payroll_loans" l
+       JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
+       JOIN "organizations" o ON o."id"=l."organizationId"
+      WHERE l."organizationId"=$1 AND l."id"=$2
+      LIMIT 1`,
+    organizationId,
+    loanId
+  );
+  const loan = loanRows[0];
+  if (!loan) {
+    const error = new Error("Loan not found.");
+    error.code = "LOAN_NOT_FOUND";
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const existingRows = await prismaClient.$queryRawUnsafe(
+    `SELECT "id","status","amount","reason","source"
+       FROM "payroll_loan_legacy_period_events"
+      WHERE "organizationId"=$1 AND "loanId"=$2 AND "periodStart"=$3::date
+      LIMIT 1`,
+    organizationId,
+    loanId,
+    period
+  );
+  const existing = existingRows[0] || null;
+  if (existing && existing.status !== "PAUSED" && existing.status !== "REACTIVATED") {
+    const error = new Error("Only a paused historical loan installment can be reactivated.");
+    error.code = "LOAN_INSTALLMENT_NOT_PAUSED";
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const eventId = existing?.id || require("crypto").randomUUID();
+  await prismaClient.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "payroll_loan_legacy_period_events"
+        ("id","organizationId","loanId","periodStart","status","amount","reason","source")
+       VALUES ($1,$2,$3,$4::date,'REACTIVATED',0,$5,'MANUAL_REACTIVATION')
+       ON CONFLICT ("organizationId","loanId","periodStart")
+       DO UPDATE SET "status"='REACTIVATED',"amount"=0,"reason"=EXCLUDED."reason","source"='MANUAL_REACTIVATION'`,
+      eventId,
+      organizationId,
+      loanId,
+      period,
+      String(reason || "Paused installment reactivated for payroll recovery").trim()
+    );
+    await tx.organizationAudit.create({
+      data: {
+        organizationId,
+        actorUserId: actorUserId || null,
+        entityType: "PayrollLoanLegacyPeriodEvent",
+        entityId: eventId,
+        action: "REACTIVATED",
+        previousValue: existing ? { status: existing.status, amount: Number(existing.amount || 0), reason: existing.reason, source: existing.source } : { status: "PAUSED", source: "ZERMATT_OPENING_HISTORY_POLICY" },
+        newValue: { loanId, loanNumber: loan.loanNumber, employeeNumber: loan.employeeNumber, periodStart: period, status: "REACTIVATED", source: "MANUAL_REACTIVATION" },
+        reason: String(reason || "Paused installment reactivated for payroll recovery").trim(),
+      },
+    });
+  });
+
+  return { loanId, periodStart: period, status: "REACTIVATED" };
+}
+
 async function getLoanProfile({ organizationId, loanId, prismaClient = prisma }) {
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT l.*, e."employeeNumber",
@@ -439,5 +514,6 @@ module.exports = {
   applyZermattOpeningHistoryPolicy,
   buildAmortizationSchedule,
   getLoanProfile,
+  reactivatePausedLegacyInstallment,
   getBulkLoanReport,
 };
