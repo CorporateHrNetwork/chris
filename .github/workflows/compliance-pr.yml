@@ -22,12 +22,17 @@ on:
           - render-preflight
           - backup
           - restore
+          - security-grades
       backup_run_id:
         description: GitHub Actions run ID containing the encrypted snapshot to restore in a disposable database
         type: string
         required: false
       confirm_write_freeze:
         description: Enter ZERMATT_WRITE_FROZEN only after the live Zermatt API is suspended
+        type: string
+        required: false
+      confirm_security_grades:
+        description: Enter APPLY_SECURITY_GRADES to commit the approved Security Officer L1 and Levi L2 mapping; otherwise preview only
         type: string
         required: false
 
@@ -39,6 +44,48 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  zermatt-security-grades:
+    name: Reconcile approved Zermatt security employment levels
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'security-grades'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: zermatt-db-transfer
+    env:
+      SUPABASE_PASSWORD: ${{ secrets.ZERMATT_SUPABASE_PASSWORD }}
+      PGSSLMODE: require
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare exact live pilot connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          password = os.environ.get('SUPABASE_PASSWORD', '')
+          if not password or '\n' in password:
+              raise SystemExit('Protected Zermatt pilot database password required.')
+          target = ('postgresql://postgres.ldmwsptljgnspwtwcdtm:' + quote(password, safe='')
+                    + '@aws-0-eu-central-1.pooler.supabase.com:5432/postgres')
+          print('::add-mask::' + target)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('DATABASE_URL=' + target + '\n')
+          PY
+      - name: Install backend dependencies and generate Prisma client
+        working-directory: backend
+        run: npm ci && npx prisma generate
+      - name: Inspect security designations and named supervisor without writes
+        working-directory: backend
+        run: node scripts/reconcile-zermatt-security-grades.cjs
+      - name: Apply approved grades and synchronize leave balances atomically
+        if: inputs.confirm_security_grades == 'APPLY_SECURITY_GRADES'
+        working-directory: backend
+        run: node scripts/reconcile-zermatt-security-grades.cjs --apply
+      - name: Verify final levels
+        if: inputs.confirm_security_grades == 'APPLY_SECURITY_GRADES'
+        working-directory: backend
+        run: node scripts/reconcile-zermatt-security-grades.cjs
+
   zermatt-live-backup:
     name: Encrypted read-only Zermatt live snapshot
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'backup'
