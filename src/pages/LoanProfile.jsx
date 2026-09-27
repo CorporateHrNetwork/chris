@@ -19,6 +19,7 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
   const goBack = () => onBack ? onBack() : navigate("/loans");
 
   useEffect(() => {
@@ -45,6 +46,31 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
       saveDownloadedBlob(await apiDownload(`/api/loans/${loanId}/export?format=${format}`));
     } catch (requestError) {
       setError(requestError?.message || "Unable to export loan report.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const reactivateInstallment = async (row) => {
+    const reason = window.prompt(`Reason for reactivating ${row.period} loan installment:`, "Resume payroll recovery");
+    if (reason === null) return;
+    if (!String(reason).trim()) {
+      setError("A reason is required to reactivate a paused installment.");
+      return;
+    }
+    try {
+      setBusy(`reactivate-${row.dueDate}`);
+      setError("");
+      setMessage("");
+      const result = await apiRequest(`/api/loans/${loanId}/amortization/reactivate`, {
+        method: "POST",
+        body: { periodStart: String(row.dueDate).slice(0, 7) + "-01", reason: String(reason).trim() },
+      });
+      setMessage(result?.message || "Paused loan installment reactivated.");
+      const refreshed = await apiRequest(`/api/loans/${loanId}/profile`);
+      setProfile(refreshed?.data || null);
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to reactivate paused installment.");
     } finally {
       setBusy("");
     }
@@ -105,6 +131,7 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
         </div>
 
         {error && <div style={errorStyle}>{error}</div>}
+        {message && <div style={messageStyle}>{message}</div>}
 
         <AnalyticsPanel title="Loan Details" subtitle="Employee, policy, approval, disbursement, recovery and settlement authority." icon={<FaFileInvoiceDollar />}>
           <div style={detailGrid}>
@@ -129,7 +156,7 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
         </AnalyticsPanel>
 
         <AnalyticsPanel title="Loan Amortization Schedule" subtitle="Zero-interest monthly recovery plan. External settlement appears as a separate zero-payroll-deduction settlement event and closes the remaining schedule." icon={<FaMoneyBillWave />}>
-          <Table headers={["#", "Period", "Due Date", "Opening Balance", "Principal", "Interest", "Total Deduction", "Amount Paid", "Status"]}>
+          <Table headers={["#", "Period", "Due Date", "Opening Balance", "Principal", "Interest", "Total Deduction", "Amount Paid", "Status", "Action"]}>
             {amortizationSchedule.map((row) => (
               <tr key={`${row.installmentNumber}-${row.dueDate}-${row.status}`}>
                 <Cell>{row.installmentNumber}</Cell>
@@ -141,9 +168,12 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
                 <Cell>{money(row.totalDeduction)}</Cell>
                 <Cell>{money(row.amountPaid)}</Cell>
                 <Cell><Status value={row.status} /></Cell>
+                <Cell>{row.status === "PAUSED"
+                  ? <button type="button" style={reactivateButton} disabled={Boolean(busy)} onClick={() => reactivateInstallment(row)}>{busy === `reactivate-${row.dueDate}` ? "Reactivating…" : "Unpause"}</button>
+                  : "—"}</Cell>
               </tr>
             ))}
-            {!amortizationSchedule.length && <tr><td colSpan="9" style={emptyCell}>Amortization schedule becomes available after Recovery Start is set at disbursement.</td></tr>}
+            {!amortizationSchedule.length && <tr><td colSpan="10" style={emptyCell}>Amortization schedule becomes available after Recovery Start is set at disbursement.</td></tr>}
           </Table>
         </AnalyticsPanel>
 
@@ -192,5 +222,7 @@ const tdStyle = { padding: 10, borderBottom: "1px solid var(--chris-dashboard-bo
 const statusStyle = { display: "inline-block", padding: "4px 8px", borderRadius: 999, border: "1px solid var(--chris-dashboard-border)", fontSize: 11, fontWeight: 900 };
 const emptyCell = { padding: 18, textAlign: "center", color: "var(--chris-dashboard-muted)" };
 const errorStyle = { padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid #b91c1c", color: "#b91c1c" };
+const messageStyle = { padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid rgba(34,197,94,.4)", background: "rgba(34,197,94,.10)", color: "#BBF7D0" };
+const reactivateButton = { ...exportButton, padding: "7px 10px", minWidth: 86, justifyContent: "center", color: "var(--chris-dashboard-gold-bright)" };
 
 export default LoanProfile;
