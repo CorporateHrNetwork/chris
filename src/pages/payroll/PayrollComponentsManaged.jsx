@@ -284,6 +284,63 @@ export default function PayrollComponentsManaged({ kind }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+
+  const deleteVariableInput = async (row) => {
+    const reason = window.prompt(`Reason for deleting ${row.componentCode} — ${row.componentName} for ${row.employeeNumber}:`, "");
+    if (reason === null) return;
+    if (!String(reason).trim()) {
+      setError("A reason is required to delete a payroll input.");
+      return;
+    }
+    try {
+      setBusy(`delete-${row.id}`);
+      setError("");
+      setMessage("");
+      const response = await apiRequest(`/api/payroll/variable-inputs/${encodeURIComponent(row.id)}`, {
+        method: "DELETE",
+        body: { reason: String(reason).trim() },
+      });
+      if (editingInputId === row.id) {
+        setEditingInputId("");
+        setForm(blankInput());
+      }
+      setMessage(response?.message || "Payroll input deleted.");
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to delete payroll input.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const deleteDeductionPlan = async (row) => {
+    const reason = window.prompt(`Reason for deleting recurring deduction ${row.componentCode} — ${row.componentName} for ${row.employeeNumber}:`, "");
+    if (reason === null) return;
+    if (!String(reason).trim()) {
+      setError("A reason is required to delete a recurring deduction plan.");
+      return;
+    }
+    try {
+      setBusy(`delete-plan-${row.id}`);
+      setError("");
+      setMessage("");
+      const response = await apiRequest(`/api/payroll/deduction-plans/${encodeURIComponent(row.id)}`, {
+        method: "DELETE",
+        body: { reason: String(reason).trim() },
+      });
+      if (editingPlanId === row.id) {
+        setEditingPlanId("");
+        setForm(blankInput());
+      }
+      setMessage(response?.message || "Recurring deduction plan deleted.");
+      await load();
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to delete recurring deduction plan.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const createComponent = async (event) => {
     event.preventDefault();
     try {
@@ -469,12 +526,12 @@ export default function PayrollComponentsManaged({ kind }) {
             <Td>{money(row.totalAmount)}</Td><Td>{money(row.outstandingAmount)}</Td>
             <Td>{row.installmentCount} × {money(row.nominalInstallmentAmount)}</Td>
             <Td>{row.startPeriod}</Td><Td>{row.endPeriod}</Td><Td><Badge>{row.status}</Badge></Td>
-            <Td><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button></Td>
+            <Td><div style={buttonRow}><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button><button type="button" style={dangerButton} onClick={() => deleteDeductionPlan(row)} disabled={row.status === "CANCELLED" || busy === `delete-plan-${row.id}`}>{busy === `delete-plan-${row.id}` ? "Deleting…" : "Delete"}</button></div></Td>
           </tr>)}
-        </DataTable> : <InputRegister rows={inputs} />}
+        </DataTable> : <InputRegister rows={inputs} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} />}
       </Panel>
 
-      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs} onEdit={editVariableInput} /></Panel>}
+      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} /></Panel>}
 
       {legacyRows.length > 0 && <Panel title="Existing Effective-Dated Components">
         <p style={controlNote}>These are earlier fixed/percentage payroll components retained for history and audit. For ZERMATT, indefinite legacy Other Allowances/Deductions do not carry into a new payroll period. Only an item explicitly tied to the selected period can participate; new recurring deductions must use the finite installment schedule above.</p>
@@ -490,8 +547,9 @@ export default function PayrollComponentsManaged({ kind }) {
   );
 }
 
-function InputRegister({ rows, onEdit = null }) {
-  return <DataTable columns={["Period", "Employee", "Component", "Input", "Reference Period", "Source", "Status", ...(onEdit ? ["Action"] : [])]}>
+function InputRegister({ rows, onEdit = null, onDelete = null, busy = "" }) {
+  const hasActions = Boolean(onEdit || onDelete);
+  return <DataTable columns={["Period", "Employee", "Component", "Input", "Reference Period", "Source", "Status", ...(hasActions ? ["Action"] : [])]}>
     {(rows || []).map((row) => <tr key={row.id}>
       <Td>{row.payrollPeriodCode}</Td>
       <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
@@ -500,7 +558,10 @@ function InputRegister({ rows, onEdit = null }) {
       <Td>{row.referencePayrollPeriodCode || "—"}</Td>
       <Td>{String(row.source || "").replaceAll("_", " ")}</Td>
       <Td><Badge>{row.status}</Badge></Td>
-      {onEdit && <Td><button type="button" style={smallButton} onClick={() => onEdit(row)} disabled={row.status !== "ACTIVE"}>Edit</button></Td>}
+      {hasActions && <Td><div style={buttonRow}>
+        {onEdit && <button type="button" style={smallButton} onClick={() => onEdit(row)} disabled={row.status !== "ACTIVE"}>Edit</button>}
+        {onDelete && <button type="button" style={dangerButton} onClick={() => onDelete(row)} disabled={row.status !== "ACTIVE" || busy === `delete-${row.id}`}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}
+      </div></Td>}
     </tr>)}
   </DataTable>;
 }
@@ -525,6 +586,7 @@ const fieldLabel = { display: "grid", gap: 6, color: "#C7D3CC", fontSize: 12, fo
 const inputStyle = { width: "100%", boxSizing: "border-box", borderRadius: 9, border: "1px solid rgba(212,175,55,.35)", padding: "10px 11px", background: "rgba(255,255,255,.06)", color: "#F7FAF8", outline: "none" };
 const primaryButton = { border: 0, borderRadius: 9, padding: "11px 16px", background: "#D4AF37", color: "#07140D", fontWeight: 900, cursor: "pointer" };
 const smallButton = { borderRadius: 9, padding: "9px 12px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(212,175,55,.45)", color: "#F7FAF8", fontWeight: 800, cursor: "pointer" };
+const dangerButton = { ...smallButton, border: "1px solid rgba(248,113,113,.5)", color: "#FCA5A5", background: "rgba(185,28,28,.12)" };
 const buttonRow = { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" };
 const checkboxLabel = { display: "flex", alignItems: "center", gap: 8, color: "#C7D3CC", fontSize: 12, fontWeight: 800 };
 const controlNote = { margin: "0 0 14px", color: "#C7D3CC", lineHeight: 1.55, fontSize: 12 };
