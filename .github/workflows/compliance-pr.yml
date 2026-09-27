@@ -752,3 +752,5 @@ jobs:
           NODE
 
 # Authorized guarded cutover run; remove this marker after verification.
+
+# Official PostgreSQL 17 client check passed; execute the guarded cutover.
