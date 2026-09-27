@@ -939,7 +939,7 @@ useEffect(() => {
         const [careerResult, typeResult, levelCatalogResult, employeeLevelResult] = await Promise.all([
           apiRequest("/api/employees/career/catalog"),
           apiRequest("/api/employees/employment-types/catalog"),
-          apiRequest("/api/employees/career/levels"),
+          apiRequest("/api/employees/career/employment-levels"),
           apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
         setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id));
