@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { apiRequest, apiDownload, saveDownloadedBlob } from "../../services/api";
@@ -112,6 +112,7 @@ export default function PayrollComponentsManaged({ kind }) {
   const [message, setMessage] = useState("");
   const [editingInputId, setEditingInputId] = useState("");
   const [editingPlanId, setEditingPlanId] = useState("");
+  const inputFormRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -176,6 +177,16 @@ export default function PayrollComponentsManaged({ kind }) {
 
   const setField = (field) => (value) => setForm((current) => ({ ...current, [field]: value }));
   const setComponentField = (field) => (value) => setComponentForm((current) => ({ ...current, [field]: value }));
+
+  const scrollToInputForm = () => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        inputFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        const focusTarget = inputFormRef.current?.querySelector("input, select, button");
+        focusTarget?.focus?.({ preventScroll: true });
+      });
+    });
+  };
 
   const saveInput = async (event) => {
     event.preventDefault();
@@ -259,7 +270,7 @@ export default function PayrollComponentsManaged({ kind }) {
     });
     setMessage("");
     setError("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToInputForm();
   };
 
   const editDeductionPlan = (row) => {
@@ -281,7 +292,7 @@ export default function PayrollComponentsManaged({ kind }) {
     });
     setMessage("");
     setError("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToInputForm();
   };
 
 
@@ -419,7 +430,7 @@ export default function PayrollComponentsManaged({ kind }) {
       <Panel title={isDeduction
         ? (editingInputId || editingPlanId ? "Correct Recorded Deduction" : "Record Employee Deduction")
         : "Record Employee Allowance"}>
-        <form style={formGrid} onSubmit={saveInput}>
+        <form ref={inputFormRef} style={{ ...formGrid, scrollMarginTop: 96 }} onSubmit={saveInput}>
           <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setField("employeeNumber")} placeholder="Search employee number or name" />
           <Select label="Component" value={form.componentCode} onChange={setField("componentCode")} options={[["", "Select component"], ...components.map((component) => [component.code, `${component.code} — ${component.name}`])]} />
           {isDeduction && <Select label="Frequency" value={form.frequency} onChange={setField("frequency")} options={[["ONE_TIME", "One-Time"], ["RECURRING", "Recurring / Installments"]]} />}
