@@ -8,9 +8,6 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/compliance-pr.yml"
-  push:
-    branches:
-      - fix/zermatt-supabase-pilot-transfer
   workflow_dispatch:
     inputs:
       operation:
@@ -93,70 +90,6 @@ jobs:
               print('Private database identity checks:', {key: 'pass' if value else 'fail' for key, value in valid.items()})
               raise SystemExit('The live API and protected source may not point to the same Render database; stop the cutover.')
           print('Read-only preflight passed: exact Zermatt API, running state, and matching original database identity verified.')
-          PY
-
-  zermatt-client-tooling:
-    name: Validate PostgreSQL 17 backup tooling
-    if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message != 'ops: execute guarded Zermatt pilot cutover'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    steps:
-      - name: Install the supported PostgreSQL client from official packages
-        run: |
-          sudo apt-get install -y -qq ca-certificates curl
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          . /etc/os-release
-          printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17
-          /usr/lib/postgresql/17/bin/pg_dump --version
-          /usr/lib/postgresql/17/bin/pg_restore --version
-
-  zermatt-cutover-suspend:
-    name: Freeze the exact Zermatt API before final copy
-    if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message == 'ops: execute guarded Zermatt pilot cutover'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    environment: zermatt-db-transfer
-    env:
-      RENDER_API_KEY: ${{ secrets.ZERMATT_RENDER_API_KEY }}
-      SOURCE_URL: ${{ secrets.ZERMATT_RENDER_DATABASE_URL }}
-    steps:
-      - name: Match the service and source, then suspend the API
-        run: |
-          python3 - <<'PY'
-          import json, os, time
-          from urllib.parse import urlsplit, unquote
-          from urllib.request import Request, urlopen
-          base = 'https://api.render.com/v1/services/srv-dai875uk1f9s73co1rk0'
-          headers = {'Authorization': 'Bearer ' + os.environ['RENDER_API_KEY'], 'Accept': 'application/json'}
-          def call(path='', method='GET'):
-              with urlopen(Request(base + path, headers=headers, method=method), timeout=30) as response:
-                  return json.load(response) if response.status == 200 else {}
-          service = call()
-          if (service.get('id'), service.get('name'), service.get('ownerId'), service.get('suspended')) != (
-              'srv-dai875uk1f9s73co1rk0', 'chris-zermatt-api', 'tea-dahvevcs728c73doovgg', 'not_suspended'):
-              raise SystemExit('Zermatt API identity or running state differs. No suspension.')
-          env = call('/env-vars/DATABASE_URL')
-          live = urlsplit(env.get('envVar', env).get('value', ''))
-          source = urlsplit(os.environ['SOURCE_URL'])
-          db_id = 'dpg-dai7a3e7bikc73dm8rgg-a'
-          if not (live.hostname or '').startswith(db_id) or db_id not in (source.hostname or '') or not (
-              source.path == live.path == '/chris_3eg6' and
-              unquote(source.username or '') == unquote(live.username or '') == 'chris_3eg6_user' and
-              source.password and unquote(source.password) == unquote(live.password or '')):
-              raise SystemExit('Live connection differs from approved Render source. No suspension.')
-          call('/suspend', 'POST')
-          for attempt in range(60):
-              if call().get('suspended') == 'suspended':
-                  print('Exact Zermatt API suspended. Final copy may start.')
-                  break
-              time.sleep(5)
-          else:
-              raise SystemExit('API suspension did not settle; recover the original service.')
           PY
 
   zermatt-pilot-copy:
@@ -282,10 +215,8 @@ jobs:
           retention-days: 14
 
   zermatt-pilot-refresh:
-    needs: [zermatt-cutover-suspend]
     name: Refresh isolated Zermatt pilot after live write freeze
-    if: >-
-      always() && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && ((github.event_name == 'workflow_dispatch' && inputs.operation == 'refresh' && inputs.confirm_write_freeze == 'ZERMATT_WRITE_FROZEN') || (github.event_name == 'push' && github.event.head_commit.message == 'ops: execute guarded Zermatt pilot cutover' && needs.zermatt-cutover-suspend.result == 'success'))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'refresh' && inputs.confirm_write_freeze == 'ZERMATT_WRITE_FROZEN'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: zermatt-db-transfer
@@ -309,7 +240,7 @@ jobs:
               raise SystemExit('Write freeze absent; pilot is untouched.')
           print('Zermatt API write freeze independently confirmed.')
           PY
-      - name: Prepare exact transfer endpoints and PostgreSQL 16 client
+      - name: Prepare exact transfer endpoints and PostgreSQL 17 client
         run: |
           python3 - <<'PY'
           import os
@@ -405,145 +336,6 @@ jobs:
         shell: bash
         run: |
           rm -f "$RUNNER_TEMP/final-source.dump" "$RUNNER_TEMP/pre-refresh-pilot.dump" "$RUNNER_TEMP/final-source.toc" "$RUNNER_TEMP/final-source.restore.toc" "$RUNNER_TEMP"/*.fingerprint
-
-  zermatt-cutover-switch:
-    name: Switch suspended Zermatt API to verified pilot
-    needs: [zermatt-cutover-suspend, zermatt-pilot-refresh]
-    if: >-
-      github.event_name == 'push' && github.event.head_commit.message == 'ops: execute guarded Zermatt pilot cutover' && needs.zermatt-pilot-refresh.result == 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment: zermatt-db-transfer
-    env:
-      RENDER_API_KEY: ${{ secrets.ZERMATT_RENDER_API_KEY }}
-      SUPABASE_PASSWORD: ${{ secrets.ZERMATT_SUPABASE_PASSWORD }}
-    steps:
-      - name: Change the single database variable and resume
-        run: |
-          python3 - <<'PY'
-          import json, os, time
-          from urllib.parse import quote, urlsplit
-          from urllib.request import Request, urlopen
-          base = 'https://api.render.com/v1/services/srv-dai875uk1f9s73co1rk0'
-          headers = {'Authorization': 'Bearer '+os.environ['RENDER_API_KEY'],
-                     'Accept': 'application/json', 'Content-Type': 'application/json'}
-          def call(path='', method='GET', data=None):
-              request=Request(base+path, headers=headers, method=method,
-                              data=json.dumps(data).encode() if data is not None else None)
-              with urlopen(request, timeout=30) as response:
-                  body=response.read()
-                  return json.loads(body) if body else {}
-          service=call()
-          if service.get('id') != 'srv-dai875uk1f9s73co1rk0' or service.get('suspended') != 'suspended':
-              raise SystemExit('API write freeze was lost; do not switch.')
-          previous=call('/env-vars/DATABASE_URL')
-          old=urlsplit(previous.get('envVar', previous).get('value',''))
-          if not (old.hostname or '').startswith('dpg-dai7a3e7bikc73dm8rgg-a') or old.path != '/chris_3eg6':
-              raise SystemExit('Original database identity changed; do not switch.')
-          password=os.environ['SUPABASE_PASSWORD']
-          if not password or '\n' in password:
-              raise SystemExit('Missing pilot database password.')
-          target=('postgresql://postgres.ldmwsptljgnspwtwcdtm:'+quote(password,safe='')+
-                  '@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require')
-          print('::add-mask::'+target)
-          call('/env-vars/DATABASE_URL','PUT',{'value':target})
-          updated=call('/env-vars/DATABASE_URL')
-          if updated.get('envVar',updated).get('value') != target:
-              raise SystemExit('Render did not accept the pilot database URL; API remains suspended.')
-          call('/resume','POST')
-          for attempt in range(60):
-              if call().get('suspended') == 'not_suspended':
-                  break
-              time.sleep(5)
-          else:
-              raise SystemExit('API did not resume; inspect before further changes.')
-          print('Zermatt API resumed with pilot database configuration.')
-          deploy=call('/deploys','POST',{'deployMode':'deploy_only'})
-          deploy_id=deploy.get('id')
-          if not deploy_id:
-              raise SystemExit('Could not identify the Render deploy.')
-          for attempt in range(90):
-              current=call('/deploys/'+deploy_id)
-              status=current.get('status')
-              if status == 'live':
-                  break
-              if status in ('build_failed','update_failed','canceled','deactivated'):
-                  raise SystemExit('Pilot deploy failed with status '+status)
-              time.sleep(8)
-          else:
-              raise SystemExit('Timed out waiting for pilot deploy.')
-          from urllib.error import URLError
-          for attempt in range(25):
-              try:
-                  with urlopen('https://chris-zermatt-api.onrender.com/health',timeout=20) as response:
-                      if response.status == 200:
-                          print('Pilot deployment live and public API health succeeded.')
-                          break
-              except URLError:
-                  pass
-              time.sleep(8)
-          else:
-              raise SystemExit('Pilot deployment live, but public health did not pass.')
-          PY
-
-  zermatt-cutover-recover:
-    name: Preserve Zermatt availability on a failed cutover
-    needs: [zermatt-cutover-suspend, zermatt-pilot-refresh, zermatt-cutover-switch]
-    if: >-
-      always() && github.event_name == 'push' && github.event.head_commit.message == 'ops: execute guarded Zermatt pilot cutover' && needs.zermatt-cutover-suspend.result != 'skipped' && (needs.zermatt-cutover-suspend.result != 'success' || needs.zermatt-pilot-refresh.result != 'success' || needs.zermatt-cutover-switch.result != 'success')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    environment: zermatt-db-transfer
-    env:
-      RENDER_API_KEY: ${{ secrets.ZERMATT_RENDER_API_KEY }}
-      SOURCE_URL: ${{ secrets.ZERMATT_RENDER_DATABASE_URL }}
-    steps:
-      - name: Resume original if no pilot service has been exposed
-        run: |
-          python3 - <<'PY'
-          import json, os, time
-          from urllib.parse import urlsplit, unquote
-          from urllib.request import Request, urlopen
-          base='https://api.render.com/v1/services/srv-dai875uk1f9s73co1rk0'
-          headers={'Authorization':'Bearer '+os.environ['RENDER_API_KEY'],'Content-Type':'application/json'}
-          def call(path='',method='GET',data=None):
-              req=Request(base+path,headers=headers,method=method,
-                          data=json.dumps(data).encode() if data is not None else None)
-              with urlopen(req,timeout=30) as response:
-                  body=response.read()
-                  return json.loads(body) if body else {}
-          service=call()
-          if service.get('id') != 'srv-dai875uk1f9s73co1rk0':
-              raise SystemExit('Service identity differs. Escalate without modifying it.')
-          current=call('/env-vars/DATABASE_URL')
-          live=urlsplit(current.get('envVar',current).get('value',''))
-          source=urlsplit(os.environ['SOURCE_URL'])
-          original=(live.hostname or '').startswith('dpg-dai7a3e7bikc73dm8rgg-a') and live.path == '/chris_3eg6'
-          target=(live.hostname == 'aws-0-eu-central-1.pooler.supabase.com' and
-                  unquote(live.username or '') == 'postgres.ldmwsptljgnspwtwcdtm' and live.path == '/postgres')
-          if service.get('suspended') == 'not_suspended' and target:
-              raise SystemExit('Pilot may have accepted new writes. Do not revert to stale source; investigate.')
-          if service.get('suspended') == 'not_suspended' and original:
-              print('Original Zermatt service remained available. No recovery needed.')
-              raise SystemExit(0)
-          if service.get('suspended') != 'suspended':
-              raise SystemExit('Unexpected service state. No recovery mutation.')
-          if target:
-              if not source.password or not (source.hostname or '').endswith('.render.com'):
-                  raise SystemExit('Original source URL invalid; do not recover.')
-              call('/env-vars/DATABASE_URL','PUT',{'value':os.environ['SOURCE_URL']})
-              print('Suspended pilot never served traffic; original source connection restored.')
-          elif not original:
-              raise SystemExit('Unexpected database target. No recovery mutation.')
-          call('/resume','POST')
-          for attempt in range(60):
-              if call().get('suspended') == 'not_suspended':
-                  print('Original Zermatt API resumed after failed transfer.')
-                  break
-              time.sleep(5)
-          else:
-              raise SystemExit('Original API did not resume. Immediate operator action required.')
-          PY
 
   zermatt-pilot-verify:
     name: Verify Zermatt pilot copy without writes
@@ -750,7 +542,3 @@ jobs:
             throw new Error(`Initial CHRiS bundle exceeded 500 KB budget: ${(bytes / 1024).toFixed(2)} KB`);
           }
           NODE
-
-# Authorized guarded cutover run; remove this marker after verification.
-
-# Official PostgreSQL 17 client check passed; execute the guarded cutover.
