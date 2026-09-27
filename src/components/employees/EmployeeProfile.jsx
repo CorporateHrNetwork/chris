@@ -3097,16 +3097,6 @@ useEffect(() => {
         pageStyle
       }
     >
-      <button
-        type="button"
-        onClick={goBackFromProfile}
-        style={
-          backButtonStyle
-        }
-      >
-        {"<-"} Back
-      </button>
-
       {success && (
         <div
           style={
@@ -7387,6 +7377,7 @@ const pageStyle = {
   width: "100%",
   maxWidth: "1200px",
   margin: "0 auto",
+  color: "#F7FBF8",
 };
 
 const loadingStyle = {
@@ -7397,32 +7388,30 @@ const loadingStyle = {
 };
 
 const backButtonStyle = {
-  border: "none",
-  background:
-    "transparent",
-  color: "#087A43",
+  border: "1px solid rgba(212,175,55,.55)",
+  background: "rgba(212,175,55,.06)",
+  color: "#D4AF37",
+  borderRadius: "10px",
   fontSize: "14px",
-  fontWeight: "700",
+  fontWeight: "800",
   cursor: "pointer",
-  padding: 0,
+  padding: "10px 14px",
   marginBottom: "22px",
 };
 
 const headerCardStyle = {
-  background: "#FFFFFF",
-  border:
-    "1px solid #E5E7EB",
-  borderRadius: "18px",
+  background: "linear-gradient(135deg, rgba(12,38,26,.98), rgba(5,14,10,.99))",
+  border: "1px solid rgba(212,175,55,.42)",
+  borderRadius: "var(--chris-radius-card)",
   padding: "26px",
   marginBottom: "22px",
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  boxShadow: "0 18px 46px rgba(0,0,0,.28)",
   display: "flex",
   alignItems: "center",
-  justifyContent:
-    "space-between",
+  justifyContent: "space-between",
   gap: "20px",
   flexWrap: "wrap",
+  color: "#F7FBF8",
 };
 
 const profileIdentityStyle = {
@@ -7435,8 +7424,8 @@ const avatarStyle = {
   width: "72px",
   height: "72px",
   borderRadius: "50%",
-  background: "#E8F5EF",
-  color: "#087A43",
+  background: "rgba(212,175,55,.12)",
+  color: "#D4AF37",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -7447,27 +7436,27 @@ const avatarStyle = {
 
 const eyebrowStyle = {
   margin: "0 0 5px",
-  color: "var(--chris-text-secondary)",
+  color: "#AFC3B7",
   fontSize: "13px",
   fontWeight: "600",
 };
 
 const nameStyle = {
   margin: 0,
-  color: "var(--chris-text-main)",
+  color: "#FFFFFF",
   fontSize: "28px",
   fontWeight: "800",
 };
 
 const subtitleStyle = {
   margin: "6px 0 0",
-  color: "var(--chris-text-secondary)",
+  color: "#B8C9C0",
   fontSize: "14px",
 };
 
 const employeeNumberStyle = {
   margin: "5px 0 0",
-  color: "#087A43",
+  color: "#D4AF37",
   fontSize: "13px",
   fontWeight: "700",
 };
@@ -7492,31 +7481,28 @@ const informationCardStyle = {
 
 const informationTitleStyle = {
   margin: "0 0 18px",
-  color: "#087A43",
+  color: "#D4AF37",
   fontSize: "18px",
   fontWeight: "800",
 };
 
 const infoRowStyle = {
   display: "flex",
-  justifyContent:
-    "space-between",
-  alignItems:
-    "flex-start",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
   gap: "20px",
   padding: "13px 0",
-  borderBottom:
-    "1px solid #EEF2F1",
+  borderBottom: "1px solid rgba(212,175,55,.16)",
 };
 
 const infoLabelStyle = {
-  color: "var(--chris-text-secondary)",
+  color: "#AFC3B7",
   fontSize: "var(--chris-font-sm)",
   fontWeight: "600",
 };
 
 const infoValueStyle = {
-  color: "var(--chris-text-main)",
+  color: "#F7FBF8",
   fontSize: "var(--chris-font-sm)",
   fontWeight: "800",
   textAlign: "right",
@@ -7531,10 +7517,9 @@ const actionsGridStyle = {
 };
 
 const actionButtonStyle = {
-  border:
-    "1px solid #D1E5DB",
+  border: "1px solid rgba(212,175,55,.34)",
   background: "rgba(255,255,255,.025)",
-  color: "#087A43",
+  color: "#D4AF37",
   borderRadius: "10px",
   padding: "12px",
   fontSize: "13px",
