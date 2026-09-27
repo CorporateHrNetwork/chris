@@ -8,9 +8,6 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/compliance-pr.yml"
-  push:
-    branches:
-      - fix/zermatt-supabase-pilot-transfer
   workflow_dispatch:
     inputs:
       operation:
@@ -36,92 +33,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  zermatt-login-repair:
-    name: Restore Zermatt database reads through encrypted pooler
-    if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message == 'ops: repair Zermatt pilot TLS login'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment: zermatt-db-transfer
-    env:
-      RENDER_API_KEY: ${{ secrets.ZERMATT_RENDER_API_KEY }}
-      SUPABASE_PASSWORD: ${{ secrets.ZERMATT_SUPABASE_PASSWORD }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install production driver
-        working-directory: backend
-        run: npm ci
-      - name: Prove actual database reads and update only the exact Render service
-        working-directory: backend
-        run: |
-          node - <<'NODE'
-          const { Client } = require('pg');
-          const { URL } = require('url');
-          const https = require('https');
-          const password = process.env.SUPABASE_PASSWORD;
-          const token = process.env.RENDER_API_KEY;
-          if (!password || !token) throw Error('Protected credentials missing');
-          const target = new URL('postgresql://aws-0-eu-central-1.pooler.supabase.com:5432/postgres');
-          target.username = 'postgres.ldmwsptljgnspwtwcdtm';
-          target.password = password;
-          target.searchParams.set('sslmode', 'require');
-          target.searchParams.set('uselibpqcompat', 'true');
-          const targetUrl = target.toString();
-          console.log('::add-mask::' + targetUrl);
-          const request = (path, method = 'GET', payload) => new Promise((resolve, reject) => {
-            const req = https.request('https://api.render.com/v1/services/srv-dai875uk1f9s73co1rk0' + path, {
-              method, headers: { Authorization: 'Bearer ' + token, Accept: 'application/json',
-                ...(payload ? { 'Content-Type': 'application/json' } : {}) },
-              timeout: 30000
-            }, res => {
-              let body = ''; res.on('data', chunk => body += chunk);
-              res.on('end', () => {
-                if (res.statusCode < 200 || res.statusCode >= 300) return reject(Error('Render request failed: ' + res.statusCode));
-                try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); }
-              });
-            });
-            req.on('error', reject); req.on('timeout', () => req.destroy(Error('Render timeout')));
-            if (payload) req.write(JSON.stringify(payload));
-            req.end();
-          });
-          const delay = ms => new Promise(r => setTimeout(r, ms));
-          (async () => {
-            const client = new Client({ connectionString: targetUrl });
-            try {
-              await client.connect();
-              const { rows } = await client.query('SELECT (SELECT count(*) FROM public.users) AS users, (SELECT count(*) FROM public.organizations) AS organizations');
-              if (Number(rows[0].users) < 14 || Number(rows[0].organizations) !== 2) throw Error('Pilot identities do not match Zermatt copy');
-              console.log('Protected pilot query passed: user and tenant tables readable over encrypted connection.');
-            } finally { await client.end(); }
-            const service = await request('');
-            if (service.id !== 'srv-dai875uk1f9s73co1rk0' || service.name !== 'chris-zermatt-api' ||
-                service.ownerId !== 'tea-dahvevcs728c73doovgg' || service.suspended !== 'not_suspended') throw Error('Service identity changed');
-            const current = await request('/env-vars/DATABASE_URL');
-            const old = new URL((current.envVar || current).value);
-            if (old.hostname !== target.hostname || old.username !== target.username || old.pathname !== target.pathname ||
-                old.password !== target.password) throw Error('Live service is not on approved Supabase pilot');
-            await request('/env-vars/DATABASE_URL', 'PUT', { value: targetUrl });
-            const updated = await request('/env-vars/DATABASE_URL');
-            if ((updated.envVar || updated).value !== targetUrl) throw Error('Render connection update failed');
-            const deploy = await request('/deploys', 'POST', { deployMode: 'deploy_only' });
-            if (!deploy.id) throw Error('Render deploy ID missing');
-            for (let i = 0; i < 100; i++) {
-              const latest = await request('/deploys/' + deploy.id);
-              if (latest.status === 'live') {
-                console.log('Render database connection repair deployed live.');
-                return;
-              }
-              if (['build_failed', 'update_failed', 'canceled', 'deactivated'].includes(latest.status))
-                throw Error('Render deploy failed: ' + latest.status);
-              await delay(7000);
-            }
-            throw Error('Render deploy timed out');
-          })().catch(error => { console.error(error.message); process.exitCode = 1; });
-          NODE
-
   zermatt-render-preflight:
     name: Verify Render cutover access without changes
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'render-preflight'
