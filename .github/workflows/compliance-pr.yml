@@ -40,7 +40,7 @@ concurrency:
 jobs:
   zermatt-render-preflight:
     name: Verify Render cutover access without changes
-    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'render-preflight') || (github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message == 'Run read-only Render connection preflight')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'render-preflight') || (github.event_name == 'push' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && github.event.head_commit.message == 'Verify Render internal and external database identity')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: zermatt-db-transfer
@@ -77,9 +77,24 @@ jobs:
               raise SystemExit('Zermatt API is not in its expected running state.')
           item = get('/env-vars/DATABASE_URL')
           env_var = item.get('envVar', item)
-          if env_var.get('value') != source:
-              raise SystemExit('The live API DATABASE_URL does not match the protected original Render URL; stop the cutover.')
-          print('Read-only preflight passed: exact Zermatt API, running state, and original database connection verified.')
+          from urllib.parse import unquote
+          live_url = env_var.get('value', '')
+          original = urlsplit(source)
+          running = urlsplit(live_url)
+          db_id = 'dpg-dai7a3e7bikc73dm8rgg-a'
+          valid = {
+              'original_render_host': (original.hostname or '').endswith('.render.com') and db_id in (original.hostname or ''),
+              'running_render_host': (running.hostname or '').startswith(db_id),
+              'matching_database': original.path == running.path == '/chris_3eg6',
+              'matching_user': unquote(original.username or '') == unquote(running.username or '') == 'chris_3eg6_user',
+              'matching_password': bool(original.password) and unquote(original.password or '') == unquote(running.password or ''),
+              'postgres_urls': original.scheme in ('postgres', 'postgresql') and running.scheme in ('postgres', 'postgresql'),
+              'postgres_ports': original.port in (None, 5432) and running.port in (None, 5432),
+          }
+          if not all(valid.values()):
+              print('Private database identity checks:', {key: 'pass' if value else 'fail' for key, value in valid.items()})
+              raise SystemExit('The live API and protected source may not point to the same Render database; stop the cutover.')
+          print('Read-only preflight passed: exact Zermatt API, running state, and matching original database identity verified.')
           PY
 
   zermatt-pilot-copy:
