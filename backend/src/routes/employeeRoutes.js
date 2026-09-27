@@ -238,6 +238,12 @@ router.get(
           include: {
             department: true,
             designation: { include: { employmentLevel: true } },
+            employmentLevelAssignments: {
+              where: { effectiveTo: null },
+              include: { employmentLevel: true },
+              orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+              take: 1,
+            },
             location: true,
             lineManagerAssignments: {
               where: { effectiveTo: null },
