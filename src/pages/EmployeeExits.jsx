@@ -1672,7 +1672,7 @@ export default function EmployeeExits() {
                 </thead>
                 <tbody>
                   {settlementEmployees.map((employee) => (
-                    <tr key={employee.employeeId}>
+                    <tr key={employee.exitProcess?.id || employee.employeeId}>
                       <td style={td}>
                         <strong style={{ color: "#F7FAF8" }}>{nameOf(employee)}</strong>
                         <div style={muted}>{employee.employeeNumber}</div>
@@ -1736,7 +1736,7 @@ export default function EmployeeExits() {
               </thead>
               <tbody>
                 {exitedEmployees.map((employee) => (
-                  <tr key={employee.employeeId}>
+                  <tr key={employee.exitProcess?.id || employee.employeeId}>
                     <td style={td}>
                       <strong style={{ color: "#F7FAF8" }}>{nameOf(employee)}</strong>
                       <div style={muted}>{employee.employeeNumber}</div>
