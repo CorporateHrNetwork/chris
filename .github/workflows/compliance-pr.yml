@@ -19,6 +19,7 @@ on:
           - verify
           - copy
           - refresh
+          - render-preflight
       confirm_write_freeze:
         description: Enter ZERMATT_WRITE_FROZEN only after the live Zermatt API is suspended
         type: string
@@ -32,6 +33,50 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  zermatt-render-preflight:
+    name: Verify Render cutover access without changes
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/fix/zermatt-supabase-pilot-transfer' && inputs.operation == 'render-preflight'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: zermatt-db-transfer
+    env:
+      RENDER_API_KEY: ${{ secrets.ZERMATT_RENDER_API_KEY }}
+      SOURCE_URL: ${{ secrets.ZERMATT_RENDER_DATABASE_URL }}
+    steps:
+      - name: Check exact service and current database connection privately
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from urllib.parse import urlsplit
+          from urllib.request import Request, urlopen
+
+          token = os.environ.get('RENDER_API_KEY', '')
+          source = os.environ.get('SOURCE_URL', '')
+          if not token or not source or not (urlsplit(source).hostname or '').endswith('.render.com'):
+              raise SystemExit('A Render API key and original Render database URL are required.')
+          base = 'https://api.render.com/v1/services/srv-dai875uk1f9s73co1rk0'
+          def get(path):
+              request = Request(base + path, headers={
+                  'Authorization': 'Bearer ' + token,
+                  'Accept': 'application/json',
+              })
+              with urlopen(request, timeout=20) as response:
+                  return json.load(response)
+          service = get('')
+          if service.get('id') != 'srv-dai875uk1f9s73co1rk0' or service.get('name') != 'chris-zermatt-api' or service.get('ownerId') != 'tea-dahvevcs728c73doovgg':
+              raise SystemExit('Render service identity differs; stop the cutover.')
+          if service.get('suspended') != 'not_suspended':
+              raise SystemExit('Zermatt API is not in its expected running state.')
+          item = get('/env-vars/DATABASE_URL')
+          env_var = item.get('envVar', item)
+          if env_var.get('value') != source:
+              raise SystemExit('The live API DATABASE_URL does not match the protected original Render URL; stop the cutover.')
+          print('Read-only preflight passed: exact Zermatt API, running state, and original database connection verified.')
+          PY
+
   zermatt-pilot-copy:
     name: Copy Zermatt to isolated Supabase pilot
     # Manual, single-branch transfer. Configure an environment restricted to this
