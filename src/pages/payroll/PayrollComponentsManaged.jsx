@@ -110,6 +110,8 @@ export default function PayrollComponentsManaged({ kind }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [editingInputId, setEditingInputId] = useState("");
+  const [editingPlanId, setEditingPlanId] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -176,38 +178,48 @@ export default function PayrollComponentsManaged({ kind }) {
     try {
       setBusy("save"); setError(""); setMessage("");
       if (isDeduction && form.frequency === "RECURRING") {
-        const response = await apiRequest("/api/payroll/deduction-plans", {
-          method: "POST",
-          body: {
-            employeeNumber: form.employeeNumber,
-            componentCode: form.componentCode,
-            totalAmount: form.totalAmount,
-            scheduleMethod: form.scheduleMethod,
-            installmentCount: form.installmentCount,
-            installmentAmount: form.installmentAmount,
-            startPayrollPeriodId: form.startPayrollPeriodId,
-            reference: form.reference,
-            remarks: form.remarks,
-          },
-        });
-        setMessage(response?.message || "Recurring deduction schedule created.");
+        const response = await apiRequest(
+          editingPlanId ? `/api/payroll/deduction-plans/${encodeURIComponent(editingPlanId)}` : "/api/payroll/deduction-plans",
+          {
+            method: editingPlanId ? "PATCH" : "POST",
+            body: {
+              employeeNumber: form.employeeNumber,
+              componentCode: form.componentCode,
+              totalAmount: form.totalAmount,
+              scheduleMethod: form.scheduleMethod,
+              installmentCount: form.installmentCount,
+              installmentAmount: form.installmentAmount,
+              startPayrollPeriodId: form.startPayrollPeriodId,
+              reference: form.reference,
+              remarks: form.remarks,
+              correctionReason: editingPlanId ? form.remarks || "Recurring deduction correction" : undefined,
+            },
+          }
+        );
+        setMessage(response?.message || (editingPlanId ? "Recurring deduction corrected." : "Recurring deduction schedule created."));
       } else {
-        const response = await apiRequest("/api/payroll/variable-inputs", {
-          method: "POST",
-          body: {
-            employeeNumber: form.employeeNumber,
-            kind,
-            componentCode: form.componentCode,
-            payrollPeriodId: form.payrollPeriodId,
-            amount: form.amount,
-            quantity: form.quantity,
-            referencePayrollPeriodId: form.referencePayrollPeriodId || null,
-            reference: form.reference,
-            remarks: form.remarks,
-          },
-        });
-        setMessage(response?.message || "Payroll input saved.");
+        const response = await apiRequest(
+          editingInputId ? `/api/payroll/variable-inputs/${encodeURIComponent(editingInputId)}` : "/api/payroll/variable-inputs",
+          {
+            method: editingInputId ? "PATCH" : "POST",
+            body: {
+              employeeNumber: form.employeeNumber,
+              kind,
+              componentCode: form.componentCode,
+              payrollPeriodId: form.payrollPeriodId,
+              amount: form.amount,
+              quantity: form.quantity,
+              referencePayrollPeriodId: form.referencePayrollPeriodId || null,
+              reference: form.reference,
+              remarks: form.remarks,
+              correctionReason: editingInputId ? form.remarks || "Payroll deduction correction" : undefined,
+            },
+          }
+        );
+        setMessage(response?.message || (editingInputId ? "Payroll input corrected." : "Payroll input saved."));
       }
+      setEditingInputId("");
+      setEditingPlanId("");
       setForm(blankInput());
       await load();
     } catch (requestError) {
@@ -215,6 +227,57 @@ export default function PayrollComponentsManaged({ kind }) {
     } finally {
       setBusy("");
     }
+  };
+
+  const cancelEdit = () => {
+    setEditingInputId("");
+    setEditingPlanId("");
+    setForm(blankInput());
+    setError("");
+  };
+
+  const editVariableInput = (row) => {
+    const payrollPeriod = periods.find((period) => period.code === row.payrollPeriodCode);
+    const referencePeriod = periods.find((period) => period.code === row.referencePayrollPeriodCode);
+    setEditingPlanId("");
+    setEditingInputId(row.id);
+    setForm({
+      ...blankInput(),
+      employeeNumber: row.employeeNumber || "",
+      componentCode: row.componentCode || "",
+      frequency: "ONE_TIME",
+      payrollPeriodId: payrollPeriod?.id || "",
+      amount: row.manualAmount == null ? "" : String(row.manualAmount),
+      quantity: row.quantity == null ? "" : String(row.quantity),
+      referencePayrollPeriodId: referencePeriod?.id || "",
+      reference: row.reference || "",
+      remarks: row.remarks || "",
+    });
+    setMessage("");
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const editDeductionPlan = (row) => {
+    const startPeriod = periods.find((period) => period.code === row.startPeriod);
+    setEditingInputId("");
+    setEditingPlanId(row.id);
+    setForm({
+      ...blankInput(),
+      employeeNumber: row.employeeNumber || "",
+      componentCode: row.componentCode || "",
+      frequency: "RECURRING",
+      totalAmount: String(row.totalAmount || ""),
+      scheduleMethod: row.scheduleMethod || "INSTALLMENT_COUNT",
+      installmentCount: row.scheduleMethod === "INSTALLMENT_COUNT" ? String(row.installmentCount || "") : "",
+      installmentAmount: row.scheduleMethod === "INSTALLMENT_AMOUNT" ? String(row.nominalInstallmentAmount || "") : "",
+      startPayrollPeriodId: startPeriod?.id || "",
+      reference: row.reference || "",
+      remarks: row.remarks || "",
+    });
+    setMessage("");
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const createComponent = async (event) => {
@@ -292,7 +355,9 @@ export default function PayrollComponentsManaged({ kind }) {
         ? "Record one-time deductions or finite recurring installment schedules. Recurring deductions stop automatically after the final mapped payroll month."
         : "Record payroll-period allowances. CHRiS calculates day/hour-based earnings from the employee's authoritative monthly gross salary."}</p>
 
-      <Panel title={isDeduction ? "Record Employee Deduction" : "Record Employee Allowance"}>
+      <Panel title={isDeduction
+        ? (editingInputId || editingPlanId ? "Correct Recorded Deduction" : "Record Employee Deduction")
+        : "Record Employee Allowance"}>
         <form style={formGrid} onSubmit={saveInput}>
           <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setField("employeeNumber")} placeholder="Search employee number or name" />
           <Select label="Component" value={form.componentCode} onChange={setField("componentCode")} options={components.map((component) => [component.code, `${component.code} — ${component.name}`])} />
@@ -317,7 +382,18 @@ export default function PayrollComponentsManaged({ kind }) {
 
           <Input label="Reference" value={form.reference} onChange={setField("reference")} placeholder="Bill/reference number" />
           <Input label="Remarks" value={form.remarks} onChange={setField("remarks")} placeholder="Reason or approval note" />
-          <div><button type="submit" style={primaryButton} disabled={busy === "save" || !form.employeeNumber || !form.componentCode}>{busy === "save" ? "Saving…" : isDeduction && form.frequency === "RECURRING" ? "Create Installment Schedule" : "Save Payroll Input"}</button></div>
+          <div style={buttonRow}>
+            <button type="submit" style={primaryButton} disabled={busy === "save" || !form.employeeNumber || !form.componentCode}>
+              {busy === "save"
+                ? "Saving…"
+                : editingInputId || editingPlanId
+                  ? "Save Correction"
+                  : isDeduction && form.frequency === "RECURRING"
+                    ? "Create Installment Schedule"
+                    : "Save Payroll Input"}
+            </button>
+            {(editingInputId || editingPlanId) && <button type="button" style={smallButton} onClick={cancelEdit} disabled={busy === "save"}>Cancel Edit</button>}
+          </div>
         </form>
 
         {selectedComponent && <div style={formulaNote}>
@@ -382,18 +458,19 @@ export default function PayrollComponentsManaged({ kind }) {
       {message && <div style={successStyle}>{message}</div>}
 
       <Panel title={isDeduction ? "Recurring Deduction Plans" : "Payroll Input Register"}>
-        {isDeduction ? <DataTable loading={loading} columns={["Employee", "Component", "Total", "Outstanding", "Installments", "Start", "Finish", "Status"]}>
+        {isDeduction ? <DataTable loading={loading} columns={["Employee", "Component", "Total", "Outstanding", "Installments", "Start", "Finish", "Status", "Action"]}>
           {plans.map((row) => <tr key={row.id}>
             <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
             <Td>{row.componentCode} — {row.componentName}</Td>
             <Td>{money(row.totalAmount)}</Td><Td>{money(row.outstandingAmount)}</Td>
             <Td>{row.installmentCount} × {money(row.nominalInstallmentAmount)}</Td>
             <Td>{row.startPeriod}</Td><Td>{row.endPeriod}</Td><Td><Badge>{row.status}</Badge></Td>
+            <Td><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button></Td>
           </tr>)}
         </DataTable> : <InputRegister rows={inputs} />}
       </Panel>
 
-      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs} /></Panel>}
+      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs} onEdit={editVariableInput} /></Panel>}
 
       {legacyRows.length > 0 && <Panel title="Existing Effective-Dated Components">
         <p style={controlNote}>These are earlier fixed/percentage payroll components retained for history and audit. For ZERMATT, indefinite legacy Other Allowances/Deductions do not carry into a new payroll period. Only an item explicitly tied to the selected period can participate; new recurring deductions must use the finite installment schedule above.</p>
@@ -409,8 +486,8 @@ export default function PayrollComponentsManaged({ kind }) {
   );
 }
 
-function InputRegister({ rows }) {
-  return <DataTable columns={["Period", "Employee", "Component", "Input", "Reference Period", "Source", "Status"]}>
+function InputRegister({ rows, onEdit = null }) {
+  return <DataTable columns={["Period", "Employee", "Component", "Input", "Reference Period", "Source", "Status", ...(onEdit ? ["Action"] : [])]}>
     {(rows || []).map((row) => <tr key={row.id}>
       <Td>{row.payrollPeriodCode}</Td>
       <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
@@ -419,6 +496,7 @@ function InputRegister({ rows }) {
       <Td>{row.referencePayrollPeriodCode || "—"}</Td>
       <Td>{String(row.source || "").replaceAll("_", " ")}</Td>
       <Td><Badge>{row.status}</Badge></Td>
+      {onEdit && <Td><button type="button" style={smallButton} onClick={() => onEdit(row)} disabled={row.status !== "ACTIVE"}>Edit</button></Td>}
     </tr>)}
   </DataTable>;
 }
