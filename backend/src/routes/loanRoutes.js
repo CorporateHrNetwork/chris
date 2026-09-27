@@ -5,7 +5,7 @@ const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const loans = require("../services/loanService");
 const { getLoanPolicies, validateLoanPurpose } = require("../services/loanPolicyService");
-const { getLoanProfile, getBulkLoanReport } = require("../services/loanProfileService");
+const { getLoanProfile, reactivatePausedLegacyInstallment, getBulkLoanReport } = require("../services/loanProfileService");
 const { exportIndividualLoan, exportBulkLoans } = require("../services/loanReportExportService");
 const { assessLoanCollateral } = require("../services/eosbService");
 const {
@@ -202,6 +202,26 @@ router.get("/:id/profile", requirePermission("payroll.view"), async (req, res) =
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to load loan profile.");
+  }
+});
+
+
+router.post("/:id/amortization/reactivate", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    const data = await reactivatePausedLegacyInstallment({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      periodStart: req.body?.periodStart,
+      reason: req.body?.reason,
+    });
+    return res.json({
+      status: "success",
+      message: "Paused loan installment reactivated for payroll recovery.",
+      data,
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to reactivate paused loan installment.");
   }
 });
 
