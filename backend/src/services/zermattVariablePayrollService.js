@@ -453,6 +453,272 @@ async function createDeductionPlan({ organizationId, actorUserId, input, source 
   };
 }
 
+
+async function updateVariableInput({ organizationId, actorUserId, inputId, input, prismaClient = prisma }) {
+  const rows = await prismaClient.$queryRawUnsafe(
+    `SELECT pvi."id",pvi."employeeId",pvi."componentId",pvi."payrollPeriodId",pvi."manualAmount",pvi."quantity",
+            pvi."referencePayrollPeriodId",pvi."reference",pvi."remarks",pvi."source",pvi."status",
+            e."employeeNumber",pvc."code" AS "componentCode",pvc."kind",pp."code" AS "payrollPeriodCode"
+       FROM "payroll_variable_inputs" pvi
+       JOIN "employees" e ON e."id"=pvi."employeeId" AND e."organizationId"=pvi."organizationId"
+       JOIN "payroll_variable_components" pvc ON pvc."id"=pvi."componentId" AND pvc."organizationId"=pvi."organizationId"
+       JOIN "payroll_periods" pp ON pp."id"=pvi."payrollPeriodId" AND pp."organizationId"=pvi."organizationId"
+      WHERE pvi."organizationId"=$1 AND pvi."id"=$2
+      LIMIT 1`,
+    organizationId,
+    inputId
+  );
+  const existing = rows[0];
+  if (!existing) throw payrollInputError("VARIABLE_INPUT_NOT_FOUND", "The payroll input was not found.", 404);
+  if (existing.status !== "ACTIVE") {
+    throw payrollInputError("VARIABLE_INPUT_NOT_EDITABLE", "Only an active payroll input can be corrected.", 409);
+  }
+
+  const currentPeriod = await getPeriod(prismaClient, organizationId, existing.payrollPeriodId);
+  await assertPeriodAcceptsPayrollInputs(prismaClient, organizationId, currentPeriod);
+
+  const employee = await getEmployee(
+    prismaClient,
+    organizationId,
+    input?.employeeNumber || existing.employeeNumber
+  );
+  const component = await getComponent(
+    prismaClient,
+    organizationId,
+    input?.componentCode || existing.componentCode,
+    input?.kind || existing.kind
+  );
+  const period = await getPeriod(
+    prismaClient,
+    organizationId,
+    input?.payrollPeriodId || input?.payrollPeriodCode || existing.payrollPeriodId
+  );
+  await assertPeriodAcceptsPayrollInputs(prismaClient, organizationId, period);
+
+  let referencePeriod = null;
+  const referenceKey = text(input?.referencePayrollPeriodId || input?.referencePayrollPeriodCode);
+  if (referenceKey) referencePeriod = await getPeriod(prismaClient, organizationId, referenceKey);
+
+  const manualAmount = component.calculationType === "ENTERED_AMOUNT"
+    ? positiveMoney(input?.amount ?? existing.manualAmount, "Amount")
+    : null;
+  const quantity = component.calculationType === "ENTERED_AMOUNT"
+    ? null
+    : positiveQuantity(input?.quantity ?? existing.quantity);
+
+  try {
+    const updated = await prismaClient.$transaction(async (tx) => {
+      const changed = await tx.$queryRawUnsafe(
+        `UPDATE "payroll_variable_inputs"
+            SET "employeeId"=$3,"componentId"=$4,"payrollPeriodId"=$5,"manualAmount"=$6,"quantity"=$7,
+                "referencePayrollPeriodId"=$8,"reference"=$9,"remarks"=$10,"updatedAt"=CURRENT_TIMESTAMP
+          WHERE "organizationId"=$1 AND "id"=$2
+          RETURNING "id","employeeId","componentId","payrollPeriodId","manualAmount","quantity",
+                    "referencePayrollPeriodId","reference","remarks","source","status","createdAt","updatedAt"`,
+        organizationId,
+        inputId,
+        employee.id,
+        component.id,
+        period.id,
+        manualAmount,
+        quantity,
+        referencePeriod?.id || null,
+        text(input?.reference) || null,
+        text(input?.remarks) || null
+      );
+      await tx.organizationAudit.create({
+        data: {
+          organizationId,
+          actorUserId: actorUserId || null,
+          entityType: "PayrollVariableInput",
+          entityId: inputId,
+          action: "CORRECTED",
+          previousValue: {
+            employeeNumber: existing.employeeNumber,
+            componentCode: existing.componentCode,
+            payrollPeriodCode: existing.payrollPeriodCode,
+            manualAmount: existing.manualAmount,
+            quantity: existing.quantity,
+            referencePayrollPeriodId: existing.referencePayrollPeriodId,
+            reference: existing.reference,
+            remarks: existing.remarks,
+          },
+          newValue: {
+            employeeNumber: employee.employeeNumber,
+            componentCode: component.code,
+            payrollPeriodCode: period.code,
+            manualAmount,
+            quantity,
+            referencePayrollPeriodCode: referencePeriod?.code || null,
+            reference: text(input?.reference) || null,
+            remarks: text(input?.remarks) || null,
+          },
+          reason: text(input?.correctionReason) || text(input?.remarks) || "Payroll input corrected before payroll approval",
+        },
+      });
+      return changed[0];
+    });
+    return {
+      ...updated,
+      employeeNumber: employee.employeeNumber,
+      employeeName: employee.employeeName,
+      componentCode: component.code,
+      componentName: component.name,
+      payrollPeriodCode: period.code,
+    };
+  } catch (error) {
+    if (String(error?.message || "").includes("payroll_variable_inputs_employee_component_period_key")) {
+      throw payrollInputError(
+        "VARIABLE_INPUT_DUPLICATE",
+        `${component.name} already has an input for ${employee.employeeNumber} in ${period.code}.`,
+        409
+      );
+    }
+    throw error;
+  }
+}
+
+async function updateDeductionPlan({ organizationId, actorUserId, planId, input, prismaClient = prisma }) {
+  const rows = await prismaClient.$queryRawUnsafe(
+    `SELECT pdp."id",pdp."employeeId",pdp."componentId",pdp."totalAmount",pdp."outstandingAmount",
+            pdp."scheduleMethod",pdp."installmentCount",pdp."nominalInstallmentAmount",
+            pdp."startYear",pdp."startMonth",pdp."endYear",pdp."endMonth",pdp."reference",pdp."remarks",pdp."status",
+            e."employeeNumber",pvc."code" AS "componentCode"
+       FROM "payroll_deduction_plans" pdp
+       JOIN "employees" e ON e."id"=pdp."employeeId" AND e."organizationId"=pdp."organizationId"
+       JOIN "payroll_variable_components" pvc ON pvc."id"=pdp."componentId" AND pvc."organizationId"=pdp."organizationId"
+      WHERE pdp."organizationId"=$1 AND pdp."id"=$2
+      LIMIT 1`,
+    organizationId,
+    planId
+  );
+  const existing = rows[0];
+  if (!existing) throw payrollInputError("DEDUCTION_PLAN_NOT_FOUND", "The recurring deduction plan was not found.", 404);
+  if (existing.status === "CANCELLED") {
+    throw payrollInputError("DEDUCTION_PLAN_NOT_EDITABLE", "A cancelled deduction plan cannot be edited.", 409);
+  }
+
+  const posted = await prismaClient.$queryRawUnsafe(
+    `SELECT "id","status","payrollRunId"
+       FROM "payroll_deduction_installments"
+      WHERE "organizationId"=$1 AND "planId"=$2 AND ("status"='POSTED' OR "payrollRunId" IS NOT NULL)
+      LIMIT 1`,
+    organizationId,
+    planId
+  );
+  if (posted[0]) {
+    throw payrollInputError(
+      "DEDUCTION_PLAN_ALREADY_POSTED",
+      "This recurring deduction has already participated in payroll. Reopen/reverse the affected payroll before correcting the schedule.",
+      409
+    );
+  }
+
+  const employee = await getEmployee(prismaClient, organizationId, input?.employeeNumber || existing.employeeNumber);
+  const component = await getComponent(prismaClient, organizationId, input?.componentCode || existing.componentCode, "DEDUCTION");
+  if (component.installmentEligible !== true) {
+    throw payrollInputError("INSTALLMENTS_NOT_ALLOWED", `${component.name} is not configured for installment deductions.`, 409);
+  }
+  const startPeriod = await resolveStartPeriod(prismaClient, organizationId, input);
+  await assertPeriodAcceptsPayrollInputs(prismaClient, organizationId, startPeriod);
+  const { year, month } = periodYearMonth(startPeriod);
+  const schedule = buildInstallmentSchedule({
+    totalAmount: input?.totalAmount ?? existing.totalAmount,
+    scheduleMethod: input?.scheduleMethod || existing.scheduleMethod,
+    installmentCount: input?.installmentCount,
+    installmentAmount: input?.installmentAmount,
+    startYear: year,
+    startMonth: month,
+  });
+
+  await prismaClient.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE "payroll_deduction_plans"
+          SET "employeeId"=$3,"componentId"=$4,"totalAmount"=$5,"outstandingAmount"=$5,
+              "scheduleMethod"=$6,"installmentCount"=$7,"nominalInstallmentAmount"=$8,
+              "startYear"=$9,"startMonth"=$10,"endYear"=$11,"endMonth"=$12,
+              "reference"=$13,"remarks"=$14,"status"='ACTIVE',"updatedAt"=CURRENT_TIMESTAMP
+        WHERE "organizationId"=$1 AND "id"=$2`,
+      organizationId,
+      planId,
+      employee.id,
+      component.id,
+      schedule.totalAmount,
+      schedule.method,
+      schedule.installmentCount,
+      schedule.nominalInstallmentAmount,
+      schedule.startYear,
+      schedule.startMonth,
+      schedule.endYear,
+      schedule.endMonth,
+      text(input?.reference) || null,
+      text(input?.remarks) || null
+    );
+    await tx.$executeRawUnsafe(
+      `DELETE FROM "payroll_deduction_installments" WHERE "organizationId"=$1 AND "planId"=$2`,
+      organizationId,
+      planId
+    );
+    for (const item of schedule.schedule) {
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "payroll_deduction_installments"
+          ("id","organizationId","planId","installmentNumber","scheduleYear","scheduleMonth","scheduledAmount","status")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'SCHEDULED')`,
+        crypto.randomUUID(), organizationId, planId, item.installmentNumber, item.year, item.month, item.amount
+      );
+    }
+    await tx.organizationAudit.create({
+      data: {
+        organizationId,
+        actorUserId: actorUserId || null,
+        entityType: "PayrollDeductionPlan",
+        entityId: planId,
+        action: "CORRECTED",
+        previousValue: {
+          employeeNumber: existing.employeeNumber,
+          componentCode: existing.componentCode,
+          totalAmount: Number(existing.totalAmount || 0),
+          scheduleMethod: existing.scheduleMethod,
+          installmentCount: Number(existing.installmentCount || 0),
+          startPeriod: monthKey(existing.startYear, existing.startMonth),
+          endPeriod: monthKey(existing.endYear, existing.endMonth),
+          reference: existing.reference,
+          remarks: existing.remarks,
+        },
+        newValue: {
+          employeeNumber: employee.employeeNumber,
+          componentCode: component.code,
+          totalAmount: schedule.totalAmount,
+          scheduleMethod: schedule.method,
+          installmentCount: schedule.installmentCount,
+          startPeriod: schedule.schedule[0]?.period,
+          endPeriod: schedule.schedule[schedule.schedule.length - 1]?.period,
+          reference: text(input?.reference) || null,
+          remarks: text(input?.remarks) || null,
+        },
+        reason: text(input?.correctionReason) || text(input?.remarks) || "Recurring deduction corrected before payroll posting",
+      },
+    });
+  });
+
+  return {
+    id: planId,
+    employeeNumber: employee.employeeNumber,
+    employeeName: employee.employeeName,
+    componentCode: component.code,
+    componentName: component.name,
+    totalAmount: schedule.totalAmount,
+    outstandingAmount: schedule.totalAmount,
+    scheduleMethod: schedule.method,
+    installmentCount: schedule.installmentCount,
+    nominalInstallmentAmount: schedule.nominalInstallmentAmount,
+    startPeriod: schedule.schedule[0]?.period,
+    endPeriod: schedule.schedule[schedule.schedule.length - 1]?.period,
+    status: "ACTIVE",
+    schedule: schedule.schedule,
+  };
+}
+
 async function listVariableInputs({ organizationId, kind, prismaClient = prisma }) {
   await ensureZermattComponentCatalogue({ organizationId, prismaClient });
   const normalizedKind = kind ? upper(kind) : null;
@@ -694,7 +960,9 @@ module.exports = {
   listVariableComponents,
   createVariableComponent,
   createVariableInput,
+  updateVariableInput,
   createDeductionPlan,
+  updateDeductionPlan,
   listVariableInputs,
   listDeductionPlans,
   loadPeriodVariableItems,
