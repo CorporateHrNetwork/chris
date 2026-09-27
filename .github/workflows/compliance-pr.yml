@@ -308,7 +308,8 @@ jobs:
               f.write('TARGET_URL=' + target + '\n')
           PY
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-16
+          sudo apt-get install -y -qq postgresql-client-17
+          echo '/usr/lib/postgresql/17/bin' >> "$GITHUB_PATH"
       - name: Check both database identities and record source baseline
         shell: bash
         run: |
