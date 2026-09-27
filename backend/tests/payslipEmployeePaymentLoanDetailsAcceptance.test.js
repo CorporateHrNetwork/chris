@@ -55,8 +55,8 @@ test("preview keeps CHRiS screen language while print follows compact A4 off-whi
     'th,td{padding:5px 8px',
     '.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px',
   ]) assert.ok(ui.includes(expected), `Missing preview/one-page print control: ${expected}`);
-  assert.equal(ui.includes('height:297mm'), false, "Print payslip must not force an exact A4 content height that can spill into a second browser page.");
-  assert.equal(ui.includes('overflow:hidden;background:#f7f3e8'), false, "Print payslip must not clip content to force a page fit.");
+  assert.equal(ui.includes('.payslip{position:relative;width:210mm;height:297mm'), false, "Print payslip content must not force an exact A4 content height that can spill into a second browser page.");
+  assert.equal(ui.includes('.payslip{position:relative;width:210mm;min-height:0;padding:10mm 14mm 9mm;overflow:hidden'), false, "Print payslip content must not clip overflow to force a page fit.");
 });
 
 test("emailed payslip includes designation and running loan balance but excludes bank account details", () => {
