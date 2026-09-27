@@ -725,3 +725,5 @@ jobs:
             throw new Error(`Initial CHRiS bundle exceeded 500 KB budget: ${(bytes / 1024).toFixed(2)} KB`);
           }
           NODE
+
+# Authorized guarded cutover run; remove this marker after verification.
