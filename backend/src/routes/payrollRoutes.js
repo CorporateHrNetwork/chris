@@ -822,11 +822,35 @@ router.patch("/variable-inputs/:id", requirePermission("payroll.manage"), async 
     });
     return res.json({
       status: "success",
-      message: "Deduction corrected. Any affected draft payroll is marked for recalculation.",
+      message: "Payroll input corrected. Any affected draft payroll is marked for recalculation.",
       data: { input: data, payrollDraftFreshness: freshness },
     });
   } catch (error) {
     return sendError(res, error, "Unable to correct payroll input.");
+  }
+});
+
+
+router.delete("/variable-inputs/:id", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    const data = await variablePayroll.cancelVariableInput({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      inputId: req.params.id,
+      reason: req.body?.reason,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Payroll input ${req.params.id} was deleted; affected draft payroll must be recalculated.`,
+    });
+    return res.json({
+      status: "success",
+      message: "Payroll input deleted and retained in audit history. Any affected draft payroll is marked for recalculation.",
+      data: { input: data, payrollDraftFreshness: freshness },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to delete payroll input.");
   }
 });
 
@@ -883,6 +907,30 @@ router.patch("/deduction-plans/:id", requirePermission("payroll.manage"), async 
     });
   } catch (error) {
     return sendError(res, error, "Unable to correct recurring deduction.");
+  }
+});
+
+
+router.delete("/deduction-plans/:id", requirePermission("payroll.manage"), async (req, res) => {
+  try {
+    const data = await variablePayroll.cancelDeductionPlan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      planId: req.params.id,
+      reason: req.body?.reason,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Recurring deduction plan ${req.params.id} was deleted; affected draft payroll must be recalculated.`,
+    });
+    return res.json({
+      status: "success",
+      message: "Recurring deduction plan deleted and retained in audit history. Any affected draft payroll is marked for recalculation.",
+      data: { plan: data, payrollDraftFreshness: freshness },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to delete recurring deduction.");
   }
 });
 
