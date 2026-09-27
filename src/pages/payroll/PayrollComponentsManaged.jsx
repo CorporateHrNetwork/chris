@@ -136,10 +136,8 @@ export default function PayrollComponentsManaged({ kind }) {
           const today = new Date().toISOString().slice(0, 10);
           return period.periodStart <= today && period.periodEnd >= today;
         }) || openPeriods[0];
-        const defaultComponent = (componentResult?.data || [])[0];
         return {
           ...current,
-          componentCode: current.componentCode || defaultComponent?.code || "",
           payrollPeriodId: current.payrollPeriodId || defaultPeriod?.id || "",
           startPayrollPeriodId: current.startPayrollPeriodId || defaultPeriod?.id || "",
         };
@@ -366,7 +364,7 @@ export default function PayrollComponentsManaged({ kind }) {
         : "Record Employee Allowance"}>
         <form style={formGrid} onSubmit={saveInput}>
           <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={setField("employeeNumber")} placeholder="Search employee number or name" />
-          <Select label="Component" value={form.componentCode} onChange={setField("componentCode")} options={components.map((component) => [component.code, `${component.code} — ${component.name}`])} />
+          <Select label="Component" value={form.componentCode} onChange={setField("componentCode")} options={[["", "Select component"], ...components.map((component) => [component.code, `${component.code} — ${component.name}`])]} />
           {isDeduction && <Select label="Frequency" value={form.frequency} onChange={setField("frequency")} options={[["ONE_TIME", "One-Time"], ["RECURRING", "Recurring / Installments"]]} />}
 
           {(!isDeduction || form.frequency === "ONE_TIME") && <>
