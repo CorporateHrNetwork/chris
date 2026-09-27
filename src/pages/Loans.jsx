@@ -569,33 +569,46 @@ function Loans() {
             <button style={secondaryButton} onClick={() => exportBulk("csv")} disabled={Boolean(busy)}>Export CSV</button>
             <button style={secondaryButton} onClick={() => exportBulk("pdf")} disabled={Boolean(busy)}>Export PDF</button>
           </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
-              <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
+          <div style={loanTableWrapStyle}>
+            <table style={loanTableStyle}>
+              <colgroup>
+                <col style={{ width: 150 }} />
+                <col style={{ width: 155 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 135 }} />
+                <col style={{ width: 105 }} />
+                <col style={{ width: 125 }} />
+                <col style={{ width: 115 }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 220 }} />
+              </colgroup>
+              <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head, index) => <th key={head} style={{ ...loanHeadStyle, ...(index >= 4 && index <= 7 ? { textAlign: "right" } : {}) }}>{head}</th>)}</tr></thead>
               <tbody>
                 {!loading && filteredLoans.length === 0 && <tr><td colSpan="11" style={{ padding: 16 }}>No loan records found.</td></tr>}
                 {filteredLoans.map((loan) => {
                   const recovered = Math.max(0, Number(loan.principalAmount || 0) - Number(loan.outstandingAmount || 0));
                   const current = ["ACTIVE", "PAUSED"].includes(loan.status);
-                  return <tr key={loan.id}>
-                    <td style={cellStyle}><strong>{loan.employeeNumber}</strong><br /><span>{loan.employeeName}</span></td>
-                    <td style={cellStyle}>{loan.loanNumber}<br /><span>{loan.purpose || "—"}</span></td>
-                    <td style={cellStyle}>{loan.gmApprovalReference || "—"}</td>
-                    <td style={cellStyle}>{loan.accountsPaymentReference || loan.disbursementReference || "—"}</td>
-                    <td style={cellStyle}>{money(loan.principalAmount)}</td>
-                    <td style={cellStyle}>{money(recovered)}</td>
-                    <td style={cellStyle}>{money(loan.outstandingAmount)}</td>
-                    <td style={cellStyle}>{money(loan.installmentAmount)}</td>
-                    <td style={cellStyle}>{loan.recoveryStartDate || "—"}</td>
-                    <td style={cellStyle}>{loan.status}</td>
-                    <td style={cellStyle}><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button style={secondaryButton} onClick={() => setSelectedLoanProfile(loan.id)}>View Profile</button>
-                      {capabilities.canManageLoans && current && <button style={secondaryButton} onClick={() => startEdit(loan)}>Edit</button>}
-                      {capabilities.canManageLoans && current && <button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button>}
-                      {capabilities.canManageLoans && current && Number(loan.outstandingAmount || 0) > 0 && <button style={primaryButton} disabled={Boolean(busy)} onClick={() => completeExternally(loan)}>Mark Completed</button>}
-                      {capabilities.canManageLoans && loan.status === "ACTIVE" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
-                      {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Resume</button>}
-                      {capabilities.canDeleteEmployeeFinancialInputs && recovered <= 0 && loan.status !== "COMPLETED" && <button style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteLoan(loan)}>Delete</button>}
+                  return <tr key={loan.id} style={loanRowStyle}>
+                    <td style={loanCellStyle}><strong style={loanPrimaryTextStyle}>{loan.employeeNumber}</strong><span style={loanSecondaryTextStyle}>{loan.employeeName}</span></td>
+                    <td style={loanCellStyle}><strong style={loanPrimaryTextStyle}>{loan.loanNumber}</strong><span style={loanSecondaryTextStyle}>{loan.purpose || "—"}</span></td>
+                    <td style={loanReferenceCellStyle}>{loan.gmApprovalReference || "—"}</td>
+                    <td style={loanReferenceCellStyle}>{loan.accountsPaymentReference || loan.disbursementReference || "—"}</td>
+                    <td style={loanMoneyCellStyle}>{money(loan.principalAmount)}</td>
+                    <td style={loanMoneyCellStyle}>{money(recovered)}</td>
+                    <td style={loanMoneyCellStyle}><strong>{money(loan.outstandingAmount)}</strong></td>
+                    <td style={loanMoneyCellStyle}>{money(loan.installmentAmount)}</td>
+                    <td style={loanCellStyle}>{loan.recoveryStartDate || "—"}</td>
+                    <td style={loanCellStyle}><span style={loanStatusStyle}>{loan.status}</span></td>
+                    <td style={loanActionCellStyle}><div style={loanActionGridStyle}>
+                      <button style={loanActionButtonStyle} onClick={() => setSelectedLoanProfile(loan.id)}>View Profile</button>
+                      {capabilities.canManageLoans && current && <button style={loanActionButtonStyle} onClick={() => startEdit(loan)}>Edit</button>}
+                      {capabilities.canManageLoans && current && <button style={loanActionButtonStyle} onClick={() => startTopUp(loan)}>Top-Up</button>}
+                      {capabilities.canManageLoans && current && Number(loan.outstandingAmount || 0) > 0 && <button style={loanPrimaryActionStyle} disabled={Boolean(busy)} onClick={() => completeExternally(loan)}>Mark Completed</button>}
+                      {capabilities.canManageLoans && loan.status === "ACTIVE" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
+                      {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Resume</button>}
+                      {capabilities.canDeleteEmployeeFinancialInputs && recovered <= 0 && loan.status !== "COMPLETED" && <button style={loanDangerActionStyle} disabled={Boolean(busy)} onClick={() => deleteLoan(loan)}>Delete</button>}
                     </div></td>
                   </tr>;
                 })}
@@ -625,5 +638,20 @@ function Loans() {
 const collateralCard = { padding: 13, borderRadius: 10, border: "1px solid rgba(212,175,55,.28)", background: "rgba(212,175,55,.055)", display: "grid", gap: 8 };
 const collateralGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 8, color: "var(--chris-dashboard-text)", fontSize: 12 };
 const cellStyle = { padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)", verticalAlign: "top" };
+const loanTableWrapStyle = { overflowX: "auto", borderRadius: 12, border: "1px solid rgba(212,175,55,.16)", background: "rgba(3,20,13,.26)" };
+const loanTableStyle = { width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 1460, tableLayout: "fixed" };
+const loanHeadStyle = { textAlign: "left", padding: "12px 10px", borderBottom: "1px solid rgba(212,175,55,.24)", background: "rgba(3,30,20,.96)", color: "var(--chris-dashboard-text-muted)", fontSize: 11, lineHeight: 1.2, textTransform: "uppercase", letterSpacing: ".04em", verticalAlign: "bottom" };
+const loanRowStyle = { height: 88 };
+const loanCellStyle = { padding: "13px 10px", borderBottom: "1px solid rgba(255,255,255,.07)", verticalAlign: "middle", lineHeight: 1.35, overflowWrap: "anywhere" };
+const loanReferenceCellStyle = { ...loanCellStyle, fontVariantNumeric: "tabular-nums", fontSize: 12 };
+const loanMoneyCellStyle = { ...loanCellStyle, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+const loanPrimaryTextStyle = { display: "block", color: "var(--chris-dashboard-text)", fontWeight: 900, marginBottom: 3 };
+const loanSecondaryTextStyle = { display: "block", color: "var(--chris-dashboard-text-muted)", fontSize: 12, lineHeight: 1.35 };
+const loanStatusStyle = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 70, padding: "6px 9px", borderRadius: 999, border: "1px solid rgba(212,175,55,.34)", background: "rgba(212,175,55,.08)", color: "var(--chris-dashboard-gold-bright)", fontSize: 10, fontWeight: 900, letterSpacing: ".04em" };
+const loanActionCellStyle = { ...loanCellStyle, paddingRight: 8 };
+const loanActionGridStyle = { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 7, alignItems: "stretch" };
+const loanActionButtonStyle = { ...secondaryButton, width: "100%", minHeight: 36, padding: "8px 9px", whiteSpace: "nowrap", fontSize: 11 };
+const loanPrimaryActionStyle = { ...primaryButton, width: "100%", minHeight: 36, padding: "8px 9px", fontSize: 11, lineHeight: 1.1 };
+const loanDangerActionStyle = { ...dangerButton, width: "100%", minHeight: 36, padding: "8px 9px", fontSize: 11 };
 
 export default Loans;
