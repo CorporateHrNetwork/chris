@@ -128,14 +128,13 @@ const SENIOR_OFFICER_AND_SUPERVISOR_CODES = new Set([
   "ZOP-FOS",
   "WHSE-SUP",
   "LOG-SUP",
-  "SEC-SUP",
   "HKF-AHS",
 ]);
 
 // Sales representatives are frontline operations support, including the
 // historical Senior Sales Representative title. Do not classify by title
 // keyword alone when the tenant-approved grade is explicit.
-const OPERATIONS_SUPPORT_CODES = new Set(["ZOP-SR", "ZOP-SSR"]);
+const OPERATIONS_SUPPORT_CODES = new Set(["ZOP-SR", "ZOP-SSR", "SEC-SO"]);
 
 const TEAM_LEADER_CODES = new Set([
   "BBO-BTL",
@@ -145,6 +144,7 @@ const TEAM_LEADER_CODES = new Set([
   "BBO-TL",
   "BBO-ATL",
   "SEC-CB",
+  "SEC-SUP",
   "SEC-TMTL",
   "HKF-HTL",
 ]);
