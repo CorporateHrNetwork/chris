@@ -58,6 +58,16 @@ function EmployeeProfile() {
   const [employmentTypes, setEmploymentTypes] = useState([]);
   const [employmentTypeReason, setEmploymentTypeReason] = useState("");
   const [employmentTypeSaving, setEmploymentTypeSaving] = useState(false);
+  const [employmentLevels, setEmploymentLevels] = useState([]);
+  const [employmentLevelState, setEmploymentLevelState] = useState(null);
+  const [employmentLevelSaving, setEmploymentLevelSaving] = useState(false);
+  const [employmentLevelForm, setEmploymentLevelForm] = useState({
+    levelNumber: "",
+    useDesignationDefault: false,
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: "",
+    notes: "",
+  });
 
   const [error, setError] =
     useState("");
@@ -391,6 +401,7 @@ function EmployeeProfile() {
       const [
         result,
         lineManagerResult,
+        levelResult,
       ] = await Promise.all([
         apiRequest(
           `/api/employees/${encodeURIComponent(
@@ -400,6 +411,9 @@ function EmployeeProfile() {
         apiRequest(
           `/api/line-managers/employees/${encodeURIComponent(employeeNumber)}`
         ),
+        apiRequest(
+          `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`
+        ).catch(() => ({ data: null })),
       ]);
 
       const employee =
@@ -433,10 +447,19 @@ function EmployeeProfile() {
         employmentType: employee.employmentType || "",
 
         employmentLevel:
+          levelResult?.data?.effective?.name ||
           employee.designation?.employmentLevel?.name ||
           (Number.isInteger(employee.designation?.careerLevel)
             ? `Level ${employee.designation.careerLevel}`
             : "Not Configured"),
+
+        employmentLevelNumber:
+          levelResult?.data?.effective?.levelNumber ??
+          employee.designation?.careerLevel ??
+          null,
+
+        employmentLevelSource:
+          levelResult?.data?.effective?.source || "DESIGNATION_DEFAULT",
 
         email:
           employee.email || "",
@@ -492,6 +515,7 @@ function EmployeeProfile() {
       setProfile(
         normalizedProfile
       );
+      setEmploymentLevelState(levelResult?.data || null);
 
       apiRequest("/api/employees/onboarding/status")
         .then((onboardingResult) => {
@@ -772,6 +796,53 @@ useEffect(() => {
     }
   };
 
+  const saveEditEmploymentLevel = async () => {
+    const reason = String(employmentLevelForm.reason || "").trim();
+    if (!employmentLevelForm.effectiveDate || !reason) {
+      setError("Select an effective date and enter the reason for the Employment Level change.");
+      return;
+    }
+    if (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber) {
+      setError("Select an Employment Level.");
+      return;
+    }
+
+    try {
+      setEmploymentLevelSaving(true);
+      setError("");
+      const result = await apiRequest(
+        `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`,
+        {
+          method: "PUT",
+          body: {
+            levelNumber: employmentLevelForm.useDesignationDefault
+              ? undefined
+              : Number(employmentLevelForm.levelNumber),
+            useDesignationDefault: employmentLevelForm.useDesignationDefault,
+            effectiveDate: employmentLevelForm.effectiveDate,
+            reason,
+            notes: employmentLevelForm.notes,
+          },
+        }
+      );
+      setEmploymentLevelState(result?.data || null);
+      setEmploymentLevelForm((current) => ({
+        ...current,
+        levelNumber: String(result?.data?.effective?.levelNumber || ""),
+        useDesignationDefault: false,
+        effectiveDate: new Date().toISOString().slice(0, 10),
+        reason: "",
+        notes: "",
+      }));
+      await loadProfile();
+      setSuccess(result?.message || "Employment Level updated and audited.");
+    } catch (err) {
+      setError(err.message || "CHRiS could not update Employment Level.");
+    } finally {
+      setEmploymentLevelSaving(false);
+    }
+  };
+
   const handleCancel = () => {
     setEditing(false);
 
@@ -860,13 +931,24 @@ useEffect(() => {
           })
         );
 
-        const [careerResult, typeResult] = await Promise.all([
+        const [careerResult, typeResult, levelCatalogResult, employeeLevelResult] = await Promise.all([
           apiRequest("/api/employees/career/catalog"),
           apiRequest("/api/employees/employment-types/catalog"),
+          apiRequest("/api/employees/career/levels"),
+          apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
         setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id));
         setEmploymentTypes(typeResult.data?.employmentTypes || []);
         setEmploymentTypeReason("");
+        setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
+        setEmploymentLevelState(employeeLevelResult.data || null);
+        setEmploymentLevelForm({
+          levelNumber: String(employeeLevelResult.data?.effective?.levelNumber || ""),
+          useDesignationDefault: false,
+          effectiveDate: new Date().toISOString().slice(0, 10),
+          reason: "",
+          notes: "",
+        });
 
         if (
           !profile.locationId
@@ -3296,6 +3378,72 @@ useEffect(() => {
             </div>
 
             <div>
+              <label style={labelStyle}>Employment Level</label>
+              <select
+                value={employmentLevelForm.useDesignationDefault ? "DEFAULT" : employmentLevelForm.levelNumber}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEmploymentLevelForm((current) => ({
+                    ...current,
+                    useDesignationDefault: value === "DEFAULT",
+                    levelNumber: value === "DEFAULT" ? "" : value,
+                  }));
+                }}
+                disabled={saving || employmentLevelSaving}
+                style={fieldStyle}
+              >
+                <option value="">Select employment level</option>
+                {employmentLevelState?.currentOverride && (
+                  <option value="DEFAULT">
+                    Use designation default — {employmentLevelState?.designationDefault?.code || ""} {employmentLevelState?.designationDefault?.name || ""}
+                  </option>
+                )}
+                {employmentLevels
+                  .slice()
+                  .sort((a, b) => Number(b.levelNumber) - Number(a.levelNumber))
+                  .map((level) => (
+                    <option key={level.levelNumber} value={String(level.levelNumber)}>
+                      {level.code || `L${level.levelNumber}`} — {level.name}
+                    </option>
+                  ))}
+              </select>
+              <p style={promotionFieldHintStyle}>
+                Current: {employmentLevelState?.effective?.code || ""} {employmentLevelState?.effective?.name || profile.employmentLevel}
+                {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
+              </p>
+              <input
+                type="date"
+                aria-label="Employment Level effective date"
+                value={employmentLevelForm.effectiveDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, effectiveDate: event.target.value }))}
+                style={fieldStyle}
+                disabled={employmentLevelSaving}
+              />
+              <input
+                aria-label="Reason for Employment Level change"
+                placeholder="Reason for Employment Level change"
+                value={employmentLevelForm.reason}
+                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
+                style={fieldStyle}
+                disabled={employmentLevelSaving}
+              />
+              <button
+                type="button"
+                onClick={saveEditEmploymentLevel}
+                disabled={
+                  employmentLevelSaving ||
+                  !employmentLevelForm.effectiveDate ||
+                  !employmentLevelForm.reason.trim() ||
+                  (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber)
+                }
+                style={actionButtonStyle}
+              >
+                {employmentLevelSaving ? "Saving…" : employmentLevelForm.useDesignationDefault ? "Reset Employment Level" : "Save Employment Level"}
+              </button>
+            </div>
+
+            <div>
               <label
                 style={
                   labelStyle
@@ -3551,6 +3699,10 @@ useEffect(() => {
             <InfoRow
               label="Employment Level"
               value={profile.employmentLevel}
+            />
+            <InfoRow
+              label="Employment Level Source"
+              value={profile.employmentLevelSource === "EMPLOYEE_OVERRIDE" ? "Employee Override" : "Designation Default"}
             />
             <InfoRow
               label="Gender"
