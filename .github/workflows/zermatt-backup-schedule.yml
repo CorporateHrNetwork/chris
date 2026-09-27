@@ -1,0 +1,79 @@
+name: Daily protected Zermatt database backup
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/zermatt-backup-schedule.yml"]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: zermatt-daily-backup-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch-and-confirm:
+    name: Dispatch protected backup and verify encrypted artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_API_URL: ${{ github.api_url }}
+      GH_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Run branch-restricted backup and check outcome
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          from urllib.request import Request, urlopen
+
+          base = os.environ['GH_API_URL'] + '/repos/' + os.environ['GH_REPOSITORY']
+          headers = {
+              'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2026-03-10',
+          }
+          def request(path, data=None):
+              payload = json.dumps(data).encode() if data is not None else None
+              req = Request(base + path, data=payload, headers=headers,
+                            method='POST' if data is not None else 'GET')
+              with urlopen(req, timeout=30) as response:
+                  return json.load(response)
+
+          run = request('/actions/workflows/compliance-pr.yml/dispatches',
+                        {'ref': 'fix/zermatt-supabase-pilot-transfer',
+                         'inputs': {'operation': 'backup'}})
+          run_id = run.get('workflow_run_id')
+          if not isinstance(run_id, int):
+              raise SystemExit('Dispatch did not return a workflow run ID.')
+          print('Protected backup run: https://github.com/' + os.environ['GH_REPOSITORY'] +
+                '/actions/runs/' + str(run_id))
+          for attempt in range(60):
+              status = request('/actions/runs/' + str(run_id))
+              if status.get('status') == 'completed':
+                  if status.get('conclusion') != 'success':
+                      raise SystemExit('Protected backup workflow failed: ' +
+                                       str(status.get('conclusion')))
+                  artifacts = request('/actions/runs/' + str(run_id) + '/artifacts')
+                  matching = [item for item in artifacts.get('artifacts', [])
+                              if item.get('name') == 'zermatt-live-encrypted-' + str(run_id)
+                              and not item.get('expired')
+                              and item.get('size_in_bytes', 0) > 0]
+                  if len(matching) != 1:
+                      raise SystemExit('Backup completed without a valid encrypted artifact.')
+                  print('Verified encrypted artifact ID ' + str(matching[0]['id']) +
+                        '; expiration ' + str(matching[0]['expires_at']))
+                  break
+              time.sleep(20)
+          else:
+              raise SystemExit('Protected backup did not finish within 20 minutes.')
+          PY
