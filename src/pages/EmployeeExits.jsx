@@ -297,7 +297,7 @@ export default function EmployeeExits() {
 
   useEffect(() => {
     if (!settlementExitId) return undefined;
-    if (settlement && !["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status)) return undefined;
+    if (settlement && !["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(settlement.status)) return undefined;
 
     let active = true;
     const timer = window.setTimeout(() => {
