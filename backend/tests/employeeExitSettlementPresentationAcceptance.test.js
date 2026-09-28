@@ -149,3 +149,13 @@ test("settlement print centers organisation branding and prevents metadata label
   assert.ok(printUtility.includes("white-space: nowrap !important"));
   assert.ok(printUtility.includes("width: 28px !important"));
 });
+
+test("settlement employment days follow Zermatt's Excel date subtraction", () => {
+  const vm = require("node:vm");
+  const functionSource = frontend.match(/function employmentDays\(hireDate, lastWorkingDay\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(functionSource, "employmentDays helper exists");
+  const employmentDays = vm.runInNewContext(`(${functionSource})`);
+  assert.equal(employmentDays("2025-05-06", "2026-09-21"), "503 days");
+  assert.equal(employmentDays("2026-09-21", "2026-09-21"), "0 days");
+  assert.equal(employmentDays("2026-09-22", "2026-09-21"), "—");
+});
