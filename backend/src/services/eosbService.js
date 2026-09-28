@@ -41,7 +41,8 @@ function serviceDaysBetween(startDate, endDate) {
   const start = utcDate(startDate);
   const end = utcDate(endDate);
   if (!start || !end || end < start) return 0;
-  return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+  // Zermatt's approved Excel basis is the elapsed days between dates (end - start).
+  return Math.floor((end.getTime() - start.getTime()) / 86400000);
 }
 
 function hasTwelveCalendarMonths(startDate, asOf) {
