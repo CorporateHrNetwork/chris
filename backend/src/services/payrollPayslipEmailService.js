@@ -109,8 +109,12 @@ function buildPayslipEmail(row) {
   const structure = details.salaryStructure || {};
   const attendance = details.attendance || {};
   const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-  const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const customAllowances = details.customAllowances || [];
+  const customDeductions = details.customDeductions || [];
+  const componentRow = (item) => [
+    [text(item.code), text(item.name)].filter(Boolean).join(" — ") || "Payroll Component",
+    Number(item.value || 0),
+  ];
   const organizationName = row.organizationLegalName || row.organizationName || "CHRiS Organization";
   const logoUrl = text(row.organizationLogoUrl);
 
@@ -119,11 +123,11 @@ function buildPayslipEmail(row) {
     ...Object.entries(structure)
       .filter(([key]) => key !== "basic")
       .map(([key, value]) => [key.charAt(0).toUpperCase() + key.slice(1), value]),
-    ["Other Earnings", customAllowances],
+    ...customAllowances.map(componentRow),
     ["Taxable Gross Pay", row.grossPay, true],
     ["PAYE", statutory.payeTax || 0],
     ["Pension", statutory.employeePension || 0],
-    ["Other Deductions", customDeductions],
+    ...customDeductions.map(componentRow),
     ["Salary Advance Recovery", row.advanceRecovery],
     ["Loan Recovery", row.loanRecovery],
     ...(leaveAllowance > 0 ? [["Leave Allowance · After Tax / Non-taxable", leaveAllowance, true]] : []),
