@@ -886,6 +886,10 @@ export default function EmployeeExits() {
     } : null;
     const snapshotReady = Boolean(settlement && snapshot.employee && snapshot.exit && snapshot.creditItems && snapshot.debitItems && snapshot.totals);
     const previewReady = Boolean(settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals);
+    const savedGratuity = snapshotReady ? Number(snapshot.creditItems.gratuityEosb?.amount || 0) : null;
+    const currentGratuity = previewReady ? Number(settlementPreview.credits.gratuityEosb || 0) : null;
+    const gratuityNeedsRecalculation = savedGratuity !== null && currentGratuity !== null && Math.abs(savedGratuity - currentGratuity) >= 0.005;
+    const settlementCanRecalculate = !settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status);
     const accountEmployee = snapshotReady ? snapshot.employee : settlementPreview?.employee || fallbackAccountEmployee;
     const accountExit = snapshotReady ? snapshot.exit : settlementPreview?.exit || fallbackAccountExit;
     const accountSalary = snapshotReady ? snapshot.salary : settlementPreview?.salary || null;
@@ -936,6 +940,12 @@ export default function EmployeeExits() {
                   {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
                 </div>
               </div>
+
+              {gratuityNeedsRecalculation ? (
+                <div role="alert" style={warning}>
+                  The saved settlement gratuity differs from the current EoSB account ({moneyText(savedGratuity, accountSalary?.currency)} saved; {moneyText(currentGratuity, accountSalary?.currency)} current). {settlementCanRecalculate ? "Review the current EoSB amount below and select Recalculate Exit Settlement Account before approval or printing." : "This settlement has progressed beyond recalculation. Refer the difference to Head HR and Accounts for a governed correction before payout."}
+                </div>
+              ) : null}
 
               {!snapshotReady && !previewReady ? (
                 <div role={settlementPreviewError ? "alert" : "status"} style={settlementPreviewError ? warning : muted}>
@@ -1026,7 +1036,7 @@ export default function EmployeeExits() {
                       />
                     </Field>
                   </div>
-                  <div style={footer}><span style={muted}>System-derived items are locked and pulled from CHRiS source accounts/rules. Only HR-designated settlement inputs are editable.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy || !settlementPreview}>{busy ? "Calculating..." : "Calculate Exit Settlement Account"}</button></div>
+                  <div style={footer}><span style={muted}>System-derived items are locked and pulled from CHRiS source accounts/rules. Only HR-designated settlement inputs are editable.</span><button type="submit" style={primaryButton} disabled={!canUpdate || busy || !settlementPreview}>{busy ? "Calculating..." : settlement ? "Recalculate Exit Settlement Account" : "Calculate Exit Settlement Account"}</button></div>
                 </form>
               ) : null}
 
@@ -1126,7 +1136,7 @@ export default function EmployeeExits() {
                   {["CALCULATED", "PENDING_APPROVAL"].includes(settlement.status) ? (
                     <div style={settlementAction}>
                       <Field label="Head HR Approval Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field>
-                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
+                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy || gratuityNeedsRecalculation} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
                       {settlement.status === "PENDING_APPROVAL" ? <button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive with Reason</button> : null}
                     </div>
                   ) : null}
