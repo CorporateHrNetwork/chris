@@ -157,3 +157,14 @@ test("Employee Exits exposes a dedicated Exit Settlement Account workspace", () 
     assert.ok(frontend.includes(expected), `Missing settlement workspace navigation: ${expected}`);
   }
 });
+
+test("unapproved settlements can refresh their snapshot but stale gratuity cannot be approved", () => {
+  assert.ok(service.includes('["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(existing.status)'));
+  assert.ok(service.includes("async function assertCurrentGratuity("));
+  assert.ok(service.includes("current.eosb.accruedValue"));
+  assert.ok(service.includes("settlement.calculationSnapshot"));
+  assert.ok(service.includes("SETTLEMENT_GRATUITY_RECALCULATION_REQUIRED"));
+  assert.ok(frontend.includes('"Recalculate Exit Settlement Account"'));
+  assert.ok(frontend.includes("disabled={!canManagePayroll || busy || gratuityNeedsRecalculation}"));
+  assert.ok(frontend.includes('"PAYMENT_PENDING"') && frontend.includes('"PAID"'));
+});
