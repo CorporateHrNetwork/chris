@@ -112,6 +112,7 @@ jobs:
           node tests/unifiedEmployeeOnboardingAcceptance.test.js
           node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeExitSettlementAccountAcceptance.test.js
+          node tests/zermattEosbElapsedDays.test.js
           node tests/exitSettlementNoticeCalculation.test.js
           node tests/employeeExitNoticeInitiationAcceptance.test.js
           node tests/employeeExitDocumentUploadAcceptance.test.js
