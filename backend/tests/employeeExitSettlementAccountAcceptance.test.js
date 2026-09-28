@@ -169,3 +169,22 @@ test("unapproved settlements can refresh but stale benefits cannot be approved",
   assert.ok(frontend.includes("disabled={!canManagePayroll || busy || benefitsNeedRecalculation}"));
   assert.ok(frontend.includes('"PAYMENT_PENDING"') && frontend.includes('"PAID"'));
 });
+
+test("Zermatt exit leave allowance uses completed service months, not a daily fraction", () => {
+  const vm = require("node:vm");
+  const functionSource = service.match(/function serviceYearProration\(hireDate, exitDate\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(functionSource);
+  const proration = vm.runInNewContext(`(${functionSource})`, {
+    Date,
+    round4: (value) => Math.round(value * 10000) / 10000,
+    dateText: (value) => value?.toISOString().slice(0, 10) || null,
+  });
+  const samuel = proration("2025-05-06", "2026-09-21");
+  assert.equal(samuel.accruedMonths, 4);
+  assert.equal(samuel.serviceYearMonths, 12);
+  assert.equal(Math.round(48000 * samuel.factor * 100) / 100, 16000);
+  assert.equal(proration("2025-05-06", "2026-09-05").accruedMonths, 3);
+  assert.equal(proration("2025-05-06", "2026-09-06").accruedMonths, 4);
+  assert.ok(service.includes("Annual Leave Allowance × completed service months ÷ 12"));
+  assert.equal(service.includes("Annual Leave Allowance × accrued service-year day fraction"), false);
+});
