@@ -884,22 +884,22 @@ export default function EmployeeExits() {
       lastWorkingDay: settlementExit.exitProcess.effectiveDate || settlementExit.exitDate || null,
       reason: settlementExit.exitProcess.reason || "",
     } : null;
+    const settlementCanRecalculate = !settlement || ["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(settlement.status);
     const snapshotReady = Boolean(settlement && snapshot.employee && snapshot.exit && snapshot.creditItems && snapshot.debitItems && snapshot.totals);
     const previewReady = Boolean(settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals);
     const savedGratuity = snapshotReady ? Number(snapshot.creditItems.gratuityEosb?.amount || 0) : null;
     const currentGratuity = previewReady ? Number(settlementPreview.credits.gratuityEosb || 0) : null;
     const gratuityNeedsRecalculation = savedGratuity !== null && currentGratuity !== null && Math.abs(savedGratuity - currentGratuity) >= 0.005;
-    const settlementCanRecalculate = !settlement || ["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(settlement.status);
     const accountEmployee = snapshotReady ? snapshot.employee : settlementPreview?.employee || fallbackAccountEmployee;
     const accountExit = snapshotReady ? snapshot.exit : settlementPreview?.exit || fallbackAccountExit;
     const accountSalary = snapshotReady ? snapshot.salary : settlementPreview?.salary || null;
-    const accountCredits = snapshotReady ? Object.fromEntries(
+    const accountCredits = snapshotReady && (!settlementCanRecalculate || !previewReady) ? Object.fromEntries(
       Object.entries(snapshot.creditItems).map(([key, item]) => [key, Number(item?.amount || 0)])
     ) : settlementPreview?.credits || {};
-    const accountDebits = snapshotReady ? Object.fromEntries(
+    const accountDebits = snapshotReady && (!settlementCanRecalculate || !previewReady) ? Object.fromEntries(
       Object.entries(snapshot.debitItems).map(([key, item]) => [key, Number(item?.amount || 0)])
     ) : settlementPreview?.debits || {};
-    const accountTotals = snapshotReady ? snapshot.totals : settlementPreview?.totals || {
+    const accountTotals = snapshotReady && (!settlementCanRecalculate || !previewReady) ? snapshot.totals : settlementPreview?.totals || {
       totalCredits: Number(settlement?.grossPayable || 0),
       totalDebits: Number(settlement?.totalRecovery || 0),
       netSettlement: Number(settlement?.netSettlement || 0),
