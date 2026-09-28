@@ -889,7 +889,7 @@ export default function EmployeeExits() {
     const savedGratuity = snapshotReady ? Number(snapshot.creditItems.gratuityEosb?.amount || 0) : null;
     const currentGratuity = previewReady ? Number(settlementPreview.credits.gratuityEosb || 0) : null;
     const gratuityNeedsRecalculation = savedGratuity !== null && currentGratuity !== null && Math.abs(savedGratuity - currentGratuity) >= 0.005;
-    const settlementCanRecalculate = !settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status);
+    const settlementCanRecalculate = !settlement || ["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(settlement.status);
     const accountEmployee = snapshotReady ? snapshot.employee : settlementPreview?.employee || fallbackAccountEmployee;
     const accountExit = snapshotReady ? snapshot.exit : settlementPreview?.exit || fallbackAccountExit;
     const accountSalary = snapshotReady ? snapshot.salary : settlementPreview?.salary || null;
@@ -931,7 +931,7 @@ export default function EmployeeExits() {
                       className="exit-settlement-print-button"
                       style={secondaryButton}
                       onClick={printExitSettlementDocument}
-                      disabled={!snapshotReady && !previewReady}
+                      disabled={(!snapshotReady && !previewReady) || (gratuityNeedsRecalculation && settlementCanRecalculate)}
                       aria-label="Print or download Employee Exit Settlement Account as PDF"
                     >
                       <FaPrint /> Print / Download PDF
@@ -973,7 +973,7 @@ export default function EmployeeExits() {
                 </section>
               ) : null}
 
-              {!settlement || ["DRAFT", "CALCULATED", "DISPUTED"].includes(settlement.status) ? (
+              {settlementCanRecalculate ? (
                 <form onSubmit={calculateExitSettlement}>
                   <div className="exit-settlement-account-columns">
                     <div className="exit-settlement-credit-column">
