@@ -159,3 +159,11 @@ test("settlement employment days follow Zermatt's Excel date subtraction", () =>
   assert.equal(employmentDays("2026-09-21", "2026-09-21"), "0 days");
   assert.equal(employmentDays("2026-09-22", "2026-09-21"), "—");
 });
+
+test("editable settlement totals and calculation notes share the live preview; locked records keep their snapshot", () => {
+  assert.ok(frontend.includes("const accountTotals = snapshotReady && (!settlementCanRecalculate || !previewReady)"));
+  assert.ok(frontend.includes("const calculationNote = snapshotReady && (!settlementCanRecalculate || !previewReady)"));
+  assert.ok(frontend.includes("settlementPreview?.calculationNote ||"));
+  assert.equal(frontend.includes("<pre>{snapshot.calculationNote || calculationNote}</pre>"), false);
+  assert.ok(frontend.includes("<pre>{calculationNote}</pre>"));
+});
