@@ -151,7 +151,7 @@ function serviceYearProration(hireDate, exitDate) {
     return new Date(Date.UTC(year, month, Math.min(hire.getUTCDate(), lastDay)));
   }).filter((anniversary) => anniversary <= exit && anniversary <= serviceYearEnd).length;
   return {
-    factor: round4(completedMonths / 12),
+    factor: completedMonths / 12,
     serviceYearStart: dateText(serviceYearStart),
     serviceYearEnd: dateText(serviceYearEnd),
     accruedMonths: completedMonths,
@@ -513,7 +513,7 @@ function buildCalculationNote(preview) {
   push(
     "Annual Leave Allowance",
     preview.credits.annualLeaveAllowance,
-    `${preview.systemItems.credits.annualLeaveAllowance.formula}; proration factor ${preview.systemItems.credits.annualLeaveAllowance.prorationFactor}`
+    `${preview.systemItems.credits.annualLeaveAllowance.formula}; ${preview.systemItems.credits.annualLeaveAllowance.accruedMonths}/${preview.systemItems.credits.annualLeaveAllowance.serviceYearMonths} completed months`
   );
   push(
     "Outstanding Salary",
