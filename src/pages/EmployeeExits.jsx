@@ -904,7 +904,9 @@ export default function EmployeeExits() {
       totalDebits: Number(settlement?.totalRecovery || 0),
       netSettlement: Number(settlement?.netSettlement || 0),
     };
-    const calculationNote = snapshotReady ? snapshot.calculationNote || "" : settlementPreview?.calculationNote || "";
+    const calculationNote = snapshotReady && (!settlementCanRecalculate || !previewReady)
+      ? snapshot.calculationNote || ""
+      : settlementPreview?.calculationNote || "";
     return (
       <div className="employee-exit-settlement-page">
         <PageHero
@@ -1221,7 +1223,7 @@ export default function EmployeeExits() {
 
                       <section className="exit-settlement-print-calculation-note">
                         <h3>Calculation Basis</h3>
-                        <pre>{snapshot.calculationNote || calculationNote}</pre>
+                        <pre>{calculationNote}</pre>
                         {snapshot.hrSupplementaryNote ? (
                           <div className="exit-settlement-print-hr-note">
                             <strong>HR Supplementary Note:</strong> {snapshot.hrSupplementaryNote}
