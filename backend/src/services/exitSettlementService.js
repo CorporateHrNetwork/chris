@@ -126,7 +126,7 @@ function serviceYearProration(hireDate, exitDate) {
   const hire = new Date(hireDate);
   const exit = new Date(exitDate);
   if ([hire, exit].some((value) => Number.isNaN(value.getTime())) || exit < hire) {
-    return { factor: 0, serviceYearStart: null, serviceYearEnd: null, accruedDays: 0, serviceYearDays: 0 };
+    return { factor: 0, serviceYearStart: null, serviceYearEnd: null, accruedMonths: 0, serviceYearMonths: 12 };
   }
 
   const anniversaryFor = (year) => {
@@ -141,15 +141,21 @@ function serviceYearProration(hireDate, exitDate) {
   if (serviceYearStart < hire) serviceYearStart = hire;
   const serviceYearEnd = anniversaryFor(serviceYearStart.getUTCFullYear() + 1);
 
-  const DAY = 86400000;
-  const accruedDays = Math.max(0, Math.floor((exit - serviceYearStart) / DAY) + 1);
-  const serviceYearDays = Math.max(1, Math.round((serviceYearEnd - serviceYearStart) / DAY));
+  // Zermatt accrues one twelfth for each completed service month.
+  // Use the hire-day anniversary (capped at month-end) for short months.
+  const completedMonths = Array.from({ length: 12 }, (_, index) => {
+    const monthIndex = serviceYearStart.getUTCMonth() + index + 1;
+    const year = serviceYearStart.getUTCFullYear() + Math.floor(monthIndex / 12);
+    const month = monthIndex % 12;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month, Math.min(hire.getUTCDate(), lastDay)));
+  }).filter((anniversary) => anniversary <= exit && anniversary <= serviceYearEnd).length;
   return {
-    factor: Math.min(1, round4(accruedDays / serviceYearDays)),
+    factor: round4(completedMonths / 12),
     serviceYearStart: dateText(serviceYearStart),
     serviceYearEnd: dateText(serviceYearEnd),
-    accruedDays,
-    serviceYearDays,
+    accruedMonths: completedMonths,
+    serviceYearMonths: 12,
   };
 }
 
@@ -282,7 +288,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   const outstandingSalary = approvedLine ? 0 : money(dayRate * salaryDaysEntitled);
 
   let fullLeaveAllowance = 0;
-  let leaveAllowanceProration = { factor: 0, accruedDays: 0, serviceYearDays: 0, serviceYearStart: null, serviceYearEnd: null };
+  let leaveAllowanceProration = { factor: 0, accruedMonths: 0, serviceYearMonths: 12, serviceYearStart: null, serviceYearEnd: null };
   if (policy) {
     const leaveCalc = calculateLeaveAllowance({
       scheduledMonthlyGross: monthlyGross,
@@ -343,12 +349,12 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         amount: annualLeaveAllowance,
         fullAnnualAmount: fullLeaveAllowance,
         prorationFactor: leaveAllowanceProration.factor,
-        accruedDays: leaveAllowanceProration.accruedDays,
-        serviceYearDays: leaveAllowanceProration.serviceYearDays,
+        accruedMonths: leaveAllowanceProration.accruedMonths,
+        serviceYearMonths: leaveAllowanceProration.serviceYearMonths,
         serviceYearStart: leaveAllowanceProration.serviceYearStart,
         serviceYearEnd: leaveAllowanceProration.serviceYearEnd,
         source: "ZERMATT_LEAVE_ALLOWANCE_FORMULA",
-        formula: "Annual Leave Allowance × accrued service-year day fraction",
+        formula: "Annual Leave Allowance × completed service months ÷ 12",
       },
       outstandingSalary: {
         amount: outstandingSalary,
