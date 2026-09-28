@@ -889,7 +889,11 @@ export default function EmployeeExits() {
     const previewReady = Boolean(settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals);
     const savedGratuity = snapshotReady ? Number(snapshot.creditItems.gratuityEosb?.amount || 0) : null;
     const currentGratuity = previewReady ? Number(settlementPreview.credits.gratuityEosb || 0) : null;
-    const gratuityNeedsRecalculation = savedGratuity !== null && currentGratuity !== null && Math.abs(savedGratuity - currentGratuity) >= 0.005;
+    const savedLeaveAllowance = snapshotReady ? Number(snapshot.creditItems.annualLeaveAllowance?.amount || 0) : null;
+    const currentLeaveAllowance = previewReady ? Number(settlementPreview.credits.annualLeaveAllowance || 0) : null;
+    const gratuityChanged = savedGratuity !== null && currentGratuity !== null && Math.abs(savedGratuity - currentGratuity) >= 0.005;
+    const leaveAllowanceChanged = savedLeaveAllowance !== null && currentLeaveAllowance !== null && Math.abs(savedLeaveAllowance - currentLeaveAllowance) >= 0.005;
+    const benefitsNeedRecalculation = gratuityChanged || leaveAllowanceChanged;
     const accountEmployee = snapshotReady ? snapshot.employee : settlementPreview?.employee || fallbackAccountEmployee;
     const accountExit = snapshotReady ? snapshot.exit : settlementPreview?.exit || fallbackAccountExit;
     const accountSalary = snapshotReady ? snapshot.salary : settlementPreview?.salary || null;
@@ -933,7 +937,7 @@ export default function EmployeeExits() {
                       className="exit-settlement-print-button"
                       style={secondaryButton}
                       onClick={printExitSettlementDocument}
-                      disabled={(!snapshotReady && !previewReady) || (gratuityNeedsRecalculation && settlementCanRecalculate)}
+                      disabled={(!snapshotReady && !previewReady) || (benefitsNeedRecalculation && settlementCanRecalculate)}
                       aria-label="Print or download Employee Exit Settlement Account as PDF"
                     >
                       <FaPrint /> Print / Download PDF
@@ -943,9 +947,11 @@ export default function EmployeeExits() {
                 </div>
               </div>
 
-              {gratuityNeedsRecalculation ? (
+              {benefitsNeedRecalculation ? (
                 <div role="alert" style={warning}>
-                  The saved settlement gratuity differs from the current EoSB account ({moneyText(savedGratuity, accountSalary?.currency)} saved; {moneyText(currentGratuity, accountSalary?.currency)} current). {settlementCanRecalculate ? "Review the current EoSB amount below and select Recalculate Exit Settlement Account before approval or printing." : "This settlement has progressed beyond recalculation. Refer the difference to Head HR and Accounts for a governed correction before payout."}
+                  {gratuityChanged ? <>Gratuity / EoSB changed: {moneyText(savedGratuity, accountSalary?.currency)} saved; {moneyText(currentGratuity, accountSalary?.currency)} current. </> : null}
+                  {leaveAllowanceChanged ? <>Annual Leave Allowance changed: {moneyText(savedLeaveAllowance, accountSalary?.currency)} saved; {moneyText(currentLeaveAllowance, accountSalary?.currency)} current. </> : null}
+                  {settlementCanRecalculate ? "Select Recalculate Exit Settlement Account to save the current benefit amounts before approval or printing." : "This settlement has progressed beyond recalculation. Refer the difference to Head HR and Accounts for a governed correction before payout."}
                 </div>
               ) : null}
 
@@ -1138,7 +1144,7 @@ export default function EmployeeExits() {
                   {["CALCULATED", "PENDING_APPROVAL"].includes(settlement.status) ? (
                     <div style={settlementAction}>
                       <Field label="Head HR Approval Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field>
-                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy || gratuityNeedsRecalculation} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
+                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy || benefitsNeedRecalculation} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
                       {settlement.status === "PENDING_APPROVAL" ? <button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive with Reason</button> : null}
                     </div>
                   ) : null}
