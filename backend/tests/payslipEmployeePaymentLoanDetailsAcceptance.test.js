@@ -90,14 +90,19 @@ test("emailed payslip includes designation and running loan balance but excludes
     organizationLogoUrl: "",
     details: {
       salaryStructure: { basic: 200000, housing: 50000 },
-      customAllowances: [],
-      customDeductions: [],
+      customAllowances: [{ code: "ALW-PH", name: "Public Holiday", value: 12000 }],
+      customDeductions: [{ code: "DED-COOP", name: "Cooperative Dues", value: 3500 }],
       statutory: { payeTax: 25000, employeePension: 20000 },
       attendance: { payableDays: 26, standardDays: 26 },
     },
   });
   assert.match(output.html, /HR Officer/);
   assert.match(output.html, /Running Loan Balance/);
+  assert.match(output.html, /ALW-PH — Public Holiday/);
+  assert.match(output.html, /DED-COOP — Cooperative Dues/);
+  assert.match(output.plainText, /ALW-PH — Public Holiday: ₦12,000/);
+  assert.match(output.plainText, /DED-COOP — Cooperative Dues: ₦3,500/);
+  assert.doesNotMatch(output.html, /Other Earnings|Other Deductions/);
   assert.doesNotMatch(output.html, />Bank</);
   assert.doesNotMatch(output.html, /Account Name/);
   assert.doesNotMatch(output.html, /Account Number/);
