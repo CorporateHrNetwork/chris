@@ -880,22 +880,24 @@ async function calculateSettlement({
   }, { isolationLevel: "Serializable" });
 }
 
-async function assertCurrentGratuity(tx, organizationId, settlement) {
+async function assertCurrentSettlementBenefits(tx, organizationId, settlement) {
   const snapshot = settlement.calculationSnapshot || {};
-  const employeeNumber = snapshot.employee?.employeeNumber;
-  const exitDate = snapshot.exit?.lastWorkingDay;
-  const savedAmount = snapshot.creditItems?.gratuityEosb?.amount;
-  if (!employeeNumber || !exitDate || savedAmount == null) {
-    throw settlementError("SETTLEMENT_GRATUITY_RECALCULATION_REQUIRED", "Settlement gratuity has no verifiable account snapshot. Recalculate before approval.");
+  const savedGratuity = snapshot.creditItems?.gratuityEosb?.amount;
+  const savedLeaveAllowance = snapshot.creditItems?.annualLeaveAllowance?.amount;
+  if (savedGratuity == null || savedLeaveAllowance == null || !snapshot.hrInputs) {
+    throw settlementError("SETTLEMENT_BENEFITS_RECALCULATION_REQUIRED", "Settlement benefits have no verifiable account snapshot. Recalculate before approval.");
   }
-  const current = await getEosbStatement({
+  const current = await getSettlementPreview({
     organizationId,
-    employeeNumber,
-    asOf: exitDate,
+    exitProcessId: settlement.exitProcessId,
+    input: snapshot.hrInputs,
     prismaClient: tx,
   });
-  if (Math.abs(money(current.eosb.accruedValue) - money(savedAmount)) >= 0.005) {
-    throw settlementError("SETTLEMENT_GRATUITY_RECALCULATION_REQUIRED", "Gratuity changed in the EoSB account. Recalculate the settlement before approval.");
+  if (
+    Math.abs(money(current.credits.gratuityEosb) - money(savedGratuity)) >= 0.005 ||
+    Math.abs(money(current.credits.annualLeaveAllowance) - money(savedLeaveAllowance)) >= 0.005
+  ) {
+    throw settlementError("SETTLEMENT_BENEFITS_RECALCULATION_REQUIRED", "Gratuity or annual leave allowance changed in the source account. Recalculate the settlement before approval.");
   }
 }
 
@@ -906,7 +908,7 @@ async function submitSettlement({ organizationId, actorUserId, exitProcessId, pr
     if (!settlement || settlement.status !== "CALCULATED") {
       throw settlementError("SETTLEMENT_NOT_CALCULATED", "A calculated settlement is required before submission.");
     }
-    await assertCurrentGratuity(tx, organizationId, settlement);
+    await assertCurrentSettlementBenefits(tx, organizationId, settlement);
     return tx.exitSettlement.update({
       where: { id: settlement.id },
       data: { status: "PENDING_APPROVAL" },
@@ -921,7 +923,7 @@ async function approveSettlement({ organizationId, actorUserId, exitProcessId, n
     if (!settlement || settlement.status !== "PENDING_APPROVAL") {
       throw settlementError("SETTLEMENT_NOT_PENDING_APPROVAL", "Settlement must be pending approval.");
     }
-    await assertCurrentGratuity(tx, organizationId, settlement);
+    await assertCurrentSettlementBenefits(tx, organizationId, settlement);
     // Employee Exit Settlement is a Head HR prepare-and-approve control.
     // External Auditor review, GM payout approval and Accounts payout processing
     // occur on the printed settlement document outside CHRiS.
