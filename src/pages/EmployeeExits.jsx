@@ -129,7 +129,7 @@ function employmentDays(hireDate, lastWorkingDay) {
   const from = Date.parse(`${start}T00:00:00Z`);
   const to = Date.parse(`${end}T00:00:00Z`);
   if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return "—";
-  return `${Math.round((to - from) / 86400000) + 1} days`;
+  return `${Math.round((to - from) / 86400000)} days`;
 }
 
 function moneyText(value, currency = "NGN") {
