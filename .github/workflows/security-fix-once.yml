@@ -42,6 +42,9 @@ jobs:
           set -euo pipefail
           npm ci
           npm audit fix || true
+          npm pkg set overrides.deepmerge-ts=8.0.2
+          npm pkg set overrides.mysql2=3.24.4
+          npm install
           npm install --save https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
           npx prisma validate
           npx prisma generate
