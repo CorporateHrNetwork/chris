@@ -6,14 +6,14 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath), "utf8");
 
-test("Leave Allowance is reference-driven end-to-end", () => {
+test("Leave Allowance uses December salary reference with retained formula end-to-end", () => {
   const service = read("backend/src/services/zermattLeaveAllowanceService.js");
   const importer = read("backend/src/services/zermattLeaveAllowanceReferenceImportService.js");
   const routes = read("backend/src/routes/zermattLeaveAllowanceRoutes.js");
   const ui = read("src/pages/benefits/ZermattLeaveAllowance.jsx");
-  assert.ok(service.includes('POLICY_MODE = "REFERENCE_IMPORT"'));
+  assert.ok(service.includes('POLICY_MODE = "REFERENCE_SALARY_FORMULA"'));
   assert.ok(service.includes('SALARY_BASIS = "LAST_DECEMBER_GROSS"'));
-  assert.ok(service.includes('PAYMENT_TIMING = "ARREARS"'));
+  assert.ok(service.includes('PAYMENT_TIMING = "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE"'));
   assert.ok(importer.includes("previewLeaveAllowanceReferenceWorkbook"));
   assert.ok(importer.includes("importLeaveAllowanceReferenceWorkbook"));
   assert.ok(routes.includes("/benefits/leave-allowance/reference-preview"));
@@ -68,3 +68,4 @@ test("payslip and exit controls retain hardened behavior", () => {
 });
 
 console.log("PASS: Zermatt release hardening acceptance gate passed.");
+
