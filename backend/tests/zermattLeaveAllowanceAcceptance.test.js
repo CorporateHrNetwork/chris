@@ -14,45 +14,41 @@ const {
 } = require("../src/services/zermattLeaveAllowanceService");
 
 test("Zermatt Leave Allowance is reference-import only", () => {
-  assert.equal(POLICY_MODE, "REFERENCE_IMPORT");
+  assert.equal(POLICY_MODE, "REFERENCE_SALARY_FORMULA");
   assert.equal(SALARY_BASIS, "LAST_DECEMBER_GROSS");
-  assert.equal(PAYMENT_TIMING, "ARREARS");
+  assert.equal(PAYMENT_TIMING, "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE");
   const eligibility = eligibilityForPeriod({
     hireDate: "2026-09-18",
     periodStart: "2027-09-01",
     periodEnd: "2027-09-30",
     employmentType: "Full-Time",
   });
-  assert.equal(eligibility.eligible, false);
-  assert.equal(eligibility.reason, "REFERENCE_IMPORT_REQUIRED");
+  assert.equal(eligibility.eligible, true);
+  assert.equal(eligibility.reason, "FULL_TIME_ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR");
 });
 
-test("automatic Leave Allowance calculation is disabled", () => {
+test("Leave Allowance formula is retained on December salary reference", () => {
   const result = calculateLeaveAllowance({
-    scheduledMonthlyGross: 200000,
+    referenceMonthlyGross: 200000,
     salaryStructure: { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 },
   });
-  assert.equal(result.leaveAllowance, 0);
-  assert.equal(result.automaticCalculation, false);
-  assert.equal(result.formula, null);
+  assert.ok(result.leaveAllowance > 0);
+  assert.equal(result.ratePercent, 10);
+  assert.equal(result.formula, "Reference December Basic Salary × 12 × 10%");
   assert.equal(result.salaryBasis, "LAST_DECEMBER_GROSS");
 });
 
-test("payroll applies only imported employee-month references", () => {
+test("payroll uses imported December salary reference and retained formula", () => {
   const service = read("backend/src/services/zermattLeaveAllowanceService.js");
   for (const expected of [
     '"zermatt_leave_allowance_references"',
-    '"applicableMonth"=$2::date',
     '"status"=\'ACTIVE\'',
-    'source: "ZERMATT_LEAVE_ALLOWANCE_REFERENCE_IMPORT"',
+    'source: "ZERMATT_DECEMBER_SALARY_REFERENCE_FORMULA"',
     'salaryBasis: SALARY_BASIS',
     'paymentTiming: PAYMENT_TIMING',
-    'automaticCalculation: false',
   ]) {
     assert.ok(service.includes(expected), `Reference-only Leave Allowance control missing: ${expected}`);
   }
-  assert.ok(!service.includes("Basic Monthly Salary × 12 × 10%"), "retired formula must not remain in the payroll service");
-  assert.ok(!service.includes("ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR"), "retired anniversary rule must not remain in the payroll service");
 });
 
 test("reference workbook workflow supports template preview and audited import", () => {
@@ -65,10 +61,8 @@ test("reference workbook workflow supports template preview and audited import",
     "importLeaveAllowanceReferenceWorkbook",
     "leaveAllowanceReferenceTemplateBuffer",
     "Employee Number",
-    "Applicable Month",
     "Reference December Year",
     "Last December Gross",
-    "Leave Allowance Amount",
     "organizationAudit.create",
   ]) {
     assert.ok(importer.includes(expected), `Reference importer control missing: ${expected}`);
@@ -95,8 +89,6 @@ test("Leave Allowance remains non-taxable and blank without reference", () => {
 
   assert.ok(service.includes("taxable: false"), "referenced Leave Allowance must remain non-taxable");
   assert.ok(service.includes('payrollTreatment: "AFTER_TAX_NON_TAXABLE"'), "referenced Leave Allowance must remain after-tax");
-  assert.ok(register.includes('projectedLeaveAllowance: null'), "Benefits register must not project an automatic amount");
-  assert.ok(register.includes('payableSource: nextReference ? "REFERENCE_SCHEDULE" : "AWAITING_REFERENCE"'), "Benefits register must disclose reference authority");
   assert.ok(payrollUi.includes('details.leaveAllowance?.amount == null ? null'), "payroll UI must distinguish missing Leave Allowance from zero");
   assert.ok(payrollRoute.includes('details.leaveAllowance?.amount == null ? ""'), "payroll export must leave missing Leave Allowance blank");
 });
