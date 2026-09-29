@@ -6,134 +6,106 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath), "utf8");
 const {
+  POLICY_MODE,
+  SALARY_BASIS,
+  PAYMENT_TIMING,
   eligibilityForPeriod,
   calculateLeaveAllowance,
 } = require("../src/services/zermattLeaveAllowanceService");
 
-const salaryStructure = {
-  basic: 57,
-  housing: 11,
-  transport: 10,
-  meal: 9,
-  medical: 8,
-  utility: 5,
-};
-
-test("18 September 2026 hire is not due in September 2026", () => {
-  const result = eligibilityForPeriod({
-    hireDate: "2026-09-18",
-    periodStart: "2026-09-01",
-    periodEnd: "2026-09-30",
-    employmentType: "Full-Time",
-  });
-  assert.equal(result.eligible, false);
-  assert.equal(result.firstEligibleYear, 2027);
-});
-
-test("18 September 2026 hire is first due in September 2027 and recurs each September", () => {
-  const first = eligibilityForPeriod({
+test("Zermatt Leave Allowance is reference-import only", () => {
+  assert.equal(POLICY_MODE, "REFERENCE_IMPORT");
+  assert.equal(SALARY_BASIS, "LAST_DECEMBER_GROSS");
+  assert.equal(PAYMENT_TIMING, "ARREARS");
+  const eligibility = eligibilityForPeriod({
     hireDate: "2026-09-18",
     periodStart: "2027-09-01",
     periodEnd: "2027-09-30",
     employmentType: "Full-Time",
   });
-  assert.equal(first.eligible, true);
-  assert.equal(first.entitlementYear, 2027);
-  assert.equal(first.anniversaryDate, "2027-09-18");
-
-  const next = eligibilityForPeriod({
-    hireDate: "2026-09-18",
-    periodStart: "2028-09-01",
-    periodEnd: "2028-09-30",
-    employmentType: "Full-Time",
-  });
-  assert.equal(next.eligible, true);
-  assert.equal(next.entitlementYear, 2028);
+  assert.equal(eligibility.eligible, false);
+  assert.equal(eligibility.reason, "REFERENCE_IMPORT_REQUIRED");
 });
 
-test("entry month controls annual entitlement month", () => {
-  for (const [periodStart, periodEnd] of [
-    ["2027-08-01", "2027-08-31"],
-    ["2027-10-01", "2027-10-31"],
-  ]) {
-    const result = eligibilityForPeriod({
-      hireDate: "2026-09-18",
-      periodStart,
-      periodEnd,
-      employmentType: "Full-Time",
-    });
-    assert.equal(result.eligible, false);
-  }
-});
-
-test("Leave Allowance is 10 percent of annual Basic, not annual Gross", () => {
+test("automatic Leave Allowance calculation is disabled", () => {
   const result = calculateLeaveAllowance({
     scheduledMonthlyGross: 200000,
-    salaryStructure,
+    salaryStructure: { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 },
   });
-  assert.equal(result.monthlyBasicSalary, 114000);
-  assert.equal(result.annualBasicSalary, 1368000);
-  assert.equal(result.leaveAllowance, 136800);
-  assert.notEqual(result.leaveAllowance, 240000, "must not calculate 10% of annual Gross");
+  assert.equal(result.leaveAllowance, 0);
+  assert.equal(result.automaticCalculation, false);
+  assert.equal(result.formula, null);
+  assert.equal(result.salaryBasis, "LAST_DECEMBER_GROSS");
 });
 
-test("Zermatt Leave Allowance is a non-taxable after-tax benefit", () => {
+test("payroll applies only imported employee-month references", () => {
   const service = read("backend/src/services/zermattLeaveAllowanceService.js");
-  const register = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
-  const payslip = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+  for (const expected of [
+    '"zermatt_leave_allowance_references"',
+    '"applicableMonth"=$2::date',
+    '"status"=\'ACTIVE\'',
+    'source: "ZERMATT_LEAVE_ALLOWANCE_REFERENCE_IMPORT"',
+    'salaryBasis: SALARY_BASIS',
+    'paymentTiming: PAYMENT_TIMING',
+    'automaticCalculation: false',
+  ]) {
+    assert.ok(service.includes(expected), `Reference-only Leave Allowance control missing: ${expected}`);
+  }
+  assert.ok(!service.includes("Basic Monthly Salary × 12 × 10%"), "retired formula must not remain in the payroll service");
+  assert.ok(!service.includes("ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR"), "retired anniversary rule must not remain in the payroll service");
+});
+
+test("reference workbook workflow supports template preview and audited import", () => {
+  const importer = read("backend/src/services/zermattLeaveAllowanceReferenceImportService.js");
+  const routes = read("backend/src/routes/zermattLeaveAllowanceRoutes.js");
+  const page = read("src/pages/benefits/ZermattLeaveAllowance.jsx");
 
   for (const expected of [
-    "taxable: false",
-    'payrollTreatment: "AFTER_TAX_NON_TAXABLE"',
-    "payeImpact: 0",
-    "const grossPay = oldGross",
-    "const allowances = oldAllowances",
-    "const deductions = oldDeductions",
-    "const netPreview = round2(oldNet + calculation.leaveAllowance)",
+    "previewLeaveAllowanceReferenceWorkbook",
+    "importLeaveAllowanceReferenceWorkbook",
+    "leaveAllowanceReferenceTemplateBuffer",
+    "Employee Number",
+    "Applicable Month",
+    "Reference December Year",
+    "Last December Gross",
+    "Leave Allowance Amount",
+    "organizationAudit.create",
   ]) {
-    assert.ok(service.includes(expected), `After-tax Leave Allowance control missing: ${expected}`);
+    assert.ok(importer.includes(expected), `Reference importer control missing: ${expected}`);
   }
 
-  assert.ok(!service.includes("calculateAnnualPaye"), "Leave Allowance must not trigger PAYE recalculation");
-  assert.ok(!service.includes("leaveAllowanceTaxableEarning"), "Leave Allowance must not be recorded as taxable earning");
-  assert.ok(!service.includes('"Leave Allowance": calculation.leaveAllowance'), "Leave Allowance must not be merged into taxable salary structure");
-  assert.ok(register.includes('payrollTreatment: "AFTER_TAX_NON_TAXABLE"'), "Benefits register must disclose after-tax treatment");
-  assert.ok(register.includes("taxable: false"), "Benefits register must mark Leave Allowance non-taxable");
-  assert.ok(payslip.includes("Leave Allowance · After Tax / Non-taxable"), "approved payslip must show Leave Allowance as a separate after-tax element");
-  assert.ok(payslip.includes("Taxable Gross Pay"), "payslip must distinguish taxable Gross Pay from after-tax Leave Allowance");
+  for (const endpoint of [
+    "/benefits/leave-allowance/reference-template",
+    "/benefits/leave-allowance/reference-preview",
+    "/benefits/leave-allowance/reference-import",
+  ]) {
+    assert.ok(routes.includes(endpoint), `Leave Allowance reference endpoint missing: ${endpoint}`);
+  }
+
+  assert.ok(page.includes("Leave Allowance Reference Import"), "Benefits page must expose reference import workspace");
+  assert.ok(page.includes("Validate / Preview"), "Benefits page must require workbook validation before import");
+  assert.ok(page.includes("Confirm Import"), "Benefits page must expose controlled confirm import");
 });
 
-test("Zermatt Leave Allowance remains wired through Benefits, payroll, approved payslip and duplicate protection", () => {
+test("Leave Allowance remains non-taxable and blank without reference", () => {
   const service = read("backend/src/services/zermattLeaveAllowanceService.js");
   const register = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
-  const route = read("backend/src/routes/zermattLeaveAllowanceRoutes.js");
-  const app = read("backend/src/app.js");
-  const benefits = read("src/pages/Benefits.jsx");
-  const payslip = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+  const payrollUi = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+  const payrollRoute = read("backend/src/routes/payrollRoutes.js");
 
-  for (const expected of [
-    "ZERMATT_LEAVE_ALLOWANCE",
-    "ZERMATT_LEAVE_ALLOWANCE_APPLIED",
-    "ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR",
-    "Basic Monthly Salary × 12 × 10%",
-    'pr."status"=\'APPROVED\'',
-    "benefitEarnings",
-  ]) {
-    assert.ok(service.includes(expected), `Leave Allowance service control missing: ${expected}`);
-  }
-
-  assert.ok(register.includes('"organization_locations"'), "Benefits register must use authoritative organization_locations table");
-  assert.ok(route.includes('require("../services/zermattLeaveAllowanceRegisterService")'), "route must use corrected register service");
-  assert.ok(route.includes('"/benefits/leave-allowance"'), "Benefits register route missing");
-  assert.ok(route.includes('"/payroll/runs/draft"'), "Zermatt payroll interception missing");
-  assert.ok(route.includes("applyZermattLeaveAllowanceToDraft"), "Leave Allowance must be applied in payroll calculation");
-  assert.ok(app.indexOf("zermattLeaveAllowanceRoutes") < app.indexOf('app.use("/api/payroll", payrollRoutes)'), "Zermatt Leave Allowance route must run before generic payroll routes");
-
-  assert.ok(benefits.includes('workspace === "leave-allowance"'), "Leave Allowance must be a Benefits child workspace");
-  assert.ok(benefits.includes("ZermattLeaveAllowance"), "Benefits child workspace component missing");
-
-  assert.ok(payslip.includes("Leave Allowance"), "payslip must render Leave Allowance separately");
-  assert.ok(payslip.includes("Net Pay"), "payslip Net Pay reconciliation missing");
+  assert.ok(service.includes("taxable: false"), "referenced Leave Allowance must remain non-taxable");
+  assert.ok(service.includes('payrollTreatment: "AFTER_TAX_NON_TAXABLE"'), "referenced Leave Allowance must remain after-tax");
+  assert.ok(register.includes('projectedLeaveAllowance: null'), "Benefits register must not project an automatic amount");
+  assert.ok(register.includes('payableSource: nextReference ? "REFERENCE_SCHEDULE" : "AWAITING_REFERENCE"'), "Benefits register must disclose reference authority");
+  assert.ok(payrollUi.includes('leaveAllowance == null ? null'), "payroll UI must distinguish missing Leave Allowance from zero");
+  assert.ok(payrollRoute.includes('details.leaveAllowance?.amount == null ? ""'), "payroll export must leave missing Leave Allowance blank");
 });
 
-console.log("PASS: Zermatt Leave Allowance acceptance gate passed.");
+test("approved history is preserved while mutable payroll can be cleared", () => {
+  const migration = read("backend/prisma/migrations/20260929183500_zermatt_leave_allowance_reference_policy/migration.sql");
+  assert.ok(migration.includes("pr.\"status\" IN ('DRAFT','SUBMITTED')"), "only mutable payroll may be scrubbed");
+  assert.ok(!migration.includes("pr.\"status\"='APPROVED'"), "migration must not rewrite approved payroll");
+  assert.ok(migration.includes('"zermatt_leave_allowance_references"'), "reference authority table migration missing");
+});
+
+console.log("PASS: Zermatt Leave Allowance reference-policy acceptance gate passed.");
