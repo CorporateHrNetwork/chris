@@ -119,7 +119,7 @@ export default function ZermattLeaveAllowance() {
     </div>
     <div style={eyebrow}>ZERMATT BENEFITS</div>
     <h1 style={titleStyle}>Leave Allowance</h1>
-    <p style={leadStyle}>Zermatt Leave Allowance is payable in arrears from an authoritative employee/month reference schedule based on the employee's last December gross salary. CHRiS does not calculate the amount automatically. Without an imported reference, the payroll Leave Allowance column remains blank.</p>
+    <p style={leadStyle}>Zermatt Leave Allowance retains the approved Basic Salary × 12 × 10% formula. The salary basis is the employee's prior-December gross salary imported as the authoritative reference; CHRiS derives the December Basic Salary from that gross, calculates the annual Leave Allowance, and applies the existing eligibility/payment timing rules. Without the salary reference, the payroll Leave Allowance column remains blank.</p>
 
     <div style={cards}>
       <Metric label="Payroll Status" value={loading ? "—" : settings.enabled === false ? "Paused" : "Enabled"} />
@@ -135,12 +135,12 @@ export default function ZermattLeaveAllowance() {
     <section style={panelStyle}>
       <h2 style={panelTitle}>Zermatt Leave Allowance Policy</h2>
       <div style={policyGrid}>
-        <Policy label="Policy mode" value="Reference import only. Automatic calculation is disabled." />
-        <Policy label="Salary basis" value="Last December gross salary, using the authoritative amount supplied in the reference schedule." />
-        <Policy label="Payment timing" value="In arrears, in the applicable month stated in the imported reference." />
+        <Policy label="Policy mode" value="Reference salary + CHRiS formula. The spreadsheet supplies salary authority; CHRiS performs the calculation." />
+        <Policy label="Salary basis" value="Last December gross salary. CHRiS derives Basic Salary using the approved salary structure." />
+        <Policy label="Payment timing" value="Existing Zermatt rule remains: payable in the employee entry/anniversary month after qualifying service, using the prior-December salary reference." />
         <Policy label="Tax treatment" value="After-tax / Non-taxable. Leave Allowance does not increase PAYE chargeable income." />
-        <Policy label="Payroll treatment" value="The referenced amount is pulled into payroll only for the matching employee and applicable month, and is shown separately on the payslip." />
-        <Policy label="Control" value="Employee + applicable month is unique. Re-importing the same employee/month retires the prior active reference and creates a new audited authority." />
+        <Policy label="Payroll treatment" value="CHRiS calculates Reference December Basic × 12 × 10% and pulls the calculated amount into the employee's eligible payroll month; it remains separately shown on the payslip." />
+        <Policy label="Control" value="Employee + Reference December Year is the salary authority. Re-importing the same employee/year retires the prior active reference and creates a new audited authority." />
       </div>
     </section>
 
@@ -148,7 +148,7 @@ export default function ZermattLeaveAllowance() {
       <div style={toolbar}>
         <div>
           <h2 style={{ ...panelTitle, marginBottom: 4 }}>Leave Allowance Reference Import</h2>
-          <div style={subtle}>Import the authoritative schedule containing Employee Number, Applicable Month, Reference December Year, Last December Gross and Leave Allowance Amount. Validate the workbook before confirming import.</div>
+          <div style={subtle}>Import the authoritative December salary schedule containing Employee Number, Reference December Year and Last December Gross Salary. CHRiS will derive Basic Salary and calculate Leave Allowance before import. Validate the workbook before confirming import.</div>
         </div>
       </div>
       <div style={importControls}>
@@ -160,13 +160,14 @@ export default function ZermattLeaveAllowance() {
       {referencePreview && <div style={previewSummary}><strong>{referencePreview.totalRows} rows</strong> · {referencePreview.validRows} valid · {referencePreview.invalidRows} errors · {referencePreview.warningRows} warnings</div>}
       {referencePreview?.rows?.length > 0 && <div style={tableWrap}>
         <table style={{ ...tableStyle, minWidth: 1200 }}>
-          <thead><tr>{["Row","Employee","Applicable Month","Reference December","Last December Gross","Leave Allowance","Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
+          <thead><tr>{["Row","Employee","Applicable Month","Reference December","Last December Gross","Derived December Basic","Calculated Leave Allowance","Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
           <tbody>{referencePreview.rows.slice(0,100).map((row) => <tr key={row.rowNumber}>
             <td style={tdStyle}>{row.rowNumber}</td>
             <td style={tdStrong}>{row.employeeNumber}{row.employeeName ? " — " + row.employeeName : ""}</td>
             <td style={tdStyle}>{row.applicableMonth || "—"}</td>
             <td style={tdStyle}>{row.referenceDecemberYear || "—"}</td>
             <td style={tdStyle}>{row.referenceDecemberGross == null ? "—" : money(row.referenceDecemberGross)}</td>
+            <td style={tdStyle}>{row.referenceDecemberBasic == null ? "—" : money(row.referenceDecemberBasic)}</td>
             <td style={tdStrong}>{row.leaveAllowanceAmount == null ? "—" : money(row.leaveAllowanceAmount)}</td>
             <td style={tdStyle}>{row.valid ? <span style={eligibleBadge}>VALID</span> : <><span style={ineligibleBadge}>ERROR</span><div style={tiny}>{(row.errors || []).join(" ")}</div></>}{row.warnings?.length ? <div style={tiny}>{row.warnings.join(" ")}</div> : null}</td>
           </tr>)}</tbody>
@@ -177,7 +178,7 @@ export default function ZermattLeaveAllowance() {
 
     <section style={panelStyle}>
       <div style={toolbar}>
-        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>This register shows imported employee/month references and approved payment history. No projected Leave Allowance amount is calculated by CHRiS.</div></div>
+        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>This register shows imported December salary references, CHRiS-calculated annual Leave Allowance values, and approved payment history.</div></div>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, branch, type or reference" style={searchInput} />
       </div>
       {error && <div style={errorStyle}>{error}</div>}
