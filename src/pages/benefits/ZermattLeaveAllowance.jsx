@@ -119,15 +119,15 @@ export default function ZermattLeaveAllowance() {
     </div>
     <div style={eyebrow}>ZERMATT BENEFITS</div>
     <h1 style={titleStyle}>Leave Allowance</h1>
-    <p style={leadStyle}>Only Full-Time employees are eligible. For eligible employees, Leave Allowance is paid through payroll in the original entry month after the first completed year of service, then in that same month annually. Other Employment Types remain visible in this register but are marked Not Eligible.</p>
+    <p style={leadStyle}>Zermatt Leave Allowance is payable in arrears from an authoritative employee/month reference schedule based on the employee's last December gross salary. CHRiS does not calculate the amount automatically. Without an imported reference, the payroll Leave Allowance column remains blank.</p>
 
     <div style={cards}>
       <Metric label="Payroll Status" value={loading ? "—" : settings.enabled === false ? "Paused" : "Enabled"} />
-      <Metric label="Eligible Type" value="Full-Time only" />
-      <Metric label="Eligible Employees" value={loading ? "—" : summary.employmentTypeEligible ?? 0} />
-      <Metric label="Not Eligible" value={loading ? "—" : summary.employmentTypeIneligible ?? 0} />
-      <Metric label="Payable Employees This Month" value={loading ? "—" : summary.payableEmployeesThisMonth ?? 0} />
-      <Metric label="Amount Payable This Month" value={loading ? "—" : money(summary.amountPayableThisMonth || 0)} />
+      <Metric label="Policy Mode" value="Reference Import" />
+      <Metric label="References Loaded" value={loading ? "—" : summary.referencesLoaded ?? 0} />
+      <Metric label="Employees Referenced" value={loading ? "—" : summary.employeesWithReference ?? 0} />
+      <Metric label="Awaiting Reference" value={loading ? "—" : summary.employeesAwaitingReference ?? 0} />
+      <Metric label="Referenced Amount" value={loading ? "—" : money(summary.totalReferencedAmount || 0)} />
     </div>
 
     {!loading && <div style={payableNote}>
@@ -137,12 +137,12 @@ export default function ZermattLeaveAllowance() {
     <section style={panelStyle}>
       <h2 style={panelTitle}>Zermatt Leave Allowance Policy</h2>
       <div style={policyGrid}>
-        <Policy label="Eligible Employment Type" value="Full-Time only. Part-time, Expatriate and NYSC/Internship employees are not eligible." />
-        <Policy label="Eligibility timing" value={policy.eligibility || "First payment after one completed year of service in the employee entry month; annual recurrence thereafter."} />
-        <Policy label="Calculation" value={policy.formula || "Basic Monthly Salary × 12 × 10%"} />
+        <Policy label="Policy mode" value="Reference import only. Automatic calculation is disabled." />
+        <Policy label="Salary basis" value="Last December gross salary, using the authoritative amount supplied in the reference schedule." />
+        <Policy label="Payment timing" value="In arrears, in the applicable month stated in the imported reference." />
         <Policy label="Tax treatment" value="After-tax / Non-taxable. Leave Allowance does not increase PAYE chargeable income." />
-        <Policy label="Payroll treatment" value={policy.payrollTreatment || "Paid with salary in the eligible payroll period and separately identified on the approved payslip."} />
-        <Policy label="Control" value="An approved entitlement year cannot be paid twice. Employment Type changes apply to subsequent payroll processing without rewriting approved history." />
+        <Policy label="Payroll treatment" value="The referenced amount is pulled into payroll only for the matching employee and applicable month, and is shown separately on the payslip." />
+        <Policy label="Control" value="Employee + applicable month is unique. Re-importing the same employee/month retires the prior active reference and creates a new audited authority." />
       </div>
     </section>
 
