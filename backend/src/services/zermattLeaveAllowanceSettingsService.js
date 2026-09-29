@@ -1,22 +1,21 @@
 const DEFAULT_SETTINGS = Object.freeze({
   enabled: true,
-  ratePercent: 10,
-  qualifyingServiceYears: 1,
-  salaryBasis: "BASIC_MONTHLY_SALARY",
-  paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
+  policyMode: "REFERENCE_IMPORT",
+  automaticCalculation: false,
+  salaryBasis: "LAST_DECEMBER_GROSS",
+  paymentTiming: "ARREARS",
   taxTreatment: "AFTER_TAX_NON_TAXABLE",
   payslipLabel: "Leave Allowance",
 });
 
 function normalizeSettings(input = {}, base = DEFAULT_SETTINGS) {
-  const rate = Number(input.ratePercent ?? base.ratePercent);
   const label = String(input.payslipLabel ?? base.payslipLabel).trim();
   return {
     enabled: input.enabled === undefined ? Boolean(base.enabled) : Boolean(input.enabled),
-    ratePercent: Number.isFinite(rate) && rate > 0 && rate <= 100 ? rate : base.ratePercent,
-    qualifyingServiceYears: 1,
-    salaryBasis: "BASIC_MONTHLY_SALARY",
-    paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
+    policyMode: "REFERENCE_IMPORT",
+    automaticCalculation: false,
+    salaryBasis: "LAST_DECEMBER_GROSS",
+    paymentTiming: "ARREARS",
     taxTreatment: "AFTER_TAX_NON_TAXABLE",
     payslipLabel: label || "Leave Allowance",
   };
