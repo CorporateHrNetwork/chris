@@ -575,7 +575,7 @@ function PayrollLines({ rows, onViewPayslip }) {
             const details = row.details || {};
             const statutory = details.statutory || {};
             const structure = details.salaryStructure || {};
-            const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
+            const leaveAllowance = details.leaveAllowance?.amount == null ? null : Number(details.leaveAllowance.amount);
             const allowanceValues = new Map((details.customAllowances || []).map((item) => [payrollLineComponentKey(item), Number(item.value || 0)]));
             const deductionValues = new Map((details.customDeductions || []).map((item) => [payrollLineComponentKey(item), Number(item.value || 0)]));
             return (
@@ -593,7 +593,7 @@ function PayrollLines({ rows, onViewPayslip }) {
                 {deductionColumns.map((item) => <Td key={`d-${item.id}`}>{money(deductionValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(row.advanceRecovery, row.currency)}</Td>
                 <Td>{money(row.loanRecovery, row.currency)}</Td>
-                <Td>{leaveAllowance ? `${money(leaveAllowance, row.currency)} · After tax` : "—"}</Td>
+                <Td>{leaveAllowance != null && leaveAllowance > 0 ? `${money(leaveAllowance, row.currency)} · After tax` : ""}</Td>
                 <Td>{money(row.grossPay, row.currency)}</Td>
                 <Td strong>{money(row.netPreview, row.currency)}</Td>
                 <Td><button type="button" style={smallButton} onClick={() => onViewPayslip?.(row)}>{row.runStatus === "APPROVED" ? "View Payslip" : "View Preview"}</button></Td>
@@ -740,7 +740,7 @@ function ApprovedPayslips() {
             <DataTable loading={loading} columns={["Select", "Period", "Employee", "Email", "Gross", "PAYE", "Pension", "Advance", "Loan", "Leave Allowance", "Net", "Action"]}>
               {displayRows.map((row) => {
                 const statutory = row.details?.statutory || {};
-                const leaveAllowance = Number(row.details?.leaveAllowance?.amount || 0);
+                const leaveAllowance = row.details?.leaveAllowance?.amount == null ? null : Number(row.details.leaveAllowance.amount);
                 return <tr key={row.id}>
                   <Td><input type="checkbox" aria-label={`Select payslip ${row.employeeNumber} ${row.periodCode}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
                   <Td strong>{row.periodCode}</Td>
@@ -751,7 +751,7 @@ function ApprovedPayslips() {
                   <Td>{money(statutory.employeePension, row.currency)}</Td>
                   <Td>{money(row.advanceRecovery, row.currency)}</Td>
                   <Td>{money(row.loanRecovery, row.currency)}</Td>
-                  <Td>{leaveAllowance ? money(leaveAllowance, row.currency) : "—"}</Td>
+                  <Td>{leaveAllowance != null && leaveAllowance > 0 ? money(leaveAllowance, row.currency) : ""}</Td>
                   <Td strong>{money(row.netPreview, row.currency)}</Td>
                   <Td><div style={buttonRow}>
                     <button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button>
