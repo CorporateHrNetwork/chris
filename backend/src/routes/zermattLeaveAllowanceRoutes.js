@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
@@ -15,8 +16,24 @@ const {
   getSettings,
   updateSettings,
 } = require("../services/zermattLeaveAllowanceSettingsService");
+const {
+  previewLeaveAllowanceReferenceWorkbook,
+  importLeaveAllowanceReferenceWorkbook,
+  leaveAllowanceReferenceTemplateBuffer,
+} = require("../services/zermattLeaveAllowanceReferenceImportService");
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter(req, file, callback) {
+    const name = String(file.originalname || "").toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
+      return callback(new Error("Upload an Excel .xlsx or .xls file."));
+    }
+    callback(null, true);
+  },
+});
 router.use(requireAuth);
 
 function zermattOnly(req, res, next) {
@@ -77,12 +94,85 @@ router.put(
       return res.json({
         status: "success",
         message: settings.enabled
-          ? "Zermatt Leave Allowance is enabled for eligible payroll periods."
-          : "Zermatt Leave Allowance is paused for future draft payroll calculations.",
+          ? "Zermatt Leave Allowance reference processing is enabled."
+          : "Zermatt Leave Allowance reference processing is paused for future payroll runs.",
         data: settings,
       });
     } catch (error) {
       return sendError(res, error, "Unable to update Leave Allowance settings.");
+    }
+  }
+);
+
+router.get(
+  "/benefits/leave-allowance/reference-template",
+  zermattOnly,
+  requirePermission("payroll.manage"),
+  async (req, res) => {
+    try {
+      const buffer = leaveAllowanceReferenceTemplateBuffer();
+      res.setHeader("Content-Disposition", 'attachment; filename="Zermatt_Leave_Allowance_Reference_Template.xlsx"');
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      return res.send(buffer);
+    } catch (error) {
+      return sendError(res, error, "Unable to prepare Leave Allowance reference template.");
+    }
+  }
+);
+
+router.post(
+  "/benefits/leave-allowance/reference-preview",
+  zermattOnly,
+  requirePermission("payroll.manage"),
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file?.buffer) {
+        const error = new Error("Upload a Leave Allowance reference workbook.");
+        error.code = "LEAVE_ALLOWANCE_REFERENCE_FILE_REQUIRED";
+        error.statusCode = 400;
+        throw error;
+      }
+      const data = await previewLeaveAllowanceReferenceWorkbook({
+        organizationId: req.auth.organizationId,
+        buffer: req.file.buffer,
+        fileName: req.file.originalname,
+        prismaClient: prisma,
+      });
+      return res.json({ status: "success", data });
+    } catch (error) {
+      return sendError(res, error, "Unable to validate Leave Allowance reference workbook.");
+    }
+  }
+);
+
+router.post(
+  "/benefits/leave-allowance/reference-import",
+  zermattOnly,
+  requirePermission("payroll.manage"),
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file?.buffer) {
+        const error = new Error("Upload a Leave Allowance reference workbook.");
+        error.code = "LEAVE_ALLOWANCE_REFERENCE_FILE_REQUIRED";
+        error.statusCode = 400;
+        throw error;
+      }
+      const data = await importLeaveAllowanceReferenceWorkbook({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        buffer: req.file.buffer,
+        fileName: req.file.originalname,
+        prismaClient: prisma,
+      });
+      return res.json({
+        status: "success",
+        message: `${data.imported} Leave Allowance reference row(s) imported successfully.`,
+        data,
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to import Leave Allowance reference workbook.");
     }
   }
 );
@@ -173,7 +263,10 @@ router.post(
             beneficiaryCount: 0,
             totalLeaveAllowance: 0,
             payrollTreatment: settings.taxTreatment,
-            formula: "Basic Monthly Salary × 12 × 10%",
+            policyMode: "REFERENCE_IMPORT",
+            salaryBasis: "LAST_DECEMBER_GROSS",
+            paymentTiming: "ARREARS",
+            automaticCalculation: false,
             beneficiaries: [],
           };
 
@@ -222,10 +315,10 @@ router.post(
       return res.status(201).json({
         status: "success",
         message: !settings.enabled
-          ? "Draft payroll calculated. Zermatt Leave Allowance is currently disabled in Benefits settings."
+          ? "Draft payroll calculated. Zermatt Leave Allowance reference processing is disabled in Benefits settings."
           : leaveAllowance.beneficiaryCount
-            ? `Draft payroll calculated. ${leaveAllowance.beneficiaryCount} employee(s) received Zermatt Leave Allowance for this period.`
-            : "Draft payroll calculated. No Zermatt Leave Allowance fell due in this period.",
+            ? `Draft payroll calculated. ${leaveAllowance.beneficiaryCount} employee(s) received referenced Zermatt Leave Allowance for this period.`
+            : "Draft payroll calculated. No imported Zermatt Leave Allowance reference applies to this period.",
         data: {
           run,
           lines: lineRows.map(mapLine),
