@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../../services/api";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -22,15 +22,83 @@ export default function ZermattLeaveAllowance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [referenceFile, setReferenceFile] = useState(null);
+  const [referencePreview, setReferencePreview] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+
+  const loadRegister = async () => {
+    const response = await apiRequest("/api/benefits/leave-allowance");
+    setData(response?.data || null);
+    return response?.data || null;
+  };
 
   useEffect(() => {
     let active = true;
-    apiRequest("/api/benefits/leave-allowance")
-      .then((response) => { if (active) { setData(response?.data || null); setError(""); } })
-      .catch((err) => { if (active) setError(err?.message || "Unable to load Leave Allowance register."); })
-      .finally(() => { if (active) setLoading(false); });
+    (async () => {
+      try {
+        setLoading(true);
+        const response = await apiRequest("/api/benefits/leave-allowance");
+        if (active) { setData(response?.data || null); setError(""); }
+      } catch (err) {
+        if (active) setError(err?.message || "Unable to load Leave Allowance register.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
     return () => { active = false; };
   }, []);
+
+  const downloadReferenceTemplate = async () => {
+    try {
+      setBusy("download-reference");
+      setError("");
+      const file = await apiDownload("/api/benefits/leave-allowance/reference-template");
+      saveDownloadedBlob(file);
+    } catch (err) {
+      setError(err?.message || "Unable to download the Leave Allowance reference template.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const previewReference = async () => {
+    if (!referenceFile) return;
+    try {
+      setBusy("preview-reference");
+      setError("");
+      setMessage("");
+      const body = new FormData();
+      body.append("file", referenceFile);
+      const response = await apiRequest("/api/benefits/leave-allowance/reference-preview", { method: "POST", body });
+      setReferencePreview(response?.data || null);
+    } catch (err) {
+      setReferencePreview(null);
+      setError(err?.message || "Unable to validate the Leave Allowance reference workbook.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const importReference = async () => {
+    if (!referenceFile || !referencePreview?.importAllowed) return;
+    try {
+      setBusy("import-reference");
+      setError("");
+      setMessage("");
+      const body = new FormData();
+      body.append("file", referenceFile);
+      const response = await apiRequest("/api/benefits/leave-allowance/reference-import", { method: "POST", body });
+      setMessage(response?.message || "Leave Allowance reference imported.");
+      setReferencePreview(null);
+      setReferenceFile(null);
+      await loadRegister();
+    } catch (err) {
+      setError(err?.message || "Unable to import the Leave Allowance reference workbook.");
+    } finally {
+      setBusy("");
+    }
+  };
 
   const rows = useMemo(() => {
     const source = data?.rows || [];
