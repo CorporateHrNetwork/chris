@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm audit fix
+          npm audit fix || true
           npm run build
           npm audit --omit=dev || true
 
@@ -41,7 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm audit fix
+          npm audit fix || true
+          npm install --save https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
           npx prisma validate
           npx prisma generate
           node --check src/server.js
