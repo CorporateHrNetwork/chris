@@ -1,9 +1,11 @@
 const DEFAULT_SETTINGS = Object.freeze({
   enabled: true,
-  policyMode: "REFERENCE_IMPORT",
-  automaticCalculation: false,
+  policyMode: "REFERENCE_SALARY_FORMULA",
+  automaticCalculation: true,
   salaryBasis: "LAST_DECEMBER_GROSS",
-  paymentTiming: "ARREARS",
+  formula: "Reference December Basic Salary × 12 × 10%",
+  qualifyingServiceYears: 1,
+  paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
   taxTreatment: "AFTER_TAX_NON_TAXABLE",
   payslipLabel: "Leave Allowance",
 });
@@ -12,10 +14,12 @@ function normalizeSettings(input = {}, base = DEFAULT_SETTINGS) {
   const label = String(input.payslipLabel ?? base.payslipLabel).trim();
   return {
     enabled: input.enabled === undefined ? Boolean(base.enabled) : Boolean(input.enabled),
-    policyMode: "REFERENCE_IMPORT",
-    automaticCalculation: false,
+    policyMode: "REFERENCE_SALARY_FORMULA",
+    automaticCalculation: true,
     salaryBasis: "LAST_DECEMBER_GROSS",
-    paymentTiming: "ARREARS",
+    formula: "Reference December Basic Salary × 12 × 10%",
+    qualifyingServiceYears: 1,
+    paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
     taxTreatment: "AFTER_TAX_NON_TAXABLE",
     payslipLabel: label || "Leave Allowance",
   };
