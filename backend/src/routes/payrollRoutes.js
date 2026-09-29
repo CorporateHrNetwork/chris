@@ -1559,7 +1559,7 @@ function payrollWorkbookModel(lines, employeeMeta) {
         Number(line.deductions || 0),
         Number(line.advanceRecovery || 0),
         Number(line.loanRecovery ?? details.loanRecoveryTotal ?? 0),
-        Number(details.leaveAllowance?.amount || 0),
+        details.leaveAllowance?.amount == null ? "" : Number(details.leaveAllowance.amount),
         Number(line.netPreview || 0),
       ],
       line,
