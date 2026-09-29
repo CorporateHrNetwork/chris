@@ -97,7 +97,7 @@ test("Leave Allowance remains non-taxable and blank without reference", () => {
   assert.ok(service.includes('payrollTreatment: "AFTER_TAX_NON_TAXABLE"'), "referenced Leave Allowance must remain after-tax");
   assert.ok(register.includes('projectedLeaveAllowance: null'), "Benefits register must not project an automatic amount");
   assert.ok(register.includes('payableSource: nextReference ? "REFERENCE_SCHEDULE" : "AWAITING_REFERENCE"'), "Benefits register must disclose reference authority");
-  assert.ok(payrollUi.includes('leaveAllowance == null ? null'), "payroll UI must distinguish missing Leave Allowance from zero");
+  assert.ok(payrollUi.includes('details.leaveAllowance?.amount == null ? null'), "payroll UI must distinguish missing Leave Allowance from zero");
   assert.ok(payrollRoute.includes('details.leaveAllowance?.amount == null ? ""'), "payroll export must leave missing Leave Allowance blank");
 });
 
