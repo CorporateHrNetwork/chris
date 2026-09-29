@@ -3,22 +3,27 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
-  ELIGIBLE_EMPLOYMENT_TYPE,
+  POLICY_MODE,
+  SALARY_BASIS,
+  PAYMENT_TIMING,
   eligibilityForPeriod,
 } = require("../src/services/zermattLeaveAllowanceService");
 
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("Zermatt Leave Allowance is restricted to Full-Time employees", () => {
-  assert.equal(ELIGIBLE_EMPLOYMENT_TYPE, "Full-Time");
-  const period = { periodStart: "2027-09-01", periodEnd: "2027-09-30" };
-  assert.equal(eligibilityForPeriod({ hireDate: "2026-09-18", employmentType: "Full-Time", ...period }).eligible, true);
-  for (const employmentType of ["Part-time", "Expatriate", "NYSC/Internship"]) {
-    const result = eligibilityForPeriod({ hireDate: "2026-09-18", employmentType, ...period });
-    assert.equal(result.eligible, false);
-    assert.equal(result.reason, "EMPLOYMENT_TYPE_NOT_ELIGIBLE");
-  }
+test("Zermatt Leave Allowance is reference-import driven", () => {
+  assert.equal(POLICY_MODE, "REFERENCE_IMPORT");
+  assert.equal(SALARY_BASIS, "LAST_DECEMBER_GROSS");
+  assert.equal(PAYMENT_TIMING, "ARREARS");
+  const result = eligibilityForPeriod({
+    hireDate: "2026-09-18",
+    employmentType: "Full-Time",
+    periodStart: "2027-09-01",
+    periodEnd: "2027-09-30",
+  });
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, "REFERENCE_IMPORT_REQUIRED");
 });
 
 test("Employment Type and salary review use individual audited branch-scoped controls", () => {
@@ -60,14 +65,17 @@ test("Documents, Statutories and Performance child routes no longer use the plan
   }
 });
 
-test("Leave Allowance UI and settings disclose Full-Time-only eligibility", () => {
+test("Leave Allowance UI and settings disclose reference-import policy", () => {
   const register = read("src/pages/benefits/ZermattLeaveAllowance.jsx");
   const settings = read("src/pages/benefits/ZermattLeaveAllowanceSettings.jsx");
   const service = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
-  assert.ok(register.includes("Full-Time only"));
-  assert.ok(register.includes("Not Eligible"));
-  assert.ok(settings.includes('value="Full-Time only"'));
-  assert.ok(service.includes("NOT_ELIGIBLE_EMPLOYMENT_TYPE"));
+  assert.ok(register.includes("Reference Import"));
+  assert.ok(register.includes("Last December gross salary"));
+  assert.ok(register.includes("Leave Allowance Reference Import"));
+  assert.ok(service.includes('"REFERENCE_IMPORT"'));
+  assert.ok(service.includes('"LAST_DECEMBER_GROSS"'));
+  assert.ok(service.includes('"ARREARS"'));
+  assert.ok(settings.includes("Leave Allowance"));
 });
 
 console.log("PASS: Zermatt workforce controls and connected module acceptance gate passed.");
