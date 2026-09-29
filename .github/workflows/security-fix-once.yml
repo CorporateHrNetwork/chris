@@ -1,0 +1,62 @@
+name: CHRiS Safe Dependency Fix
+
+on:
+  push:
+    branches:
+      - fix/security-audit-20260929
+    paths:
+      - ".github/workflows/security-fix-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/security-audit-20260929
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+
+      - name: Apply safe frontend audit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm audit fix
+          npm run build
+          npm audit --omit=dev || true
+
+      - name: Apply safe backend audit fixes
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm audit fix
+          npx prisma validate
+          npx prisma generate
+          node --check src/server.js
+          npm audit --omit=dev || true
+
+      - name: Commit safe lockfile updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "CHRiS Security Maintenance"
+          git config user.email "corporatehr.crn@gmail.com"
+          git add package-lock.json backend/package-lock.json package.json backend/package.json
+          if git diff --cached --quiet; then
+            echo "No safe dependency changes were available."
+            exit 0
+          fi
+          git commit -m "chore: apply safe dependency security updates"
+          git push origin HEAD:fix/security-audit-20260929
