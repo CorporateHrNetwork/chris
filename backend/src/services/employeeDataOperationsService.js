@@ -363,7 +363,14 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (designation && !Number.isInteger(designation.careerLevel)) {
       errors.push("Designation must be mapped to an Employment Level.");
     }
+    const hasSupplementalData = [
+      accountNumber, bankName, pensionPfa, pensionPin, dateOfBirth,
+      taxIdentificationNumber, payeState, guarantor1, guarantor2, nextOfKin, rawBranchInput,
+    ].some(Boolean);
     if (isZermatt && !onboardingTemplate) errors.push("No active onboarding workflow matches this Employment Type; configure the workflow before bulk import.");
+    if (!isZermatt && hasSupplementalData && !onboardingTemplate) {
+      errors.push("An active onboarding workflow is required to preserve the supplied banking, statutory and contact fields.");
+    }
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
     // A descriptive Branch may differ from the mapped physical Location.
     // Keep it as HR onboarding metadata rather than silently discarding it.
