@@ -350,6 +350,7 @@ function CreateEmployeesWorkspace({
             }}
           />
           <p style={muted}>{file ? file.name : "No workbook selected."}</p>
+          <p style={muted}>One workbook captures Employment Level, salary, bank, pension, tax, DOB, guarantors and next of kin. Verify sensitive details after import.</p>
           <button type="button" style={primaryButton} onClick={validate} disabled={!file || busy}>
             {busy === "preview" ? "Validating…" : "Validate Workbook"}
           </button>
@@ -586,7 +587,7 @@ function CreateResultTable({ rows, validation = false }) {
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={tableStyle}>
-        <thead><tr><th>Row</th><th>Employee</th><th>Email</th><th>Employment Type</th><th>Cost Centre</th><th>Opening Salary</th><th>Status</th><th>Details</th></tr></thead>
+        <thead><tr><th>Row</th><th>Employee</th><th>Email</th><th>Employment Type</th><th>Employment Level</th><th>Cost Centre</th><th>Opening Salary</th><th>Status</th><th>Details</th></tr></thead>
         <tbody>
           {(rows || []).map((row) => {
             const ok = validation ? row.valid : row.success;
@@ -606,6 +607,7 @@ function CreateResultTable({ rows, validation = false }) {
                 <td>{employee?.name || employee?.employeeNumber || "-"}</td>
                 <td>{employee?.email || "-"}</td>
                 <td>{validation ? (row.display?.employmentType || "-") : "-"}</td>
+                <td>{validation ? (row.display?.employmentLevel || "-") : "-"}</td>
                 <td>{validation ? (row.display?.costCentre || "-") : "-"}</td>
                 <td>{salaryAmount ? `${salaryCurrency || "NGN"} ${Number(salaryAmount).toLocaleString()}` : "-"}</td>
                 <td><span style={ok ? okBadge : badBadge}>{ok ? (validation ? "Valid" : warnings.length ? "Created / review" : "Created") : "Needs attention"}</span></td>

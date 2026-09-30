@@ -12,18 +12,18 @@ const {
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("Zermatt Leave Allowance is reference-import driven", () => {
-  assert.equal(POLICY_MODE, "REFERENCE_IMPORT");
+test("Zermatt Leave Allowance retains its formula using reference December salary", () => {
+  assert.equal(POLICY_MODE, "REFERENCE_SALARY_FORMULA");
   assert.equal(SALARY_BASIS, "LAST_DECEMBER_GROSS");
-  assert.equal(PAYMENT_TIMING, "ARREARS");
+  assert.equal(PAYMENT_TIMING, "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE");
   const result = eligibilityForPeriod({
     hireDate: "2026-09-18",
     employmentType: "Full-Time",
     periodStart: "2027-09-01",
     periodEnd: "2027-09-30",
   });
-  assert.equal(result.eligible, false);
-  assert.equal(result.reason, "REFERENCE_IMPORT_REQUIRED");
+  assert.equal(result.eligible, true);
+  assert.equal(result.reason, "FULL_TIME_ANNUAL_ENTRY_MONTH_AFTER_FIRST_SERVICE_YEAR");
 });
 
 test("Employment Type and salary review use individual audited branch-scoped controls", () => {
@@ -65,16 +65,16 @@ test("Documents, Statutories and Performance child routes no longer use the plan
   }
 });
 
-test("Leave Allowance UI and settings disclose reference-import policy", () => {
+test("Leave Allowance UI and settings disclose the reference salary and retained formula", () => {
   const register = read("src/pages/benefits/ZermattLeaveAllowance.jsx");
   const settings = read("src/pages/benefits/ZermattLeaveAllowanceSettings.jsx");
   const service = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
   assert.ok(register.includes("Reference Import"));
   assert.ok(register.includes("Last December gross salary"));
   assert.ok(register.includes("Leave Allowance Reference Import"));
-  assert.ok(service.includes('"REFERENCE_IMPORT"'));
+  assert.ok(service.includes('"REFERENCE_SALARY_FORMULA"'));
   assert.ok(service.includes('"LAST_DECEMBER_GROSS"'));
-  assert.ok(service.includes('"ARREARS"'));
+  assert.ok(service.includes('"EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE"'));
   assert.ok(settings.includes("Leave Allowance"));
 });
 

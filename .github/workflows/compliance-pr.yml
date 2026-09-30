@@ -59,6 +59,8 @@ jobs:
           node --check src/routes/payrollIntegrationRoutes.js
           node --check src/routes/complianceRoutes.js
           node --check src/services/nigeriaPayrollComplianceService.js
+          node --check src/services/employeeDataOperationsService.js
+          node --check src/services/employeeCreationService.js
 
       - name: Rehearse full migration chain
         run: npm run test:migration:compliance
@@ -109,6 +111,9 @@ jobs:
           node tests/employeeEmploymentGovernanceAcceptance.test.js
           node tests/employeeDataOperations.test.js
           node tests/zermattBulkEmployeePayrollReadinessAcceptance.test.js
+          node --test tests/zermattCompleteBulkOnboardingAcceptance.test.js
+          node --test tests/zermattCompleteBulkOnboardingAtomic.test.js
+          node --test tests/zermattLiveBulkTemplateDropdowns.test.js
           node tests/unifiedEmployeeOnboardingAcceptance.test.js
           node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeExitSettlementAccountAcceptance.test.js

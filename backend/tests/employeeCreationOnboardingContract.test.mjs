@@ -86,7 +86,8 @@ assert.ok(
 assert.match(schema, /model Employee\s*\{[\s\S]*employmentEpisodes\s+EmployeeEmploymentEpisode\[\][\s\S]*onboardings\s+EmployeeOnboarding\[\]/);
 assert.match(schema, /model EmployeeOnboarding\s*\{[\s\S]*organizationId\s+String[\s\S]*employeeId\s+String[\s\S]*templateId\s+String/);
 assert.match(schema, /model EmployeeDocument\s*\{[\s\S]*employeeId\s+String[\s\S]*onboardingId\s+String\?/);
-assert.doesNotMatch(employeeCreationService, /employeeOnboarding\.create/);
+assert.match(employeeCreationService, /if \(input\.onboardingTemplateId && input\.onboardingSectionData\)/);
+assert.match(employeeCreationService, /tx\.employeeOnboarding\.create/);
 
 // Starting onboarding uses the existing employee, designation level and template.
 assert.match(startOnboarding, /requirePermission\("employees\.update"\)/);

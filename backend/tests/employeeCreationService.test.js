@@ -185,5 +185,6 @@ test("does not create EmployeeOnboarding during ordinary creation", () => {
     ),
     "utf8"
   );
-  assert.doesNotMatch(source, /employeeOnboarding\.(create|upsert)/);
+  assert.match(source, /if \(input\.onboardingTemplateId && input\.onboardingSectionData\)/);
+  assert.match(source, /tx\.employeeOnboarding\.create/);
 });

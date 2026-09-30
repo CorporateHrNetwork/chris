@@ -444,6 +444,75 @@ async function createEmployeeWithDependencies(
       });
     }
 
+    // Bulk imports store the governed level override and onboarding sections
+    // in the same transaction as the employee and opening salary authority.
+    const requestedLevel = input.openingEmploymentLevelNumber == null
+      ? null : Number(input.openingEmploymentLevelNumber);
+    if (requestedLevel != null && requestedLevel !== designation.careerLevel) {
+      const level = await tx.organizationEmploymentLevel.findUnique({
+        where: { organizationId_levelNumber: { organizationId, levelNumber: requestedLevel } },
+        select: { levelNumber: true, code: true, name: true, isActive: true },
+      });
+      if (!level?.isActive) throw employeeCreationError("INVALID_EMPLOYMENT_LEVEL");
+      const effectiveFrom = payload.hireDate && payload.hireDate <= new Date()
+        ? payload.hireDate : new Date();
+      const assigned = await tx.employeeEmploymentLevelAssignment.create({
+        data: {
+          organizationId,
+          employeeId: employee.id,
+          levelNumber: requestedLevel,
+          effectiveFrom,
+          reason: "Initial Employment Level specified in authorized bulk onboarding",
+          performedByUserId: actorUserId || null,
+        },
+      });
+      await tx.organizationAudit.create({
+        data: {
+          organizationId,
+          actorUserId: actorUserId || null,
+          entityType: "EmployeeEmploymentLevelAssignment",
+          entityId: assigned.id,
+          action: "EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_ASSIGNED",
+          previousValue: { levelNumber: designation.careerLevel, source: "DESIGNATION_DEFAULT" },
+          newValue: { levelNumber: level.levelNumber, code: level.code, name: level.name, source: "BULK_ONBOARDING" },
+          reason: "Authorized bulk onboarding selected an active Employment Level different from the designation default.",
+        },
+      });
+    }
+
+    if (input.onboardingTemplateId && input.onboardingSectionData) {
+      const template = await tx.onboardingWorkflowTemplate.findFirst({
+        where: { id: input.onboardingTemplateId, organizationId, isActive: true },
+        select: { id: true, sections: true },
+      });
+      if (!template) throw employeeCreationError("ONBOARDING_TEMPLATE_REQUIRED");
+      const sections = Array.isArray(template.sections) ? template.sections : [];
+      const onboarding = await tx.employeeOnboarding.create({
+        data: {
+          organizationId,
+          employeeId: employee.id,
+          templateId: template.id,
+          createdByUserId: actorUserId || null,
+          assignedToUserId: actorUserId || null,
+          status: "IN_PROGRESS",
+          startedAt: new Date(),
+          sectionData: input.onboardingSectionData,
+          sectionProgress: Object.fromEntries(sections.map((section) => [
+            section.key,
+            { completed: false, completedItems: [], totalItems: Array.isArray(section.items) ? section.items.length : 0 },
+          ])),
+          completionPercent: 0,
+          currentStage: sections[0]?.label || null,
+        },
+      });
+      const { createTasksFromTemplate } = require("./employeeOnboardingTaskService");
+      await createTasksFromTemplate(tx, {
+        organizationId,
+        onboardingId: onboarding.id,
+        sections,
+      });
+    }
+
     await tx.employeeEmploymentEpisode.create({
       data: {
         organizationId,

@@ -1256,6 +1256,114 @@ router.get(
   }
 );
 
+// Branch HR shortcut: validates tenant, branch location and an explicitly selected HR/Admin owner.
+router.get(
+  "/records/:id/branch-hr-owners",
+  requirePermission("employees.view"),
+  async (req, res) => {
+    try {
+      const record = await prisma.employeeOnboarding.findFirst({
+        where: { id: req.params.id, organizationId: req.auth.organizationId },
+        select: { employee: { select: { locationId: true } } },
+      });
+      if (!record) return res.status(404).json({ status: "error", message: "Onboarding record not found." });
+      if (!record.employee?.locationId) return res.status(409).json({ status: "error", message: "Employee branch/location must be set before assigning a branch HR owner." });
+      const users = await prisma.user.findMany({
+        where: {
+          organizationId: req.auth.organizationId,
+          isActive: true,
+          OR: [
+            { employee: { locationId: record.employee.locationId } },
+            { userLocations: { some: { locationId: record.employee.locationId, organizationId: req.auth.organizationId } } },
+          ],
+          userRoles: { some: { role: { name: { contains: "HR", mode: "insensitive" } } } },
+        },
+        select: { id: true, firstName: true, lastName: true, email: true },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      });
+      return res.json({ status: "success", data: users });
+    } catch (error) {
+      console.error("Load branch HR owners error:", error);
+      return res.status(500).json({ status: "error", message: "Unable to load branch HR owners." });
+    }
+  }
+);
+
+router.post(
+  "/records/:id/tasks/assign-branch-hr",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    const ownerUserId = String(req.body?.ownerUserId || "").trim();
+    if (!ownerUserId) return res.status(400).json({ status: "error", message: "Select the branch HR & Admin Officer." });
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const record = await tx.employeeOnboarding.findFirst({
+          where: { id: req.params.id, organizationId: req.auth.organizationId },
+          select: { id: true, employee: { select: { locationId: true } } },
+        });
+        if (!record) {
+          const error = new Error("Onboarding record not found.");
+          error.statusCode = 404;
+          throw error;
+        }
+        const locationId = record.employee?.locationId;
+        if (!locationId) {
+          const error = new Error("Employee branch/location must be set first.");
+          error.statusCode = 409;
+          throw error;
+        }
+        const owner = await tx.user.findFirst({
+          where: {
+            id: ownerUserId,
+            organizationId: req.auth.organizationId,
+            isActive: true,
+            OR: [
+              { employee: { locationId } },
+              { userLocations: { some: { locationId, organizationId: req.auth.organizationId } } },
+            ],
+            userRoles: { some: { role: { name: { contains: "HR", mode: "insensitive" } } } },
+          },
+          select: { id: true },
+        });
+        if (!owner) {
+          const error = new Error("The selected user must be an active HR owner for this employee's branch.");
+          error.statusCode = 400;
+          throw error;
+        }
+        // Preserve existing owners by default; explicit overwrite requires a separate confirmation.
+        const overwrite = req.body?.overwriteExisting === true;
+        const tasks = await tx.employeeOnboardingTask.findMany({
+          where: { organizationId: req.auth.organizationId, onboardingId: record.id, ...(overwrite ? {} : { ownerUserId: null }) },
+          select: { id: true },
+        });
+        const changed = tasks.length
+          ? await tx.employeeOnboardingTask.updateMany({
+              where: { id: { in: tasks.map((task) => task.id) }, organizationId: req.auth.organizationId, onboardingId: record.id },
+              data: { ownerUserId },
+            })
+          : { count: 0 };
+        await tx.organizationAudit.create({
+          data: {
+            organizationId: req.auth.organizationId,
+            actorUserId: req.auth.userId || null,
+            entityType: "EmployeeOnboarding",
+            entityId: record.id,
+            action: "BRANCH_HR_CHECKLIST_OWNER_ASSIGNED",
+            newValue: { ownerUserId, updatedTaskCount: changed.count, overwriteExisting: overwrite },
+            reason: "Assign onboarding operational checklist to selected branch HR/Admin officer.",
+          },
+        });
+        return { assigned: changed.count, overwriteExisting: overwrite };
+      });
+      const tasks = await listOnboardingTasks(prisma, { organizationId: req.auth.organizationId, onboardingId: req.params.id });
+      return res.json({ status: "success", data: { ...result, tasks } });
+    } catch (error) {
+      if (!error.statusCode || error.statusCode >= 500) console.error("Assign branch HR checklist error:", error);
+      return res.status(error.statusCode || 500).json({ status: "error", message: error.statusCode ? error.message : "Unable to assign branch HR checklist." });
+    }
+  }
+);
+
 router.get(
   "/records/:id/tasks",
   requirePermission("employees.view"),

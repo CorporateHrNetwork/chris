@@ -24,6 +24,7 @@ const SECTION_CONFIG = {
     fields: [
       { name: "taxIdentificationNumber", label: "Tax Identification Number (TIN)", type: "text" },
       { name: "payeState", label: "PAYE State / Tax Authority", type: "nigeria-state" },
+      { name: "taxAuthority", label: "Tax Authority (as recorded)", type: "text" },
       { name: "pensionPfa", label: "Pension Fund Administrator (PFA)", type: "nigeria-pfa" },
       { name: "pensionPin", label: "Retirement Savings Account (RSA) PIN", type: "text" },
       { name: "nhiaNumber", label: "NHIA / Health Insurance Number", type: "text" },
@@ -38,6 +39,8 @@ const SECTION_CONFIG = {
       { name: "phoneCountryCode", label: "Phone Country", type: "country-phone" },
       { name: "phoneNumber", label: "Phone Number", type: "text" },
       { name: "address", label: "Residential Address", type: "textarea" },
+      { name: "guarantor1", label: "Guarantor 1 — Name", type: "text" },
+      { name: "guarantor2", label: "Guarantor 2 — Name", type: "text" },
     ],
   },
   "emergency-contact": {

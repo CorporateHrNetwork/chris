@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
+const CFB = require("cfb");
 const { normalizeEmploymentType } = require("./employeeCreationService");
 
 const EXPORT_COLUMN_CATALOG = [
@@ -58,12 +59,31 @@ const IMPORT_HEADERS = [
   "Employment Type",
   "Department",
   "Designation",
+  "Employment Level",
   "Location",
   "Cost Centre / Operating Unit",
   "Monthly Gross Salary",
   "Salary Currency",
   "Salary Effective From",
   "NIN",
+  "Account Number",
+  "Bank",
+  "Pension Provider",
+  "RSA Number",
+  "Branch",
+  "Date of Birth",
+  "TaxIdentificationNO",
+  "Tax Authority",
+  "Guarantor 1",
+  "Guarantor 2",
+  "Next Of Kin"
+];
+
+const STANDARD_IMPORT_HEADERS = [
+  "Employee Name", "Work Email", "Phone", "Gender", "Status", "Hire Date",
+  "Employment Type", "Department", "Designation", "Location",
+  "Cost Centre / Operating Unit", "Monthly Gross Salary", "Salary Currency",
+  "Salary Effective From", "NIN",
 ];
 
 function normalizeHeader(value) {
@@ -122,22 +142,29 @@ function mapStatus(value) {
   return allowed.get(normalized) || null;
 }
 
-function buildTemplateWorkbook() {
+function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
   const workbook = XLSX.utils.book_new();
-  const instructions = [
+  const instructions = isZermatt ? [
+    ["Zermatt / CHRiS Complete Bulk Employee Onboarding"],
+    ["One employee per row; retain the Employee Import column headings. Sensitive employee data must be handled only by authorized HR."],
+    ["Required: Employee Name, Department, Designation, Location, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary for Zermatt."],
+    ["Employment Level: L1–L7 code or active level name. Blank uses the designation default; a different level creates an audited employee override."],
+    ["Location must match an active CHRiS location. Branch is a separate HR field; discrepancies are flagged for HR verification."],
+    ["Department, Designation, Location, Cost Centre and Employment Level must match the active CHRiS catalogue."],
+    ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED. Status: Active, Probation, Leave or Suspended. Blank status defaults to Probation."],
+    ["Dates: YYYY-MM-DD. Phone, NIN, account number, RSA and tax ID should be entered as TEXT to preserve zeros."],
+    ["Bank and account details are imported but bank-account ownership is not verified by this workbook; authorized HR must complete bank verification."],
+    ["Pension Provider, RSA Number, Tax Identification Number and Tax Authority populate Statutory onboarding details."],
+    ["Guarantor 1, Guarantor 2 and Next Of Kin populate onboarding contact information; enter contact names here and complete remaining contact details during review."],
+    ["Salary Currency defaults to NGN. Salary Effective From defaults to Hire Date or import date when blank."],
+    ["Preview checks duplicates, active catalogue mapping, employment level and account/NIN formats before import."],
+  ] : [
     ["CHRiS Bulk Employee Import"],
-    ["One employee per row. Do not change the column headings."],
-    ["Department, Designation, Location and Cost Centre / Operating Unit may use the CHRiS name or code."],
-    ["Required: Employee Name, Department, Designation and Location. Email and Phone may be completed later by authorized HR."],
-    ["Employment Type: Full-Time, Part-Time, Expatriate, NYSC / Internship, or Domestic Staff - Housekeeper."],
-    ["Cost Centre / Operating Unit is validated independently from Department when supplied."],
-    ["For ZERMATT current employees, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary are payroll-readiness requirements and must be supplied."],
-    ["Monthly Gross Salary creates the employee's opening effective-dated salary authority during import. Salary Currency defaults to NGN."],
-    ["Salary Effective From: YYYY-MM-DD. If blank, CHRiS uses Hire Date; if Hire Date is blank, CHRiS uses the import date."],
-    ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED."],
-    ["Status: Active, Probation, Leave or Suspended. Blank defaults to Probation."],
-    ["Hire Date: YYYY-MM-DD."],
-    ["NIN: optional; when supplied it must be a valid unused 11-digit NIN."],
+    ["One employee per row; keep the column headings unchanged."],
+    ["Required: Employee Name, Department, Designation and Location."],
+    ["Status defaults to Probation. Employment Type and Cost Centre should follow your organization's CHRiS catalogue."],
+    ["Salary fields are optional outside Zermatt; if supplied, authorized Payroll Manage access is required."],
+    ["Date format: YYYY-MM-DD. NIN is optional and must be an unused valid 11-digit number if supplied."],
   ];
   XLSX.utils.book_append_sheet(
     workbook,
@@ -147,28 +174,89 @@ function buildTemplateWorkbook() {
   XLSX.utils.book_append_sheet(
     workbook,
     XLSX.utils.aoa_to_sheet([
-      IMPORT_HEADERS,
-      [
-        "Jane Mary Doe",
-        "jane.doe@example.com",
-        "08000000000",
-        "FEMALE",
-        "Probation",
-        "2026-08-30",
-        "Full-Time",
-        "Human Resources",
-        "HR Officer",
-        "Abuja",
-        "HEAD OFFICE",
-        "450000",
-        "NGN",
-        "2026-08-30",
-        "",
-      ],
+      isZermatt ? IMPORT_HEADERS : STANDARD_IMPORT_HEADERS,
+      (isZermatt ? IMPORT_HEADERS : STANDARD_IMPORT_HEADERS).map((label) =>
+        ["Jane Mary Doe","","08000000000","FEMALE","Probation","2026-09-01","Full-Time","Human Resources","HR Officer","L3","Abuja","HEAD OFFICE",450000,"NGN","2026-09-01","","","","","","Abuja","","","","","",""][IMPORT_HEADERS.indexOf(label)]),
     ]),
     "Employee Import"
   );
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  if (isZermatt) {
+    const available = [
+      ["Gender", ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"]],
+      ["Status", ["Probation", "Active", "Leave", "Suspended"]],
+      ["Employment Type", catalog.employmentTypes || []],
+      ["Department", catalog.departments || []],
+      ["Designation", catalog.designations || []],
+      ["Employment Level", catalog.employmentLevels || []],
+      ["Location", catalog.locations || []],
+      ["Cost Centre / Operating Unit", catalog.costCentres || []],
+      ["Salary Currency", ["NGN", "USD", "GBP", "EUR"]],
+      ["Bank", catalog.banks || []],
+      ["Pension Provider", catalog.pensionProviders || []],
+      ["Branch", catalog.locations || []],
+      ["Tax Authority", catalog.taxAuthorities || []],
+    ];
+    const longest = Math.max(1, ...available.map(([, values]) => values.length));
+    const values = [
+      available.map(([heading]) => heading),
+      ...Array.from({ length: longest }, (_, row) =>
+        available.map(([, items]) => items[row] || "")),
+    ];
+    const listSheet = XLSX.utils.aoa_to_sheet(values);
+    listSheet["!cols"] = available.map(([heading]) => ({
+      wch: heading === "Designation" || heading === "Pension Provider" ? 44 : 29,
+    }));
+    XLSX.utils.book_append_sheet(workbook, listSheet, "Dropdown Lists");
+
+    const sections = [
+      ["1", "Personal Information", "Employee Name, Work Email, Phone, Gender, Date of Birth, NIN"],
+      ["2", "Employment Information", "Status, Hire Date, Employment Type, Designation, Employment Level"],
+      ["3", "Organization Placement", "Department, Location, Branch, Cost Centre / Operating Unit"],
+      ["4", "Compensation / Payment Setup", "Monthly Gross Salary, Salary Currency, Salary Effective From, Account Number, Bank"],
+      ["5", "Statutory Information", "Pension Provider, RSA Number, TaxIdentificationNO, Tax Authority"],
+      ["6", "Next of Kin / Emergency", "Next Of Kin, Guarantor 1, Guarantor 2 (additional contact details remain in CHRiS)"],
+      ["7", "Documents", "Required supporting files are uploaded securely in CHRiS; no document files are stored in spreadsheet cells."],
+      ["8", "Legal / Assets", "Legal declarations and asset allocations remain in the guided onboarding workflow."],
+      ["9", "Onboarding Checklist", "Ownership and task completion are managed within CHRiS."],
+      ["10", "Review & Create", "Run Validate Workbook before confirming the import."],
+    ];
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ["Step", "CHRiS Onboarding Section", "Captured columns or completion path"],
+      ...sections,
+    ]), "Section Guide");
+  }
+  const output = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  if (!isZermatt) return output;
+  // SheetJS produces the workbook data; CFB safely adds Excel-native validation
+  // without replacing live tenant data with static dropdown choices.
+  const archive = CFB.read(output, { type: "buffer" });
+  const path = "/xl/worksheets/sheet2.xml";
+  const entry = CFB.find(archive, path) || CFB.find(archive, "xl/worksheets/sheet2.xml");
+  if (!entry?.content) throw new Error("BULK_TEMPLATE_WORKSHEET_MISSING");
+  let xml = Buffer.from(entry.content).toString("utf8");
+  const fieldColumns = [
+    ["D", "A"], // gender
+    ["E", "B"], // status
+    ["G", "C"], // employment type
+    ["H", "D"], // department
+    ["I", "E"], // designation
+    ["J", "F"], // employment level
+    ["K", "G"], // location
+    ["L", "H"], // cost centre
+    ["N", "I"], // currency
+    ["R", "J"], // bank
+    ["S", "K"], // pension
+    ["U", "L"], // branch
+    ["X", "M"], // PAYE authority
+  ];
+  const entries = fieldColumns.map(([field, source]) =>
+    `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Select a listed option" error="Choose an existing CHRiS option from the Dropdown Lists sheet." sqref="${field}2:${field}1001"><formula1>INDIRECT(&quot;'Dropdown Lists'!$${source}$2:$${source}$250&quot;)</formula1></dataValidation>`
+  );
+  const validations = `<dataValidations count="${entries.length}">${entries.join("")}</dataValidations>`;
+  if (!xml.includes("</worksheet>")) throw new Error("BULK_TEMPLATE_WORKSHEET_INVALID");
+  xml = xml.replace("</worksheet>", validations + "</worksheet>");
+  CFB.utils.cfb_add(archive, path, Buffer.from(xml, "utf8"));
+  return CFB.write(archive, { type: "buffer", fileType: "zip" });
 }
 
 function findCatalogRow(rows, value) {
@@ -185,7 +273,7 @@ function findCatalogRow(rows, value) {
 async function prepareBulkRows(prisma, { organizationId, buffer }) {
   const sourceRows = parseWorkbook(buffer);
   const now = new Date();
-  const [organization, departments, designations, locations, costCentres, existingEmployees] = await Promise.all([
+  const [organization, departments, designations, locations, costCentres, existingEmployees, employmentLevels, onboardingTemplates] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: organizationId },
       select: { slug: true },
@@ -215,6 +303,14 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       where: { organizationId },
       select: { email: true, nationalIdentificationNumber: true },
     }),
+    prisma.organizationEmploymentLevel.findMany({
+      where: { organizationId, isActive: true },
+      select: { levelNumber: true, code: true, name: true },
+    }),
+    prisma.onboardingWorkflowTemplate.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true, employmentType: true, sections: true },
+    }),
   ]);
 
   const existingEmails = new Set(
@@ -232,7 +328,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const email = getCell(row, ["Work Email", "Email", "Work Email Address"]).toLowerCase();
     const phone = getCell(row, ["Phone", "Phone Number"]);
     const gender = (getCell(row, ["Gender"]) || "UNSPECIFIED").toUpperCase();
-    const status = mapStatus(getCell(row, ["Status"]) || "Active");
+    const status = mapStatus(getCell(row, ["Status"]) || "Probation");
     const hireDate = getCell(row, ["Hire Date", "Employment Date", "Start Date"]);
     const employmentTypeInput = getCell(row, ["Employment Type", "EmploymentType"]);
     const employmentType = normalizeEmploymentType(employmentTypeInput);
@@ -242,6 +338,17 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const nin = directNin || (String(idType || "").trim().toUpperCase() === "NIN" ? idNumber : "");
     const departmentInput = getCell(row, ["Department", "Department Code"]);
     const designationInput = getCell(row, ["Designation", "Designation Code"]);
+    const employmentLevelInput = getCell(row, ["Employment Level", "Grade", "Level"]);
+    const accountNumber = getCell(row, ["Account Number", "Bank Account Number"]).replace(/[\s-]/g, "");
+    const bankName = getCell(row, ["Bank", "Bank Name"]);
+    const pensionPfa = getCell(row, ["Pension Provider", "Pension Fund Administrator", "PFA"]);
+    const pensionPin = getCell(row, ["RSA Number", "RSA PIN", "Pension PIN"]);
+    const dateOfBirth = getCell(row, ["Date of Birth", "DOB"]);
+    const taxIdentificationNumber = getCell(row, ["TaxIdentificationNO", "Tax Identification Number", "TIN"]);
+    const payeState = getCell(row, ["Tax Authority", "PAYE State", "PAYE Authority"]);
+    const guarantor1 = getCell(row, ["Guarantor 1", "First Guarantor"]);
+    const guarantor2 = getCell(row, ["Guarantor 2", "Second Guarantor"]);
+    const nextOfKin = getCell(row, ["Next Of Kin", "Next of Kin", "NOK"]);
     const costCentreInput = getCell(row, [
       "Cost Centre / Operating Unit",
       "Cost Centre",
@@ -271,7 +378,8 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       "Salary Effective Date",
     ]);
 
-    const rawLocationInput = getCell(row, ["Location", "Company Branch", "Branch", "Branch / Location", "Location Code"]);
+    const rawLocationInput = getCell(row, ["Location", "Company Branch", "Branch / Location", "Location Code"]);
+    const rawBranchInput = getCell(row, ["Branch", "Branch Name"]);
     const locationAliases = {
       "ABUJA": "ABJ",
       "ABUJA BRANCH": "ABJ",
@@ -284,12 +392,24 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       "HEAD OFFICE": "HO",
     };
     const locationInput =
-      locationAliases[String(rawLocationInput || "").trim().toUpperCase()] ||
-      rawLocationInput;
+      locationAliases[String(rawLocationInput || rawBranchInput || "").trim().toUpperCase()] ||
+      rawLocationInput || rawBranchInput;
+    const branchInput = locationAliases[String(rawBranchInput || "").trim().toUpperCase()] || rawBranchInput;
 
     const department = findCatalogRow(departments, departmentInput);
     const designation = findCatalogRow(designations, designationInput);
     const location = findCatalogRow(locations, locationInput);
+    const branch = branchInput ? findCatalogRow(locations, branchInput) : null;
+    const onboardingTemplate =
+      onboardingTemplates.find((template) => template.employmentType === employmentType) ||
+      onboardingTemplates.find((template) => !template.employmentType) ||
+      null;
+    const employmentLevel = employmentLevelInput
+      ? employmentLevels.find((level) =>
+          [level.code, level.name, String(level.levelNumber)].some(
+            (value) => String(value || "").trim().toLowerCase() === employmentLevelInput.toLowerCase()
+          )) || null
+      : null;
     const mappedCostCentre =
       department?.costCentreId
         ? costCentres.find((row) => row.id === department.costCentreId) || null
@@ -298,6 +418,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       findCatalogRow(costCentres, costCentreInput) ||
       (!costCentreInput ? mappedCostCentre : null);
     const errors = [];
+    const warnings = [];
     const isZermatt =
       String(organization?.slug || "").trim().toLowerCase() ===
       "zermatt-liquor-limited";
@@ -319,7 +440,20 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (designation && !Number.isInteger(designation.careerLevel)) {
       errors.push("Designation must be mapped to an Employment Level.");
     }
+    const hasSupplementalData = [
+      accountNumber, bankName, pensionPfa, pensionPin, dateOfBirth,
+      taxIdentificationNumber, payeState, guarantor1, guarantor2, nextOfKin, rawBranchInput,
+    ].some(Boolean);
+    if (isZermatt && !onboardingTemplate) errors.push("No active onboarding workflow matches this Employment Type; configure the workflow before bulk import.");
+    if (!isZermatt && hasSupplementalData && !onboardingTemplate) {
+      errors.push("An active onboarding workflow is required to preserve the supplied banking, statutory and contact fields.");
+    }
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
+    // A descriptive Branch may differ from the mapped physical Location.
+    // Keep it as HR onboarding metadata rather than silently discarding it.
+    if (rawBranchInput && !branch) warnings.push("Branch does not match an active Location; retained for HR verification.");
+    if (location && branch && location.id !== branch.id) warnings.push("Branch differs from Location; HR should verify work placement.");
+    if (employmentLevelInput && !employmentLevel) errors.push("Employment Level must match an active CHRiS Employment Level (L1–L7).");
     if (costCentreInput && !costCentre) errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
     if (isZermatt && !costCentre) errors.push("Department has no mapped Cost Centre / Operating Unit. Configure the Department mapping or supply a valid Cost Centre.");
     if (isZermatt && !grossSalaryInput) errors.push("Monthly Gross Salary is required for ZERMATT payroll readiness.");
@@ -327,6 +461,13 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (grossSalaryInput && !/^[A-Z]{3}$/.test(salaryCurrency)) errors.push("Salary Currency must be a 3-letter currency code such as NGN.");
     if (grossSalaryInput && !/^\d{4}-\d{2}-\d{2}$/.test(salaryEffectiveFrom)) errors.push("Salary Effective From must use YYYY-MM-DD.");
     if (hireDate && !/^\d{4}-\d{2}-\d{2}$/.test(hireDate)) errors.push("Hire Date must use YYYY-MM-DD.");
+    if (dateOfBirth && (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) || Number.isNaN(Date.parse(dateOfBirth)) ||
+      new Date(dateOfBirth).toISOString().slice(0, 10) !== dateOfBirth || new Date(dateOfBirth) > now)) {
+      errors.push("Date of Birth must be a valid YYYY-MM-DD date that is not in the future.");
+    }
+    if (accountNumber && !/^\d{10}$/.test(accountNumber)) errors.push("Account Number must contain exactly 10 digits.");
+    if (accountNumber && !bankName) errors.push("Bank is required when Account Number is supplied.");
+    if (bankName && !accountNumber) errors.push("Account Number is required when Bank is supplied.");
     if (nin && !/^\d{11}$/.test(nin.replace(/\D/g, ""))) errors.push("NIN must contain 11 digits.");
     if (email && (existingEmails.has(email) || seenEmails.has(email))) errors.push("Work Email already exists or is duplicated in this file.");
     const normalizedNin = nin.replace(/\D/g, "");
@@ -339,9 +480,9 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
 
     return {
       rowNumber,
-      source: row,
       valid: errors.length === 0,
       errors,
+      warnings,
       input:
         errors.length === 0
           ? {
@@ -357,6 +498,26 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
               locationId: location.id,
               costCentreId: costCentre?.id || null,
               nationalIdentificationNumber: normalizedNin || "",
+              openingEmploymentLevelNumber: employmentLevel?.levelNumber ?? null,
+              onboardingTemplateId: onboardingTemplate?.id || null,
+              onboardingSectionData: {
+                "personal-details": {
+                  fullName: name, dateOfBirth,
+                  nationalIdentificationNumber: normalizedNin || "",
+                  phone, email, gender,
+                  branch: rawBranchInput,
+                },
+                "payment-details": {
+                  accountNumber, bankName,
+                  payrollCurrency: salaryCurrency || "NGN",
+                  paymentMethod: accountNumber ? "Bank Transfer" : "",
+                  bankVerificationStatus: accountNumber ? "PENDING_HR_VERIFICATION" : "",
+                },
+                "statutory-details": {
+                  taxIdentificationNumber, taxAuthority: payeState, pensionPfa, pensionPin,
+                },
+                "next-of-kin": { name: nextOfKin, guarantor1, guarantor2 },
+              },
             }
           : null,
       salaryRate:
@@ -375,6 +536,14 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
         employmentType: employmentType || employmentTypeInput,
         department: department?.name || departmentInput,
         designation: designation?.name || designationInput,
+        employmentLevel: employmentLevel?.code || employmentLevelInput ||
+          employmentLevels.find((level) => level.levelNumber === designation?.careerLevel)?.code || "",
+        accountNumberLast4: accountNumber.slice(-4),
+        bankName,
+        branch: rawBranchInput,
+        pensionPfa,
+        dateOfBirth,
+        nextOfKinPresent: Boolean(nextOfKin),
         location: location?.name || locationInput,
         costCentre: costCentre?.name || costCentreInput,
         costCentreSource: costCentreInput ? "Workbook" : costCentre ? "Auto from Department" : "",
