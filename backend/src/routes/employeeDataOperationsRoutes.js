@@ -98,7 +98,9 @@ router.post(
       return res.json({
         status: "success",
         data: {
-          rows,
+          rows: rows.map(({ rowNumber, valid, errors, warnings, display }) => ({
+            rowNumber, valid, errors, warnings, display,
+          })),
           totalRows: rows.length,
           validRows: rows.filter((row) => row.valid).length,
           invalidRows: rows.filter((row) => !row.valid).length,
