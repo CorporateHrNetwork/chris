@@ -58,10 +58,17 @@ router.get(
   "/bulk/template",
   requirePermission("employees.create"),
   async (req, res) => {
-    const buffer = buildTemplateWorkbook();
+    const organization = await prisma.organization.findUnique({
+      where: { id: req.auth.organizationId },
+      select: { slug: true },
+    });
+    const isZermatt = organization?.slug === "zermatt-liquor-limited";
+    const buffer = buildTemplateWorkbook({ isZermatt });
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="CHRIS_Bulk_Employee_Import_Template.xlsx"'
+      isZermatt
+        ? 'attachment; filename="Zermatt_Complete_Bulk_Onboarding_Template.xlsx"'
+        : 'attachment; filename="CHRIS_Bulk_Employee_Import_Template.xlsx"'
     );
     res.setHeader(
       "Content-Type",
