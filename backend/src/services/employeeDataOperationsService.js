@@ -340,6 +340,9 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       errors.push("Designation must be mapped to an Employment Level.");
     }
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
+    if (rawBranchInput && !branch) errors.push("Branch was not found in the active CHRiS location catalogue.");
+    if (location && branch && location.id !== branch.id) errors.push("Branch and Location must identify the same CHRiS location.");
+    if (employmentLevelInput && !employmentLevel) errors.push("Employment Level must match an active CHRiS Employment Level (L1–L7).");
     if (costCentreInput && !costCentre) errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
     if (isZermatt && !costCentre) errors.push("Department has no mapped Cost Centre / Operating Unit. Configure the Department mapping or supply a valid Cost Centre.");
     if (isZermatt && !grossSalaryInput) errors.push("Monthly Gross Salary is required for ZERMATT payroll readiness.");
@@ -347,6 +350,12 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (grossSalaryInput && !/^[A-Z]{3}$/.test(salaryCurrency)) errors.push("Salary Currency must be a 3-letter currency code such as NGN.");
     if (grossSalaryInput && !/^\d{4}-\d{2}-\d{2}$/.test(salaryEffectiveFrom)) errors.push("Salary Effective From must use YYYY-MM-DD.");
     if (hireDate && !/^\d{4}-\d{2}-\d{2}$/.test(hireDate)) errors.push("Hire Date must use YYYY-MM-DD.");
+    if (dateOfBirth && (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) || Number.isNaN(Date.parse(dateOfBirth)) || new Date(dateOfBirth) > now)) {
+      errors.push("Date of Birth must be a valid YYYY-MM-DD date that is not in the future.");
+    }
+    if (accountNumber && !/^\d{10}$/.test(accountNumber)) errors.push("Account Number must contain exactly 10 digits.");
+    if (accountNumber && !bankName) errors.push("Bank is required when Account Number is supplied.");
+    if (bankName && !accountNumber) errors.push("Account Number is required when Bank is supplied.");
     if (nin && !/^\d{11}$/.test(nin.replace(/\D/g, ""))) errors.push("NIN must contain 11 digits.");
     if (email && (existingEmails.has(email) || seenEmails.has(email))) errors.push("Work Email already exists or is duplicated in this file.");
     const normalizedNin = nin.replace(/\D/g, "");
