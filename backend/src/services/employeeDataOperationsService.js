@@ -58,12 +58,24 @@ const IMPORT_HEADERS = [
   "Employment Type",
   "Department",
   "Designation",
+  "Employment Level",
   "Location",
   "Cost Centre / Operating Unit",
   "Monthly Gross Salary",
   "Salary Currency",
   "Salary Effective From",
   "NIN",
+  "Account Number",
+  "Bank",
+  "Pension Provider",
+  "RSA Number",
+  "Branch",
+  "Date of Birth",
+  "TaxIdentificationNO",
+  "Tax Authority",
+  "Guarantor 1",
+  "Guarantor 2",
+  "Next Of Kin"
 ];
 
 function normalizeHeader(value) {
@@ -125,19 +137,19 @@ function mapStatus(value) {
 function buildTemplateWorkbook() {
   const workbook = XLSX.utils.book_new();
   const instructions = [
-    ["CHRiS Bulk Employee Import"],
-    ["One employee per row. Do not change the column headings."],
-    ["Department, Designation, Location and Cost Centre / Operating Unit may use the CHRiS name or code."],
-    ["Required: Employee Name, Department, Designation and Location. Email and Phone may be completed later by authorized HR."],
-    ["Employment Type: Full-Time, Part-Time, Expatriate, NYSC / Internship, or Domestic Staff - Housekeeper."],
-    ["Cost Centre / Operating Unit is validated independently from Department when supplied."],
-    ["For ZERMATT current employees, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary are payroll-readiness requirements and must be supplied."],
-    ["Monthly Gross Salary creates the employee's opening effective-dated salary authority during import. Salary Currency defaults to NGN."],
-    ["Salary Effective From: YYYY-MM-DD. If blank, CHRiS uses Hire Date; if Hire Date is blank, CHRiS uses the import date."],
-    ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED."],
-    ["Status: Active, Probation, Leave or Suspended. Blank defaults to Probation."],
-    ["Hire Date: YYYY-MM-DD."],
-    ["NIN: optional; when supplied it must be a valid unused 11-digit NIN."],
+    ["Zermatt / CHRiS Complete Bulk Employee Onboarding"],
+    ["One employee per row; retain the Employee Import column headings. Sensitive employee data must be handled only by authorized HR."],
+    ["Required: Employee Name, Department, Designation, Location, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary for Zermatt."],
+    ["Employment Level: L1–L7 code or active level name. Blank uses the designation default; a different level creates an audited employee override."],
+    ["Branch: optional alias for Location. If both are provided they must match the same active location."],
+    ["Department, Designation, Location, Cost Centre and Employment Level must match the active CHRiS catalogue."],
+    ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED. Status: Active, Probation, Leave or Suspended. Blank status defaults to Probation."],
+    ["Dates: YYYY-MM-DD. Phone, NIN, account number, RSA and tax ID should be entered as TEXT to preserve zeros."],
+    ["Bank and account details are imported but bank-account ownership is not verified by this workbook; authorized HR must complete bank verification."],
+    ["Pension Provider, RSA Number, Tax Identification Number and Tax Authority populate Statutory onboarding details."],
+    ["Guarantor 1, Guarantor 2 and Next Of Kin populate onboarding contact information; enter contact names here and complete remaining contact details during review."],
+    ["Salary Currency defaults to NGN. Salary Effective From defaults to Hire Date or import date when blank."],
+    ["Preview checks duplicates, active catalogue mapping, employment level and account/NIN formats before import."],
   ];
   XLSX.utils.book_append_sheet(
     workbook,
@@ -148,23 +160,7 @@ function buildTemplateWorkbook() {
     workbook,
     XLSX.utils.aoa_to_sheet([
       IMPORT_HEADERS,
-      [
-        "Jane Mary Doe",
-        "jane.doe@example.com",
-        "08000000000",
-        "FEMALE",
-        "Probation",
-        "2026-08-30",
-        "Full-Time",
-        "Human Resources",
-        "HR Officer",
-        "Abuja",
-        "HEAD OFFICE",
-        "450000",
-        "NGN",
-        "2026-08-30",
-        "",
-      ],
+      ["Jane Mary Doe","","08000000000","FEMALE","Probation","2026-09-01","Full-Time","Human Resources","HR Officer","L3","Abuja","HEAD OFFICE",450000,"NGN","2026-09-01","","","","","","Abuja","","","","","",""],
     ]),
     "Employee Import"
   );
