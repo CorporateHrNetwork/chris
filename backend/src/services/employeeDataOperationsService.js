@@ -181,7 +181,7 @@ function findCatalogRow(rows, value) {
 async function prepareBulkRows(prisma, { organizationId, buffer }) {
   const sourceRows = parseWorkbook(buffer);
   const now = new Date();
-  const [organization, departments, designations, locations, costCentres, existingEmployees, employmentLevels] = await Promise.all([
+  const [organization, departments, designations, locations, costCentres, existingEmployees, employmentLevels, onboardingTemplates] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: organizationId },
       select: { slug: true },
@@ -214,6 +214,10 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     prisma.organizationEmploymentLevel.findMany({
       where: { organizationId, isActive: true },
       select: { levelNumber: true, code: true, name: true },
+    }),
+    prisma.onboardingWorkflowTemplate.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true, employmentType: true, sections: true },
     }),
   ]);
 
@@ -304,6 +308,10 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const designation = findCatalogRow(designations, designationInput);
     const location = findCatalogRow(locations, locationInput);
     const branch = branchInput ? findCatalogRow(locations, branchInput) : null;
+    const onboardingTemplate =
+      onboardingTemplates.find((template) => template.employmentType === employmentType) ||
+      onboardingTemplates.find((template) => !template.employmentType) ||
+      null;
     const employmentLevel = employmentLevelInput
       ? employmentLevels.find((level) =>
           [level.code, level.name, String(level.levelNumber)].some(
@@ -339,6 +347,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (designation && !Number.isInteger(designation.careerLevel)) {
       errors.push("Designation must be mapped to an Employment Level.");
     }
+    if (isZermatt && !onboardingTemplate) errors.push("No active onboarding workflow matches this Employment Type; configure the workflow before bulk import.");
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
     if (rawBranchInput && !branch) errors.push("Branch was not found in the active CHRiS location catalogue.");
     if (location && branch && location.id !== branch.id) errors.push("Branch and Location must identify the same CHRiS location.");
@@ -387,6 +396,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
               costCentreId: costCentre?.id || null,
               nationalIdentificationNumber: normalizedNin || "",
               openingEmploymentLevelNumber: employmentLevel?.levelNumber ?? null,
+              onboardingTemplateId: onboardingTemplate?.id || null,
               onboardingSectionData: {
                 "personal-details": {
                   fullName: name, dateOfBirth,
