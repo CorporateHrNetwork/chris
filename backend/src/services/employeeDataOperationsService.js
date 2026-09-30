@@ -242,6 +242,17 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const nin = directNin || (String(idType || "").trim().toUpperCase() === "NIN" ? idNumber : "");
     const departmentInput = getCell(row, ["Department", "Department Code"]);
     const designationInput = getCell(row, ["Designation", "Designation Code"]);
+    const employmentLevelInput = getCell(row, ["Employment Level", "Grade", "Level"]);
+    const accountNumber = getCell(row, ["Account Number", "Bank Account Number"]).replace(/[\\s-]/g, "");
+    const bankName = getCell(row, ["Bank", "Bank Name"]);
+    const pensionPfa = getCell(row, ["Pension Provider", "Pension Fund Administrator", "PFA"]);
+    const pensionPin = getCell(row, ["RSA Number", "RSA PIN", "Pension PIN"]);
+    const dateOfBirth = getCell(row, ["Date of Birth", "DOB"]);
+    const taxIdentificationNumber = getCell(row, ["TaxIdentificationNO", "Tax Identification Number", "TIN"]);
+    const payeState = getCell(row, ["Tax Authority", "PAYE State", "PAYE Authority"]);
+    const guarantor1 = getCell(row, ["Guarantor 1", "First Guarantor"]);
+    const guarantor2 = getCell(row, ["Guarantor 2", "Second Guarantor"]);
+    const nextOfKin = getCell(row, ["Next Of Kin", "Next of Kin", "NOK"]);
     const costCentreInput = getCell(row, [
       "Cost Centre / Operating Unit",
       "Cost Centre",
