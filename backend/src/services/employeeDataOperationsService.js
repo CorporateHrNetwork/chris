@@ -403,7 +403,6 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
 
     return {
       rowNumber,
-      source: row,
       valid: errors.length === 0,
       errors,
       warnings,
