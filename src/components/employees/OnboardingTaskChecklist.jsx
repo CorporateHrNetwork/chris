@@ -20,7 +20,6 @@ export default function OnboardingTaskChecklist({ record, onSaved }) {
   const [branchHrOwners, setBranchHrOwners] = useState([]);
   const [branchHrOwnerId, setBranchHrOwnerId] = useState("");
   const [branchHrError, setBranchHrError] = useState("");
-  const [assignmentMode, setAssignmentMode] = useState("default");
 
   useEffect(() => {
     let active = true;
@@ -167,23 +166,21 @@ export default function OnboardingTaskChecklist({ record, onSaved }) {
   return <section className="onboarding-task-panel">
     <div><strong>Operational Checklist</strong><span>{persistedTasks.length ? `${completedCount}/${persistedTasks.length} complete · ${outstandingCount} outstanding · ${overdueCount} overdue` : "No deterministic template tasks available"}</span></div>
     <div className="onboarding-task-context"><strong>Onboarding Progress: {Number(record.completionPercent || 0)}%</strong><span>Operational tasks track accountability. Completed sections satisfy untouched matching tasks; explicitly managed tasks remain independent.</span></div>
-    <div className="onboarding-task-owner-mode">
-      <strong>Task ownership workflow</strong>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
-        <label><input type="radio" name="onboarding-owner-mode" checked={assignmentMode === "default"} onChange={() => setAssignmentMode("default")} /> Assign individual task owners (default)</label>
-        <label><input type="radio" name="onboarding-owner-mode" checked={assignmentMode === "branch-hr"} onChange={() => setAssignmentMode("branch-hr")} /> Assign unassigned tasks to branch HR &amp; Admin Officer</label>
-      </div>
-      {assignmentMode === "branch-hr" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+    <div className="onboarding-task-owner-mode" role="group" aria-label="Onboarding task ownership">
+      <strong>Assign all to Branch HR &amp; Admin Officer</strong>
+      <p className="onboarding-task-owner-help">Select the officer responsible for this employee’s branch and assign all currently unassigned operational checklist tasks in one action.</p>
+      <div className="onboarding-task-owner-controls">
         <select aria-label="Branch HR and Admin Officer" value={branchHrOwnerId} onChange={(event) => setBranchHrOwnerId(event.target.value)}>
-          <option value="">Select branch HR &amp; Admin Officer</option>
+          <option value="">Select Branch HR &amp; Admin Officer</option>
           {branchHrOwners.map((owner) => <option key={owner.id} value={owner.id}>{person(owner)}</option>)}
         </select>
-        <button type="button" disabled={Boolean(busy) || !branchHrOwnerId} onClick={assignBranchHr}>
-          {busy === "assign-branch-hr" ? "Assigning…" : "Assign All Unassigned Tasks to Branch HR"}
+        <button type="button" className="onboarding-task-assign-all" disabled={Boolean(busy) || !branchHrOwnerId} onClick={assignBranchHr}>
+          {busy === "assign-branch-hr" ? "Assigning…" : "Assign All to Branch HR & Admin Officer"}
         </button>
-        <small>Existing individual owners and completed task statuses are retained.</small>
-      </div>}
-      {assignmentMode === "branch-hr" && branchHrError && <div className="onboarding-task-feedback is-error" role="alert">{branchHrError}</div>}
+      </div>
+      {branchHrError && <div className="onboarding-task-feedback is-error" role="alert">{branchHrError}</div>}
+      {!branchHrError && branchHrOwners.length === 0 && <small>No eligible officer has been linked to this branch yet. Assign the officer’s HR/Admin role and branch in CHRiS.</small>}
+      <p className="onboarding-task-owner-help">Alternatively, retain the default workflow: assign different owners using the individual Owner dropdown on each task below. Existing owners and completed task statuses are preserved.</p>
     </div>
     {ownerError && <div className="onboarding-task-feedback is-error" role="alert">{ownerError}</div>}
     {feedback && <div className={`onboarding-task-feedback ${feedback.type === "error" ? "is-error" : ""}`} role={feedback.type === "error" ? "alert" : "status"}>{feedback.message}</div>}
