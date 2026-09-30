@@ -38,7 +38,7 @@ test("Zermatt Excel dropdowns use active organization catalogue, not illustrativ
   if (ignoredErrorsIndex !== -1) {
     assert.ok(validationIndex < ignoredErrorsIndex, "Office XML requires dropdown validations before ignoredErrors; otherwise Excel offers to repair the workbook.");
   }
-  assert.equal((xml.match(/<dataValidations\\b/g) || []).length, 1, "Only one dropdown validation container can be present.");
+  assert.equal((xml.match(/<dataValidations\b/g) || []).length, 1, "Only one dropdown validation container can be present.");
 
   assert.match(xml, /sqref="H2:H1001"/, "Department must offer dropdown validation.");
   assert.match(xml, /sqref="J2:J1001"/, "Employment Level must offer dropdown validation.");
