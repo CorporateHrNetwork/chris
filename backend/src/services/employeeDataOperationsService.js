@@ -150,6 +150,7 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
     ["Required: Employee Name, Department, Designation, Location, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary for Zermatt."],
     ["Employment Level: L1–L7 code or active level name. Blank uses the designation default; a different level creates an audited employee override."],
     ["Location must match an active CHRiS location. Branch is a separate HR field; discrepancies are flagged for HR verification."],
+    ["The Department dropdown includes the complete approved Zermatt department list. Check the Department Reconciliation sheet: items not matched to active CHRiS records must be configured with valid Cost Centres before bulk import."],
     ["Department, Designation, Location, Cost Centre and Employment Level must match the active CHRiS catalogue."],
     ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED. Status: Active, Probation, Leave or Suspended. Blank status defaults to Probation."],
     ["Dates: YYYY-MM-DD. Phone, NIN, account number, RSA and tax ID should be entered as TEXT to preserve zeros."],
@@ -207,6 +208,19 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
       wch: heading === "Designation" || heading === "Pension Provider" ? 44 : 29,
     }));
     XLSX.utils.book_append_sheet(workbook, listSheet, "Dropdown Lists");
+    const departmentStatus = Array.isArray(catalog.departmentStatus) ? catalog.departmentStatus : [];
+    if (departmentStatus.length) {
+      const referenceSheet = XLSX.utils.aoa_to_sheet([
+        ["Approved Zermatt Department", "CHRiS catalogue status", "Required action"],
+        ...departmentStatus.map((item) => [
+          item.name,
+          item.active ? "ACTIVE - available for import" : "NOT MATCHED TO ACTIVE DEPARTMENT",
+          item.active ? "No action needed" : "HR administrator: reconcile/create/reactivate the matching department and map its Cost Centre before importing employees.",
+        ]),
+      ]);
+      referenceSheet["!cols"] = [{ wch: 43 }, { wch: 39 }, { wch: 94 }];
+      XLSX.utils.book_append_sheet(workbook, referenceSheet, "Department Reconciliation");
+    }
 
     const sections = [
       ["1", "Personal Information", "Employee Name, Work Email, Phone, Gender, Date of Birth, NIN"],
