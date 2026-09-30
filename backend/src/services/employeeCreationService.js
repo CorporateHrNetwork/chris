@@ -295,8 +295,11 @@ async function createEmployeeWithDependencies(
     where: {
       id: payload.designationId,
       organizationId,
-      departmentId: department.id,
       isActive: true,
+      OR: [
+        { departmentId: department.id },
+        { departmentEligibility: { some: { departmentId: department.id, organizationId } } },
+      ],
     },
     select: {
       id: true,
@@ -305,6 +308,7 @@ async function createEmployeeWithDependencies(
       departmentId: true,
       careerLevel: true,
       isActive: true,
+      departmentEligibility: { select: { departmentId: true } },
     },
   });
   if (!designation) throw employeeCreationError("INVALID_EMPLOYEE_DESIGNATION");
