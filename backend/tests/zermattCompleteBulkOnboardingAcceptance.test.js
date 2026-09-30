@@ -76,3 +76,17 @@ test("bulk create saves sections and grade in the employee transaction", () => {
 });
 
 console.log("PASS: Zermatt complete bulk onboarding acceptance checks");
+
+
+test("operational checklist always exposes branch HR assign-all while preserving individual owners", () => {
+  const checklist = read("src/components/employees/OnboardingTaskChecklist.jsx");
+  const route = read("backend/src/routes/onboardingRoutes.js");
+  assert.ok(checklist.includes("Assign All to Branch HR & Admin Officer"));
+  assert.ok(checklist.includes('className="onboarding-task-assign-all"'));
+  assert.ok(checklist.includes("assignBranchHr"));
+  assert.ok(checklist.includes("individual Owner dropdown"));
+  assert.ok(checklist.includes("owners.map((owner)"));
+  assert.equal(checklist.includes('assignmentMode === "branch-hr"'), false, "Bulk ownership must be immediately visible, not hidden behind a radio switch");
+  assert.ok(route.includes('"/records/:id/tasks/assign-branch-hr"'));
+  assert.ok(route.includes("overwriteExisting: false") || checklist.includes("overwriteExisting: false"));
+});
