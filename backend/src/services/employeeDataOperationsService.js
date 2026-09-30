@@ -326,6 +326,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       findCatalogRow(costCentres, costCentreInput) ||
       (!costCentreInput ? mappedCostCentre : null);
     const errors = [];
+    const warnings = [];
     const isZermatt =
       String(organization?.slug || "").trim().toLowerCase() ===
       "zermatt-liquor-limited";
@@ -349,8 +350,10 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     }
     if (isZermatt && !onboardingTemplate) errors.push("No active onboarding workflow matches this Employment Type; configure the workflow before bulk import.");
     if (!location) errors.push("Location was not found in the active CHRiS location catalogue.");
-    if (rawBranchInput && !branch) errors.push("Branch was not found in the active CHRiS location catalogue.");
-    if (location && branch && location.id !== branch.id) errors.push("Branch and Location must identify the same CHRiS location.");
+    // A descriptive Branch may differ from the mapped physical Location.
+    // Keep it as HR onboarding metadata rather than silently discarding it.
+    if (rawBranchInput && !branch) warnings.push("Branch does not match an active Location; retained for HR verification.");
+    if (location && branch && location.id !== branch.id) warnings.push("Branch differs from Location; HR should verify work placement.");
     if (employmentLevelInput && !employmentLevel) errors.push("Employment Level must match an active CHRiS Employment Level (L1–L7).");
     if (costCentreInput && !costCentre) errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
     if (isZermatt && !costCentre) errors.push("Department has no mapped Cost Centre / Operating Unit. Configure the Department mapping or supply a valid Cost Centre.");
@@ -359,7 +362,8 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (grossSalaryInput && !/^[A-Z]{3}$/.test(salaryCurrency)) errors.push("Salary Currency must be a 3-letter currency code such as NGN.");
     if (grossSalaryInput && !/^\d{4}-\d{2}-\d{2}$/.test(salaryEffectiveFrom)) errors.push("Salary Effective From must use YYYY-MM-DD.");
     if (hireDate && !/^\d{4}-\d{2}-\d{2}$/.test(hireDate)) errors.push("Hire Date must use YYYY-MM-DD.");
-    if (dateOfBirth && (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) || Number.isNaN(Date.parse(dateOfBirth)) || new Date(dateOfBirth) > now)) {
+    if (dateOfBirth && (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) || Number.isNaN(Date.parse(dateOfBirth)) ||
+      new Date(dateOfBirth).toISOString().slice(0, 10) !== dateOfBirth || new Date(dateOfBirth) > now)) {
       errors.push("Date of Birth must be a valid YYYY-MM-DD date that is not in the future.");
     }
     if (accountNumber && !/^\d{10}$/.test(accountNumber)) errors.push("Account Number must contain exactly 10 digits.");
@@ -380,6 +384,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       source: row,
       valid: errors.length === 0,
       errors,
+      warnings,
       input:
         errors.length === 0
           ? {
@@ -402,6 +407,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
                   fullName: name, dateOfBirth,
                   nationalIdentificationNumber: normalizedNin || "",
                   phone, email, gender,
+                  branch: rawBranchInput,
                 },
                 "payment-details": {
                   accountNumber, bankName,
@@ -436,6 +442,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
           employmentLevels.find((level) => level.levelNumber === designation?.careerLevel)?.code || "",
         accountNumberLast4: accountNumber.slice(-4),
         bankName,
+        branch: rawBranchInput,
         pensionPfa,
         dateOfBirth,
         nextOfKinPresent: Boolean(nextOfKin),
