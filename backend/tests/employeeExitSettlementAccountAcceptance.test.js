@@ -185,6 +185,6 @@ test("Zermatt exit leave allowance uses completed service months, not a daily fr
   assert.equal(Math.round(48000 * samuel.factor * 100) / 100, 16000);
   assert.equal(proration("2025-05-06", "2026-09-05").accruedMonths, 3);
   assert.equal(proration("2025-05-06", "2026-09-06").accruedMonths, 4);
-  assert.ok(service.includes("Annual Leave Allowance × completed service months ÷ 12"));
+  assert.ok(service.includes("Reference December Basic Salary × 12 × 10% × completed service months ÷ 12"));
   assert.equal(service.includes("Annual Leave Allowance × accrued service-year day fraction"), false);
 });
