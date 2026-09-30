@@ -63,7 +63,47 @@ router.get(
       select: { slug: true },
     });
     const isZermatt = organization?.slug === "zermatt-liquor-limited";
-    const buffer = buildTemplateWorkbook({ isZermatt });
+    const catalog = {};
+    if (isZermatt) {
+      const now = new Date();
+      const [departments, designations, locations, costCentres, levels] = await Promise.all([
+        prisma.department.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
+        prisma.designation.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
+        prisma.organizationLocation.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
+        prisma.costCentre.findMany({ where: { organizationId: req.auth.organizationId, status: "ACTIVE", effectiveFrom: { lte: now }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] }, select: { name: true }, orderBy: { name: "asc" } }),
+        prisma.organizationEmploymentLevel.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { code: true }, orderBy: { levelNumber: "asc" } }),
+      ]);
+      catalog.employmentTypes = ["Full-Time", "Part-Time", "Expatriate", "NYSC / Internship", "Domestic Staff - Housekeeper"];
+      catalog.departments = [...new Set(departments.map((item) => item.name))];
+      catalog.designations = [...new Set(designations.map((item) => item.name))];
+      catalog.locations = [...new Set(locations.map((item) => item.name))];
+      catalog.costCentres = [...new Set(costCentres.map((item) => item.name))];
+      catalog.employmentLevels = levels.map((item) => item.code);
+      // Bank and pension catalogues are curated separately; do not invent tenant-specific choices.
+      catalog.banks = [
+        "Access Bank", "Citibank Nigeria", "Ecobank Nigeria", "Fidelity Bank",
+        "First Bank of Nigeria", "First City Monument Bank",
+        "Guaranty Trust Bank", "Jaiz Bank", "Keystone Bank", "Polaris Bank",
+        "Providus Bank", "Stanbic IBTC Bank", "Standard Chartered Bank",
+        "Sterling Bank", "Union Bank of Nigeria", "United Bank for Africa",
+        "Unity Bank", "Wema Bank", "Zenith Bank",
+      ];
+      catalog.pensionProviders = [
+        "Access Pensions", "ARM Pension Managers", "CrusaderSterling Pensions",
+        "FCMB Pensions", "Fidelity Pension Managers", "Leadway Pensure",
+        "NLPC Pension Fund Administrators", "NPF Pensions", "Oak Pensions",
+        "Premium Pension", "Stanbic IBTC Pension Managers",
+        "Tangerine APT Pensions", "Trustfund Pensions", "Veritas Glanvills Pensions",
+      ];
+      catalog.taxAuthorities = [
+        "Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno",
+        "Cross River","Delta","Ebonyi","Edo","Ekiti","Enugu","FCT","Gombe",
+        "Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos",
+        "Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto",
+        "Taraba","Yobe","Zamfara",
+      ];
+    }
+    const buffer = buildTemplateWorkbook({ isZermatt, catalog });
     res.setHeader(
       "Content-Disposition",
       isZermatt
