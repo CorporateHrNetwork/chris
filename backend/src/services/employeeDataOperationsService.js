@@ -282,7 +282,8 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       "Salary Effective Date",
     ]);
 
-    const rawLocationInput = getCell(row, ["Location", "Company Branch", "Branch", "Branch / Location", "Location Code"]);
+    const rawLocationInput = getCell(row, ["Location", "Company Branch", "Branch / Location", "Location Code"]);
+    const rawBranchInput = getCell(row, ["Branch", "Branch Name"]);
     const locationAliases = {
       "ABUJA": "ABJ",
       "ABUJA BRANCH": "ABJ",
@@ -295,12 +296,20 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
       "HEAD OFFICE": "HO",
     };
     const locationInput =
-      locationAliases[String(rawLocationInput || "").trim().toUpperCase()] ||
-      rawLocationInput;
+      locationAliases[String(rawLocationInput || rawBranchInput || "").trim().toUpperCase()] ||
+      rawLocationInput || rawBranchInput;
+    const branchInput = locationAliases[String(rawBranchInput || "").trim().toUpperCase()] || rawBranchInput;
 
     const department = findCatalogRow(departments, departmentInput);
     const designation = findCatalogRow(designations, designationInput);
     const location = findCatalogRow(locations, locationInput);
+    const branch = branchInput ? findCatalogRow(locations, branchInput) : null;
+    const employmentLevel = employmentLevelInput
+      ? employmentLevels.find((level) =>
+          [level.code, level.name, String(level.levelNumber)].some(
+            (value) => String(value || "").trim().toLowerCase() === employmentLevelInput.toLowerCase()
+          )) || null
+      : null;
     const mappedCostCentre =
       department?.costCentreId
         ? costCentres.find((row) => row.id === department.costCentreId) || null
