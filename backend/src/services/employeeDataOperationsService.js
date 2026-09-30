@@ -150,7 +150,8 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
     ["Required: Employee Name, Department, Designation, Location, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary for Zermatt."],
     ["Employment Level: L1–L7 code or active level name. Blank uses the designation default; a different level creates an audited employee override."],
     ["Location must match an active CHRiS location. Branch is a separate HR field; discrepancies are flagged for HR verification."],
-    ["The Department dropdown includes the complete approved Zermatt department list. Check the Department Reconciliation sheet: items not matched to active CHRiS records must be configured with valid Cost Centres before bulk import."],
+    ["Dropdowns are generated from the live tenant catalogue at download time. The Complete Department Inventory sheet includes every stored department, including inactive/historical records, usage and Cost Centre status. Inactive departments cannot be used for new onboarding until authorised reactivation."],
+    ["The Department Reconciliation sheet compares the 15 supplied baseline names with live CHRiS records. Other active pre-stored departments appear in the dropdown automatically."],
     ["Department, Designation, Location, Cost Centre and Employment Level must match the active CHRiS catalogue."],
     ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED. Status: Active, Probation, Leave or Suspended. Blank status defaults to Probation."],
     ["Dates: YYYY-MM-DD. Phone, NIN, account number, RSA and tax ID should be entered as TEXT to preserve zeros."],
@@ -211,15 +212,58 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
     const departmentStatus = Array.isArray(catalog.departmentStatus) ? catalog.departmentStatus : [];
     if (departmentStatus.length) {
       const referenceSheet = XLSX.utils.aoa_to_sheet([
-        ["Approved Zermatt Department", "CHRiS catalogue status", "Required action"],
+        ["Approved Zermatt Department", "Live CHRiS record", "Active for new hires", "Cost Centre mapping", "Employees currently assigned", "Required action"],
         ...departmentStatus.map((item) => [
           item.name,
-          item.active ? "ACTIVE - available for import" : "NOT MATCHED TO ACTIVE DEPARTMENT",
-          item.active ? "No action needed" : "HR administrator: reconcile/create/reactivate the matching department and map its Cost Centre before importing employees.",
+          item.found === false ? "NOT STORED" : item.active ? "FOUND - ACTIVE" : "FOUND - INACTIVE",
+          item.active ? "YES" : "NO",
+          item.costCentreMapped ? "MAPPED" : "NOT MAPPED / UNVERIFIED",
+          Number(item.employeeCount || 0),
+          item.active && item.costCentreMapped
+            ? "Available for new onboarding"
+            : "HR administrator: inspect existing department, reconcile status and Cost Centre before importing employees.",
         ]),
       ]);
-      referenceSheet["!cols"] = [{ wch: 43 }, { wch: 39 }, { wch: 94 }];
+      referenceSheet["!cols"] = [{ wch: 43 }, { wch: 25 }, { wch: 24 }, { wch: 29 }, { wch: 28 }, { wch: 105 }];
       XLSX.utils.book_append_sheet(workbook, referenceSheet, "Department Reconciliation");
+    }
+
+    // Always report EVERY persisted department, not just the approved baseline
+    // or active ones. Historical/disabled departments are visible, never silently
+    // dropped and never automatically reactivated.
+    if (Array.isArray(catalog.departmentInventory)) {
+      const all = catalog.departmentInventory;
+      const snapshot = catalog.departmentInventoryMeta || {};
+      if (snapshot.storedDepartmentCount != null && Number(snapshot.storedDepartmentCount) !== all.length) {
+        throw new Error("BULK_TEMPLATE_DEPARTMENT_CATALOG_INCOMPLETE");
+      }
+      const activeCount = all.filter((item) => item.active).length;
+      if (snapshot.activeDepartmentCount != null && Number(snapshot.activeDepartmentCount) !== activeCount) {
+        throw new Error("BULK_TEMPLATE_ACTIVE_DEPARTMENT_COUNT_MISMATCH");
+      }
+      const inventorySheet = XLSX.utils.aoa_to_sheet([
+        ["LIVE ZERMATT DEPARTMENT INVENTORY - generated from CHRiS database"],
+        ["Generated at (UTC)", snapshot.generatedAt || ""],
+        ["Stored departments", all.length],
+        ["Active departments", activeCount],
+        ["Inactive / historical departments", all.length - activeCount],
+        [],
+        ["Stored department name", "Code", "Status", "Mapped Cost Centre", "Assigned employees", "Linked designations", "In approved baseline", "New onboarding eligibility"],
+        ...all.map((item) => [
+          item.name, item.code || "",
+          item.active ? "ACTIVE" : "INACTIVE / HISTORICAL",
+          item.costCentreMapped ? "YES" : "NO",
+          Number(item.employeeCount || 0),
+          Number(item.designationCount || 0),
+          item.inApprovedBaseline ? "YES" : "OTHER PRE-STORED DEPARTMENT",
+          item.active ? item.costCentreMapped ? "ELIGIBLE SUBJECT TO DESIGNATION VALIDATION" : "COST CENTRE MAPPING REQUIRED" : "HISTORY ONLY - MUST REACTIVATE BEFORE REUSE",
+        ]),
+      ]);
+      inventorySheet["!cols"] = [
+        { wch: 52 }, { wch: 16 }, { wch: 27 }, { wch: 26 },
+        { wch: 24 }, { wch: 23 }, { wch: 32 }, { wch: 58 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, inventorySheet, "Complete Department Inventory");
     }
 
     const sections = [
