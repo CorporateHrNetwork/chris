@@ -256,7 +256,7 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
   // Office Open XML requires dataValidations BEFORE ignoredErrors (and before
   // drawing / page-layout elements). Appending it at the end of worksheet is
   // well-formed XML but makes Excel display the "repair workbook" warning.
-  const trailingWorksheetElements = /<(?:ignoredErrors|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|extLst)(?:\\s|>)/;
+  const trailingWorksheetElements = /<(?:ignoredErrors|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|extLst)(?:\s|>)/;
   const trailingElement = xml.search(trailingWorksheetElements);
   if (trailingElement >= 0) {
     xml = xml.slice(0, trailingElement) + validations + xml.slice(trailingElement);
