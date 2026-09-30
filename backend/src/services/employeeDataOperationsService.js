@@ -236,7 +236,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const email = getCell(row, ["Work Email", "Email", "Work Email Address"]).toLowerCase();
     const phone = getCell(row, ["Phone", "Phone Number"]);
     const gender = (getCell(row, ["Gender"]) || "UNSPECIFIED").toUpperCase();
-    const status = mapStatus(getCell(row, ["Status"]) || "Active");
+    const status = mapStatus(getCell(row, ["Status"]) || "Probation");
     const hireDate = getCell(row, ["Hire Date", "Employment Date", "Start Date"]);
     const employmentTypeInput = getCell(row, ["Employment Type", "EmploymentType"]);
     const employmentType = normalizeEmploymentType(employmentTypeInput);
@@ -247,7 +247,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     const departmentInput = getCell(row, ["Department", "Department Code"]);
     const designationInput = getCell(row, ["Designation", "Designation Code"]);
     const employmentLevelInput = getCell(row, ["Employment Level", "Grade", "Level"]);
-    const accountNumber = getCell(row, ["Account Number", "Bank Account Number"]).replace(/[\\s-]/g, "");
+    const accountNumber = getCell(row, ["Account Number", "Bank Account Number"]).replace(/[\s-]/g, "");
     const bankName = getCell(row, ["Bank", "Bank Name"]);
     const pensionPfa = getCell(row, ["Pension Provider", "Pension Fund Administrator", "PFA"]);
     const pensionPin = getCell(row, ["RSA Number", "RSA PIN", "Pension PIN"]);
