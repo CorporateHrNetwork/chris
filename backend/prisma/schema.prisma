@@ -37,6 +37,7 @@ model Organization {
   roles                              Role[]
   departments                        Department[]
   designations                       Designation[]
+  designationDepartmentEligibility   DesignationDepartmentEligibility[]
   employmentLevels                   OrganizationEmploymentLevel[]
   employees                          Employee[]
   locations                          OrganizationLocation[]
