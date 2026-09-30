@@ -112,6 +112,7 @@ jobs:
           node tests/employeeDataOperations.test.js
           node tests/zermattBulkEmployeePayrollReadinessAcceptance.test.js
           node --test tests/zermattCompleteBulkOnboardingAcceptance.test.js
+          node --test tests/zermattCompleteBulkOnboardingAtomic.test.js
           node tests/unifiedEmployeeOnboardingAcceptance.test.js
           node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeExitSettlementAccountAcceptance.test.js
