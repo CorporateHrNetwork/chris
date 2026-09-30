@@ -141,7 +141,7 @@ function mapStatus(value) {
   return allowed.get(normalized) || null;
 }
 
-function buildTemplateWorkbook({ isZermatt = true } = {}) {
+function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
   const workbook = XLSX.utils.book_new();
   const instructions = isZermatt ? [
     ["Zermatt / CHRiS Complete Bulk Employee Onboarding"],
@@ -179,6 +179,51 @@ function buildTemplateWorkbook({ isZermatt = true } = {}) {
     ]),
     "Employee Import"
   );
+  if (isZermatt) {
+    const available = [
+      ["Gender", ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"]],
+      ["Status", ["Probation", "Active", "Leave", "Suspended"]],
+      ["Employment Type", catalog.employmentTypes || []],
+      ["Department", catalog.departments || []],
+      ["Designation", catalog.designations || []],
+      ["Employment Level", catalog.employmentLevels || []],
+      ["Location", catalog.locations || []],
+      ["Cost Centre / Operating Unit", catalog.costCentres || []],
+      ["Salary Currency", ["NGN", "USD", "GBP", "EUR"]],
+      ["Bank", catalog.banks || []],
+      ["Pension Provider", catalog.pensionProviders || []],
+      ["Branch", catalog.locations || []],
+      ["Tax Authority", catalog.taxAuthorities || []],
+    ];
+    const longest = Math.max(1, ...available.map(([, values]) => values.length));
+    const values = [
+      available.map(([heading]) => heading),
+      ...Array.from({ length: longest }, (_, row) =>
+        available.map(([, items]) => items[row] || "")),
+    ];
+    const listSheet = XLSX.utils.aoa_to_sheet(values);
+    listSheet["!cols"] = available.map(([heading]) => ({
+      wch: heading === "Designation" || heading === "Pension Provider" ? 44 : 29,
+    }));
+    XLSX.utils.book_append_sheet(workbook, listSheet, "Dropdown Lists");
+
+    const sections = [
+      ["1", "Personal Information", "Employee Name, Work Email, Phone, Gender, Date of Birth, NIN"],
+      ["2", "Employment Information", "Status, Hire Date, Employment Type, Designation, Employment Level"],
+      ["3", "Organization Placement", "Department, Location, Branch, Cost Centre / Operating Unit"],
+      ["4", "Compensation / Payment Setup", "Monthly Gross Salary, Salary Currency, Salary Effective From, Account Number, Bank"],
+      ["5", "Statutory Information", "Pension Provider, RSA Number, TaxIdentificationNO, Tax Authority"],
+      ["6", "Next of Kin / Emergency", "Next Of Kin, Guarantor 1, Guarantor 2 (additional contact details remain in CHRiS)"],
+      ["7", "Documents", "Required supporting files are uploaded securely in CHRiS; no document files are stored in spreadsheet cells."],
+      ["8", "Legal / Assets", "Legal declarations and asset allocations remain in the guided onboarding workflow."],
+      ["9", "Onboarding Checklist", "Ownership and task completion are managed within CHRiS."],
+      ["10", "Review & Create", "Run Validate Workbook before confirming the import."],
+    ];
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ["Step", "CHRiS Onboarding Section", "Captured columns or completion path"],
+      ...sections,
+    ]), "Section Guide");
+  }
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
