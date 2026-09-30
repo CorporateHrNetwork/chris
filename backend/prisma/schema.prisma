@@ -37,6 +37,7 @@ model Organization {
   roles                              Role[]
   departments                        Department[]
   designations                       Designation[]
+  designationDepartmentEligibility   DesignationDepartmentEligibility[]
   employmentLevels                   OrganizationEmploymentLevel[]
   employees                          Employee[]
   locations                          OrganizationLocation[]
@@ -377,6 +378,7 @@ model Department {
 
   employees    Employee[]
   designations Designation[]
+  designationEligibility DesignationDepartmentEligibility[]
 
   previousDepartmentEvents EmployeeLifecycleEvent[] @relation("LifecyclePreviousDepartment")
   newDepartmentEvents      EmployeeLifecycleEvent[] @relation("LifecycleNewDepartment")
@@ -438,6 +440,7 @@ model Designation {
   employmentLevel OrganizationEmploymentLevel? @relation(fields: [organizationId, careerLevel], references: [organizationId, levelNumber], onDelete: Restrict)
 
   employees Employee[]
+  departmentEligibility DesignationDepartmentEligibility[]
 
   reportsToDesignation Designation? @relation("DesignationCareerHierarchy", fields: [organizationId, reportsToDesignationId], references: [organizationId, id], onDelete: Restrict)
 
@@ -1541,6 +1544,24 @@ enum LocationType {
 enum UserLocationScope {
   ALL_LOCATIONS
   ASSIGNED_LOCATIONS
+}
+
+model DesignationDepartmentEligibility {
+  id             String @id @default(uuid())
+  organizationId String
+  designationId  String
+  departmentId   String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  designation Designation @relation(fields: [organizationId, designationId], references: [organizationId, id], onDelete: Cascade)
+  department Department @relation(fields: [organizationId, departmentId], references: [organizationId, id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, designationId, departmentId])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, designationId])
+  @@map("designation_department_eligibility")
 }
 
 model DesignationLifecycleEvent {
