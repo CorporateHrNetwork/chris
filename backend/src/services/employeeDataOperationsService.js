@@ -253,8 +253,18 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
     `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Select a listed option" error="Choose an existing CHRiS option from the Dropdown Lists sheet." sqref="${field}2:${field}1001"><formula1>INDIRECT(&quot;'Dropdown Lists'!$${source}$2:$${source}$250&quot;)</formula1></dataValidation>`
   );
   const validations = `<dataValidations count="${entries.length}">${entries.join("")}</dataValidations>`;
-  if (!xml.includes("</worksheet>")) throw new Error("BULK_TEMPLATE_WORKSHEET_INVALID");
-  xml = xml.replace("</worksheet>", validations + "</worksheet>");
+  // Office Open XML requires dataValidations BEFORE ignoredErrors (and before
+  // drawing / page-layout elements). Appending it at the end of worksheet is
+  // well-formed XML but makes Excel display the "repair workbook" warning.
+  const trailingWorksheetElements = /<(?:ignoredErrors|hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|extLst)(?:\\s|>)/;
+  const trailingElement = xml.search(trailingWorksheetElements);
+  if (trailingElement >= 0) {
+    xml = xml.slice(0, trailingElement) + validations + xml.slice(trailingElement);
+  } else if (xml.includes("</worksheet>")) {
+    xml = xml.replace("</worksheet>", validations + "</worksheet>");
+  } else {
+    throw new Error("BULK_TEMPLATE_WORKSHEET_INVALID");
+  }
   CFB.utils.cfb_add(archive, path, Buffer.from(xml, "utf8"));
   return CFB.write(archive, { type: "buffer", fileType: "zip" });
 }
