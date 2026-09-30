@@ -74,7 +74,32 @@ router.get(
         prisma.organizationEmploymentLevel.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { code: true }, orderBy: { levelNumber: "asc" } }),
       ]);
       catalog.employmentTypes = ["Full-Time", "Part-Time", "Expatriate", "NYSC / Internship", "Domestic Staff - Housekeeper"];
-      catalog.departments = [...new Set(departments.map((item) => item.name))];
+      // Zermatt's approved departmental structure; preserve every live
+      // catalogue entry and flag approved names not configured as active.
+      const approvedDepartments = [
+        "Accounts & Finance",
+        "Audit & Internal Control",
+        "Beer Barn Operations",
+        "Entertainment",
+        "Executive Management",
+        "Facilities Management",
+        "Housekeeping",
+        "Housekeeping & Facilities",
+        "Human Resources & Administration",
+        "ICT",
+        "Purchase & Procurement",
+        "Security",
+        "Transport & Logistics",
+        "Warehouse & Stores",
+        "Zermatt Operations",
+      ];
+      const activeNames = departments.map((item) => String(item.name || "").trim()).filter(Boolean);
+      const activeNameSet = new Set(activeNames.map((name) => name.toLocaleLowerCase("en")));
+      catalog.departments = [...new Map([...approvedDepartments, ...activeNames].map((name) => [name.toLocaleLowerCase("en"), name])).values()];
+      catalog.departmentStatus = approvedDepartments.map((name) => ({
+        name,
+        active: activeNameSet.has(name.toLocaleLowerCase("en")),
+      }));
       catalog.designations = [...new Set(designations.map((item) => item.name))];
       catalog.locations = [...new Set(locations.map((item) => item.name))];
       catalog.costCentres = [...new Set(costCentres.map((item) => item.name))];
