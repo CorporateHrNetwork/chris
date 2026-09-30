@@ -78,6 +78,13 @@ const IMPORT_HEADERS = [
   "Next Of Kin"
 ];
 
+const STANDARD_IMPORT_HEADERS = [
+  "Employee Name", "Work Email", "Phone", "Gender", "Status", "Hire Date",
+  "Employment Type", "Department", "Designation", "Location",
+  "Cost Centre / Operating Unit", "Monthly Gross Salary", "Salary Currency",
+  "Salary Effective From", "NIN",
+];
+
 function normalizeHeader(value) {
   return String(value || "")
     .trim()
@@ -134,9 +141,9 @@ function mapStatus(value) {
   return allowed.get(normalized) || null;
 }
 
-function buildTemplateWorkbook() {
+function buildTemplateWorkbook({ isZermatt = true } = {}) {
   const workbook = XLSX.utils.book_new();
-  const instructions = [
+  const instructions = isZermatt ? [
     ["Zermatt / CHRiS Complete Bulk Employee Onboarding"],
     ["One employee per row; retain the Employee Import column headings. Sensitive employee data must be handled only by authorized HR."],
     ["Required: Employee Name, Department, Designation, Location, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary for Zermatt."],
@@ -150,6 +157,13 @@ function buildTemplateWorkbook() {
     ["Guarantor 1, Guarantor 2 and Next Of Kin populate onboarding contact information; enter contact names here and complete remaining contact details during review."],
     ["Salary Currency defaults to NGN. Salary Effective From defaults to Hire Date or import date when blank."],
     ["Preview checks duplicates, active catalogue mapping, employment level and account/NIN formats before import."],
+  ] : [
+    ["CHRiS Bulk Employee Import"],
+    ["One employee per row; keep the column headings unchanged."],
+    ["Required: Employee Name, Department, Designation and Location."],
+    ["Status defaults to Probation. Employment Type and Cost Centre should follow your organization's CHRiS catalogue."],
+    ["Salary fields are optional outside Zermatt; if supplied, authorized Payroll Manage access is required."],
+    ["Date format: YYYY-MM-DD. NIN is optional and must be an unused valid 11-digit number if supplied."],
   ];
   XLSX.utils.book_append_sheet(
     workbook,
@@ -159,8 +173,9 @@ function buildTemplateWorkbook() {
   XLSX.utils.book_append_sheet(
     workbook,
     XLSX.utils.aoa_to_sheet([
-      IMPORT_HEADERS,
-      ["Jane Mary Doe","","08000000000","FEMALE","Probation","2026-09-01","Full-Time","Human Resources","HR Officer","L3","Abuja","HEAD OFFICE",450000,"NGN","2026-09-01","","","","","","Abuja","","","","","",""],
+      isZermatt ? IMPORT_HEADERS : STANDARD_IMPORT_HEADERS,
+      (isZermatt ? IMPORT_HEADERS : STANDARD_IMPORT_HEADERS).map((label) =>
+        ["Jane Mary Doe","","08000000000","FEMALE","Probation","2026-09-01","Full-Time","Human Resources","HR Officer","L3","Abuja","HEAD OFFICE",450000,"NGN","2026-09-01","","","","","","Abuja","","","","","",""][IMPORT_HEADERS.indexOf(label)]),
     ]),
     "Employee Import"
   );
