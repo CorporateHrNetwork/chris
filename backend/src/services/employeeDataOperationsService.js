@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const XLSX = require("xlsx");
+const CFB = require("cfb");
 const { normalizeEmploymentType } = require("./employeeCreationService");
 
 const EXPORT_COLUMN_CATALOG = [
@@ -224,7 +225,38 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
       ...sections,
     ]), "Section Guide");
   }
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  const output = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  if (!isZermatt) return output;
+  // SheetJS produces the workbook data; CFB safely adds Excel-native validation
+  // without replacing live tenant data with static dropdown choices.
+  const archive = CFB.read(output, { type: "buffer" });
+  const path = "/xl/worksheets/sheet2.xml";
+  const entry = CFB.find(archive, path) || CFB.find(archive, "xl/worksheets/sheet2.xml");
+  if (!entry?.content) throw new Error("BULK_TEMPLATE_WORKSHEET_MISSING");
+  let xml = Buffer.from(entry.content).toString("utf8");
+  const fieldColumns = [
+    ["D", "A"], // gender
+    ["E", "B"], // status
+    ["G", "C"], // employment type
+    ["H", "D"], // department
+    ["I", "E"], // designation
+    ["J", "F"], // employment level
+    ["K", "G"], // location
+    ["L", "H"], // cost centre
+    ["N", "I"], // currency
+    ["R", "J"], // bank
+    ["S", "K"], // pension
+    ["U", "L"], // branch
+    ["X", "M"], // PAYE authority
+  ];
+  const entries = fieldColumns.map(([field, source]) =>
+    `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Select a listed option" error="Choose an existing CHRiS option from the Dropdown Lists sheet." sqref="${field}2:${field}1001"><formula1>INDIRECT(&quot;'Dropdown Lists'!${source}$2:${source}$250&quot;)</formula1></dataValidation>`
+  );
+  const validations = `<dataValidations count="${entries.length}">${entries.join("")}</dataValidations>`;
+  if (!xml.includes("</worksheet>")) throw new Error("BULK_TEMPLATE_WORKSHEET_INVALID");
+  xml = xml.replace("</worksheet>", validations + "</worksheet>");
+  CFB.utils.cfb_add(archive, path, Buffer.from(xml, "utf8"));
+  return CFB.write(archive, { type: "buffer", fileType: "zip" });
 }
 
 function findCatalogRow(rows, value) {
