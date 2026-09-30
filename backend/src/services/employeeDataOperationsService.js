@@ -181,7 +181,7 @@ function findCatalogRow(rows, value) {
 async function prepareBulkRows(prisma, { organizationId, buffer }) {
   const sourceRows = parseWorkbook(buffer);
   const now = new Date();
-  const [organization, departments, designations, locations, costCentres, existingEmployees] = await Promise.all([
+  const [organization, departments, designations, locations, costCentres, existingEmployees, employmentLevels] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: organizationId },
       select: { slug: true },
@@ -210,6 +210,10 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     prisma.employee.findMany({
       where: { organizationId },
       select: { email: true, nationalIdentificationNumber: true },
+    }),
+    prisma.organizationEmploymentLevel.findMany({
+      where: { organizationId, isActive: true },
+      select: { levelNumber: true, code: true, name: true },
     }),
   ]);
 
