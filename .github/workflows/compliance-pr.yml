@@ -115,6 +115,7 @@ jobs:
           node --test tests/zermattCompleteBulkOnboardingAtomic.test.js
           node --test tests/zermattLiveBulkTemplateDropdowns.test.js
           node --test tests/zermattApprovedDepartmentTemplate.test.js
+          node --test tests/zermattAuthoritativeDepartmentInventory.test.js
           node tests/unifiedEmployeeOnboardingAcceptance.test.js
           node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeExitSettlementAccountAcceptance.test.js

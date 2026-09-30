@@ -30,6 +30,7 @@ test("Zermatt template retains all 15 approved departments and flags unmatched l
   assert.deepEqual(listRows.slice(1, 16).map((row) => row[3]), approved);
   const reconciliationRows = XLSX.utils.sheet_to_json(wb.Sheets["Department Reconciliation"], { header: 1 });
   assert.equal(reconciliationRows.length, 16);
-  assert.equal(reconciliationRows[5][1], "NOT MATCHED TO ACTIVE DEPARTMENT");
-  assert.match(reconciliationRows[5][2], /map its Cost Centre/);
+  assert.equal(reconciliationRows[5][1], "FOUND - INACTIVE");
+  assert.equal(reconciliationRows[5][2], "NO");
+  assert.match(reconciliationRows[5][5], /reconcile status and Cost Centre/);
 });
