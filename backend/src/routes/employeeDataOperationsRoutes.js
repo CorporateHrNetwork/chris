@@ -67,39 +67,68 @@ router.get(
     if (isZermatt) {
       const now = new Date();
       const [departments, designations, locations, costCentres, levels] = await Promise.all([
-        prisma.department.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
+        prisma.department.findMany({
+          where: { organizationId: req.auth.organizationId },
+          select: {
+            id: true, name: true, code: true, isActive: true, costCentreId: true,
+            _count: { select: { employees: true, designations: true } },
+          },
+          orderBy: { name: "asc" },
+        }),
         prisma.designation.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
         prisma.organizationLocation.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
         prisma.costCentre.findMany({ where: { organizationId: req.auth.organizationId, status: "ACTIVE", effectiveFrom: { lte: now }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] }, select: { name: true }, orderBy: { name: "asc" } }),
         prisma.organizationEmploymentLevel.findMany({ where: { organizationId: req.auth.organizationId, isActive: true }, select: { code: true }, orderBy: { levelNumber: "asc" } }),
       ]);
       catalog.employmentTypes = ["Full-Time", "Part-Time", "Expatriate", "NYSC / Internship", "Domestic Staff - Housekeeper"];
-      // Zermatt's approved departmental structure; preserve every live
-      // catalogue entry and flag approved names not configured as active.
+      // Fresh tenant database is the source of truth. The approved list is only
+      // an external reconciliation baseline; it must never hide additional
+      // stored departments or silently treat an unconfigured name as active.
       const approvedDepartments = [
-        "Accounts & Finance",
-        "Audit & Internal Control",
-        "Beer Barn Operations",
-        "Entertainment",
-        "Executive Management",
-        "Facilities Management",
-        "Housekeeping",
-        "Housekeeping & Facilities",
-        "Human Resources & Administration",
-        "ICT",
-        "Purchase & Procurement",
-        "Security",
-        "Transport & Logistics",
-        "Warehouse & Stores",
-        "Zermatt Operations",
+        "Accounts & Finance", "Audit & Internal Control", "Beer Barn Operations",
+        "Entertainment", "Executive Management", "Facilities Management",
+        "Housekeeping", "Housekeeping & Facilities",
+        "Human Resources & Administration", "ICT", "Purchase & Procurement",
+        "Security", "Transport & Logistics", "Warehouse & Stores", "Zermatt Operations",
       ];
-      const activeNames = departments.map((item) => String(item.name || "").trim()).filter(Boolean);
-      const activeNameSet = new Set(activeNames.map((name) => name.toLocaleLowerCase("en")));
-      catalog.departments = [...new Map([...approvedDepartments, ...activeNames].map((name) => [name.toLocaleLowerCase("en"), name])).values()];
-      catalog.departmentStatus = approvedDepartments.map((name) => ({
-        name,
-        active: activeNameSet.has(name.toLocaleLowerCase("en")),
+      const normalizeDepartment = (name) => String(name || "").trim().toLocaleLowerCase("en");
+      const storedByName = new Map(departments
+        .filter((item) => String(item.name || "").trim())
+        .map((item) => [normalizeDepartment(item.name), item]));
+      const approvedNameSet = new Set(approvedDepartments.map(normalizeDepartment));
+      // Only active configured DB departments can be newly assigned. Previously
+      // used and deactivated departments remain visible in the inventory.
+      const configuredActive = departments.filter((item) => item.isActive);
+      catalog.departments = [...new Set([
+        ...configuredActive.map((item) => String(item.name || "").trim()).filter(Boolean),
+        ...approvedDepartments.filter((name) => !storedByName.has(normalizeDepartment(name))),
+      ])].sort((a, b) => a.localeCompare(b));
+      catalog.departmentStatus = approvedDepartments.map((name) => {
+        const stored = storedByName.get(normalizeDepartment(name));
+        return {
+          name, active: Boolean(stored?.isActive),
+          found: Boolean(stored),
+          costCentreMapped: Boolean(stored?.costCentreId),
+          employeeCount: stored?._count?.employees ?? 0,
+          designationCount: stored?._count?.designations ?? 0,
+        };
+      });
+      catalog.departmentInventory = departments.map((item) => ({
+        name: String(item.name || "").trim(),
+        code: item.code || "",
+        active: Boolean(item.isActive),
+        costCentreMapped: Boolean(item.costCentreId),
+        employeeCount: item._count?.employees ?? 0,
+        designationCount: item._count?.designations ?? 0,
+        inApprovedBaseline: approvedNameSet.has(normalizeDepartment(item.name)),
       }));
+      catalog.departmentInventoryMeta = {
+        generatedAt: now.toISOString(),
+        storedDepartmentCount: departments.length,
+        activeDepartmentCount: configuredActive.length,
+        inactiveDepartmentCount: departments.length - configuredActive.length,
+        activeNamesIncluded: configuredActive.length,
+      };
       catalog.designations = [...new Set(designations.map((item) => item.name))];
       catalog.locations = [...new Set(locations.map((item) => item.name))];
       catalog.costCentres = [...new Set(costCentres.map((item) => item.name))];
