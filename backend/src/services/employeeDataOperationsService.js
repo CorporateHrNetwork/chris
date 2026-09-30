@@ -250,7 +250,7 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
     ["X", "M"], // PAYE authority
   ];
   const entries = fieldColumns.map(([field, source]) =>
-    `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Select a listed option" error="Choose an existing CHRiS option from the Dropdown Lists sheet." sqref="${field}2:${field}1001"><formula1>INDIRECT(&quot;'Dropdown Lists'!${source}$2:${source}$250&quot;)</formula1></dataValidation>`
+    `<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Select a listed option" error="Choose an existing CHRiS option from the Dropdown Lists sheet." sqref="${field}2:${field}1001"><formula1>INDIRECT(&quot;'Dropdown Lists'!$${source}$2:$${source}$250&quot;)</formula1></dataValidation>`
   );
   const validations = `<dataValidations count="${entries.length}">${entries.join("")}</dataValidations>`;
   if (!xml.includes("</worksheet>")) throw new Error("BULK_TEMPLATE_WORKSHEET_INVALID");
