@@ -35,12 +35,16 @@ function createFixture({ provisioningFails = false } = {}) {
     designation: {
       findFirst: async ({ where }) => {
         assert.equal(where.organizationId, "organization-1");
-        assert.equal(where.departmentId, "department-1");
+        assert.deepEqual(where.OR, [
+          { departmentId: "department-1" },
+          { departmentEligibility: { some: { departmentId: "department-1", organizationId: "organization-1" } } },
+        ]);
         return {
           id: "designation-1",
           departmentId: "department-1",
           careerLevel: 1,
           isActive: true,
+          departmentEligibility: [],
         };
       },
     },
@@ -187,4 +191,36 @@ test("does not create EmployeeOnboarding during ordinary creation", () => {
   );
   assert.match(source, /if \(input\.onboardingTemplateId && input\.onboardingSectionData\)/);
   assert.match(source, /tx\.employeeOnboarding\.create/);
+});
+
+
+test("final employee creation accepts a designation through shared department eligibility", async () => {
+  const fixture = createFixture();
+  fixture.dependencies.prisma.designation.findFirst = async ({ where }) => {
+    assert.equal(where.id, "designation-1");
+    assert.equal(where.organizationId, "organization-1");
+    assert.deepEqual(where.OR, [
+      { departmentId: "department-1" },
+      { departmentEligibility: { some: { departmentId: "department-1", organizationId: "organization-1" } } },
+    ]);
+    return {
+      id: "designation-1",
+      departmentId: "beer-barn-operations",
+      careerLevel: 1,
+      isActive: true,
+      departmentEligibility: [{ departmentId: "department-1" }],
+    };
+  };
+
+  const employee = await createEmployeeWithDependencies(
+    {
+      organizationId: "organization-1",
+      actorUserId: "actor-1",
+      input,
+    },
+    fixture.dependencies
+  );
+
+  assert.equal(employee.departmentId, "department-1");
+  assert.equal(employee.designationId, "designation-1");
 });

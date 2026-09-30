@@ -110,6 +110,7 @@ jobs:
           node tests/exitRegister.test.js
           node tests/employeeEmploymentGovernanceAcceptance.test.js
           node tests/employeeDataOperations.test.js
+          node --test tests/employeeCreationService.test.js
           node tests/zermattBulkEmployeePayrollReadinessAcceptance.test.js
           node --test tests/zermattCompleteBulkOnboardingAcceptance.test.js
           node --test tests/zermattCompleteBulkOnboardingAtomic.test.js
