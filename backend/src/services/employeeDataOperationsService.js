@@ -410,7 +410,7 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
                   bankVerificationStatus: accountNumber ? "PENDING_HR_VERIFICATION" : "",
                 },
                 "statutory-details": {
-                  taxIdentificationNumber, payeState, pensionPfa, pensionPin,
+                  taxIdentificationNumber, taxAuthority: payeState, pensionPfa, pensionPin,
                 },
                 "next-of-kin": { name: nextOfKin, guarantor1, guarantor2 },
               },
