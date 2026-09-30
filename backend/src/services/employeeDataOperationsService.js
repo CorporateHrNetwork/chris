@@ -212,7 +212,7 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
     const departmentStatus = Array.isArray(catalog.departmentStatus) ? catalog.departmentStatus : [];
     if (departmentStatus.length) {
       const referenceSheet = XLSX.utils.aoa_to_sheet([
-        ["Approved Zermatt Department", "Live CHRiS record", "Active for new hires", "Cost Centre mapping", "Employees currently assigned", "Required action"],
+        ["Approved Zermatt Department", "Live CHRiS record", "Active for new hires", "Cost Centre mapping", "Employees currently assigned", "Required action", "Current Cost Centre code"],
         ...departmentStatus.map((item) => [
           item.name,
           item.found === false ? "NOT STORED" : item.active ? "FOUND - ACTIVE" : "FOUND - INACTIVE",
@@ -222,9 +222,10 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
           item.active && item.costCentreMapped
             ? "Available for new onboarding"
             : "HR administrator: inspect existing department, reconcile status and Cost Centre before importing employees.",
+          item.costCentreCode || "NOT MAPPED",
         ]),
       ]);
-      referenceSheet["!cols"] = [{ wch: 43 }, { wch: 25 }, { wch: 24 }, { wch: 29 }, { wch: 28 }, { wch: 105 }];
+      referenceSheet["!cols"] = [{ wch: 43 }, { wch: 25 }, { wch: 24 }, { wch: 29 }, { wch: 28 }, { wch: 105 }, { wch: 27 }];
       XLSX.utils.book_append_sheet(workbook, referenceSheet, "Department Reconciliation");
     }
 
@@ -248,7 +249,7 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
         ["Active departments", activeCount],
         ["Inactive / historical departments", all.length - activeCount],
         [],
-        ["Stored department name", "Code", "Status", "Mapped Cost Centre", "Assigned employees", "Linked designations", "In approved baseline", "New onboarding eligibility"],
+        ["Stored department name", "Code", "Status", "Mapped Cost Centre", "Assigned employees", "Linked designations", "In approved baseline", "New onboarding eligibility", "Cost Centre code", "Cost Centre name", "Cost Centre status"],
         ...all.map((item) => [
           item.name, item.code || "",
           item.active ? "ACTIVE" : "INACTIVE / HISTORICAL",
@@ -257,11 +258,13 @@ function buildTemplateWorkbook({ isZermatt = true, catalog = {} } = {}) {
           Number(item.designationCount || 0),
           item.inApprovedBaseline ? "YES" : "OTHER PRE-STORED DEPARTMENT",
           item.active ? item.costCentreMapped ? "ELIGIBLE SUBJECT TO DESIGNATION VALIDATION" : "COST CENTRE MAPPING REQUIRED" : "HISTORY ONLY - MUST REACTIVATE BEFORE REUSE",
+          item.costCentreCode || "", item.costCentreName || "", item.costCentreStatus || "",
         ]),
       ]);
       inventorySheet["!cols"] = [
         { wch: 52 }, { wch: 16 }, { wch: 27 }, { wch: 26 },
         { wch: 24 }, { wch: 23 }, { wch: 32 }, { wch: 58 },
+        { wch: 27 }, { wch: 44 }, { wch: 22 },
       ];
       XLSX.utils.book_append_sheet(workbook, inventorySheet, "Complete Department Inventory");
     }
