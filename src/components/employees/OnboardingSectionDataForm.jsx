@@ -24,6 +24,7 @@ const SECTION_CONFIG = {
     fields: [
       { name: "taxIdentificationNumber", label: "Tax Identification Number (TIN)", type: "text" },
       { name: "payeState", label: "PAYE State / Tax Authority", type: "nigeria-state" },
+      { name: "taxAuthority", label: "Tax Authority (as recorded)", type: "text" },
       { name: "pensionPfa", label: "Pension Fund Administrator (PFA)", type: "nigeria-pfa" },
       { name: "pensionPin", label: "Retirement Savings Account (RSA) PIN", type: "text" },
       { name: "nhiaNumber", label: "NHIA / Health Insurance Number", type: "text" },
