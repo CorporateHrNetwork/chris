@@ -80,6 +80,9 @@ router.get(
           departmentId: true,
           reportsToDesignationId: true,
           department: { select: { id: true, code: true, name: true } },
+          departmentEligibility: {
+            select: { department: { select: { id: true, code: true, name: true } } },
+          },
           employmentLevel: {
             select: {
               levelNumber: true,
