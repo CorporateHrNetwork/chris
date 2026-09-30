@@ -17,6 +17,10 @@ export default function OnboardingTaskChecklist({ record, onSaved }) {
   const [recentlySavedId, setRecentlySavedId] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [ownerError, setOwnerError] = useState("");
+  const [branchHrOwners, setBranchHrOwners] = useState([]);
+  const [branchHrOwnerId, setBranchHrOwnerId] = useState("");
+  const [branchHrError, setBranchHrError] = useState("");
+  const [assignmentMode, setAssignmentMode] = useState("default");
 
   useEffect(() => {
     let active = true;
@@ -35,6 +39,25 @@ export default function OnboardingTaskChecklist({ record, onSaved }) {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!record?.id) return undefined;
+    apiRequest(`/api/employees/onboarding/records/${encodeURIComponent(record.id)}/branch-hr-owners`)
+      .then((result) => {
+        if (active) {
+          setBranchHrOwners(result.data || []);
+          setBranchHrError("");
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setBranchHrOwners([]);
+          setBranchHrError(error?.message || "Branch HR owners are unavailable.");
+        }
+      });
+    return () => { active = false; };
+  }, [record?.id]);
 
   useEffect(() => {
     setPersistedTasks(record?.tasks || []);
@@ -114,6 +137,29 @@ export default function OnboardingTaskChecklist({ record, onSaved }) {
     } finally { setBusy(""); }
   }
 
+  async function assignBranchHr() {
+    if (!branchHrOwnerId) {
+      setFeedback({ type: "error", message: "Select the branch HR & Admin Officer first." });
+      return;
+    }
+    setBusy("assign-branch-hr");
+    setFeedback(null);
+    try {
+      const result = await apiRequest(`/api/employees/onboarding/records/${encodeURIComponent(record.id)}/tasks/assign-branch-hr`, {
+        method: "POST",
+        body: { ownerUserId: branchHrOwnerId, overwriteExisting: false },
+      });
+      setPersistedTasks(result?.data?.tasks || []);
+      setDrafts({});
+      setFeedback({ type: "success", message: `${result?.data?.assigned || 0} unassigned checklist task(s) assigned to the selected branch HR officer. Already assigned tasks were preserved.` });
+      await onSaved?.();
+    } catch (error) {
+      setFeedback({ type: "error", message: error.message || "Unable to assign branch HR task owners." });
+    } finally {
+      setBusy("");
+    }
+  }
+
   if (!record) return null;
   const completedCount = persistedTasks.filter(resolved).length;
   const outstandingCount = persistedTasks.length - completedCount;
@@ -121,6 +167,24 @@ export default function OnboardingTaskChecklist({ record, onSaved }) {
   return <section className="onboarding-task-panel">
     <div><strong>Operational Checklist</strong><span>{persistedTasks.length ? `${completedCount}/${persistedTasks.length} complete · ${outstandingCount} outstanding · ${overdueCount} overdue` : "No deterministic template tasks available"}</span></div>
     <div className="onboarding-task-context"><strong>Onboarding Progress: {Number(record.completionPercent || 0)}%</strong><span>Operational tasks track accountability. Completed sections satisfy untouched matching tasks; explicitly managed tasks remain independent.</span></div>
+    <div className="onboarding-task-owner-mode">
+      <strong>Task ownership workflow</strong>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+        <label><input type="radio" name="onboarding-owner-mode" checked={assignmentMode === "default"} onChange={() => setAssignmentMode("default")} /> Assign individual task owners (default)</label>
+        <label><input type="radio" name="onboarding-owner-mode" checked={assignmentMode === "branch-hr"} onChange={() => setAssignmentMode("branch-hr")} /> Assign unassigned tasks to branch HR &amp; Admin Officer</label>
+      </div>
+      {assignmentMode === "branch-hr" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+        <select aria-label="Branch HR and Admin Officer" value={branchHrOwnerId} onChange={(event) => setBranchHrOwnerId(event.target.value)}>
+          <option value="">Select branch HR &amp; Admin Officer</option>
+          {branchHrOwners.map((owner) => <option key={owner.id} value={owner.id}>{person(owner)}</option>)}
+        </select>
+        <button type="button" disabled={Boolean(busy) || !branchHrOwnerId} onClick={assignBranchHr}>
+          {busy === "assign-branch-hr" ? "Assigning…" : "Assign All Unassigned Tasks to Branch HR"}
+        </button>
+        <small>Existing individual owners and completed task statuses are retained.</small>
+      </div>}
+      {assignmentMode === "branch-hr" && branchHrError && <div className="onboarding-task-feedback is-error" role="alert">{branchHrError}</div>}
+    </div>
     {ownerError && <div className="onboarding-task-feedback is-error" role="alert">{ownerError}</div>}
     {feedback && <div className={`onboarding-task-feedback ${feedback.type === "error" ? "is-error" : ""}`} role={feedback.type === "error" ? "alert" : "status"}>{feedback.message}</div>}
     {groups.map((group) => <div className="onboarding-task-group" key={group.category}>
