@@ -141,7 +141,7 @@ function buildTemplateWorkbook() {
     ["One employee per row; retain the Employee Import column headings. Sensitive employee data must be handled only by authorized HR."],
     ["Required: Employee Name, Department, Designation, Location, Employment Type, Cost Centre / Operating Unit and Monthly Gross Salary for Zermatt."],
     ["Employment Level: L1–L7 code or active level name. Blank uses the designation default; a different level creates an audited employee override."],
-    ["Branch: optional alias for Location. If both are provided they must match the same active location."],
+    ["Location must match an active CHRiS location. Branch is a separate HR field; discrepancies are flagged for HR verification."],
     ["Department, Designation, Location, Cost Centre and Employment Level must match the active CHRiS catalogue."],
     ["Gender: MALE, FEMALE, OTHER or UNSPECIFIED. Status: Active, Probation, Leave or Suspended. Blank status defaults to Probation."],
     ["Dates: YYYY-MM-DD. Phone, NIN, account number, RSA and tax ID should be entered as TEXT to preserve zeros."],
