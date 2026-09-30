@@ -71,6 +71,7 @@ router.get(
           where: { organizationId: req.auth.organizationId },
           select: {
             id: true, name: true, code: true, isActive: true, costCentreId: true,
+            costCentre: { select: { name: true, code: true, status: true } },
             _count: { select: { employees: true, designations: true } },
           },
           orderBy: { name: "asc" },
@@ -90,6 +91,7 @@ router.get(
         "Housekeeping", "Housekeeping & Facilities",
         "Human Resources & Administration", "ICT", "Purchase & Procurement",
         "Security", "Transport & Logistics", "Warehouse & Stores", "Zermatt Operations",
+        "BB Takeaway", "BB Takeaway (WSE)", "BB Takeaway (GWP)",
       ];
       const normalizeDepartment = (name) => String(name || "").trim().toLocaleLowerCase("en");
       const storedByName = new Map(departments
@@ -109,6 +111,7 @@ router.get(
           name, active: Boolean(stored?.isActive),
           found: Boolean(stored),
           costCentreMapped: Boolean(stored?.costCentreId),
+          costCentreCode: stored?.costCentre?.code || "",
           employeeCount: stored?._count?.employees ?? 0,
           designationCount: stored?._count?.designations ?? 0,
         };
@@ -118,6 +121,9 @@ router.get(
         code: item.code || "",
         active: Boolean(item.isActive),
         costCentreMapped: Boolean(item.costCentreId),
+        costCentreName: item.costCentre?.name || "",
+        costCentreCode: item.costCentre?.code || "",
+        costCentreStatus: item.costCentre?.status || "",
         employeeCount: item._count?.employees ?? 0,
         designationCount: item._count?.designations ?? 0,
         inApprovedBaseline: approvedNameSet.has(normalizeDepartment(item.name)),
