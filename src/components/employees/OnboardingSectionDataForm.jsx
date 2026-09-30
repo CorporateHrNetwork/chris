@@ -38,6 +38,8 @@ const SECTION_CONFIG = {
       { name: "phoneCountryCode", label: "Phone Country", type: "country-phone" },
       { name: "phoneNumber", label: "Phone Number", type: "text" },
       { name: "address", label: "Residential Address", type: "textarea" },
+      { name: "guarantor1", label: "Guarantor 1 — Name", type: "text" },
+      { name: "guarantor2", label: "Guarantor 2 — Name", type: "text" },
     ],
   },
   "emergency-contact": {
