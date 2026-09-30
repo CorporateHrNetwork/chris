@@ -386,6 +386,24 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
               locationId: location.id,
               costCentreId: costCentre?.id || null,
               nationalIdentificationNumber: normalizedNin || "",
+              openingEmploymentLevelNumber: employmentLevel?.levelNumber ?? null,
+              onboardingSectionData: {
+                "personal-details": {
+                  fullName: name, dateOfBirth,
+                  nationalIdentificationNumber: normalizedNin || "",
+                  phone, email, gender,
+                },
+                "payment-details": {
+                  accountNumber, bankName,
+                  payrollCurrency: salaryCurrency || "NGN",
+                  paymentMethod: accountNumber ? "Bank Transfer" : "",
+                  bankVerificationStatus: accountNumber ? "PENDING_HR_VERIFICATION" : "",
+                },
+                "statutory-details": {
+                  taxIdentificationNumber, payeState, pensionPfa, pensionPin,
+                },
+                "next-of-kin": { name: nextOfKin, guarantor1, guarantor2 },
+              },
             }
           : null,
       salaryRate:
@@ -404,6 +422,13 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
         employmentType: employmentType || employmentTypeInput,
         department: department?.name || departmentInput,
         designation: designation?.name || designationInput,
+        employmentLevel: employmentLevel?.code || employmentLevelInput ||
+          employmentLevels.find((level) => level.levelNumber === designation?.careerLevel)?.code || "",
+        accountNumberLast4: accountNumber.slice(-4),
+        bankName,
+        pensionPfa,
+        dateOfBirth,
+        nextOfKinPresent: Boolean(nextOfKin),
         location: location?.name || locationInput,
         costCentre: costCentre?.name || costCentreInput,
         costCentreSource: costCentreInput ? "Workbook" : costCentre ? "Auto from Department" : "",
