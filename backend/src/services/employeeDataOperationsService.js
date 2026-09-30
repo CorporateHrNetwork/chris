@@ -355,7 +355,10 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     }),
     prisma.designation.findMany({
       where: { organizationId, isActive: true },
-      select: { id: true, departmentId: true, name: true, code: true, careerLevel: true },
+      select: {
+        id: true, departmentId: true, name: true, code: true, careerLevel: true,
+        departmentEligibility: { select: { departmentId: true } },
+      },
     }),
     prisma.organizationLocation.findMany({
       where: { organizationId, isActive: true },
@@ -505,8 +508,14 @@ async function prepareBulkRows(prisma, { organizationId, buffer }) {
     if (isZermatt && !employmentTypeInput) errors.push("Employment Type is required for ZERMATT payroll readiness.");
     if (!department) errors.push("Department was not found in the active CHRiS structure.");
     if (!designation) errors.push("Designation was not found in the active CHRiS structure.");
-    if (designation && department && designation.departmentId !== department.id) {
-      errors.push("Designation is not mapped to the selected Department.");
+    if (designation && department) {
+      const eligibleDepartmentIds = new Set([
+        designation.departmentId,
+        ...(designation.departmentEligibility || []).map((item) => item.departmentId),
+      ].filter(Boolean));
+      if (!eligibleDepartmentIds.has(department.id)) {
+        errors.push("Designation is not mapped to the selected Department.");
+      }
     }
     if (designation && !Number.isInteger(designation.careerLevel)) {
       errors.push("Designation must be mapped to an Employment Level.");
