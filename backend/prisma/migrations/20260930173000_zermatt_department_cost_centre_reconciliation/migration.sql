@@ -81,6 +81,21 @@ BEGIN
       END IF;
     END IF;
 
+    IF v_cost_id IS NOT NULL THEN
+      DECLARE
+        actual_cost_code TEXT;
+      BEGIN
+        SELECT code INTO actual_cost_code FROM cost_centres
+          WHERE id=v_cost_id AND "organizationId"=v_org;
+        IF actual_cost_code IS DISTINCT FROM entry.cost_code THEN
+          v_unresolved := v_unresolved || jsonb_build_array(
+            jsonb_build_object('department',entry.department_name,
+              'reason','Reused existing matching Cost Centre name with a different live code',
+              'storedCostCentreCode',actual_cost_code,
+              'suggestedHistoricalCostCentreCode',entry.cost_code));
+        END IF;
+      END;
+    END IF;
     IF v_cost_id IS NULL OR v_cost_status IS DISTINCT FROM 'ACTIVE' THEN
       v_unresolved := v_unresolved || jsonb_build_array(
         jsonb_build_object('department',entry.department_name,'costCentre',entry.cost_code,
