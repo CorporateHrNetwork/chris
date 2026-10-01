@@ -9,7 +9,7 @@ test("current rent relief export covers all current employees and exposes record
   const ui = fs.readFileSync(path.join(root,"src/pages/payroll/RentReliefManaged.jsx"),"utf8");
 
   assert.ok(route.includes('"/tax-reliefs/rent/export-current"'));
-  assert.ok(route.includes("Current Annual Housing × 12"));
+  assert.ok(route.includes("Current Recorded Rent (Gross × 11% × 56)"));
   assert.ok(route.includes("Recorded Annual Rent Basis"));
   assert.ok(route.includes("Recorded Eligible Rent Relief"));
   assert.ok(route.includes("NOT RECORDED"));
