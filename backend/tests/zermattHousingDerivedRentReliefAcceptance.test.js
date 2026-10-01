@@ -61,6 +61,12 @@ test("individual and bulk paths use payroll-derived amounts, not typed annual re
   assert.ok(ui.includes("Monthly Housing Allowance"));
   assert.ok(ui.includes("Recorded Rent (Gross × 11% × 56)"));
   assert.ok(ui.includes("readOnly"));
+  assert.ok(route.includes("System-derived Rent Relief"));
+  assert.ok(route.includes("markDraftRunsRecalculationRequired"));
+  const service = fs.readFileSync(path.join(root, "backend/src/services/nigeriaPayrollComplianceService.js"), "utf8");
+  assert.ok(service.includes('const housingRate = 11'));
+  assert.ok(service.includes('monthlyHousingAllowance * 56'));
+  assert.ok(service.includes('targetStatus = isZermattOrganization ? "VERIFIED"'));
 });
 
 test("new authoritative migration corrects all current records and auto-syncs future salary changes", () => {
