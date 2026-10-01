@@ -30,6 +30,7 @@ export default function EmployeeSelfService() {
   const [payslips, setPayslips] = useState([]);
   const [leave, setLeave] = useState(null);
   const [gratuity, setGratuity] = useState(null);
+  const [news, setNews] = useState([]);
   const [selectedPolicy, setSelectedPolicy] = useState("");
   const [active, setActive] = useState("profile");
   const [loading, setLoading] = useState(true);
@@ -38,16 +39,18 @@ export default function EmployeeSelfService() {
   const load = async () => {
     try {
       setLoading(true);
-      const [overviewResult, payslipResult, leaveResult, gratuityResult] = await Promise.all([
+      const [overviewResult, payslipResult, leaveResult, gratuityResult, newsResult] = await Promise.all([
         apiRequest("/api/ess/overview"),
         apiRequest("/api/ess/payslips"),
         apiRequest("/api/ess/leave"),
         apiRequest("/api/ess/gratuity"),
+        apiRequest("/api/ess/news"),
       ]);
       setOverview(overviewResult?.data || null);
       setPayslips(payslipResult?.data || []);
       setLeave(leaveResult?.data || null);
       setGratuity(gratuityResult?.data || null);
+      setNews(newsResult?.data || []);
       setError("");
     } catch (requestError) {
       setError(requestError?.message || "Unable to load Employee Self Service.");
@@ -89,6 +92,7 @@ export default function EmployeeSelfService() {
     ["payslips", "Payslips"],
     ["leave", "Leave Ledger"],
     ["training", "Training"],
+    ["news", "Zermatt News"],
     ["gratuity", "Gratuity Account"],
   ], []);
 
@@ -197,6 +201,27 @@ export default function EmployeeSelfService() {
         </Card>
       )}
 
+      {active === "news" && (
+        <Card title="Zermatt News & Opportunities">
+          {!news.length ? <p style={note}>There are no published internal updates at the moment.</p> : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {news.map((item) => (
+                <article key={item.id} style={newsItem}>
+                  <div style={newsMeta}>
+                    <span style={newsCategory}>{String(item.category || "ANNOUNCEMENT").replaceAll("_"," ")}</span>
+                    {item.isPinned ? <span style={pinned}>PINNED</span> : null}
+                    <span>{fmtDate(item.publishAt || item.createdAt)}</span>
+                  </div>
+                  <h3 style={newsTitle}>{item.title}</h3>
+                  {item.summary ? <p style={newsSummary}>{item.summary}</p> : null}
+                  <div style={newsBody}>{item.body}</div>
+                </article>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {active === "gratuity" && (
         <Card title="My Gratuity Account">
           {!gratuity?.eligibleForEmployeeView ? (
@@ -245,3 +270,11 @@ const lockedBox={padding:20,border:"1px dashed #8b7130",borderRadius:12,backgrou
 const errorBox={maxWidth:1180,margin:"0 auto 16px",padding:13,borderRadius:10,background:"#4a1717",border:"1px solid #8b3434",color:"#ffd7d7"};
 const loadingBox={maxWidth:700,margin:"15vh auto",padding:30,textAlign:"center",color:"#f4d76a"};
 const footer={maxWidth:1180,margin:"30px auto 0",textAlign:"center",fontSize:12,color:"#7f9989"};
+
+const newsItem={padding:"16px",border:"1px solid #2c523d",borderRadius:12,background:"#07150f"};
+const newsMeta={display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#8fa99a",alignItems:"center"};
+const newsCategory={fontWeight:900,color:"#f2d166",letterSpacing:.6};
+const pinned={fontWeight:900,color:"#07110c",background:"#d4af37",borderRadius:999,padding:"3px 7px"};
+const newsTitle={margin:"9px 0 6px",fontSize:18,color:"#fff"};
+const newsSummary={margin:"0 0 8px",color:"#bfd0c6",fontWeight:700};
+const newsBody={whiteSpace:"pre-wrap",lineHeight:1.65,color:"#dce8e1"};
