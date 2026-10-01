@@ -241,7 +241,13 @@ function Login() {
         )
       );
 
-      navigate("/", {
+      const roleNames = (result.data.user?.roles || []).map((role) => String(role || "").trim().toLowerCase());
+      const employeeSelfServiceOnly =
+        Boolean(result.data.user?.employeeId) &&
+        roleNames.includes("employee self service") &&
+        !roleNames.some((role) => role !== "employee self service");
+
+      navigate(employeeSelfServiceOnly ? "/ess" : "/", {
         replace: true,
       });
     } catch (err) {

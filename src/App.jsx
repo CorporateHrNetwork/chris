@@ -28,6 +28,7 @@ const BulkEmployeeImport = lazy(() => import("./pages/BulkEmployeeImport"));
 const EmployeeInvitations = lazy(() => import("./pages/EmployeeInvitations"));
 const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
 const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
+const EmployeeSelfService = lazy(() => import("./pages/EmployeeSelfService"));
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
 const LineManagers = lazy(() => import("./pages/LineManagers"));
@@ -106,6 +107,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/employee-invite/:token" element={<EmployeeSelfOnboardingPublic />} />
+        <Route path="/ess" element={<ProtectedRoute><EmployeeSelfService /></ProtectedRoute>} />
 
         <Route path="/" element={<PermissionLayout permission="dashboard.view"><Dashboard /></PermissionLayout>} />
 

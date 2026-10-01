@@ -132,6 +132,7 @@ router.post("/login", async (req, res) => {
 
         user: {
           id: user.id,
+          employeeId: user.employeeId || null,
           email: user.email,
           firstName:
             user.firstName,

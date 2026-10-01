@@ -95,6 +95,7 @@ async function requireAuth(req, res, next) {
 
     req.auth = {
       userId: user.id,
+      employeeId: user.employeeId || null,
       organizationId: user.organizationId,
       email: user.email,
       organization: user.organization,
