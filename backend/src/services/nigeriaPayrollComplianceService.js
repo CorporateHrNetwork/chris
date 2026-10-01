@@ -221,7 +221,7 @@ async function getHousingDerivedRentBasis({
   if (organization?.slug !== "zermatt-liquor-limited") {
     throw payrollError(
       "HOUSING_DERIVED_RENT_RELIEF_NOT_ENABLED",
-      "Payroll Housing Allowance × 12 rent-relief basis is currently configured for ZERMATT.",
+      "Gross × Housing % × 56 rent-relief basis is currently configured for ZERMATT.",
       409
     );
   }
@@ -274,7 +274,7 @@ async function getHousingDerivedRentBasis({
   }
 
   const monthlyHousingAllowance = round2(gross * housingRate / 100);
-  const annualRentBasis = round2(monthlyHousingAllowance * 12);
+  const annualRentBasis = round2(monthlyHousingAllowance * 56);
   const rentReliefRate = Number(policy.payeRules?.rentReliefRate ?? 20);
   const rentReliefCap = Number(policy.payeRules?.rentReliefCap ?? 500000);
   const eligibleRentRelief = Math.min(rentReliefCap, percent(annualRentBasis, rentReliefRate));
@@ -293,7 +293,7 @@ async function getHousingDerivedRentBasis({
     rentReliefRate,
     rentReliefCap,
     salaryEffectiveFrom: dateText(salary.effectiveFrom),
-    source: "PAYROLL_HOUSING_ALLOWANCE_X12",
+    source: "GROSS_X_HOUSING_RATE_X56",
   };
 }
 
@@ -338,7 +338,8 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
     employee.id,
     taxYear
   );
-  if (existing[0]?.status === "VERIFIED") {
+  const isZermattOrganization = organization?.slug === "zermatt-liquor-limited";
+  if (existing[0]?.status === "VERIFIED" && !isZermattOrganization) {
     throw payrollError(
       "VERIFIED_RENT_RELIEF_IMMUTABLE",
       "A verified rent-relief declaration cannot be overwritten. Reject/correct it through an auditable relief workflow before replacement.",
@@ -347,12 +348,21 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
   }
 
   const id = existing[0]?.id || crypto.randomUUID();
+  const systemEvidence = isZermattOrganization
+    ? `CHRIS-SYSTEM-RENT-${employee.employeeNumber}-${taxYear}`
+    : evidenceReference;
+  const systemNotes = isZermattOrganization
+    ? `System-derived Zermatt recorded rent: Monthly Gross × ${basis?.housingAllowanceRate ?? 11}% × 56. Applied automatically to PAYE.`
+    : notes;
+  const targetStatus = isZermattOrganization ? "VERIFIED" : "PENDING_VERIFICATION";
   const rows = existing[0]
     ? await prismaClient.$queryRawUnsafe(
         `UPDATE "payroll_tax_reliefs"
             SET "annualDeclaredAmount"=$4,"eligibleReliefAmount"=$5,"evidenceReference"=$6,
-                "status"='PENDING_VERIFICATION',"declaredByUserId"=$7,"verifiedByUserId"=NULL,"verifiedAt"=NULL,
-                "notes"=$8,"updatedAt"=CURRENT_TIMESTAMP
+                "status"=$7,"declaredByUserId"=$8,
+                "verifiedByUserId"=CASE WHEN $7='VERIFIED' THEN $8 ELSE NULL END,
+                "verifiedAt"=CASE WHEN $7='VERIFIED' THEN CURRENT_TIMESTAMP ELSE NULL END,
+                "notes"=$9,"updatedAt"=CURRENT_TIMESTAMP
           WHERE "organizationId"=$1 AND "employeeId"=$2 AND "taxYear"=$3 AND "reliefType"='RENT'
           RETURNING *`,
         organizationId,
@@ -360,14 +370,15 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
         taxYear,
         round2(annualRent),
         eligible,
-        evidenceReference,
+        systemEvidence,
+        targetStatus,
         actorUserId || null,
-        notes
+        systemNotes
       )
     : await prismaClient.$queryRawUnsafe(
         `INSERT INTO "payroll_tax_reliefs"
-          ("id","organizationId","employeeId","taxYear","reliefType","annualDeclaredAmount","eligibleReliefAmount","evidenceReference","status","declaredByUserId","notes")
-         VALUES ($1,$2,$3,$4,'RENT',$5,$6,$7,'PENDING_VERIFICATION',$8,$9)
+          ("id","organizationId","employeeId","taxYear","reliefType","annualDeclaredAmount","eligibleReliefAmount","evidenceReference","status","declaredByUserId","verifiedByUserId","verifiedAt","notes")
+         VALUES ($1,$2,$3,$4,'RENT',$5,$6,$7,$8,$9,CASE WHEN $8='VERIFIED' THEN $9 ELSE NULL END,CASE WHEN $8='VERIFIED' THEN CURRENT_TIMESTAMP ELSE NULL END,$10)
          RETURNING *`,
         id,
         organizationId,
@@ -375,9 +386,10 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
         taxYear,
         round2(annualRent),
         eligible,
-        evidenceReference,
+        systemEvidence,
+        targetStatus,
         actorUserId || null,
-        notes
+        systemNotes
       );
 
   await writeAudit(prismaClient, {
@@ -393,9 +405,9 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
       annualRentPaid: round2(annualRent),
       eligibleRentRelief: eligible,
       rentBasis: basis || undefined,
-      status: "PENDING_VERIFICATION",
+      status: targetStatus,
     },
-    reason: notes || "Rent relief declaration recorded for verification",
+    reason: systemNotes || notes || "Rent relief declaration recorded",
   });
 
   return {
