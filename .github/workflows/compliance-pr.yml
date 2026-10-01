@@ -120,6 +120,7 @@ jobs:
           node --test tests/zermattTakeawayDepartmentCostCentreAcceptance.test.js
           node --test tests/zermattSharedTakeawayDesignationAcceptance.test.js
           node --test tests/zermattHousingDerivedRentReliefAcceptance.test.js
+          node --test tests/zermattCurrentRentReliefExportAcceptance.test.js
           node tests/unifiedEmployeeOnboardingAcceptance.test.js
           node tests/employeePayrollAuthorityAutoSyncAcceptance.test.js
           node tests/employeeExitSettlementAccountAcceptance.test.js
