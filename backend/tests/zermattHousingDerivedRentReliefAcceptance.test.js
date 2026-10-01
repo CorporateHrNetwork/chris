@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+process.env.DATABASE_URL = process.env.DATABASE_URL || "postgresql://test:test@127.0.0.1:5432/chris_test";
 const { getHousingDerivedRentBasis } = require("../src/services/nigeriaPayrollComplianceService");
 
 test("Zermatt rent basis is monthly Payroll Housing Allowance times 12", async () => {
