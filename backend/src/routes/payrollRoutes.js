@@ -377,6 +377,143 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
   }));
 }
 
+async function currentRentReliefExportBuffer(organizationId, taxYear) {
+  const year = Number(taxYear);
+  if (!Number.isInteger(year) || year < 2026) {
+    throw payroll.operationalError("INVALID_TAX_YEAR", "Tax Year must be 2026 or later.");
+  }
+
+  const policy = await nigeriaPayroll.getActivePolicy({
+    organizationId,
+    asOf: `${year}-12-31`,
+  });
+  if (!policy) {
+    throw payroll.operationalError(
+      "PAYROLL_POLICY_NOT_CONFIGURED",
+      `No active payroll policy covers tax year ${year}.`
+    );
+  }
+
+  const housingRate = Number(policy.salaryStructure?.housing ?? 0);
+  const reliefRate = Number(policy.payeRules?.rentReliefRate ?? 20);
+  const reliefCap = Number(policy.payeRules?.rentReliefCap ?? 500000);
+
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT
+        e."employeeNumber",
+        CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
+        e.status::text AS "employeeStatus",
+        e."employmentType",
+        d.name AS "department",
+        l.name AS "location",
+        sr.amount AS "monthlyGrossSalary",
+        sr.currency,
+        sr."effectiveFrom" AS "salaryEffectiveFrom",
+        tr."annualDeclaredAmount",
+        tr."eligibleReliefAmount",
+        tr."evidenceReference",
+        tr.status AS "reliefStatus",
+        tr.notes
+      FROM employees e
+      LEFT JOIN departments d
+        ON d.id=e."departmentId" AND d."organizationId"=e."organizationId"
+      LEFT JOIN organization_locations l
+        ON l.id=e."locationId" AND l."organizationId"=e."organizationId"
+      LEFT JOIN LATERAL (
+        SELECT s.amount,s.currency,s."effectiveFrom"
+          FROM payroll_salary_rates s
+         WHERE s."organizationId"=e."organizationId"
+           AND s."employeeId"=e.id
+           AND s.status='ACTIVE'
+           AND s."effectiveFrom" <= CURRENT_DATE
+           AND (s."effectiveTo" IS NULL OR s."effectiveTo" >= CURRENT_DATE)
+         ORDER BY s."effectiveFrom" DESC
+         LIMIT 1
+      ) sr ON TRUE
+      LEFT JOIN payroll_tax_reliefs tr
+        ON tr."organizationId"=e."organizationId"
+       AND tr."employeeId"=e.id
+       AND tr."taxYear"=$2
+       AND tr."reliefType"='RENT'
+     WHERE e."organizationId"=$1
+       AND e.status::text IN ('ACTIVE','PROBATION','LEAVE','SUSPENDED')
+     ORDER BY e."employeeNumber"`,
+    organizationId,
+    year
+  );
+
+  const reportRows = rows.map((row) => {
+    const gross = row.monthlyGrossSalary == null ? null : Number(row.monthlyGrossSalary);
+    const monthlyHousing = gross == null ? null : Math.round((gross * housingRate / 100) * 100) / 100;
+    const annualHousing = monthlyHousing == null ? null : Math.round((monthlyHousing * 12) * 100) / 100;
+    const derivedEligible = annualHousing == null
+      ? null
+      : Math.min(reliefCap, Math.round((annualHousing * reliefRate / 100) * 100) / 100);
+    return [
+      row.employeeNumber,
+      row.employeeName,
+      row.employeeStatus,
+      row.employmentType || "",
+      row.department || "",
+      row.location || "",
+      gross ?? "",
+      row.currency || "NGN",
+      housingRate,
+      monthlyHousing ?? "",
+      annualHousing ?? "",
+      derivedEligible ?? "",
+      row.annualDeclaredAmount == null ? "" : Number(row.annualDeclaredAmount),
+      row.eligibleReliefAmount == null ? "" : Number(row.eligibleReliefAmount),
+      row.reliefStatus || "NOT RECORDED",
+      row.evidenceReference || "",
+      row.notes || "",
+      row.salaryEffectiveFrom ? new Date(row.salaryEffectiveFrom).toISOString().slice(0,10) : "",
+    ];
+  });
+
+  const workbook = XLSX.utils.book_new();
+  const summary = XLSX.utils.aoa_to_sheet([
+    ["CHRiS Current Rent Relief Register"],
+    ["Tax Year", year],
+    ["Housing Allowance % of Monthly Gross", housingRate],
+    ["Rent Relief Rate %", reliefRate],
+    ["Rent Relief Cap", reliefCap],
+    ["Employees in current register", reportRows.length],
+    ["Generated At (UTC)", new Date().toISOString()],
+    [],
+    ["Definition", "Annual Rent Basis = current Payroll Housing Allowance × 12. Recorded figures are shown separately from current derived figures so changes in salary remain auditable."],
+  ]);
+  summary["!cols"] = [{wch:34},{wch:105}];
+  XLSX.utils.book_append_sheet(workbook, summary, "Summary");
+
+  const register = XLSX.utils.aoa_to_sheet([
+    ["Employee No","Employee Name","Employee Status","Employment Type","Department","Location","Monthly Gross Salary","Currency","Housing %","Monthly Housing Allowance","Current Annual Housing × 12","Current Eligible Rent Relief","Recorded Annual Rent Basis","Recorded Eligible Rent Relief","Relief Status","Evidence / Reference","Notes","Salary Effective From"],
+    ...reportRows,
+  ]);
+  register["!cols"] = [
+    {wch:16},{wch:34},{wch:18},{wch:18},{wch:34},{wch:24},{wch:22},{wch:10},{wch:12},
+    {wch:24},{wch:26},{wch:27},{wch:28},{wch:29},{wch:22},{wch:34},{wch:70},{wch:20},
+  ];
+  XLSX.utils.book_append_sheet(workbook, register, "Current Rent Relief");
+  return XLSX.write(workbook,{type:"buffer",bookType:"xlsx"});
+}
+
+router.get(
+  "/tax-reliefs/rent/export-current",
+  requirePermission("payroll.view"),
+  async (req,res) => {
+    try {
+      const year = Number(req.query?.taxYear || new Date().getFullYear());
+      const buffer = await currentRentReliefExportBuffer(req.auth.organizationId, year);
+      res.setHeader("Content-Disposition", `attachment; filename="CHRIS_Current_Rent_Relief_${year}.xlsx"`);
+      res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      return res.send(buffer);
+    } catch (error) {
+      return sendError(res,error,"Unable to export current rent relief register.");
+    }
+  }
+);
+
 router.get(
   "/tax-reliefs/rent/housing-basis",
   requirePermission("payroll.view"),
