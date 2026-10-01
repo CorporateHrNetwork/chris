@@ -19,6 +19,8 @@ export default function RentReliefManaged() {
   const [registerMessage, setRegisterMessage] = useState("");
   const [selectedReliefIds, setSelectedReliefIds] = useState([]);
   const [form, setForm] = useState({ employeeNumber: "", taxYear: String(year), annualRentPaid: "", evidenceReference: "", notes: "" });
+  const [housingBasis, setHousingBasis] = useState(null);
+  const [basisLoading, setBasisLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -39,6 +41,31 @@ export default function RentReliefManaged() {
   }, [year]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    if (!form.employeeNumber || !form.taxYear) {
+      setHousingBasis(null);
+      return () => { active = false; };
+    }
+    setBasisLoading(true);
+    apiRequest(`/api/payroll/tax-reliefs/rent/housing-basis?employeeNumber=${encodeURIComponent(form.employeeNumber)}&taxYear=${encodeURIComponent(form.taxYear)}`)
+      .then((response) => {
+        if (!active) return;
+        const basis = response?.data || null;
+        setHousingBasis(basis);
+        setForm((current) => ({ ...current, annualRentPaid: basis?.annualRentBasis != null ? String(basis.annualRentBasis) : "" }));
+        setError("");
+      })
+      .catch((requestError) => {
+        if (!active) return;
+        setHousingBasis(null);
+        setForm((current) => ({ ...current, annualRentPaid: "" }));
+        setError(requestError?.message || "Unable to derive rent relief from Payroll Housing Allowance.");
+      })
+      .finally(() => { if (active) setBasisLoading(false); });
+    return () => { active = false; };
+  }, [form.employeeNumber, form.taxYear]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -196,23 +223,25 @@ export default function RentReliefManaged() {
       <button type="button" style={backButton} onClick={() => navigate("/payroll")}>← Payroll Dashboard</button>
       <div style={eyebrow}>NIGERIA PAYROLL COMPLIANCE</div>
       <h1 style={titleStyle}>Tax Rent Relief</h1>
-      <p style={leadStyle}>Record and verify annual rent declarations before CHRiS uses permitted rent relief in PAYE. Employees are selected from the current employee register rather than manually typed.</p>
+      <p style={leadStyle}>For Zermatt, CHRiS derives the annual Rent Relief basis from Payroll Housing Allowance × 12 months, then applies the configured PAYE rent-relief rule after verification.</p>
 
       <Panel title="Declare Annual Rent">
-        <p style={controlNote}>CHRiS calculates eligible rent relief as {rate}% of annual rent paid, capped at {money(cap)}. PAYE uses it only after verification and supporting evidence/reference.</p>
+        <p style={controlNote}>CHRiS derives monthly Housing Allowance from the active payroll salary structure, annualizes it × 12, then calculates eligible rent relief at {rate}% subject to the {money(cap)} cap. PAYE uses the relief only after verification.</p>
         <form style={formGrid} onSubmit={submit}>
           <EmployeeSearchSelect label="Employee" value={form.employeeNumber} onChange={(employeeNumber) => setForm((current) => ({ ...current, employeeNumber }))} required placeholder="Search employee number or name" />
           <Input type="number" label="Tax Year" value={form.taxYear} onChange={(value) => setForm((current) => ({ ...current, taxYear: value }))} min="2026" required />
-          <Input type="number" label="Annual Rent Paid" value={form.annualRentPaid} onChange={(value) => setForm((current) => ({ ...current, annualRentPaid: value }))} min="0" step="0.01" required />
+          <Input type="number" label="Monthly Gross Salary" value={housingBasis?.monthlyGrossSalary ?? ""} onChange={() => {}} readOnly placeholder={basisLoading ? "Calculating…" : "Select employee"} />
+          <Input type="number" label={`Monthly Housing Allowance (${housingBasis?.housingAllowanceRate ?? "—"}%)`} value={housingBasis?.monthlyHousingAllowance ?? ""} onChange={() => {}} readOnly />
+          <Input type="number" label="Annual Rent Basis (Housing × 12)" value={form.annualRentPaid} onChange={() => {}} readOnly required />
           <Input label="Evidence / Document Reference" value={form.evidenceReference} onChange={(value) => setForm((current) => ({ ...current, evidenceReference: value }))} placeholder="Receipt no., document ID or file reference" />
           <Input label="Notes" value={form.notes} onChange={(value) => setForm((current) => ({ ...current, notes: value }))} />
-          <div><button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : "Save for Verification"}</button></div>
+          <div><button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : "Compute & Save for Verification"}</button></div>
         </form>
       </Panel>
 
       <Panel title="Bulk Rent Relief Upload">
         <p style={controlNote}>
-          Use this for Zermatt bulk rent-relief data. Uploading does not approve the relief: every valid row is saved as PENDING_VERIFICATION until HR reviews the supporting evidence and selects Verify or Reject.
+          Use this for Zermatt bulk rent relief. CHRiS recomputes each employee’s annual basis from Payroll Housing Allowance × 12 during validation; spreadsheet amounts are not trusted as the source of truth. Valid rows are saved as PENDING_VERIFICATION.
         </p>
         <div style={buttonRow}>
           <button type="button" style={smallButton} disabled={Boolean(busy)} onClick={downloadBulkTemplate}>
@@ -252,12 +281,14 @@ export default function RentReliefManaged() {
             <div style={previewSummaryStyle}>
               <strong>{bulkPreview.totalRows || 0}</strong> total · <strong>{bulkPreview.validRows || 0}</strong> valid · <strong>{bulkPreview.invalidRows || 0}</strong> invalid
             </div>
-            <DataTable columns={["Row", "Employee", "Year", "Annual Rent", "Eligible Relief", "Evidence", "Result"]}>
+            <DataTable columns={["Row", "Employee", "Year", "Monthly Gross", "Monthly Housing", "Annual Housing ×12", "Eligible Relief", "Evidence", "Result"]}>
               {(bulkPreview.rows || []).map((row) => (
                 <tr key={row.rowNumber}>
                   <Td>{row.rowNumber}</Td>
                   <Td strong>{row.display?.employeeNumber || "—"}{row.display?.employeeName ? ` · ${row.display.employeeName}` : ""}</Td>
                   <Td>{row.display?.taxYear || "—"}</Td>
+                  <Td>{money(row.display?.monthlyGrossSalary)}</Td>
+                  <Td>{money(row.display?.monthlyHousingAllowance)}</Td>
                   <Td>{money(row.display?.annualRentPaid)}</Td>
                   <Td>{money(row.display?.eligibleRelief)}</Td>
                   <Td>{row.display?.evidenceReference || "—"}</Td>
@@ -297,7 +328,7 @@ export default function RentReliefManaged() {
 
         {registerMessage && <div style={successStyle}>{registerMessage}</div>}
 
-        <DataTable loading={loading} columns={["Select", "Employee", "Name", "Year", "Annual Rent", "Eligible Relief", "Evidence", "Status", "Action"]}>
+        <DataTable loading={loading} columns={["Select", "Employee", "Name", "Year", "Annual Housing ×12", "Eligible Relief", "Evidence", "Status", "Action"]}>
           {rows.map((row) => (
             <tr key={row.id}>
               <Td>

@@ -180,7 +180,7 @@ function rentReliefTemplateBuffer() {
     XLSX.utils.aoa_to_sheet([
       ["CHRiS PAYE Rent Relief Bulk Import"],
       ["Complete one employee per row. Employee Number is preferred; exact Employee Name can be used when Employee Number is unavailable."],
-      ["Required fields: Tax Year, Annual Rent Paid and Evidence / Document Reference."],
+      ["Required fields: Employee Number, Tax Year and Evidence / Document Reference. For ZERMATT, CHRiS computes Annual Rent Basis from Payroll Housing Allowance × 12."],
       ["Imported rows are always saved as PENDING_VERIFICATION. Bulk upload never bypasses HR evidence review."],
       ["A VERIFIED rent-relief record is immutable and cannot be overwritten by bulk upload."],
       ["CHRiS calculates eligible relief from the active payroll policy and uses it in PAYE only after verification."],
@@ -191,8 +191,8 @@ function rentReliefTemplateBuffer() {
   XLSX.utils.book_append_sheet(
     workbook,
     XLSX.utils.aoa_to_sheet([
-      ["Employee No", "Employee Name", "Tax Year", "Annual Rent Paid", "Evidence / Document Reference", "Notes"],
-      ["ZLL000001", "Jane Mary Doe", 2026, 1200000, "ZLL-RR-2026-0001", "Rent relief evidence submitted for HR verification."],
+      ["Employee No", "Employee Name", "Tax Year", "Monthly Gross Salary", "Housing %", "Monthly Housing Allowance", "Annual Rent Basis (Housing × 12)", "Evidence / Document Reference", "Notes"],
+      ["ZLL000001", "Jane Mary Doe", 2026, "", "", "", "", "ZLL-RR-2026-0001", "Amounts are computed from CHRiS payroll during validation."],
     ]),
     "Rent Relief"
   );
@@ -304,9 +304,6 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
     if (!Number.isInteger(taxYear) || taxYear < 2026) errors.push("Tax Year must be 2026 or later.");
 
     const annualRentPaid = Number(String(annualRentRaw || "").replace(/[₦,\s]/g, ""));
-    if (annualRentRaw === "" || !Number.isFinite(annualRentPaid) || annualRentPaid < 0) {
-      errors.push("Annual Rent Paid is required and must be zero or greater.");
-    }
 
     if (!evidenceReference) errors.push("Evidence / Document Reference is required for bulk rent relief.");
 
@@ -333,32 +330,23 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
     };
   });
 
-  const taxYears = [...new Set(parsedRows.filter((row) => Number.isInteger(row.taxYear) && row.taxYear >= 2026).map((row) => row.taxYear))];
-  const policyPairs = await Promise.all(
-    taxYears.map(async (taxYear) => [
-      taxYear,
-      await nigeriaPayroll.getActivePolicy({
-        organizationId,
-        asOf: `${taxYear}-12-31`,
-      }),
-    ])
-  );
-  const policyByYear = new Map(policyPairs);
-
-  return parsedRows.map((row) => {
+  return Promise.all(parsedRows.map(async (row) => {
     const errors = [...row.errors];
-    const policy = policyByYear.get(row.taxYear);
-    if (Number.isInteger(row.taxYear) && row.taxYear >= 2026 && !policy) {
-      errors.push(`No active Nigeria payroll policy covers tax year ${row.taxYear}.`);
-    }
-    const rate = Number(policy?.payeRules?.rentReliefRate ?? 20);
-    const cap = Number(policy?.payeRules?.rentReliefCap ?? 500000);
-    const eligibleRelief = Number.isFinite(row.annualRentPaid)
-      ? Math.min(cap, Math.round((row.annualRentPaid * rate / 100) * 100) / 100)
-      : 0;
     const employeeName = row.employee
       ? [row.employee.firstName, row.employee.middleName, row.employee.lastName].filter(Boolean).join(" ")
       : "";
+    let basis = null;
+    if (row.employee && Number.isInteger(row.taxYear) && row.taxYear >= 2026) {
+      try {
+        basis = await nigeriaPayroll.getHousingDerivedRentBasis({
+          organizationId,
+          employeeNumber: row.employee.employeeNumber,
+          taxYear: row.taxYear,
+        });
+      } catch (error) {
+        errors.push(error.message || "Unable to derive Payroll Housing Allowance.");
+      }
+    }
 
     return {
       rowNumber: row.rowNumber,
@@ -369,22 +357,43 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
         : {
             employeeNumber: row.employee.employeeNumber,
             taxYear: row.taxYear,
-            annualRentPaid: row.annualRentPaid,
+            annualRentPaid: basis.annualRentBasis,
             evidenceReference: row.evidenceReference,
-            notes: row.notes || "Bulk rent relief import — pending HR verification.",
+            notes: row.notes || "Payroll Housing Allowance × 12 rent basis — pending HR verification.",
           },
       display: {
         employeeNumber: row.employee?.employeeNumber || "",
         employeeName: employeeName || "",
         taxYear: row.taxYear || "",
-        annualRentPaid: Number.isFinite(row.annualRentPaid) ? row.annualRentPaid : "",
-        eligibleRelief,
+        monthlyGrossSalary: basis?.monthlyGrossSalary ?? "",
+        housingAllowanceRate: basis?.housingAllowanceRate ?? "",
+        monthlyHousingAllowance: basis?.monthlyHousingAllowance ?? "",
+        annualRentPaid: basis?.annualRentBasis ?? "",
+        eligibleRelief: basis?.eligibleRentRelief ?? "",
         evidenceReference: row.evidenceReference,
         status: "PENDING_VERIFICATION",
       },
     };
-  });
+  }));
 }
+
+router.get(
+  "/tax-reliefs/rent/housing-basis",
+  requirePermission("payroll.view"),
+  async (req, res) => {
+    try {
+      const taxYear = req.query?.taxYear || new Date().getFullYear();
+      const data = await nigeriaPayroll.getHousingDerivedRentBasis({
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.query?.employeeNumber,
+        taxYear,
+      });
+      return res.json({ status: "success", data });
+    } catch (error) {
+      return sendError(res, error, "Unable to derive rent relief from Payroll Housing Allowance.");
+    }
+  }
+);
 
 router.get(
   "/tax-reliefs/rent/template",

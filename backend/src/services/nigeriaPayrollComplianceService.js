@@ -202,18 +202,130 @@ async function listTaxReliefs({ organizationId, taxYear, prismaClient = prisma }
   }));
 }
 
+async function getHousingDerivedRentBasis({
+  organizationId,
+  employeeNumber,
+  taxYear,
+  prismaClient = prisma,
+}) {
+  const employee = await resolveEmployee(prismaClient, organizationId, employeeNumber);
+  const year = Number(taxYear);
+  if (!Number.isInteger(year) || year < 2026) {
+    throw payrollError("INVALID_TAX_YEAR", "Tax Year must be 2026 or later.");
+  }
+
+  const organization = await prismaClient.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  if (organization?.slug !== "zermatt-liquor-limited") {
+    throw payrollError(
+      "HOUSING_DERIVED_RENT_RELIEF_NOT_ENABLED",
+      "Payroll Housing Allowance × 12 rent-relief basis is currently configured for ZERMATT.",
+      409
+    );
+  }
+
+  const policy = await getActivePolicy({
+    organizationId,
+    asOf: `${year}-12-31`,
+    prismaClient,
+  });
+  if (!policy) {
+    throw payrollError(
+      "PAYROLL_POLICY_NOT_CONFIGURED",
+      `No active Nigeria payroll policy covers tax year ${year}.`,
+      409
+    );
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const yearEnd = `${year}-12-31`;
+  const asOf = today < yearEnd ? today : yearEnd;
+  const salaryRows = await prismaClient.$queryRawUnsafe(
+    `SELECT "amount","currency","effectiveFrom","effectiveTo"
+       FROM "payroll_salary_rates"
+      WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status"='ACTIVE'
+        AND "effectiveFrom" <= $3::date
+        AND ("effectiveTo" IS NULL OR "effectiveTo" >= $3::date)
+      ORDER BY "effectiveFrom" DESC
+      LIMIT 1`,
+    organizationId,
+    employee.id,
+    asOf
+  );
+  const salary = salaryRows[0];
+  if (!salary) {
+    throw payrollError(
+      "ACTIVE_SALARY_RATE_REQUIRED",
+      `Employee ${employee.employeeNumber} has no active salary rate covering ${asOf}.`,
+      409
+    );
+  }
+
+  const gross = Number(salary.amount || 0);
+  const housingRate = Number(policy.salaryStructure?.housing ?? 0);
+  if (!Number.isFinite(gross) || gross <= 0 || !Number.isFinite(housingRate) || housingRate < 0) {
+    throw payrollError(
+      "HOUSING_ALLOWANCE_BASIS_UNAVAILABLE",
+      "Payroll Housing Allowance could not be derived from the active salary structure.",
+      409
+    );
+  }
+
+  const monthlyHousingAllowance = round2(gross * housingRate / 100);
+  const annualRentBasis = round2(monthlyHousingAllowance * 12);
+  const rentReliefRate = Number(policy.payeRules?.rentReliefRate ?? 20);
+  const rentReliefCap = Number(policy.payeRules?.rentReliefCap ?? 500000);
+  const eligibleRentRelief = Math.min(rentReliefCap, percent(annualRentBasis, rentReliefRate));
+
+  return {
+    employeeId: employee.id,
+    employeeNumber: employee.employeeNumber,
+    employeeName: employeeName(employee),
+    taxYear: year,
+    currency: salary.currency || "NGN",
+    monthlyGrossSalary: round2(gross),
+    housingAllowanceRate: housingRate,
+    monthlyHousingAllowance,
+    annualRentBasis,
+    eligibleRentRelief,
+    rentReliefRate,
+    rentReliefCap,
+    salaryEffectiveFrom: dateText(salary.effectiveFrom),
+    source: "PAYROLL_HOUSING_ALLOWANCE_X12",
+  };
+}
+
 async function declareRentRelief({ organizationId, actorUserId, input, prismaClient = prisma }) {
   const employee = await resolveEmployee(prismaClient, organizationId, input?.employeeNumber);
   const taxYear = Number(input?.taxYear);
-  const annualRent = Number(input?.annualRentPaid);
   if (!Number.isInteger(taxYear) || taxYear < 2026) throw payrollError("INVALID_TAX_YEAR", "Tax Year must be 2026 or later.");
-  if (!Number.isFinite(annualRent) || annualRent < 0) throw payrollError("INVALID_ANNUAL_RENT", "Annual Rent Paid must be zero or greater.");
 
-  const policy = await getActivePolicy({ organizationId, asOf: `${taxYear}-12-31`, prismaClient });
-  if (!policy) throw payrollError("PAYROLL_POLICY_NOT_CONFIGURED", `No active Nigeria payroll policy covers tax year ${taxYear}.`, 409);
-  const rate = Number(policy.payeRules?.rentReliefRate ?? 20);
-  const cap = Number(policy.payeRules?.rentReliefCap ?? 500000);
-  const eligible = Math.min(cap, percent(annualRent, rate));
+  const organization = await prismaClient.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  let annualRent = Number(input?.annualRentPaid);
+  let eligible;
+  let basis = null;
+  if (organization?.slug === "zermatt-liquor-limited") {
+    basis = await getHousingDerivedRentBasis({
+      organizationId,
+      employeeNumber: employee.employeeNumber,
+      taxYear,
+      prismaClient,
+    });
+    annualRent = basis.annualRentBasis;
+    eligible = basis.eligibleRentRelief;
+  } else {
+    if (!Number.isFinite(annualRent) || annualRent < 0) throw payrollError("INVALID_ANNUAL_RENT", "Annual Rent Paid must be zero or greater.");
+    const policy = await getActivePolicy({ organizationId, asOf: `${taxYear}-12-31`, prismaClient });
+    if (!policy) throw payrollError("PAYROLL_POLICY_NOT_CONFIGURED", `No active Nigeria payroll policy covers tax year ${taxYear}.`, 409);
+    const rate = Number(policy.payeRules?.rentReliefRate ?? 20);
+    const cap = Number(policy.payeRules?.rentReliefCap ?? 500000);
+    eligible = Math.min(cap, percent(annualRent, rate));
+  }
   const evidenceReference = text(input?.evidenceReference) || null;
   const notes = text(input?.notes) || null;
 
@@ -280,6 +392,7 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
       taxYear,
       annualRentPaid: round2(annualRent),
       eligibleRentRelief: eligible,
+      rentBasis: basis || undefined,
       status: "PENDING_VERIFICATION",
     },
     reason: notes || "Rent relief declaration recorded for verification",
@@ -291,6 +404,7 @@ async function declareRentRelief({ organizationId, actorUserId, input, prismaCli
     employeeName: employeeName(employee),
     annualDeclaredAmount: Number(rows[0].annualDeclaredAmount || 0),
     eligibleReliefAmount: Number(rows[0].eligibleReliefAmount || 0),
+    rentBasis: basis || undefined,
   };
 }
 
@@ -1056,6 +1170,7 @@ module.exports = {
   getActivePolicy,
   getCompliancePolicy,
   listTaxReliefs,
+  getHousingDerivedRentBasis,
   declareRentRelief,
   decideRentRelief,
   bulkVerifyRentReliefs,
