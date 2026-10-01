@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const prisma = require("../config/prisma");
 const { requireAuth } = require("../middleware/authMiddleware");
 const { getEmployeeLeaveLedger } = require("../services/employeeLeaveLedgerService");
@@ -88,6 +89,30 @@ function sendError(res, error, fallback) {
   });
 }
 
+function lagosMonthDay() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${month}-${day}`;
+}
+
+function birthdayPhotoDataUrl(row) {
+  const mimeType = String(row?.photoMimeType || "").trim().toLowerCase();
+  const storagePath = String(row?.photoStoragePath || "").trim();
+  if (!mimeType.startsWith("image/") || !storagePath || !fs.existsSync(storagePath)) return null;
+  try {
+    const buffer = fs.readFileSync(storagePath);
+    if (!buffer.length || buffer.length > 5 * 1024 * 1024) return null;
+    return `data:${mimeType};base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 router.get("/overview", async (req, res) => {
   try {
     const employee = await resolveSelf(req);
@@ -169,6 +194,67 @@ router.get("/overview", async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, "Unable to load Employee Self Service.");
+  }
+});
+
+router.get("/birthdays", async (req, res) => {
+  try {
+    await resolveSelf(req);
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT
+          e."id",e."employeeNumber",e."firstName",e."middleName",e."lastName",
+          loc."name" AS "locationName",des."name" AS "designationName",
+          onboarding."dateOfBirth",
+          photo."storagePath" AS "photoStoragePath",photo."mimeType" AS "photoMimeType"
+         FROM "employees" e
+         LEFT JOIN "organization_locations" loc
+           ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
+         LEFT JOIN "designations" des
+           ON des."id"=e."designationId" AND des."organizationId"=e."organizationId"
+         LEFT JOIN LATERAL (
+           SELECT eo."sectionData"->'personal-details'->>'dateOfBirth' AS "dateOfBirth"
+             FROM "employee_onboardings" eo
+            WHERE eo."organizationId"=e."organizationId" AND eo."employeeId"=e."id"
+            ORDER BY eo."updatedAt" DESC
+            LIMIT 1
+         ) onboarding ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT ed."storagePath",ed."mimeType"
+             FROM "employee_documents" ed
+            WHERE ed."organizationId"=e."organizationId"
+              AND ed."employeeId"=e."id"
+              AND ed."category"='PASSPORT_PHOTO'
+            ORDER BY ed."createdAt" DESC
+            LIMIT 1
+         ) photo ON TRUE
+        WHERE e."organizationId"=$1
+          AND e."status" IN ('ACTIVE','PROBATION','LEAVE','SUSPENDED')
+        ORDER BY e."firstName",e."lastName"`,
+      req.auth.organizationId
+    );
+
+    const today = lagosMonthDay();
+    const birthdays = rows
+      .filter((row) => {
+        const raw = String(row.dateOfBirth || "").slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(raw) && raw.slice(5) === today;
+      })
+      .map((row) => ({
+        employeeNumber: row.employeeNumber,
+        name: fullName(row),
+        designation: row.designationName || null,
+        location: row.locationName || null,
+        birthday: today,
+        photoDataUrl: birthdayPhotoDataUrl(row),
+      }));
+
+    return res.json({
+      status: "success",
+      data: birthdays,
+      timezone: "Africa/Lagos",
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to load today's employee birthdays.");
   }
 });
 
