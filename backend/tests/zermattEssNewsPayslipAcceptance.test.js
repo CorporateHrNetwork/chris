@@ -50,3 +50,14 @@ test("internal news supports the approved Zermatt communication categories", () 
     "RETIREMENT","TERMINATION","EVENT","POLICY_HR_UPDATE"
   ]) assert.ok(news.includes(category));
 });
+
+
+test("ESS exposes a daily Zermatt birthday banner with employee profile imagery", () => {
+  assert.ok(ess.includes('router.get("/birthdays"'));
+  assert.ok(ess.includes('"Africa/Lagos"'));
+  assert.ok(ess.includes("'PASSPORT_PHOTO'"));
+  assert.ok(ess.includes("photoDataUrl"));
+  assert.ok(ui.includes("Happy Birthday!"));
+  assert.ok(ui.includes("Today's employee birthdays"));
+  assert.ok(ui.includes("birthdayPhoto"));
+});
