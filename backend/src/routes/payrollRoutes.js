@@ -104,12 +104,19 @@ router.get("/tax-reliefs", requirePermission("payroll.view"), async (req, res) =
 
 router.post("/tax-reliefs/rent", requirePermission("payroll.manage"), async (req, res) => {
   try {
-    const data = await nigeriaPayroll.declareRentRelief({
+    const relief = await nigeriaPayroll.declareRentRelief({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
       input: req.body || {},
     });
-    return res.status(201).json({ status: "success", data });
+    const payrollDraftFreshness = relief?.status === "VERIFIED"
+      ? await markDraftRunsRecalculationRequired({
+          organizationId: req.auth.organizationId,
+          actorUserId: req.auth.userId,
+          reason: `System-derived Rent Relief for ${relief.employeeNumber || relief.employeeId} changed PAYE inputs; draft payroll must be recalculated.`,
+        })
+      : null;
+    return res.status(201).json({ status: "success", data: { relief, payrollDraftFreshness } });
   } catch (error) {
     return sendError(res, error, "Unable to record rent relief declaration.");
   }
@@ -400,7 +407,7 @@ async function currentRentReliefExportBuffer(organizationId, taxYear) {
     );
   }
 
-  const housingRate = Number(policy.salaryStructure?.housing ?? 0);
+  const housingRate = 11;
   const reliefRate = Number(policy.payeRules?.rentReliefRate ?? 20);
   const reliefCap = Number(policy.payeRules?.rentReliefCap ?? 500000);
 
@@ -611,13 +618,19 @@ router.post(
 
       return res.status(207).json({
         status: "success",
-        message: `${imported} rent-relief record(s) imported as PENDING_VERIFICATION. ${failed} row(s) failed.`,
+        message: `${imported} rent-relief record(s) imported. Zermatt formula-derived rows are system-verified and payroll-active automatically. ${failed} row(s) failed.`,
         data: {
           results,
           imported,
           failed,
           total: results.length,
-          payrollDraftFreshness: null,
+          payrollDraftFreshness: imported > 0
+            ? await markDraftRunsRecalculationRequired({
+                organizationId: req.auth.organizationId,
+                actorUserId: req.auth.userId,
+                reason: `${imported} Rent Relief record(s) changed PAYE inputs; draft payroll must be recalculated.`,
+              })
+            : null,
         },
       });
     } catch (error) {
