@@ -264,8 +264,10 @@ async function getHousingDerivedRentBasis({
   }
 
   const gross = Number(salary.amount || 0);
-  const housingRate = Number(policy.salaryStructure?.housing ?? 0);
-  if (!Number.isFinite(gross) || gross <= 0 || !Number.isFinite(housingRate) || housingRate < 0) {
+  // Zermatt authoritative Rent Relief rule: Monthly Gross × 11% × 56.
+  // Keep the 11% basis fixed here even if the general salary-structure policy changes later.
+  const housingRate = 11;
+  if (!Number.isFinite(gross) || gross <= 0) {
     throw payrollError(
       "HOUSING_ALLOWANCE_BASIS_UNAVAILABLE",
       "Payroll Housing Allowance could not be derived from the active salary structure.",
