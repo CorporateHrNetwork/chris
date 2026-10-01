@@ -180,9 +180,9 @@ function rentReliefTemplateBuffer() {
     XLSX.utils.aoa_to_sheet([
       ["CHRiS PAYE Rent Relief Bulk Import"],
       ["Complete one employee per row. Employee Number is preferred; exact Employee Name can be used when Employee Number is unavailable."],
-      ["Required fields: Employee Number, Tax Year and Evidence / Document Reference. For ZERMATT, CHRiS computes Annual Rent Basis from Payroll Housing Allowance × 12."],
-      ["Imported rows are always saved as PENDING_VERIFICATION. Bulk upload never bypasses HR evidence review."],
-      ["A VERIFIED rent-relief record is immutable and cannot be overwritten by bulk upload."],
+      ["Required fields: Employee Number and Tax Year. For ZERMATT, CHRiS computes Recorded Rent as Monthly Gross × 11% × 56 and applies the equivalent statutory Rent Relief directly to payroll."],
+      ["For ZERMATT, formula-derived rows are system-verified automatically and become payroll-eligible without a separate evidence-verification step."],
+      ["For ZERMATT, formula-derived records are synchronized from payroll salary data; recalculation can update a previous system-derived value when salary changes."],
       ["CHRiS calculates eligible relief from the active payroll policy and uses it in PAYE only after verification."],
       ["After successful import, any existing draft payroll is marked for recalculation."],
     ]),
@@ -191,7 +191,7 @@ function rentReliefTemplateBuffer() {
   XLSX.utils.book_append_sheet(
     workbook,
     XLSX.utils.aoa_to_sheet([
-      ["Employee No", "Employee Name", "Tax Year", "Monthly Gross Salary", "Housing %", "Monthly Housing Allowance", "Annual Rent Basis (Housing × 12)", "Evidence / Document Reference", "Notes"],
+      ["Employee No", "Employee Name", "Tax Year", "Monthly Gross Salary", "Housing %", "Monthly Housing Allowance", "Recorded Rent (Gross × 11% × 56)", "Evidence / Document Reference", "Notes"],
       ["ZLL000001", "Jane Mary Doe", 2026, "", "", "", "", "ZLL-RR-2026-0001", "Amounts are computed from CHRiS payroll during validation."],
     ]),
     "Rent Relief"
@@ -214,6 +214,12 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
   if (!sheetName) throw payroll.operationalError("EMPTY_WORKBOOK", "The workbook does not contain a worksheet.");
 
   const sourceRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  const zermattSystemRent = organization?.slug === "zermatt-liquor-limited";
+
   const employees = await prisma.employee.findMany({
     where: { organizationId },
     select: {
@@ -305,7 +311,7 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
 
     const annualRentPaid = Number(String(annualRentRaw || "").replace(/[₦,\s]/g, ""));
 
-    if (!evidenceReference) errors.push("Evidence / Document Reference is required for bulk rent relief.");
+    if (!zermattSystemRent && !evidenceReference) errors.push("Evidence / Document Reference is required for bulk rent relief.");
 
     if (employee && Number.isInteger(taxYear)) {
       const employeeYearKey = `${employee.id}:${taxYear}`;
@@ -314,7 +320,7 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
       } else {
         seenEmployeeYears.add(employeeYearKey);
       }
-      if (existingByEmployeeYear.get(employeeYearKey)?.status === "VERIFIED") {
+      if (!zermattSystemRent && existingByEmployeeYear.get(employeeYearKey)?.status === "VERIFIED") {
         errors.push("A VERIFIED rent-relief record already exists and cannot be overwritten.");
       }
     }
@@ -359,7 +365,7 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
             taxYear: row.taxYear,
             annualRentPaid: basis.annualRentBasis,
             evidenceReference: row.evidenceReference,
-            notes: row.notes || "Payroll Housing Allowance × 12 rent basis — pending HR verification.",
+            notes: row.notes || "System-derived Zermatt recorded rent: Monthly Gross × Housing % × 56.",
           },
       display: {
         employeeNumber: row.employee?.employeeNumber || "",
@@ -371,7 +377,7 @@ async function prepareRentReliefWorkbook(organizationId, buffer) {
         annualRentPaid: basis?.annualRentBasis ?? "",
         eligibleRelief: basis?.eligibleRentRelief ?? "",
         evidenceReference: row.evidenceReference,
-        status: "PENDING_VERIFICATION",
+        status: zermattSystemRent ? "VERIFIED / PAYROLL ACTIVE" : "PENDING_VERIFICATION",
       },
     };
   }));
@@ -445,7 +451,7 @@ async function currentRentReliefExportBuffer(organizationId, taxYear) {
   const reportRows = rows.map((row) => {
     const gross = row.monthlyGrossSalary == null ? null : Number(row.monthlyGrossSalary);
     const monthlyHousing = gross == null ? null : Math.round((gross * housingRate / 100) * 100) / 100;
-    const annualHousing = monthlyHousing == null ? null : Math.round((monthlyHousing * 12) * 100) / 100;
+    const annualHousing = monthlyHousing == null ? null : Math.round((monthlyHousing * 56) * 100) / 100;
     const derivedEligible = annualHousing == null
       ? null
       : Math.min(reliefCap, Math.round((annualHousing * reliefRate / 100) * 100) / 100);
@@ -481,13 +487,13 @@ async function currentRentReliefExportBuffer(organizationId, taxYear) {
     ["Employees in current register", reportRows.length],
     ["Generated At (UTC)", new Date().toISOString()],
     [],
-    ["Definition", "Annual Rent Basis = current Payroll Housing Allowance × 12. Recorded figures are shown separately from current derived figures so changes in salary remain auditable."],
+    ["Definition", "Zermatt Recorded Rent = current Monthly Gross × Housing % × 56. Recorded figures are shown separately from current derived figures so salary changes remain auditable."],
   ]);
   summary["!cols"] = [{wch:34},{wch:105}];
   XLSX.utils.book_append_sheet(workbook, summary, "Summary");
 
   const register = XLSX.utils.aoa_to_sheet([
-    ["Employee No","Employee Name","Employee Status","Employment Type","Department","Location","Monthly Gross Salary","Currency","Housing %","Monthly Housing Allowance","Current Annual Housing × 12","Current Eligible Rent Relief","Recorded Annual Rent Basis","Recorded Eligible Rent Relief","Relief Status","Evidence / Reference","Notes","Salary Effective From"],
+    ["Employee No","Employee Name","Employee Status","Employment Type","Department","Location","Monthly Gross Salary","Currency","Housing %","Monthly Housing Allowance","Current Recorded Rent (Gross × 11% × 56)","Current Eligible Rent Relief","Recorded Annual Rent Basis","Recorded Eligible Rent Relief","Relief Status","Evidence / Reference","Notes","Salary Effective From"],
     ...reportRows,
   ]);
   register["!cols"] = [
