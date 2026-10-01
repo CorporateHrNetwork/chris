@@ -23,7 +23,9 @@ function ResetPassword() {
     the token will come from the secure reset URL.
   */
   const resetToken =
-    location.state?.resetToken || "";
+    location.state?.resetToken ||
+    new URLSearchParams(location.search).get("token") ||
+    "";
 
   const [newPassword, setNewPassword] =
     useState("");
@@ -131,7 +133,10 @@ function ResetPassword() {
         then return to Sign In.
       */
       window.setTimeout(() => {
-        navigate("/login", {
+        const organizationSlug =
+          new URLSearchParams(location.search).get("organization") ||
+          "zermatt-liquor-limited";
+        navigate(`/login?organization=${encodeURIComponent(organizationSlug)}`, {
           replace: true,
         });
       }, 2500);

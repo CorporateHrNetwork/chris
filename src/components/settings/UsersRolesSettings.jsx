@@ -94,6 +94,11 @@ function UsersRolesSettings() {
     setStatusUpdatingUserId,
   ] = useState(null);
 
+  const [
+    essProvisioning,
+    setEssProvisioning,
+  ] = useState(false);
+
   const {
     hasPermission,
     profile,
@@ -310,6 +315,43 @@ function UsersRolesSettings() {
         true
       );
     };
+
+  const handleBulkEssProvision = async () => {
+    if (!canManageUsers || essProvisioning) return;
+    const confirmed = window.confirm(
+      "Provision Employee Self Service accounts for all current Zermatt employees who have a work email and do not already have a CHRiS user account? Existing users will not be changed."
+    );
+    if (!confirmed) return;
+
+    try {
+      setEssProvisioning(true);
+      setActionError("");
+      setActionMessage("");
+      const result = await apiRequest("/api/users/ess/provision-bulk", { method: "POST" });
+      const rows = result?.data?.results || [];
+      const successful = rows.filter((row) => row.success);
+      if (successful.length) {
+        const header = ["Employee Number","Employee Name","Email","Activation Link","Activation Expires"];
+        const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+        const csv = "\uFEFF" + [header, ...successful.map((row) => [
+          row.employeeNumber,row.employeeName,row.email,row.activationUrl,row.activationExpiresAt
+        ])].map((row) => row.map(escapeCsv).join(",")).join("\r\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `CHRiS-Zermatt-ESS-Activation-Links-${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+      setActionMessage(result?.message || "Employee Self Service accounts provisioned.");
+      await Promise.all([loadUsers(), loadRoles()]);
+    } catch (error) {
+      setActionError(error.message || "Unable to provision Employee Self Service accounts.");
+    } finally {
+      setEssProvisioning(false);
+    }
+  };
 
   /*
   ============================================================
@@ -745,6 +787,14 @@ function UsersRolesSettings() {
               handleOpenCreateUser
             }
 
+            onBulkProvision={
+              handleBulkEssProvision
+            }
+
+            essProvisioning={
+              essProvisioning
+            }
+
             onEditUser={
               handleEditUser
             }
@@ -818,6 +868,8 @@ function UsersTab({
   editingUser,
   statusUpdatingUserId,
   onCreateUser,
+  onBulkProvision,
+  essProvisioning,
   onEditUser,
   onStatusChange,
 }) {
@@ -894,21 +946,25 @@ function UsersTab({
 
         {canManage &&
           !managementFormOpen && (
-            <button
-              type="button"
-
-              onClick={
-                onCreateUser
-              }
-
-              style={
-                createButtonStyle
-              }
-            >
-              <FaUserPlus />
-
-              + Create User
-            </button>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={onBulkProvision}
+                disabled={essProvisioning}
+                style={createButtonStyle}
+              >
+                <FaUsers />
+                {essProvisioning ? "Provisioning ESS…" : "Provision Zermatt ESS Accounts"}
+              </button>
+              <button
+                type="button"
+                onClick={onCreateUser}
+                style={createButtonStyle}
+              >
+                <FaUserPlus />
+                + Create User
+              </button>
+            </div>
           )}
       </div>
 

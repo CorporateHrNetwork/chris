@@ -1,5 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
@@ -345,6 +346,125 @@ router.post("/", requirePermission("users.manage"), async (req, res) => {
       return res.status(409).json({ status: "error", message: "This employee already has a CHRIS user account, or the employee email is already assigned to another CHRIS user." });
     }
     return sendKnownError(res, error, "Unable to create CHRIS user.");
+  }
+});
+
+router.post("/ess/provision-bulk", requirePermission("users.manage"), async (req, res) => {
+  try {
+    const organizationId = req.auth.organizationId;
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, slug: true },
+    });
+    if (organization?.slug !== "zermatt-liquor-limited") {
+      return res.status(403).json({ status: "error", code: "ESS_PROVISIONING_NOT_ENABLED", message: "Bulk ESS provisioning is currently enabled for Zermatt Liquor Limited." });
+    }
+
+    const role = await prisma.role.findFirst({
+      where: { organizationId, name: "Employee Self Service" },
+      select: { id: true, name: true },
+    });
+    if (!role) {
+      return res.status(409).json({ status: "error", code: "ESS_ROLE_REQUIRED", message: "Employee Self Service role is not configured." });
+    }
+
+    const employees = await prisma.employee.findMany({
+      where: {
+        organizationId,
+        status: { in: ["ACTIVE","PROBATION","LEAVE","SUSPENDED"] },
+        email: { not: null },
+        user: null,
+      },
+      select: {
+        id: true, employeeNumber: true, firstName: true, lastName: true,
+        email: true, locationId: true,
+      },
+      orderBy: { employeeNumber: "asc" },
+    });
+
+    const appOrigin = String(req.headers.origin || process.env.CHRIS_APP_URL || "").replace(/\/$/,"");
+    const results = [];
+    for (const employee of employees) {
+      const email = String(employee.email || "").trim().toLowerCase();
+      if (!email) continue;
+      try {
+        const rawToken = crypto.randomBytes(32).toString("hex");
+        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+        const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+        const lockedPassword = crypto.randomBytes(48).toString("hex");
+        const passwordHash = await bcrypt.hash(lockedPassword, 12);
+
+        const created = await prisma.$transaction(async (tx) => {
+          const duplicate = await tx.user.findFirst({ where: { organizationId, email }, select: { id: true } });
+          if (duplicate) throw Object.assign(new Error("Email already belongs to a CHRiS user."), { code: "DUPLICATE_USER_EMAIL" });
+
+          const user = await tx.user.create({
+            data: {
+              organizationId,
+              employeeId: employee.id,
+              email,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              passwordHash,
+              isActive: true,
+              locationScope: employee.locationId ? "ASSIGNED_LOCATIONS" : "ALL_LOCATIONS",
+              userRoles: { create: [{ roleId: role.id }] },
+              userLocations: employee.locationId ? { create: [{ locationId: employee.locationId }] } : undefined,
+            },
+            select: { id: true, email: true },
+          });
+
+          await tx.passwordResetToken.create({
+            data: { userId: user.id, tokenHash, expiresAt },
+          });
+          await tx.organizationAudit.create({
+            data: {
+              organizationId,
+              actorUserId: req.auth.userId || null,
+              entityType: "User",
+              entityId: user.id,
+              action: "ESS_USER_PROVISIONED",
+              newValue: { employeeId: employee.id, employeeNumber: employee.employeeNumber, email, role: role.name },
+              reason: "Bulk Zermatt Employee Self Service provisioning",
+            },
+          });
+          return user;
+        });
+
+        results.push({
+          success: true,
+          userId: created.id,
+          employeeNumber: employee.employeeNumber,
+          employeeName: [employee.firstName, employee.lastName].filter(Boolean).join(" "),
+          email,
+          activationExpiresAt: expiresAt,
+          activationUrl: appOrigin ? `${appOrigin}/reset-password?token=${rawToken}&activation=1` : `/reset-password?token=${rawToken}&activation=1`,
+        });
+      } catch (error) {
+        results.push({
+          success: false,
+          employeeNumber: employee.employeeNumber,
+          email,
+          code: error.code || "ESS_PROVISION_FAILED",
+          message: error.message || "Unable to provision employee ESS account.",
+        });
+      }
+    }
+
+    const provisioned = results.filter((row) => row.success).length;
+    return res.status(results.some((row) => !row.success) ? 207 : 201).json({
+      status: "success",
+      message: `${provisioned} Employee Self Service account(s) provisioned. Activation links expire after 72 hours and are returned only in this response.`,
+      data: {
+        eligible: employees.length,
+        provisioned,
+        failed: results.length - provisioned,
+        results,
+      },
+    });
+  } catch (error) {
+    console.error("ESS bulk provisioning error:", error);
+    return res.status(500).json({ status: "error", message: "Unable to bulk provision Employee Self Service accounts." });
   }
 });
 

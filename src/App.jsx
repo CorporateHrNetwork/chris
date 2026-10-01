@@ -30,6 +30,7 @@ const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
 const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
 const EmployeeSelfService = lazy(() => import("./pages/EmployeeSelfService"));
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
+const InternalNewsManagement = lazy(() => import("./pages/InternalNewsManagement"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
 const LineManagers = lazy(() => import("./pages/LineManagers"));
 const EmployeeProfile = lazy(() => import("./components/employees/EmployeeProfile"));
@@ -117,6 +118,7 @@ function App() {
         <Route path="/employees/invitations" element={<PermissionLayout permission="employees.create"><EmployeeInvitations /></PermissionLayout>} />
         <Route path="/employees/export-queue" element={<PermissionLayout permission="employees.update"><EmployeeExportQueue /></PermissionLayout>} />
         <Route path="/employees/governance" element={<PermissionLayout permission="employees.update"><EmployeeGovernance /></PermissionLayout>} />
+        <Route path="/employees/news" element={<PermissionLayout permission="employees.update"><InternalNewsManagement /></PermissionLayout>} />
         <Route path="/employees/directory" element={<PermissionLayout permission="employees.view"><Employees /></PermissionLayout>} />
         <Route path="/employees/profiles" element={<PermissionLayout permission="employees.view"><EmployeeModuleWorkspace mode="profiles" /></PermissionLayout>} />
         <Route path="/employees/onboarding" element={<PermissionLayout permission="employees.view"><OnboardingTracker /></PermissionLayout>} />

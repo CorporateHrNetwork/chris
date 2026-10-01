@@ -216,6 +216,25 @@ router.get("/leave", async (req, res) => {
   }
 });
 
+router.get("/news", async (req, res) => {
+  try {
+    await resolveSelf(req);
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT "id","category","title","summary","body","isPinned","publishAt","expireAt","createdAt"
+         FROM "internal_news_posts"
+        WHERE "organizationId"=$1
+          AND "status"='PUBLISHED'
+          AND ("publishAt" IS NULL OR "publishAt" <= CURRENT_TIMESTAMP)
+          AND ("expireAt" IS NULL OR "expireAt" > CURRENT_TIMESTAMP)
+        ORDER BY "isPinned" DESC,COALESCE("publishAt","createdAt") DESC,"createdAt" DESC`,
+      req.auth.organizationId
+    );
+    return res.json({ status: "success", data: rows });
+  } catch (error) {
+    return sendError(res, error, "Unable to load employee news.");
+  }
+});
+
 router.get("/gratuity", async (req, res) => {
   try {
     const employee = await resolveSelf(req);
