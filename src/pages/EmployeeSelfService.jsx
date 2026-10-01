@@ -31,6 +31,7 @@ export default function EmployeeSelfService() {
   const [leave, setLeave] = useState(null);
   const [gratuity, setGratuity] = useState(null);
   const [news, setNews] = useState([]);
+  const [birthdays, setBirthdays] = useState([]);
   const [selectedPolicy, setSelectedPolicy] = useState("");
   const [active, setActive] = useState("profile");
   const [loading, setLoading] = useState(true);
@@ -39,18 +40,20 @@ export default function EmployeeSelfService() {
   const load = async () => {
     try {
       setLoading(true);
-      const [overviewResult, payslipResult, leaveResult, gratuityResult, newsResult] = await Promise.all([
+      const [overviewResult, payslipResult, leaveResult, gratuityResult, newsResult, birthdayResult] = await Promise.all([
         apiRequest("/api/ess/overview"),
         apiRequest("/api/ess/payslips"),
         apiRequest("/api/ess/leave"),
         apiRequest("/api/ess/gratuity"),
         apiRequest("/api/ess/news"),
+        apiRequest("/api/ess/birthdays"),
       ]);
       setOverview(overviewResult?.data || null);
       setPayslips(payslipResult?.data || []);
       setLeave(leaveResult?.data || null);
       setGratuity(gratuityResult?.data || null);
       setNews(newsResult?.data || []);
+      setBirthdays(birthdayResult?.data || []);
       setError("");
     } catch (requestError) {
       setError(requestError?.message || "Unable to load Employee Self Service.");
@@ -112,6 +115,35 @@ export default function EmployeeSelfService() {
       </header>
 
       {error && <div style={errorBox}>{error}</div>}
+
+      {birthdays.length > 0 && (
+        <section style={birthdayBanner} aria-label="Today's employee birthdays">
+          <div style={birthdayIntro}>
+            <div style={birthdayEyebrow}>TODAY AT ZERMATT</div>
+            <h2 style={birthdayTitle}>Happy Birthday!</h2>
+            <p style={birthdayText}>
+              {birthdays.length === 1
+                ? `Celebrating ${birthdays[0].name} today. Wishing you a wonderful year ahead.`
+                : `Celebrating ${birthdays.length} colleagues today. Wishing you all a wonderful year ahead.`}
+            </p>
+          </div>
+          <div style={birthdayPeople}>
+            {birthdays.map((person) => (
+              <article key={person.employeeNumber} style={birthdayPerson}>
+                {person.photoDataUrl ? (
+                  <img src={person.photoDataUrl} alt={person.name} style={birthdayPhoto} />
+                ) : (
+                  <div style={birthdayPhotoFallback}>{String(person.name || "?").slice(0,1).toUpperCase()}</div>
+                )}
+                <div>
+                  <strong style={birthdayName}>{person.name}</strong>
+                  <div style={birthdayRole}>{person.designation || "Zermatt Team Member"}{person.location ? ` · ${person.location}` : ""}</div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <nav style={tabsStyle} aria-label="Employee Self Service sections">
         {tabs.map(([key, label]) => (
@@ -278,3 +310,15 @@ const pinned={fontWeight:900,color:"#07110c",background:"#d4af37",borderRadius:9
 const newsTitle={margin:"9px 0 6px",fontSize:18,color:"#fff"};
 const newsSummary={margin:"0 0 8px",color:"#bfd0c6",fontWeight:700};
 const newsBody={whiteSpace:"pre-wrap",lineHeight:1.65,color:"#dce8e1"};
+
+const birthdayBanner={maxWidth:1180,margin:"0 auto 18px",padding:"22px",borderRadius:18,border:"1px solid rgba(212,175,55,.55)",background:"linear-gradient(135deg,#17452f,#8b6a13)",boxShadow:"0 16px 42px rgba(0,0,0,.24)",display:"grid",gridTemplateColumns:"minmax(220px,.85fr) minmax(280px,1.65fr)",gap:20,alignItems:"center"};
+const birthdayIntro={minWidth:0};
+const birthdayEyebrow={fontSize:11,fontWeight:900,letterSpacing:1.5,color:"#f9e9a7"};
+const birthdayTitle={margin:"5px 0 7px",fontSize:"clamp(26px,4vw,40px)",color:"#fff"};
+const birthdayText={margin:0,lineHeight:1.55,color:"#f6f2df"};
+const birthdayPeople={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10};
+const birthdayPerson={display:"flex",alignItems:"center",gap:12,padding:"12px",borderRadius:14,background:"rgba(7,17,12,.62)",border:"1px solid rgba(255,255,255,.16)"};
+const birthdayPhoto={width:62,height:62,borderRadius:"50%",objectFit:"cover",border:"3px solid #f2d166",background:"#fff"};
+const birthdayPhotoFallback={width:62,height:62,borderRadius:"50%",display:"grid",placeItems:"center",border:"3px solid #f2d166",background:"#0b281a",color:"#f2d166",fontSize:24,fontWeight:900};
+const birthdayName={display:"block",color:"#fff",fontSize:15};
+const birthdayRole={marginTop:4,color:"#e8e2c9",fontSize:12,lineHeight:1.4};
