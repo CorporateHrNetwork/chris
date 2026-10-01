@@ -99,6 +99,20 @@ export default function RentReliefManaged() {
   };
 
 
+  const downloadCurrentRegister = async () => {
+    try {
+      setBusy("current-export");
+      setError("");
+      const download = await apiDownload(`/api/payroll/tax-reliefs/rent/export-current?taxYear=${year}`);
+      saveDownloadedBlob(download);
+      setRegisterMessage(`Current rent-relief register for ${year} downloaded.`);
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to download current rent relief register.");
+    } finally {
+      setBusy("");
+    }
+  };
+
   const downloadBulkTemplate = async () => {
     try {
       setBusy("bulk-template");
@@ -304,6 +318,14 @@ export default function RentReliefManaged() {
       <Panel title="Rent Relief Register">
         <div style={registerToolbarStyle}>
           <div style={buttonRow}>
+            <button
+              type="button"
+              style={smallButton}
+              disabled={Boolean(busy)}
+              onClick={downloadCurrentRegister}
+            >
+              {busy === "current-export" ? "Preparing…" : "Download Current Rent Relief"}
+            </button>
             <button
               type="button"
               style={smallButton}
