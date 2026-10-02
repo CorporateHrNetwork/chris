@@ -195,7 +195,7 @@ test("bulk email processes an entire approved run in bounded chunks and reports 
 test("emailed approved payslip uses the authoritative print culture and includes a downloadable attachment", () => {
   const service = fs.readFileSync(path.join(repoRoot, "backend/src/services/payrollPayslipEmailService.js"), "utf8");
   for (const expected of [
-    "background:#f7f3e8",
+    "background:#ffffff",
     'class="watermark"',
     'class="organization-logo"',
     'class="organization-name"',
