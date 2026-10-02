@@ -189,3 +189,24 @@ test("bulk email processes an entire approved run in bounded chunks and reports 
     "bulkRunId",
   ]) assert.ok(payrollUi.includes(expected), `Missing email-all payslips UI control: ${expected}`);
 });
+
+
+test("emailed approved payslip uses the authoritative print culture and includes a downloadable attachment", () => {
+  const service = fs.readFileSync(path.join(root, "backend/src/services/payrollPayslipEmailService.js"), "utf8");
+  for (const expected of [
+    "background:#f7f3e8",
+    'class="watermark"',
+    'class="organization-logo"',
+    'class="organization-name"',
+    'class="document-title"',
+    'class="details"',
+    "Loan Summary",
+    "Running Loan Balance",
+    "Powered by CHRiS",
+    "attachments: attachment ?",
+    'contentType: "text/html; charset=utf-8"',
+    "The same official payslip is attached for download, saving and printing.",
+  ]) {
+    assert.ok(service.includes(expected), `Missing canonical emailed-payslip control: ${expected}`);
+  }
+});
