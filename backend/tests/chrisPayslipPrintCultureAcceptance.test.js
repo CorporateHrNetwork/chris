@@ -45,12 +45,12 @@ test("shared CHRiS printable branding reuses the payslip document culture", () =
   }
 });
 
-test("payslip and shared CHRiS print documents use the same off-white paper culture", () => {
+test("payslip keeps CHRiS print language while using the approved clean-white paper", () => {
   assert.ok(globalPrint.includes("--chris-print-paper: #f7f3e8"));
-  assert.ok(payslip.includes("body{margin:0;background:#f7f3e8"));
+  assert.ok(payslip.includes("body{margin:0;background:#ffffff"));
   assert.ok(payslip.includes(".payslip{position:relative"));
-  assert.ok(payslip.includes("background:#f7f3e8"));
-  assert.ok(payslip.includes("th{background:#f7f3e8!important;color:#064e3b!important"));
+  assert.ok(payslip.includes("background:#ffffff"));
+  assert.ok(payslip.includes("th{background:#ffffff!important;color:#064e3b!important"));
   assert.equal(payslip.includes("th{background:#064e3b!important"), false);
 });
 
