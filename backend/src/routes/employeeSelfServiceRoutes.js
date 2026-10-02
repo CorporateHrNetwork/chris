@@ -23,16 +23,78 @@ function ensureZermattOrganization(req) {
 
 async function resolveSelf(req) {
   ensureZermattOrganization(req);
-  if (!req.auth?.employeeId) {
+  let employeeId = req.auth?.employeeId || null;
+
+  if (!employeeId && req.auth?.userId) {
+    const user = await prisma.user.findFirst({
+      where: { id: req.auth.userId, organizationId: req.auth.organizationId },
+      select: { id: true, email: true, employeeId: true },
+    });
+    employeeId = user?.employeeId || null;
+
+    if (!employeeId && user?.email) {
+      const matches = await prisma.$queryRawUnsafe(
+        `SELECT e."id",e."employeeNumber"
+           FROM "employees" e
+          WHERE e."organizationId"=$1
+            AND LOWER(COALESCE(e."email",''))=LOWER($2)
+            AND e."status" IN ('ACTIVE','PROBATION','LEAVE','SUSPENDED')
+          ORDER BY e."employeeNumber"
+          LIMIT 2`,
+        req.auth.organizationId,
+        String(user.email).trim()
+      );
+
+      if (matches.length === 1) {
+        const alreadyLinked = await prisma.user.findFirst({
+          where: {
+            organizationId: req.auth.organizationId,
+            employeeId: matches[0].id,
+            NOT: { id: user.id },
+          },
+          select: { id: true },
+        });
+
+        if (!alreadyLinked) {
+          await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+              where: { id: user.id },
+              data: { employeeId: matches[0].id },
+            });
+            await tx.organizationAudit.create({
+              data: {
+                organizationId: req.auth.organizationId,
+                actorUserId: user.id,
+                entityType: "User",
+                entityId: user.id,
+                action: "ESS_EMPLOYEE_LINK_AUTO_RECONCILED",
+                newValue: {
+                  employeeId: matches[0].id,
+                  employeeNumber: matches[0].employeeNumber,
+                  matchedBy: "work_email",
+                },
+                reason: "Authenticated Zermatt ESS account reconciled to a unique current employee with the same work email.",
+              },
+            });
+          });
+          employeeId = matches[0].id;
+          req.auth.employeeId = employeeId;
+        }
+      }
+    }
+  }
+
+  if (!employeeId) {
     throw essError(
       "ESS_EMPLOYEE_LINK_REQUIRED",
       "This CHRiS user account is not linked to an employee record. Contact HR to link the account.",
       403
     );
   }
+
   const employee = await prisma.employee.findFirst({
     where: {
-      id: req.auth.employeeId,
+      id: employeeId,
       organizationId: req.auth.organizationId,
     },
     select: {
