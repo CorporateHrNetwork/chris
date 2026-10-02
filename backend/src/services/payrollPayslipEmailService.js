@@ -103,7 +103,177 @@ async function loadApprovedPayslip({ organizationId, payrollRunLineId, prismaCli
   };
 }
 
-function buildPayslipEmail(row) {
+
+function pdfSafe(value) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function pdfMoney(value, currency = "NGN") {
+  const amount = Number(value || 0);
+  return `${currency || "NGN"} ${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function jpegDimensions(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 9 < buffer.length) {
+    if (buffer[offset] !== 0xff) { offset += 1; continue; }
+    const marker = buffer[offset + 1];
+    const length = buffer.readUInt16BE(offset + 2);
+    if ([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)) {
+      return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
+    }
+    if (!length || length < 2) break;
+    offset += 2 + length;
+  }
+  return null;
+}
+
+async function fetchPayslipLogo(row) {
+  const candidates = [
+    text(row.organizationLogoUrl),
+    text(process.env.CHRIS_APP_URL) ? `${text(process.env.CHRIS_APP_URL).replace(/\/$/, "")}/zrt-logo.jpeg` : "",
+  ].filter(Boolean);
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const contentType = text(response.headers.get("content-type")).toLowerCase();
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (!contentType.includes("jpeg") && !contentType.includes("jpg") && !(bytes[0] === 0xff && bytes[1] === 0xd8)) continue;
+      const dimensions = jpegDimensions(bytes);
+      if (!dimensions) continue;
+      return { bytes, ...dimensions };
+    } catch {}
+  }
+  return null;
+}
+
+function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
+  const width = 595.28;
+  const height = 841.89;
+  const streams = [];
+  const cmd = (value) => streams.push(value);
+  const topY = (top) => height - top;
+  const textAt = (value, x, top, size = 7, bold = false, color = "0.09 0.13 0.11") => {
+    cmd(`BT /${bold ? "F2" : "F1"} ${size} Tf ${color} rg ${x.toFixed(2)} ${topY(top).toFixed(2)} Td (${pdfSafe(value)}) Tj ET\n`);
+  };
+  const line = (x1, top1, x2, top2, color = "0.04 0.42 0.26", thickness = 1) => {
+    cmd(`${color} RG ${thickness} w ${x1.toFixed(2)} ${topY(top1).toFixed(2)} m ${x2.toFixed(2)} ${topY(top2).toFixed(2)} l S\n`);
+  };
+  const rect = (x, top, w, h, stroke = "0.85 0.78 0.53", fill = "0.969 0.953 0.910") => {
+    cmd(`${fill} rg ${stroke} RG ${x.toFixed(2)} ${(height-top-h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re B\n`);
+  };
+
+  cmd("0.969 0.953 0.910 rg 0 0 595.28 841.89 re f\n");
+
+  if (logo) {
+    const maxW = 54, maxH = 35;
+    const ratio = Math.min(maxW / logo.width, maxH / logo.height);
+    const drawW = logo.width * ratio, drawH = logo.height * ratio;
+    const x = (width - drawW) / 2;
+    const y = height - 24 - drawH;
+    cmd(`q ${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im1 Do Q\n`);
+    cmd(`q /GS1 gs 210 0 0 110 192 330 cm /Im1 Do Q\n`);
+  } else {
+    cmd("q /GS1 gs\n");
+    textAt(organizationName, 115, 445, 34, true, "0.04 0.31 0.23");
+    cmd("Q\n");
+  }
+
+  textAt(organizationName, 205, 66, 12.5, true, "0.025 0.306 0.231");
+  textAt("EMPLOYEE PAYSLIP", 238, 83, 8.3, true, "0.60 0.45 0.06");
+  line(53, 94, 542, 94, "0.04 0.42 0.26", 1.4);
+  textAt(`${row.periodCode || ""} - ${row.employeeNumber || ""}`, 244, 108, 6.8, false, "0.28 0.35 0.42");
+
+  const boxW = 238;
+  const boxH = 28;
+  detailItems.forEach(([label, value], index) => {
+    const col = index % 2;
+    const r = Math.floor(index / 2);
+    const x = 53 + col * 251;
+    const top = 119 + r * 34;
+    rect(x, top, boxW, boxH);
+    textAt(String(label).toUpperCase(), x + 6, top + 9, 5.3, false, "0.39 0.46 0.55");
+    textAt(value, x + 6, top + 21, 6.7, true);
+  });
+
+  let top = 259;
+  textAt("EARNINGS / DEDUCTIONS", 55, top, 6, true, "0.025 0.306 0.231");
+  textAt("AMOUNT", 493, top, 6, true, "0.025 0.306 0.231");
+  line(53, top + 5, 542, top + 5, "0.025 0.306 0.231", 1.2);
+  top += 15;
+  rows.forEach(([label, amount, strong], index) => {
+    const net = index === rows.length - 1;
+    if (net) line(53, top - 5, 542, top - 5, "0.60 0.45 0.06", 1.4);
+    textAt(label, 56, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
+    textAt(pdfMoney(amount, row.currency), 448, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
+    line(53, top + 9, 542, top + 9, net ? "0.60 0.45 0.06" : "0.85 0.87 0.89", net ? 1.4 : 0.35);
+    top += 15;
+  });
+
+  top += 4;
+  line(53, top, 542, top, "0.025 0.306 0.231", 1.4);
+  textAt("LOAN SUMMARY", 55, top + 13, 6, true, "0.60 0.45 0.06");
+  rect(53, top + 18, 489, 28);
+  textAt("RUNNING LOAN BALANCE", 59, top + 29, 5.3, false, "0.39 0.46 0.55");
+  textAt(pdfMoney(row.runningLoanBalance, row.currency), 431, top + 34, 6.8, true);
+
+  const footerTop = Math.min(790, top + 67);
+  line(53, footerTop, 542, footerTop, "0.58 0.64 0.72", 0.4);
+  textAt("Generated from an approved CHRiS payroll run.", 53, footerTop + 11, 5.4, false, "0.39 0.46 0.55");
+  textAt("Powered by CHRiS", 469, footerTop + 11, 5.4, false, "0.39 0.46 0.55");
+
+  const content = Buffer.from(streams.join(""), "binary");
+  const objects = [];
+  const add = (buffer) => { objects.push(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer, "binary")); return objects.length; };
+
+  const catalogId = add("");
+  const pagesId = add("");
+  const pageId = add("");
+  const fontId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const boldFontId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+  const gsId = add("<< /Type /ExtGState /ca 0.08 /CA 0.08 >>");
+  let imageId = null;
+  if (logo) {
+    const header = Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n`, "binary");
+    imageId = add(Buffer.concat([header, logo.bytes, Buffer.from("\nendstream", "binary")]));
+  }
+  const contentId = add(Buffer.concat([
+    Buffer.from(`<< /Length ${content.length} >>\nstream\n`, "binary"),
+    content,
+    Buffer.from("endstream", "binary"),
+  ]));
+
+  const resources = `<< /Font << /F1 ${fontId} 0 R /F2 ${boldFontId} 0 R >> /ExtGState << /GS1 ${gsId} 0 R >>${imageId ? ` /XObject << /Im1 ${imageId} 0 R >>` : ""} >>`;
+  objects[catalogId - 1] = Buffer.from(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  objects[pagesId - 1] = Buffer.from(`<< /Type /Pages /Kids [${pageId} 0 R] /Count 1 >>`);
+  objects[pageId - 1] = Buffer.from(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${width} ${height}] /Resources ${resources} /Contents ${contentId} 0 R >>`);
+
+  const chunks = [Buffer.from("%PDF-1.4\n%CHRiS\n", "binary")];
+  const offsets = [0];
+  let offset = chunks[0].length;
+  objects.forEach((object, i) => {
+    offsets.push(offset);
+    const prefix = Buffer.from(`${i + 1} 0 obj\n`, "binary");
+    const suffix = Buffer.from("\nendobj\n", "binary");
+    chunks.push(prefix, object, suffix);
+    offset += prefix.length + object.length + suffix.length;
+  });
+  const xrefOffset = offset;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  xref += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  chunks.push(Buffer.from(xref, "binary"));
+  return Buffer.concat(chunks);
+}
+
+async function buildPayslipEmail(row) {
   const details = row.details || {};
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
@@ -174,7 +344,9 @@ function buildPayslipEmail(row) {
     "Generated from an approved CHRiS payroll run.",
   ].join("\n");
 
-  const filename = `ZERMATT-Payslip-${String(row.periodCode || row.periodName || "Payroll").replace(/[^A-Za-z0-9._-]+/g, "-")}-${String(row.employeeNumber || "Employee").replace(/[^A-Za-z0-9._-]+/g, "-")}.html`;
+  const logoBinary = await fetchPayslipLogo(row);
+  const pdfBuffer = createPdfBuffer({ row, organizationName, detailItems, rows, logo: logoBinary });
+  const filename = `ZERMATT-Payslip-${String(row.periodCode || row.periodName || "Payroll").replace(/[^A-Za-z0-9._-]+/g, "-")}-${String(row.employeeNumber || "Employee").replace(/[^A-Za-z0-9._-]+/g, "-")}.pdf`;
   const emailIntro = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:794px;margin:0 auto 12px;color:#17211c"><p>Dear ${escapeHtml(row.employeeName)},</p><p>Your approved payroll payslip for <strong>${escapeHtml(row.periodName || row.periodCode)}</strong> is below. The same official payslip is attached for download, saving and printing.</p></div>`;
 
   return {
@@ -183,8 +355,8 @@ function buildPayslipEmail(row) {
     plainText,
     attachment: {
       filename,
-      content: Buffer.from(documentHtml, "utf8").toString("base64"),
-      contentType: "text/html; charset=utf-8",
+      content: pdfBuffer.toString("base64"),
+      contentType: "application/pdf",
     },
   };
 }
@@ -246,7 +418,7 @@ async function sendViaWebhook({ to, subject, html, plainText, row }) {
 
 async function sendApprovedPayslipEmail({ organizationId, actorUserId, payrollRunLineId, prismaClient = prisma }) {
   const row = await loadApprovedPayslip({ organizationId, payrollRunLineId, prismaClient });
-  const email = buildPayslipEmail(row);
+  const email = await buildPayslipEmail(row);
 
   let delivery = await sendViaResend({
     to: text(row.employeeEmail),
