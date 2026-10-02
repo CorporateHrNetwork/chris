@@ -245,7 +245,7 @@ function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
   const gsId = add("<< /Type /ExtGState /ca 0.08 /CA 0.08 >>");
   let imageId = null;
   if (logo) {
-    const header = Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n`, "binary");
+    const header = Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Mask [245 255 245 255 245 255] /Length ${logo.bytes.length} >>\nstream\n`, "binary");
     imageId = add(Buffer.concat([header, logo.bytes, Buffer.from("\nendstream", "binary")]));
   }
   const contentId = add(Buffer.concat([
