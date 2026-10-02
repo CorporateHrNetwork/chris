@@ -15,10 +15,14 @@ const migration = fs.readFileSync(
   "utf8"
 );
 
-test("ESS identity is derived from authenticated user employeeId and never a caller-supplied employee number", () => {
+test("ESS identity comes only from authenticated account linkage or unique same-tenant work-email reconciliation", () => {
   assert.ok(auth.includes("employeeId: user.employeeId || null"));
-  assert.ok(route.includes("id: req.auth.employeeId"));
+  assert.ok(route.includes("let employeeId = req.auth?.employeeId || null"));
+  assert.ok(route.includes("id: employeeId"));
   assert.ok(route.includes("organizationId: req.auth.organizationId"));
+  assert.ok(route.includes("matches.length === 1"));
+  assert.ok(route.includes("ESS_EMPLOYEE_LINK_AUTO_RECONCILED"));
+  assert.ok(route.includes('matchedBy: "work_email"'));
   assert.equal(route.includes("req.params.employeeNumber"), false);
   assert.equal(route.includes("req.query.employeeNumber"), false);
   assert.equal(route.includes("req.body.employeeNumber"), false);
