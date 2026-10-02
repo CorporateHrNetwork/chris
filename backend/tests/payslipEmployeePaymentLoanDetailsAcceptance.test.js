@@ -38,8 +38,8 @@ test("screen and print payslips retain CHRiS identity fields and move running lo
   for (const forbidden of ['label="Bank"', 'label="Account Name"', 'label="Account Number"', '["Bank",', '["Account Name",', '["Account Number",']) {
     assert.equal(ui.includes(forbidden), false, `Bank account details must not be rendered on payslips: ${forbidden}`);
   }
-  assert.ok(ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p>'));
-  assert.ok(!ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.employeeName)}</p>'));
+  assert.ok(ui.includes('<p class="reference">${escapeHtml(row.periodCode)}</p>'));
+  assert.equal(ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p>'), false);
 });
 
 test("preview keeps CHRiS screen language while print follows compact A4 off-white culture", () => {
