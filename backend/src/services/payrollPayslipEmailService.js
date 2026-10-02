@@ -163,6 +163,10 @@ function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
   const textAt = (value, x, top, size = 7, bold = false, color = "0.09 0.13 0.11") => {
     cmd(`BT /${bold ? "F2" : "F1"} ${size} Tf ${color} rg ${x.toFixed(2)} ${topY(top).toFixed(2)} Td (${pdfSafe(value)}) Tj ET\n`);
   };
+  const estimatedTextWidth = (value, size) => String(value ?? "").length * size * 0.52;
+  const textRight = (value, right, top, size = 7, bold = false, color = "0.09 0.13 0.11") => {
+    textAt(value, right - estimatedTextWidth(value, size), top, size, bold, color);
+  };
   const line = (x1, top1, x2, top2, color = "0.04 0.42 0.26", thickness = 1) => {
     cmd(`${color} RG ${thickness} w ${x1.toFixed(2)} ${topY(top1).toFixed(2)} m ${x2.toFixed(2)} ${topY(top2).toFixed(2)} l S\n`);
   };
@@ -186,10 +190,10 @@ function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
     cmd("Q\n");
   }
 
-  textAt(organizationName, 205, 66, 12.5, true, "0.025 0.306 0.231");
+  if (!logo) textAt(organizationName, 205, 66, 12.5, true, "0.025 0.306 0.231");
   textAt("EMPLOYEE PAYSLIP", 238, 83, 8.3, true, "0.60 0.45 0.06");
   line(53, 94, 542, 94, "0.04 0.42 0.26", 1.4);
-  textAt(`${row.periodCode || ""} - ${row.employeeNumber || ""}`, 244, 108, 6.8, false, "0.28 0.35 0.42");
+  textAt(row.periodCode || "", 267, 108, 6.8, false, "0.28 0.35 0.42");
 
   const boxW = 238;
   const boxH = 28;
@@ -205,14 +209,14 @@ function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
 
   let top = 259;
   textAt("EARNINGS / DEDUCTIONS", 55, top, 6, true, "0.025 0.306 0.231");
-  textAt("AMOUNT", 493, top, 6, true, "0.025 0.306 0.231");
+  textRight("AMOUNT", 538, top, 6, true, "0.025 0.306 0.231");
   line(53, top + 5, 542, top + 5, "0.025 0.306 0.231", 1.2);
   top += 15;
   rows.forEach(([label, amount, strong], index) => {
     const net = index === rows.length - 1;
     if (net) line(53, top - 5, 542, top - 5, "0.60 0.45 0.06", 1.4);
     textAt(label, 56, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
-    textAt(pdfMoney(amount, row.currency), 448, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
+    textRight(pdfMoney(amount, row.currency), 538, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
     line(53, top + 9, 542, top + 9, net ? "0.60 0.45 0.06" : "0.85 0.87 0.89", net ? 1.4 : 0.35);
     top += 15;
   });
@@ -222,7 +226,7 @@ function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
   textAt("LOAN SUMMARY", 55, top + 13, 6, true, "0.60 0.45 0.06");
   rect(53, top + 18, 489, 28);
   textAt("RUNNING LOAN BALANCE", 59, top + 29, 5.3, false, "0.39 0.46 0.55");
-  textAt(pdfMoney(row.runningLoanBalance, row.currency), 431, top + 34, 6.8, true);
+  textRight(pdfMoney(row.runningLoanBalance, row.currency), 536, top + 34, 6.8, true);
 
   const footerTop = Math.min(790, top + 67);
   line(53, footerTop, 542, footerTop, "0.58 0.64 0.72", 0.4);
