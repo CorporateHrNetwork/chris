@@ -47,3 +47,12 @@ test("Zermatt payslips fall back to the bundled official logo when tenant logoUr
   assert.ok(ui.includes('return "/zrt-logo.jpeg"'));
   assert.ok(ui.includes("const logoUrl = payslipLogoUrl(organization);"));
 });
+
+
+test("Zermatt payslip identity is logo-only when a logo is available", () => {
+  const ui = read("src/pages/payroll/PayrollIntegratedManaged.jsx");
+  assert.ok(ui.includes('!logoUrl && <div style={payslipPreviewOrganizationNameStyle}>{organizationName}</div>'));
+  assert.ok(ui.includes('mixBlendMode: "multiply"'));
+  assert.ok(ui.includes('<p class="reference">${escapeHtml(row.periodCode)}</p>'));
+  assert.equal(ui.includes('<p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p>'), false);
+});
