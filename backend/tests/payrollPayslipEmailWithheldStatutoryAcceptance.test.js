@@ -162,8 +162,9 @@ test("approved payslip email body is generated from the approved payroll calcula
   assert.match(result.subject, /Zermatt Liquor Limited Payslip/);
   assert.match(result.html, /Employee Payslip/i);
   assert.match(result.html, /Net Pay/);
-  assert.match(result.html, /Salary Advance Recovery/);
-  assert.match(result.html, /Loan Recovery/);
+  assert.match(result.plainText, /Salary Advance Recovery/);
+  assert.match(result.plainText, /Loan Recovery/);
+  assert.equal(result.attachment.contentType, "application/pdf");
   assert.match(result.plainText, /Generated from an approved CHRiS payroll run/);
 });
 
@@ -205,7 +206,9 @@ test("emailed approved payslip uses the authoritative print culture and includes
     "Powered by CHRiS",
     "attachments: attachment ?",
     'contentType: "application/pdf"',
-    "The same official payslip is attached for download, saving and printing.",
+    "The attached PDF is the official CHRiS payslip",
+    'content="light only"',
+    "background-image:linear-gradient(#f4f1e8,#f4f1e8)",
     "createPdfBuffer",
     "%PDF-1.4",
     ".pdf",
