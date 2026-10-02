@@ -206,6 +206,9 @@ test("emailed approved payslip uses the authoritative print culture and includes
     "attachments: attachment ?",
     'contentType: "text/html; charset=utf-8"',
     "The same official payslip is attached for download, saving and printing.",
+    "createPdfBuffer",
+    "%PDF-1.4",
+    ".pdf",
   ]) {
     assert.ok(service.includes(expected), `Missing canonical emailed-payslip control: ${expected}`);
   }
