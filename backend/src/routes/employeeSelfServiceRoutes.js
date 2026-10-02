@@ -15,10 +15,14 @@ function essError(code, message, statusCode = 400) {
   return error;
 }
 
-async function resolveSelf(req) {
+function ensureZermattOrganization(req) {
   if (req.auth?.organization?.slug !== "zermatt-liquor-limited") {
     throw essError("ESS_NOT_ENABLED", "Employee Self Service is currently enabled for Zermatt Liquor Limited.", 403);
   }
+}
+
+async function resolveSelf(req) {
+  ensureZermattOrganization(req);
   if (!req.auth?.employeeId) {
     throw essError(
       "ESS_EMPLOYEE_LINK_REQUIRED",
@@ -199,7 +203,7 @@ router.get("/overview", async (req, res) => {
 
 router.get("/birthdays", async (req, res) => {
   try {
-    await resolveSelf(req);
+    ensureZermattOrganization(req);
     const rows = await prisma.$queryRawUnsafe(
       `SELECT
           e."id",e."employeeNumber",e."firstName",e."middleName",e."lastName",
@@ -304,9 +308,10 @@ router.get("/leave", async (req, res) => {
 
 router.get("/news", async (req, res) => {
   try {
-    await resolveSelf(req);
+    ensureZermattOrganization(req);
     const rows = await prisma.$queryRawUnsafe(
-      `SELECT "id","category","title","summary","body","isPinned","publishAt","expireAt","createdAt"
+      `SELECT "id","category","title","summary","body","isPinned","publishAt","expireAt","createdAt",
+              "attachmentFileName","attachmentMimeType","attachmentSize"
          FROM "internal_news_posts"
         WHERE "organizationId"=$1
           AND "status"='PUBLISHED'
@@ -318,6 +323,33 @@ router.get("/news", async (req, res) => {
     return res.json({ status: "success", data: rows });
   } catch (error) {
     return sendError(res, error, "Unable to load employee news.");
+  }
+});
+
+router.get("/news/:id/attachment", async (req, res) => {
+  try {
+    ensureZermattOrganization(req);
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT "attachmentFileName","attachmentMimeType","attachmentSize","attachmentData"
+         FROM "internal_news_posts"
+        WHERE "organizationId"=$1
+          AND "id"=$2
+          AND "status"='PUBLISHED'
+          AND ("publishAt" IS NULL OR "publishAt" <= CURRENT_TIMESTAMP)
+          AND ("expireAt" IS NULL OR "expireAt" > CURRENT_TIMESTAMP)
+        LIMIT 1`,
+      req.auth.organizationId,
+      req.params.id
+    );
+    const row = rows[0];
+    if (!row || !row.attachmentData) throw essError("NEWS_ATTACHMENT_NOT_FOUND", "This news item has no available attachment.", 404);
+    res.setHeader("Content-Type", row.attachmentMimeType || "application/octet-stream");
+    res.setHeader("Content-Length", String(row.attachmentSize || row.attachmentData.length));
+    const safeName = String(row.attachmentFileName || "news-attachment").replace(/[\r\n"]/g, "_");
+    res.setHeader("Content-Disposition", `inline; filename="${safeName}"`);
+    return res.send(row.attachmentData);
+  } catch (error) {
+    return sendError(res, error, "Unable to load employee news attachment.");
   }
 });
 

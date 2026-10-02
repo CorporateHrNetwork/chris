@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../services/api";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const money = (value, currency = "NGN") =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value || 0));
@@ -38,28 +38,26 @@ export default function EmployeeSelfService() {
   const [error, setError] = useState("");
 
   const load = async () => {
-    try {
-      setLoading(true);
-      const [overviewResult, payslipResult, leaveResult, gratuityResult, newsResult, birthdayResult] = await Promise.all([
-        apiRequest("/api/ess/overview"),
-        apiRequest("/api/ess/payslips"),
-        apiRequest("/api/ess/leave"),
-        apiRequest("/api/ess/gratuity"),
-        apiRequest("/api/ess/news"),
-        apiRequest("/api/ess/birthdays"),
-      ]);
-      setOverview(overviewResult?.data || null);
-      setPayslips(payslipResult?.data || []);
-      setLeave(leaveResult?.data || null);
-      setGratuity(gratuityResult?.data || null);
-      setNews(newsResult?.data || []);
-      setBirthdays(birthdayResult?.data || []);
-      setError("");
-    } catch (requestError) {
-      setError(requestError?.message || "Unable to load Employee Self Service.");
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    const [overviewResult, payslipResult, leaveResult, gratuityResult, newsResult, birthdayResult] = await Promise.allSettled([
+      apiRequest("/api/ess/overview"),
+      apiRequest("/api/ess/payslips"),
+      apiRequest("/api/ess/leave"),
+      apiRequest("/api/ess/gratuity"),
+      apiRequest("/api/ess/news"),
+      apiRequest("/api/ess/birthdays"),
+    ]);
+
+    if (overviewResult.status === "fulfilled") setOverview(overviewResult.value?.data || null);
+    if (payslipResult.status === "fulfilled") setPayslips(payslipResult.value?.data || []);
+    if (leaveResult.status === "fulfilled") setLeave(leaveResult.value?.data || null);
+    if (gratuityResult.status === "fulfilled") setGratuity(gratuityResult.value?.data || null);
+    if (newsResult.status === "fulfilled") setNews(newsResult.value?.data || []);
+    if (birthdayResult.status === "fulfilled") setBirthdays(birthdayResult.value?.data || []);
+
+    const personalFailure = [overviewResult,payslipResult,leaveResult,gratuityResult].find((result)=>result.status==="rejected");
+    setError(personalFailure?.reason?.message || "");
+    setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
@@ -70,6 +68,15 @@ export default function EmployeeSelfService() {
       .then((result) => setLeave(result?.data || null))
       .catch((requestError) => setError(requestError?.message || "Unable to load selected leave ledger."));
   }, [selectedPolicy]);
+
+  const openNewsAttachment = async (item) => {
+    try {
+      const result = await apiDownload(`/api/ess/news/${item.id}/attachment`);
+      saveDownloadedBlob(result);
+    } catch (requestError) {
+      setError(requestError?.message || "Unable to download news attachment.");
+    }
+  };
 
   const logout = () => {
     const organization = JSON.parse(localStorage.getItem("chris_organization") || sessionStorage.getItem("chris_organization") || "{}");
@@ -246,7 +253,12 @@ export default function EmployeeSelfService() {
                   </div>
                   <h3 style={newsTitle}>{item.title}</h3>
                   {item.summary ? <p style={newsSummary}>{item.summary}</p> : null}
-                  <div style={newsBody}>{item.body}</div>
+                  {item.body ? <div style={newsBody}>{item.body}</div> : null}
+                  {item.attachmentFileName ? (
+                    <button type="button" style={newsAttachmentButton} onClick={() => openNewsAttachment(item)}>
+                      {String(item.attachmentMimeType || "").startsWith("image/") ? "View image" : "Open PDF"} · {item.attachmentFileName}
+                    </button>
+                  ) : null}
                 </article>
               ))}
             </div>
@@ -322,3 +334,5 @@ const birthdayPhoto={width:62,height:62,borderRadius:"50%",objectFit:"cover",bor
 const birthdayPhotoFallback={width:62,height:62,borderRadius:"50%",display:"grid",placeItems:"center",border:"3px solid #f2d166",background:"#0b281a",color:"#f2d166",fontSize:24,fontWeight:900};
 const birthdayName={display:"block",color:"#fff",fontSize:15};
 const birthdayRole={marginTop:4,color:"#e8e2c9",fontSize:12,lineHeight:1.4};
+
+const newsAttachmentButton={marginTop:12,border:"1px solid #8b7130",borderRadius:9,background:"rgba(212,175,55,.08)",color:"#f2d166",padding:"9px 11px",fontWeight:800,cursor:"pointer",textAlign:"left"};

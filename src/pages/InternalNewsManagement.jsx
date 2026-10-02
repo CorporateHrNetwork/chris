@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiRequest } from "../services/api";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const blank={category:"ANNOUNCEMENT",title:"",summary:"",body:"",status:"DRAFT",isPinned:false,expireAt:""};
 const categories=[
@@ -14,6 +14,7 @@ export default function InternalNewsManagement(){
   const [busy,setBusy]=useState("");
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
+  const [attachment,setAttachment]=useState(null);
 
   const load=async()=>{const r=await apiRequest("/api/news");setRows(r.data||[]);};
   useEffect(()=>{load().catch(e=>setError(e.message||"Unable to load internal news."));},[]);
@@ -22,10 +23,22 @@ export default function InternalNewsManagement(){
     e.preventDefault();
     try{
       setBusy("save");setError("");setMessage("");
-      const r=await apiRequest("/api/news",{method:"POST",body:form});
+      const payload=new FormData();
+      Object.entries(form).forEach(([key,value])=>payload.append(key,String(value ?? "")));
+      if(attachment) payload.append("attachment",attachment);
+      const r=await apiRequest("/api/news",{method:"POST",body:payload});
       setMessage(r.data?.status==="PUBLISHED"?"News published to Employee Self Service.":"News draft saved.");
-      setForm(blank);await load();
+      setForm(blank);setAttachment(null);e.currentTarget.reset();await load();
     }catch(err){setError(err.message||"Unable to save internal news.");}
+    finally{setBusy("");}
+  };
+
+  const downloadAttachment=async(row)=>{
+    try{
+      setBusy(row.id+"ATTACHMENT");setError("");
+      const result=await apiDownload(`/api/news/${row.id}/attachment`);
+      saveDownloadedBlob(result);
+    }catch(err){setError(err.message||"Unable to download news attachment.");}
     finally{setBusy("");}
   };
 
@@ -55,7 +68,13 @@ export default function InternalNewsManagement(){
       </div>
       <label style={field}><span>Title</span><input required value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label>
       <label style={field}><span>Summary</span><input value={form.summary} onChange={e=>setForm({...form,summary:e.target.value})}/></label>
-      <label style={field}><span>Message</span><textarea required rows={7} value={form.body} onChange={e=>setForm({...form,body:e.target.value})}/></label>
+      <label style={field}><span>Message</span><textarea rows={7} value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder="Add a message, or attach an approved PDF/image below."/></label>
+      <label style={attachmentField}>
+        <span>PDF / Image Attachment</span>
+        <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>setAttachment(e.target.files?.[0]||null)}/>
+        <small style={help}>Optional. PDF, JPG, PNG or WEBP · maximum 8 MB. Employees can open/download the published attachment from Zermatt News.</small>
+        {attachment?<strong style={{color:"#2EE98B"}}>{attachment.name}</strong>:null}
+      </label>
       <button type="submit" style={primary} disabled={busy==="save"}>{busy==="save"?"Saving…":form.status==="PUBLISHED"?"Publish to Employees":"Save Draft"}</button>
     </form>
 
@@ -63,15 +82,17 @@ export default function InternalNewsManagement(){
       <h2 style={{marginTop:0}}>News Register</h2>
       <div style={{overflowX:"auto"}}>
         <table style={table}>
-          <thead><tr><th>Category</th><th>Title</th><th>Status</th><th>Published</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Category</th><th>Title</th><th>Attachment</th><th>Status</th><th>Published</th><th>Actions</th></tr></thead>
           <tbody>{rows.length?rows.map(row=><tr key={row.id}>
-            <td>{String(row.category).replaceAll("_"," ")}</td><td><strong>{row.title}</strong>{row.isPinned?<span style={pin}>Pinned</span>:null}</td><td>{row.status}</td><td>{row.publishAt?new Date(row.publishAt).toLocaleString():"—"}</td>
+            <td>{String(row.category).replaceAll("_"," ")}</td><td><strong>{row.title}</strong>{row.isPinned?<span style={pin}>Pinned</span>:null}</td>
+            <td>{row.attachmentFileName?<button type="button" style={linkButton} disabled={busy===row.id+"ATTACHMENT"} onClick={()=>downloadAttachment(row)}>{row.attachmentFileName}</button>:"—"}</td>
+            <td>{row.status}</td><td>{row.publishAt?new Date(row.publishAt).toLocaleString():"—"}</td>
             <td><div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
               {row.status!=="PUBLISHED"?<button type="button" style={small} disabled={busy===row.id+"PUBLISHED"} onClick={()=>changeStatus(row.id,"PUBLISHED")}>Publish</button>:null}
               {row.status!=="DRAFT"?<button type="button" style={small} disabled={busy===row.id+"DRAFT"} onClick={()=>changeStatus(row.id,"DRAFT")}>Return to Draft</button>:null}
               {row.status!=="ARCHIVED"?<button type="button" style={small} disabled={busy===row.id+"ARCHIVED"} onClick={()=>changeStatus(row.id,"ARCHIVED")}>Archive</button>:null}
             </div></td>
-          </tr>):<tr><td colSpan="5">No internal news items yet.</td></tr>}</tbody>
+          </tr>):<tr><td colSpan="6">No internal news items yet.</td></tr>}</tbody>
         </table>
       </div>
     </div>
@@ -91,3 +112,7 @@ const table={width:"100%",borderCollapse:"collapse",minWidth:760};
 const pin={marginLeft:8,fontSize:10,padding:"2px 6px",borderRadius:999,background:"#D4AF37",color:"#07140D"};
 const errorBox={marginTop:14,padding:12,borderRadius:9,background:"rgba(185,28,28,.16)",color:"#FCA5A5"};
 const successBox={marginTop:14,padding:12,borderRadius:9,background:"rgba(46,233,139,.08)",color:"#2EE98B"};
+
+const attachmentField={...field,padding:14,border:"1px dashed rgba(212,175,55,.46)",borderRadius:10,background:"rgba(212,175,55,.05)"};
+const help={color:"#9DB8AA",fontWeight:500,lineHeight:1.5};
+const linkButton={border:0,background:"transparent",color:"#F2D166",padding:0,textDecoration:"underline",cursor:"pointer",fontWeight:800,textAlign:"left"};
