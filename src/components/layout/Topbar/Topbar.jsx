@@ -457,7 +457,7 @@ function Topbar() {
               setSearchOpen(false);
               if (next) loadNotifications();
             }}
-            style={{ width:"38px", height:"38px", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid rgba(212,175,55,0.30)", borderRadius:"9px", background:"linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.09))", color:"#D4AF37", cursor:"pointer", boxShadow:"0 0 14px rgba(212,175,55,0.06)" }}
+            style={{ position:"relative", width:"38px", height:"38px", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid rgba(212,175,55,0.30)", borderRadius:"9px", background:"linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.09))", color:"#D4AF37", cursor:"pointer", boxShadow:"0 0 14px rgba(212,175,55,0.06)" }}
           >
             <FaBell />
             {notificationItems.length > 0 && <span aria-label={`${notificationItems.reduce((sum,item)=>sum+(item.count||0),0)} notifications`} style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:999,background:"#D4AF37",color:"#07110c",fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #06110C"}}>{notificationItems.reduce((sum,item)=>sum+(item.count||0),0)}</span>}
