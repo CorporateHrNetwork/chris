@@ -127,9 +127,9 @@ test("withheld statutory obligations, approved payslip email and live preview co
   ]) assert.ok(remittanceUi.includes(expected), `withheld pool UI missing: ${expected}`);
 });
 
-test("approved payslip email body is generated from the approved payroll calculation", () => {
+test("approved payslip email body is generated from the approved payroll calculation", async () => {
   const { buildPayslipEmail } = require("../src/services/payrollPayslipEmailService");
-  const result = buildPayslipEmail({
+  const result = await buildPayslipEmail({
     id: "line-1",
     runId: "run-1",
     employeeId: "emp-1",
@@ -192,7 +192,7 @@ test("bulk email processes an entire approved run in bounded chunks and reports 
 
 
 test("emailed approved payslip uses the authoritative print culture and includes a downloadable attachment", () => {
-  const service = fs.readFileSync(path.join(root, "backend/src/services/payrollPayslipEmailService.js"), "utf8");
+  const service = fs.readFileSync(path.join(repoRoot, "backend/src/services/payrollPayslipEmailService.js"), "utf8");
   for (const expected of [
     "background:#f7f3e8",
     'class="watermark"',
@@ -204,7 +204,7 @@ test("emailed approved payslip uses the authoritative print culture and includes
     "Running Loan Balance",
     "Powered by CHRiS",
     "attachments: attachment ?",
-    'contentType: "text/html; charset=utf-8"',
+    'contentType: "application/pdf"',
     "The same official payslip is attached for download, saving and printing.",
     "createPdfBuffer",
     "%PDF-1.4",
