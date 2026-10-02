@@ -51,7 +51,7 @@ test("preview keeps CHRiS screen language while print follows compact A4 clean-w
     'color: "#F7D66A"',
     '@page{size:A4 portrait;margin:0}',
     '.payslip{position:relative;width:210mm;min-height:0;padding:10mm 14mm 9mm;overflow:visible;background:#ffffff}',
-    'th{background:#f7f3e8!important;color:#064e3b!important',
+    'th{background:#ffffff!important;color:#064e3b!important',
     'th,td{padding:5px 8px',
     '.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px',
   ]) assert.ok(ui.includes(expected), `Missing preview/one-page print control: ${expected}`);
