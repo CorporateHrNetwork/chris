@@ -59,7 +59,7 @@ test("preview keeps CHRiS screen language while print follows compact A4 off-whi
   assert.equal(ui.includes('.payslip{position:relative;width:210mm;min-height:0;padding:10mm 14mm 9mm;overflow:hidden'), false, "Print payslip content must not clip overflow to force a page fit.");
 });
 
-test("emailed payslip includes designation and running loan balance but excludes bank account details", () => {
+test("emailed payslip includes designation and running loan balance but excludes bank account details", async () => {
   const service = read("backend/src/services/payrollPayslipEmailService.js");
   assert.ok(service.includes('d."name" AS "designation"'));
   assert.ok(service.includes('"loanOutstandingBalance"'));
@@ -68,7 +68,7 @@ test("emailed payslip includes designation and running loan balance but excludes
   }
 
   const { buildPayslipEmail } = require("../src/services/payrollPayslipEmailService");
-  const output = buildPayslipEmail({
+  const output = await buildPayslipEmail({
     employeeNumber: "ZLL000001",
     employeeName: "Jane Mary Doe",
     employeeEmail: "jane@example.test",

@@ -103,7 +103,177 @@ async function loadApprovedPayslip({ organizationId, payrollRunLineId, prismaCli
   };
 }
 
-function buildPayslipEmail(row) {
+
+function pdfSafe(value) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function pdfMoney(value, currency = "NGN") {
+  const amount = Number(value || 0);
+  return `${currency || "NGN"} ${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function jpegDimensions(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 9 < buffer.length) {
+    if (buffer[offset] !== 0xff) { offset += 1; continue; }
+    const marker = buffer[offset + 1];
+    const length = buffer.readUInt16BE(offset + 2);
+    if ([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)) {
+      return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
+    }
+    if (!length || length < 2) break;
+    offset += 2 + length;
+  }
+  return null;
+}
+
+async function fetchPayslipLogo(row) {
+  const candidates = [
+    text(row.organizationLogoUrl),
+    text(process.env.CHRIS_APP_URL) ? `${text(process.env.CHRIS_APP_URL).replace(/\/$/, "")}/zrt-logo.jpeg` : "",
+  ].filter(Boolean);
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const contentType = text(response.headers.get("content-type")).toLowerCase();
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (!contentType.includes("jpeg") && !contentType.includes("jpg") && !(bytes[0] === 0xff && bytes[1] === 0xd8)) continue;
+      const dimensions = jpegDimensions(bytes);
+      if (!dimensions) continue;
+      return { bytes, ...dimensions };
+    } catch {}
+  }
+  return null;
+}
+
+function createPdfBuffer({ row, organizationName, detailItems, rows, logo }) {
+  const width = 595.28;
+  const height = 841.89;
+  const streams = [];
+  const cmd = (value) => streams.push(value);
+  const topY = (top) => height - top;
+  const textAt = (value, x, top, size = 7, bold = false, color = "0.09 0.13 0.11") => {
+    cmd(`BT /${bold ? "F2" : "F1"} ${size} Tf ${color} rg ${x.toFixed(2)} ${topY(top).toFixed(2)} Td (${pdfSafe(value)}) Tj ET\n`);
+  };
+  const line = (x1, top1, x2, top2, color = "0.04 0.42 0.26", thickness = 1) => {
+    cmd(`${color} RG ${thickness} w ${x1.toFixed(2)} ${topY(top1).toFixed(2)} m ${x2.toFixed(2)} ${topY(top2).toFixed(2)} l S\n`);
+  };
+  const rect = (x, top, w, h, stroke = "0.85 0.78 0.53", fill = "0.969 0.953 0.910") => {
+    cmd(`${fill} rg ${stroke} RG ${x.toFixed(2)} ${(height-top-h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re B\n`);
+  };
+
+  cmd("0.969 0.953 0.910 rg 0 0 595.28 841.89 re f\n");
+
+  if (logo) {
+    const maxW = 54, maxH = 35;
+    const ratio = Math.min(maxW / logo.width, maxH / logo.height);
+    const drawW = logo.width * ratio, drawH = logo.height * ratio;
+    const x = (width - drawW) / 2;
+    const y = height - 24 - drawH;
+    cmd(`q ${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im1 Do Q\n`);
+    cmd(`q /GS1 gs 210 0 0 110 192 330 cm /Im1 Do Q\n`);
+  } else {
+    cmd("q /GS1 gs\n");
+    textAt(organizationName, 115, 445, 34, true, "0.04 0.31 0.23");
+    cmd("Q\n");
+  }
+
+  textAt(organizationName, 205, 66, 12.5, true, "0.025 0.306 0.231");
+  textAt("EMPLOYEE PAYSLIP", 238, 83, 8.3, true, "0.60 0.45 0.06");
+  line(53, 94, 542, 94, "0.04 0.42 0.26", 1.4);
+  textAt(`${row.periodCode || ""} - ${row.employeeNumber || ""}`, 244, 108, 6.8, false, "0.28 0.35 0.42");
+
+  const boxW = 238;
+  const boxH = 28;
+  detailItems.forEach(([label, value], index) => {
+    const col = index % 2;
+    const r = Math.floor(index / 2);
+    const x = 53 + col * 251;
+    const top = 119 + r * 34;
+    rect(x, top, boxW, boxH);
+    textAt(String(label).toUpperCase(), x + 6, top + 9, 5.3, false, "0.39 0.46 0.55");
+    textAt(value, x + 6, top + 21, 6.7, true);
+  });
+
+  let top = 259;
+  textAt("EARNINGS / DEDUCTIONS", 55, top, 6, true, "0.025 0.306 0.231");
+  textAt("AMOUNT", 493, top, 6, true, "0.025 0.306 0.231");
+  line(53, top + 5, 542, top + 5, "0.025 0.306 0.231", 1.2);
+  top += 15;
+  rows.forEach(([label, amount, strong], index) => {
+    const net = index === rows.length - 1;
+    if (net) line(53, top - 5, 542, top - 5, "0.60 0.45 0.06", 1.4);
+    textAt(label, 56, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
+    textAt(pdfMoney(amount, row.currency), 448, top + 4, net ? 7.6 : 6.7, Boolean(strong || net), strong || net ? "0.025 0.306 0.231" : "0.09 0.13 0.11");
+    line(53, top + 9, 542, top + 9, net ? "0.60 0.45 0.06" : "0.85 0.87 0.89", net ? 1.4 : 0.35);
+    top += 15;
+  });
+
+  top += 4;
+  line(53, top, 542, top, "0.025 0.306 0.231", 1.4);
+  textAt("LOAN SUMMARY", 55, top + 13, 6, true, "0.60 0.45 0.06");
+  rect(53, top + 18, 489, 28);
+  textAt("RUNNING LOAN BALANCE", 59, top + 29, 5.3, false, "0.39 0.46 0.55");
+  textAt(pdfMoney(row.runningLoanBalance, row.currency), 431, top + 34, 6.8, true);
+
+  const footerTop = Math.min(790, top + 67);
+  line(53, footerTop, 542, footerTop, "0.58 0.64 0.72", 0.4);
+  textAt("Generated from an approved CHRiS payroll run.", 53, footerTop + 11, 5.4, false, "0.39 0.46 0.55");
+  textAt("Powered by CHRiS", 469, footerTop + 11, 5.4, false, "0.39 0.46 0.55");
+
+  const content = Buffer.from(streams.join(""), "binary");
+  const objects = [];
+  const add = (buffer) => { objects.push(Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer, "binary")); return objects.length; };
+
+  const catalogId = add("");
+  const pagesId = add("");
+  const pageId = add("");
+  const fontId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const boldFontId = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+  const gsId = add("<< /Type /ExtGState /ca 0.08 /CA 0.08 >>");
+  let imageId = null;
+  if (logo) {
+    const header = Buffer.from(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n`, "binary");
+    imageId = add(Buffer.concat([header, logo.bytes, Buffer.from("\nendstream", "binary")]));
+  }
+  const contentId = add(Buffer.concat([
+    Buffer.from(`<< /Length ${content.length} >>\nstream\n`, "binary"),
+    content,
+    Buffer.from("endstream", "binary"),
+  ]));
+
+  const resources = `<< /Font << /F1 ${fontId} 0 R /F2 ${boldFontId} 0 R >> /ExtGState << /GS1 ${gsId} 0 R >>${imageId ? ` /XObject << /Im1 ${imageId} 0 R >>` : ""} >>`;
+  objects[catalogId - 1] = Buffer.from(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  objects[pagesId - 1] = Buffer.from(`<< /Type /Pages /Kids [${pageId} 0 R] /Count 1 >>`);
+  objects[pageId - 1] = Buffer.from(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${width} ${height}] /Resources ${resources} /Contents ${contentId} 0 R >>`);
+
+  const chunks = [Buffer.from("%PDF-1.4\n%CHRiS\n", "binary")];
+  const offsets = [0];
+  let offset = chunks[0].length;
+  objects.forEach((object, i) => {
+    offsets.push(offset);
+    const prefix = Buffer.from(`${i + 1} 0 obj\n`, "binary");
+    const suffix = Buffer.from("\nendobj\n", "binary");
+    chunks.push(prefix, object, suffix);
+    offset += prefix.length + object.length + suffix.length;
+  });
+  const xrefOffset = offset;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  xref += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  chunks.push(Buffer.from(xref, "binary"));
+  return Buffer.concat(chunks);
+}
+
+async function buildPayslipEmail(row) {
   const details = row.details || {};
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
@@ -117,8 +287,14 @@ function buildPayslipEmail(row) {
   ];
   const organizationName = row.organizationLegalName || row.organizationName || "CHRiS Organization";
   const logoUrl = text(row.organizationLogoUrl);
+  const logo = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo" class="organization-logo">`
+    : "";
+  const watermark = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="" class="watermark">`
+    : `<div class="watermark-text">${escapeHtml(organizationName)}</div>`;
 
-  const amountRows = [
+  const rows = [
     ["Basic", structure.basic ?? row.baseSalary],
     ...Object.entries(structure)
       .filter(([key]) => key !== "basic")
@@ -134,47 +310,24 @@ function buildPayslipEmail(row) {
     ["Net Pay", row.netPreview, true],
   ];
 
-  const htmlRows = amountRows.map(([label, amount, strong], index) => {
-    const net = index === amountRows.length - 1;
-    return `<tr>
-      <td style="padding:9px 10px;border-bottom:1px solid #d9e2dd;${strong ? "font-weight:700;color:#064e3b;" : ""}">${escapeHtml(label)}</td>
-      <td style="padding:9px 10px;border-bottom:1px solid #d9e2dd;text-align:right;${strong ? "font-weight:700;color:#064e3b;" : ""}${net ? "border-top:2px solid #b08a1e;font-size:16px;" : ""}">${escapeHtml(money(amount, row.currency))}</td>
-    </tr>`;
-  }).join("");
+  const detailItems = [
+    ["Employee Name", row.employeeName || "—"],
+    ["Employee Number", row.employeeNumber || "—"],
+    ["Designation", row.designation || "—"],
+    ["Payroll Period", `${row.periodStart || "—"} → ${row.periodEnd || "—"}`],
+    ["Pay Date", row.payDate || "—"],
+    ["Worked Days", attendance.payableDays != null ? `${attendance.payableDays} / ${attendance.standardDays}` : "—"],
+    ["Attendance Source", text(attendance.source || attendance.sourceLabel) || "STANDARD DAYS DEFAULT"],
+    ["Status", row.runStatus === "APPROVED" ? "Approved Payroll" : row.runStatus || "—"],
+  ];
 
-  const logo = logoUrl
-    ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo" style="max-width:120px;max-height:64px;display:block;margin:0 auto 8px;object-fit:contain;">`
-    : "";
+  const ledgerRows = rows.map(([label, amount, strong], index) =>
+    `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(money(amount, row.currency))}</td></tr>`
+  ).join("");
 
-  const html = `
-  <div style="font-family:Arial,Helvetica,sans-serif;background:#f4f7f5;padding:24px;color:#17211c;">
-    <div style="max-width:760px;margin:0 auto;background:#fff;border:1px solid #d5dfd9;border-radius:12px;overflow:hidden;">
-      <div style="padding:22px;text-align:center;border-bottom:3px solid #087A43;">
-        ${logo}
-        <div style="font-size:21px;font-weight:800;color:#064e3b;">${escapeHtml(organizationName)}</div>
-        <div style="margin-top:6px;color:#9a7410;font-size:13px;font-weight:700;letter-spacing:.1em;">EMPLOYEE PAYSLIP</div>
-      </div>
-      <div style="padding:20px 22px;">
-        <p style="margin-top:0;">Dear ${escapeHtml(row.employeeName)},</p>
-        <p>Your approved payroll payslip for <strong>${escapeHtml(row.periodName || row.periodCode)}</strong> is shown below.</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-          <tr><td style="padding:6px 0;color:#64748b;">Employee Name</td><td style="padding:6px 0;text-align:right;font-weight:700;">${escapeHtml(row.employeeName || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Employee Number</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.employeeNumber || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Designation</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.designation || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Payroll Period</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.periodStart || "—")} → ${escapeHtml(row.periodEnd || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Pay Date</td><td style="padding:6px 0;text-align:right;">${escapeHtml(row.payDate || "—")}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Worked Days</td><td style="padding:6px 0;text-align:right;">${attendance.payableDays != null ? `${escapeHtml(attendance.payableDays)} / ${escapeHtml(attendance.standardDays)}` : "—"}</td></tr>
-          <tr><td style="padding:6px 0;color:#64748b;">Running Loan Balance</td><td style="padding:6px 0;text-align:right;">${escapeHtml(money(row.runningLoanBalance, row.currency))}</td></tr>
-        </table>
-        <table style="width:100%;border-collapse:collapse;border:1px solid #d9e2dd;">
-          <thead><tr><th style="padding:10px;background:#064e3b;color:#fff;text-align:left;">Earnings / Deductions</th><th style="padding:10px;background:#064e3b;color:#fff;text-align:right;">Amount</th></tr></thead>
-          <tbody>${htmlRows}</tbody>
-        </table>
-        <p style="margin:18px 0 0;color:#64748b;font-size:12px;">This payslip was generated from an approved CHRiS payroll run. Please contact HR if you have a payroll query.</p>
-      </div>
-      <div style="padding:12px 22px;background:#f8faf9;color:#64748b;font-size:11px;text-align:center;">CHRiS — People. Performance. Reward.</div>
-    </div>
-  </div>`;
+  const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(organizationName)} Payslip</title><style>
+    *{box-sizing:border-box}body{margin:0;background:#f7f3e8;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;width:100%;max-width:794px;min-height:0;margin:0 auto;padding:38px 53px 34px;overflow:hidden;background:#f7f3e8}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:8px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:92px;max-height:48px;margin:0 auto 5px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:17px;line-height:1.18}.document-title{margin:4px 0 0;color:#9a7410;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:absolute;z-index:0;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);pointer-events:none}.watermark-text{position:absolute;z-index:0;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;pointer-events:none}.reference{margin:8px 0 8px;text-align:center;color:#475569;font-size:8.5pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:9px}.detail{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#f7f3e8}.detail span{display:block;margin-bottom:2px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:8.2pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#f7f3e8}th,td{padding:5px 8px;border-bottom:1px solid #d8dee2;font-size:8.2pt}th{background:#f7f3e8;color:#064e3b;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:7pt;border-bottom:2px solid #064e3b}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:9.5pt}.payment-summary{margin-top:8px;padding-top:7px;border-top:2px solid #064e3b}.payment-title{margin:0 0 5px;color:#9a7410;font-size:7.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.payment-item{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#f7f3e8}.payment-item span{display:inline;margin-right:8px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.payment-item strong{font-size:8.2pt}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px;border-top:1px solid #94a3b8;color:#64748b;font-size:6.8pt}@media(max-width:640px){.payslip{padding:22px 18px}.details{grid-template-columns:1fr}}@media print{@page{size:A4 portrait;margin:0}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.payslip{width:210mm;padding:10mm 14mm 9mm}}
+  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${ledgerRows}</tbody></table><section class="payment-summary"><h3 class="payment-title">Loan Summary</h3><div class="payment-item"><span>Running Loan Balance</span><strong>${escapeHtml(money(row.runningLoanBalance, row.currency))}</strong></div></section><footer class="footer"><span>Generated from an approved CHRiS payroll run.</span><span>Powered by CHRiS</span></footer></div></article></body></html>`;
 
   const plainText = [
     organizationName,
@@ -186,19 +339,29 @@ function buildPayslipEmail(row) {
     `Pay Date: ${row.payDate || "—"}`,
     `Running Loan Balance: ${money(row.runningLoanBalance, row.currency)}`,
     "",
-    ...amountRows.map(([label, amount]) => `${label}: ${money(amount, row.currency)}`),
+    ...rows.map(([label, amount]) => `${label}: ${money(amount, row.currency)}`),
     "",
     "Generated from an approved CHRiS payroll run.",
   ].join("\n");
 
+  const logoBinary = await fetchPayslipLogo(row);
+  const pdfBuffer = createPdfBuffer({ row, organizationName, detailItems, rows, logo: logoBinary });
+  const filename = `ZERMATT-Payslip-${String(row.periodCode || row.periodName || "Payroll").replace(/[^A-Za-z0-9._-]+/g, "-")}-${String(row.employeeNumber || "Employee").replace(/[^A-Za-z0-9._-]+/g, "-")}.pdf`;
+  const emailIntro = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:794px;margin:0 auto 12px;color:#17211c"><p>Dear ${escapeHtml(row.employeeName)},</p><p>Your approved payroll payslip for <strong>${escapeHtml(row.periodName || row.periodCode)}</strong> is below. The same official payslip is attached for download, saving and printing.</p></div>`;
+
   return {
     subject: `${organizationName} Payslip — ${row.periodName || row.periodCode} — ${row.employeeNumber}`,
-    html,
+    html: emailIntro + documentHtml,
     plainText,
+    attachment: {
+      filename,
+      content: pdfBuffer.toString("base64"),
+      contentType: "application/pdf",
+    },
   };
 }
 
-async function sendViaResend({ to, subject, html, plainText }) {
+async function sendViaResend({ to, subject, html, plainText, attachment }) {
   const apiKey = text(process.env.RESEND_API_KEY);
   if (!apiKey) return null;
   const from = text(process.env.PAYROLL_EMAIL_FROM || process.env.RESEND_FROM) || "CHRiS Payroll <noreply@crnetwork.com.ng>";
@@ -214,6 +377,7 @@ async function sendViaResend({ to, subject, html, plainText }) {
       subject,
       html,
       text: plainText,
+      attachments: attachment ? [{ filename: attachment.filename, content: attachment.content, content_type: attachment.contentType }] : undefined,
     }),
   });
   let body = null;
@@ -254,13 +418,14 @@ async function sendViaWebhook({ to, subject, html, plainText, row }) {
 
 async function sendApprovedPayslipEmail({ organizationId, actorUserId, payrollRunLineId, prismaClient = prisma }) {
   const row = await loadApprovedPayslip({ organizationId, payrollRunLineId, prismaClient });
-  const email = buildPayslipEmail(row);
+  const email = await buildPayslipEmail(row);
 
   let delivery = await sendViaResend({
     to: text(row.employeeEmail),
     subject: email.subject,
     html: email.html,
     plainText: email.plainText,
+    attachment: email.attachment,
   });
   if (!delivery) {
     delivery = await sendViaWebhook({

@@ -127,9 +127,9 @@ test("withheld statutory obligations, approved payslip email and live preview co
   ]) assert.ok(remittanceUi.includes(expected), `withheld pool UI missing: ${expected}`);
 });
 
-test("approved payslip email body is generated from the approved payroll calculation", () => {
+test("approved payslip email body is generated from the approved payroll calculation", async () => {
   const { buildPayslipEmail } = require("../src/services/payrollPayslipEmailService");
-  const result = buildPayslipEmail({
+  const result = await buildPayslipEmail({
     id: "line-1",
     runId: "run-1",
     employeeId: "emp-1",
@@ -160,7 +160,7 @@ test("approved payslip email body is generated from the approved payroll calcula
   });
 
   assert.match(result.subject, /Zermatt Liquor Limited Payslip/);
-  assert.match(result.html, /EMPLOYEE PAYSLIP/);
+  assert.match(result.html, /Employee Payslip/i);
   assert.match(result.html, /Net Pay/);
   assert.match(result.html, /Salary Advance Recovery/);
   assert.match(result.html, /Loan Recovery/);
@@ -188,4 +188,28 @@ test("bulk email processes an entire approved run in bounded chunks and reports 
     "Email All Payslips to Employees",
     "bulkRunId",
   ]) assert.ok(payrollUi.includes(expected), `Missing email-all payslips UI control: ${expected}`);
+});
+
+
+test("emailed approved payslip uses the authoritative print culture and includes a downloadable attachment", () => {
+  const service = fs.readFileSync(path.join(repoRoot, "backend/src/services/payrollPayslipEmailService.js"), "utf8");
+  for (const expected of [
+    "background:#f7f3e8",
+    'class="watermark"',
+    'class="organization-logo"',
+    'class="organization-name"',
+    'class="document-title"',
+    'class="details"',
+    "Loan Summary",
+    "Running Loan Balance",
+    "Powered by CHRiS",
+    "attachments: attachment ?",
+    'contentType: "application/pdf"',
+    "The same official payslip is attached for download, saving and printing.",
+    "createPdfBuffer",
+    "%PDF-1.4",
+    ".pdf",
+  ]) {
+    assert.ok(service.includes(expected), `Missing canonical emailed-payslip control: ${expected}`);
+  }
 });
