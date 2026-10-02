@@ -61,3 +61,41 @@ test("ESS exposes a daily Zermatt birthday banner with employee profile imagery"
   assert.ok(ui.includes("Today's employee birthdays"));
   assert.ok(ui.includes("birthdayPhoto"));
 });
+
+
+test("internal news supports durable PDF and image attachments for employee consumption", () => {
+  const migration = fs.readFileSync(path.join(root, "backend/prisma/migrations/20261002184000_internal_news_attachments/migration.sql"), "utf8");
+  const adminUi = fs.readFileSync(path.join(root, "src/pages/InternalNewsManagement.jsx"), "utf8");
+  for (const expected of [
+    '"attachmentFileName"',
+    '"attachmentMimeType"',
+    '"attachmentSize"',
+    '"attachmentData"',
+  ]) assert.ok(migration.includes(expected), `Missing news attachment storage: ${expected}`);
+  for (const expected of [
+    'multer.memoryStorage()',
+    '"application/pdf"',
+    '"image/jpeg"',
+    '"image/png"',
+    '"image/webp"',
+    'upload.single("attachment")',
+    'router.get("/:id/attachment"',
+  ]) assert.ok(news.includes(expected), `Missing news attachment API control: ${expected}`);
+  for (const expected of [
+    'type="file"',
+    'application/pdf,image/jpeg,image/png,image/webp',
+    'new FormData()',
+    'PDF / Image Attachment',
+  ]) assert.ok(adminUi.includes(expected), `Missing Internal News attachment UI: ${expected}`);
+  assert.ok(ess.includes('router.get("/news/:id/attachment"'));
+  assert.ok(ui.includes("openNewsAttachment"));
+  assert.ok(ui.includes("Open PDF"));
+  assert.ok(ui.includes("View image"));
+});
+
+test("birthday banner and Zermatt News are not suppressed by an unlinked personal ESS profile", () => {
+  assert.ok(ess.includes("ensureZermattOrganization(req)"));
+  assert.ok(ui.includes("Promise.allSettled"));
+  assert.ok(ui.includes('apiRequest("/api/ess/news")'));
+  assert.ok(ui.includes('apiRequest("/api/ess/birthdays")'));
+});
