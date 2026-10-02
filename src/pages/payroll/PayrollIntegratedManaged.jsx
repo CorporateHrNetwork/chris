@@ -102,6 +102,7 @@ function ExecuteIntegrated() {
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [emailNotice, setEmailNotice] = useState("");
   const [branchView, setBranchView] = useState("");
   const [selectedPayslip, setSelectedPayslip] = useState(null);
   const payslipPreviewRef = useRef(null);
@@ -220,6 +221,9 @@ function ExecuteIntegrated() {
     try {
       setBusy(`email-${row.id}`); setError(""); setMessage("");
       const response = await apiRequest(`/api/payroll/payslips/${row.id}/email`, { method: "POST" });
+      if (response?.data?.status === "SENT") {
+        setEmailNotice(`Email sent successfully to ${response?.data?.email || row.employeeEmail || row.employeeNumber}.`);
+      }
       setMessage(response?.message || `Payslip email action completed for ${row.employeeNumber}.`);
     } catch (err) {
       setError(err.message || "Unable to email approved payslip.");
@@ -227,6 +231,12 @@ function ExecuteIntegrated() {
       setBusy("");
     }
   };
+
+  useEffect(() => {
+    if (!emailNotice) return undefined;
+    const timer = window.setTimeout(() => setEmailNotice(""), 7000);
+    return () => window.clearTimeout(timer);
+  }, [emailNotice]);
 
   useEffect(() => {
     if (!error) return undefined;
@@ -255,6 +265,7 @@ function ExecuteIntegrated() {
       </Panel>
 
       <Feedback error={periodsError || error || (!policyLoading && policyData?.configured === false ? "Nigeria payroll policy is not configured." : "")} />
+      {emailNotice && <div role="status" aria-live="polite" style={emailSuccessToastStyle}>✓ {emailNotice}</div>}
       {message && <div style={infoStyle}>{message}</div>}
 
       <Panel title="Payroll Runs">
@@ -612,6 +623,7 @@ function ApprovedPayslips() {
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [emailNotice, setEmailNotice] = useState("");
   const [emailError, setEmailError] = useState("");
   const [bulkRunId, setBulkRunId] = useState("");
   const approvedPayslipRef = useRef(null);
@@ -634,6 +646,9 @@ function ApprovedPayslips() {
     try {
       setBusy(`email-${row.id}`); setEmailError(""); setFeedback("");
       const response = await apiRequest(`/api/payroll/payslips/${row.id}/email`, { method: "POST" });
+      if (response?.data?.status === "SENT") {
+        setEmailNotice(`Email sent successfully to ${response?.data?.email || row.employeeEmail || row.employeeNumber}.`);
+      }
       setFeedback(response?.message || `Payslip email action completed for ${row.employeeNumber}.`);
     } catch (err) {
       setEmailError(err.message || "Unable to email approved payslip.");
@@ -659,6 +674,12 @@ function ApprovedPayslips() {
     }
   };
 
+
+  useEffect(() => {
+    if (!emailNotice) return undefined;
+    const timer = window.setTimeout(() => setEmailNotice(""), 7000);
+    return () => window.clearTimeout(timer);
+  }, [emailNotice]);
 
   useEffect(() => {
     if (!bulkRunId && approvedRuns.length) setBulkRunId(approvedRuns[0].id);
@@ -764,6 +785,7 @@ function ApprovedPayslips() {
         </EmployeeBatchSelector>
       </Panel>
       <Feedback error={error || emailError} />
+      {emailNotice && <div role="status" aria-live="polite" style={emailSuccessToastStyle}>✓ {emailNotice}</div>}
       {feedback && <div style={infoStyle}>{feedback}</div>}
       {selected && <div ref={approvedPayslipRef} tabIndex={-1} style={payslipScrollAnchorStyle}>
         <PayslipCard
@@ -946,7 +968,7 @@ async function printPayslip(row, organization = {}) {
   try {
     printDocument.open();
     printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title></title><style>
-    @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#f7f3e8;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;width:210mm;min-height:0;padding:10mm 14mm 9mm;overflow:visible;background:#f7f3e8}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:8px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:92px;max-height:48px;margin:0 auto 5px;object-fit:contain;mix-blend-mode:multiply}.organization-name{margin:0;color:#064e3b;font-size:17px;line-height:1.18}.document-title{margin:4px 0 0;color:#9a7410;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:8px 0 8px;text-align:center;color:#475569;font-size:8.5pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:9px}.detail{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#f7f3e8}.detail span{display:block;margin-bottom:2px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:8.2pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#f7f3e8}th,td{padding:5px 8px;border-bottom:1px solid #d8dee2;font-size:8.2pt}th{background:#f7f3e8!important;color:#064e3b!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:7pt;border-bottom:2px solid #064e3b;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:9.5pt}.payment-summary{margin-top:8px;padding-top:7px;border-top:2px solid #064e3b}.payment-title{margin:0 0 5px;color:#9a7410;font-size:7.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.payment-grid{display:grid;grid-template-columns:1fr;gap:5px}.payment-item{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#f7f3e8}.payment-item span{display:inline;margin-right:8px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.payment-item strong{font-size:8.2pt;overflow-wrap:anywhere}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px;border-top:1px solid #94a3b8;color:#64748b;font-size:6.8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+    @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#ffffff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;width:210mm;min-height:0;padding:10mm 14mm 9mm;overflow:visible;background:#ffffff}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:8px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:92px;max-height:48px;margin:0 auto 5px;object-fit:contain;mix-blend-mode:multiply}.organization-name{margin:0;color:#064e3b;font-size:17px;line-height:1.18}.document-title{margin:4px 0 0;color:#9a7410;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:8px 0 8px;text-align:center;color:#475569;font-size:8.5pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:9px}.detail{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#ffffff}.detail span{display:block;margin-bottom:2px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:8.2pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#ffffff}th,td{padding:5px 8px;border-bottom:1px solid #d8dee2;font-size:8.2pt}th{background:#ffffff!important;color:#064e3b!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:7pt;border-bottom:2px solid #064e3b;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:9.5pt}.payment-summary{margin-top:8px;padding-top:7px;border-top:2px solid #064e3b}.payment-title{margin:0 0 5px;color:#9a7410;font-size:7.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.payment-grid{display:grid;grid-template-columns:1fr;gap:5px}.payment-item{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#ffffff}.payment-item span{display:inline;margin-right:8px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.payment-item strong{font-size:8.2pt;overflow-wrap:anywhere}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px;border-top:1px solid #94a3b8;color:#64748b;font-size:6.8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
   </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}${organizationTitle}<h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><section class="payment-summary"><h3 class="payment-title">Loan Summary</h3><div class="payment-grid">${paymentItems.map(([label, value]) => `<div class="payment-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div></section><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article></body></html>`);
     printDocument.close();
 
@@ -1060,6 +1082,7 @@ const tdStyle = { padding: "10px", borderBottom: "1px solid rgba(255,255,255,.08
 const badgeStyle = { display: "inline-block", padding: "4px 7px", borderRadius: 999, border: "1px solid rgba(212,175,55,.35)", color: "#F7D66A", fontSize: 10, fontWeight: 900, whiteSpace: "nowrap" };
 const errorStyle = { marginTop: 14, padding: 12, borderRadius: 10, background: "rgba(127,29,29,.35)", border: "1px solid rgba(248,113,113,.45)", color: "#FCA5A5" };
 const infoStyle = { marginTop: 14, padding: 12, borderRadius: 10, background: "rgba(14,71,48,.42)", border: "1px solid rgba(212,175,55,.35)", color: "#C7D3CC", lineHeight: 1.6 };
+const emailSuccessToastStyle = { position:"fixed", top:92, right:24, zIndex:1200, maxWidth:420, padding:"13px 16px", borderRadius:11, background:"#0D5B3A", border:"1px solid #2EE98B", color:"#F4FFF8", boxShadow:"0 16px 38px rgba(0,0,0,.35)", fontWeight:800, lineHeight:1.45 };
 const loadingStyle = { padding: 14, color: "#C7D3CC" };
 const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 };
 const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.25)", borderRadius: 10, background: "rgba(255,255,255,.04)" };
