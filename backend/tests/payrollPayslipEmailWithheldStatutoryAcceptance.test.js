@@ -160,7 +160,7 @@ test("approved payslip email body is generated from the approved payroll calcula
   });
 
   assert.match(result.subject, /Zermatt Liquor Limited Payslip/);
-  assert.match(result.html, /EMPLOYEE PAYSLIP/);
+  assert.match(result.html, /Employee Payslip/i);
   assert.match(result.html, /Net Pay/);
   assert.match(result.html, /Salary Advance Recovery/);
   assert.match(result.html, /Loan Recovery/);
