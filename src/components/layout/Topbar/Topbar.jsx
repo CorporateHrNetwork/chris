@@ -2,7 +2,14 @@ import {
   FaBell,
   FaSearch,
   FaBars,
+  FaClipboardCheck,
+  FaCalendarAlt,
+  FaMoneyCheckAlt,
+  FaBullhorn,
+  FaHeadset,
 } from "react-icons/fa";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import avatar from "../../../assets/images/avatar.png";
 import BranchContextSelector from "../../BranchContextSelector";
@@ -12,9 +19,88 @@ import {
   getStoredOrganization,
 } from "../../../services/api";
 
+const TOPBAR_SEARCH_ITEMS = [
+  ["Dashboard", "/"],
+  ["Employees", "/employees"],
+  ["Employee Directory", "/employees/directory"],
+  ["Employee Profiles", "/employees/profiles"],
+  ["Onboarding", "/employees/onboarding"],
+  ["Employee Analytics", "/employees/analytics"],
+  ["Transfers", "/employees/transfers"],
+  ["Promotions", "/employees/promotions"],
+  ["Exits", "/employees/exits"],
+  ["Internal News", "/employees/news"],
+  ["Recruitment", "/recruitment"],
+  ["Attendance", "/attendance"],
+  ["Worked Days", "/attendance/worked-days"],
+  ["Overtime", "/attendance/overtime"],
+  ["Public Holidays", "/attendance/public-holidays"],
+  ["Leave", "/leave"],
+  ["Leave Requests", "/leave/requests"],
+  ["Leave Balances", "/leave/balances"],
+  ["Leave Policies", "/leave/policies"],
+  ["Payroll", "/payroll"],
+  ["Execute Payroll", "/payroll?workspace=execute"],
+  ["Salary Rates", "/payroll?workspace=rates"],
+  ["Allowances", "/payroll?workspace=allowances"],
+  ["Deductions", "/payroll?workspace=deductions"],
+  ["Payslips", "/payroll?workspace=payslips"],
+  ["Payroll Approvals", "/payroll?workspace=approvals"],
+  ["Loans", "/loans"],
+  ["Salary Advances", "/payroll?workspace=salary-advances"],
+  ["Training", "/training"],
+  ["Reports", "/reports"],
+  ["Statutories", "/statutories"],
+  ["Remittances", "/statutories/remittances"],
+  ["Documents", "/documents"],
+  ["Organization", "/organization"],
+  ["Cost Centres", "/organization/cost-centres"],
+  ["Settings", "/settings"],
+  ["Users & Roles", "/settings"],
+  ["Support", "/support"],
+];
+
+const TOPBAR_ACTIONS = [
+  { label: "Approval Inbox", description: "Review workflow items requiring action.", path: "/workflows/approval-inbox", icon: <FaClipboardCheck /> },
+  { label: "Leave Requests", description: "Review employee leave requests and approvals.", path: "/leave/requests", icon: <FaCalendarAlt /> },
+  { label: "Payroll Approvals", description: "Open payroll approval controls.", path: "/payroll?workspace=approvals", icon: <FaMoneyCheckAlt /> },
+  { label: "Internal News", description: "Publish or review Zermatt employee news.", path: "/employees/news", icon: <FaBullhorn /> },
+  { label: "Support Requests", description: "Open CHRiS support requests.", path: "/support", icon: <FaHeadset /> },
+];
+
 function Topbar() {
+  const navigate = useNavigate();
   const user = getStoredUser();
   const organization = getStoredOrganization();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const topbarRef = useRef(null);
+
+  const searchResults = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return [];
+    return TOPBAR_SEARCH_ITEMS
+      .filter(([label, path]) => `${label} ${path}`.toLowerCase().includes(term))
+      .slice(0, 8);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (topbarRef.current && !topbarRef.current.contains(event.target)) {
+        setSearchOpen(false);
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
+  const openSearchResult = (path) => {
+    setSearchQuery("");
+    setSearchOpen(false);
+    navigate(path);
+  };
 
   const today = new Date().toLocaleDateString("en-NG", {
     weekday: "long",
@@ -35,6 +121,7 @@ function Topbar() {
 
   return (
     <header
+      ref={topbarRef}
       className="chris-topbar-shell"
       style={{
         height: "78px",
@@ -246,58 +333,63 @@ function Topbar() {
       >
         <BranchContextSelector compact />
 
-        <div
-          className="chris-topbar-search"
-          style={{
-            width: "220px",
-            maxWidth: "22vw",
-            display: "flex",
-            alignItems: "center",
-            padding: "9px 12px",
-            border: "1px solid rgba(8,122,67,0.42)",
-            borderRadius: "10px",
-            background: "rgba(2,10,7,0.56)",
-            boxShadow:
-              "inset 0 0 16px rgba(8,122,67,0.04), 0 0 12px rgba(0,0,0,0.10)",
-          }}
-        >
-          <FaSearch size={13} color="#D4AF37" />
-          <input
-            type="text"
-            placeholder="Search CHRIS..."
-            style={{
-              width: "100%",
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              marginLeft: "9px",
-              color: "#F8FAF9",
-              fontSize: "13px",
-            }}
-          />
+        <div className="chris-topbar-search" style={{ width:"220px", maxWidth:"22vw", position:"relative" }}>
+          <div style={{ display:"flex", alignItems:"center", padding:"9px 12px", border:"1px solid rgba(8,122,67,0.42)", borderRadius:"10px", background:"rgba(2,10,7,0.56)", boxShadow:"inset 0 0 16px rgba(8,122,67,0.04), 0 0 12px rgba(0,0,0,0.10)" }}>
+            <FaSearch size={13} color="#D4AF37" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => { setSearchQuery(event.target.value); setSearchOpen(true); setNotificationsOpen(false); }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSearchOpen(false);
+                if (event.key === "Enter" && searchResults[0]) openSearchResult(searchResults[0][1]);
+              }}
+              placeholder="Search CHRiS..."
+              aria-label="Search CHRiS navigation"
+              style={{ width:"100%", border:"none", outline:"none", background:"transparent", marginLeft:"9px", color:"#F8FAF9", fontSize:"13px" }}
+            />
+          </div>
+          {searchOpen && searchQuery.trim() && (
+            <div role="listbox" aria-label="CHRiS search results" style={{ position:"absolute", top:"46px", left:0, right:0, minWidth:280, maxHeight:320, overflowY:"auto", background:"#06110C", border:"1px solid rgba(212,175,55,.35)", borderRadius:10, boxShadow:"0 16px 36px rgba(0,0,0,.48)", zIndex:80, padding:6 }}>
+              {searchResults.length ? searchResults.map(([label,path]) => (
+                <button key={`${label}-${path}`} type="button" onClick={() => openSearchResult(path)} style={{ width:"100%", border:0, borderBottom:"1px solid rgba(255,255,255,.05)", background:"transparent", color:"#DCEBE3", textAlign:"left", padding:"10px 11px", cursor:"pointer", fontSize:12 }}>
+                  <strong style={{ color:"#F7FAF8" }}>{label}</strong>
+                  <span style={{ display:"block", marginTop:3, color:"#7FA391", fontSize:10 }}>{path}</span>
+                </button>
+              )) : <div style={{ padding:12, color:"#9DB8AA", fontSize:12 }}>No matching CHRiS workspace.</div>}
+            </div>
+          )}
         </div>
 
-        <button
-          type="button"
-          title="Notifications"
-          className="chris-topbar-notifications"
-          style={{
-            width: "38px",
-            height: "38px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            border: "1px solid rgba(212,175,55,0.30)",
-            borderRadius: "9px",
-            background:
-              "linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.09))",
-            color: "#D4AF37",
-            cursor: "pointer",
-            boxShadow: "0 0 14px rgba(212,175,55,0.06)",
-          }}
-        >
-          <FaBell />
-        </button>
+        <div className="chris-topbar-notifications" style={{ position:"relative" }}>
+          <button
+            type="button"
+            title="Notifications and actions"
+            aria-label="Open notifications and actions"
+            aria-expanded={notificationsOpen}
+            onClick={() => { setNotificationsOpen((current) => !current); setSearchOpen(false); }}
+            style={{ width:"38px", height:"38px", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid rgba(212,175,55,0.30)", borderRadius:"9px", background:"linear-gradient(145deg, rgba(255,255,255,0.035), rgba(8,122,67,0.09))", color:"#D4AF37", cursor:"pointer", boxShadow:"0 0 14px rgba(212,175,55,0.06)" }}
+          >
+            <FaBell />
+          </button>
+          {notificationsOpen && (
+            <div style={{ position:"absolute", top:46, right:0, width:330, background:"#06110C", border:"1px solid rgba(212,175,55,.35)", borderRadius:12, boxShadow:"0 18px 42px rgba(0,0,0,.52)", zIndex:80, overflow:"hidden" }}>
+              <div style={{ padding:"12px 14px", borderBottom:"1px solid rgba(212,175,55,.18)" }}>
+                <strong style={{ display:"block", color:"#F7D66A", fontSize:13 }}>Notifications & Actions</strong>
+                <span style={{ display:"block", marginTop:4, color:"#8FA79A", fontSize:10, lineHeight:1.4 }}>Quick access to CHRiS items that commonly require attention.</span>
+              </div>
+              <div style={{ padding:6 }}>
+                {TOPBAR_ACTIONS.map((item) => (
+                  <button key={item.path} type="button" onClick={() => { setNotificationsOpen(false); navigate(item.path); }} style={{ width:"100%", display:"grid", gridTemplateColumns:"28px 1fr", gap:9, alignItems:"start", border:0, borderBottom:"1px solid rgba(255,255,255,.05)", background:"transparent", color:"#DCEBE3", padding:"10px 9px", textAlign:"left", cursor:"pointer" }}>
+                    <span style={{ color:"#D4AF37", fontSize:14, paddingTop:2 }}>{item.icon}</span>
+                    <span><strong style={{ display:"block", color:"#F7FAF8", fontSize:12 }}>{item.label}</strong><small style={{ display:"block", marginTop:3, color:"#8FA79A", lineHeight:1.35 }}>{item.description}</small></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div
           className="chris-topbar-user"
