@@ -4,6 +4,7 @@ import App from './App.jsx'
 import AppErrorBoundary from './components/system/AppErrorBoundary.jsx'
 import "./styles/global.css";
 import "./styles/chris-visual-standard-v2.css";
+import "./styles/zermatt-motion.css";
 
 import "./styles/chris-dashboard.css";
 import "./styles/chris-route-theme.js";
