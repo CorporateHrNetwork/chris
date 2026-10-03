@@ -1,0 +1,9 @@
+/* Shared Zermatt-style motion language for CHRiS */
+img{will-change:transform;transition:transform .7s cubic-bezier(.22,1,.36,1),filter .7s ease}
+main [class*="card"],main [class*="Card"],main [class*="panel"],main [class*="Panel"],main [class*="summary"],main [class*="metric"],main [class*="stat-"]{transition:transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .4s ease;will-change:transform}
+main [class*="card"]:hover,main [class*="Card"]:hover,main [class*="panel"]:hover,main [class*="Panel"]:hover,main [class*="summary"]:hover,main [class*="metric"]:hover,main [class*="stat-"]:hover{transform:translateY(-5px);box-shadow:0 16px 34px rgba(0,0,0,.18)}
+main [class*="card"]:hover img,main [class*="Card"]:hover img,main [class*="panel"]:hover img,main [class*="Panel"]:hover img,main [class*="banner"]:hover img{transform:scale(1.045)}
+main [class*="banner"],main [class*="Banner"],main [class*="hero"],main [class*="Hero"]{overflow:hidden}
+main [class*="banner"] img,main [class*="Banner"] img,main [class*="hero"] img,main [class*="Hero"] img{animation:zermattKenBurns 10s ease-in-out infinite alternate;transform-origin:center}
+@keyframes zermattKenBurns{0%{transform:scale(1)}100%{transform:scale(1.035)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}main [class*="card"]:hover,main [class*="Card"]:hover,main [class*="panel"]:hover,main [class*="Panel"]:hover,main [class*="summary"]:hover,main [class*="metric"]:hover,main [class*="stat-"]:hover{transform:none}}
