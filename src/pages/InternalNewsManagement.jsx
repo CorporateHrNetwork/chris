@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const blank={category:"ANNOUNCEMENT",title:"",summary:"",body:"",status:"DRAFT",isPinned:false,expireAt:""};
@@ -15,6 +15,7 @@ export default function InternalNewsManagement(){
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
   const [attachment,setAttachment]=useState(null);
+  const formRef=useRef(null);
 
   const load=async()=>{const r=await apiRequest("/api/news");setRows(r.data||[]);};
   useEffect(()=>{load().catch(e=>setError(e.message||"Unable to load internal news."));},[]);
@@ -28,7 +29,7 @@ export default function InternalNewsManagement(){
       if(attachment) payload.append("attachment",attachment);
       const r=await apiRequest("/api/news",{method:"POST",body:payload});
       setMessage(r.data?.status==="PUBLISHED"?"News published to Employee Self Service.":"News draft saved.");
-      setForm(blank);setAttachment(null);e.currentTarget.reset();await load();
+      setForm(blank);setAttachment(null);formRef.current?.reset();await load();
     }catch(err){setError(err.message||"Unable to save internal news.");}
     finally{setBusy("");}
   };
@@ -59,7 +60,7 @@ export default function InternalNewsManagement(){
     {error?<div style={errorBox}>{error}</div>:null}
     {message?<div style={successBox}>{message}</div>:null}
 
-    <form onSubmit={submit} style={panel}>
+    <form ref={formRef} onSubmit={submit} style={panel}>
       <div style={grid}>
         <label style={field}><span>Category</span><select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{categories.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
         <label style={field}><span>Status</span><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="DRAFT">Draft</option><option value="PUBLISHED">Publish now</option></select></label>
