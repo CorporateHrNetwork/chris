@@ -99,3 +99,12 @@ test("birthday banner and Zermatt News are not suppressed by an unlinked persona
   assert.ok(ui.includes('apiRequest("/api/ess/news")'));
   assert.ok(ui.includes('apiRequest("/api/ess/birthdays")'));
 });
+
+test("Internal News form resets safely after an async save", () => {
+  const adminUi = fs.readFileSync(path.join(root, "src/pages/InternalNewsManagement.jsx"), "utf8");
+  assert.ok(adminUi.includes("useRef"));
+  assert.ok(adminUi.includes("const formRef=useRef(null)"));
+  assert.ok(adminUi.includes("<form ref={formRef}"));
+  assert.ok(adminUi.includes("formRef.current?.reset()"));
+  assert.ok(!adminUi.includes("e.currentTarget.reset()"));
+});
