@@ -54,6 +54,7 @@ const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes"
 const documentRoutes = require("./routes/documentRoutes");
 const operationalControlRoutes = require("./routes/operationalControlRoutes");
 const eosbRoutes = require("./routes/eosbRoutes");
+const chrisAutomationRoutes = require("./routes/chrisAutomationRoutes");
 const employeeSelfServiceRoutes = require("./routes/employeeSelfServiceRoutes");
 const employeeNewsRoutes = require("./routes/employeeNewsRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
@@ -94,6 +95,7 @@ app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
+app.use("/api/chris-automation", chrisAutomationRoutes);
 app.use("/api/ess", employeeSelfServiceRoutes);
 app.use("/api/news", employeeNewsRoutes);
 

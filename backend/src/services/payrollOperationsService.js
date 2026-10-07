@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const exitSettlementService = require("./exitSettlementService");
 const { confirmPayrollObligations } = require("./statutoryObligationService");
 const { postDeductionInstallments } = require("./zermattVariablePayrollService");
 
@@ -641,7 +642,7 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
   if (period.status === "CLOSED") throw operationalError("PAYROLL_PERIOD_CLOSED", "Closed payroll periods cannot be recalculated.", 409);
 
   const employees = await prismaClient.employee.findMany({
-    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES } },
+    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES }, exitProcesses: { none: { status: { in: ["IN_PROGRESS", "READY_TO_COMPLETE"] }, lastWorkingDay: { gte: period.periodStart, lte: period.periodEnd } } } },
     select: {
       id: true,
       employeeNumber: true,
@@ -657,6 +658,9 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
     },
     orderBy: { employeeNumber: "asc" },
   });
+  const exitProcessesForPeriod = await prismaClient.employeeExitProcess.findMany({ where: { organizationId, status: { in: ["IN_PROGRESS", "READY_TO_COMPLETE"] }, lastWorkingDay: { gte: period.periodStart, lte: period.periodEnd } }, select: { id: true, employeeId: true, lastWorkingDay: true } });
+  for (const exitProcess of exitProcessesForPeriod) { try { await exitSettlementService.calculateSettlement({ organizationId, actorUserId, exitProcessId: exitProcess.id, input: {}, prismaClient }); } catch (error) { console.warn("Automatic settlement calculation deferred:", exitProcess.id, error.message); } }
+
   if (!employees.length) throw operationalError("NO_PAYROLL_EMPLOYEES", "There are no current employees to include in payroll.", 409);
 
   const rateRows = await prismaClient.$queryRawUnsafe(
