@@ -1,4 +1,5 @@
 require("dotenv").config();
+const crypto = require("crypto");
 const prisma = require("../src/config/prisma");
 
 function monthWindow(now = new Date()) {
@@ -18,8 +19,8 @@ async function main() {
     }
     await prisma.$queryRawUnsafe(
       `INSERT INTO "payroll_periods" ("id","organizationId","code","name","periodStart","periodEnd","payDate","status","createdByUserId")
-       VALUES (gen_random_uuid()::text,$1,$2,$3,$4::date,$5::date,NULL,'OPEN',NULL)`,
-      org.id, code, `${start.toLocaleString("en-US",{month:"long",year:"numeric"})} Payroll`, start.toISOString().slice(0,10), end.toISOString().slice(0,10)
+       VALUES ($1,$2,$3,$4,$5::date,$6::date,NULL,'OPEN',NULL)`,
+      crypto.randomUUID(), org.id, code, `${start.toLocaleString("en-US",{month:"long",year:"numeric"})} Payroll`, start.toISOString().slice(0,10), end.toISOString().slice(0,10)
     );
     console.log(`[CHRiS] ${org.name}: opened ${code}.`);
   }
