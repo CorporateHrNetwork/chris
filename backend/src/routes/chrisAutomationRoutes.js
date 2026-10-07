@@ -1,5 +1,6 @@
 const express = require("express");
 const crypto = require("crypto");
+const XLSX = require("xlsx");
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const payroll = require("../services/payrollOperationsService");
@@ -268,6 +269,30 @@ router.get("/performance/assessments", requirePermission("performance.view"), as
     req.auth.organizationId
   );
   return res.json({status:"success",data:rows});
+});
+
+router.get("/payroll-dashboard/export", requirePermission("payroll.view"), async (req,res)=>{
+  try {
+    const periodCode = text(req.query?.periodCode) || "2026-09";
+    const periods = await prisma.$queryRawUnsafe(`SELECT "id","code","name","periodStart","periodEnd","payDate","status" FROM "payroll_periods" WHERE "organizationId"=$1 AND "code"=$2 LIMIT 1`, req.auth.organizationId, periodCode);
+    if(!periods[0]) return res.status(404).json({status:"error",message:`Payroll period ${periodCode} was not found.`});
+    const period=periods[0];
+    const runs=await prisma.$queryRawUnsafe(`SELECT "id","status","employeeCount","grossTotal","deductionTotal","netPreviewTotal","submittedAt","approvedAt" FROM "payroll_runs" WHERE "organizationId"=$1 AND "periodId"=$2 ORDER BY "createdAt" DESC LIMIT 1`,req.auth.organizationId,period.id);
+    const run=runs[0]||null;
+    const lines=run?await prisma.$queryRawUnsafe(`SELECT "employeeNumber","employeeName","baseSalary","allowances","deductions","advanceRecovery","loanRecovery","grossPay","netPreview","statutoryStatus" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "employeeNumber"`,req.auth.organizationId,run.id):[];
+    const notes=await prisma.$queryRawUnsafe(`SELECT "category","originalNote","reviewedNote","status","submittedAt","reviewedAt","implementedAt" FROM "chris_payroll_notes" WHERE "organizationId"=$1 AND ("payrollPeriodId"=$2 OR "payrollPeriodId" IS NULL) ORDER BY "submittedAt"`,req.auth.organizationId,period.id);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Period:period.name,Code:period.code,Start:period.periodStart,End:period.periodEnd,Status:period.status,RunStatus:run?.status||"NOT RUN",Employees:run?.employeeCount||0,Gross:run?.grossTotal||0,Deductions:run?.deductionTotal||0,Net:run?.netPreviewTotal||0}]),"Dashboard");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lines),"Payroll Lines");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(notes),"Payroll Notes & Audit");
+    const buffer=XLSX.write(wb,{type:"buffer",bookType:"xlsx"});
+    res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition",`attachment; filename="CHRIS_${period.code}_Payroll_Dashboard.xlsx"`);
+    return res.send(buffer);
+  } catch(error) {
+    console.error("Payroll dashboard export error:",error);
+    return res.status(500).json({status:"error",message:"Unable to export payroll dashboard."});
+  }
 });
 
 router.post("/automation/ensure-current-payroll", requirePermission("payroll.manage"), async (req,res)=>{
