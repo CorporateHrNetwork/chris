@@ -4,11 +4,12 @@ import { apiRequest } from "../services/api";
 export default function ESSPortal() {
   const [message,setMessage]=useState("");
   const [email,setEmail]=useState("");
+  const [organizationSlug,setOrganizationSlug]=useState("zermatt-liquor-limited");
   const [password,setPassword]=useState("");
   const submit=async(e)=>{
     e.preventDefault();setMessage("");
     try{
-      const r=await apiRequest("/api/auth/login",{method:"POST",body:{email,password}});
+      const r=await apiRequest("/api/auth/login",{method:"POST",body:{email,password,organizationSlug}});
       const token=r?.data?.token||r?.token;
       const user=r?.data?.user||r?.user;
       if(token)localStorage.setItem("chris_token",token);
