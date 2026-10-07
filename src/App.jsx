@@ -166,7 +166,6 @@ function App() {
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
         <Route path="/payroll/notes" element={<ProtectedLayout><CHRiSAutomationCentre mode="payroll" /></ProtectedLayout>} />
         <Route path="/performance/management" element={<ProtectedLayout><CHRiSAutomationCentre mode="performance" /></ProtectedLayout>} />
-        <Route path="/ess" element={<ESSPortal />} />
         <Route path="/training" element={<PermissionLayout permission="training.view"><Training /></PermissionLayout>} />
         <Route path="/reports" element={<PermissionLayout permission="reports.view"><Reports /></PermissionLayout>} />
         <Route path="/settings" element={<PermissionLayout permission="settings.view"><Settings /></PermissionLayout>} />
