@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../services/api";
+import { apiRequest, apiDownload, saveDownloadedBlob } from "../services/api";
 
 const card = { background:"var(--chris-dashboard-surface,#fff)", border:"1px solid var(--chris-dashboard-border,#ddd)", borderRadius:14, padding:18 };
 const button = { border:0, borderRadius:10, padding:"10px 14px", fontWeight:800, cursor:"pointer" };
@@ -64,7 +64,7 @@ export default function CHRiSAutomationCentre({ mode="all" }) {
         </form>
       </div>
       <div style={card}>
-        <h3 style={{marginTop:0}}>Payroll Notes Inbox</h3>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}><h3 style={{margin:0}}>Payroll Notes Inbox</h3><button onClick={async()=>{try{const d=await apiDownload("/api/chris-automation/payroll-dashboard/export?periodCode=2026-09");saveDownloadedBlob(d);setMessage("September 2026 payroll dashboard exported successfully.");}catch(err){setMessage(err.message)}}} style={{...button,background:"#333",color:"#fff"}}>Download September 2026 Dashboard</button></div>
         <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th align="left">Employee</th><th align="left">Category</th><th align="left">Original Note</th><th align="left">Status</th><th></th></tr></thead><tbody>{notes.map(n=><tr key={n.id} style={{borderTop:"1px solid #eee"}}><td>{n.employeeNumber||"—"}<br/><small>{n.employeeName||""}</small></td><td>{n.category}</td><td>{n.originalNote}</td><td>{n.status}</td><td style={{whiteSpace:"nowrap"}}>{n.status!=="APPROVED"&&n.status!=="IMPLEMENTED"&&<button onClick={()=>review(n.id,"APPROVED")} style={{...button,background:"#1f7a4d",color:"#fff",marginRight:6}}>Approve</button>}{n.status!=="IMPLEMENTED"&&<button onClick={()=>review(n.id,"IMPLEMENTED")} style={{...button,background:"#333",color:"#fff"}}>Implemented</button>}</td></tr>)}</tbody></table></div>
       </div>
     </section>}
