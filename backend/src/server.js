@@ -13,6 +13,7 @@ const {
 const {
   createZermattAnnualCarryoverScheduler,
 } = require("./services/zermattAnnualCarryoverScheduler");
+const { createPayrollPeriodAutomationScheduler } = require("./services/payrollPeriodAutomationScheduler");
 
 const PORT = process.env.PORT || 5000;
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
@@ -31,6 +32,12 @@ const server = app.listen(PORT, async () => {
     } catch (error) {
       console.error("CHRIS workforce snapshot scheduler startup failed:", error);
     }
+  }
+  try {
+    await payrollPeriodAutomationScheduler.start();
+    console.log("CHRIS payroll/performance automation scheduler started.");
+  } catch (error) {
+    console.error("CHRIS payroll/performance automation scheduler startup failed:", error);
   }
   try {
     await annualCarryoverScheduler.start();
