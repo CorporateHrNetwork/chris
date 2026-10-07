@@ -148,7 +148,7 @@ router.patch("/payroll-notes/:id/review", requirePermission("payroll.manage"), a
   if(!["UNDER_REVIEW","APPROVED","REJECTED","IMPLEMENTED"].includes(status)) return res.status(400).json({status:"error",message:"Invalid payroll note status."});
   const reviewedNote=text(req.body?.reviewedNote)||null;
   const aiAction=req.body?.aiAction || null;
-  const sets=["status=$3","reviewedNote=$4","headHrUserId=$5","reviewedAt=CURRENT_TIMESTAMP","updatedAt=CURRENT_TIMESTAMP"];
+  const sets=["status=$3","reviewedNote=$4","headHrUserId=$5","aiAction=$6::jsonb","reviewedAt=CURRENT_TIMESTAMP","updatedAt=CURRENT_TIMESTAMP"];
   if(status==="IMPLEMENTED") sets.push("implementedAt=CURRENT_TIMESTAMP");
   const row=(await prisma.$queryRawUnsafe(`UPDATE "chris_payroll_notes" SET ${sets.join(",")} WHERE "id"=$1 AND "organizationId"=$2 RETURNING *`,req.params.id,req.auth.organizationId,status,reviewedNote,req.auth.userId,JSON.stringify(aiAction)))[0];
   if(!row) return res.status(404).json({status:"error",message:"Payroll note not found."});
