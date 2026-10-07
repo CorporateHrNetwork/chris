@@ -13,6 +13,7 @@ const {
 const {
   createZermattAnnualCarryoverScheduler,
 } = require("./services/zermattAnnualCarryoverScheduler");
+const { createPayrollPeriodAutomationScheduler } = require("./services/payrollPeriodAutomationScheduler");
 
 const PORT = process.env.PORT || 5000;
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
@@ -21,6 +22,7 @@ console.log(`CHRIS Paystack configured: ${paystackConfigured ? "YES" : "NO"}`);
 
 const snapshotScheduler = createWorkforceSnapshotScheduler({ prisma });
 const annualCarryoverScheduler = createZermattAnnualCarryoverScheduler({ prisma });
+const payrollPeriodAutomationScheduler = createPayrollPeriodAutomationScheduler({ prisma });
 const server = app.listen(PORT, async () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);
   if (shouldAutoStartSnapshotScheduler()) {
@@ -30,6 +32,12 @@ const server = app.listen(PORT, async () => {
     } catch (error) {
       console.error("CHRIS workforce snapshot scheduler startup failed:", error);
     }
+  }
+  try {
+    await payrollPeriodAutomationScheduler.start();
+    console.log("CHRIS payroll/performance automation scheduler started.");
+  } catch (error) {
+    console.error("CHRIS payroll/performance automation scheduler startup failed:", error);
   }
   try {
     await annualCarryoverScheduler.start();
@@ -46,6 +54,7 @@ async function shutdown(signal) {
   console.log(`CHRIS API received ${signal}; shutting down.`);
   snapshotScheduler.stop();
   annualCarryoverScheduler.stop();
+  payrollPeriodAutomationScheduler.stop();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);
