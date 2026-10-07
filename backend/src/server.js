@@ -21,6 +21,7 @@ console.log(`CHRIS Paystack configured: ${paystackConfigured ? "YES" : "NO"}`);
 
 const snapshotScheduler = createWorkforceSnapshotScheduler({ prisma });
 const annualCarryoverScheduler = createZermattAnnualCarryoverScheduler({ prisma });
+const payrollPeriodAutomationScheduler = createPayrollPeriodAutomationScheduler({ prisma });
 const server = app.listen(PORT, async () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);
   if (shouldAutoStartSnapshotScheduler()) {
@@ -46,6 +47,7 @@ async function shutdown(signal) {
   console.log(`CHRIS API received ${signal}; shutting down.`);
   snapshotScheduler.stop();
   annualCarryoverScheduler.stop();
+  payrollPeriodAutomationScheduler.stop();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);
