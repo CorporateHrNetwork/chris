@@ -119,7 +119,7 @@ function Login({login,setLogin,submit,submitting,error}){
          </div>
        </label>
        <label className="ess-field-label">Password
-         <div className="ess-input-wrap"><FiLock className="ess-input-icon" size={18}/>
+         <div className="ess-input-wrap ess-password-wrap"><FiLock className="ess-input-icon" size={18}/>
            <input required type={showPassword?"text":"password"} name="chris_secure_access" autoComplete="new-password" value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} placeholder="Enter your password"/>
            <button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} title={showPassword?"Hide password":"Show password"}>{showPassword?<FiEyeOff size={19}/>:<FiEye size={19}/>}</button>
          </div>
@@ -149,7 +149,7 @@ body{background:#07110C;color:#F3F7F4}
 .ess-input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#64748B;pointer-events:none}
 .ess-input-wrap input{width:100%;padding:13px 50px 13px 43px;box-sizing:border-box;border:1px solid rgba(8,122,67,.70);border-radius:11px;background:rgba(2,10,7,.62);color:#F8FAF9;font-size:14px;outline:none}
 .ess-input-wrap input:focus{border-color:#D4AF37;box-shadow:0 0 0 3px rgba(212,175,55,.10)}
-.password-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent!important;color:#475569;border:none;border-radius:8px;cursor:pointer;padding:0;transition:none!important;box-shadow:none!important;outline:none!important}
+.ess-password-wrap .ess-input-icon{color:#D4AF37}.ess-password-wrap input{padding-right:50px;border-color:rgba(8,122,67,.70);border-radius:11px;background:rgba(2,10,7,.62);color:#F8FAF9;font-size:14px}.ess-password-wrap input:focus{border-color:#D4AF37;box-shadow:0 0 0 3px rgba(212,175,55,.10)}.password-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent!important;color:#D4AF37;border:none;border-radius:8px;cursor:pointer;padding:0;transition:none!important;box-shadow:none!important;outline:none!important}
 .password-toggle:hover,.password-toggle:focus,.password-toggle:focus-visible,.password-toggle:active{background:transparent!important;color:#475569!important;transform:translateY(-50%)!important;transition:none!important;box-shadow:none!important;outline:none!important}
 .autofill-decoy{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .ess-signin{width:100%;border:none;border-radius:11px;padding:14px;background:linear-gradient(90deg,#075F36,#0B7A45);color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.30),0 0 14px rgba(8,122,67,.18)}
