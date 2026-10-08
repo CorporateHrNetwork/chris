@@ -515,4 +515,25 @@ router.post("/performance/self-assessment", async (req,res) => {
   } catch(error) { return sendError(res,error,"Unable to submit your self-assessment."); }
 });
 
+router.get("/documents/:id/download", async (req, res) => {
+  try {
+    const employee = await resolveSelf(req);
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT "originalName","mimeType","sizeBytes","storagePath" FROM "employee_documents" WHERE "id"=$1 AND "organizationId"=$2 AND "employeeId"=$3 LIMIT 1`,
+      req.params.id, req.auth.organizationId, employee.id
+    );
+    const row = rows[0];
+    if (!row || !row.storagePath || !fs.existsSync(row.storagePath)) {
+      return res.status(404).json({ status:"error", message:"Document is not available for download." });
+    }
+    const safeName = String(row.originalName || "CHRiS_Document").replace(/[\\/\r\n"]/g,"_");
+    res.setHeader("Content-Type", row.mimeType || "application/octet-stream");
+    res.setHeader("Content-Length", String(row.sizeBytes || fs.statSync(row.storagePath).size));
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+    return fs.createReadStream(row.storagePath).pipe(res);
+  } catch(error) {
+    return sendError(res,error,"Unable to download your document.");
+  }
+});
+
 module.exports = router;
