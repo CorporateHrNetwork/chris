@@ -1,491 +1,71 @@
 import { useEffect, useState } from "react";
-import {
-  API_BASE_URL,
-  clearEssAuthSession,
-  essRequest,
-  getEssAuthToken,
-} from "../services/api";
+import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "../services/api";
 
-const ORGANIZATION_SLUG = "zermatt-liquor-limited";
+const ORG_SLUG = "zermatt-liquor-limited";
+const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["documents","Documents"]];
+const RATINGS = ["EXCELLENT","SATISFACTORY","ACCEPTABLE","UNSATISFACTORY"];
+const money=(v,c="NGN")=>Number.isFinite(Number(v))?new Intl.NumberFormat("en-NG",{style:"currency",currency:c||"NGN",maximumFractionDigits:2}).format(Number(v)): "—";
+const date=v=>v?new Intl.DateTimeFormat("en-NG",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(v)):"—";
+const title=v=>String(v||"").replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+const val=v=>v===null||v===undefined||v===""?"—":String(v);
+const initials=e=>[e?.firstName,e?.lastName].filter(Boolean).map(x=>x[0]).join("").slice(0,2).toUpperCase()||"CH";
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-NG", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+export default function ESSPortal(){
+ const [auth,setAuth]=useState(Boolean(getEssAuthToken())),[data,setData]=useState(null),[tab,setTab]=useState("overview"),[loading,setLoading]=useState(Boolean(getEssAuthToken())),[error,setError]=useState(""),[login,setLogin]=useState({email:"",password:""}),[submitting,setSubmitting]=useState(false);
+ useEffect(()=>{if(window.location.search)window.history.replaceState({},document.title,"/ess")},[]);
+ const load=async()=>{setLoading(true);setError("");try{const r=await essRequest("/api/ess/dashboard");setData(r?.data||null);setAuth(true)}catch(e){setAuth(false);setData(null);setError(e.message||"Unable to load your employee portal.")}finally{setLoading(false)}};
+ useEffect(()=>{if(getEssAuthToken())load();else setLoading(false)},[]);
+ const submit=async e=>{e.preventDefault();setSubmitting(true);setError("");try{const r=await essRequest("/api/ess/login",{method:"POST",body:{...login,organizationSlug:ORG_SLUG}});localStorage.setItem("chris_ess_token",r.data.token);localStorage.setItem("chris_ess_employee",JSON.stringify(r.data.employee||{}));localStorage.setItem("chris_ess_organization",JSON.stringify(r.data.organization||{}));await load()}catch(e){setError(e.message||"Invalid employee login credentials.")}finally{setSubmitting(false)}};
+ const signOut=()=>{clearEssAuthSession();setAuth(false);setData(null);setTab("overview")};
+ if(!auth)return <Login login={login} setLogin={setLogin} submit={submit} submitting={submitting} error={error}/>;
+ if(loading&&!data)return <Shell><div className="loading"><Brand/><h2>Opening your employee portal…</h2><p>Securely loading your CHRiS employee information.</p></div></Shell>;
+ if(!data)return <Login login={login} setLogin={setLogin} submit={submit} submitting={submitting} error={error}/>;
+ return <Shell><div className="app"><header><div className="brandrow"><Brand small/><div><strong>CHRiS</strong><small>Employee Self-Service</small></div></div><div className="headuser"><div className="avatar">{initials(data.profile)}</div><div><b>{data.profile.name}</b><small>{data.profile.designation?.name||"Employee"} · {data.profile.employeeNumber}</small></div><button className="ghost" onClick={signOut}>Sign out</button></div></header><div className="body"><aside><span className="caption">MY CHRiS</span>{NAV.map(([k,l])=><button className={tab===k?"nav active":"nav"} key={k} onClick={()=>setTab(k)}><i>{icon(k)}</i><span>{l}</span>{k==="onboarding"&&<b>{data.onboarding.completionPercent}%</b>}</button>)}<div className="sidefoot">Private employee access<br/><small>Only your own CHRiS record is available.</small></div></aside><main>
+ {tab==="overview"&&<Overview data={data} go={setTab}/>}
+ {tab==="profile"&&<Profile data={data}/>}
+ {tab==="onboarding"&&<Onboarding data={data}/>}
+ {tab==="statutory"&&<Statutory data={data}/>}
+ {tab==="payroll"&&<Payroll data={data}/>}
+ {tab==="payslips"&&<Payslips data={data}/>}
+ {tab==="leave"&&<LeaveAttendance data={data}/>}
+ {tab==="performance"&&<Performance data={data} onSaved={load}/>}
+ {tab==="documents"&&<Documents data={data}/>}
+ </main></div></div></Shell>;
 }
 
-function display(value) {
-  return value === null || value === undefined || value === "" ? "—" : value;
-}
+function Overview({data,go}){const p=data.profile,o=data.onboarding,latest=data.payroll.latestPayslip,perf=data.performance?.[0];return <Page h="Welcome back" s="Your personal CHRiS workspace for employee information, payroll, leave and performance."><div className="hero"><div className="person"><div className="bigavatar">{initials(p)}</div><div><span className="eyebrow">ZERMATT LIQUOR LIMITED</span><h1>{p.name}</h1><p>{p.designation?.name||"Employee"} · {p.department?.name||"—"} · {p.location?.name||"—"}</p></div></div><span className="pill">{title(p.status)}</span></div><div className="metrics"><Metric l="Onboarding" v={o.completionPercent+"%"} s={o.currentStage||"Profile registration"} go={()=>go("onboarding")}/><Metric l="Payslips" v={data.payroll.payslips.length} s="Approved payroll records" go={()=>go("payslips")}/><Metric l="Leave records" v={data.leaveBalances.length} s="Current balances" go={()=>go("leave")}/><Metric l="Performance" v={perf?.assessment?.finalRating?title(perf.assessment.finalRating):"In progress"} s="Quarterly evaluation" go={()=>go("performance")}/></div><div className="twocol"><Card t="Onboarding registration" a="Open" click={()=>go("onboarding")}><Progress v={o.completionPercent}/><p className="muted">{Object.values(o.sectionProgress||{}).filter(x=>x.completed).length} of {Object.keys(o.sectionProgress||{}).length} sections completed.</p></Card><Card t="Latest payslip" a="View" click={()=>go("payslips")}>{latest?<div className="latest"><div><small>{latest.periodName||latest.periodCode}</small><strong>{money(latest.netPreview,latest.currency)}</strong></div><small>Pay date {date(latest.payDate)}</small></div>:<Empty t="No approved payslip is available yet."/>}</Card></div><Card t="Quick access"><div className="quickgrid">{[["profile","My Profile","Personal and employment information"],["statutory","Statutory","PAYE, pension and statutory registration"],["payroll","Payment & Payroll","Bank/payment and payroll summary"],["performance","Performance Evaluation","Objectives, self-assessment and outcomes"]].map(x=><button className="quick" key={x[0]} onClick={()=>go(x[0])}><span>{icon(x[0])}</span><div><b>{x[1]}</b><small>{x[2]}</small></div>→</button>)}</div></Card></Page>}
 
-export default function ESSPortal() {
-  const [authenticated, setAuthenticated] = useState(Boolean(getEssAuthToken()));
-  const [employee, setEmployee] = useState(null);
-  const [organization, setOrganization] = useState(null);
-  const [loading, setLoading] = useState(Boolean(getEssAuthToken()));
-  const [message, setMessage] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+function Profile({data}){const p=data.profile,x=data.onboarding.data["personal-details"]||{};return <Page h="My Profile" s="Your complete employee master record as maintained in CHRiS."><Card t="Identity"><Info items={[["Employee Number",p.employeeNumber],["Full Name",p.name],["Email",p.email],["Phone",p.phone],["Gender",title(p.gender)],["Date of Birth",date(x.dateOfBirth)],["Marital Status",x.maritalStatus],["Nationality",x.nationality],["Residential Address",x.residentialAddress],["State",x.state],["LGA",x.lga],["Identification Type",x.idType],["Identification Number",x.idNumber]]}/></Card><Card t="Employment"><Info items={[["Department",p.department?.name],["Designation",p.designation?.name],["Employment Level",p.employmentLevel?.name||p.designation?.employmentLevel?.name],["Employment Type",p.employmentType],["Location / Branch",p.location?.name],["Cost Centre",p.costCentre?.name],["Date Employed",date(p.hireDate)],["Current Service Start",date(p.employmentEpisodes?.[0]?.startDate||p.hireDate)],["Confirmation Date",date(p.confirmationDate)],["Line Manager",p.lineManager?.name],["Manager Designation",p.lineManager?.designation]]}/></Card></Page>}
 
-  useEffect(() => {
-    if (!getEssAuthToken()) {
-      setLoading(false);
-      return;
-    }
+function Onboarding({data}){const o=data.onboarding;return <Page h="Onboarding & Registration" s="Track every section of your CHRiS employee registration and see what remains outstanding."><Card><div className="proghead"><div><span className="eyebrow">REGISTRATION COMPLETION</span><strong>{o.completionPercent}%</strong></div><span>{o.status==="COMPLETED"?"Completed":o.currentStage||"In progress"}</span></div><Progress v={o.completionPercent}/></Card><div className="sectiongrid">{(o.sections||[]).map(s=>{const p=o.sectionProgress?.[s.key]||{};return <div className="sectiontile" key={s.key}><div className={p.completed?"check done":"check"}>{p.completed?"✓":"!"}</div><div><b>{s.label||title(s.key)}</b><small>{p.completedItems||0} of {p.totalItems||0} items completed · {p.required?"Required":"Optional"}</small></div><span>{p.completed?"Complete":"Pending"}</span></div>})}</div><Card t="Registration data"><Groups data={o.data}/></Card></Page>}
 
-    let active = true;
-    essRequest("/api/ess/me")
-      .then((result) => {
-        if (!active) return;
-        setEmployee(result?.data?.employee || null);
-        setOrganization(result?.data?.organization || null);
-        setAuthenticated(true);
-      })
-      .catch(() => {
-        if (!active) return;
-        setAuthenticated(false);
-        setEmployee(null);
-        setOrganization(null);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+function Statutory({data}){const s=data.statutory.registered||{};return <Page h="Statutory Information" s="Your statutory registration details and payroll-linked statutory obligations."><Card t="Registration details"><Info items={[["Tax Identification Number",s.taxIdentificationNumber],["PAYE State",s.payeState],["Pension PFA",s.pensionPfa],["Pension PFA Code",s.pensionPfaCode],["Pension PIN",s.pensionPin],["NHIA / Health Status",s.nhiaStatus||s.nhiaRegistrationStatus],["NHIA Number",s.nhiaNumber||s.nhiaId],["Other Statutory Status",s.otherStatutoryStatus],["Other Notes",s.otherStatutoryNotes]]}/></Card><Card t="Payroll statutory obligations"><Table rows={data.statutory.obligations} cols={[["Period",r=>r.periodYear+"-"+String(r.periodMonth).padStart(2,"0")],["Type",r=>title(r.obligationType)],["Employee",r=>money(r.employeeAmount,r.currency)],["Employer",r=>money(r.employerAmount,r.currency)],["Remitted",r=>money(r.amountRemitted,r.currency)],["Status",r=>title(r.status)]]}/></Card></Page>}
 
-    return () => {
-      active = false;
-    };
-  }, []);
+function Payroll({data}){const p=data.payment||{};return <Page h="Payment & Payroll" s="Your registered payment instructions and approved payroll summary."><Card t="Payment information"><Info items={[["Bank Name",p.bankName],["Account Name",p.accountName],["Account Number",p.accountNumber],["Bank Code",p.bankCode],["Payment Method",p.paymentMethod],["Payroll Currency",p.payrollCurrency]]}/></Card><Card t="Payroll summary"><Info items={[["Approved Payslips",data.payroll.payslips.length],["Latest Gross Pay",data.payroll.latestPayslip?money(data.payroll.latestPayslip.grossPay,data.payroll.latestPayslip.currency):"—"],["Latest Net Pay",data.payroll.latestPayslip?money(data.payroll.latestPayslip.netPreview,data.payroll.latestPayslip.currency):"—"],["Latest Pay Date",date(data.payroll.latestPayslip?.payDate)]]}/></Card></Page>}
 
-  const submit = async (event) => {
-    event.preventDefault();
-    setMessage("");
-    setLoading(true);
+function Payslips({data}){return <Page h="Payslips" s="View approved payroll records and download an employee copy."><Card><Table rows={data.payroll.payslips} empty="No approved payslips are available yet." cols={[["Period",r=>r.periodName||r.periodCode],["Period End",r=>date(r.periodEnd)],["Pay Date",r=>date(r.payDate)],["Gross",r=>money(r.grossPay,r.currency)],["Deductions",r=>money(r.deductions,r.currency)],["Net Pay",r=>money(r.netPreview,r.currency)],["",r=><Download id={r.id}/>]]}/></Card></Page>}
 
-    try {
-      const result = await essRequest("/api/ess/login", {
-        method: "POST",
-        body: {
-          email,
-          password,
-          organizationSlug: ORGANIZATION_SLUG,
-        },
-      });
+function LeaveAttendance({data}){return <Page h="Leave & Attendance" s="Your leave balances and recent attendance records."><Card t="Leave balances"><Table rows={data.leaveBalances} empty="No leave balance is currently available." cols={[["Leave Type",r=>r.leaveType],["Year",r=>r.leaveYear],["Opening",r=>Number(r.openingBalance||0)],["Accrued",r=>Number(r.accrued||0)],["Used",r=>Number(r.used||0)],["Adjusted",r=>Number(r.adjusted||0)],["Balance",r=>Number(r.openingBalance||0)+Number(r.accrued||0)+Number(r.carriedForward||0)+Number(r.adjusted||0)-Number(r.used||0)]]}/></Card><Card t="Recent attendance"><Table rows={data.attendance} empty="No attendance records are available." cols={[["Date",r=>date(r.attendanceDate)],["Status",r=>title(r.status)],["Clock In",r=>r.clockIn?new Date(r.clockIn).toLocaleTimeString("en-NG",{hour:"2-digit",minute:"2-digit"}):"—"],["Clock Out",r=>r.clockOut?new Date(r.clockOut).toLocaleTimeString("en-NG",{hour:"2-digit",minute:"2-digit"}):"—"],["Late",r=>r.lateMinutes+" min"],["Overtime",r=>r.overtimeMinutes+" min"]]}/></Card></Page>}
 
-      const token = result?.data?.token;
-      if (!token) throw new Error("Employee portal authentication was not returned by the server.");
+function Performance({data,onSaved}){const current=data.performance?.[0];const [answers,setAnswers]=useState({}),[comments,setComments]=useState(""),[rating,setRating]=useState("SATISFACTORY"),[busy,setBusy]=useState(false),[msg,setMsg]=useState("");if(!current)return <Page h="Performance Evaluation" s="Quarterly performance evaluation, objectives and self-assessment."><Card><Empty t="No performance cycle has been opened for your employee record yet."/></Card></Page>;const submitted=["MANAGER_APPROVAL_PENDING","FINAL"].includes(current.assessment?.status);const submit=async()=>{setBusy(true);setMsg("");try{const assessment={overallRating:rating,comments,improvementAreas:comments,kpis:current.kpis.map(k=>({kpiId:k.id,rating:answers[k.id]?.rating||"SATISFACTORY",comment:answers[k.id]?.comment||""}))};await essRequest("/api/ess/performance/self-assessment",{method:"POST",body:{cycleId:current.cycle.id,assessment}});setMsg("Self-assessment submitted to your line manager.");await onSaved()}catch(e){setMsg(e.message||"Unable to submit self-assessment.")}finally{setBusy(false)}};return <Page h="Performance Evaluation" s={"Quarter "+current.cycle.quarter+" • "+current.cycle.year+" • Quarterly appraisal workflow"}><Card t="Objectives & KPIs"><div className="workflow"><span className="step done">1. Objectives published</span><span className={submitted?"step done":"step active"}>2. Self-assessment</span><span className={current.assessment?.status==="FINAL"?"step done":"step"}>3. Line manager assessment</span><span className="step">4. Final outcome</span></div>{current.kpis.length?current.kpis.map(k=><div className="kpi" key={k.id}><div><span>{k.weight}%</span><b>{k.title}</b></div><p>{k.objective}</p><small>Measure: {k.measurement} · Target: {k.target}</small><div className="kpiinputs"><select disabled={submitted} value={answers[k.id]?.rating||current.assessment?.selfAssessment?.kpis?.find(x=>x.kpiId===k.id)?.rating||"SATISFACTORY"} onChange={e=>setAnswers(a=>({...a,[k.id]:{...a[k.id],rating:e.target.value}}))}>{RATINGS.map(x=><option key={x}>{x}</option>)}</select><input disabled={submitted} placeholder="Evidence / comment" value={answers[k.id]?.comment||""} onChange={e=>setAnswers(a=>({...a,[k.id]:{...a[k.id],comment:e.target.value}}))}/></div></div>):<Empty t="Your approved objectives have not yet been published for this cycle."/>}</Card><Card t="Self-assessment"><label className="field">Overall self-rating<select disabled={submitted} value={rating} onChange={e=>setRating(e.target.value)}>{RATINGS.map(x=><option key={x}>{x}</option>)}</select></label><label className="field">Comments / improvement areas<textarea disabled={submitted} rows="4" value={comments} onChange={e=>setComments(e.target.value)} placeholder="Summarise achievements, evidence and improvement areas."/></label>{msg&&<div className="notice">{msg}</div>}{!submitted&&<button className="primary" disabled={busy||!current.kpis.length} onClick={submit}>{busy?"Submitting…":"Submit self-assessment"}</button>}{current.assessment?.finalRating&&<div className="outcome"><b>Final outcome: {title(current.assessment.finalRating)}</b><span>{current.assessment.improvementNotes||"No improvement note recorded."}</span>{current.promotionPipeline&&<strong>Promotion / LRT review: {title(current.promotionPipeline.status)}</strong>}{current.pip&&<strong>Performance Improvement Plan: {title(current.pip.status)}</strong>}</div>}</Card></Page>}
 
-      localStorage.setItem("chris_ess_token", token);
-      localStorage.setItem("chris_ess_employee", JSON.stringify(result.data.employee || {}));
-      localStorage.setItem("chris_ess_organization", JSON.stringify(result.data.organization || {}));
+function Documents({data}){return <Page h="Documents" s="Documents attached to your CHRiS employee record."><Card><Table rows={data.onboarding.documents} empty="No employee documents are available." cols={[["Document",r=>r.originalName],["Category",r=>title(r.category)],["Type",r=>r.mimeType||"—"],["Uploaded",r=>date(r.createdAt)],["",r=><Doc id={r.id}/>]]}/></Card></Page>}
 
-      const profile = await essRequest("/api/ess/me");
-      setEmployee(profile?.data?.employee || null);
-      setOrganization(profile?.data?.organization || result.data.organization || null);
-      setAuthenticated(true);
-      setEmail("");
-      setPassword("");
-    } catch (error) {
-      setMessage(error.message || "Unable to sign in to the employee portal.");
-    } finally {
-      setLoading(false);
-    }
-  };
+function Download({id}){return <button className="tablebtn" onClick={async()=>{try{const r=await fetch(API_BASE_URL+"/api/ess/payslips/"+id+"/download",{headers:{Authorization:"Bearer "+localStorage.getItem("chris_ess_token")}});if(!r.ok)throw Error("Download failed");const b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="CHRiS_Payslip.xlsx";a.click();URL.revokeObjectURL(u)}catch(e){alert(e.message)}}>Download</button>}
+function Doc({id}){return <button className="tablebtn" onClick={async()=>{const r=await fetch(API_BASE_URL+"/api/ess/documents/"+id+"/download",{headers:{Authorization:"Bearer "+localStorage.getItem("chris_ess_token")}});if(!r.ok){alert("Document could not be downloaded.");return}const b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="CHRiS_Document";a.click();URL.revokeObjectURL(u)}}>Download</button>}
 
-  const signOut = () => {
-    clearEssAuthSession();
-    setAuthenticated(false);
-    setEmployee(null);
-    setOrganization(null);
-    setMessage("");
-    setPassword("");
-  };
+function Page({h,s,children}){return <><div className="pagehead"><span className="eyebrow">CHRiS EMPLOYEE PORTAL</span><h2>{h}</h2><p>{s}</p></div>{children}</>}
+function Card({t,a,click,children}){return <section className="card">{t&&<div className="cardhead"><h3>{t}</h3>{a&&<button className="link" onClick={click}>{a} →</button>}</div>}{children}</section>}
+function Metric({l,v,s,go}){return <button className="metric" onClick={go}><span>{l}</span><strong>{v}</strong><small>{s}</small></button>}
+function Progress({v}){return <div className="progress"><span style={{width:Math.max(0,Math.min(100,Number(v)||0))+"%"}}/></div>}
+function Info({items}){return <div className="infogrid">{items.map(([l,v])=><div className="info" key={l}><small>{l}</small><b>{val(v)}</b></div>)}</div>}
+function Groups({data}){return <div>{Object.entries(data||{}).map(([k,v])=><div className="group" key={k}><h4>{title(k)}</h4><Info items={Object.entries(v||{}).map(([a,b])=>[title(a),typeof b==="object"?JSON.stringify(b):b])}/></div>)}</div>}
+function Table({rows=[],cols,empty="No records available."}){if(!rows.length)return <Empty t={empty}/>;return <div className="tablewrap"><table><thead><tr>{cols.map(([h],i)=><th key={h||i}>{h}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={r.id||i}>{cols.map(([h,f],j)=><td key={h||j}>{f(r)}</td>)}</tr>)}</tbody></table></div>}
+function Empty({t}){return <div className="empty">{t}</div>}
+function Brand({small=false}){return <div className={small?"brandmark small":"brandmark"}>CH</div>}
+function Login({login,setLogin,submit,submitting,error}){return <Shell><div className="loginwrap"><div className="loginbrand"><Brand/><strong>CHRiS</strong><small>Corporate Human Resources Information System</small></div><div className="logincard"><span className="eyebrow">ZERMATT LIQUOR LIMITED</span><h1>Employee Self-Service</h1><p>Sign in to your private employee portal. You can only access your own CHRiS employee record.</p>{error&&<div className="error">{error}</div>}<form onSubmit={submit}><label>Employee email<input required type="email" autoComplete="username" value={login.email} onChange={e=>setLogin({...login,email:e.target.value})} placeholder="Email registered in CHRiS"/></label><label>Password<input required type="password" autoComplete="current-password" value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} placeholder="Your employee portal password"/></label><button className="primary" disabled={submitting}>{submitting?"Signing in…":"Sign in to my portal"}</button></form><div className="security">🔒 Private employee access<br/><small>Your employee identity is derived from your authenticated CHRiS account; it is never selected from the URL.</small></div></div></div></Shell>}
+function Shell({children}){return <main className="essshell">{children}<style>{CSS}</style></main>}
+function icon(k){return ({overview:"⌂",profile:"◉",onboarding:"✓",statutory:"▣",payroll:"₦",payslips:"▤",leave:"◷",performance:"★",documents:"▤"}[k]||"•")}
 
-  if (loading && !employee && authenticated) {
-    return <PortalShell><LoadingState /></PortalShell>;
-  }
-
-  if (!authenticated) {
-    return (
-      <PortalShell>
-        <section style={cardStyle}>
-          <div style={eyebrowStyle}>ZERMATT LIQUOR LIMITED</div>
-          <h1 style={headingStyle}>Employee Self-Service</h1>
-          <p style={subheadingStyle}>
-            Sign in to your personal CHRiS employee portal. Your access is limited to your own employee record.
-          </p>
-
-          {message && (
-            <div role="alert" style={errorStyle}>{message}</div>
-          )}
-
-          <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
-            <label style={labelStyle}>
-              Employee email
-              <input
-                required
-                autoComplete="username"
-                type="email"
-                placeholder="Enter the email registered in CHRiS"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                style={inputStyle}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Password
-              <input
-                required
-                autoComplete="current-password"
-                type="password"
-                placeholder="Enter your CHRiS employee portal password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                style={inputStyle}
-              />
-            </label>
-
-            <button disabled={loading} type="submit" style={{ ...buttonStyle, opacity: loading ? 0.7 : 1 }}>
-              {loading ? "Signing in…" : "Sign in to my portal"}
-            </button>
-          </form>
-
-          <div style={securityNoteStyle}>
-            <strong>Private employee access</strong>
-            <span>This page does not provide access to the CHRiS administration system or other employees' records.</span>
-          </div>
-          <div style={footerStyle}>Powered by CHRiS • Corporate Resources Network</div>
-        </section>
-      </PortalShell>
-    );
-  }
-
-  return (
-    <PortalShell>
-      <section style={profileCardStyle}>
-        <div style={topBarStyle}>
-          <div>
-            <div style={eyebrowStyle}>{organization?.name || "ZERMATT LIQUOR LIMITED"}</div>
-            <h1 style={{ ...headingStyle, marginBottom: 4 }}>My Employee Portal</h1>
-            <p style={{ ...subheadingStyle, marginBottom: 0 }}>
-              Welcome, {display(employee?.firstName)}. This is your private CHRiS profile.
-            </p>
-          </div>
-          <button type="button" onClick={signOut} style={signOutStyle}>Sign out</button>
-        </div>
-
-        <div style={profileHeroStyle}>
-          <div style={avatarStyle}>
-            {String(employee?.firstName || "E").charAt(0).toUpperCase()}
-            {String(employee?.lastName || "").charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#073B24" }}>
-              {[employee?.firstName, employee?.middleName, employee?.lastName].filter(Boolean).join(" ")}
-            </div>
-            <div style={{ marginTop: 4, color: "#64748B", fontWeight: 700 }}>
-              Employee No. {display(employee?.employeeNumber)}
-            </div>
-          </div>
-          <div style={statusPillStyle}>{display(employee?.status)}</div>
-        </div>
-
-        <Section title="Personal Information">
-          <Info label="Email address" value={employee?.email} />
-          <Info label="Phone number" value={employee?.phone} />
-          <Info label="Gender" value={employee?.gender} />
-        </Section>
-
-        <Section title="Employment Information">
-          <Info label="Department" value={employee?.department?.name} />
-          <Info label="Designation" value={employee?.designation?.name} />
-          <Info label="Employment type" value={employee?.employmentType} />
-          <Info label="Location / Branch" value={employee?.location?.name} />
-          <Info label="Cost centre" value={employee?.costCentre?.name} />
-          <Info label="Date employed" value={formatDate(employee?.hireDate)} />
-          <Info label="Confirmation date" value={formatDate(employee?.confirmationDate)} />
-        </Section>
-
-        <div style={privacyBannerStyle}>
-          <strong>Your data is scoped to you.</strong>
-          <span>The portal obtains your employee ID from your authenticated account. It does not accept an employee number in the URL, so changing URLs cannot switch the profile to another employee.</span>
-        </div>
-
-        <div style={footerStyle}>CHRiS Employee Self-Service • {API_BASE_URL ? "Secure API connection" : "Secure CHRiS connection"}</div>
-      </section>
-    </PortalShell>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <section style={{ marginTop: 24 }}>
-      <h2 style={sectionTitleStyle}>{title}</h2>
-      <div style={infoGridStyle}>{children}</div>
-    </section>
-  );
-}
-
-function Info({ label, value }) {
-  return (
-    <div style={infoItemStyle}>
-      <div style={infoLabelStyle}>{label}</div>
-      <div style={infoValueStyle}>{display(value)}</div>
-    </div>
-  );
-}
-
-function PortalShell({ children }) {
-  return (
-    <main style={shellStyle}>
-      <div style={brandMarkStyle}>CH</div>
-      {children}
-    </main>
-  );
-}
-
-function LoadingState() {
-  return (
-    <section style={{ ...cardStyle, textAlign: "center" }}>
-      <div style={brandMarkStyle}>CH</div>
-      <h1 style={headingStyle}>Opening your portal…</h1>
-      <p style={subheadingStyle}>Verifying your secure employee session.</p>
-    </section>
-  );
-}
-
-const shellStyle = {
-  minHeight: "100vh",
-  display: "grid",
-  placeItems: "center",
-  padding: "48px 20px",
-  boxSizing: "border-box",
-  background: "linear-gradient(135deg, #F4F8F6 0%, #EEF3F0 100%)",
-  fontFamily: "Inter, Arial, Helvetica, sans-serif",
-  color: "#0F172A",
-};
-
-const cardStyle = {
-  width: "min(480px, 100%)",
-  boxSizing: "border-box",
-  background: "#FFFFFF",
-  border: "1px solid #DDE8E1",
-  borderRadius: 20,
-  padding: 32,
-  boxShadow: "0 18px 50px rgba(7, 59, 36, 0.10)",
-};
-
-const profileCardStyle = {
-  ...cardStyle,
-  width: "min(980px, 100%)",
-  padding: 34,
-};
-
-const brandMarkStyle = {
-  width: 54,
-  height: 54,
-  marginBottom: 16,
-  display: "grid",
-  placeItems: "center",
-  borderRadius: 14,
-  background: "#087A43",
-  color: "#F7D66A",
-  fontWeight: 950,
-  fontSize: 18,
-  boxShadow: "0 8px 22px rgba(8, 122, 67, 0.18)",
-};
-
-const eyebrowStyle = {
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 1.25,
-  color: "#087A43",
-  textTransform: "uppercase",
-};
-
-const headingStyle = {
-  margin: "7px 0 8px",
-  color: "#073B24",
-  fontSize: 30,
-  lineHeight: 1.15,
-  fontWeight: 950,
-};
-
-const subheadingStyle = {
-  margin: "0 0 24px",
-  color: "#64748B",
-  fontSize: 14,
-  lineHeight: 1.65,
-};
-
-const labelStyle = {
-  display: "grid",
-  gap: 7,
-  color: "#334155",
-  fontSize: 12,
-  fontWeight: 800,
-};
-
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "13px 14px",
-  border: "1px solid #CBD5E1",
-  borderRadius: 10,
-  outline: "none",
-  fontSize: 14,
-  color: "#0F172A",
-  background: "#FFFFFF",
-};
-
-const buttonStyle = {
-  width: "100%",
-  border: 0,
-  borderRadius: 10,
-  padding: "13px 16px",
-  background: "#087A43",
-  color: "#FFFFFF",
-  fontSize: 14,
-  fontWeight: 900,
-  cursor: "pointer",
-};
-
-const errorStyle = {
-  marginBottom: 16,
-  padding: "11px 12px",
-  borderRadius: 10,
-  background: "#FEF2F2",
-  border: "1px solid #FECACA",
-  color: "#991B1B",
-  fontSize: 13,
-  lineHeight: 1.5,
-};
-
-const securityNoteStyle = {
-  display: "grid",
-  gap: 4,
-  marginTop: 22,
-  padding: 13,
-  borderRadius: 10,
-  background: "#F0FDF4",
-  border: "1px solid #BBF7D0",
-  color: "#166534",
-  fontSize: 12,
-  lineHeight: 1.55,
-};
-
-const footerStyle = {
-  marginTop: 22,
-  textAlign: "center",
-  color: "#94A3B8",
-  fontSize: 11,
-};
-
-const topBarStyle = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 20,
-  flexWrap: "wrap",
-};
-
-const signOutStyle = {
-  border: "1px solid #CBD5E1",
-  borderRadius: 9,
-  background: "#FFFFFF",
-  color: "#334155",
-  padding: "9px 13px",
-  fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const profileHeroStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: 16,
-  flexWrap: "wrap",
-  marginTop: 26,
-  padding: 18,
-  borderRadius: 14,
-  background: "#F8FAFC",
-  border: "1px solid #E2E8F0",
-};
-
-const avatarStyle = {
-  width: 58,
-  height: 58,
-  flex: "0 0 58px",
-  display: "grid",
-  placeItems: "center",
-  borderRadius: "50%",
-  background: "#087A43",
-  color: "#F7D66A",
-  fontWeight: 950,
-  fontSize: 17,
-};
-
-const statusPillStyle = {
-  marginLeft: "auto",
-  padding: "7px 11px",
-  borderRadius: 999,
-  background: "#DCFCE7",
-  color: "#166534",
-  fontSize: 11,
-  fontWeight: 900,
-};
-
-const sectionTitleStyle = {
-  margin: "0 0 12px",
-  color: "#073B24",
-  fontSize: 15,
-  fontWeight: 900,
-};
-
-const infoGridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 10,
-};
-
-const infoItemStyle = {
-  padding: 13,
-  borderRadius: 10,
-  border: "1px solid #E2E8F0",
-  background: "#FFFFFF",
-};
-
-const infoLabelStyle = {
-  color: "#94A3B8",
-  fontSize: 10,
-  fontWeight: 900,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
-};
-
-const infoValueStyle = {
-  marginTop: 5,
-  color: "#1E293B",
-  fontSize: 13,
-  fontWeight: 700,
-  wordBreak: "break-word",
-};
-
-const privacyBannerStyle = {
-  display: "grid",
-  gap: 4,
-  marginTop: 26,
-  padding: 14,
-  borderRadius: 10,
-  background: "#F8FAFC",
-  border: "1px solid #E2E8F0",
-  color: "#475569",
-  fontSize: 12,
-  lineHeight: 1.55,
-};
-
+const CSS=\`
+*{box-sizing:border-box}.essshell{min-height:100vh;background:#f4f7f6;color:#10251c;font-family:Inter,Arial,sans-serif}.app{min-height:100vh}header{height:76px;background:#fff;border-bottom:1px solid #dfe8e3;display:flex;align-items:center;justify-content:space-between;padding:0 30px;position:sticky;top:0;z-index:5}.brandrow,.headuser,.person{display:flex;align-items:center;gap:12px}.brandmark{width:64px;height:64px;border-radius:18px;background:#087a43;color:#f7d66a;display:grid;place-items:center;font-weight:950}.brandmark.small{width:42px;height:42px;border-radius:12px;font-size:14px}.brandrow strong{display:block;font-size:19px;color:#073b24}.brandrow small,.headuser small{display:block;font-size:10px;color:#718078}.avatar,.bigavatar{border-radius:50%;background:#e4f1ea;color:#087a43;display:grid;place-items:center;font-weight:900}.avatar{width:40px;height:40px}.bigavatar{width:72px;height:72px;font-size:23px}.headuser b{display:block;font-size:12px}.ghost,.link,.tablebtn{border:0;background:none;color:#087a43;font-weight:800;cursor:pointer}.ghost{margin-left:12px}.body{display:flex;max-width:1500px;margin:auto}aside{width:250px;min-height:calc(100vh - 76px);background:#fff;border-right:1px solid #dfe8e3;padding:20px 13px;display:flex;flex-direction:column}.caption{font-size:10px;font-weight:950;letter-spacing:1.2px;color:#91a198;padding:8px 11px}.nav{border:0;background:transparent;text-align:left;padding:11px;border-radius:10px;display:flex;align-items:center;gap:9px;color:#506159;font-weight:750;cursor:pointer;margin:2px 0}.nav i{font-style:normal;width:21px;text-align:center}.nav b{margin-left:auto;font-size:9px;background:#eaf5ef;color:#087a43;padding:3px 6px;border-radius:999px}.nav.active{background:#eaf5ef;color:#087a43}.sidefoot{margin-top:auto;border-top:1px solid #e7eeea;padding:15px 10px;font-size:10px;font-weight:800;color:#415249}.sidefoot small{font-weight:500;color:#849189}.body main{flex:1;padding:32px;min-width:0}.pagehead{margin-bottom:20px}.pagehead h2{margin:4px 0;color:#073b24;font-size:29px}.pagehead p{margin:0;color:#718078;font-size:12px}.eyebrow{font-size:10px;letter-spacing:1px;font-weight:950;color:#087a43}.hero{background:linear-gradient(120deg,#073b24,#087a43);color:#fff;border-radius:18px;padding:23px;display:flex;justify-content:space-between;align-items:center}.hero h1{margin:3px 0;font-size:25px}.hero p{margin:0;color:#d5e9df;font-size:12px}.hero .eyebrow{color:#f7d66a}.pill{background:#fff;color:#087a43;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:900}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin:15px 0}.metric{border:1px solid #dfe8e3;background:#fff;border-radius:13px;padding:16px;text-align:left;cursor:pointer}.metric span,.metric small{display:block;color:#718078;font-size:10px}.metric strong{display:block;color:#073b24;font-size:23px;margin:6px 0}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:15px}.card{background:#fff;border:1px solid #dfe8e3;border-radius:14px;padding:19px;margin-bottom:15px}.cardhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.card h3{margin:0;color:#173c2c;font-size:14px}.progress{height:9px;background:#e9efec;border-radius:99px;overflow:hidden}.progress span{display:block;height:100%;background:#087a43}.muted{font-size:11px;color:#718078}.latest{display:flex;justify-content:space-between;align-items:center}.latest small{display:block;color:#718078;font-size:10px}.latest strong{display:block;color:#087a43;font-size:21px;margin-top:3px}.quickgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.quick{border:1px solid #e0e9e4;background:#fbfdfc;border-radius:11px;padding:12px;text-align:left;display:flex;align-items:center;gap:9px;cursor:pointer;color:#173c2c}.quick div{flex:1}.quick b,.quick small{display:block}.quick small{font-size:10px;color:#718078;margin-top:3px}.infogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e5ece8;border:1px solid #e5ece8;border-radius:10px;overflow:hidden}.info{background:#fff;padding:12px}.info small{display:block;color:#849189;font-size:9px;font-weight:700;margin-bottom:4px}.info b{font-size:12px;line-height:1.4;word-break:break-word}.proghead{display:flex;justify-content:space-between;align-items:end;margin-bottom:11px}.proghead strong{display:block;font-size:30px;color:#073b24;margin-top:3px}.sectiongrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px}.sectiontile{background:#fff;border:1px solid #dfe8e3;border-radius:12px;padding:13px;display:flex;align-items:center;gap:10px}.check{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#fff4dc;color:#a76d00;font-weight:900}.check.done{background:#e6f5ed;color:#087a43}.sectiontile>div:nth-child(2){flex:1}.sectiontile b,.sectiontile small{display:block}.sectiontile small{font-size:9px;color:#849189;margin-top:3px}.sectiontile>span{font-size:8px;font-weight:900;text-transform:uppercase;color:#087a43}.group{margin-bottom:17px}.group h4{margin:0 0 7px;color:#087a43;font-size:11px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:11px}th{text-align:left;background:#f5f8f6;color:#68776f;font-size:9px;text-transform:uppercase}th,td{padding:10px;border-bottom:1px solid #e8eeeb;white-space:nowrap}.empty{padding:24px;text-align:center;background:#f8faf9;border:1px dashed #d6e2db;border-radius:10px;color:#7a8981;font-size:11px}.workflow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:15px}.step{padding:6px 8px;border-radius:999px;background:#f1f4f2;color:#7b8982;font-size:9px;font-weight:800}.step.active{background:#fff3d8;color:#9a6b00}.step.done{background:#e8f5ed;color:#087a43}.kpi{border:1px solid #e1e9e5;border-radius:11px;padding:14px;margin-top:9px}.kpi>div:first-child{display:flex;gap:8px;align-items:center}.kpi>div:first-child span{background:#eaf5ef;color:#087a43;border-radius:99px;padding:4px 7px;font-size:8px;font-weight:900}.kpi p{font-size:11px;margin:8px 0 4px}.kpi small{font-size:9px;color:#718078}.kpiinputs{display:grid;grid-template-columns:180px 1fr;gap:8px;margin-top:10px}.field{display:grid;gap:5px;font-size:10px;font-weight:800;color:#415249;margin-bottom:12px}select,input,textarea{width:100%;border:1px solid #d5e0da;border-radius:8px;padding:9px;background:#fff;font:inherit;font-size:11px;color:#173c2c}.primary{width:100%;border:0;border-radius:9px;background:#087a43;color:#fff;padding:11px;font-weight:900;cursor:pointer}.primary:disabled{opacity:.6}.notice{padding:10px;background:#e9f5ee;color:#087a43;border-radius:8px;font-size:10px;margin-bottom:10px}.outcome{margin-top:12px;padding:12px;border-radius:10px;background:#f4f8f6;display:grid;gap:5px;font-size:11px}.error{background:#fff0ef;color:#a43d32;padding:9px;border-radius:8px;font-size:10px;margin:12px 0}.security{margin-top:14px;padding:10px;background:#f4f8f6;border-radius:8px;font-size:10px;color:#315044;font-weight:800}.security small{font-weight:500;color:#728078}.loginwrap{min-height:100vh;display:grid;place-items:center;padding:28px}.loginbrand{text-align:center;margin-bottom:16px}.loginbrand .brandmark{margin:auto}.loginbrand strong{display:block;font-size:23px;color:#073b24;margin-top:8px}.loginbrand small{color:#7b8982;font-size:9px}.logincard{width:min(460px,100%);background:#fff;border:1px solid #dfe8e3;border-radius:17px;padding:27px;box-shadow:0 18px 50px rgba(7,59,36,.1)}.logincard h1{color:#073b24;margin:4px 0}.logincard p{font-size:11px;color:#718078;line-height:1.6}.logincard form{display:grid;gap:12px;margin-top:17px}.logincard label{font-size:10px;font-weight:800;color:#415249}.logincard input{margin-top:5px}.loading{text-align:center;margin:20vh auto;background:#fff;border:1px solid #dfe8e3;border-radius:16px;padding:32px;max-width:410px}.loading h2{color:#073b24}.loading p{font-size:11px;color:#718078}@media(max-width:1000px){.metrics{grid-template-columns:repeat(2,1fr)}.infogrid{grid-template-columns:repeat(2,1fr)}}@media(max-width:760px){header{padding:0 13px}.headuser>div:not(.avatar),.ghost{display:none}.body{display:block}aside{width:100%;min-height:auto;border-right:0;border-bottom:1px solid #dfe8e3;display:grid;grid-template-columns:repeat(3,1fr);padding:7px}.caption,.sidefoot{display:none}.nav{justify-content:center;padding:8px;font-size:9px}.nav span{display:none}.nav b{margin:0}.body main{padding:17px 12px}.metrics,.twocol,.sectiongrid,.quickgrid{grid-template-columns:1fr}.infogrid{grid-template-columns:1fr}.kpiinputs{grid-template-columns:1fr}.hero{align-items:flex-start;gap:12px}.hero h1{font-size:19px}}`;
