@@ -51,26 +51,14 @@ function Performance({data,onSaved}){const current=data.performance?.[0];const [
 
 function Documents({data}){return <Page h="Documents" s="Documents attached to your CHRiS employee record."><Card><Table rows={data.onboarding.documents} empty="No employee documents are available." cols={[["Document",r=>r.originalName],["Category",r=>title(r.category)],["Type",r=>r.mimeType||"—"],["Uploaded",r=>date(r.createdAt)],["",r=><Doc id={r.id}/>]]}/></Card></Page>}
 
-function Download({id}) {
- return <button className="tablebtn" onClick={async()=>{
-  try {
-   const r=await fetch(API_BASE_URL+"/api/ess/payslips/"+id+"/download",{headers:{Authorization:"Bearer "+localStorage.getItem("chris_ess_token")}});
-   if(!r.ok) throw Error("Download failed");
-   const blob=await r.blob(); const url=URL.createObjectURL(blob); const link=document.createElement("a");
-   link.href=url; link.download="CHRiS_Payslip.xlsx"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-  } catch(e) { alert(e.message); }
- }}>Download</button>;
+async function downloadFile(url,name){
+ const r=await fetch(url,{headers:{Authorization:"Bearer "+localStorage.getItem("chris_ess_token")}});
+ if(!r.ok) throw Error("The requested file could not be downloaded.");
+ const blob=await r.blob(); const objectUrl=URL.createObjectURL(blob); const link=document.createElement("a");
+ link.href=objectUrl; link.download=name; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(objectUrl);
 }
-function Doc({id}) {
- return <button className="tablebtn" onClick={async()=>{
-  try {
-   const r=await fetch(API_BASE_URL+"/api/ess/documents/"+id+"/download",{headers:{Authorization:"Bearer "+localStorage.getItem("chris_ess_token")}});
-   if(!r.ok) throw Error("Document could not be downloaded.");
-   const blob=await r.blob(); const url=URL.createObjectURL(blob); const link=document.createElement("a");
-   link.href=url; link.download="CHRiS_Document"; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-  } catch(e) { alert(e.message); }
- }}>Download</button>;
-}
+function Download({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/payslips/"+id+"/download","CHRiS_Payslip.xlsx").catch(e=>alert(e.message))}>Download</button>}
+function Doc({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/documents/"+id+"/download","CHRiS_Document").catch(e=>alert(e.message))}>Download</button>}
 
 function Page({h,s,children}){return <><div className="pagehead"><span className="eyebrow">CHRiS EMPLOYEE PORTAL</span><h2>{h}</h2><p>{s}</p></div>{children}</>}
 function Card({t,a,click,children}){return <section className="card">{t&&<div className="cardhead"><h3>{t}</h3>{a&&<button className="link" onClick={click}>{a} →</button>}</div>}{children}</section>}
