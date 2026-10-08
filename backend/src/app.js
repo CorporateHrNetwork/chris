@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
+const essRoutes = require("./routes/essRoutes");
 const activeBranchScopeRoutes = require("./routes/activeBranchScopeRoutes");
 const activeBranchSupplementRoutes = require("./routes/activeBranchSupplementRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
@@ -87,6 +88,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/ess", essRoutes);
 app.use("/api/support-desk", supportDeskCancellationRoutes);
 app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
