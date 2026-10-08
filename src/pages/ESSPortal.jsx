@@ -73,7 +73,9 @@ function Table({rows=[],cols,empty="No records available."}){if(!rows.length)ret
 function Empty({t}){return <div className="empty">{t}</div>}
 function Brand({small=false}){return <img src={chrisLogo} alt="CHRiS" className={small?"brandlogo small":"brandlogo"}/>}
 
-function Login({login,setLogin,submit,submitting,error}){\n const [showPassword,setShowPassword]=useState(false);\n return <main className="esslogin" style={{backgroundImage:`linear-gradient(135deg,rgba(3,45,29,.42),rgba(0,0,0,.16)),url(${loginBackground})`}}>
+function Login({login,setLogin,submit,submitting,error}){
+ const [showPassword,setShowPassword]=useState(false);
+ return <main className="esslogin" style={{backgroundImage:`linear-gradient(135deg,rgba(3,45,29,.42),rgba(0,0,0,.16)),url(${loginBackground})`}}>
    <div className="esslogin-glow"/>
    <div className="esslogin-center">
      <div className="esslogin-brand">
