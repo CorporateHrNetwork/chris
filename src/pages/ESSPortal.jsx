@@ -155,7 +155,7 @@ body{background:#07110C;color:#F3F7F4}
 .ess-signin{width:100%;border:none;border-radius:11px;padding:14px;background:linear-gradient(90deg,#075F36,#0B7A45);color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.30),0 0 14px rgba(8,122,67,.18)}
 .ess-signin:disabled{background:#688B79;cursor:not-allowed;opacity:.8}
 .ess-error{margin-bottom:20px;padding:13px 15px;background:rgba(254,242,242,.94);border:1px solid #FECACA;border-radius:10px;color:#B91C1C;font-size:13px;font-weight:600;line-height:1.5}
-.ess-login-footer{margin-top:28px;height:auto;min-height:0;background:transparent;position:relative;padding-top:0;display:flex;justify-content:center;gap:10px;color:#7FAF96;font-size:12px;font-weight:700}
+.ess-login-footer{margin-top:28px!important;height:auto!important;min-height:0!important;background:none!important;background-image:none!important;border:0!important;border-top:0!important;box-shadow:none!important;outline:0!important;padding:0!important;position:relative;display:flex;justify-content:center;gap:10px;color:#7FAF96;font-size:12px;font-weight:700}.ess-login-footer:before,.ess-login-footer:after{content:none!important;display:none!important;border:0!important;background:none!important;box-shadow:none!important}
 .ess-login-footer b{color:#D4AF37}
 @media(max-width:760px){.esslogin{padding:18px}.ess-admin-login-card{padding:28px 24px;border-radius:20px}.ess-admin-logo{width:220px}.ess-welcome{font-size:15px}.ess-corporate{font-size:16px}}
 
