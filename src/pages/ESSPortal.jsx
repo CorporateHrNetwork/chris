@@ -14,8 +14,14 @@ const initials=e=>[e?.firstName,e?.lastName].filter(Boolean).map(x=>x[0]).join("
 const icon=k=>({overview:"⌂",profile:"👤",onboarding:"✓",statutory:"▣",payroll:"₦",payslips:"▤",leave:"◷",performance:"★",documents:"▤"}[k]||"•");
 
 export default function ESSPortal(){
- const essToken=getEssAuthToken();\n const [auth,setAuth]=useState(Boolean(essToken)),[data,setData]=useState(null),[tab,setTab]=useState("overview"),[loading,setLoading]=useState(Boolean(essToken)),[error,setError]=useState(""),[login,setLogin]=useState({email:"",password:""}),[submitting,setSubmitting]=useState(false);
- useEffect(()=>{\n   localStorage.removeItem("chris_ess_token");\n   localStorage.removeItem("chris_ess_employee");\n   localStorage.removeItem("chris_ess_organization");\n   if(window.location.search)window.history.replaceState({},document.title,"/ess");\n },[]);
+ const essToken=getEssAuthToken();
+ const [auth,setAuth]=useState(Boolean(essToken)),[data,setData]=useState(null),[tab,setTab]=useState("overview"),[loading,setLoading]=useState(Boolean(essToken)),[error,setError]=useState(""),[login,setLogin]=useState({email:"",password:""}),[submitting,setSubmitting]=useState(false);
+ useEffect(()=>{
+   localStorage.removeItem("chris_ess_token");
+   localStorage.removeItem("chris_ess_employee");
+   localStorage.removeItem("chris_ess_organization");
+   if(window.location.search)window.history.replaceState({},document.title,"/ess");
+ },[]);
  const load=async()=>{setLoading(true);setError("");try{const r=await essRequest("/api/ess/dashboard");const d=r?.data||{};setData({profile:d.profile||{},onboarding:{completionPercent:0,currentStage:null,status:"NOT_STARTED",sectionProgress:{},sections:[],data:{},documents:[],...(d.onboarding||{})},statutory:{registered:{},obligations:[],...(d.statutory||{})},payment:d.payment||{},payroll:{payslips:[],latestPayslip:null,...(d.payroll||{})},leaveBalances:Array.isArray(d.leaveBalances)?d.leaveBalances:[],attendance:Array.isArray(d.attendance)?d.attendance:[],performance:Array.isArray(d.performance)?d.performance:[]});setAuth(true)}catch(e){setAuth(false);setData(null);setError(e.message||"Unable to load your employee portal.")}finally{setLoading(false)}};
  useEffect(()=>{if(getEssAuthToken())load();else setLoading(false)},[]);
  const submit=async e=>{e.preventDefault();setSubmitting(true);setError("");try{const r=await essRequest("/api/ess/login",{method:"POST",body:{...login,organizationSlug:ORG_SLUG}});sessionStorage.setItem("chris_ess_token",r.data.token);sessionStorage.setItem("chris_ess_employee",JSON.stringify(r.data.employee||{}));sessionStorage.setItem("chris_ess_organization",JSON.stringify(r.data.organization||{}));await load()}catch(e){setError(e.message||"Invalid employee login credentials.")}finally{setSubmitting(false)}};
