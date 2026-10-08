@@ -3,6 +3,7 @@ const prisma = require("../config/prisma");
 
 const PLATFORM_ORGANIZATION_SLUG = "corporatehr-network";
 const PLATFORM_ONLY_PERMISSION_PREFIXES = ["support.internal.", "support.engineering."];
+const ESS_EMPLOYEE_STATUSES = new Set(["ACTIVE", "PROBATION", "LEAVE"]);
 
 function isPlatformOnlyPermission(permission) {
   const key = String(permission || "");
@@ -24,6 +25,9 @@ async function requireAuth(req, res, next) {
     if (!token) return res.status(401).json({ status: "error", message: "Authentication required." });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.accessType === "ESS") {
+      return res.status(401).json({ status: "error", code: "ESS_SESSION_NOT_ALLOWED", message: "This session is restricted to the employee portal." });
+    }
     const user = await prisma.user.findFirst({
       where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true },
       include: {
@@ -133,6 +137,50 @@ async function requireAuth(req, res, next) {
   }
 }
 
+
+async function requireEssAuth(req, res, next) {
+  try {
+    const authorization = req.headers.authorization;
+    if (!authorization || !authorization.startsWith("Bearer ")) {
+      return res.status(401).json({ status: "error", message: "Employee portal authentication required." });
+    }
+    const token = authorization.split(" ")[1];
+    if (!token) return res.status(401).json({ status: "error", message: "Employee portal authentication required." });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.accessType !== "ESS") {
+      return res.status(401).json({ status: "error", code: "ESS_SESSION_REQUIRED", message: "An employee portal session is required." });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true, employeeId: { not: null } },
+      include: { organization: true, employee: { select: { id: true, status: true } } },
+    });
+
+    if (!user || !user.employee || !ESS_EMPLOYEE_STATUSES.has(user.employee.status)) {
+      return res.status(403).json({ status: "error", code: "ESS_ACCESS_REVOKED", message: "Employee portal access is unavailable for this account." });
+    }
+    if (user.organization.status !== "ACTIVE") {
+      return res.status(403).json({ status: "error", message: "Organization access is currently unavailable." });
+    }
+
+    req.essAuth = {
+      userId: user.id,
+      organizationId: user.organizationId,
+      employeeId: user.employee.id,
+      email: user.email,
+      organization: user.organization,
+    };
+    next();
+  } catch (error) {
+    console.error("ESS authentication error:", error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ status: "error", message: "Your employee portal session is invalid or has expired." });
+    }
+    return res.status(500).json({ status: "error", message: "Unable to authenticate employee portal request." });
+  }
+}
+
 function requirePermission(...requiredPermissions) {
   return (req, res, next) => {
     if (!req.auth) return res.status(401).json({ status: "error", message: "Authentication required." });
@@ -175,4 +223,4 @@ function requireRole(...requiredRoles) {
   };
 }
 
-module.exports = { requireAuth, requirePermission, requireAnyPermission, requireRole };
+module.exports = { requireAuth, requireEssAuth, requirePermission, requireAnyPermission, requireRole };
