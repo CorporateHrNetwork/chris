@@ -1,12 +1,74 @@
 import { useEffect, useState } from "react";
-import {
-  API_BASE_URL,
-  clearEssAuthSession,
-  essRequest,
-  getEssAuthToken,
-} from "../services/api";
+
+const API_BASE_URL = String(
+  import.meta.env.VITE_API_BASE_URL || ""
+).replace(/\/+$/, "");
 
 const ORGANIZATION_SLUG = "zermatt-liquor-limited";
+
+function getEssAuthToken() {
+  return localStorage.getItem("chris_ess_token") || sessionStorage.getItem("chris_ess_token") || null;
+}
+
+function clearEssAuthSession() {
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem("chris_ess_token");
+    storage.removeItem("chris_ess_employee");
+    storage.removeItem("chris_ess_organization");
+  }
+}
+
+async function essRequest(endpoint, options = {}) {
+  const token = getEssAuthToken();
+  const rawBody = options.body;
+  const requestBody =
+    rawBody !== undefined && rawBody !== null && typeof rawBody === "object"
+      ? JSON.stringify(rawBody)
+      : rawBody;
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      body: requestBody,
+      headers: {
+        ...(requestBody !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Cache-Control": "no-cache",
+        ...(options.headers || {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    const error = new Error("The employee portal cannot connect to the CHRiS server. Check your internet connection and try again.");
+    error.code = "NETWORK_UNAVAILABLE";
+    throw error;
+  }
+
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    result = { status: "error", message: "Invalid server response." };
+  }
+
+  if (response.status === 401) {
+    clearEssAuthSession();
+    if (window.location.pathname !== "/ess") window.location.replace("/ess");
+    const error = new Error(result.message || "Your employee portal session has expired. Please sign in again.");
+    error.code = "ESS_AUTH_INVALID";
+    throw error;
+  }
+
+  if (!response.ok) {
+    const error = new Error(result.message || "Unable to complete employee portal request.");
+    error.code = result.code || "ESS_REQUEST_FAILED";
+    error.details = result.details || null;
+    throw error;
+  }
+
+  return result;
+}
 
 function formatDate(value) {
   if (!value) return "—";
