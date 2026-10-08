@@ -15,6 +15,7 @@ import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
 const Login = lazy(() => import("./pages/Login"));
+const ESSPortal = lazy(() => import("./pages/ESSPortal"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Employees = lazy(() => import("./pages/Employees"));
