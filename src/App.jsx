@@ -15,6 +15,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
+const ESSPortal = lazy(() => import("./pages/ESSPortal"));
 const Login = lazy(() => import("./pages/Login"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -109,7 +110,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/employee-invite/:token" element={<EmployeeSelfOnboardingPublic />} />
-        <Route path="/ess" element={<ProtectedRoute><EmployeeSelfService /></ProtectedRoute>} />
+        <Route path="/ess" element={<ESSPortal />} />
 
         <Route path="/" element={<PermissionLayout permission="dashboard.view"><Dashboard /></PermissionLayout>} />
 
