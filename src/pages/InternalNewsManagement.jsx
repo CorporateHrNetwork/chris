@@ -3,8 +3,8 @@ import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const blank={category:"ANNOUNCEMENT",title:"",summary:"",body:"",status:"DRAFT",isPinned:false,expireAt:""};
 const categories=[
-  ["ANNOUNCEMENT","Announcement"],["PROMOTION","Promotion"],["INTERNAL_CAREER","Internal Career"],
-  ["TRANSFER","Transfer"],["RETIREMENT","Retirement"],["TERMINATION","Termination"],
+  ["ANNOUNCEMENT","Announcement"],["MEMO","Memo"],["PROMOTION","Promotion"],["INTERNAL_CAREER","Internal Career"],
+  ["TRANSFER","Transfer"],["RETIREMENT","Retirement"],["RESIGNATION","Resignation"],["TERMINATION","Termination"],
   ["EVENT","Event"],["POLICY_HR_UPDATE","Policy / HR Update"],
 ];
 
