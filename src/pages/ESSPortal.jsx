@@ -11,6 +11,7 @@ const date=v=>{if(!v)return "—";const d=new Date(v);return Number.isNaN(d.getT
 const title=v=>String(v||"").replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
 const val=v=>v===null||v===undefined||v===""?"—":String(v);
 const initials=e=>[e?.firstName,e?.lastName].filter(Boolean).map(x=>x[0]).join("").slice(0,2).toUpperCase()||"CH";
+const icon=k=>({overview:"⌂",profile:"👤",onboarding:"✓",statutory:"▣",payroll:"₦",payslips:"▤",leave:"◷",performance:"★",documents:"▤"}[k]||"•");
 
 export default function ESSPortal(){
  const [auth,setAuth]=useState(Boolean(getEssAuthToken())),[data,setData]=useState(null),[tab,setTab]=useState("overview"),[loading,setLoading]=useState(Boolean(getEssAuthToken())),[error,setError]=useState(""),[login,setLogin]=useState({email:"",password:""}),[submitting,setSubmitting]=useState(false);
