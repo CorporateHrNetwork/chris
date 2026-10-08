@@ -103,8 +103,8 @@ function Login({login,setLogin,submit,submitting,error}){
      <div className="ess-admin-header">
        <div className="ess-welcome">Welcome to</div>
        <img src={chrisLogo} alt="CHRIS" className="ess-admin-logo"/>
-       <div className="ess-corporate">CorporateHR Network</div>
-       <div className="ess-information">Information System</div><div className="ess-portal-title">Employee Self-Service</div>
+       <div className="ess-corporate">Zermatt Liquor Limited</div>
+       <div className="ess-portal-title">Employee Self-Service</div>
        <div className="ess-divider" aria-hidden="true"/>
      </div>
      {error&&<div className="ess-error">{error}</div>}
