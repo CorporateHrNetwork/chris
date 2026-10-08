@@ -12,7 +12,7 @@ const date=v=>{if(!v)return "—";const d=new Date(v);return Number.isNaN(d.getT
 const title=v=>String(v||"").replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
 const val=v=>v===null||v===undefined||v===""?"—":String(v);
 const initials=e=>[e?.firstName,e?.lastName].filter(Boolean).map(x=>x[0]).join("").slice(0,2).toUpperCase()||"CH";
-const icon=k=>({overview:"⌂",profile:"👤",onboarding:"✓",statutory:"▣",payroll:"₦",payslips:"▤",leave:"◷",performance:"★",documents:"▤"}[k]||"•");
+const icon=k=>({overview:"⌂",profile:"👤",onboarding:"✓",statutory:"▣",payroll:"₦",payslips:"▤",leave:"◷",performance:"★",gratuity:"₦",birthday:"🎂",documents:"▤"}[k]||"•");
 
 export default function ESSPortal(){
  const essToken=getEssAuthToken();
@@ -23,10 +23,10 @@ export default function ESSPortal(){
    localStorage.removeItem("chris_ess_organization");
    if(window.location.search)window.history.replaceState({},document.title,"/ess");
  },[]);
- const load=async()=>{setLoading(true);setError("");try{const r=await essRequest("/api/ess/dashboard");const d=r?.data||{};setData({profile:d.profile||{},onboarding:{completionPercent:0,currentStage:null,status:"NOT_STARTED",sectionProgress:{},sections:[],data:{},documents:[],...(d.onboarding||{})},statutory:{registered:{},obligations:[],...(d.statutory||{})},payment:d.payment||{},payroll:{payslips:[],latestPayslip:null,...(d.payroll||{})},leaveBalances:Array.isArray(d.leaveBalances)?d.leaveBalances:[],attendance:Array.isArray(d.attendance)?d.attendance:[],performance:Array.isArray(d.performance)?d.performance:[]});setAuth(true)}catch(e){setAuth(false);setData(null);setError(e.message||"Unable to load your employee portal dashboard.")}finally{setLoading(false)}};
+ const load=async()=>{setLoading(true);setError("");try{const r=await essRequest("/api/ess/dashboard");const d=r?.data||{};setData({profile:d.profile||{},onboarding:{completionPercent:0,currentStage:null,status:"NOT_STARTED",sectionProgress:{},sections:[],data:{},documents:[],...(d.onboarding||{})},statutory:{registered:{},obligations:[],...(d.statutory||{})},payment:d.payment||{},payroll:{payslips:[],latestPayslip:null,...(d.payroll||{})},leaveBalances:Array.isArray(d.leaveBalances)?d.leaveBalances:[],attendance:Array.isArray(d.attendance)?d.attendance:[],performance:Array.isArray(d.performance)?d.performance:[],gratuity:d.gratuity||null,birthday:d.birthday||{}});setAuth(true)}catch(e){setAuth(false);setData(null);setError(e.message||"Unable to load your employee portal dashboard.")}finally{setLoading(false)}};
  useEffect(()=>{if(getEssAuthToken())load();else setLoading(false)},[]);
  const submit=async e=>{e.preventDefault();setSubmitting(true);setError("");try{const r=await essRequest("/api/ess/login",{method:"POST",body:{...login,organizationSlug:ORG_SLUG}});sessionStorage.setItem("chris_ess_token",r.data.token);sessionStorage.setItem("chris_ess_employee",JSON.stringify(r.data.employee||{}));sessionStorage.setItem("chris_ess_organization",JSON.stringify(r.data.organization||{}));await load()}catch(e){setError(e.message||"Invalid employee login credentials.")}finally{setSubmitting(false)}};
- const signOut=()=>{clearEssAuthSession();setAuth(false);setData(null);setTab("overview");setError("");setLogin({email:"",password:""})};
+ const signOut=()=>{clearEssAuthSession();setAuth(false);setData(null);setTab("overview");setError("");setLogin({email:"",password:""});window.history.replaceState({},document.title,"/ess")};
  if(!auth)return <><style>{CSS}</style><Login login={login} setLogin={setLogin} submit={submit} submitting={submitting} error={error}/></>;
  if(loading&&!data)return <><style>{CSS}</style><div className="essshell"><div className="loading"><Brand/><h2>Opening your employee portal…</h2><p>Securely loading your CHRiS employee information.</p></div></div></>;
  if(!data)return <><style>{CSS}</style><Login login={login} setLogin={setLogin} submit={submit} submitting={submitting} error={error}/></>;
@@ -140,7 +140,7 @@ body{background:#07110C;color:#F3F7F4}
 .ess-admin-logo{display:block;width:245px;max-width:92%;height:auto;margin:0 auto 5px;object-fit:contain;animation:chrisEssLogoPulse 2.5s ease-in-out infinite}
 @keyframes chrisEssLogoPulse{0%,100%{opacity:1;transform:scale(1);filter:drop-shadow(0 0 6px rgba(0,155,74,.24)) drop-shadow(0 0 5px rgba(212,175,55,.15))}50%{opacity:.64;transform:scale(1.035);filter:drop-shadow(0 0 14px rgba(0,185,88,.40)) drop-shadow(0 0 11px rgba(212,175,55,.28))}}
 .ess-corporate{margin-top:3px;color:#087A43;font-size:17px;font-weight:900;line-height:1.25;letter-spacing:.01em;text-shadow:0 0 9px rgba(8,122,67,.22)}
-.ess-information{margin-top:5px;color:#D4AF37;font-size:10px;font-weight:800;line-height:1.3;letter-spacing:.16em;text-transform:uppercase;text-shadow:0 0 8px rgba(212,175,55,.18)}
+.ess-information{margin-top:5px;color:#D4AF37;font-size:10px;font-weight:800;line-height:1.3;letter-spacing:.16em;text-transform:uppercase;text-shadow:0 0 8px rgba(212,175,55,.18)}\n.ess-portal-title{margin-top:12px;color:#F3F7F4;font-size:15px;font-weight:800;line-height:1.3;letter-spacing:.01em}
 .ess-divider{width:62%;height:1px;margin:15px auto 0;background:linear-gradient(90deg,transparent 0%,rgba(8,122,67,.72) 25%,rgba(212,175,55,.92) 50%,rgba(8,122,67,.72) 75%,transparent 100%)}
 .ess-field-label{display:block;margin-bottom:18px;color:#D7E4DC;font-size:13px;font-weight:800}
 .ess-input-wrap{position:relative;width:100%;margin-top:8px}
