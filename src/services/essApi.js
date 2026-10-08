@@ -3,11 +3,11 @@ export const API_BASE_URL = String(
 ).replace(/\/+$/, "");
 
 export function getEssAuthToken() {
-  return localStorage.getItem("chris_ess_token") || sessionStorage.getItem("chris_ess_token") || null;
+  return sessionStorage.getItem("chris_ess_token") || null;
 }
 
 export function getStoredEssEmployee() {
-  const value = localStorage.getItem("chris_ess_employee") || sessionStorage.getItem("chris_ess_employee");
+  const value = sessionStorage.getItem("chris_ess_employee");
   if (!value) return null;
   try { return JSON.parse(value); } catch { return null; }
 }
