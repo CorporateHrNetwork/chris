@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
-import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "../services/api";
+import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "../services/essApi";
 
 const ORG_SLUG = "zermatt-liquor-limited";
 const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["documents","Documents"]];
