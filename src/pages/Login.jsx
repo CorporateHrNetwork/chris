@@ -137,6 +137,8 @@ function Login() {
     localStorage.removeItem(
       "chris_token"
     );
+    localStorage.removeItem("chris_refresh_token");
+    localStorage.removeItem("chris_token_expires_at");
 
     localStorage.removeItem(
       "chris_user"
@@ -149,6 +151,8 @@ function Login() {
     sessionStorage.removeItem(
       "chris_token"
     );
+    sessionStorage.removeItem("chris_refresh_token");
+    sessionStorage.removeItem("chris_token_expires_at");
 
     sessionStorage.removeItem(
       "chris_user"
