@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   FiEye,
@@ -9,21 +9,19 @@ import {
 
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
-import { API_BASE_URL } from "../services/api";
+import { hasPasswordRecoverySession, restorePasswordRecoveryFromUrl, updateRecoveredPassword } from "../services/supabaseAuth";
 
 function ResetPassword() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  /*
-    During local development, Login.jsx will pass
-    the reset token here after Forgot Password succeeds.
+  const organizationSlug = new URLSearchParams(location.search).get("organization") || "corporatehr-network";
+  const [recoveryReady, setRecoveryReady] = useState(false);
 
-    Later, when email delivery is implemented,
-    the token will come from the secure reset URL.
-  */
-  const resetToken =
-    location.state?.resetToken || "";
+  useEffect(() => {
+    restorePasswordRecoveryFromUrl();
+    setRecoveryReady(hasPasswordRecoverySession());
+  }, []);
 
   const [newPassword, setNewPassword] =
     useState("");
@@ -54,97 +52,33 @@ function ResetPassword() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     try {
       setLoading(true);
       setError("");
       setSuccess("");
-
-      if (!resetToken) {
-        throw new Error(
-          "Your password reset session is missing or has expired. Please start again from Forgot Password."
-        );
+      if (!recoveryReady) {
+        throw new Error("Your password reset link is missing or has expired. Please request a new reset email.");
       }
-
-      if (
-        !newPassword ||
-        !confirmPassword
-      ) {
-        throw new Error(
-          "Please complete both password fields."
-        );
+      if (!newPassword || !confirmPassword) {
+        throw new Error("Please complete both password fields.");
       }
-
       if (newPassword.length < 10) {
-        throw new Error(
-          "Your new password must contain at least 10 characters."
-        );
+        throw new Error("Your new password must contain at least 10 characters.");
       }
-
-      if (
-        newPassword !==
-        confirmPassword
-      ) {
-        throw new Error(
-          "The passwords do not match."
-        );
+      if (newPassword !== confirmPassword) {
+        throw new Error("The passwords do not match.");
       }
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/auth/reset-password`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            token: resetToken,
-            newPassword,
-            confirmPassword,
-          }),
-        }
-      );
-
-      const result =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            "Unable to reset password."
-        );
-      }
-
+      await updateRecoveredPassword(newPassword);
       setNewPassword("");
       setConfirmPassword("");
-
-      setSuccess(
-        result.message ||
-          "Password reset successfully."
-      );
-
-      /*
-        Give the user time to see the confirmation,
-        then return to Sign In.
-      */
+      setRecoveryReady(false);
+      setSuccess("Password reset successfully.");
       window.setTimeout(() => {
-        navigate("/login", {
-          replace: true,
-        });
+        navigate(`/login?organization=${encodeURIComponent(organizationSlug)}`, { replace: true });
       }, 2500);
     } catch (err) {
-      console.error(
-        "CHRIS reset password error:",
-        err
-      );
-
-      setError(
-        err.message ||
-          "CHRIS could not reset your password."
-      );
+      console.error("CHRIS Supabase password reset error:", err);
+      setError(err.message || "CHRIS could not reset your password.");
     } finally {
       setLoading(false);
     }
@@ -220,7 +154,7 @@ function ResetPassword() {
         <button
           type="button"
           onClick={() =>
-            navigate("/login", {
+            navigate(`/login?organization=${encodeURIComponent(organizationSlug)}`, {
               replace: true,
             })
           }
@@ -294,7 +228,7 @@ function ResetPassword() {
           </p>
         </div>
 
-        {!resetToken && (
+        {!recoveryReady && (
           <MessageBox
             type="error"
             message="No active password reset session was found. Return to Sign In and select Forgot password?"
@@ -390,7 +324,7 @@ function ResetPassword() {
             disabled={
               loading ||
               success ||
-              !resetToken
+              !recoveryReady
             }
             style={{
               ...submitButtonStyle,
@@ -398,21 +332,21 @@ function ResetPassword() {
               background:
                 loading ||
                 success ||
-                !resetToken
+                !recoveryReady
                   ? "#688B79"
                   : "#087A43",
 
               cursor:
                 loading ||
                 success ||
-                !resetToken
+                !recoveryReady
                   ? "not-allowed"
                   : "pointer",
 
               opacity:
                 loading ||
                 success ||
-                !resetToken
+                !recoveryReady
                   ? 0.75
                   : 1,
             }}
