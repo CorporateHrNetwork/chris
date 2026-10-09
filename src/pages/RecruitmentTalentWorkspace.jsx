@@ -64,6 +64,7 @@ const MODE_META = {
   offers: { eyebrow: "RECRUITMENT · OFFERS", title: "Offers", icon: <FaFileSignature /> },
   ats: { eyebrow: "RECRUITMENT · APPLICANT TRACKING", title: "Applicant Tracking System", icon: <FaBriefcase /> },
   "talent-pool": { eyebrow: "RECRUITMENT · TALENT POOL", title: "Talent Pool", icon: <FaUserCheck /> },
+  hiring: { eyebrow: "RECRUITMENT · HIRING", title: "Hiring Register", icon: <FaHandshake /> },
 };
 
 function RecruitmentTalentWorkspace({ mode = "candidates" }) {
@@ -274,6 +275,7 @@ function RecruitmentTalentWorkspace({ mode = "candidates" }) {
           ["interviews", "Interviews"],
           ["offers", "Offers"],
           ["talent-pool", "Talent Pool"],
+          ["hiring", "Hiring"],
         ].map(([key, label]) => (
           <button key={key} type="button" style={mode === key ? activeTabStyle : tabStyle} onClick={() => navigate(`/recruitment/${key}`)}>{label}</button>
         ))}
@@ -341,6 +343,10 @@ function RecruitmentTalentWorkspace({ mode = "candidates" }) {
 
       {mode === "talent-pool" && (
         <TalentPoolWorkspace candidates={talentPool} canManage={canManage} loading={loading} saving={saving} onPool={updatePool} />
+      )}
+
+      {mode === "hiring" && (
+        <HiringWorkspace applications={applications} offers={offers} loading={loading} />
       )}
     </div>
   );
@@ -501,6 +507,50 @@ function OfferActions({ row, saving, onAction }) {
       : row.status === "APPROVED" ? ["issue", "withdraw"]
         : row.status === "ISSUED" ? ["accept", "decline", "withdraw"] : [];
   return <div style={actionWrapStyle}>{actions.map((action) => <button type="button" disabled={saving} key={action} style={action === "withdraw" || action === "decline" ? miniDangerButtonStyle : miniButtonStyle} onClick={() => onAction(row, action)}>{friendly(action)}</button>)}</div>;
+}
+
+function HiringWorkspace({ applications, offers, loading }) {
+  const hiredApplications = applications.filter((row) => row.stage === "HIRED");
+  const acceptedOffers = offers.filter((row) => row.status === "ACCEPTED");
+  return (
+    <>
+      <div style={warningStyle}>
+        <strong>Hiring completion is driven by accepted offers.</strong>
+        <span>When an authorized offer is marked Accepted, CHRiS closes the application as Hired. This register shows completed hiring outcomes and does not create a hire outside the approved offer workflow.</span>
+      </div>
+      <div style={metricsStyle}>
+        <Metric label="Completed Hires" value={loading ? "…" : hiredApplications.length} />
+        <Metric label="Accepted Offers" value={loading ? "…" : acceptedOffers.length} />
+      </div>
+      <Register
+        title="Completed Hiring Register"
+        empty="No completed hires yet. Complete the approved offer workflow and record candidate acceptance."
+        columns={["Application", "Candidate", "Vacancy", "Branch", "Stage", "Applied"]}
+        loading={loading}
+        rows={hiredApplications.map((row) => [
+          row.applicationNumber,
+          <CellMain key="candidate" title={`${row.firstName} ${row.lastName}`} subtitle={row.candidateNumber} />,
+          row.vacancyTitle,
+          row.locationCode || row.locationName || "—",
+          <Status key="stage" status={row.stage} />,
+          formatDate(row.createdAt),
+        ])}
+      />
+      <Register
+        title="Accepted Offer Register"
+        empty="No accepted offers recorded."
+        columns={["Offer", "Candidate", "Vacancy", "Status", "Proposed Start Date"]}
+        loading={loading}
+        rows={acceptedOffers.map((row) => [
+          row.offerNumber,
+          <CellMain key="candidate" title={`${row.firstName} ${row.lastName}`} subtitle={row.applicationNumber} />,
+          row.vacancyTitle,
+          <Status key="status" status={row.status} />,
+          row.proposedStartDate ? formatDate(row.proposedStartDate) : "—",
+        ])}
+      />
+    </>
+  );
 }
 
 function TalentPoolWorkspace({ candidates, canManage, loading, onPool }) {
