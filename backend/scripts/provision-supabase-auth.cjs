@@ -24,10 +24,6 @@ async function adminRequest(path, body) {
 }
 
 async function main() {
-  if (!SUPABASE_URL || !SERVICE_KEY || !PUBLIC_KEY || !RESET_REDIRECT) {
-    throw new Error("Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY), and SUPABASE_PASSWORD_RESET_REDIRECT_URL in backend/.env before running.");
-  }
-
   const users = await prisma.user.findMany({
     where: { isActive: true },
     select: {
@@ -41,6 +37,21 @@ async function main() {
     const email = String(user.email || "").trim().toLowerCase();
     if (!email || user.organization?.status !== "ACTIVE") continue;
     if (!byEmail.has(email)) byEmail.set(email, user.organization.slug);
+  }
+
+  const sendRecoveryEmails = process.argv.includes("--send-recovery-emails");
+  if (!sendRecoveryEmails) {
+    console.log(JSON.stringify({
+      dryRun: true,
+      activeUniqueEmails: byEmail.size,
+      organizationsRepresented: new Set(users.filter((user) => user.organization?.status === "ACTIVE").map((user) => user.organization.slug)).size,
+      message: "No Supabase users were changed and no emails were sent. Re-run with --send-recovery-emails after reviewing this report to execute provisioning.",
+    }, null, 2));
+    return;
+  }
+
+  if (!SUPABASE_URL || !SERVICE_KEY || !PUBLIC_KEY || !RESET_REDIRECT) {
+    throw new Error("Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY), and SUPABASE_PASSWORD_RESET_REDIRECT_URL in backend/.env before executing provisioning.");
   }
 
   let created = 0;
