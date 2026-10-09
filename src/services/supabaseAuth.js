@@ -5,6 +5,7 @@ const TOKEN_KEY = "chris_token";
 const REFRESH_KEY = "chris_refresh_token";
 const EXPIRY_KEY = "chris_token_expires_at";
 const RECOVERY_KEY = "chris_password_recovery";
+let refreshPromise = null;
 
 function configured() {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -80,17 +81,23 @@ export async function getValidAccessToken() {
   if (token && expiresAt > Date.now() + 60_000) return token;
   if (!refreshToken) return token || null;
 
-  try {
-    const refreshed = await authFetch("token?grant_type=refresh_token", {
-      method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    persistSession(refreshed, storage === localStorage);
-    return refreshed.access_token || null;
-  } catch (error) {
-    clearTokens();
-    throw error;
-  }
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const refreshed = await authFetch("token?grant_type=refresh_token", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      persistSession(refreshed, storage === localStorage);
+      return refreshed.access_token || null;
+    } catch (error) {
+      clearTokens();
+      throw error;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
 }
 
 export async function requestPasswordRecovery(email, redirectTo) {
