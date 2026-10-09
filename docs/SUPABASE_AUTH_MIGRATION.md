@@ -41,16 +41,21 @@ The backend validates each bearer token with Supabase Auth's `/auth/v1/user` end
 
 Existing CHRIS users have password hashes in the CHRIS database, not Supabase. This migration does not copy those hashes or attempt to reverse them. Instead, the provisioning script creates a Supabase Auth identity for each unique email used by an active user in an active organization, or reuses an identity that already exists, and requests a password recovery email.
 
-From the backend directory, after environment variables and database connectivity are verified:
+From the backend directory, first run a read-only dry run to count unique active user emails and represented organizations:
 
 ```bash
-node scripts/provision-supabase-auth.cjs
+npm run provision:supabase-auth
+```
+
+Review the report and recipient scope. Dry-run mode does not change Supabase users or send emails. After confirming the target project, Auth provider, redirect allowlist, app URL and recipient list, explicitly execute provisioning:
+
+```bash
+npm run provision:supabase-auth -- --send-recovery-emails
 ```
 
 Review the JSON report and any failures. The script never prints temporary passwords. Users set a new password from the Supabase recovery email. Emails shared by more than one CHRIS organization map to one Supabase identity; organization membership is still checked separately by CHRIS for every request.
 
-**Run the provisioning script deliberately.** It sends real recovery emails. First confirm the Supabase email provider, redirect allowlist, app URL and recipient list. For a staging rehearsal, use a staging database and Supabase project.
-
+**Execute provisioning deliberately.** It sends real recovery emails. For a staging rehearsal, use a staging database and Supabase project.
 ## Behavior and safeguards
 
 - The login URL continues to accept `/login?organization=<slug>`.
