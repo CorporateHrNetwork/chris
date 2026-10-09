@@ -2,6 +2,19 @@
 
 This branch moves primary CHRIS web sign-in and password recovery to Supabase Auth while keeping the Express/Prisma backend as the source of truth for organization membership, roles, permissions, and location scope.
 
+## Environment selection: Zermatt pilot
+
+The pilot Supabase project is **`chris-zermatt-pilot-db`** (`ldmwsptljgnspwtwcdtm`), separate from the compliance staging project.
+
+- Supabase URL: `https://ldmwsptljgnspwtwcdtm.supabase.co`
+- Browser-safe publishable key: `sb_publishable_S6RRyJzm4IvJ-ne1953dFA_wy_SaRly`
+- Current Auth users: 0
+- Current CHRIS users: 12 active records across 2 active organizations; 11 unique active email addresses overall (6 users/emails in each organization, with one email shared across organizations).
+
+A pilot-specific browser environment template is in `deployment/zermatt-pilot.env.example`. The API host and exact app redirect URL remain deployment-specific placeholders; do not guess them. Set them to the real pilot URLs before building or deploying.
+
+The Supabase project is active and has existing CHRIS data. Its security advisor flags 106 public tables with RLS disabled. A read-only privilege check returned no table-level SELECT/INSERT grants for `anon` or `authenticated` across those public tables at the time checked, so the advisor finding should be reconciled against the complete grants/default privileges and actual connection paths. Do not enable RLS broadly without a table-by-table plan. The pilot advisor also flags six database functions with mutable `search_path`; review and harden those separately.
+
 ## Required environment
 
 ### Frontend environment
