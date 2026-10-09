@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 
 const EMAIL_FROM = process.env.RESEND_FROM_EMAIL;
-const FRONTEND_URL = (process.env.FRONTEND_URL || "https://chris.crnetwork.com.ng").replace(/\\/$/, "");
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://chris.crnetwork.com.ng";
 
 async function sendTransactionalEmail({ to, subject, html, text }) {
   if (!process.env.RESEND_API_KEY || !EMAIL_FROM) {
