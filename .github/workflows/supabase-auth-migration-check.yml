@@ -38,3 +38,4 @@ jobs:
       - run: node --check src/middleware/authMiddleware.js
       - run: node --check src/services/supabaseAuth.js
       - run: node --check scripts/provision-supabase-auth.cjs
+      - run: node --test tests/supabaseAuth.test.js
