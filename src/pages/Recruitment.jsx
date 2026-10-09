@@ -338,34 +338,30 @@ function Recruitment() {
         <QuickActionCard
           key="candidates"
           title="Candidates"
-          subtitle="Manage candidate pipeline"
+          subtitle="Create candidate profiles and manage applications"
           icon={<FaUsers />}
-          disabled
-          onClick={() => {}}
+          onClick={() => window.location.assign("/recruitment/candidates")}
         />,
         <QuickActionCard
           key="interviews"
           title="Interviews"
-          subtitle="Schedule and manage interviews"
+          subtitle="Schedule, complete and record interview outcomes"
           icon={<FaCalendarCheck />}
-          disabled
-          onClick={() => {}}
+          onClick={() => window.location.assign("/recruitment/interviews")}
         />,
         <QuickActionCard
           key="offers"
           title="Offers"
-          subtitle="Prepare and track offers"
+          subtitle="Prepare, authorize, issue and track employment offers"
           icon={<FaFileSignature />}
-          disabled
-          onClick={() => {}}
+          onClick={() => window.location.assign("/recruitment/offers")}
         />,
         <QuickActionCard
           key="hiring"
           title="Hiring"
-          subtitle="Complete hiring workflow"
+          subtitle="Track completed hires from accepted employment offers"
           icon={<FaHandshake />}
-          disabled
-          onClick={() => {}}
+          onClick={() => window.location.assign("/recruitment/hiring")}
         />,
       ]}
     />
