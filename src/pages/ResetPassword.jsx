@@ -133,12 +133,10 @@ function ResetPassword() {
         then return to Sign In.
       */
       window.setTimeout(() => {
-        const organizationSlug =
-          new URLSearchParams(location.search).get("organization") ||
-          "zermatt-liquor-limited";
-        navigate(`/login?organization=${encodeURIComponent(organizationSlug)}`, {
-          replace: true,
-        });
+        const params = new URLSearchParams(location.search);
+        const organizationSlug = params.get("organization") || "zermatt-liquor-limited";
+        const isEssFlow = params.get("portal") === "ess" || params.get("mode") === "activation";
+        navigate(isEssFlow ? "/ess" : `/login?organization=${encodeURIComponent(organizationSlug)}`, { replace: true });
       }, 2500);
     } catch (err) {
       console.error(
