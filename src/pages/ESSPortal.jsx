@@ -88,17 +88,32 @@ function Brand({small=false}){return <img src={chrisLogo} alt="CHRiS" className=
 
 function Login({login,setLogin,submit,submitting,error}){
  const [showPassword,setShowPassword]=useState(false);
+ const [mode,setMode]=useState("login");
+ const [supportEmail,setSupportEmail]=useState("");
+ const [employeeNumber,setEmployeeNumber]=useState("");
+ const [supportBusy,setSupportBusy]=useState(false);
+ const [supportMessage,setSupportMessage]=useState("");
+ const [supportError,setSupportError]=useState("");
  useEffect(()=>{
-   const clearFields=()=>{
-     setLogin({email:"",password:""});
-     setShowPassword(false);
-   };
+   const clearFields=()=>{setLogin({email:"",password:""});setShowPassword(false);};
    clearFields();
    const a=window.setTimeout(clearFields,100),b=window.setTimeout(clearFields,600);
    const onShow=()=>clearFields();
    window.addEventListener("pageshow",onShow);
    return()=>{window.clearTimeout(a);window.clearTimeout(b);window.removeEventListener("pageshow",onShow)};
  },[setLogin]);
+ const submitSupport=async e=>{
+   e.preventDefault();setSupportBusy(true);setSupportMessage("");setSupportError("");
+   try{
+     const endpoint=mode==="activate"?"/api/auth/activate-employee":"/api/auth/forgot-password";
+     const body=mode==="activate"?{email:supportEmail,employeeNumber,organizationSlug:ORG_SLUG}:{email:supportEmail,organizationSlug:ORG_SLUG};
+     const response=await fetch(`${API_BASE_URL}${endpoint}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+     const result=await response.json();
+     if(!response.ok)throw new Error(result.message||"We could not process your request. Please try again.");
+     setSupportMessage(result.message||"If the details match an eligible account, instructions will be sent to your registered email.");
+   }catch(e){setSupportError(e.message||"We could not process your request. Please try again.");}
+   finally{setSupportBusy(false);}
+ };
  return <main className="esslogin" style={{backgroundImage:`linear-gradient(135deg,rgba(3,45,29,.42),rgba(0,0,0,.16)),url(${loginBackground})`}}>
    <div className="esslogin-glow"/>
    <div className="ess-admin-login-card">
@@ -109,23 +124,28 @@ function Login({login,setLogin,submit,submitting,error}){
        <div className="ess-portal-title">Employee Self-Service</div>
        <div className="ess-divider" aria-hidden="true"/>
      </div>
-     {error&&<div className="ess-error">{error}</div>}
-     <form onSubmit={submit} autoComplete="off">
-       <input type="text" name="username" autoComplete="username" tabIndex="-1" aria-hidden="true" className="autofill-decoy"/>
-       <input type="password" name="password" autoComplete="current-password" tabIndex="-1" aria-hidden="true" className="autofill-decoy"/>
-       <label className="ess-field-label">Email Address
-         <div className="ess-input-wrap"><FiMail className="ess-input-icon" size={18}/>
-           <input required type="email" name="chris_account_identifier" autoComplete="off" spellCheck="false" value={login.email} onChange={e=>setLogin({...login,email:e.target.value})} placeholder="Enter your email address"/>
-         </div>
-       </label>
-       <label className="ess-field-label">Password
-         <div className="ess-input-wrap ess-password-wrap"><FiLock className="ess-input-icon" size={18}/>
-           <input required type={showPassword?"text":"password"} name="chris_secure_access" autoComplete="new-password" value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} placeholder="Enter your password"/>
-           <button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} title={showPassword?"Hide password":"Show password"}>{showPassword?<FiEyeOff size={19}/>:<FiEye size={19}/>}</button>
-         </div>
-       </label>
-       <button className="ess-signin" disabled={submitting}>{submitting?"Signing in...":"Sign In"}</button>
-     </form>
+     {mode==="login"?<>
+       {error&&<div className="ess-error">{error}</div>}
+       <form onSubmit={submit} autoComplete="off">
+         <input type="text" name="username" autoComplete="username" tabIndex="-1" aria-hidden="true" className="autofill-decoy"/>
+         <input type="password" name="password" autoComplete="current-password" tabIndex="-1" aria-hidden="true" className="autofill-decoy"/>
+         <label className="ess-field-label">Email Address<div className="ess-input-wrap"><FiMail className="ess-input-icon" size={18}/><input required type="email" name="chris_account_identifier" autoComplete="off" spellCheck="false" value={login.email} onChange={e=>setLogin({...login,email:e.target.value})} placeholder="Enter your registered email address"/></div></label>
+         <label className="ess-field-label">Password<div className="ess-input-wrap ess-password-wrap"><FiLock className="ess-input-icon" size={18}/><input required type={showPassword?"text":"password"} name="chris_secure_access" autoComplete="new-password" value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} placeholder="Enter your password"/><button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} title={showPassword?"Hide password":"Show password"}>{showPassword?<FiEyeOff size={19}/>:<FiEye size={19}/>}</button></div></label>
+         <button className="ess-signin" disabled={submitting}>{submitting?"Signing in...":"Sign In"}</button>
+       </form>
+       <div className="ess-account-links"><button type="button" onClick={()=>{setMode("forgot");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Forgot Password?</button><span>·</span><button type="button" onClick={()=>{setMode("activate");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Activate Account</button></div>
+     </>:<>
+       <h2 className="ess-support-title">{mode==="activate"?"Activate your account":"Reset your password"}</h2>
+       <p className="ess-support-copy">{mode==="activate"?"Enter your employee number and the email address registered in CHRiS.":"Enter your registered email address to receive a secure password-reset link."}</p>
+       {supportMessage&&<div className="ess-support-success" role="status">{supportMessage}</div>}
+       {supportError&&<div className="ess-error" role="alert">{supportError}</div>}
+       {!supportMessage&&<form onSubmit={submitSupport} autoComplete="off">
+         {mode==="activate"&&<label className="ess-field-label">Employee Number<div className="ess-input-wrap"><input required value={employeeNumber} onChange={e=>setEmployeeNumber(e.target.value)} placeholder="Enter your employee number" autoComplete="off"/></div></label>}
+         <label className="ess-field-label">Registered Email Address<div className="ess-input-wrap"><FiMail className="ess-input-icon" size={18}/><input required type="email" value={supportEmail} onChange={e=>setSupportEmail(e.target.value)} placeholder="Enter your registered email" autoComplete="email"/></div></label>
+         <button className="ess-signin" disabled={supportBusy}>{supportBusy?"Please wait…":mode==="activate"?"Send Activation Link":"Send Reset Link"}</button>
+       </form>}
+       <button type="button" className="ess-support-back" onClick={()=>{setMode("login");setSupportMessage("");setSupportError("");}}>← Back to Sign In</button>
+     </>}
      <div className="ess-login-footer"><span>People</span><b>|</b><span>Performance</span><b>|</b><span>Rewards</span></div>
    </div>
  </main>
@@ -155,6 +175,7 @@ body{background:#07110C;color:#F3F7F4}
 .ess-signin{width:100%;border:none;border-radius:11px;padding:14px;background:linear-gradient(90deg,#075F36,#0B7A45);color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.30),0 0 14px rgba(8,122,67,.18)}
 .ess-signin:disabled{background:#688B79;cursor:not-allowed;opacity:.8}
 .ess-error{margin-bottom:20px;padding:13px 15px;background:rgba(254,242,242,.94);border:1px solid #FECACA;border-radius:10px;color:#B91C1C;font-size:13px;font-weight:600;line-height:1.5}
+.ess-account-links{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:16px;font-size:13px;color:#D4AF37}.ess-account-links button,.ess-support-back{background:none;border:0;color:#D4AF37;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:5px}.ess-support-title{margin:0 0 8px;color:#F3F7F4;font-size:21px;text-align:center}.ess-support-copy{margin:0 0 22px;color:#C7D7CE;font-size:13px;line-height:1.6;text-align:center}.ess-support-success{margin-bottom:18px;padding:13px 15px;background:rgba(8,122,67,.18);border:1px solid rgba(8,180,100,.55);border-radius:10px;color:#D7FBE6;font-size:13px;line-height:1.6}.ess-support-back{display:block;margin:14px auto 0}
 .ess-login-footer{margin-top:28px!important;height:auto!important;min-height:0!important;background:none!important;background-image:none!important;border:0!important;border-top:0!important;box-shadow:none!important;outline:0!important;padding:0!important;position:relative;display:flex;justify-content:center;gap:10px;color:#7FAF96;font-size:12px;font-weight:700}.ess-login-footer:before,.ess-login-footer:after{content:none!important;display:none!important;border:0!important;background:none!important;box-shadow:none!important}
 .ess-login-footer b{color:#D4AF37}
 @media(max-width:760px){.esslogin{padding:18px}.ess-admin-login-card{padding:28px 24px;border-radius:20px}.ess-admin-logo{width:220px}.ess-welcome{font-size:15px}.ess-corporate{font-size:16px}}
