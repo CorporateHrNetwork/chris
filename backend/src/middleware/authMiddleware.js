@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
+const { verifySupabaseAccessToken } = require("../services/supabaseAuth");
 
 const PLATFORM_ORGANIZATION_SLUG = "corporatehr-network";
 const PLATFORM_ONLY_PERMISSION_PREFIXES = ["support.internal.", "support.engineering."];
@@ -24,17 +25,25 @@ async function requireAuth(req, res, next) {
     const token = authorization.split(" ")[1];
     if (!token) return res.status(401).json({ status: "error", message: "Authentication required." });
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.accessType === "ESS") {
-      return res.status(401).json({
-        status: "error",
-        code: "ESS_SESSION_NOT_ALLOWED",
-        message: "This session is restricted to the employee portal.",
-      });
+    let supabaseUser;
+    try {
+      supabaseUser = await verifySupabaseAccessToken(token);
+    } catch (error) {
+      if (error.code === "SUPABASE_AUTH_NOT_CONFIGURED") throw error;
+      return res.status(401).json({ status: "error", message: "Your Supabase session is invalid or has expired." });
+    }
+
+    const organizationId = String(req.headers["x-chris-organization-id"] || "").trim();
+    if (!organizationId) {
+      return res.status(401).json({ status: "error", code: "ORGANIZATION_CONTEXT_REQUIRED", message: "Select your CHRIS organization and sign in again." });
     }
 
     const user = await prisma.user.findFirst({
-      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true },
+      where: {
+        email: String(supabaseUser.email).trim().toLowerCase(),
+        organizationId,
+        isActive: true,
+      },
       include: {
         organization: true,
         userLocations: { include: { location: true } },
@@ -49,7 +58,9 @@ async function requireAuth(req, res, next) {
         },
       },
     });
-    if (!user) return res.status(401).json({ status: "error", message: "User account is unavailable." });
+    if (!user) {
+      return res.status(403).json({ status: "error", code: "CHRIS_MEMBERSHIP_REQUIRED", message: "This Supabase account does not have active access to the selected CHRIS organization." });
+    }
     if (user.organization.status !== "ACTIVE") {
       return res.status(403).json({ status: "error", message: "Organization access is currently unavailable." });
     }
