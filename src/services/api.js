@@ -108,6 +108,8 @@ export function clearAuthSession() {
 
   for (const storage of [localStorage, sessionStorage]) {
     storage.removeItem("chris_token");
+    storage.removeItem("chris_refresh_token");
+    storage.removeItem("chris_token_expires_at");
     storage.removeItem("chris_user");
     storage.removeItem("chris_organization");
     storage.removeItem("chris_active_location_id");
