@@ -140,6 +140,7 @@ function App() {
         <Route path="/recruitment/offers" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="offers" /></PermissionLayout>} />
         <Route path="/recruitment/ats" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="ats" /></PermissionLayout>} />
         <Route path="/recruitment/talent-pool" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="talent-pool" /></PermissionLayout>} />
+        <Route path="/recruitment/hiring" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="hiring" /></PermissionLayout>} />
 
         <Route path="/attendance" element={<PermissionLayout permission="attendance.view"><AttendanceDashboard /></PermissionLayout>} />
         <Route path="/attendance/register" element={<PermissionLayout permission="attendance.view"><AttendanceRegister /></PermissionLayout>} />
