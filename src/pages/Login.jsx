@@ -157,6 +157,9 @@ function Login() {
     sessionStorage.removeItem(
       "chris_organization"
     );
+
+    localStorage.removeItem("chris_active_location_id");
+    sessionStorage.removeItem("chris_active_location_id");
   };
 
   const handleSubmit = async (event) => {
