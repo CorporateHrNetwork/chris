@@ -19,6 +19,7 @@ import {
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
 import { API_BASE_URL } from "../services/api";
+import { requestPasswordRecovery, signInWithPassword } from "../services/supabaseAuth";
 
 /*
   CHRIS_TENANT_AWARE_LOGIN
@@ -158,208 +159,77 @@ function Login() {
     );
   };
 
-  const handleSubmit = async (
-    event
-  ) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-
+    let accessToken = "";
     try {
       setLoading(true);
       setError("");
       setNotice("");
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/auth/login`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            email:
-              email.trim().toLowerCase(),
-
-            password,
-
-            organizationSlug,
-          }),
-        }
-      );
-
-      const result =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            "Unable to sign in."
-        );
-      }
-
       clearExistingSession();
 
-      /*
-        Remember Me checked:
-        localStorage survives browser restart.
-
-        Remember Me unchecked:
-        sessionStorage lasts for the current
-        browser session.
-      */
-      const storage =
+      const session = await signInWithPassword(
+        email.trim().toLowerCase(),
+        password,
         rememberMe
-          ? localStorage
-          : sessionStorage;
-
-      storage.setItem(
-        "chris_token",
-        result.data.token
       );
+      accessToken = session.access_token;
 
-      storage.setItem(
-        "chris_user",
-        JSON.stringify(
-          result.data.user
-        )
-      );
-
-      storage.setItem(
-        "chris_organization",
-        JSON.stringify(
-          result.data.organization
-        )
-      );
-
-      navigate("/", {
-        replace: true,
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ organizationSlug }),
+        cache: "no-store",
       });
-    } catch (err) {
-      console.error(
-        "CHRIS login error:",
-        err
-      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "Your Supabase identity could not be linked to this CHRIS organization.");
+      }
 
-      setError(
-        err.message ||
-          "CHRIS could not complete sign in."
-      );
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem("chris_user", JSON.stringify(result.data.user));
+      storage.setItem("chris_organization", JSON.stringify(result.data.organization));
+      navigate("/", { replace: true });
+    } catch (err) {
+      console.error("CHRIS Supabase login error:", err);
+      if (accessToken) {
+        for (const storage of [localStorage, sessionStorage]) {
+          storage.removeItem("chris_token");
+          storage.removeItem("chris_refresh_token");
+          storage.removeItem("chris_token_expires_at");
+        }
+      }
+      setError(err.message || "CHRIS could not complete sign in.");
     } finally {
       setLoading(false);
     }
   };
 
-  /*
-    FORGOT PASSWORD
-
-    Calls the real CHRIS backend.
-
-    During development, the backend returns
-    the reset token directly.
-
-    Later, when email delivery is implemented,
-    this token will instead be delivered through
-    a secure reset link.
-  */
-  const handleForgotPassword =
-    async (event) => {
-      event.preventDefault();
-
-      try {
-        setRecoveryLoading(true);
-        setError("");
-        setNotice("");
-
-        const normalizedEmail =
-          email.trim().toLowerCase();
-
-        if (!normalizedEmail) {
-          throw new Error(
-            "Enter the email address linked to your CHRIS account."
-          );
-        }
-
-        const response = await fetch(
-          `${API_BASE_URL}/api/auth/forgot-password`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body: JSON.stringify({
-              email: normalizedEmail,
-
-              organizationSlug,
-            }),
-          }
-        );
-
-        const result =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.message ||
-              "Unable to prepare password reset."
-          );
-        }
-
-        /*
-          DEVELOPMENT RESET FLOW
-
-          A valid development account receives
-          resetToken in result.data.
-
-          Invalid/non-existent accounts still receive
-          the same generic success message from the
-          backend, protecting account privacy.
-        */
-        const resetToken =
-          result.data?.resetToken;
-
-        if (!resetToken) {
-          setNotice(
-            result.message ||
-              "If an active CHRIS account exists for this email, password reset instructions have been prepared."
-          );
-
-          return;
-        }
-
-        /*
-          Pass the development reset token directly
-          to the Reset Password page without placing
-          it in the visible URL.
-        */
-        navigate(
-          "/reset-password",
-          {
-            state: {
-              resetToken,
-              email:
-                normalizedEmail,
-            },
-          }
-        );
-      } catch (err) {
-        console.error(
-          "CHRIS forgot password error:",
-          err
-        );
-
-        setError(
-          err.message ||
-            "CHRIS could not prepare password recovery."
-        );
-      } finally {
-        setRecoveryLoading(false);
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    try {
+      setRecoveryLoading(true);
+      setError("");
+      setNotice("");
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail) {
+        throw new Error("Enter the email address linked to your CHRIS account.");
       }
-    };
+      const redirectTo = new URL("/reset-password", window.location.origin);
+      redirectTo.searchParams.set("organization", organizationSlug);
+      await requestPasswordRecovery(normalizedEmail, redirectTo.toString());
+      setNotice("If a Supabase account exists for this email, password recovery instructions have been sent. Check your inbox and spam folder.");
+      setMode("login");
+    } catch (err) {
+      console.error("CHRIS Supabase recovery error:", err);
+      setError(err.message || "CHRIS could not send password recovery instructions.");
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
 
   return (
     <div
