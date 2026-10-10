@@ -51,6 +51,7 @@ function corsOptionsDelegate(req, callback) {
       "Content-Type",
       "Cache-Control",
       "X-CHRiS-Location-Id",
+      "X-CHRIS-Organization-Id",
     ],
     exposedHeaders: ["Content-Disposition"],
     maxAge: 600,

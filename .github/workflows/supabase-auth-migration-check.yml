@@ -1,0 +1,41 @@
+name: Supabase Auth migration checks
+
+on:
+  push:
+    branches:
+      - feature/supabase-auth-migration
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+
+  backend-syntax:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: node --check src/routes/authRoutes.js
+      - run: node --check src/middleware/authMiddleware.js
+      - run: node --check src/services/supabaseAuth.js
+      - run: node --check scripts/provision-supabase-auth.cjs
+      - run: node --test tests/supabaseAuth.test.js

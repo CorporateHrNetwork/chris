@@ -1,3 +1,5 @@
+import { getValidAccessToken } from "./supabaseAuth";
+
 export const API_BASE_URL = String(
   import.meta.env.VITE_API_BASE_URL || ""
 ).replace(/\/+$/, "");
@@ -106,6 +108,8 @@ export function clearAuthSession() {
 
   for (const storage of [localStorage, sessionStorage]) {
     storage.removeItem("chris_token");
+    storage.removeItem("chris_refresh_token");
+    storage.removeItem("chris_token_expires_at");
     storage.removeItem("chris_user");
     storage.removeItem("chris_organization");
     storage.removeItem("chris_active_location_id");
@@ -115,8 +119,10 @@ export function clearAuthSession() {
 function authHeaders(extra = {}) {
   const token = getAuthToken();
   const activeLocationId = getActiveLocationId();
+  const organizationId = getStoredOrganization()?.id || "";
   return {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(organizationId ? { "X-CHRIS-Organization-Id": organizationId } : {}),
     ...(activeLocationId ? { "X-CHRiS-Location-Id": activeLocationId } : {}),
     "Cache-Control": "no-cache",
     ...extra,
@@ -124,7 +130,12 @@ function authHeaders(extra = {}) {
 }
 
 export async function verifyAuthSession() {
-  const token = getAuthToken();
+  let token;
+  try { token = await getValidAccessToken(); } catch {
+    const error = new Error("Your Supabase session has expired. Please sign in again.");
+    error.code = "AUTH_INVALID";
+    throw error;
+  }
   if (!token) {
     const error = new Error("Authentication required.");
     error.code = "AUTH_INVALID";
@@ -158,6 +169,7 @@ export async function verifyAuthSession() {
 }
 
 export async function apiRequest(endpoint, options = {}) {
+  const accessToken = await getValidAccessToken();
   const rawBody = options.body;
   const isFormData = typeof FormData !== "undefined" && rawBody instanceof FormData;
   const isBlob = typeof Blob !== "undefined" && rawBody instanceof Blob;
@@ -165,6 +177,7 @@ export async function apiRequest(endpoint, options = {}) {
   const shouldSerializeJson = rawBody !== undefined && rawBody !== null && typeof rawBody === "object" && !isFormData && !isBlob && !isUrlSearchParams;
   const requestBody = shouldSerializeJson ? JSON.stringify(rawBody) : rawBody;
   const headers = authHeaders({
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     ...((shouldSerializeJson || typeof rawBody === "string") ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
   });
@@ -198,11 +211,15 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 export async function apiDownload(endpoint, options = {}) {
+  const accessToken = await getValidAccessToken();
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
-      headers: authHeaders(options.headers || {}),
+      headers: authHeaders({
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(options.headers || {}),
+      }),
       cache: "no-store",
     });
   } catch {
