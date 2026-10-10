@@ -2329,10 +2329,35 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     bookType: "xlsx",
     cellFormula: true,
   });
+
+  // Approved payout packs are used as payroll control and payment evidence.
+  // Keep this high-stakes export on SheetJS' native XLSX writer: the custom
+  // OOXML chart injector can produce workbooks that Excel asks to repair.
+  // The dashboard tables and KPI values are already present in this buffer;
+  // do not risk those worksheet cells for decorative chart objects.
+  if (isApproved) {
+    const validatedWorkbook = XLSX.read(workbookBuffer, { type: "buffer" });
+    const dashboard = validatedWorkbook.Sheets["Payroll Dashboard"];
+    if (!dashboard || !dashboard.A1 || !dashboard.A2 || !dashboard.A3 || !dashboard.A15) {
+      throw payroll.operationalError(
+        "PAYROLL_EXPORT_DASHBOARD_INTEGRITY_FAILED",
+        "Approved payroll export failed its dashboard integrity check.",
+        500
+      );
+    }
+    return workbookBuffer;
+  }
+
   try {
-    return addNativeExcelCharts(workbookBuffer, nativeCharts);
+    const chartedBuffer = addNativeExcelCharts(workbookBuffer, nativeCharts);
+    const validatedWorkbook = XLSX.read(chartedBuffer, { type: "buffer" });
+    const dashboard = validatedWorkbook.Sheets["Payroll Dashboard"];
+    if (!dashboard || !dashboard.A1 || !dashboard.A2 || !dashboard.A3 || !dashboard.A15) {
+      throw new Error("Dashboard worksheet did not survive workbook chart injection.");
+    }
+    return chartedBuffer;
   } catch (chartError) {
-    console.error("CHRiS native Excel chart generation failed; returning workbook without chart objects.", chartError);
+    console.error("CHRiS native Excel chart generation/validation failed; returning workbook without chart objects.", chartError);
     return workbookBuffer;
   }
 }
