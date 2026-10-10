@@ -100,3 +100,17 @@ test("Payroll Runs UI exposes explicit draft-review and approved-payout actions"
   ]) assert.ok(ui.includes(expected), "Missing payroll export UI control: " + expected);
   assert.equal(ui.includes("Export Audit Pack"), false, "Primary UI should use the explicit Approved Payout export label.");
 });
+
+
+test("approved payout export validates dashboard after chart injection and falls back to native workbook on failure", () => {
+  for (const expected of [
+    'XLSX.read(workbookBuffer, { type: "buffer" })',
+    "PAYROLL_EXPORT_DASHBOARD_INTEGRITY_FAILED",
+    "addNativeExcelCharts(workbookBuffer, nativeCharts)",
+    'XLSX.read(chartedBuffer, { type: "buffer" })',
+    'validatedWorkbook.Sheets["Payroll Dashboard"]',
+    "dashboard.A1",
+    "dashboard.A15",
+    "return workbookBuffer;",
+]) assert.ok(routes.includes(expected), "Missing approved payout workbook integrity safeguard: " + expected);
+});
