@@ -445,6 +445,61 @@ router.get(
   }
 );
 
+function appendPayrollDashboardSheet(workbook, data) {
+  const totals = data.totals || {};
+  const rows = [
+    ["CHRiS PAYROLL DASHBOARD"],
+    ["Report Scope", data.scope?.locationName || data.scope?.locationCode || "Head Office · All Branches"],
+    ["Generated At", data.generatedAt || ""],
+    [],
+    ["PAYROLL KPI", "VALUE"],
+    ["Payroll Runs", Number(totals.runCount || 0)],
+    ["Employees in Latest Run", Number(totals.latestEmployeeCount || 0)],
+    ["Gross Payroll", Number(totals.latestGrossPayroll || 0)],
+    ["Total Deductions", Number(totals.latestDeductions || 0)],
+    ["Net Payroll", Number(totals.latestNetPayroll || 0)],
+    ["Employer Statutory Cost", Number(totals.latestEmployerStatutoryCost || 0)],
+    ["Total Employer Cost", Number(totals.latestTotalEmployerCost || 0)],
+    [],
+    ["PAYROLL BY BRANCH"],
+    ["Branch", "Code", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"],
+    ...(data.allocation?.byBranch || []).map((item) => [
+      item.label || "", item.code || "", Number(item.headcount || 0),
+      Number(item.grossPayroll || 0), Number(item.deductions || 0), Number(item.netPayroll || 0),
+      Number(item.paye || 0), Number(item.employerPension || 0),
+      Number(item.employerStatutoryCost || 0), Number(item.totalEmployerCost || 0),
+    ]),
+    [],
+    ["PAYROLL BY DEPARTMENT"],
+    ["Department", "Code", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"],
+    ...(data.allocation?.byDepartment || []).map((item) => [
+      item.label || "", item.code || "", Number(item.headcount || 0),
+      Number(item.grossPayroll || 0), Number(item.deductions || 0), Number(item.netPayroll || 0),
+      Number(item.paye || 0), Number(item.employerPension || 0),
+      Number(item.employerStatutoryCost || 0), Number(item.totalEmployerCost || 0),
+    ]),
+    [],
+    ["PAYROLL BY COST CENTRE / OPERATING UNIT"],
+    ["Cost Centre", "Code", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"],
+    ...(data.allocation?.byCostCentre || []).map((item) => [
+      item.label || "", item.code || "", Number(item.headcount || 0),
+      Number(item.grossPayroll || 0), Number(item.deductions || 0), Number(item.netPayroll || 0),
+      Number(item.paye || 0), Number(item.employerPension || 0),
+      Number(item.employerStatutoryCost || 0), Number(item.totalEmployerCost || 0),
+    ]),
+    [],
+    ["CONTROL"],
+    [data.control || "Payroll execution and approval remain subject to CHRiS payroll controls."],
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet["!cols"] = [
+    { wch: 34 }, { wch: 18 }, { wch: 14 }, { wch: 20 }, { wch: 18 },
+    { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 28 }, { wch: 22 },
+  ];
+  sheet["!freeze"] = { xSplit: 0, ySplit: 5 };
+  XLSX.utils.book_append_sheet(workbook, sheet, "Payroll Dashboard");
+}
+
 function appendSheet(workbook, rows, name) {
   const data = Array.isArray(rows) && rows.length ? rows : [{ message: "No records available" }];
   XLSX.utils.book_append_sheet(
@@ -544,6 +599,7 @@ router.get(
         scope: data.scope,
         generatedAt: data.generatedAt,
       });
+      appendPayrollDashboardSheet(workbook, data);
       appendSheet(workbook, [data.totals], "Payroll Summary");
       appendSheet(workbook, data.runs, "Payroll Runs");
       appendSheet(workbook, data.allocation?.byDepartment || [], "By Department");
