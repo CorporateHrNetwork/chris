@@ -12,6 +12,7 @@ test("native Excel chart service injects real drawing and chart parts", () => {
     ["Net", 80],
     ["PAYE", 10],
   ]);
+  sheet.A1.c = [{ a: "CHRiS", t: "Dashboard control note" }];
   XLSX.utils.book_append_sheet(workbook, sheet, "Payroll Dashboard");
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
@@ -45,4 +46,11 @@ test("native Excel chart service injects real drawing and chart parts", () => {
   const chartXml = Buffer.from(chartEntry.content || []).toString("utf8");
   assert.ok(chartXml.includes("<c:barChart>"));
   assert.ok(chartXml.includes("Payroll Metrics"));
+
+  const sheetEntry = CFB.find(cfb, "xl/worksheets/sheet1.xml") || CFB.find(cfb, "/xl/worksheets/sheet1.xml");
+  assert.ok(sheetEntry);
+  const sheetXml = Buffer.from(sheetEntry.content || []).toString("utf8");
+  assert.ok(sheetXml.indexOf("<drawing") >= 0);
+  assert.ok(sheetXml.indexOf("<legacyDrawing") >= 0);
+  assert.ok(sheetXml.indexOf("<drawing") < sheetXml.indexOf("<legacyDrawing"), "drawing must precede legacyDrawing per SpreadsheetML worksheet order");
 });

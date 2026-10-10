@@ -40,6 +40,15 @@ function appendBeforeClosing(xml, closingTag, fragment) {
   return xml.replace(closingTag, fragment + closingTag);
 }
 
+function insertWorksheetDrawing(xml, drawingTag) {
+  // SpreadsheetML requires drawing before legacyDrawing, picture, and extLst.
+  // Appending it after legacyDrawing makes Excel repair the worksheet and can drop charts.
+  const laterWorksheetElement = /<(?:legacyDrawing(?:HF)?|drawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b/;
+  const match = laterWorksheetElement.exec(xml);
+  if (match) return xml.slice(0, match.index) + drawingTag + xml.slice(match.index);
+  return appendBeforeClosing(xml, "</worksheet>", drawingTag);
+}
+
 function nextRelationshipId(xml) {
   let max = 0;
   for (const match of xml.matchAll(/Id="rId(\d+)"/g)) {
@@ -220,7 +229,7 @@ function addNativeExcelCharts(buffer, charts = [], { sheetPath = "xl/worksheets/
   writeXml(cfb, relPath, sheetRels);
 
   sheetXml = sheetXml.replace(/<drawing\b[^>]*\/>/g, "");
-  sheetXml = appendBeforeClosing(sheetXml, "</worksheet>", '<drawing r:id="' + drawingRelId + '"/>');
+  sheetXml = insertWorksheetDrawing(sheetXml, '<drawing r:id="' + drawingRelId + '"/>');
   writeXml(cfb, sheetPath, sheetXml);
 
   const drawingXml =

@@ -2330,24 +2330,18 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     cellFormula: true,
   });
 
-  // Approved payout packs are used as payroll control and payment evidence.
-  // Keep this high-stakes export on SheetJS' native XLSX writer: the custom
-  // OOXML chart injector can produce workbooks that Excel asks to repair.
-  // The dashboard tables and KPI values are already present in this buffer;
-  // do not risk those worksheet cells for decorative chart objects.
-  if (isApproved) {
-    const validatedWorkbook = XLSX.read(workbookBuffer, { type: "buffer" });
-    const dashboard = validatedWorkbook.Sheets["Payroll Dashboard"];
-    if (!dashboard || !dashboard.A1 || !dashboard.A2 || !dashboard.A3 || !dashboard.A15) {
-      throw payroll.operationalError(
-        "PAYROLL_EXPORT_DASHBOARD_INTEGRITY_FAILED",
-        "Approved payroll export failed its dashboard integrity check.",
-        500
-      );
-    }
-    return workbookBuffer;
+  // Validate the base workbook before chart injection so a missing dashboard fails closed.
+  const baseWorkbook = XLSX.read(workbookBuffer, { type: "buffer" });
+  const baseDashboard = baseWorkbook.Sheets["Payroll Dashboard"];
+  if (!baseDashboard || !baseDashboard.A1 || !baseDashboard.A2 || !baseDashboard.A3 || !baseDashboard.A15) {
+    throw payroll.operationalError(
+      "PAYROLL_EXPORT_DASHBOARD_INTEGRITY_FAILED",
+      "Approved payroll export failed its dashboard integrity check.",
+      500
+    );
   }
 
+  // The chart service inserts its drawing before legacyDrawing to preserve SpreadsheetML order.
   try {
     const chartedBuffer = addNativeExcelCharts(workbookBuffer, nativeCharts);
     const validatedWorkbook = XLSX.read(chartedBuffer, { type: "buffer" });
