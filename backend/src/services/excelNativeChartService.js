@@ -105,8 +105,8 @@ function seriesXml(series, index, { varyColors = false } = {}) {
     "<c:ser>" +
     '<c:idx val="' + index + '"/><c:order val="' + index + '"/>' +
     "<c:tx><c:v>" + xmlEscape(series.name || ("Series " + (index + 1))) + "</c:v></c:tx>" +
-    points +
     '<c:spPr><a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill></a:ln></c:spPr>' +
+    points +
     "<c:cat><c:strRef><c:f>" + xmlEscape(normalizeRange(series.categoriesRange)) + "</c:f>" +
     stringCache(series.categories || []) +
     "</c:strRef></c:cat>" +
@@ -178,8 +178,9 @@ function pieChartXml(chart, chartIndex) {
     "<c:tx><c:v>" + xmlEscape(series.name || "Value") + "</c:v></c:tx>" + pointXml +
     "<c:cat><c:strRef><c:f>" + xmlEscape(normalizeRange(series.categoriesRange)) + "</c:f>" + stringCache(series.categories || []) + "</c:strRef></c:cat>" +
     "<c:val><c:numRef><c:f>" + xmlEscape(normalizeRange(series.valuesRange)) + "</c:f>" + numberCache(series.values || []) + "</c:numRef></c:val>" +
+    "</c:ser>" +
     '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="1"/><c:showLeaderLines val="1"/></c:dLbls>' +
-    "</c:ser></c:pieChart></c:plotArea>" +
+    "</c:pieChart></c:plotArea>" +
     '<c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/>' +
     "</c:chart>" +
     '<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings>' +
