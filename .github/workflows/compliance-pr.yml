@@ -134,6 +134,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Validate loan-history archive and repeat-borrower filtering
+        run: node --test tests/loanHistoryArchive.test.mjs
+
       - name: Enforce initial bundle budget
         run: |
           node - <<'NODE'
