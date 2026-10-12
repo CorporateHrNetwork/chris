@@ -23,6 +23,12 @@ async function sendInvoice(invoice,pdf){
  text:'Thank you for selecting CHRiS '+invoice.quote.planId+'. Invoice '+invoice.invoiceNumber+' is attached. Payment is subject to independent verification.',attachments};
  const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});
  if(!r.ok)throw new Error('Email provider rejected invoice delivery: '+r.status);
+ const internalEmail=process.env.CHRIS_BILLING_NOTIFICATION_EMAIL;
+ if(internalEmail && emailOk(internalEmail)) {
+   const adminBody={...body,to:[internalEmail],subject:'CHRiS client selection '+invoice.invoiceNumber};
+   const adminResponse=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify(adminBody)});
+   if(!adminResponse.ok) console.error('[subscription-invoice] billing notification delivery failed',adminResponse.status);
+ }
  return {status:'SENT'};
 }
 router.get('/catalogue',enabled,(req,res)=>res.json({plans:PLANS,vatBasisPoints:750}));
