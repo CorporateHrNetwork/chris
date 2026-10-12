@@ -15,6 +15,7 @@ import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
 const Login = lazy(() => import("./pages/Login"));
+const SubscriptionPricingPublic = lazy(() => import("./pages/SubscriptionPricingPublic"));
 const ESSPortal = lazy(() => import("./pages/ESSPortal"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -105,6 +106,7 @@ function App() {
       <Suspense fallback={<AppLoading />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/subscriptions/pricing" element={<SubscriptionPricingPublic />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/employee-invite/:token" element={<EmployeeSelfOnboardingPublic />} />
 
