@@ -31,3 +31,20 @@
 End-to-end invitation → selection → authoritative quote → PDF → two emails → pending status; authenticated downloads; invoice uniqueness and idempotency; VAT exemptions; tampered requests; incorrect email; plan switches; renewals; staging tenant isolation; PDF accessibility; receipt of attachments; opt-out and failed email retries.
 
 The catalogue exports `calculateQuote()` and `getEntitlements()` for the future implementation.
+
+## Implemented on draft branch (not deployed)
+- Public React route: `/subscriptions/pricing`.
+- API endpoints under `/api/commercial/subscriptions`: GET `/catalogue`, POST `/quotes`, POST `/invoice-requests`, authenticated internal GET `/internal/invoices/:number/pdf`, POST `/internal/invoices/:number/confirm-payment`.
+- All endpoints disabled by default until `CHRIS_PUBLIC_SUBSCRIPTIONS_ENABLED=true`; **do not enable in production without QA and security review**.
+- Invoice records stored as `OrganizationAudit` events in existing platform organization, without changing the tenant schema. A better dedicated transactional invoice model and invoice-number sequence are required before scale.
+- Generated PDF is a basic text-based pro forma invoice using standard PDF syntax, not yet an approved graphical logo template.
+- Resend invoice PDF dispatch requires `RESEND_API_KEY` and `RESEND_FROM`; billing copy uses optional `CHRIS_BILLING_NOTIFICATION_EMAIL`. Sender domain, recipient consent and suppression policies must be configured.
+- Manual verified payment changes invoice status only, **never** activates employee subscriptions automatically.
+
+## Production-release blockers
+1. Implement verified email invitation token flow (avoid sending invoices to unverified user-supplied addresses); add CAPTCHA/rate limits backed by shared persistent storage, input validation, invoice request idempotency and restrictions on public quote requests.
+2. Replace audit-event invoice storage with dedicated immutable PostgreSQL invoice, invoice_lines, delivery events, payment verification and subscription entitlement tables; transactional unique invoice numbering.
+3. Upgrade PDF with company-approved graphical logo and branding, tax identifiers, due/expiry date, VAT exemption handling and authorization signatures.
+4. Add billing dashboard with search, resend, approval and audit permissions. Payment verification must require independent documentary/bank evidence and second-approver controls where appropriate.
+5. Run package/unit/integration/UI tests in CI against isolated staging; manually confirm generated PDFs and email attachments; security-review and test multi-tenant isolation.
+6. Only after explicit authorization enable flag in staging, test, and separately approve production rollout.
