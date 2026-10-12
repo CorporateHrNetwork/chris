@@ -22,6 +22,7 @@ import {
 import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
 import LoanProfile from "./LoanProfile";
 import LoanBulkUpload from "./LoanBulkUpload";
+import { selectLoanHistory, employeeLifetimeLoanHistory } from "../utils/loanHistoryArchive";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const MAX_REPAYMENT_MONTHS = 600;
@@ -121,6 +122,7 @@ function Loans() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loanSearch, setLoanSearch] = useState("");
+  const [historyView, setHistoryView] = useState("ALL");
   const [topUpParent, setTopUpParent] = useState(null);
   const [editingLoan, setEditingLoan] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -418,11 +420,12 @@ function Loans() {
     return { active: active.length, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
   }, [loans]);
 
-  const filteredLoans = useMemo(() => {
-    const term = loanSearch.trim().toLowerCase();
-    if (!term) return loans;
-    return loans.filter((loan) => [loan.employeeNumber, loan.employeeName, loan.loanNumber, loan.purpose, loan.status]
-      .filter(Boolean).join(" ").toLowerCase().includes(term));
+  const filteredLoans = useMemo(() => selectLoanHistory(loans, historyView, loanSearch), [loans, historyView, loanSearch]);
+  const completedLoanCount = useMemo(() => loans.filter((loan) => loan.status === "COMPLETED").length, [loans]);
+  const employeeHistory = useMemo(() => {
+    const term = loanSearch.trim().toUpperCase();
+    if (!term || !loans.some((loan) => String(loan.employeeNumber || "").toUpperCase() === term)) return [];
+    return employeeLifetimeLoanHistory(loans, term);
   }, [loans, loanSearch]);
 
   const activity = [
@@ -565,10 +568,30 @@ function Loans() {
         <AnalyticsPanel title="Loan Register" subtitle="One running loan account per facility. Approved top-ups increase the same account rather than creating a second loan." icon={<FaHandHoldingUsd />}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
             <input style={{ ...inputStyle, maxWidth: 360 }} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Search Loan / Employee — employee number, employee name, loan number, policy or status" />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700 }}>Loan records
+              <select aria-label="Loan record status filter" style={{ ...inputStyle, width: "auto" }} value={historyView} onChange={(event) => setHistoryView(event.target.value)}>
+                <option value="ALL">All loans ({loans.length})</option>
+                <option value="ACTIVE">Active / Paused</option>
+                <option value="COMPLETED">Completed / Historical ({completedLoanCount})</option>
+              </select>
+            </label>
             <button style={secondaryButton} onClick={() => exportBulk("xlsx")} disabled={Boolean(busy)}>Bulk Loan Report · XLSX</button>
             <button style={secondaryButton} onClick={() => exportBulk("csv")} disabled={Boolean(busy)}>Export CSV</button>
             <button style={secondaryButton} onClick={() => exportBulk("pdf")} disabled={Boolean(busy)}>Export PDF</button>
           </div>
+          <p style={{ margin: "6px 0 14px", color: "var(--chris-dashboard-text)", opacity: .8 }}>
+            Completed loans remain available as historical records. Use the employee number in Search to review repeat loans.
+            Open any loan profile to inspect its posted payroll recoveries, historical opening-period evidence, or externally recorded settlement.
+          </p>
+          {employeeHistory.length > 0 && <div role="region" aria-label="Employee lifetime loan history" style={{ padding: 12, marginBottom: 12, border: "1px solid var(--chris-dashboard-border)", borderRadius: 10 }}>
+            <strong>Employee Lifetime Loan History · {loanSearch.trim().toUpperCase()}</strong>
+            <div>{employeeHistory.length} loan record(s), including {employeeHistory.filter((loan) => loan.status === "COMPLETED").length} completed.</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              {employeeHistory.map((loan) => <button key={loan.id} style={secondaryButton} onClick={() => setSelectedLoanProfile(loan.id)}>
+                {loan.loanNumber} · {loan.status} · {money(loan.principalAmount)}
+              </button>)}
+            </div>
+          </div>}
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
               <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
