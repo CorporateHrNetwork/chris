@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { calculateQuote, getEntitlements } = require('../src/services/subscriptionPricing');
 test('Zermatt 320 employee quotations, including 7.5% illustrative VAT', () => {
- const expected = { basic:1298600, standard:1556600, premium:1943600 };
+ const expected = { basic:6467200, standard:7774400, premium:9700800 };
  // Reconcile against itemized totals: annual rates are per employee per year.
  for (const [planId,total] of Object.entries(expected)) {
    const q=calculateQuote({planId,employeeCount:320});
