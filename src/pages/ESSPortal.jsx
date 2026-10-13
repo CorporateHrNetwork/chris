@@ -17,11 +17,8 @@ const icon=k=>({overview:"⌂",profile:"👤",onboarding:"✓",statutory:"▣",p
 export default function ESSPortal(){
  const [auth,setAuth]=useState(false),[data,setData]=useState(null),[tab,setTab]=useState("overview"),[navOpen,setNavOpen]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState(""),[login,setLogin]=useState({email:"",password:""}),[submitting,setSubmitting]=useState(false);
  useEffect(()=>{
-   clearEssAuthSession();
-   localStorage.removeItem("chris_ess_token");
-   localStorage.removeItem("chris_ess_employee");
-   localStorage.removeItem("chris_ess_organization");
    if(window.location.search)window.history.replaceState({},document.title,"/ess");
+   if(getEssAuthToken()) load();
  },[]);
  const load=async()=>{setLoading(true);setError("");try{const r=await essRequest("/api/ess/dashboard");const d=r?.data||{};setData({profile:d.profile||{},onboarding:{completionPercent:0,currentStage:null,status:"NOT_STARTED",sectionProgress:{},sections:[],data:{},documents:[],...(d.onboarding||{})},statutory:{registered:{},obligations:[],...(d.statutory||{})},payment:d.payment||{},payroll:{payslips:[],latestPayslip:null,...(d.payroll||{})},leaveBalances:Array.isArray(d.leaveBalances)?d.leaveBalances:[],attendance:Array.isArray(d.attendance)?d.attendance:[],performance:Array.isArray(d.performance)?d.performance:[],gratuity:d.gratuity||null,birthday:d.birthday||{},birthdays:Array.isArray(d.birthdays)?d.birthdays:[],workAnniversaries:Array.isArray(d.workAnniversaries)?d.workAnniversaries:[],news:Array.isArray(d.news)?d.news:[]});setAuth(true)}catch(e){setAuth(false);setData(null);setError(e.message||"Unable to load your employee portal dashboard.")}finally{setLoading(false)}};
  useEffect(()=>{setLoading(false)},[]);
