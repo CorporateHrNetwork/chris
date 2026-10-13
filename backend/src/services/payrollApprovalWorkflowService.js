@@ -9,7 +9,7 @@ const STAGE = Object.freeze({
 });
 function fail(code,message,statusCode=409){const e=new Error(message);e.code=code;e.statusCode=statusCode;throw e;}
 async function workflow(tx,organizationId,runId){
- const rows=await tx.$queryRawUnsafe('SELECT * FROM "payroll_approval_workflows" WHERE "organizationId"=$1 AND "runId"=$2 LIMIT 1',organizationId,runId);
+ const rows=await tx.$queryRawUnsafe('SELECT * FROM "payroll_approval_workflows" WHERE "organizationId"=$1 AND "runId"=$2 LIMIT 1 FOR UPDATE',organizationId,runId);
  return rows[0]||null;
 }
 async function event(tx,wf,actorUserId,action,toStage,notes){
