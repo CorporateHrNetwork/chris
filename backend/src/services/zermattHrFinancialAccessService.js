@@ -10,6 +10,10 @@ const HEAD_HR_ROLES = new Set([
   "HEAD OF HUMAN RESOURCES & ADMINISTRATION",
 ]);
 
+const PAYROLL_AUDITOR_ROLES = new Set(["HEAD OF AUDIT & INTERNAL CONTROL","HEAD OF AUDIT & INTERNAL CONTROLS","HEAD AUDIT & INTERNAL CONTROL","HEAD AUDIT & INTERNAL CONTROLS","HEAD_AUDIT_INTERNAL_CONTROL"]);
+const GENERAL_MANAGER_ROLES = new Set(["GENERAL MANAGER","GM"]);
+const CHIEF_ACCOUNTANT_ROLES = new Set(["CHIEF ACCOUNTANT","HEAD OF ACCOUNTS","HEAD ACCOUNTS"]);
+
 const BRANCH_HR_ROLES = new Set([
   "HR & ADMIN OFFICER - BRANCH",
   "BRANCH HR & ADMIN OFFICER",
@@ -47,6 +51,10 @@ function isHeadHr(req) {
   const permissions = new Set(req.auth?.permissions || []);
   return hasAnyRole(req, HEAD_HR_ROLES) || permissions.has("loans.verify");
 }
+
+function isPayrollAuditor(req) { return isZermatt(req) && hasAnyRole(req, PAYROLL_AUDITOR_ROLES); }
+function isGeneralManager(req) { return isZermatt(req) && hasAnyRole(req, GENERAL_MANAGER_ROLES); }
+function isChiefAccountant(req) { return isZermatt(req) && hasAnyRole(req, CHIEF_ACCOUNTANT_ROLES); }
 
 function isBranchHr(req) {
   return isZermatt(req) && hasAnyRole(req, BRANCH_HR_ROLES);
@@ -198,6 +206,9 @@ module.exports = {
   accessError,
   isZermatt,
   isHeadHr,
+  isPayrollAuditor,
+  isGeneralManager,
+  isChiefAccountant,
   isBranchHr,
   canManageEmployeeFinancialInputs,
   canManageLoans,
