@@ -12,9 +12,9 @@ const {
 const root = path.resolve(__dirname, "..", "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("Zermatt Leave Allowance retains its formula using reference December salary", () => {
-  assert.equal(POLICY_MODE, "REFERENCE_SALARY_FORMULA");
-  assert.equal(SALARY_BASIS, "LAST_DECEMBER_GROSS");
+test("Zermatt Leave Allowance retains its formula using current monthly salary", () => {
+  assert.equal(POLICY_MODE, "CURRENT_MONTH_SALARY_FORMULA");
+  assert.equal(SALARY_BASIS, "CURRENT_MONTH_GROSS_AND_BASIC");
   assert.equal(PAYMENT_TIMING, "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE");
   const result = eligibilityForPeriod({
     hireDate: "2026-09-18",
