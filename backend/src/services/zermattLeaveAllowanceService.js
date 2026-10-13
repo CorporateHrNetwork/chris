@@ -5,8 +5,8 @@ const ZERMATT_SLUG = "zermatt-liquor-limited";
 const BENEFIT_CODE = "ZERMATT_LEAVE_ALLOWANCE";
 const ELIGIBLE_EMPLOYMENT_TYPE = "Full-Time";
 const LEAVE_ALLOWANCE_RATE = 10;
-const POLICY_MODE = "REFERENCE_SALARY_FORMULA";
-const SALARY_BASIS = "LAST_DECEMBER_GROSS";
+const POLICY_MODE = "CURRENT_MONTH_SALARY_FORMULA";
+const SALARY_BASIS = "CURRENT_MONTH_GROSS_AND_BASIC";
 const PAYMENT_TIMING = "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE";
 
 function round2(value) {
@@ -55,30 +55,19 @@ function eligibilityForPeriod({ hireDate, periodStart, periodEnd, employmentType
   };
 }
 
-function calculateLeaveAllowance({ referenceMonthlyGross, scheduledMonthlyGross, salaryStructure }) {
-  const gross = round2(referenceMonthlyGross ?? scheduledMonthlyGross ?? 0);
-  if (gross <= 0) {
-    return {
-      referenceMonthlyGross: gross,
-      monthlyBasicSalary: 0,
-      annualBasicSalary: 0,
-      leaveAllowance: 0,
-      ratePercent: LEAVE_ALLOWANCE_RATE,
-      formula: "Reference December Basic Salary × 12 × 10%",
-      salaryBasis: SALARY_BASIS,
-    };
-  }
+function calculateLeaveAllowance({ monthlyGross, monthlyBasic, referenceMonthlyGross, scheduledMonthlyGross, salaryStructure }) {
+  const gross = round2(monthlyGross ?? referenceMonthlyGross ?? scheduledMonthlyGross ?? 0);
   const structure = calculateStructure(gross, salaryStructure || {});
-  const monthlyBasicSalary = round2(structure.basic || 0);
-  const annualBasicSalary = round2(monthlyBasicSalary * 12);
+  const basic = round2(monthlyBasic ?? structure.basic ?? 0);
+  const annualBasicSalary = round2(basic * 12);
   const leaveAllowance = round2(annualBasicSalary * LEAVE_ALLOWANCE_RATE / 100);
   return {
-    referenceMonthlyGross: gross,
-    monthlyBasicSalary,
+    monthlyGrossSalary: gross,
+    monthlyBasicSalary: basic,
     annualBasicSalary,
     leaveAllowance,
     ratePercent: LEAVE_ALLOWANCE_RATE,
-    formula: "Reference December Basic Salary × 12 × 10%",
+    formula: "Monthly Basic Salary × 12 × 10%",
     salaryBasis: SALARY_BASIS,
     contractualStructure: structure,
   };
@@ -175,13 +164,14 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         periodEnd: period.periodEnd,
         employmentType: row.employmentType,
       });
-      const reference = eligibility.eligible
-        ? await getReferenceSalary({ organizationId, employeeId: row.employeeId, asOfDate: period.periodEnd, prismaClient: tx })
+      const calculation = eligibility.eligible
+        ? calculateLeaveAllowance({
+            monthlyGross: row.grossPay,
+            monthlyBasic: details.salaryStructure?.basic,
+            salaryStructure: policy.salaryStructure,
+          })
         : null;
       const entitlementKey = eligibility.entitlementYear ? `${row.employeeId}:${eligibility.entitlementYear}` : null;
-      const calculation = reference
-        ? calculateLeaveAllowance({ referenceMonthlyGross: reference.referenceDecemberGross, salaryStructure: policy.salaryStructure })
-        : null;
       const amount = entitlementKey && !alreadyPaid.has(entitlementKey) ? round2(calculation?.leaveAllowance || 0) : 0;
 
       const benefitEarnings = Array.isArray(details.benefitEarnings)
@@ -192,10 +182,10 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         benefitEarnings,
         leaveAllowancePolicy: {
           mode: POLICY_MODE,
-          formula: "Reference December Basic Salary × 12 × 10%",
+          formula: "Monthly Basic Salary × 12 × 10%",
           salaryBasis: SALARY_BASIS,
           paymentTiming: PAYMENT_TIMING,
-          status: amount > 0 ? "REFERENCE_SALARY_APPLIED" : reference ? "NOT_DUE_OR_ALREADY_PAID" : "AWAITING_REFERENCE_SALARY",
+          status: amount > 0 ? "CURRENT_MONTH_SALARY_APPLIED" : "NOT_DUE_OR_ALREADY_PAID",
         },
       };
       delete nextDetails.leaveAllowance;
@@ -209,9 +199,8 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
           employmentType: row.employmentType,
           amount,
           value: amount,
-          referenceDecemberYear: Number(reference.referenceDecemberYear),
-          referenceDecemberGross: round2(reference.referenceDecemberGross),
-          referenceDecemberBasic: calculation.monthlyBasicSalary,
+          monthlyGrossSalary: calculation.monthlyGrossSalary,
+          monthlyBasicSalary: calculation.monthlyBasicSalary,
           annualBasicSalary: calculation.annualBasicSalary,
           ratePercent: LEAVE_ALLOWANCE_RATE,
           formula: calculation.formula,
@@ -221,11 +210,9 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
           payrollPeriodId: period.id,
           payrollPeriodCode: period.code,
           taxable: false,
-          payrollTreatment: "AFTER_TAX_NON_TAXABLE",
+          payrollTreatment: "AFTER_TAX",
           payeImpact: 0,
-          source: "ZERMATT_DECEMBER_SALARY_REFERENCE_FORMULA",
-          sourceFileName: reference.sourceFileName || null,
-          sourceRowNumber: reference.sourceRowNumber || null,
+          source: "ZERMATT_CURRENT_MONTH_SALARY_FORMULA",
         };
         nextDetails.leaveAllowance = leaveAllowance;
         nextDetails.benefitEarnings = [...benefitEarnings, leaveAllowance];
@@ -270,18 +257,18 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         actorUserId: actorUserId || null,
         entityType: "PayrollRun",
         entityId: runId,
-        action: "ZERMATT_LEAVE_ALLOWANCE_REFERENCE_SALARY_FORMULA_APPLIED",
+        action: "ZERMATT_LEAVE_ALLOWANCE_CURRENT_MONTH_SALARY_FORMULA_APPLIED",
         newValue: {
           payrollPeriodId: period.id,
           payrollPeriodCode: period.code,
           policyMode: POLICY_MODE,
-          formula: "Reference December Basic Salary × 12 × 10%",
+          formula: "Monthly Basic Salary × 12 × 10%",
           salaryBasis: SALARY_BASIS,
           paymentTiming: PAYMENT_TIMING,
           beneficiaryCount: beneficiaries.length,
           totalLeaveAllowance: round2(beneficiaries.reduce((sum, item) => sum + item.amount, 0)),
         },
-        reason: "Zermatt annual Leave Allowance retains the Basic × 12 × 10% formula. The salary authority is the prior December gross salary reference rather than current salary.",
+        reason: "Annual Leave Allowance uses the authoritative monthly gross/basic salary elements for the eligible payroll month while retaining Basic × 12 × 10%.",
       },
     });
   });
@@ -290,7 +277,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
     organization: { id: organization.id, name: organization.name, slug: organization.slug },
     period: { id: period.id, code: period.code, periodStart: dateText(period.periodStart), periodEnd: dateText(period.periodEnd) },
     policyMode: POLICY_MODE,
-    formula: "Reference December Basic Salary × 12 × 10%",
+    formula: "Monthly Basic Salary × 12 × 10%",
     salaryBasis: SALARY_BASIS,
     paymentTiming: PAYMENT_TIMING,
     beneficiaryCount: beneficiaries.length,
