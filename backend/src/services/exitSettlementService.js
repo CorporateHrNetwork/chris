@@ -1,6 +1,6 @@
 const prisma = require("../config/prisma");
 const { getEosbStatement } = require("./eosbService");
-const { calculateLeaveAllowance, getReferenceSalary } = require("./zermattLeaveAllowanceService");
+const { calculateLeaveAllowance } = require("./zermattLeaveAllowanceService");
 const { getActivePolicy } = require("./nigeriaPayrollComplianceService");
 
 const SYSTEM_VARIABLE_CODES = {
@@ -288,23 +288,14 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   const outstandingSalary = approvedLine ? 0 : money(dayRate * salaryDaysEntitled);
 
   let fullLeaveAllowance = 0;
-  let leaveAllowanceReference = null;
   let leaveAllowanceCalculation = null;
   let leaveAllowanceProration = { factor: 0, accruedMonths: 0, serviceYearMonths: 12, serviceYearStart: null, serviceYearEnd: null };
   if (policy) {
-    leaveAllowanceReference = await getReferenceSalary({
-      organizationId,
-      employeeId: exit.employeeId,
-      asOfDate: lastWorkingDay,
-      prismaClient: client,
+    leaveAllowanceCalculation = calculateLeaveAllowance({
+      monthlyGross,
+      salaryStructure: policy.salaryStructure,
     });
-    if (leaveAllowanceReference) {
-      leaveAllowanceCalculation = calculateLeaveAllowance({
-        referenceMonthlyGross: leaveAllowanceReference.referenceDecemberGross,
-        salaryStructure: policy.salaryStructure,
-      });
-      fullLeaveAllowance = money(leaveAllowanceCalculation.leaveAllowance);
-    }
+    fullLeaveAllowance = money(leaveAllowanceCalculation.leaveAllowance);
     leaveAllowanceProration = serviceYearProration(exit.employee.hireDate, lastWorkingDay);
   }
   const annualLeaveAllowance = money(fullLeaveAllowance * leaveAllowanceProration.factor);
@@ -363,11 +354,10 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         serviceYearMonths: leaveAllowanceProration.serviceYearMonths,
         serviceYearStart: leaveAllowanceProration.serviceYearStart,
         serviceYearEnd: leaveAllowanceProration.serviceYearEnd,
-        source: leaveAllowanceReference ? "ZERMATT_DECEMBER_SALARY_REFERENCE_FORMULA" : "ZERMATT_LEAVE_ALLOWANCE_REFERENCE_REQUIRED",
-        formula: "Reference December Basic Salary × 12 × 10% × completed service months ÷ 12",
-        referenceDecemberYear: leaveAllowanceReference ? Number(leaveAllowanceReference.referenceDecemberYear) : null,
-        referenceDecemberGross: leaveAllowanceReference ? money(leaveAllowanceReference.referenceDecemberGross) : null,
-        referenceDecemberBasic: leaveAllowanceCalculation ? money(leaveAllowanceCalculation.monthlyBasicSalary) : null,
+        source: "ZERMATT_CURRENT_SALARY_LEAVE_ALLOWANCE_AUTHORITY",
+        formula: "Monthly Basic Salary × 12 × 10% × completed service months ÷ 12",
+        authoritativeMonthlyGross: monthlyGross,
+        authoritativeMonthlyBasic: leaveAllowanceCalculation ? money(leaveAllowanceCalculation.monthlyBasicSalary) : null,
       },
       outstandingSalary: {
         amount: outstandingSalary,
