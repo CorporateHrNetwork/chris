@@ -71,10 +71,12 @@ test("ZERMATT R1 reporting and security release gate", () => {
   assert.match(app, /cors\(corsOptionsDelegate\)/);
   assert.doesNotMatch(app, /app\.use\(cors\(\)\)/);
 
-  assert.match(
-    auth,
-    /process\.env\.NODE_ENV[\s\S]{0,120}!==[\s\S]{0,40}"production"[\s\S]{0,220}resetToken:\s*rawToken/
-  );
+  // Reset tokens must be hashed at rest, emailed to the recipient, and never returned in API responses.
+  assert.match(auth, /\.createHash\("sha256"\)/);
+  assert.match(auth, /tokenHash,/);
+  assert.match(auth, /sendTransactionalEmail\(/);
+  assert.match(auth, /encodeURIComponent\(rawToken\)/);
+  assert.doesNotMatch(auth, /resetToken:\s*rawToken/);
 
   assert.match(api, /import\.meta\.env\.VITE_API_BASE_URL/);
   assert.match(login, /API_BASE_URL/);

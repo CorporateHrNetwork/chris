@@ -12,6 +12,7 @@ const {
   getPayrollReadiness,
 } = require("../services/payrollReadinessService");
 const payroll = require("../services/payrollOperationsService");
+const payrollApprovalWorkflow = require("../services/payrollApprovalWorkflowService");
 const nigeriaPayroll = require("../services/nigeriaPayrollComplianceService");
 const {
   validateNigeriaPayrollApproval,
@@ -19,6 +20,9 @@ const {
 const {
   isZermatt,
   isHeadHr,
+  isPayrollAuditor,
+  isGeneralManager,
+  isChiefAccountant,
 } = require("../services/zermattHrFinancialAccessService");
 const variablePayroll = require("../services/zermattVariablePayrollService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
@@ -60,6 +64,148 @@ function sendError(res, error, fallback = "Payroll operation failed.") {
   console.error("Payroll operation error:", error);
   return res.status(500).json({ status: "error", message: error?.message || fallback });
 }
+
+// Zermatt's sequential workflow is opt-in while legacy payroll is preserved.
+// GM final approval and payout export remain disabled until the compliance and export
+// paths are integrated transactionally; neither operation is exposed here.
+function requireZermattApprovalRole(roleCheck) {
+  return (req, res, next) => {
+    if (isZermatt(req) && roleCheck(req)) return next();
+    return res.status(403).json({
+      status: "error",
+      code: "ZERMATT_PAYROLL_APPROVAL_ROLE_REQUIRED",
+      message: "This Zermatt payroll approval stage requires its designated role.",
+    });
+  };
+}
+
+router.get("/runs/:id/approval-workflow", requireZermattApprovalRole(
+  (req) => isHeadHr(req) || isPayrollAuditor(req) || isGeneralManager(req) || isChiefAccountant(req)
+), async (req, res) => {
+  try {
+    const data = await payrollApprovalWorkflow.get({
+      organizationId: req.auth.organizationId,
+      runId: req.params.id,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to read payroll approval workflow.");
+  }
+});
+
+router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole(
+  (req) => isHeadHr(req) || isPayrollAuditor(req) || isGeneralManager(req) || isChiefAccountant(req)
+), async (req, res) => {
+  try {
+    const data = await payrollApprovalWorkflow.history({
+      organizationId: req.auth.organizationId,
+      runId: req.params.id,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to load payroll approval history.");
+  }
+});
+ 
+router.get("/approval-workflow/assignments", requireZermattApprovalRole(isHeadHr), async (req,res)=>{
+  try {
+    const data=await payrollApprovalWorkflow.listAssignments({organizationId:req.auth.organizationId});
+    return res.json({status:"success",data});
+  } catch(error){ return sendError(res,error,"Unable to load payroll approval assignments."); }
+});
+
+router.put("/approval-workflow/assignments/:responsibility", requireZermattApprovalRole(isHeadHr), async (req,res)=>{
+  try {
+    const responsibility=String(req.params.responsibility||"").trim().toUpperCase();
+    const assignedUserId=String(req.body?.assignedUserId||"").trim();
+    if(!assignedUserId) return res.status(400).json({status:"error",code:"PAYROLL_APPROVAL_ASSIGNEE_REQUIRED",message:"assignedUserId is required."});
+    const data=await payrollApprovalWorkflow.assignResponsibility({
+      organizationId:req.auth.organizationId,responsibility,assignedUserId,assignedByUserId:req.auth.userId
+    });
+    return res.json({status:"success",data});
+  } catch(error){ return sendError(res,error,"Unable to assign payroll approval responsibility."); }
+});
+
+
+// Read-only GM gate: validate workflow stage, payroll state, and statutory readiness.
+// This does not approve payroll or release funds.
+router.get("/runs/:id/approval-workflow/gm-readiness", requireZermattApprovalRole(isGeneralManager), async (req, res) => {
+  try {
+    const workflow = await payrollApprovalWorkflow.get({
+      organizationId: req.auth.organizationId, runId: req.params.id,
+    });
+    const run = await prisma.$queryRawUnsafe(
+      'SELECT "id","status" FROM "payroll_runs" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1',
+      req.auth.organizationId, req.params.id
+    );
+    if (!run[0]) return res.status(404).json({ status: "error", code: "PAYROLL_RUN_NOT_FOUND" });
+    const statutory = await validateNigeriaPayrollApproval({
+      organizationId: req.auth.organizationId, runId: req.params.id,
+    });
+    const eligible = workflow?.stage === "GM_PROCESSING" && run[0].status === "PENDING_APPROVAL" &&
+      statutory.valid === true && statutory.approvalBlocked !== true;
+    return res.json({
+      status: "success",
+      data: {
+        readyForManualReview: eligible,
+        stage: workflow?.stage || null,
+        payrollStatus: run[0].status,
+        statutory,
+        requiresStatutoryConfirmation: true,
+        approvalEnabled: false,
+      },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to validate GM payroll readiness.");
+  }
+});
+
+router.post("/runs/:id/approval-workflow/start", requireZermattApprovalRole(isHeadHr), async (req, res) => {
+  try {
+    const data = await payrollApprovalWorkflow.ensure({
+      organizationId: req.auth.organizationId,
+      runId: req.params.id,
+      actorUserId: req.auth.userId,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to start payroll approval workflow.");
+  }
+});
+
+router.post("/runs/:id/approval-workflow/action", requireAuth, async (req, res) => {
+  const action = String(req.body?.action || "").trim().toUpperCase();
+  const roles = {
+    REQUEST_AUDIT: isHeadHr,
+    AUDIT_OPEN: isPayrollAuditor,
+    AUDIT_APPROVE: isPayrollAuditor,
+    AUDIT_DISAPPROVE: isPayrollAuditor,
+    REQUEST_GM: isHeadHr,
+    GM_OPEN: isGeneralManager,
+    GM_APPROVE: isGeneralManager,
+    GM_DISAPPROVE: isGeneralManager,
+    PAYOUT_EXPORTED: isChiefAccountant,
+  };
+  if (!isZermatt(req) || !roles[action] || !roles[action](req)) {
+    return res.status(403).json({
+      status: "error",
+      code: "ZERMATT_PAYROLL_APPROVAL_ACTION_FORBIDDEN",
+      message: "This payroll approval action is unavailable or is not permitted for your role.",
+    });
+  }
+  try {
+    const data = await payrollApprovalWorkflow.transition({
+      organizationId: req.auth.organizationId,
+      runId: req.params.id,
+      actorUserId: req.auth.userId,
+      action,
+      notes: req.body?.notes,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to update payroll approval stage.");
+  }
+});
 
 router.get(
   "/readiness",
@@ -1491,6 +1637,20 @@ router.post("/runs/:id/submit", requirePermission("payroll.process"), requireZer
 
 router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
+    // Never let the legacy single-approver path bypass a started sequential workflow.
+    if (isZermatt(req)) {
+      const activeWorkflow = await payrollApprovalWorkflow.get({
+        organizationId: req.auth.organizationId,
+        runId: req.params.id,
+      });
+      if (activeWorkflow) {
+        return res.status(409).json({
+          status: "error",
+          code: "ZERMATT_SEQUENTIAL_APPROVAL_REQUIRED",
+          message: "This payroll run uses sequential approvals; legacy approval and rejection are disabled.",
+        });
+      }
+    }
     const decision = String(req.body?.decision || "").trim().toUpperCase();
     let isNigeriaPayroll = false;
     let statutoryCompliance = null;
@@ -2464,8 +2624,23 @@ router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), req
   }
 });
 
-router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
+router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), async (req, res, next) => {
+  if (isZermatt(req) && !isChiefAccountant(req)) {
+    return res.status(403).json({status:"error",code:"ZERMATT_PAYOUT_ACCOUNTANT_REQUIRED",message:"Only the assigned Chief Accountant may export and lock the approved Zermatt payroll payout."});
+  }
+  return next();
+}, async (req, res) => {
   try {
+    const activeWorkflow = isZermatt(req) ? await payrollApprovalWorkflow.get({
+      organizationId: req.auth.organizationId, runId: req.params.id,
+    }) : null;
+    if (isZermatt(req) && (!activeWorkflow || activeWorkflow.stage !== "READY_FOR_PAYOUT")) {
+      return res.status(409).json({
+        status:"error",
+        code:"ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY",
+        message:"The payroll must complete Head HR, Audit and GM approval before the Chief Accountant can export and lock payout."
+      });
+    }
     const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
     if (context.run.status !== "APPROVED") {
       throw payroll.operationalError(
@@ -2485,6 +2660,15 @@ router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), 
       action: "PAYROLL_APPROVED_PAYOUT_EXPORTED",
       stage: "APPROVED_PAYOUT",
     });
+    if (isZermatt(req)) {
+      await payrollApprovalWorkflow.transition({
+        organizationId:req.auth.organizationId,
+        runId:req.params.id,
+        actorUserId:req.auth.userId,
+        action:"PAYOUT_EXPORTED",
+        notes:"Approved payout workbook generated successfully and exported by the assigned Chief Accountant."
+      });
+    }
     const safePeriod = String(context.run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
     res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${safePeriod}_Approved_Payroll_External_Approval_Payout.xlsx"`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

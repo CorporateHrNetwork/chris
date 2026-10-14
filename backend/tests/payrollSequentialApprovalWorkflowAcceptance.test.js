@@ -1,0 +1,6 @@
+const test=require("node:test");const assert=require("node:assert/strict");const fs=require("node:fs");const path=require("node:path");
+const root=path.resolve(__dirname,"..","..");const read=p=>fs.readFileSync(path.join(root,p),"utf8");
+test("sequential payroll approval workflow preserves maker-checker stages",()=>{const s=read("backend/src/services/payrollApprovalWorkflowService.js");for(const x of ["PENDING_AUDIT","AUDIT_PROCESSING","AUDIT_DISAPPROVED","AUDIT_APPROVED","PENDING_GM","GM_PROCESSING","GM_DISAPPROVED","READY_FOR_PAYOUT","PAYOUT_EXPORTED_LOCKED","AUDIT_OBSERVATIONS_REQUIRED"])assert.ok(s.includes(x),x);});
+test("payout export is terminal and locks workflow",()=>{const s=read("backend/src/services/payrollApprovalWorkflowService.js");assert.ok(s.includes('"lockedAt"=?'));assert.ok(s.includes('PAYOUT_EXPORTED_LOCKED'));});
+
+test("approval workflow requires an authenticated actor and rejects finalized runs",()=>{const s=read("backend/src/services/payrollApprovalWorkflowService.js");assert.ok(s.includes("PAYROLL_APPROVAL_ACTOR_REQUIRED"));assert.ok(s.includes("PAYROLL_ALREADY_FINALIZED"));assert.ok(s.includes('run[0].status === "APPROVED"'));});

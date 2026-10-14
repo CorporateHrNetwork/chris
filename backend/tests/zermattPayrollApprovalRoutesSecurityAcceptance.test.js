@@ -1,0 +1,56 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const routes = fs.readFileSync(path.join(__dirname, "../src/routes/payrollRoutes.js"), "utf8");
+
+test("Zermatt approval endpoints enforce designated roles and tenant", () => {
+  assert.ok(routes.includes('router.post("/runs/:id/approval-workflow/start"'));
+  assert.ok(routes.includes('router.post("/runs/:id/approval-workflow/action"'));
+  assert.ok(routes.includes("isZermatt(req) && roleCheck(req)"));
+  assert.ok(routes.includes("!isZermatt(req) || !roles[action] || !roles[action](req)"));
+  for (const role of ["REQUEST_AUDIT: isHeadHr", "AUDIT_APPROVE: isPayrollAuditor", "GM_OPEN: isGeneralManager", "GM_DISAPPROVE: isGeneralManager"]) {
+    assert.ok(routes.includes(role), role);
+  }
+  assert.ok(routes.includes("GM_APPROVE: isGeneralManager"));
+  assert.ok(routes.includes("PAYOUT_EXPORTED: isChiefAccountant"));
+});
+
+test("legacy payroll approval and payout cannot bypass an active Zermatt workflow", () => {
+  const decision = routes.slice(routes.indexOf('router.post("/runs/:id/decision"'));
+  const payout = routes.slice(routes.indexOf('router.get("/runs/:id/approved-payout.xlsx"'));
+  assert.ok(decision.indexOf("ZERMATT_SEQUENTIAL_APPROVAL_REQUIRED") >= 0);
+  assert.ok(decision.indexOf("ZERMATT_SEQUENTIAL_APPROVAL_REQUIRED") < decision.indexOf("payroll.decidePayrollRun("));
+  assert.ok(payout.indexOf("ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY") >= 0);
+  assert.ok(payout.indexOf("ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY") < payout.indexOf("payrollExternalWorkbook("));
+});
+
+test("approval event history remains Zermatt role-gated", () => {
+  assert.ok(routes.includes('router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole('));
+  assert.ok(routes.includes("payrollApprovalWorkflow.history({"));
+});
+
+test("GM statutory readiness remains read-only and final approval is disabled", () => {
+  assert.ok(routes.includes('router.get("/runs/:id/approval-workflow/gm-readiness"'));
+  assert.ok(routes.includes("requireZermattApprovalRole(isGeneralManager)"));
+  assert.ok(routes.includes("validateNigeriaPayrollApproval({"));
+  assert.ok(routes.includes("approvalEnabled: false"));
+  assert.ok(routes.includes("GM_APPROVE: isGeneralManager"));
+});
+
+
+test("approval responsibility assignment controls are exposed only to Head HR", () => {
+  assert.ok(routes.includes('router.get("/approval-workflow/assignments", requireZermattApprovalRole(isHeadHr)'));
+  assert.ok(routes.includes('router.put("/approval-workflow/assignments/:responsibility", requireZermattApprovalRole(isHeadHr)'));
+  assert.ok(routes.includes("payrollApprovalWorkflow.assignResponsibility({"));
+  assert.ok(routes.includes("payrollApprovalWorkflow.listAssignments({"));
+});
+
+test("Zermatt payout export requires Chief Accountant and terminally records export lock", () => {
+  const payout = routes.slice(routes.indexOf('router.get("/runs/:id/approved-payout.xlsx"'));
+  assert.ok(payout.includes("ZERMATT_PAYOUT_ACCOUNTANT_REQUIRED"));
+  assert.ok(payout.includes('stage !== "READY_FOR_PAYOUT"'));
+  assert.ok(payout.includes('action:"PAYOUT_EXPORTED"'));
+  assert.ok(payout.indexOf("payrollExternalWorkbook") < payout.indexOf('action:"PAYOUT_EXPORTED"'));
+});

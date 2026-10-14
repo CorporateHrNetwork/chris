@@ -41,7 +41,7 @@ test("ESS exposes only approved employee payroll and 12-month-gated gratuity", (
 test("ESS is mounted separately from admin workspaces and employee-only role routes to /ess", () => {
   assert.ok(app.includes('app.use("/api/ess", employeeSelfServiceRoutes)'));
   assert.ok(router.includes('path="/ess"'));
-  assert.ok(router.includes("<EmployeeSelfService />"));
+  assert.ok(router.includes("<ESSPortal />"));
   assert.ok(login.includes('roleNames.includes("employee self service")'));
   assert.ok(login.includes('employeeSelfServiceOnly ? "/ess" : "/"'));
   assert.ok(migration.includes("'Employee Self Service'"));
