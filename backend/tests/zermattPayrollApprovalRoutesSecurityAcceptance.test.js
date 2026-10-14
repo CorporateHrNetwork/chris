@@ -25,3 +25,8 @@ test("legacy payroll approval and payout cannot bypass an active Zermatt workflo
   assert.ok(payout.indexOf("ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY") >= 0);
   assert.ok(payout.indexOf("ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY") < payout.indexOf("payrollExternalWorkbook("));
 });
+
+test("approval event history remains Zermatt role-gated", () => {
+  assert.ok(routes.includes('router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole('));
+  assert.ok(routes.includes("payrollApprovalWorkflow.history({"));
+});
