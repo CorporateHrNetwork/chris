@@ -442,6 +442,7 @@ function EditUserForm({
 
   return (
     <div
+      className="chris-edit-user-form"
       style={{
         background:
           "#FFFFFF",
