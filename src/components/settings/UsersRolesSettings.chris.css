@@ -174,3 +174,68 @@
   border-color: rgba(240,207,88,.62) !important;
   box-shadow: 0 18px 36px rgba(0,0,0,.28) !important;
 }
+
+
+/* ============================================================
+   PERMISSION WORKSPACE — CHRiS GLOBAL VISUAL STANDARD
+   ============================================================ */
+.chris-users-roles .chris-role-permissions-editor {
+  background: linear-gradient(155deg,#063522 0%,#04291b 55%,#03160f 100%) !important;
+  border: 1px solid rgba(212,175,55,.40) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 18px 42px rgba(0,0,0,.26) !important;
+  color: #f5fbf7 !important;
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#FFFFFF"],
+.chris-users-roles .chris-role-permissions-editor [style*="#FFF"],
+.chris-users-roles .chris-role-permissions-editor [style*="#F8FAFC"],
+.chris-users-roles .chris-role-permissions-editor [style*="#F9FAFB"],
+.chris-users-roles .chris-role-permissions-editor [style*="#F1F5F9"],
+.chris-users-roles .chris-role-permissions-editor [style*="#F0FDF4"] {
+  background:#04291b !important; color:#f5fbf7 !important; border-color:rgba(76,154,108,.32) !important;
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#0F172A"] { color:#f7faf8 !important; }
+.chris-users-roles .chris-role-permissions-editor [style*="#334155"],
+.chris-users-roles .chris-role-permissions-editor [style*="#475569"],
+.chris-users-roles .chris-role-permissions-editor [style*="#64748B"],
+.chris-users-roles .chris-role-permissions-editor [style*="#94A3B8"] { color:#a9bdb2 !important; }
+.chris-users-roles .chris-role-permissions-editor > div:first-child {
+  background:linear-gradient(135deg,#063522,#04291b) !important;
+  border-bottom-color:rgba(212,175,55,.28) !important;
+}
+.chris-users-roles .chris-role-permissions-editor > div:first-child h3 { color:#f7faf8 !important; font-size:20px !important; }
+.chris-users-roles .chris-role-permissions-editor > div:first-child p { color:#a9bdb2 !important; }
+.chris-users-roles .chris-role-permissions-editor [style*="#ECFDF5"] {
+  background:rgba(10,168,91,.12) !important; color:#bff5d9 !important; border-color:rgba(25,212,119,.30) !important;
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#FFF7ED"] {
+  background:rgba(212,175,55,.10) !important; color:#f0cf58 !important; border-color:rgba(212,175,55,.32) !important;
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#EFF6FF"] {
+  background:rgba(25,212,119,.07) !important; color:#b8e8cf !important; border-color:rgba(76,154,108,.30) !important;
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#FEF2F2"] {
+  background:rgba(185,28,28,.12) !important; color:#ffb4b4 !important; border-color:rgba(248,113,113,.32) !important;
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#FFFBEB"] {
+  background:rgba(212,175,55,.11) !important; color:#f0cf58 !important; border-color:rgba(212,175,55,.34) !important;
+}
+.chris-users-roles .chris-role-permissions-editor label {
+  background:#063522 !important; border-color:rgba(76,154,108,.32) !important; color:#f5fbf7 !important;
+}
+.chris-users-roles .chris-role-permissions-editor label:hover {
+  border-color:rgba(212,175,55,.55) !important; background:rgba(10,168,91,.12) !important;
+}
+.chris-users-roles .chris-role-permissions-editor label span span:first-child { color:#f7faf8 !important; }
+.chris-users-roles .chris-role-permissions-editor label span span:nth-child(2) { color:#a9bdb2 !important; }
+.chris-users-roles .chris-role-permissions-editor label span span:nth-child(3) {
+  background:#021d13 !important; color:#91a99e !important; border:1px solid rgba(76,154,108,.24);
+}
+.chris-users-roles .chris-role-permissions-editor [style*="#E2E8F0"],
+.chris-users-roles .chris-role-permissions-editor [style*="#CBD5E1"] { border-color:rgba(76,154,108,.30) !important; }
+.chris-users-roles .chris-role-permissions-editor button[style*="#087A43"] {
+  background:linear-gradient(135deg,#0aa85b,#087a43) !important; color:#fff !important; border-color:rgba(212,175,55,.42) !important;
+}
+.chris-users-roles .chris-role-permissions-editor button[style*="#FFFFFF"] {
+  background:#04291b !important; color:#dce8e2 !important; border-color:rgba(212,175,55,.30) !important;
+}
