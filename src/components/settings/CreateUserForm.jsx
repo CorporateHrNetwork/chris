@@ -122,8 +122,19 @@ function CreateUserForm({
       const name = [employee.firstName, employee.middleName, employee.lastName]
         .filter(Boolean).join(" ").toLowerCase();
       const employeeNumber = String(employee.employeeNumber || "").toLowerCase();
+      const employeeId = String(employee.id || "").toLowerCase();
       const email = String(employee.email || "").toLowerCase();
-      return name.includes(query) || employeeNumber.includes(query) || email.includes(query);
+      const normalizedQuery = query.replace(/[\s-]/g, "");
+      const normalizedEmployeeNumber = employeeNumber.replace(/[\s-]/g, "");
+      const normalizedEmployeeId = employeeId.replace(/[\s-]/g, "");
+      return (
+        name.includes(query) ||
+        employeeNumber.includes(query) ||
+        normalizedEmployeeNumber.includes(normalizedQuery) ||
+        employeeId.includes(query) ||
+        normalizedEmployeeId.includes(normalizedQuery) ||
+        email.includes(query)
+      );
     });
   }, [employees, employeeSearch]);
 
@@ -424,8 +435,8 @@ function CreateUserForm({
                 type="search"
                 value={employeeSearch}
                 onChange={(event) => setEmployeeSearch(event.target.value)}
-                placeholder="Search by employee name or ID number"
-                aria-label="Search employees by name or ID number"
+                placeholder="Search employee name, employee ID or number"
+                aria-label="Search employees by name, employee ID or employee number"
                 disabled={saving || employeesLoading}
                 style={inputStyle}
                 autoComplete="off"
