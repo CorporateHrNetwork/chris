@@ -106,6 +106,26 @@ router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole(
     return sendError(res, error, "Unable to load payroll approval history.");
   }
 });
+ 
+router.get("/approval-workflow/assignments", requireZermattApprovalRole(isHeadHr), async (req,res)=>{
+  try {
+    const data=await payrollApprovalWorkflow.listAssignments({organizationId:req.auth.organizationId});
+    return res.json({status:"success",data});
+  } catch(error){ return sendError(res,error,"Unable to load payroll approval assignments."); }
+});
+
+router.put("/approval-workflow/assignments/:responsibility", requireZermattApprovalRole(isHeadHr), async (req,res)=>{
+  try {
+    const responsibility=String(req.params.responsibility||"").trim().toUpperCase();
+    const assignedUserId=String(req.body?.assignedUserId||"").trim();
+    if(!assignedUserId) return res.status(400).json({status:"error",code:"PAYROLL_APPROVAL_ASSIGNEE_REQUIRED",message:"assignedUserId is required."});
+    const data=await payrollApprovalWorkflow.assignResponsibility({
+      organizationId:req.auth.organizationId,responsibility,assignedUserId,assignedByUserId:req.auth.userId
+    });
+    return res.json({status:"success",data});
+  } catch(error){ return sendError(res,error,"Unable to assign payroll approval responsibility."); }
+});
+
 
 // Read-only GM gate: validate workflow stage, payroll state, and statutory readiness.
 // This does not approve payroll or release funds.
@@ -162,7 +182,9 @@ router.post("/runs/:id/approval-workflow/action", requireAuth, async (req, res) 
     AUDIT_DISAPPROVE: isPayrollAuditor,
     REQUEST_GM: isHeadHr,
     GM_OPEN: isGeneralManager,
+    GM_APPROVE: isGeneralManager,
     GM_DISAPPROVE: isGeneralManager,
+    PAYOUT_EXPORTED: isChiefAccountant,
   };
   if (!isZermatt(req) || !roles[action] || !roles[action](req)) {
     return res.status(403).json({
@@ -2602,21 +2624,22 @@ router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), req
   }
 });
 
-router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
+router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), async (req, res, next) => {
+  if (isZermatt(req) && !isChiefAccountant(req)) {
+    return res.status(403).json({status:"error",code:"ZERMATT_PAYOUT_ACCOUNTANT_REQUIRED",message:"Only the assigned Chief Accountant may export and lock the approved Zermatt payroll payout."});
+  }
+  return next();
+}, async (req, res) => {
   try {
-    // Fail closed: sequential approval payout must use an audited, transactional export flow.
-    if (isZermatt(req)) {
-      const activeWorkflow = await payrollApprovalWorkflow.get({
-        organizationId: req.auth.organizationId,
-        runId: req.params.id,
+    const activeWorkflow = isZermatt(req) ? await payrollApprovalWorkflow.get({
+      organizationId: req.auth.organizationId, runId: req.params.id,
+    }) : null;
+    if (isZermatt(req) && (!activeWorkflow || activeWorkflow.stage !== "READY_FOR_PAYOUT")) {
+      return res.status(409).json({
+        status:"error",
+        code:"ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY",
+        message:"The payroll must complete Head HR, Audit and GM approval before the Chief Accountant can export and lock payout."
       });
-      if (activeWorkflow) {
-        return res.status(409).json({
-          status: "error",
-          code: "ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY",
-          message: "Sequential payroll payout export is unavailable until the accountant export-and-lock control is activated.",
-        });
-      }
     }
     const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
     if (context.run.status !== "APPROVED") {
@@ -2637,6 +2660,15 @@ router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), 
       action: "PAYROLL_APPROVED_PAYOUT_EXPORTED",
       stage: "APPROVED_PAYOUT",
     });
+    if (isZermatt(req)) {
+      await payrollApprovalWorkflow.transition({
+        organizationId:req.auth.organizationId,
+        runId:req.params.id,
+        actorUserId:req.auth.userId,
+        action:"PAYOUT_EXPORTED",
+        notes:"Approved payout workbook generated successfully and exported by the assigned Chief Accountant."
+      });
+    }
     const safePeriod = String(context.run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
     res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${safePeriod}_Approved_Payroll_External_Approval_Payout.xlsx"`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
