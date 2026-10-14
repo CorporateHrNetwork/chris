@@ -279,7 +279,7 @@ function CreateUserForm({
   };
 
   return (
-    <div
+    <div className="chris-create-user-form"
       style={{
         background: "#FFFFFF",
         border:
