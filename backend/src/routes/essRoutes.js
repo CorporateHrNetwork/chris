@@ -47,9 +47,8 @@ router.post("/login", async (req, res) => {
     const user = await prisma.user.findFirst({
       where: {
         organizationId: organization.id,
-        email,
+        email: { equals: email, mode: "insensitive" },
         isActive: true,
-        employeeId: { not: null },
       },
       include: {
         employee: {
@@ -67,7 +66,52 @@ router.post("/login", async (req, res) => {
       },
     });
 
-    if (!user || !user.employee || !ESS_EMPLOYEE_STATUSES.has(user.employee.status)) {
+    if (!user) {
+      return invalidCredentials(res);
+    }
+
+    if (!user.employee) {
+      const matches = await prisma.employee.findMany({
+        where: {
+          organizationId: organization.id,
+          email: { equals: email, mode: "insensitive" },
+          status: { in: Array.from(ESS_EMPLOYEE_STATUSES) },
+        },
+        orderBy: { employeeNumber: "asc" },
+        take: 2,
+      });
+
+      if (matches.length !== 1) {
+        return invalidCredentials(res);
+      }
+
+      const linkedEmployee = matches[0];
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { employeeId: linkedEmployee.id },
+        });
+        await tx.organizationAudit.create({
+          data: {
+            organizationId: organization.id,
+            actorUserId: user.id,
+            entityType: "User",
+            entityId: user.id,
+            action: "ESS_EMPLOYEE_LINK_AUTO_RECONCILED",
+            newValue: {
+              employeeId: linkedEmployee.id,
+              employeeNumber: linkedEmployee.employeeNumber,
+              matchedBy: "work_email",
+            },
+            reason: "ESS login reconciled an active CHRiS account to a unique active employee with the same work email.",
+          },
+        });
+      });
+
+      user.employee = linkedEmployee;
+    }
+
+    if (!ESS_EMPLOYEE_STATUSES.has(user.employee.status)) {
       return invalidCredentials(res);
     }
 
