@@ -60,3 +60,45 @@
   .chris-employee-search-row { flex-direction:column; align-items:stretch; }
   .chris-employee-search-clear { width:100%; }
 }
+/* ============================================================
+   USER IDENTITY LEGIBILITY — CHRiS GLOBAL STANDARD
+   Names are the primary identity on the Users table and must
+   remain immediately readable against the dark CHRiS surface.
+   ============================================================ */
+.chris-users-roles table tbody td:first-child {
+  min-width: 240px;
+  vertical-align: middle;
+}
+.chris-users-roles table tbody td:first-child > div:first-child {
+  color: #f7faf8 !important;
+  font-size: 15px !important;
+  line-height: 1.35 !important;
+  font-weight: 800 !important;
+  letter-spacing: .01em;
+  text-shadow: 0 1px 1px rgba(0,0,0,.28);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.chris-users-roles table tbody td:first-child > div:first-child span {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  vertical-align: middle;
+}
+.chris-users-roles table tbody td:first-child > div:nth-child(2) {
+  color: #b8c9c0 !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 700 !important;
+  letter-spacing: .03em;
+}
+.chris-users-roles table tbody td:nth-child(2) {
+  color: #dce8e2 !important;
+  font-size: 13px !important;
+}
+.chris-users-roles table tbody td:nth-child(3) {
+  color: #dce8e2 !important;
+}
+.chris-users-roles table tbody tr {
+  min-height: 64px;
+}
