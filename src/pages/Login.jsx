@@ -29,10 +29,14 @@ import { API_BASE_URL } from "../services/api";
   CorporateHr Network remains the safe development fallback.
 */
 function Login() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const legacyOrganization = String(window.location.search || "")
+    .match(/[?&]=?(?:organization[-_])?([^&]+)/i)?.[1]
+    ?.trim();
+
   const organizationSlug =
-    new URLSearchParams(
-      window.location.search
-    ).get("organization") ||
+    searchParams.get("organization")?.trim() ||
+    legacyOrganization ||
     "corporatehr-network";
   const navigate = useNavigate();
 
