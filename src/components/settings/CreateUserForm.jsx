@@ -7,6 +7,8 @@ import {
 import {
   FaUserPlus,
   FaTimes,
+  FaEye,
+  FaEyeSlash,
 } from "react-icons/fa";
 
 import {
@@ -32,6 +34,9 @@ function CreateUserForm({
     employeesError,
     setEmployeesError,
   ] = useState("");
+
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [form, setForm] = useState({
     employeeId: "",
@@ -110,6 +115,18 @@ function CreateUserForm({
   SELECTED EMPLOYEE
   ============================================================
   */
+  const filteredEmployees = useMemo(() => {
+    const query = employeeSearch.trim().toLowerCase();
+    if (!query) return employees;
+    return employees.filter((employee) => {
+      const name = [employee.firstName, employee.middleName, employee.lastName]
+        .filter(Boolean).join(" ").toLowerCase();
+      const employeeNumber = String(employee.employeeNumber || "").toLowerCase();
+      const email = String(employee.email || "").toLowerCase();
+      return name.includes(query) || employeeNumber.includes(query) || email.includes(query);
+    });
+  }, [employees, employeeSearch]);
+
   const selectedEmployee =
     useMemo(
       () =>
@@ -401,57 +418,69 @@ function CreateUserForm({
           required
           hint="Employee master record"
         >
-          <select
-            name="employeeId"
-            value={
-              form.employeeId
-            }
-            onChange={
-              handleChange
-            }
-            disabled={
-              saving ||
-              employeesLoading
-            }
-            style={inputStyle}
-          >
-            <option value="">
-              {employeesLoading
-                ? "Loading eligible employees..."
-                : employees.length ===
-                    0
-                  ? "No eligible employees available"
-                  : "Select an employee"}
-            </option>
+          <div className="chris-employee-search">
+            <div className="chris-employee-search-row">
+              <input
+                type="search"
+                value={employeeSearch}
+                onChange={(event) => setEmployeeSearch(event.target.value)}
+                placeholder="Search by employee name or ID number"
+                aria-label="Search employees by name or ID number"
+                disabled={saving || employeesLoading}
+                style={inputStyle}
+                autoComplete="off"
+              />
+              {employeeSearch && (
+                <button
+                  type="button"
+                  className="chris-employee-search-clear"
+                  onClick={() => setEmployeeSearch("")}
+                  disabled={saving}
+                  aria-label="Clear employee search"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
 
-            {employees.map(
-              (employee) => {
-                const fullName = [
-                  employee.firstName,
-                  employee.middleName,
-                  employee.lastName,
-                ]
-                  .filter(Boolean)
-                  .join(" ");
-
-                return (
-                  <option
-                    key={
-                      employee.id
-                    }
-                    value={
-                      employee.id
-                    }
-                  >
-                    {
-                      employee.employeeNumber
-                    }{" "}
-                    — {fullName}
-                  </option>
-                );
-              }
+            <div className="chris-employee-search-results" role="listbox" aria-label="Eligible employees">
+              {employeesLoading ? (
+                <div className="chris-employee-search-state">Loading eligible employees...</div>
+              ) : employees.length === 0 ? (
+                <div className="chris-employee-search-state">No eligible employees available.</div>
+              ) : filteredEmployees.length === 0 ? (
+                <div className="chris-employee-search-state">No employee matches that name or ID number.</div>
+              ) : (
+                filteredEmployees.slice(0, 50).map((employee) => {
+                  const fullName = [employee.firstName, employee.middleName, employee.lastName]
+                    .filter(Boolean).join(" ");
+                  const selected = form.employeeId === employee.id;
+                  return (
+                    <button
+                      key={employee.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`chris-employee-search-option${selected ? " is-selected" : ""}`}
+                      onClick={() => {
+                        setForm((current) => ({ ...current, employeeId: employee.id }));
+                        setError("");
+                      }}
+                      disabled={saving}
+                    >
+                      <span className="chris-employee-search-name">{fullName}</span>
+                      <span className="chris-employee-search-meta">
+                        {employee.employeeNumber || "No ID"}{employee.email ? ` • ${employee.email}` : ""}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            {!employeesLoading && filteredEmployees.length > 50 && (
+              <div className="chris-employee-search-limit">Showing the first 50 matches. Refine your search to find another employee.</div>
             )}
-          </select>
+          </div>
         </FormField>
 
         {/*
@@ -640,20 +669,28 @@ function CreateUserForm({
             required
             hint="Minimum 10 characters"
           >
-            <input
-              type="password"
-              name="temporaryPassword"
-              value={
-                form.temporaryPassword
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Enter temporary password"
-              style={inputStyle}
-              disabled={saving}
-              autoComplete="new-password"
-            />
+            <div className="chris-password-field">
+              <input
+                type={showPassword ? "text" : "password"}
+                name="temporaryPassword"
+                value={form.temporaryPassword}
+                onChange={handleChange}
+                placeholder="Enter temporary password"
+                style={inputStyle}
+                disabled={saving}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="chris-password-toggle"
+                onClick={() => setShowPassword((current) => !current)}
+                disabled={saving}
+                aria-label={showPassword ? "Hide temporary password" : "Show temporary password"}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </div>
           </FormField>
         </div>
 
