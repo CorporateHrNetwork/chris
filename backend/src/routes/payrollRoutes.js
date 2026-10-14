@@ -1568,6 +1568,20 @@ router.post("/runs/:id/submit", requirePermission("payroll.process"), requireZer
 
 router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
+    // Never let the legacy single-approver path bypass a started sequential workflow.
+    if (isZermatt(req)) {
+      const activeWorkflow = await payrollApprovalWorkflow.get({
+        organizationId: req.auth.organizationId,
+        runId: req.params.id,
+      });
+      if (activeWorkflow) {
+        return res.status(409).json({
+          status: "error",
+          code: "ZERMATT_SEQUENTIAL_APPROVAL_REQUIRED",
+          message: "This payroll run uses sequential approvals; legacy approval and rejection are disabled.",
+        });
+      }
+    }
     const decision = String(req.body?.decision || "").trim().toUpperCase();
     let isNigeriaPayroll = false;
     let statutoryCompliance = null;
@@ -2543,6 +2557,20 @@ router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), req
 
 router.get("/runs/:id/approved-payout.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
+    // Fail closed: sequential approval payout must use an audited, transactional export flow.
+    if (isZermatt(req)) {
+      const activeWorkflow = await payrollApprovalWorkflow.get({
+        organizationId: req.auth.organizationId,
+        runId: req.params.id,
+      });
+      if (activeWorkflow) {
+        return res.status(409).json({
+          status: "error",
+          code: "ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY",
+          message: "Sequential payroll payout export is unavailable until the accountant export-and-lock control is activated.",
+        });
+      }
+    }
     const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
     if (context.run.status !== "APPROVED") {
       throw payroll.operationalError(
