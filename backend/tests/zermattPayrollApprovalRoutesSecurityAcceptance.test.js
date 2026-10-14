@@ -16,3 +16,12 @@ test("Zermatt approval endpoints enforce designated roles and tenant", () => {
   assert.equal(routes.includes("GM_APPROVE: isGeneralManager"), false);
   assert.equal(routes.includes("PAYOUT_EXPORTED: isChiefAccountant"), false);
 });
+
+test("legacy payroll approval and payout cannot bypass an active Zermatt workflow", () => {
+  const decision = routes.slice(routes.indexOf('router.post("/runs/:id/decision"'));
+  const payout = routes.slice(routes.indexOf('router.get("/runs/:id/approved-payout.xlsx"'));
+  assert.ok(decision.indexOf("ZERMATT_SEQUENTIAL_APPROVAL_REQUIRED") >= 0);
+  assert.ok(decision.indexOf("ZERMATT_SEQUENTIAL_APPROVAL_REQUIRED") < decision.indexOf("payroll.decidePayrollRun("));
+  assert.ok(payout.indexOf("ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY") >= 0);
+  assert.ok(payout.indexOf("ZERMATT_SEQUENTIAL_PAYOUT_EXPORT_NOT_READY") < payout.indexOf("payrollExternalWorkbook("));
+});
