@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS "payroll_approval_workflows" (
   "lockedAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "payroll_approval_workflows_run_fk" FOREIGN KEY ("runId") REFERENCES "payroll_runs"("id") ON DELETE CASCADE,
-  CONSTRAINT "payroll_approval_workflows_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE CASCADE
+  CONSTRAINT "payroll_approval_workflows_run_fk" FOREIGN KEY ("runId") REFERENCES "payroll_runs"("id") ON DELETE RESTRICT,
+  CONSTRAINT "payroll_approval_workflows_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "payroll_approval_workflows_org_run_key" ON "payroll_approval_workflows"("organizationId","runId");
 CREATE INDEX IF NOT EXISTS "payroll_approval_workflows_stage_idx" ON "payroll_approval_workflows"("organizationId","stage");
@@ -35,6 +35,6 @@ CREATE TABLE IF NOT EXISTS "payroll_approval_events" (
   "toStage" TEXT NOT NULL,
   "notes" TEXT,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "payroll_approval_events_workflow_fk" FOREIGN KEY ("workflowId") REFERENCES "payroll_approval_workflows"("id") ON DELETE CASCADE
+  CONSTRAINT "payroll_approval_events_workflow_fk" FOREIGN KEY ("workflowId") REFERENCES "payroll_approval_workflows"("id") ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS "payroll_approval_events_run_idx" ON "payroll_approval_events"("organizationId","runId","createdAt");
