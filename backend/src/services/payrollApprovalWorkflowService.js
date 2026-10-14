@@ -16,16 +16,19 @@ async function event(tx,wf,actorUserId,action,toStage,notes){
  await tx.$executeRawUnsafe('INSERT INTO "payroll_approval_events" ("id","organizationId","runId","workflowId","actorUserId","action","fromStage","toStage","notes") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',crypto.randomUUID(),wf.organizationId,wf.runId,wf.id,actorUserId||null,action,wf.stage,toStage,notes||null);
 }
 async function ensure({organizationId,runId,actorUserId,prismaClient=prisma}){
+ if(!actorUserId)fail("PAYROLL_APPROVAL_ACTOR_REQUIRED","Authenticated payroll officer required.",403);
  return prismaClient.$transaction(async tx=>{
   let wf=await workflow(tx,organizationId,runId); if(wf)return wf;
   const run=await tx.$queryRawUnsafe('SELECT "id","status" FROM "payroll_runs" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1',organizationId,runId);
   if(!run[0])fail("PAYROLL_RUN_NOT_FOUND","Payroll run not found.",404);
+  if(run[0].status === "APPROVED" || run[0].status === "PAID" || run[0].status === "LOCKED")fail("PAYROLL_ALREADY_FINALIZED","A finalized payroll run cannot start a new approval workflow.");
   const id=crypto.randomUUID();
   await tx.$executeRawUnsafe('INSERT INTO "payroll_approval_workflows" ("id","organizationId","runId","stage") VALUES ($1,$2,$3,$4)',id,organizationId,runId,STAGE.DRAFT);
   wf=await workflow(tx,organizationId,runId); await event(tx,wf,actorUserId,"WORKFLOW_CREATED",STAGE.DRAFT,null); return wf;
  });
 }
 async function transition({organizationId,runId,actorUserId,action,notes,prismaClient=prisma}){
+ if(!actorUserId)fail("PAYROLL_APPROVAL_ACTOR_REQUIRED","Authenticated payroll officer required.",403);
  return prismaClient.$transaction(async tx=>{
   let wf=await workflow(tx,organizationId,runId); if(!wf)fail("PAYROLL_APPROVAL_WORKFLOW_REQUIRED","Start the payroll approval workflow first.");
   const rules={
