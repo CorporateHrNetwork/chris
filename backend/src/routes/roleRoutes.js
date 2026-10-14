@@ -26,6 +26,138 @@ router.use(requireAuth);
 GET ALL ROLES
 ============================================================
 */
+/*
+============================================================
+CREATE ORGANIZATION ROLE
+============================================================
+Tenant administrators can create tenant-scoped custom roles.
+New roles start with no permissions and are then configured
+through the existing Roles & Permissions editor.
+============================================================
+*/
+router.post(
+  "/",
+  requirePermission("roles.manage"),
+  async (req, res) => {
+    try {
+      const organizationId = req.auth.organizationId;
+      const name = String(req.body?.name || "").trim();
+      const description = String(req.body?.description || "").trim();
+
+      if (!name) {
+        return res.status(400).json({
+          status: "error",
+          code: "ROLE_NAME_REQUIRED",
+          message: "Role name is required.",
+        });
+      }
+
+      if (name.length > 100) {
+        return res.status(400).json({
+          status: "error",
+          code: "ROLE_NAME_TOO_LONG",
+          message: "Role name must not exceed 100 characters.",
+        });
+      }
+
+      if (name.toLowerCase() === "administrator") {
+        return res.status(400).json({
+          status: "error",
+          code: "PROTECTED_ROLE_NAME",
+          message: "Administrator is a protected system role and cannot be recreated.",
+        });
+      }
+
+      const duplicate = await prisma.role.findFirst({
+        where: {
+          organizationId,
+          name: { equals: name, mode: "insensitive" },
+        },
+        select: { id: true, name: true },
+      });
+
+      if (duplicate) {
+        return res.status(409).json({
+          status: "error",
+          code: "ROLE_ALREADY_EXISTS",
+          message: "A role with this name already exists in this organization.",
+        });
+      }
+
+      const role = await prisma.$transaction(async (tx) => {
+        const created = await tx.role.create({
+          data: {
+            organizationId,
+            name,
+            description: description || null,
+            isSystemRole: false,
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            isSystemRole: true,
+            createdAt: true,
+            _count: {
+              select: {
+                userRoles: true,
+                rolePermissions: true,
+              },
+            },
+          },
+        });
+
+        await tx.organizationAudit.create({
+          data: {
+            organizationId,
+            actorUserId: req.auth.userId,
+            entityType: "Role",
+            entityId: created.id,
+            action: "CHRIS_ROLE_CREATED",
+            previousValue: null,
+            newValue: {
+              name: created.name,
+              description: created.description,
+              isSystemRole: created.isSystemRole,
+              permissionCount: 0,
+            },
+            reason: "Organization administrator created a tenant role.",
+          },
+        });
+
+        return created;
+      });
+
+      return res.status(201).json({
+        status: "success",
+        message: role.name + " role created successfully. Configure its permissions before assigning it to users.",
+        data: {
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          isSystemRole: role.isSystemRole,
+          createdAt: role.createdAt,
+          userCount: role._count.userRoles,
+          permissionCount: role._count.rolePermissions,
+        },
+      });
+    } catch (error) {
+      console.error("Role creation error:", error);
+      if (error.code === "P2002") {
+        return res.status(409).json({
+          status: "error",
+          code: "ROLE_ALREADY_EXISTS",
+          message: "A role with this name already exists in this organization.",
+        });
+      }
+      return res.status(500).json({
+        status: "error",
+        message: "Unable to create CHRIS role.",
+      });
+    }
+  }
+);
+
 router.get(
   "/",
   requirePermission("roles.view"),

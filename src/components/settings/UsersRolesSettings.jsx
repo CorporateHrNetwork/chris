@@ -23,6 +23,7 @@ import {
 import useAuthorization from "../../hooks/useAuthorization";
 
 import CreateUserForm from "./CreateUserForm";
+import CreateRoleForm from "./CreateRoleForm";
 import EditUserForm from "./EditUserForm";
 import RolePermissionsEditor from "./RolePermissionsEditor";
 
@@ -48,6 +49,11 @@ function UsersRolesSettings() {
     selectedRole,
     setSelectedRole,
   ] = useState(null);
+
+  const [
+    showCreateRole,
+    setShowCreateRole,
+  ] = useState(false);
 
   const [
     users,
@@ -269,6 +275,17 @@ function UsersRolesSettings() {
       setTimeout(() => {
         setActionMessage("");
       }, 4000);
+    };
+
+  const handleRoleCreated =
+    async () => {
+      setShowCreateRole(false);
+      setActionError("");
+      setActionMessage("CHRIS role created successfully. Configure its permissions, then assign it to users.");
+      await loadRoles();
+      setTimeout(() => {
+        setActionMessage("");
+      }, 5000);
     };
 
   /*
@@ -833,6 +850,25 @@ function UsersRolesSettings() {
               selectedRole
             }
 
+            showCreateRole={
+              showCreateRole
+            }
+
+            onCreateRole={() => {
+              setShowCreateRole(true);
+              setSelectedRole(null);
+              setActionMessage("");
+              setActionError("");
+            }}
+
+            onRoleCreated={
+              handleRoleCreated
+            }
+
+            onCancelCreateRole={() =>
+              setShowCreateRole(false)
+            }
+
             onSelectRole={
               setSelectedRole
             }
@@ -1303,6 +1339,10 @@ function RolesTab({
   canView,
   canManage,
   selectedRole,
+  showCreateRole,
+  onCreateRole,
+  onRoleCreated,
+  onCancelCreateRole,
   onSelectRole,
   onCloseRole,
   onSaved,
@@ -1312,6 +1352,17 @@ function RolesTab({
       <AccessNotice
         message="You do not have permission to view CHRIS roles."
       />
+    );
+  }
+
+  if (showCreateRole && canManage) {
+    return (
+      <div>
+        <CreateRoleForm
+          onCancel={onCancelCreateRole}
+          onCreated={onRoleCreated}
+        />
+      </div>
     );
   }
 
@@ -1411,13 +1462,18 @@ function RolesTab({
         </div>
 
         {canManage ? (
-          <span
-            style={
-              manageBadgeStyle
-            }
-          >
-            Role Management Enabled
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={manageBadgeStyle}>
+              Role Management Enabled
+            </span>
+            <button
+              type="button"
+              onClick={onCreateRole}
+              style={createButtonStyle}
+            >
+              + Create Role
+            </button>
+          </div>
         ) : (
           <span
             style={
