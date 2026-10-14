@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../../services/api";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -187,7 +187,7 @@ function ApprovalsWorkspace() {
     }
     try {
       setBusy(action); setError("");
-      await apiRequest(`/api/payroll/runs/${selectedRun.id}/approval-workflow/action`, {
+      if (action === "PAYOUT_EXPORTED") { const downloaded = await apiDownload(`/api/payroll/runs/${selectedRun.id}/approved-payout.xlsx`); saveDownloadedBlob(downloaded); } else await apiRequest(`/api/payroll/runs/${selectedRun.id}/approval-workflow/action`, {
         method: "POST",
         body: JSON.stringify({ action, notes: notes.trim() || undefined }),
       });
