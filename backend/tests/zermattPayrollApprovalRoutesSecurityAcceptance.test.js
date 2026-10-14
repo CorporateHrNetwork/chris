@@ -13,8 +13,8 @@ test("Zermatt approval endpoints enforce designated roles and tenant", () => {
   for (const role of ["REQUEST_AUDIT: isHeadHr", "AUDIT_APPROVE: isPayrollAuditor", "GM_OPEN: isGeneralManager", "GM_DISAPPROVE: isGeneralManager"]) {
     assert.ok(routes.includes(role), role);
   }
-  assert.equal(routes.includes("GM_APPROVE: isGeneralManager"), false);
-  assert.equal(routes.includes("PAYOUT_EXPORTED: isChiefAccountant"), false);
+  assert.ok(routes.includes("GM_APPROVE: isGeneralManager"));
+  assert.ok(routes.includes("PAYOUT_EXPORTED: isChiefAccountant"));
 });
 
 test("legacy payroll approval and payout cannot bypass an active Zermatt workflow", () => {
@@ -36,5 +36,21 @@ test("GM statutory readiness remains read-only and final approval is disabled", 
   assert.ok(routes.includes("requireZermattApprovalRole(isGeneralManager)"));
   assert.ok(routes.includes("validateNigeriaPayrollApproval({"));
   assert.ok(routes.includes("approvalEnabled: false"));
-  assert.equal(routes.includes("GM_APPROVE: isGeneralManager"), false);
+  assert.ok(routes.includes("GM_APPROVE: isGeneralManager"));
+});
+
+
+test("approval responsibility assignment controls are exposed only to Head HR", () => {
+  assert.ok(routes.includes('router.get("/approval-workflow/assignments", requireZermattApprovalRole(isHeadHr)'));
+  assert.ok(routes.includes('router.put("/approval-workflow/assignments/:responsibility", requireZermattApprovalRole(isHeadHr)'));
+  assert.ok(routes.includes("payrollApprovalWorkflow.assignResponsibility({"));
+  assert.ok(routes.includes("payrollApprovalWorkflow.listAssignments({"));
+});
+
+test("Zermatt payout export requires Chief Accountant and terminally records export lock", () => {
+  const payout = routes.slice(routes.indexOf('router.get("/runs/:id/approved-payout.xlsx"'));
+  assert.ok(payout.includes("ZERMATT_PAYOUT_ACCOUNTANT_REQUIRED"));
+  assert.ok(payout.includes('stage !== "READY_FOR_PAYOUT"'));
+  assert.ok(payout.includes('action:"PAYOUT_EXPORTED"'));
+  assert.ok(payout.indexOf("payrollExternalWorkbook") < payout.indexOf('action:"PAYOUT_EXPORTED"'));
 });
