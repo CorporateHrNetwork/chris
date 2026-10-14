@@ -34,7 +34,7 @@ export default function NigeriaPayrollSupplementWorkspace({ mode }) {
     allowances: ["Other Allowances", "Add earnings outside ZERMATT's 100% Basic/Housing/Transport/Meal/Medical/Utility gross structure. Taxable is the safe default."],
     deductions: ["Other Deductions", "Configure non-statutory deductions separately from CHRiS-calculated PAYE and pension."],
     payslips: ["Payslips", "Review employee payroll results including Nigeria PAYE, pension, salary structure and net pay."],
-    approvals: ["Payroll Approvals", "Approve or reject calculated payroll after reviewing statutory results and exceptions. Approval does not transmit payment instructions."],
+    approvals: ["Payroll Approvals", "Approve or reject calculated payroll after reviewing statutory results and exceptions. Approval does not transmit payment instructions. I confirm I reviewed CHRiS-calculated PAYE/pension."],
   };
   const [title, description] = meta[mode] || meta.allowances;
   return (
