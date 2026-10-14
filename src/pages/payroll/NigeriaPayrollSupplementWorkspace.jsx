@@ -1,3 +1,5 @@
+const PAYROLL_REVIEW_CONFIRMATION_TEXT = "I confirm I reviewed CHRiS-calculated PAYE/pension";
+
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
