@@ -38,7 +38,7 @@ async function resolveAssignment({organizationId,responsibility,actorUserId=null
  return prismaClient.$transaction(async tx=>{
   let a=await assignment(tx,organizationId,responsibility); if(a)return a;
   const roles=ROLE_CANDIDATES[responsibility]||[];
-  const rows=await tx.$queryRawUnsafe('SELECT DISTINCT u."id",u."email",u."firstName",u."lastName" FROM "users" u JOIN "user_roles" ur ON ur."userId"=u."id" JOIN "roles" r ON r."id"=ur."roleId" WHERE u."organizationId"=$1 AND u."isActive"=true AND UPPER(REGEXP_REPLACE(TRIM(r."name"),$3,$4,'g')) = ANY($2::text[]) ORDER BY u."email"',organizationId,roles.map(x=>x.toUpperCase()),'\\s+',' ');
+  const rows=await tx.$queryRawUnsafe(`SELECT DISTINCT u."id",u."email",u."firstName",u."lastName" FROM "users" u JOIN "user_roles" ur ON ur."userId"=u."id" JOIN "roles" r ON r."id"=ur."roleId" WHERE u."organizationId"=$1 AND u."isActive"=true AND UPPER(REGEXP_REPLACE(TRIM(r."name"),$3,$4,'g')) = ANY($2::text[]) ORDER BY u."email"`,organizationId,roles.map(x=>x.toUpperCase()),'\\s+',' ');
   if(rows.length!==1) fail("PAYROLL_APPROVAL_ASSIGNMENT_REQUIRED",`Exactly one active user must be assigned to ${responsibility.replaceAll("_"," ")} before this payroll stage can proceed.`);
   await tx.$executeRawUnsafe('INSERT INTO "payroll_approval_assignments" ("id","organizationId","responsibility","assignedUserId","assignedByUserId","isActive") VALUES ($1,$2,$3,$4,$5,true)',crypto.randomUUID(),organizationId,responsibility,rows[0].id,actorUserId||null);
   return assignment(tx,organizationId,responsibility);
@@ -57,7 +57,7 @@ async function assignResponsibility({organizationId,responsibility,assignedUserI
  return prismaClient.$transaction(async tx=>{
   const user=await tx.$queryRawUnsafe('SELECT "id","email","isActive" FROM "users" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1',organizationId,assignedUserId);
   if(!user[0]||!user[0].isActive) fail("PAYROLL_APPROVAL_ASSIGNEE_INVALID","Assigned user must be an active Zermatt user.",400);
-  const roleRows=await tx.$queryRawUnsafe('SELECT 1 FROM "user_roles" ur JOIN "roles" r ON r."id"=ur."roleId" WHERE ur."userId"=$1 AND UPPER(REGEXP_REPLACE(TRIM(r."name"),$3,$4,'g')) = ANY($2::text[]) LIMIT 1',assignedUserId,ROLE_CANDIDATES[responsibility].map(x=>x.toUpperCase()),'\\s+',' ');
+  const roleRows=await tx.$queryRawUnsafe(`SELECT 1 FROM "user_roles" ur JOIN "roles" r ON r."id"=ur."roleId" WHERE ur."userId"=$1 AND UPPER(REGEXP_REPLACE(TRIM(r."name"),$3,$4,'g')) = ANY($2::text[]) LIMIT 1`,assignedUserId,ROLE_CANDIDATES[responsibility].map(x=>x.toUpperCase()),'\\s+',' ');
   if(!roleRows[0]) fail("PAYROLL_APPROVAL_ASSIGNEE_ROLE_MISMATCH","Assigned user does not hold the required approval role.",400);
   await tx.$executeRawUnsafe('UPDATE "payroll_approval_assignments" SET "isActive"=false,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "responsibility"=$2 AND "isActive"=true',organizationId,responsibility);
   await tx.$executeRawUnsafe('INSERT INTO "payroll_approval_assignments" ("id","organizationId","responsibility","assignedUserId","assignedByUserId","isActive") VALUES ($1,$2,$3,$4,$5,true)',crypto.randomUUID(),organizationId,responsibility,assignedUserId,assignedByUserId);
