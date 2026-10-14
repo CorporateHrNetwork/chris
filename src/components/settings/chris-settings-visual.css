@@ -253,3 +253,80 @@ main div[style*="border-radius"] {
 .chris-settings-skin tbody td { color:#C7D3CC !important; }
 .chris-settings-skin tbody td strong,.chris-settings-skin tbody td b { color:#F7FAF8 !important; }
 .chris-settings-skin .chris-settings-tab--active,.chris-settings-skin > div:first-child > p:first-child { color:#F2CF57 !important; }
+
+/* ============================================================
+   CHRIS CREATE USER — GLOBAL VISUAL LANGUAGE
+   ============================================================ */
+.chris-create-user-form {
+  background: linear-gradient(145deg, #063522 0%, #03160f 100%) !important;
+  border: 1px solid rgba(212,175,55,.42) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 18px 42px rgba(0,0,0,.28) !important;
+  color: #F7FAF8 !important;
+}
+.chris-create-user-form > div:first-child {
+  background: linear-gradient(90deg, rgba(10,168,91,.16), rgba(212,175,55,.08)) !important;
+  border-bottom: 1px solid rgba(212,175,55,.28) !important;
+}
+.chris-create-user-form > div:first-child > div > div:first-child {
+  background: rgba(10,168,91,.16) !important;
+  border: 1px solid rgba(46,233,139,.25) !important;
+  color: #2EE98B !important;
+}
+.chris-create-user-form h3 { color: #F7FAF8 !important; }
+.chris-create-user-form p { color: #9FB1A7 !important; }
+.chris-create-user-form label > div > span:first-child,
+.chris-create-user-form label > span,
+.chris-create-user-form label { color: #C7D3CC !important; }
+.chris-create-user-form input,
+.chris-create-user-form select,
+.chris-create-user-form textarea {
+  background: #021D13 !important;
+  color: #F7FAF8 !important;
+  border: 1px solid rgba(76,154,108,.48) !important;
+  border-radius: 9px !important;
+}
+.chris-create-user-form input:focus,
+.chris-create-user-form select:focus,
+.chris-create-user-form textarea:focus {
+  border-color: #D4AF37 !important;
+  box-shadow: 0 0 0 3px rgba(212,175,55,.12) !important;
+}
+.chris-create-user-form select option { background: #021D13; color: #F7FAF8; }
+.chris-create-user-form [style*="#FAFFFC"],
+.chris-create-user-form [style*="#F8FAFC"] {
+  background: rgba(2,29,19,.72) !important;
+  border-color: rgba(76,154,108,.30) !important;
+}
+.chris-create-user-form [style*="#F0FDF4"] {
+  background: rgba(10,168,91,.12) !important;
+  border-color: #0AA85B !important;
+}
+.chris-create-user-form [style*="#FFFFFF"] { background: #063522 !important; }
+.chris-create-user-form button[style*="#FFFFFF"] {
+  background: transparent !important;
+  color: #C7D3CC !important;
+  border-color: rgba(76,154,108,.40) !important;
+}
+.chris-create-user-form button[style*="#087A43"] {
+  background: linear-gradient(135deg, #0AA85B, #087A43) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(212,175,55,.32) !important;
+  box-shadow: 0 7px 18px rgba(0,0,0,.20) !important;
+}
+.chris-create-user-form button:hover:not(:disabled) { transform: translateY(-1px); }
+.chris-create-user-form [style*="#FFFBEB"] {
+  background: rgba(212,175,55,.10) !important;
+  border-color: rgba(212,175,55,.38) !important;
+  color: #F2CF57 !important;
+}
+.chris-create-user-form [style*="#FEF2F2"] {
+  background: rgba(185,28,28,.12) !important;
+  border-color: rgba(248,113,113,.35) !important;
+}
+.chris-create-user-form input[type="checkbox"] { accent-color: #D4AF37; }
+.chris-create-user-form input::placeholder { color: #7F988B !important; }
+@media (max-width: 700px) {
+  .chris-create-user-form { border-radius: 12px !important; }
+  .chris-create-user-form form { padding: 16px !important; }
+}
