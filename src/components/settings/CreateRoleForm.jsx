@@ -31,6 +31,7 @@ function CreateRoleForm({ onCancel, onCreated }) {
 
   return (
     <form
+      className="chris-create-role-form"
       onSubmit={submit}
       style={{
         marginBottom: "22px",
