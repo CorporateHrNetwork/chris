@@ -27,9 +27,9 @@ async function ensure({organizationId,runId,actorUserId,prismaClient=prisma}){
   wf=await workflow(tx,organizationId,runId); await event(tx,wf,actorUserId,"WORKFLOW_CREATED",STAGE.DRAFT,null); return wf;
  });
 }
-async function transition({organizationId,runId,actorUserId,action,notes,prismaClient=prisma}){
+async function transition({organizationId,runId,actorUserId,action,notes,prismaClient=prisma,transactionClient=null}){
  if(!actorUserId)fail("PAYROLL_APPROVAL_ACTOR_REQUIRED","Authenticated payroll officer required.",403);
- return prismaClient.$transaction(async tx=>{
+ const perform = async tx=>{
   let wf=await workflow(tx,organizationId,runId); if(!wf)fail("PAYROLL_APPROVAL_WORKFLOW_REQUIRED","Start the payroll approval workflow first.");
   const rules={
    REQUEST_AUDIT:[[STAGE.DRAFT,STAGE.AUDIT_DISAPPROVED],STAGE.PENDING_AUDIT],
@@ -54,9 +54,10 @@ async function transition({organizationId,runId,actorUserId,action,notes,prismaC
   if(action==="GM_APPROVE"||action==="GM_DISAPPROVE"){add('"gmDecision"=?',action==="GM_APPROVE"?"APPROVED":"DISAPPROVED");add('"gmActorUserId"=?',actorUserId);add('"gmDecidedAt"=?',new Date());}
   if(action==="PAYOUT_EXPORTED"){add('"payoutActorUserId"=?',actorUserId);add('"payoutExportedAt"=?',new Date());add('"lockedAt"=?',new Date());}
   await tx.$executeRawUnsafe('UPDATE "payroll_approval_workflows" SET '+sets.join(",")+' WHERE "organizationId"=$1 AND "runId"=$2 AND "id"=$3',...values);
-  if(action==="GM_APPROVE") await tx.$executeRawUnsafe('UPDATE "payroll_runs" SET "status"=\'APPROVED\',"approvedAt"=CURRENT_TIMESTAMP,"approvedByUserId"=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "id"=$2',organizationId,runId,actorUserId);
+  // Payroll status and statutory postings are committed by payrollOperationsService in the same transaction.
   return workflow(tx,organizationId,runId);
- });
+ };
+ return transactionClient ? perform(transactionClient) : prismaClient.$transaction(perform);
 }
 async function get({organizationId,runId,prismaClient=prisma}){return workflow(prismaClient,organizationId,runId)}
 async function history({organizationId,runId,prismaClient=prisma}){
