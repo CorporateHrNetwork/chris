@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
+const { dispatchTodayCelebrations } = require("../services/zermattCelebrationNotificationService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -42,6 +43,18 @@ function handle(res, error, fallback) {
     message: error.message || fallback,
   });
 }
+
+router.post("/celebrations/dispatch", requirePermission("employees.update"), async (req, res) => {
+  try {
+    const data = await dispatchTodayCelebrations({
+      organizationId: req.auth.organizationId,
+      date: req.body?.date || undefined,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return handle(res, error, "Unable to dispatch today's celebration notifications.");
+  }
+});
 
 router.get("/", requirePermission("employees.view"), async (req, res) => {
   try {
