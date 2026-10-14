@@ -59,4 +59,12 @@ async function transition({organizationId,runId,actorUserId,action,notes,prismaC
  });
 }
 async function get({organizationId,runId,prismaClient=prisma}){return workflow(prismaClient,organizationId,runId)}
-module.exports={STAGE,ensure,transition,get};
+async function history({organizationId,runId,prismaClient=prisma}){
+ const current=await get({organizationId,runId,prismaClient});
+ if(!current)fail("PAYROLL_APPROVAL_WORKFLOW_NOT_FOUND","Approval workflow not found.",404);
+ return prismaClient.$queryRawUnsafe(
+  'SELECT "id","action","actorUserId","fromStage","toStage","notes","createdAt" FROM "payroll_approval_events" WHERE "organizationId"=$1 AND "runId"=$2 AND "workflowId"=$3 ORDER BY "createdAt" ASC,"id" ASC',
+  organizationId,runId,current.id
+ );
+}
+module.exports={STAGE,ensure,transition,get,history};
