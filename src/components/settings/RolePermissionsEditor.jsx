@@ -478,6 +478,7 @@ function RolePermissionsEditor({
 
   return (
     <div
+      className="chris-role-permissions-editor"
       style={{
         background:
           "#FFFFFF",
