@@ -68,6 +68,7 @@ function RolePermissionsEditor({
     "Administrator";
 
   const isReadOnly =
+    Boolean(role?.isSystemRole) ||
     isAdministrator ||
     !canManage;
 
@@ -361,9 +362,9 @@ function RolePermissionsEditor({
         return;
       }
 
-      if (isAdministrator) {
+      if (role?.isSystemRole || isAdministrator) {
         setError(
-          "Administrator permissions are protected and cannot be modified."
+          "System role permissions are protected and cannot be modified."
         );
 
         return;
