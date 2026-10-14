@@ -109,13 +109,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    const normalizedOrganizationSlug = organizationSlug.trim().toLowerCase().replace(/^organization[-_]/, "");
+    const normalizedEmail = email.trim().toLowerCase();
+
     const organization =
       await prisma.organization.findUnique({
-        where: {
-          slug: organizationSlug
-            .trim()
-            .toLowerCase(),
-        },
+        where: { slug: normalizedOrganizationSlug },
       });
 
     if (!organization) {
@@ -139,14 +138,12 @@ router.post("/login", async (req, res) => {
     const user =
       await prisma.user.findFirst({
         where: {
-          organizationId:
-            organization.id,
-
-          email: email
-            .trim()
-            .toLowerCase(),
-
+          organizationId: organization.id,
           isActive: true,
+          OR: [
+            { email: normalizedEmail },
+            { employee: { email: { equals: normalizedEmail, mode: "insensitive" } } },
+          ],
         },
 
         include: {
