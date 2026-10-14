@@ -85,7 +85,9 @@ async function claimChannel({ organizationId, employeeId, celebrationType, celeb
     \`INSERT INTO "employee_celebration_notification_ledger"
       ("id","organizationId","employeeId","celebrationType","celebrationDate","channel","messageHash","status")
      VALUES ($1,$2,$3,$4,$5::date,$6,$7,'PROCESSING')
-     ON CONFLICT ("organizationId","employeeId","celebrationType","celebrationDate","channel") DO NOTHING
+     ON CONFLICT ("organizationId","employeeId","celebrationType","celebrationDate","channel")
+     DO UPDATE SET "status"='PROCESSING',"messageHash"=EXCLUDED."messageHash","error"=NULL,"updatedAt"=CURRENT_TIMESTAMP
+       WHERE "employee_celebration_notification_ledger"."status" IN ('FAILED','PENDING_CONFIGURATION')
      RETURNING "id"\`,
     crypto.randomUUID(), organizationId, employeeId, celebrationType, celebrationDate, channel, messageHash
   );
