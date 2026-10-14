@@ -107,6 +107,39 @@ router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole(
   }
 });
 
+// Read-only GM gate: validate workflow stage, payroll state, and statutory readiness.
+// This does not approve payroll or release funds.
+router.get("/runs/:id/approval-workflow/gm-readiness", requireZermattApprovalRole(isGeneralManager), async (req, res) => {
+  try {
+    const workflow = await payrollApprovalWorkflow.get({
+      organizationId: req.auth.organizationId, runId: req.params.id,
+    });
+    const run = await prisma.$queryRawUnsafe(
+      'SELECT "id","status" FROM "payroll_runs" WHERE "organizationId"=$1 AND "id"=$2 LIMIT 1',
+      req.auth.organizationId, req.params.id
+    );
+    if (!run[0]) return res.status(404).json({ status: "error", code: "PAYROLL_RUN_NOT_FOUND" });
+    const statutory = await validateNigeriaPayrollApproval({
+      organizationId: req.auth.organizationId, runId: req.params.id,
+    });
+    const eligible = workflow?.stage === "GM_PROCESSING" && run[0].status === "PENDING_APPROVAL" &&
+      statutory.valid === true && statutory.approvalBlocked !== true;
+    return res.json({
+      status: "success",
+      data: {
+        readyForManualReview: eligible,
+        stage: workflow?.stage || null,
+        payrollStatus: run[0].status,
+        statutory,
+        requiresStatutoryConfirmation: true,
+        approvalEnabled: false,
+      },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to validate GM payroll readiness.");
+  }
+});
+
 router.post("/runs/:id/approval-workflow/start", requireZermattApprovalRole(isHeadHr), async (req, res) => {
   try {
     const data = await payrollApprovalWorkflow.ensure({
