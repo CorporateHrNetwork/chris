@@ -1648,6 +1648,7 @@ function RolesTab({
                     }}
                   >
                     <RoleMetric
+                      className="chris-role-metric"
                       label="Users"
                       value={
                         role.userCount ??
@@ -1656,6 +1657,7 @@ function RolesTab({
                     />
 
                     <RoleMetric
+                      className="chris-role-metric"
                       label="Permissions"
                       value={
                         role.permissionCount ??
@@ -1673,6 +1675,7 @@ function RolesTab({
                       )
                     }
 
+                    className={`chris-role-action ${administrator || role.isSystemRole || !canManage ? "is-view" : "is-edit"}`}
                     style={{
                       ...roleActionButtonStyle,
 
@@ -1695,7 +1698,7 @@ function RolesTab({
                           : "1px solid #087A43",
                     }}
                   >
-                    {buttonLabel}
+                    {administrator || role.isSystemRole || !canManage ? "View Permissions" : "Edit Role & Permissions"}
                   </button>
                 </div>
               );
@@ -1906,9 +1909,11 @@ function StatusBadge({
 function RoleMetric({
   label,
   value,
+  className = "",
 }) {
   return (
     <div
+      className={className}
       style={{
         padding:
           "12px",
