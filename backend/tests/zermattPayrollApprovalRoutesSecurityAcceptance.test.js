@@ -30,3 +30,11 @@ test("approval event history remains Zermatt role-gated", () => {
   assert.ok(routes.includes('router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole('));
   assert.ok(routes.includes("payrollApprovalWorkflow.history({"));
 });
+
+test("GM statutory readiness remains read-only and final approval is disabled", () => {
+  assert.ok(routes.includes('router.get("/runs/:id/approval-workflow/gm-readiness"'));
+  assert.ok(routes.includes("requireZermattApprovalRole(isGeneralManager)"));
+  assert.ok(routes.includes("validateNigeriaPayrollApproval({"));
+  assert.ok(routes.includes("approvalEnabled: false"));
+  assert.equal(routes.includes("GM_APPROVE: isGeneralManager"), false);
+});
