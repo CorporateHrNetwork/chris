@@ -93,6 +93,20 @@ router.get("/runs/:id/approval-workflow", requireZermattApprovalRole(
   }
 });
 
+router.get("/runs/:id/approval-workflow/history", requireZermattApprovalRole(
+  (req) => isHeadHr(req) || isPayrollAuditor(req) || isGeneralManager(req) || isChiefAccountant(req)
+), async (req, res) => {
+  try {
+    const data = await payrollApprovalWorkflow.history({
+      organizationId: req.auth.organizationId,
+      runId: req.params.id,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to load payroll approval history.");
+  }
+});
+
 router.post("/runs/:id/approval-workflow/start", requireZermattApprovalRole(isHeadHr), async (req, res) => {
   try {
     const data = await payrollApprovalWorkflow.ensure({
