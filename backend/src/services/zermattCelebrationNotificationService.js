@@ -14,12 +14,12 @@ function lagosToday() {
   }).formatToParts(new Date());
   const value = {};
   for (const part of parts) if (part.type !== "literal") value[part.type] = part.value;
-  return ${value.year}-${value.month}-${value.day};
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function monthDay(value) {
   const raw = String(value || "").slice(0, 10);
-  return /^\\d{4}-\\d{2}-\\d{2}$/.test(raw) ? raw.slice(5) : null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw.slice(5) : null;
 }
 
 async function organizationIsZermatt({ organizationId, prismaClient = prisma }) {
