@@ -1057,6 +1057,7 @@ function EditUserForm({
             <div style={{ flex: "1 1 280px" }}>
               <FormField label="Temporary Password">
                 <div
+                  className="chris-password-field"
                   style={{
                     position: "relative",
                     width: "100%",
@@ -1080,6 +1081,7 @@ function EditUserForm({
                     }}
                   />
                   <button
+                    className="chris-password-toggle"
                     type="button"
                     onClick={() =>
                       setShowTemporaryPassword((current) => !current)
