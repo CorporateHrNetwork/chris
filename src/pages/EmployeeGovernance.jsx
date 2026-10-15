@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import DisciplinaryProcessControls from "../components/employees/DisciplinaryProcessControls";
 
@@ -9,7 +10,13 @@ const tabs = [
 ];
 
 function EmployeeGovernance() {
-  const [tab, setTab] = useState("CONTRACTS");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = String(searchParams.get("tab") || "CONTRACTS").toUpperCase();
+  const [tab, setTab] = useState(tabs.some(([key]) => key === requestedTab) ? requestedTab : "CONTRACTS");
+
+  useEffect(() => {
+    if (tabs.some(([key]) => key === requestedTab)) setTab(requestedTab);
+  }, [requestedTab]);
   const [catalog, setCatalog] = useState(null);
   const [contracts, setContracts] = useState([]);
   const [cases, setCases] = useState([]);
@@ -70,7 +77,7 @@ function EmployeeGovernance() {
           <button
             key={key}
             type="button"
-            onClick={() => setTab(key)}
+            onClick={() => { setTab(key); setSearchParams(key === "CONTRACTS" ? {} : { tab: key }); }}
             style={tab === key ? activeTabStyle : tabStyle}
           >
             {label}
