@@ -141,6 +141,8 @@ function ApprovalsWorkspace() {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState("");
   const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [reviewRows, setReviewRows] = useState([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const currentUser = getStoredUser();
   const roleNames = useMemo(
     () => new Set((currentUser?.roles || []).map((role) => String(role || "").trim().toUpperCase())),
@@ -148,6 +150,7 @@ function ApprovalsWorkspace() {
   );
   const hasRole = useCallback((candidates) => candidates.some((candidate) => roleNames.has(candidate)), [roleNames]);
   const canStartWorkflow = hasRole(["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"]);
+  const canAudit = hasRole(["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"]);
   const canAct = useCallback((action) => {
     const actionRoles = {
       REQUEST_AUDIT: ["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"],
@@ -159,6 +162,7 @@ function ApprovalsWorkspace() {
       GM_APPROVE: ["GENERAL MANAGER", "GM"],
       GM_DISAPPROVE: ["GENERAL MANAGER", "GM"],
       PAYOUT_EXPORTED: ["CHIEF ACCOUNTANT", "HEAD OF ACCOUNTS", "HEAD ACCOUNTS"],
+      REINITIATE_AUDIT: ["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"],
     };
     return Boolean(actionRoles[action]?.some((candidate) => roleNames.has(candidate)));
   }, [roleNames]);
@@ -201,6 +205,28 @@ function ApprovalsWorkspace() {
     } catch (err) { setError(err.message); } finally { setBusy(""); }
   };
 
+  const loadAuditReview = useCallback(async (runId) => {
+    if (!runId || !canAudit) return;
+    try {
+      setReviewLoading(true);
+      const result = await apiRequest(`/api/payroll/runs/${runId}/approval-review`);
+      setReviewRows(result?.data?.lines || []);
+    } catch (err) {
+      setError(err.message || "Unable to load the submitted payroll for audit review.");
+      setReviewRows([]);
+    } finally { setReviewLoading(false); }
+  }, [canAudit, setError]);
+
+  const exportAuditReview = async () => {
+    if (!selectedRun?.id || !canAudit) return;
+    try {
+      setBusy("audit-export"); setError("");
+      const downloaded = await apiDownload(`/api/payroll/runs/${selectedRun.id}/audit-review.xlsx`);
+      saveDownloadedBlob(downloaded);
+    } catch (err) { setError(err.message || "Unable to export the audit review workbook."); }
+    finally { setBusy(""); }
+  };
+
   const act = async (action) => {
     if (!selectedRun?.id || !canAct(action)) return;
     const auditDecision = ["AUDIT_APPROVE", "AUDIT_DISAPPROVE"].includes(action);
@@ -216,6 +242,7 @@ function ApprovalsWorkspace() {
       });
       setNotes("");
       await Promise.all([loadWorkflow(selectedRun.id), load(), loadHistory()]);
+      if (["AUDIT_OPEN", "REINITIATE_AUDIT"].includes(action)) await loadAuditReview(selectedRun.id);
     } catch (err) { setError(err.message); } finally { setBusy(""); }
   };
 
@@ -229,11 +256,12 @@ function ApprovalsWorkspace() {
   const actionForStage = {
     DRAFT: ["REQUEST_AUDIT", "Send to Audit", primaryButton],
     PENDING_AUDIT: ["AUDIT_OPEN", "Open Audit", primaryButton],
-    AUDIT_PROCESSING: ["AUDIT_APPROVE", "Approve Audit", primaryButton, "AUDIT_DISAPPROVE", "Reject Audit", dangerButton],
+    AUDIT_PROCESSING: ["AUDIT_APPROVE", "Approve Audit", primaryButton, "AUDIT_DISAPPROVE", "Disapprove & Return to HR", dangerButton],
     AUDIT_APPROVED: ["REQUEST_GM", "Send to GM", primaryButton],
     PENDING_GM: ["GM_OPEN", "Open GM Review", primaryButton],
     GM_PROCESSING: ["GM_APPROVE", "Approve for Payout", primaryButton, "GM_DISAPPROVE", "Reject GM Approval", dangerButton],
     READY_FOR_PAYOUT: ["PAYOUT_EXPORTED", "Export Approved Payout & Lock", primaryButton],
+    AUDIT_DISAPPROVED: ["REINITIATE_AUDIT", "Reinitiate After Correction", primaryButton],
   };
   const actions = actionForStage[stage] || [];
   const visibleActions = actions.length >= 6
@@ -313,7 +341,7 @@ function ApprovalsWorkspace() {
             </div>
           </Panel>
 
-          {![ "PAYOUT_EXPORTED_LOCKED", "AUDIT_DISAPPROVED", "GM_DISAPPROVED"].includes(stage) && visibleActions.length > 0 && (
+          {![ "PAYOUT_EXPORTED_LOCKED", "GM_DISAPPROVED"].includes(stage) && visibleActions.length > 0 && (
             <Panel title="Stage Action">
               <div style={formGrid}>
                 <Input label={["AUDIT_APPROVE","AUDIT_DISAPPROVE"].includes(visibleActions[0]) ? "Audit Observations (required)" : "Notes / Authority"} value={notes} onChange={setNotes} placeholder="Record review basis, exception or authority" />
@@ -325,9 +353,30 @@ function ApprovalsWorkspace() {
             </Panel>
           )}
 
-          {workflow && visibleActions.length === 0 && !["PAYOUT_EXPORTED_LOCKED", "AUDIT_DISAPPROVED", "GM_DISAPPROVED"].includes(stage) && (
+          {workflow && visibleActions.length === 0 && !["PAYOUT_EXPORTED_LOCKED", "GM_DISAPPROVED"].includes(stage) && (
             <Panel title="Approval Stage">
               <div style={waitingBanner}>This stage is assigned to its designated user. No action is available to this account.</div>
+            </Panel>
+          )}
+
+          {canAudit && ["PENDING_AUDIT", "AUDIT_PROCESSING"].includes(stage) && (
+            <Panel title="Auditor Payroll Review">
+              <p style={controlNote}>Open the submitted payroll, inspect the full employee register and statutory results, and export the same pre-approval review pack to Excel for manual verification before recording Approve or Disapprove.</p>
+              <div style={buttonRow}>
+                <button style={secondaryButton} disabled={reviewLoading} onClick={() => loadAuditReview(selectedRun.id)}>{reviewLoading ? "Loading Payroll…" : "View / Refresh Submitted Payroll"}</button>
+                <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : "Export Audit Review to Excel"}</button>
+              </div>
+              {reviewRows.length > 0 && <DataTable columns={["Employee", "Basic", "Gross", "PAYE", "Pension", "Other Deductions", "Net"]}>
+                {reviewRows.map((row) => {
+                  const details = row.details || {};
+                  const statutory = details.statutory || {};
+                  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+                  return <tr key={row.id}>
+                    <Td strong>{row.employeeNumber || "—"}</Td><Td>{row.employeeName || "—"}</Td><Td>{money(row.baseSalary, row.currency)}</Td><Td>{money(row.grossPay, row.currency)}</Td><Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(customDeductions, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
+                  </tr>;
+                })}
+              </DataTable>}
+              {!reviewLoading && reviewRows.length === 0 && <div style={waitingBanner}>No payroll lines loaded yet. Click “View / Refresh Submitted Payroll” to load the submitted payroll for verification.</div>}
             </Panel>
           )}
 
