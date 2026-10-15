@@ -558,7 +558,7 @@ function Panel({ title, subtitle, actions, children, variant = "default" }) {
   const summary = variant === "summary";
   return (
     <section
-      className={`reports-panel chris-role-card${summary ? " reports-panel--summary" : ""}`
+      className={`reports-panel chris-role-card${summary ? " reports-panel--summary" : ""}`}
       style={summary ? summaryPanelStyle : panelStyle}
     >
       <div style={panelHeaderStyle}>
