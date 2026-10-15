@@ -1059,6 +1059,7 @@ function EditUserForm({
                 <div
                   style={{
                     position: "relative",
+                    width: "100%",
                   }}
                 >
                   <input
@@ -1073,7 +1074,9 @@ function EditUserForm({
                     placeholder="Minimum 10 characters"
                     style={{
                       ...inputStyle,
-                      paddingRight: "44px",
+                      paddingRight: "48px",
+                      fontFamily: "Arial, Helvetica, sans-serif",
+                      lineHeight: 1.4,
                     }}
                   />
                   <button
@@ -1094,19 +1097,23 @@ function EditUserForm({
                     }
                     style={{
                       position: "absolute",
-                      right: "8px",
+                      right: "6px",
                       top: "50%",
                       transform: "translateY(-50%)",
-                      width: "32px",
-                      height: "32px",
+                      width: "36px",
+                      height: "36px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      border: "none",
-                      background: "transparent",
-                      color: "#64748B",
+                      border: "1px solid #CBD5E1",
+                      background: "#FFFFFF",
+                      color: "#087A43",
                       cursor: resettingPassword || saving ? "not-allowed" : "pointer",
                       padding: 0,
+                      zIndex: 2,
+                      fontSize: "16px",
+                      boxShadow: "0 1px 3px rgba(15,23,42,0.10)",
+                    }}
                     }}
                   >
                     {showTemporaryPassword ? <FaEyeSlash /> : <FaEye />}
@@ -1937,6 +1944,7 @@ function ReadOnlyItem({
 }
 
 const employeeCardStyle = {
+  fontFamily: "Arial, Helvetica, sans-serif",
   padding:
     "18px",
 
@@ -1954,6 +1962,7 @@ const employeeCardStyle = {
 };
 
 const inputStyle = {
+  fontFamily: "Arial, Helvetica, sans-serif",
   width:
     "100%",
 
