@@ -196,6 +196,12 @@ function ApprovalsWorkspace() {
     loadWorkflow(selectedRun?.id);
   }, [selectedRun?.id, loadWorkflow]);
 
+  useEffect(() => {
+    if (canAudit && selectedRun?.id && ["PENDING_AUDIT", "AUDIT_PROCESSING"].includes(workflow?.stage)) {
+      loadAuditReview(selectedRun.id);
+    }
+  }, [canAudit, selectedRun?.id, workflow?.stage, loadAuditReview]);
+
   const startWorkflow = async () => {
     if (!selectedRun?.id || !canStartWorkflow) return;
     try {
@@ -210,7 +216,7 @@ function ApprovalsWorkspace() {
     try {
       setReviewLoading(true);
       const result = await apiRequest(`/api/payroll/payslips?runId=${encodeURIComponent(runId)}`);
-      setReviewRows(result?.data?.lines || []);
+      setReviewRows(Array.isArray(result?.data) ? result.data : (result?.data?.lines || []));
     } catch (err) {
       setError(err.message || "Unable to load the submitted payroll for audit review.");
       setReviewRows([]);
@@ -248,8 +254,8 @@ function ApprovalsWorkspace() {
 
   const stage = workflow?.stage || "NOT_STARTED";
   const steps = [
-    ["HEAD_HR", "Head HR", ["DRAFT", "PENDING_AUDIT"], "Head HR prepares and sends the payroll to Audit."],
-    ["PAYROLL_AUDITOR", "Payroll Auditor", ["AUDIT_PROCESSING", "AUDIT_APPROVED", "AUDIT_DISAPPROVED"], "Audit reviews statutory results, exceptions and payroll evidence."],
+    ["HEAD_HR", "Head HR", ["DRAFT"], "Head HR prepares and sends the payroll to Audit."],
+    ["PAYROLL_AUDITOR", "Payroll Auditor", ["PENDING_AUDIT", "AUDIT_PROCESSING", "AUDIT_APPROVED", "AUDIT_DISAPPROVED"], "Audit reviews statutory results, exceptions and payroll evidence."],
     ["GENERAL_MANAGER", "General Manager", ["GM_PROCESSING", "READY_FOR_PAYOUT", "GM_DISAPPROVED"], "GM performs the final management approval."],
     ["CHIEF_ACCOUNTANT", "Chief Accountant", ["PAYOUT_EXPORTED_LOCKED"], "Chief Accountant exports the approved payout; export locks the workflow."],
   ];
@@ -327,7 +333,7 @@ function ApprovalsWorkspace() {
               {steps.map(([responsibility, label, stages, description], index) => {
                 const active = stages.includes(stage);
                 const completed = (
-                  (responsibility === "HEAD_HR" && ["AUDIT_PROCESSING","AUDIT_APPROVED","PENDING_GM","GM_PROCESSING","READY_FOR_PAYOUT","PAYOUT_EXPORTED_LOCKED"].includes(stage)) ||
+                  (responsibility === "HEAD_HR" && ["PENDING_AUDIT","AUDIT_PROCESSING","AUDIT_APPROVED","PENDING_GM","GM_PROCESSING","READY_FOR_PAYOUT","PAYOUT_EXPORTED_LOCKED"].includes(stage)) ||
                   (responsibility === "PAYROLL_AUDITOR" && ["AUDIT_APPROVED","PENDING_GM","GM_PROCESSING","READY_FOR_PAYOUT","PAYOUT_EXPORTED_LOCKED"].includes(stage)) ||
                   (responsibility === "GENERAL_MANAGER" && ["READY_FOR_PAYOUT","PAYOUT_EXPORTED_LOCKED"].includes(stage)) ||
                   (responsibility === "CHIEF_ACCOUNTANT" && stage === "PAYOUT_EXPORTED_LOCKED")
