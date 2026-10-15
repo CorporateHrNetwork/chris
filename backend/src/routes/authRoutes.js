@@ -471,9 +471,9 @@ router.post(
             id: resetRecord.userId,
           },
 
-          data: {
-            passwordHash,
-          },
+          data: resetRecord.portal === "ess"
+            ? { essPasswordHash: passwordHash }
+            : { passwordHash },
         }),
 
         prisma.passwordResetToken.update(
