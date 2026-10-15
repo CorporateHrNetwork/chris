@@ -180,6 +180,7 @@ router.post("/runs/:id/approval-workflow/action", requireAuth, async (req, res) 
     AUDIT_OPEN: isPayrollAuditor,
     AUDIT_APPROVE: isPayrollAuditor,
     AUDIT_DISAPPROVE: isPayrollAuditor,
+    REINITIATE_AUDIT: isHeadHr,
     REQUEST_GM: isHeadHr,
     GM_OPEN: isGeneralManager,
     GM_APPROVE: isGeneralManager,
