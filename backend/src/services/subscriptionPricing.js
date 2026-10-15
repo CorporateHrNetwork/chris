@@ -4,9 +4,9 @@
 // Money amounts are integer NGN. Licence/ESS per employee monthly,
 // onboarding one-time per employee, support annually per employee.
 const PLANS = Object.freeze({
-  basic: Object.freeze({ label: 'Basic', licenceMonthly: 1000, essMonthly: 500, onboardingOnce: 300, supportAnnual: 500, tier: 1 }),
-  standard: Object.freeze({ label: 'Standard', licenceMonthly: 1200, essMonthly: 600, onboardingOnce: 400, supportAnnual: 600, tier: 2 }),
-  premium: Object.freeze({ label: 'Premium', licenceMonthly: 1500, essMonthly: 750, onboardingOnce: 500, supportAnnual: 700, tier: 3 }),
+  basic: Object.freeze({ label: 'Basic', licenceMonthly: 1200, essMonthly: 700, onboardingOnce: 500, supportAnnual: 700, tier: 1 }),
+  standard: Object.freeze({ label: 'Standard', licenceMonthly: 1500, essMonthly: 800, onboardingOnce: 500, supportAnnual: 800, tier: 2 }),
+  premium: Object.freeze({ label: 'Premium', licenceMonthly: 1700, essMonthly: 900, onboardingOnce: 500, supportAnnual: 900, tier: 3 }),
 });
 const HRIS = Object.freeze({
   dashboard: 1, support_requests: 1, employees: 1, recruitment: 2,
@@ -42,7 +42,7 @@ function calculateQuote({ planId, employeeCount, includeEss = true, waiveOnboard
   const renewalSubtotal = licence + ess + support;
   return {
     currency: 'NGN', planId, employeeCount, includeEss, waiveOnboarding,
-    terms: { licence: '12 months', ess: '12 months', onboarding: 'once', support: '12 months' },
+    terms: { licence: '12 months from verified payment date', ess: '12 months from verified payment date', onboarding: 'once per employee', support: '12 months', implementation: 'within one calendar month from verified payment (subject to client readiness)', gracePeriod: 'none', upfrontPayment: '100% required before implementation' },
     lineItems: { licence, ess, onboarding, support },
     subtotal, vatBasisPoints, vat, total: subtotal + vat,
     renewalEstimate: renewalSubtotal + Math.round(renewalSubtotal * vatBasisPoints / 10000),
