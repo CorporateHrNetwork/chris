@@ -199,6 +199,7 @@ model User {
   employeeId     String? @unique
   email          String
   passwordHash   String
+  essPasswordHash String?
   firstName      String?
   lastName       String?
   isActive       Boolean @default(true)
@@ -1433,6 +1434,7 @@ model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String
   tokenHash String    @unique
+  portal    String    @default("admin")
   expiresAt DateTime
   usedAt    DateTime?
 
