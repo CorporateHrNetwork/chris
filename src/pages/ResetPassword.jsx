@@ -108,6 +108,7 @@ function ResetPassword() {
             token: resetToken,
             newPassword,
             confirmPassword,
+            portal,
           }),
         }
       );
