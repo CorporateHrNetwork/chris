@@ -2105,9 +2105,11 @@ function AccessNotice({
 function getUserName(
   user
 ) {
+  const employee = user?.employee || null;
   const fullName = [
-    user.firstName,
-    user.lastName,
+    employee?.firstName || user.firstName,
+    employee?.middleName,
+    employee?.lastName || user.lastName,
   ]
     .filter(Boolean)
     .join(" ")
