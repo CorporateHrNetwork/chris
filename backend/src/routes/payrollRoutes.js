@@ -2596,7 +2596,7 @@ async function auditPayrollExport({ organizationId, actorUserId, run, action, st
 }
 
 router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), (req, res, next) => {
-  if (!isZermatt(req) || isHeadHr(req) || isPayrollAuditor(req)) return next();
+  if (!isZermatt(req) || isHeadHr(req) || isPayrollAuditor(req) || isGeneralManager(req)) return next();
   return res.status(403).json({ status: "error", code: "ZERMATT_PAYROLL_REVIEW_ROLE_REQUIRED", message: "Only Head HR or the designated Payroll Auditor may export the payroll review workbook." });
 }, async (req, res) => {
   try {
