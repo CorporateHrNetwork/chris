@@ -60,6 +60,7 @@ export default function DisciplinaryProcessControls({
     contentText: "",
     documentReference: "",
     finalized: false,
+    attachment: null,
   });
   const [caseTransition, setCaseTransition] = useState({
     caseId: "",
@@ -124,6 +125,19 @@ export default function DisciplinaryProcessControls({
     try {
       setBusy(true);
       setError("");
+      const file = evidence.attachment;
+      let attachment = null;
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) throw new Error("Manual form upload must not exceed 5 MB.");
+        const allowed = ["application/pdf", "image/jpeg", "image/png"];
+        if (!allowed.includes(file.type)) throw new Error("Upload a PDF, JPG or PNG manual form.");
+        attachment = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ fileName: file.name, mimeType: file.type, size: file.size, dataUrl: reader.result });
+          reader.onerror = () => reject(new Error("Unable to read the selected manual form."));
+          reader.readAsDataURL(file);
+        });
+      }
       await apiRequest(
         `/api/employment-governance/disciplinary-cases/${evidence.caseId}/evidence`,
         {
@@ -132,8 +146,8 @@ export default function DisciplinaryProcessControls({
             logicalEvidenceKey: evidence.logicalEvidenceKey || undefined,
             category: evidence.category,
             title: evidence.title,
-            content: evidence.contentText
-              ? { text: evidence.contentText }
+            content: evidence.contentText || attachment
+              ? { text: evidence.contentText || undefined, attachment: attachment || undefined }
               : undefined,
             documentReference: evidence.documentReference || undefined,
             finalized: evidence.finalized,
@@ -292,6 +306,11 @@ export default function DisciplinaryProcessControls({
               }
               style={inputStyle}
             />
+          </label>
+          <label style={fieldStyle}>
+            <span style={labelStyle}>Manual Form Upload</span>
+            <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setEvidence({ ...evidence, attachment: e.target.files?.[0] || null })} style={inputStyle} />
+            <small style={{ color: "#AFC0B7" }}>PDF, JPG or PNG · maximum 5 MB. For signed query responses, verbal, 1st, 2nd or final warning forms.</small>
           </label>
           <label style={fieldStyle}>
             <span style={labelStyle}>Evidence Notes / Content</span>
