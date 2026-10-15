@@ -255,7 +255,10 @@ router.post(
       const {
         email,
         organizationSlug,
+        portal = "admin",
       } = req.body;
+
+      const normalizedPortal = portal === "ess" ? "ess" : "admin";
 
       if (
         !email?.trim() ||
