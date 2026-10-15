@@ -22,10 +22,12 @@ function ResetPassword() {
     Later, when email delivery is implemented,
     the token will come from the secure reset URL.
   */
+  const searchParams = new URLSearchParams(location.search);
   const resetToken =
     location.state?.resetToken ||
-    new URLSearchParams(location.search).get("token") ||
+    searchParams.get("token") ||
     "";
+  const portal = location.state?.portal || searchParams.get("portal") || "admin";
 
   const [newPassword, setNewPassword] =
     useState("");
