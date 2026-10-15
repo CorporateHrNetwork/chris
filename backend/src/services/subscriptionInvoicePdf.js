@@ -15,6 +15,11 @@ function pdfInvoice(invoice) {
     'TOTAL: NGN '+q.total.toLocaleString('en-NG'),
     'PAYMENT DETAILS', 'Zenith Bank PLC', 'Corporate Resources Network',
     'Account: 1312432840', 'Status: AWAITING PAYMENT',
+    'Full payment is required before deployment and implementation.',
+    'Licence term: 12 months from confirmed payment date.',
+    'Implementation: within one calendar month from confirmed payment',
+    '(subject to timely client readiness and cooperation).',
+    'No complimentary grace period after licence expiry.',
     'Payment is subject to independent verification before activation.'
   ];
   const esc=s=>String(s).replace(/[^\x20-\x7E]/g,' ').replace(/[\\()]/g,'\\$&');
