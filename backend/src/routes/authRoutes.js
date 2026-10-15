@@ -68,7 +68,7 @@ router.post("/activate-employee", async (req, res) => {
     await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
+    await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, portal: "ess", expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
     const link = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(rawToken)}&organization=${encodeURIComponent(organization.slug)}&mode=activation&portal=ess`;
     try {
       await sendTransactionalEmail({
@@ -350,7 +350,7 @@ router.post(
         }
       );
 
-      const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(rawToken)}&organization=${encodeURIComponent(organization.slug)}&portal=ess`;
+      const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(rawToken)}&organization=${encodeURIComponent(organization.slug)}&portal=${encodeURIComponent(normalizedPortal)}`;
       try {
         await sendTransactionalEmail({
           to: user.email, subject: "Reset your CHRiS password",
