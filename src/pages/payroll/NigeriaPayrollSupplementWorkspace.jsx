@@ -200,8 +200,22 @@ function ApprovalsWorkspace() {
     if (!runId || !canAudit) return;
     try {
       setReviewLoading(true);
-      const result = await apiRequest(`/api/payroll/payslips?runId=${encodeURIComponent(runId)}`);
-      setReviewRows(Array.isArray(result?.data) ? result.data : (result?.data?.lines || []));
+      setError("");
+      // Use the authoritative payroll-run line endpoint. This is the same line source
+      // used by the audit/export pipeline and avoids the generic payslip projection.
+      const result = await apiRequest(`/api/payroll/runs/${encodeURIComponent(runId)}/lines`);
+      const payload = result?.data;
+      const rows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.lines)
+          ? payload.lines
+          : Array.isArray(result?.lines)
+            ? result.lines
+            : [];
+      setReviewRows(rows);
+      if (!rows.length) {
+        throw new Error("The selected payroll run contains no readable payroll lines.");
+      }
     } catch (err) {
       setError(err.message || "Unable to load the submitted payroll for audit review.");
       setReviewRows([]);
