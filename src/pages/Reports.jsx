@@ -16,7 +16,7 @@ import {
   FaUserSlash,
 } from "react-icons/fa";
 
-import "./Reports.css";
+import "./Reports.css";\nimport "../components/settings/UsersRolesSettings.chris.css";
 import { PrintableReportHeader, PrintableReportFooter } from "../components/reporting/PrintableReportBranding";
 
 import {
@@ -200,7 +200,7 @@ function Reports() {
     : `${scope?.locationName || "BRANCH"}${scope?.locationCode ? ` · ${scope.locationCode}` : ""}`;
 
   return (
-    <div className="chris-reports-page" style={pageStyle}>
+    <div className="chris-users-roles chris-reports-page" style={pageStyle}>
       <div className="reports-screen-header" style={headerStyle}>
         <div>
           <div style={eyebrowStyle}>REPORTING & INSIGHTS</div>
@@ -303,7 +303,7 @@ function MetricCards({ cards }) {
   return (
     <div className="reports-kpi-grid" style={kpiGridStyle}>
       {cards.map((card) => (
-        <div className="reports-kpi-card" key={card.title} style={kpiCardStyle}>
+        <div className="reports-kpi-card chris-role-card" key={card.title} style={kpiCardStyle}>
           <div style={kpiTopStyle}>
             <span style={kpiLabelStyle}>{card.title}</span>
             {card.icon && <span style={card.tone === "gold" ? iconGoldStyle : iconGreenStyle}>{card.icon}</span>}
@@ -558,7 +558,7 @@ function Panel({ title, subtitle, actions, children, variant = "default" }) {
   const summary = variant === "summary";
   return (
     <section
-      className={`reports-panel${summary ? " reports-panel--summary" : ""}`}
+      className={`reports-panel chris-role-card${summary ? " reports-panel--summary" : ""}`
       style={summary ? summaryPanelStyle : panelStyle}
     >
       <div style={panelHeaderStyle}>
