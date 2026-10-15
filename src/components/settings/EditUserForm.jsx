@@ -1018,6 +1018,86 @@ function EditUserForm({
           </div>
         )}
 
+        {/* REGULAR CHRIS PASSWORD RESET */}
+
+        <div
+          style={{
+            marginTop: "28px",
+            paddingTop: "24px",
+            borderTop: "1px solid #E2E8F0",
+          }}
+        >
+          <SectionTitle>Regular CHRIS Password Reset</SectionTitle>
+          <p
+            style={{
+              margin: "-4px 0 12px",
+              color: "#64748B",
+              fontSize: "12px",
+              lineHeight: 1.6,
+            }}
+          >
+            Issue a temporary password for the regular CHRIS login only. The user's Employee Self Service password remains unchanged.
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "flex-end",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ flex: "1 1 280px" }}>
+              <FormField label="Temporary Password">
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={temporaryPassword}
+                  disabled={resettingPassword || saving}
+                  onChange={(event) => {
+                    setTemporaryPassword(event.target.value);
+                    setPasswordMessage("");
+                  }}
+                  placeholder="Minimum 10 characters"
+                  style={inputStyle}
+                />
+              </FormField>
+            </div>
+            <button
+              type="button"
+              onClick={handlePasswordReset}
+              disabled={resettingPassword || saving || temporaryPassword.length < 10}
+              style={{
+                ...saveButtonStyle,
+                marginBottom: "1px",
+                opacity:
+                  resettingPassword || saving || temporaryPassword.length < 10
+                    ? 0.6
+                    : 1,
+                cursor:
+                  resettingPassword || saving || temporaryPassword.length < 10
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              <FaUserShield />
+              {resettingPassword ? "Resetting..." : "Reset CHRIS Password"}
+            </button>
+          </div>
+          {passwordMessage ? (
+            <div
+              style={{
+                marginTop: "10px",
+                color: "#087A43",
+                fontSize: "12px",
+                fontWeight: "700",
+              }}
+            >
+              {passwordMessage}
+            </div>
+          ) : null}
+        </div>
+
+
         {/* ROLES */}
 
         <div
@@ -1602,85 +1682,6 @@ function EditUserForm({
               )}
             </div>
           )}
-        </div>
-
-        {/* REGULAR CHRIS PASSWORD RESET */}
-
-        <div
-          style={{
-            marginTop: "28px",
-            paddingTop: "24px",
-            borderTop: "1px solid #E2E8F0",
-          }}
-        >
-          <SectionTitle>Regular CHRIS Password Reset</SectionTitle>
-          <p
-            style={{
-              margin: "-4px 0 12px",
-              color: "#64748B",
-              fontSize: "12px",
-              lineHeight: 1.6,
-            }}
-          >
-            Issue a temporary password for the regular CHRIS login only. The user's Employee Self Service password remains unchanged.
-          </p>
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "flex-end",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ flex: "1 1 280px" }}>
-              <FormField label="Temporary Password">
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={temporaryPassword}
-                  disabled={resettingPassword || saving}
-                  onChange={(event) => {
-                    setTemporaryPassword(event.target.value);
-                    setPasswordMessage("");
-                  }}
-                  placeholder="Minimum 10 characters"
-                  style={inputStyle}
-                />
-              </FormField>
-            </div>
-            <button
-              type="button"
-              onClick={handlePasswordReset}
-              disabled={resettingPassword || saving || temporaryPassword.length < 10}
-              style={{
-                ...saveButtonStyle,
-                marginBottom: "1px",
-                opacity:
-                  resettingPassword || saving || temporaryPassword.length < 10
-                    ? 0.6
-                    : 1,
-                cursor:
-                  resettingPassword || saving || temporaryPassword.length < 10
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              <FaUserShield />
-              {resettingPassword ? "Resetting..." : "Reset CHRIS Password"}
-            </button>
-          </div>
-          {passwordMessage ? (
-            <div
-              style={{
-                marginTop: "10px",
-                color: "#087A43",
-                fontSize: "12px",
-                fontWeight: "700",
-              }}
-            >
-              {passwordMessage}
-            </div>
-          ) : null}
         </div>
 
         {/* ACTIONS */}
