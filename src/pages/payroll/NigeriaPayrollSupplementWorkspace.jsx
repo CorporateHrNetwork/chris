@@ -150,7 +150,9 @@ function ApprovalsWorkspace() {
   );
   const hasRole = useCallback((candidates) => candidates.some((candidate) => roleNames.has(candidate)), [roleNames]);
   const canStartWorkflow = hasRole(["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"]);
-  const canAudit = hasRole(["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"]);\n  const canGM = hasRole(["GENERAL MANAGER", "GM"]);\n  const canPayrollReview = canAudit || canGM;
+  const canAudit = hasRole(["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"]);
+  const canGM = hasRole(["GENERAL MANAGER", "GM"]);
+  const canPayrollReview = canAudit || canGM;
   const canAct = useCallback((action) => {
     const actionRoles = {
       REQUEST_AUDIT: ["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"],
@@ -369,6 +371,14 @@ function ApprovalsWorkspace() {
                   {visibleActions.length >= 3 && <button style={visibleActions[2]} disabled={Boolean(busy)} onClick={() => act(visibleActions[0])}>{busy === visibleActions[0] ? "Processing…" : visibleActions[1]}</button>}
                   {visibleActions.length >= 6 && <button style={visibleActions[5]} disabled={Boolean(busy)} onClick={() => act(visibleActions[3])}>{busy === visibleActions[3] ? "Processing…" : visibleActions[4]}</button>}
                 </div>
+              </div>
+            </Panel>
+          )}
+
+          {canStartWorkflow && stage === "AUDIT_APPROVED" && (
+            <Panel title="Audit Completed">
+              <div style={waitingBanner}>
+                The Payroll Auditor has approved this payroll. Audit is <strong>COMPLETED</strong> and the payroll is now ready for Head HR to send to the General Manager for final review.
               </div>
             </Panel>
           )}
