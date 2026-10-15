@@ -3,12 +3,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { calculateQuote, getEntitlements } = require('../src/services/subscriptionPricing');
 test('Zermatt 320 employee quotations, including 7.5% illustrative VAT', () => {
- const expected = { basic:6467200, standard:7774400, premium:9700800 };
+ const expected = { basic:8256000, standard:9941600, premium:11214400 };
  // Reconcile against itemized totals: annual rates are per employee per year.
  for (const [planId,total] of Object.entries(expected)) {
    const q=calculateQuote({planId,employeeCount:320});
    assert.equal(q.total,total);
  }
+});
+test('payment-date licensing, one-time onboarding and no grace period', () => {
+ const q=calculateQuote({planId:'basic',employeeCount:320});
+ assert.equal(q.lineItems.onboarding,160000);
+ assert.equal(q.terms.gracePeriod,'none');
+ assert.match(q.terms.licence,/verified payment date/);
+ assert.match(q.terms.upfrontPayment,/100%/);
 });
 test('ESS may be excluded and onboarding waived', () => {
  const q=calculateQuote({planId:'standard',employeeCount:320,includeEss:false,waiveOnboarding:true});
