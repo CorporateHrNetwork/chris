@@ -239,3 +239,72 @@
 .chris-users-roles .chris-role-permissions-editor button[style*="#FFFFFF"] {
   background:#04291b !important; color:#dce8e2 !important; border-color:rgba(212,175,55,.30) !important;
 }
+
+
+/* ============================================================
+   EDIT USER WORKSPACE — LEGIBILITY + PASSWORD CONTROL
+   ============================================================ */
+.chris-users-roles .chris-edit-user-form {
+  color: #f7faf8 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+.chris-users-roles .chris-edit-user-form h2,
+.chris-users-roles .chris-edit-user-form h3,
+.chris-users-roles .chris-edit-user-form h4,
+.chris-users-roles .chris-edit-user-form [style*="#334155"],
+.chris-users-roles .chris-edit-user-form [style*="#0F172A"] {
+  color: #f7faf8 !important;
+}
+.chris-users-roles .chris-edit-user-form p,
+.chris-users-roles .chris-edit-user-form label,
+.chris-users-roles .chris-edit-user-form [style*="#64748B"],
+.chris-users-roles .chris-edit-user-form [style*="#475569"] {
+  color: #c7d3cc !important;
+}
+.chris-users-roles .chris-edit-user-form input {
+  font-family: Arial, Helvetica, sans-serif !important;
+  color: #f7faf8 !important;
+}
+.chris-users-roles .chris-edit-user-form .chris-password-field {
+  position: relative !important;
+  width: 100% !important;
+}
+.chris-users-roles .chris-edit-user-form .chris-password-field input {
+  padding-right: 52px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.chris-users-roles .chris-edit-user-form .chris-password-toggle {
+  position: absolute !important;
+  right: 6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 20 !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  color: #d4af37 !important;
+  border: 1px solid #d4af37 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 5px rgba(0,0,0,.22) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+.chris-users-roles .chris-edit-user-form .chris-password-toggle svg {
+  display: block !important;
+  width: 17px !important;
+  height: 17px !important;
+  color: #087a43 !important;
+  fill: currentColor !important;
+}
+.chris-users-roles .chris-edit-user-form .chris-password-toggle:hover:not(:disabled) {
+  transform: translateY(-50%) !important;
+  background: #fffdf4 !important;
+  color: #087a43 !important;
+  filter: none !important;
+}
