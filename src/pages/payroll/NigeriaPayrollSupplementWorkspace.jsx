@@ -86,7 +86,7 @@ function ComponentsWorkspace({ kind }) {
             ? <Input type="number" label="Amount" value={form.amount} onChange={(value) => setForm((p) => ({ ...p, amount: value }))} min="0" step="0.01" required />
             : <Input type="number" label="Percentage" value={form.percentage} onChange={(value) => setForm((p) => ({ ...p, percentage: value }))} min="0" step="0.01" required />}
           <Input type="date" label="Effective From" value={form.effectiveFrom} onChange={(value) => setForm((p) => ({ ...p, effectiveFrom: value }))} required />
-          <Input type="date" label="Effective To" value={form.effectiveTo} onChange={(p) => setForm((p) => ({ ...p, effectiveTo: p }))} />
+          <Input type="date" label="Effective To" value={form.effectiveTo} onChange={(value) => setForm((p) => ({ ...p, effectiveTo: value }))} />
           <Select label="One-Time Period (optional)" value={form.oneTimePeriodId} onChange={(value) => setForm((p) => ({ ...p, oneTimePeriodId: value }))} options={[["","Recurring / effective-dated"], ...(periods || []).map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           {kind === "ALLOWANCE" && <label style={checkboxLabel}><input type="checkbox" checked={form.taxable} onChange={(e) => setForm((p) => ({ ...p, taxable: e.target.checked }))} /> Taxable earning (default). Clear only where a lawful non-taxable treatment is supported.</label>}
           <Input label="Notes / Authority" value={form.notes} onChange={(value) => setForm((p) => ({ ...p, notes: value }))} placeholder="Reason, approval or source reference" />
