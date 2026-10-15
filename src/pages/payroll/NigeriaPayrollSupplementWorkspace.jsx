@@ -243,17 +243,25 @@ function ApprovalsWorkspace() {
     if (!selectedRun?.id || !canPayrollReview) return;
     try {
       setBusy("audit-export"); setError("");
-      const downloaded = await apiDownload(`/api/payroll/runs/${selectedRun.id}/draft-review.xlsx`);
+      const endpoint = canGM && ["PENDING_GM", "GM_PROCESSING"].includes(stage)
+        ? `/api/payroll/runs/${selectedRun.id}/gm-review.xlsx`
+        : `/api/payroll/runs/${selectedRun.id}/draft-review.xlsx`;
+      const downloaded = await apiDownload(endpoint);
       saveDownloadedBlob(downloaded);
-    } catch (err) { setError(err.message || "Unable to export the audit review workbook."); }
+    } catch (err) { setError(err.message || "Unable to export the payroll review workbook."); }
     finally { setBusy(""); }
   };
 
   const act = async (action) => {
     if (!selectedRun?.id || !canAct(action)) return;
     const auditDecision = ["AUDIT_APPROVE", "AUDIT_DISAPPROVE"].includes(action);
+    const gmRejection = action === "GM_DISAPPROVE";
     if (auditDecision && !notes.trim()) {
       setError("Audit observations are required before the Auditor records a decision.");
+      return;
+    }
+    if (gmRejection && !notes.trim()) {
+      setError("GM rejection observations are required before returning the payroll.");
       return;
     }
     try {
@@ -279,7 +287,6 @@ function ApprovalsWorkspace() {
     DRAFT: ["REQUEST_AUDIT", "Send to Audit", primaryButton],
     PENDING_AUDIT: ["AUDIT_OPEN", "Open Audit", primaryButton],
     AUDIT_PROCESSING: ["AUDIT_APPROVE", "Approve Audit", primaryButton, "AUDIT_DISAPPROVE", "Disapprove & Return to HR", dangerButton],
-    AUDIT_APPROVED: ["REQUEST_GM", "Send to GM", primaryButton],
     PENDING_GM: ["GM_OPEN", "Open GM Review", primaryButton],
     GM_PROCESSING: ["GM_APPROVE", "Approve for Payout", primaryButton, "GM_DISAPPROVE", "Reject GM Approval", dangerButton],
     READY_FOR_PAYOUT: ["PAYOUT_EXPORTED", "Export Approved Payout & Lock", primaryButton],
@@ -375,13 +382,7 @@ function ApprovalsWorkspace() {
             </Panel>
           )}
 
-          {canStartWorkflow && stage === "AUDIT_APPROVED" && (
-            <Panel title="Audit Completed">
-              <div style={waitingBanner}>
-                The Payroll Auditor has approved this payroll. Audit is <strong>COMPLETED</strong> and the payroll is now ready for Head HR to send to the General Manager for final review.
-              </div>
-            </Panel>
-          )}
+
 
           {workflow && visibleActions.length === 0 && !["PAYOUT_EXPORTED_LOCKED", "GM_DISAPPROVED"].includes(stage) && (
             <Panel title="Approval Stage">
@@ -390,11 +391,15 @@ function ApprovalsWorkspace() {
           )}
 
           {canPayrollReview && ["PENDING_AUDIT", "AUDIT_PROCESSING", "PENDING_GM", "GM_PROCESSING"].includes(stage) && (
-            <Panel title="Auditor Payroll Review">
-              <p style={controlNote}>Open the submitted payroll, inspect the full employee register and statutory results, and export the same pre-approval review pack to Excel for manual verification before recording Approve or Disapprove.</p>
+            <Panel title={canGM ? "General Manager Payroll Review" : "Auditor Payroll Review"}>
+              <p style={controlNote}>
+                {canGM
+                  ? "The Payroll Auditor has approved this payroll. Open the full employee register, review the statutory results and export the auditor-approved payroll for your private external review before recording your final Approve or Reject decision in CHRiS."
+                  : "Open the submitted payroll, inspect the full employee register and statutory results, and export the same review pack to Excel for manual verification before recording Approve or Disapprove."}
+              </p>
               <div style={buttonRow}>
-                <button style={secondaryButton} disabled={reviewLoading} onClick={() => loadAuditReview(selectedRun.id)}>{reviewLoading ? "Loading Payroll…" : "View / Refresh Submitted Payroll"}</button>
-                <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : "Export Review to Excel"}</button>
+                <button style={secondaryButton} disabled={reviewLoading} onClick={() => loadAuditReview(selectedRun.id)}>{reviewLoading ? "Loading Payroll…" : canGM ? "View / Refresh Auditor-Approved Payroll" : "View / Refresh Submitted Payroll"}</button>
+                <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : canGM ? "Export Auditor-Approved Payroll for Private Review" : "Export Review to Excel"}</button>
               </div>
               {reviewRows.length > 0 && <DataTable columns={["Employee No", "Employee", "Basic", "Gross", "PAYE", "Pension", "Other Deductions", "Net"]}>
                 {reviewRows.map((row) => {
