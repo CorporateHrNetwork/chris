@@ -2,7 +2,11 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const exitSettlementService = require("./exitSettlementService");
 const { confirmPayrollObligations } = require("./statutoryObligationService");
-const { postDeductionInstallments } = require("./zermattVariablePayrollService");
+const {
+  postDeductionInstallments,
+  loadPeriodVariableItems,
+  calculateVariableValue,
+} = require("./zermattVariablePayrollService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 const PERIOD_STATUSES = ["OPEN", "LOCKED", "CLOSED"];
@@ -717,26 +721,45 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
     organizationId,
     period.periodEnd
   );
+  const variableItemsByEmployee = await loadPeriodVariableItems({
+    organizationId,
+    period,
+    employeeIds: employees.map((employee) => employee.id),
+    prismaClient,
+  });
 
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
     const baseSalary = Number(rate.amount || 0);
     const applicable = componentRows.filter((component) => !component.employeeId || component.employeeId === employee.id);
-    const allowanceItems = applicable
+    const variable = variableItemsByEmployee.get(employee.id) || { allowances: [], deductions: [] };
+    const configuredAllowanceItems = applicable
       .filter((component) => component.kind === "ALLOWANCE")
-      .map((component) => ({ ...component, value: componentValue(component, baseSalary) }));
-    const grossPay = Math.round((baseSalary + allowanceItems.reduce((sum, row) => sum + row.value, 0)) * 100) / 100;
-    const deductionItems = applicable
+      .map((component) => ({ ...component, value: componentValue(component, baseSalary), source: "CONFIGURED_COMPONENT" }));
+    const variableAllowanceItems = variable.allowances.map((item) => ({
+      ...item,
+      value: calculateVariableValue(item, baseSalary),
+      source: item.frequency || "VARIABLE_INPUT",
+    }));
+    const allowanceItems = [...configuredAllowanceItems, ...variableAllowanceItems];
+    const grossPay = Math.round((baseSalary + allowanceItems.reduce((sum, row) => sum + Number(row.value || 0), 0)) * 100) / 100;
+    const configuredDeductionItems = applicable
       .filter((component) => component.kind === "DEDUCTION")
-      .map((component) => ({ ...component, value: componentValue(component, grossPay) }));
+      .map((component) => ({ ...component, value: componentValue(component, grossPay), source: "CONFIGURED_COMPONENT" }));
+    const variableDeductionItems = variable.deductions.map((item) => ({
+      ...item,
+      value: calculateVariableValue(item, grossPay),
+      source: item.frequency || "VARIABLE_INPUT",
+    }));
+    const deductionItems = [...configuredDeductionItems, ...variableDeductionItems];
     const advances = advanceRows
       .filter((advance) => advance.employeeId === employee.id)
       .map((advance) => ({
         id: advance.id,
         value: Math.min(Number(advance.outstandingAmount || 0), Number(advance.installmentAmount || 0)),
       }));
-    const allowances = Math.round(allowanceItems.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
-    const deductions = Math.round(deductionItems.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
+    const allowances = Math.round(allowanceItems.reduce((sum, row) => sum + Number(row.value || 0), 0) * 100) / 100;
+    const deductions = Math.round(deductionItems.reduce((sum, row) => sum + Number(row.value || 0), 0) * 100) / 100;
     const advanceRecovery = Math.round(advances.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
     const netPreview = Math.max(0, Math.round((grossPay - deductions - advanceRecovery) * 100) / 100);
     return {
@@ -764,8 +787,18 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
           locationCode: employee.location?.code || null,
           locationName: employee.location?.name || null,
         },
-        allowanceItems: allowanceItems.map(({ id, code, name, value }) => ({ id, code, name, value })),
-        deductionItems: deductionItems.map(({ id, code, name, value }) => ({ id, code, name, value })),
+        allowanceItems: allowanceItems.map(({ id, code, name, value, inputId, calculationType, quantity, taxable, reference, remarks, source }) => ({
+          id: id || null, inputId: inputId || null, code, name, value,
+          calculationType: calculationType || null, quantity: quantity ?? null, taxable: taxable ?? null,
+          reference: reference || null, remarks: remarks || null, source: source || "CONFIGURED_COMPONENT",
+        })),
+        deductionItems: deductionItems.map(({ id, code, name, value, inputId, installmentId, planId, calculationType, quantity, installmentNumber, installmentCount, taxable, reference, remarks, source }) => ({
+          id: id || null, inputId: inputId || null, installmentId: installmentId || null, planId: planId || null,
+          code, name, value, calculationType: calculationType || null, quantity: quantity ?? null,
+          installmentNumber: installmentNumber ?? null, installmentCount: installmentCount ?? null,
+          taxable: taxable ?? null, reference: reference || null, remarks: remarks || null,
+          source: source || "CONFIGURED_COMPONENT",
+        })),
         salaryAdvanceRecoveries: advances,
         statutoryControl: "PAYE/pension statutory calculations are not automatically derived in Release-1. Net Preview is not a payment instruction until manual statutory review is confirmed in Payroll Approvals.",
       },
