@@ -63,6 +63,7 @@ const Loans = lazy(() => import("./pages/Loans"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Training = lazy(() => import("./pages/Training"));
 const Reports = lazy(() => import("./pages/Reports"));
+const AuditTrail = lazy(() => import("./pages/AuditTrail"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Designations = lazy(() => import("./pages/Designations"));
 const OrganizationProfile = lazy(() => import("./pages/OrganizationProfile"));
@@ -171,6 +172,7 @@ function App() {
         <Route path="/performance/management" element={<ProtectedLayout><CHRiSAutomationCentre mode="performance" /></ProtectedLayout>} />
         <Route path="/training" element={<PermissionLayout permission="training.view"><Training /></PermissionLayout>} />
         <Route path="/reports" element={<PermissionLayout permission="reports.view"><Reports /></PermissionLayout>} />
+        <Route path="/reports/audit-trail" element={<PermissionLayout permission="reports.view"><AuditTrail /></PermissionLayout>} />
         <Route path="/settings" element={<PermissionLayout permission="settings.view"><Settings /></PermissionLayout>} />
         <Route path="/designations" element={<PermissionLayout permission="settings.view"><Designations /></PermissionLayout>} />
 
