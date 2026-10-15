@@ -348,6 +348,7 @@ router.post(
           data: {
             userId: user.id,
             tokenHash,
+            portal: normalizedPortal,
             expiresAt,
           },
         }
