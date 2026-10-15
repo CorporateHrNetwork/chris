@@ -2594,10 +2594,13 @@ async function auditPayrollExport({ organizationId, actorUserId, run, action, st
   });
 }
 
-router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
+router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), (req, res, next) => {
+  if (!isZermatt(req) || isHeadHr(req) || isPayrollAuditor(req)) return next();
+  return res.status(403).json({ status: "error", code: "ZERMATT_PAYROLL_REVIEW_ROLE_REQUIRED", message: "Only Head HR or the designated Payroll Auditor may export the payroll review workbook." });
+}, async (req, res) => {
   try {
     const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
-    if (!["DRAFT", "REJECTED", "SUBMITTED"].includes(context.run.status)) {
+    if (!["DRAFT", "REJECTED", "SUBMITTED", "PENDING_APPROVAL"].includes(context.run.status)) {
       throw payroll.operationalError(
         "PAYROLL_DRAFT_REVIEW_REQUIRES_PREAPPROVAL_STATUS",
         "Draft review export is available only before CHRiS payroll approval.",
