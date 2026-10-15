@@ -65,7 +65,7 @@ router.post("/activate-employee", async (req, res) => {
         select: { id: true, email: true, isActive: true },
       });
     }
-    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
+    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null, portal: "ess" } });
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
     await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, portal: "ess", expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
@@ -322,6 +322,7 @@ router.post(
           where: {
             userId: user.id,
             usedAt: null,
+            portal: normalizedPortal,
           },
         }
       );
