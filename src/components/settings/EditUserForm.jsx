@@ -11,6 +11,8 @@ import {
   FaMapMarkerAlt,
   FaEnvelope,
   FaIdBadge,
+  FaEye,
+  FaEyeSlash,
 } from "react-icons/fa";
 
 import {
@@ -81,6 +83,11 @@ function EditUserForm({
   ] = useState("");
 
   const [
+    showTemporaryPassword,
+    setShowTemporaryPassword,
+  ] = useState(false);
+
+  const [
     resettingPassword,
     setResettingPassword,
   ] = useState(false);
@@ -140,6 +147,7 @@ function EditUserForm({
     );
 
     setTemporaryPassword("");
+    setShowTemporaryPassword(false);
     setPasswordMessage("");
     setError("");
   }, [user]);
@@ -1048,18 +1056,62 @@ function EditUserForm({
           >
             <div style={{ flex: "1 1 280px" }}>
               <FormField label="Temporary Password">
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={temporaryPassword}
-                  disabled={resettingPassword || saving}
-                  onChange={(event) => {
-                    setTemporaryPassword(event.target.value);
-                    setPasswordMessage("");
+                <div
+                  style={{
+                    position: "relative",
                   }}
-                  placeholder="Minimum 10 characters"
-                  style={inputStyle}
-                />
+                >
+                  <input
+                    type={showTemporaryPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={temporaryPassword}
+                    disabled={resettingPassword || saving}
+                    onChange={(event) => {
+                      setTemporaryPassword(event.target.value);
+                      setPasswordMessage("");
+                    }}
+                    placeholder="Minimum 10 characters"
+                    style={{
+                      ...inputStyle,
+                      paddingRight: "44px",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowTemporaryPassword((current) => !current)
+                    }
+                    disabled={resettingPassword || saving}
+                    aria-label={
+                      showTemporaryPassword
+                        ? "Hide temporary password"
+                        : "Show temporary password"
+                    }
+                    title={
+                      showTemporaryPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                    style={{
+                      position: "absolute",
+                      right: "8px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: "32px",
+                      height: "32px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      border: "none",
+                      background: "transparent",
+                      color: "#64748B",
+                      cursor: resettingPassword || saving ? "not-allowed" : "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    {showTemporaryPassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
               </FormField>
             </div>
             <button
