@@ -1911,15 +1911,20 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   workbook.Workbook = workbook.Workbook || {};
   workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
   const isApproved = stage === "APPROVED_PAYOUT";
+  const isGMReview = stage === "GM_REVIEW";
   const organizationName = String(
     organization.legalName || organization.name || "Organisation"
   ).replace(/\s*[—-]\s*SYNTHETIC STAGING ACCEPTANCE\s*$/i, "").trim();
   const title = isApproved
     ? `${organizationName} Approved Payroll — External Approval & Payout Pack`
-    : `${organizationName} Draft Payroll — External HR Review Pack`;
+    : isGMReview
+      ? `${organizationName} Auditor-Approved Payroll — GM Private External Review Pack`
+      : `${organizationName} Draft Payroll — External HR Review Pack`;
   const controlLabel = isApproved
     ? "APPROVED IN CHRiS — EXTERNAL APPROVAL / PAYOUT HANDOFF"
-    : "PRE-APPROVAL REVIEW — NOT FOR PAYOUT";
+    : isGMReview
+      ? "AUDITOR-APPROVED — GM PRIVATE EXTERNAL REVIEW — NOT YET GM APPROVED"
+      : "PRE-APPROVAL REVIEW — NOT FOR PAYOUT";
 
   const model = payrollWorkbookModel(lines, employeeMeta);
   const total = (selector) => model.rows.reduce((sum, row) => sum + Number(selector(row) || 0), 0);
@@ -2595,6 +2600,25 @@ async function auditPayrollExport({ organizationId, actorUserId, run, action, st
   });
 }
 
+router.get("/runs/:id/gm-review.xlsx", requirePermission("payroll.view"), async (req, res, next) => {
+  if (isZermatt(req) && !isGeneralManager(req)) {
+    return res.status(403).json({ status: "error", code: "ZERMATT_GM_REVIEW_ROLE_REQUIRED", message: "Only the assigned General Manager may export the auditor-approved payroll for private external review." });
+  }
+  try {
+    const activeWorkflow = isZermatt(req) ? await payrollApprovalWorkflow.get({ organizationId: req.auth.organizationId, runId: req.params.id }) : null;
+    if (isZermatt(req) && (!activeWorkflow || !["PENDING_GM", "GM_PROCESSING"].includes(activeWorkflow.stage))) {
+      return res.status(409).json({ status: "error", code: "ZERMATT_GM_REVIEW_NOT_READY", message: "The Payroll Auditor must approve the payroll before the General Manager can export the GM review pack." });
+    }
+    const context = await payrollExportContext(req.auth.organizationId, req.params.id, { includePaymentDetails: true });
+    if (context.run.status !== "PENDING_APPROVAL") throw payroll.operationalError("PAYROLL_GM_REVIEW_REQUIRES_PENDING_APPROVAL", "The GM review pack is available only while the payroll is awaiting final management approval.", 409);
+    const buffer = payrollExternalWorkbook({ ...context, stage: "GM_REVIEW" });
+    await auditPayrollExport({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, run: context.run, action: "PAYROLL_GM_REVIEW_EXPORTED", stage: "GM_REVIEW" });
+    const safePeriod = String(context.run.periodCode || "Payroll").replace(/[^A-Za-z0-9_-]+/g, "_");
+    res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${safePeriod}_Auditor_Approved_GM_Private_Review.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
+  } catch (error) { return sendError(res, error, "Unable to export the auditor-approved GM review pack."); }
+});
 router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), (req, res, next) => {
   if (!isZermatt(req) || isHeadHr(req) || isPayrollAuditor(req) || isGeneralManager(req)) return next();
   return res.status(403).json({ status: "error", code: "ZERMATT_PAYROLL_REVIEW_ROLE_REQUIRED", message: "Only Head HR or the designated Payroll Auditor may export the payroll review workbook." });
