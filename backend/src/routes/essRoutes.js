@@ -115,7 +115,7 @@ router.post("/login", async (req, res) => {
       return invalidCredentials(res);
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+    const passwordMatches = await bcrypt.compare(password, user.essPasswordHash || user.passwordHash);
     if (!passwordMatches) {
       return invalidCredentials(res);
     }
