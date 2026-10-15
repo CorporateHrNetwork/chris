@@ -1,8 +1,8 @@
 const PAYROLL_REVIEW_CONFIRMATION_TEXT = "I confirm I reviewed CHRiS-calculated PAYE/pension";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
+import { apiDownload, apiRequest, getStoredUser, saveDownloadedBlob } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -86,7 +86,7 @@ function ComponentsWorkspace({ kind }) {
             ? <Input type="number" label="Amount" value={form.amount} onChange={(value) => setForm((p) => ({ ...p, amount: value }))} min="0" step="0.01" required />
             : <Input type="number" label="Percentage" value={form.percentage} onChange={(value) => setForm((p) => ({ ...p, percentage: value }))} min="0" step="0.01" required />}
           <Input type="date" label="Effective From" value={form.effectiveFrom} onChange={(value) => setForm((p) => ({ ...p, effectiveFrom: value }))} required />
-          <Input type="date" label="Effective To" value={form.effectiveTo} onChange={(value) => setForm((p) => ({ ...p, effectiveTo: value }))} />
+          <Input type="date" label="Effective To" value={form.effectiveTo} onChange={(p) => setForm((p) => ({ ...p, effectiveTo: p }))} />
           <Select label="One-Time Period (optional)" value={form.oneTimePeriodId} onChange={(value) => setForm((p) => ({ ...p, oneTimePeriodId: value }))} options={[["","Recurring / effective-dated"], ...(periods || []).map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           {kind === "ALLOWANCE" && <label style={checkboxLabel}><input type="checkbox" checked={form.taxable} onChange={(e) => setForm((p) => ({ ...p, taxable: e.target.checked }))} /> Taxable earning (default). Clear only where a lawful non-taxable treatment is supported.</label>}
           <Input label="Notes / Authority" value={form.notes} onChange={(value) => setForm((p) => ({ ...p, notes: value }))} placeholder="Reason, approval or source reference" />
@@ -141,6 +141,27 @@ function ApprovalsWorkspace() {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState("");
   const [workflowLoading, setWorkflowLoading] = useState(false);
+  const currentUser = getStoredUser();
+  const roleNames = useMemo(
+    () => new Set((currentUser?.roles || []).map((role) => String(role || "").trim().toUpperCase())),
+    [currentUser]
+  );
+  const hasRole = useCallback((candidates) => candidates.some((candidate) => roleNames.has(candidate)), [roleNames]);
+  const canStartWorkflow = hasRole(["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"]);
+  const canAct = useCallback((action) => {
+    const actionRoles = {
+      REQUEST_AUDIT: ["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"],
+      AUDIT_OPEN: ["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"],
+      AUDIT_APPROVE: ["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"],
+      AUDIT_DISAPPROVE: ["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"],
+      REQUEST_GM: ["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"],
+      GM_OPEN: ["GENERAL MANAGER", "GM"],
+      GM_APPROVE: ["GENERAL MANAGER", "GM"],
+      GM_DISAPPROVE: ["GENERAL MANAGER", "GM"],
+      PAYOUT_EXPORTED: ["CHIEF ACCOUNTANT", "HEAD OF ACCOUNTS", "HEAD ACCOUNTS"],
+    };
+    return Boolean(actionRoles[action]?.some((candidate) => roleNames.has(candidate)));
+  }, [roleNames]);
 
   const candidates = (runs || []).filter((run) =>
     ["PENDING_APPROVAL", "APPROVED"].includes(String(run.status || "").toUpperCase())
@@ -172,7 +193,7 @@ function ApprovalsWorkspace() {
   }, [selectedRun?.id, loadWorkflow]);
 
   const startWorkflow = async () => {
-    if (!selectedRun?.id) return;
+    if (!selectedRun?.id || !canStartWorkflow) return;
     try {
       setBusy("start"); setError("");
       await apiRequest(`/api/payroll/runs/${selectedRun.id}/approval-workflow/start`, { method: "POST" });
@@ -181,7 +202,7 @@ function ApprovalsWorkspace() {
   };
 
   const act = async (action) => {
-    if (!selectedRun?.id) return;
+    if (!selectedRun?.id || !canAct(action)) return;
     const auditDecision = ["AUDIT_APPROVE", "AUDIT_DISAPPROVE"].includes(action);
     if (auditDecision && !notes.trim()) {
       setError("Audit observations are required before the Auditor records a decision.");
@@ -215,7 +236,11 @@ function ApprovalsWorkspace() {
     READY_FOR_PAYOUT: ["PAYOUT_EXPORTED", "Export Approved Payout & Lock", primaryButton],
   };
   const actions = actionForStage[stage] || [];
+  const visibleActions = actions.length >= 6
+    ? (canAct(actions[0]) || canAct(actions[3]) ? actions : [])
+    : (actions.length >= 3 && canAct(actions[0]) ? actions : []);
   const noWorkflow = !workflow && !workflowLoading;
+
   const statusText = stage === "PAYOUT_EXPORTED_LOCKED"
     ? "PAYOUT EXPORTED — LOCKED"
     : stage.replaceAll("_", " ");
@@ -244,11 +269,16 @@ function ApprovalsWorkspace() {
               <span>Employees</span><strong>{selectedRun.employeeCount}</strong>
             </div>
           )}
-          {noWorkflow && selectedRun && (
+          {noWorkflow && selectedRun && canStartWorkflow && (
             <div>
               <button style={primaryButton} disabled={busy === "start"} onClick={startWorkflow}>
                 {busy === "start" ? "Starting…" : "Start Approval Workflow"}
               </button>
+            </div>
+          )}
+          {noWorkflow && selectedRun && !canStartWorkflow && (
+            <div style={waitingBanner}>
+              Approval workflow has not been started by Head HR. This account is not permitted to start it.
             </div>
           )}
         </div>
@@ -283,15 +313,21 @@ function ApprovalsWorkspace() {
             </div>
           </Panel>
 
-          {!["PAYOUT_EXPORTED_LOCKED", "AUDIT_DISAPPROVED", "GM_DISAPPROVED"].includes(stage) && (
+          {![ "PAYOUT_EXPORTED_LOCKED", "AUDIT_DISAPPROVED", "GM_DISAPPROVED"].includes(stage) && visibleActions.length > 0 && (
             <Panel title="Stage Action">
               <div style={formGrid}>
-                <Input label={["AUDIT_APPROVE","AUDIT_DISAPPROVE"].includes(actions[0]) ? "Audit Observations (required)" : "Notes / Authority"} value={notes} onChange={setNotes} placeholder="Record review basis, exception or authority" />
+                <Input label={["AUDIT_APPROVE","AUDIT_DISAPPROVE"].includes(visibleActions[0]) ? "Audit Observations (required)" : "Notes / Authority"} value={notes} onChange={setNotes} placeholder="Record review basis, exception or authority" />
                 <div style={buttonRow}>
-                  {actions.length >= 3 && <button style={actions[2]} disabled={Boolean(busy)} onClick={() => act(actions[0])}>{busy === actions[0] ? "Processing…" : actions[1]}</button>}
-                  {actions.length >= 6 && <button style={actions[5]} disabled={Boolean(busy)} onClick={() => act(actions[3])}>{busy === actions[3] ? "Processing…" : actions[4]}</button>}
+                  {visibleActions.length >= 3 && <button style={visibleActions[2]} disabled={Boolean(busy)} onClick={() => act(visibleActions[0])}>{busy === visibleActions[0] ? "Processing…" : visibleActions[1]}</button>}
+                  {visibleActions.length >= 6 && <button style={visibleActions[5]} disabled={Boolean(busy)} onClick={() => act(visibleActions[3])}>{busy === visibleActions[3] ? "Processing…" : visibleActions[4]}</button>}
                 </div>
               </div>
+            </Panel>
+          )}
+
+          {workflow && visibleActions.length === 0 && !["PAYOUT_EXPORTED_LOCKED", "AUDIT_DISAPPROVED", "GM_DISAPPROVED"].includes(stage) && (
+            <Panel title="Approval Stage">
+              <div style={waitingBanner}>This stage is assigned to its designated user. No action is available to this account.</div>
             </Panel>
           )}
 
@@ -335,7 +371,6 @@ function DataTable({ columns, children, loading = false }) { return <div style={
 function Td({ children, strong = false }) { return <td style={{ ...tdStyle, ...(strong ? { fontWeight: 900, color: "#F7FAF8" } : {}) }}>{children}</td>; }
 function Badge({ children }) { return <span style={badgeStyle}>{children || "—"}</span>; }
 
-
 const runSummary = { display: "grid", gridTemplateColumns: "repeat(3,minmax(120px,1fr))", gap: 10, padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,.04)", border: "1px solid rgba(212,175,55,.2)", fontSize: 11 };
 const stageBanner = { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", padding: "14px 16px", borderRadius: 11, background: "rgba(212,175,55,.08)", border: "1px solid rgba(212,175,55,.3)", color: "#C7D3CC" };
 const stepGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12, marginTop: 16 };
@@ -371,3 +406,4 @@ const errorStyle = { marginTop: 16, padding: 12, borderRadius: 10, border: "1px 
 const controlNote = { margin: "0 0 14px", color: "#C7D3CC", lineHeight: 1.55, fontSize: 12 };
 const checkboxLabel = { display: "flex", alignItems: "center", gap: 8, color: "#F7FAF8", fontSize: 12, fontWeight: 800 };
 const loadingStyle = { padding: 14, color: "#C7D3CC" };
+const waitingBanner = { padding: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.35)", background: "rgba(212,175,55,.08)", color: "#F7D66A", lineHeight: 1.5, fontSize: 12 };
