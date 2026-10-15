@@ -150,7 +150,7 @@ function ApprovalsWorkspace() {
   );
   const hasRole = useCallback((candidates) => candidates.some((candidate) => roleNames.has(candidate)), [roleNames]);
   const canStartWorkflow = hasRole(["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"]);
-  const canAudit = hasRole(["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"]);
+  const canAudit = hasRole(["HEAD OF AUDIT & INTERNAL CONTROL", "HEAD OF AUDIT & INTERNAL CONTROLS", "HEAD AUDIT & INTERNAL CONTROL", "HEAD AUDIT & INTERNAL CONTROLS"]);\n  const canGM = hasRole(["GENERAL MANAGER", "GM"]);\n  const canPayrollReview = canAudit || canGM;
   const canAct = useCallback((action) => {
     const actionRoles = {
       REQUEST_AUDIT: ["HEAD OF HR & ADMIN", "HEAD OF HR", "HEAD HR", "HEAD OF HUMAN RESOURCES", "HEAD OF HUMAN RESOURCES & ADMINISTRATION"],
@@ -197,7 +197,7 @@ function ApprovalsWorkspace() {
   }, [selectedRun?.id, loadWorkflow]);
 
   const loadAuditReview = useCallback(async (runId) => {
-    if (!runId || !canAudit) return;
+    if (!runId || !canPayrollReview) return;
     try {
       setReviewLoading(true);
       setError("");
@@ -220,13 +220,13 @@ function ApprovalsWorkspace() {
       setError(err.message || "Unable to load the submitted payroll for audit review.");
       setReviewRows([]);
     } finally { setReviewLoading(false); }
-  }, [canAudit, setError]);
+  }, [canPayrollReview, setError]);
 
   useEffect(() => {
-    if (canAudit && selectedRun?.id && ["PENDING_AUDIT", "AUDIT_PROCESSING"].includes(workflow?.stage)) {
+    if (canPayrollReview && selectedRun?.id && ["PENDING_AUDIT", "AUDIT_PROCESSING", "PENDING_GM", "GM_PROCESSING"].includes(workflow?.stage)) {
       loadAuditReview(selectedRun.id);
     }
-  }, [canAudit, selectedRun?.id, workflow?.stage, loadAuditReview]);
+  }, [canPayrollReview, selectedRun?.id, workflow?.stage, loadAuditReview]);
 
   const startWorkflow = async () => {
     if (!selectedRun?.id || !canStartWorkflow) return;
@@ -238,7 +238,7 @@ function ApprovalsWorkspace() {
   };
 
   const exportAuditReview = async () => {
-    if (!selectedRun?.id || !canAudit) return;
+    if (!selectedRun?.id || !canPayrollReview) return;
     try {
       setBusy("audit-export"); setError("");
       const downloaded = await apiDownload(`/api/payroll/runs/${selectedRun.id}/draft-review.xlsx`);
@@ -379,12 +379,12 @@ function ApprovalsWorkspace() {
             </Panel>
           )}
 
-          {canAudit && ["PENDING_AUDIT", "AUDIT_PROCESSING"].includes(stage) && (
+          {canPayrollReview && ["PENDING_AUDIT", "AUDIT_PROCESSING", "PENDING_GM", "GM_PROCESSING"].includes(stage) && (
             <Panel title="Auditor Payroll Review">
               <p style={controlNote}>Open the submitted payroll, inspect the full employee register and statutory results, and export the same pre-approval review pack to Excel for manual verification before recording Approve or Disapprove.</p>
               <div style={buttonRow}>
                 <button style={secondaryButton} disabled={reviewLoading} onClick={() => loadAuditReview(selectedRun.id)}>{reviewLoading ? "Loading Payroll…" : "View / Refresh Submitted Payroll"}</button>
-                <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : "Export Audit Review to Excel"}</button>
+                <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : "Export Review to Excel"}</button>
               </div>
               {reviewRows.length > 0 && <DataTable columns={["Employee No", "Employee", "Basic", "Gross", "PAYE", "Pension", "Other Deductions", "Net"]}>
                 {reviewRows.map((row) => {
