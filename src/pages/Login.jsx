@@ -311,8 +311,8 @@ function Login() {
 
             body: JSON.stringify({
               email: normalizedEmail,
-
               organizationSlug,
+              portal: "admin",
             }),
           }
         );
