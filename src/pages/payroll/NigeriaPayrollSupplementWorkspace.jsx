@@ -209,7 +209,7 @@ function ApprovalsWorkspace() {
     if (!runId || !canAudit) return;
     try {
       setReviewLoading(true);
-      const result = await apiRequest(`/api/payroll/runs/${runId}/approval-review`);
+      const result = await apiRequest(`/api/payroll/payslips?runId=${encodeURIComponent(runId)}`);
       setReviewRows(result?.data?.lines || []);
     } catch (err) {
       setError(err.message || "Unable to load the submitted payroll for audit review.");
@@ -221,7 +221,7 @@ function ApprovalsWorkspace() {
     if (!selectedRun?.id || !canAudit) return;
     try {
       setBusy("audit-export"); setError("");
-      const downloaded = await apiDownload(`/api/payroll/runs/${selectedRun.id}/audit-review.xlsx`);
+      const downloaded = await apiDownload(`/api/payroll/runs/${selectedRun.id}/draft-review.xlsx`);
       saveDownloadedBlob(downloaded);
     } catch (err) { setError(err.message || "Unable to export the audit review workbook."); }
     finally { setBusy(""); }
@@ -366,7 +366,7 @@ function ApprovalsWorkspace() {
                 <button style={secondaryButton} disabled={reviewLoading} onClick={() => loadAuditReview(selectedRun.id)}>{reviewLoading ? "Loading Payroll…" : "View / Refresh Submitted Payroll"}</button>
                 <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : "Export Audit Review to Excel"}</button>
               </div>
-              {reviewRows.length > 0 && <DataTable columns={["Employee", "Basic", "Gross", "PAYE", "Pension", "Other Deductions", "Net"]}>
+              {reviewRows.length > 0 && <DataTable columns={["Employee No", "Employee", "Basic", "Gross", "PAYE", "Pension", "Other Deductions", "Net"]}>
                 {reviewRows.map((row) => {
                   const details = row.details || {};
                   const statutory = details.statutory || {};
