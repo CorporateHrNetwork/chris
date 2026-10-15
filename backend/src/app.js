@@ -18,6 +18,7 @@ const employmentEligibilityRoutes = require("./routes/employmentEligibilityRoute
 const employeeReportRoutes = require("./routes/employeeReportRoutes");
 const reportsRelease1Routes = require("./routes/reportsRelease1Routes");
 const reportsOperationalRoutes = require("./routes/reportsOperationalRoutes");
+const auditTrailRoutes = require("./routes/auditTrailRoutes");
 const recruitmentRoutes = require("./routes/recruitmentRoutes");
 const recruitmentVacancyRoutes = require("./routes/recruitmentVacancyRoutes");
 const recruitmentTalentRoutes = require("./routes/recruitmentTalentRoutes");
@@ -119,6 +120,7 @@ app.use("/api/employment-eligibility", employmentEligibilityRoutes);
 app.use("/api/employee-reports", employeeReportRoutes);
 app.use("/api/reports", reportsRelease1Routes);
 app.use("/api/reports", reportsOperationalRoutes);
+app.use("/api/audit-trail", auditTrailRoutes);
 app.use("/api/recruitment", recruitmentRoutes);
 app.use("/api/recruitment", recruitmentVacancyRoutes);
 app.use("/api/recruitment", recruitmentTalentRoutes);
