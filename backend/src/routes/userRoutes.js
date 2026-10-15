@@ -468,6 +468,64 @@ router.post("/ess/provision-bulk", requirePermission("users.manage"), async (req
   }
 });
 
+router.post("/:userId/reset-password", requirePermission("users.manage"), async (req, res) => {
+  try {
+    const organizationId = req.auth.organizationId;
+    const { userId } = req.params;
+    const temporaryPassword = String(req.body?.temporaryPassword || "");
+
+    if (userId === req.auth.userId) {
+      return res.status(400).json({ status: "error", message: "Use your own account security settings to change your password." });
+    }
+    if (temporaryPassword.length < 10) {
+      return res.status(400).json({ status: "error", message: "Temporary password must contain at least 10 characters." });
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: { id: userId, organizationId },
+      select: { id: true, email: true, firstName: true, lastName: true, isActive: true },
+    });
+    if (!existingUser) {
+      return res.status(404).json({ status: "error", message: "CHRIS user not found." });
+    }
+    if (!existingUser.isActive) {
+      return res.status(409).json({ status: "error", message: "Reactivate this CHRIS user before resetting the password." });
+    }
+
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      });
+      await tx.passwordResetToken.deleteMany({
+        where: { userId, usedAt: null, portal: "admin" },
+      });
+      await tx.organizationAudit.create({
+        data: {
+          organizationId,
+          actorUserId: req.auth.userId,
+          entityType: "User",
+          entityId: userId,
+          action: "CHRIS_PASSWORD_ADMIN_RESET",
+          previousValue: null,
+          newValue: { regularChrisPasswordReset: true, essPasswordChanged: false },
+          reason: String(req.body?.reason || "Administrator issued a temporary regular CHRIS password").trim(),
+        },
+      });
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Regular CHRIS password reset successfully. Employee Self Service password was not changed.",
+      data: { userId: existingUser.id },
+    });
+  } catch (error) {
+    console.error("Admin CHRIS password reset error:", error);
+    return res.status(500).json({ status: "error", message: "Unable to reset the regular CHRIS password." });
+  }
+});
+
 router.put("/:userId", requirePermission("users.manage"), async (req, res) => {
   try {
     const organizationId = req.auth.organizationId;
