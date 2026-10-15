@@ -16,7 +16,8 @@ import {
   FaUserSlash,
 } from "react-icons/fa";
 
-import "./Reports.css";\nimport "../components/settings/UsersRolesSettings.chris.css";
+import "./Reports.css";
+import "../components/settings/UsersRolesSettings.chris.css";
 import { PrintableReportHeader, PrintableReportFooter } from "../components/reporting/PrintableReportBranding";
 
 import {
