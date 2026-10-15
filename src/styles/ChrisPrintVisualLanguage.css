@@ -112,3 +112,139 @@
     content: none !important;
   }
 }
+
+
+/*
+ * CHRiS shared visual language — screen surfaces.
+ * Reuses the accepted green / natural-gold / white language from the
+ * approved Settings and print/report surfaces. Child panels inherit the
+ * same typography, contrast and card treatment.
+ */
+:root {
+  --chris-screen-green: #087A43;
+  --chris-screen-green-deep: #075C34;
+  --chris-screen-gold: #B08A12;
+  --chris-screen-ink: #17211C;
+  --chris-screen-muted: #5F6B66;
+  --chris-screen-border: #DCE4DF;
+  --chris-screen-surface: #FFFFFF;
+  --chris-screen-soft: #F7FAF8;
+}
+
+.chris-reports-page,
+.reports-print-content,
+.chris-settings-page,
+.chris-workspace,
+.chris-module,
+.chris-section,
+.chris-panel,
+.chris-card,
+.chris-kpi-card,
+.chris-summary-card,
+.chris-report-card,
+.chris-analytics-card,
+.chris-child-card {
+  color: var(--chris-screen-ink);
+}
+
+.chris-reports-page h1,
+.chris-reports-page h2,
+.chris-reports-page h3,
+.chris-settings-page h1,
+.chris-settings-page h2,
+.chris-settings-page h3,
+.chris-workspace h1,
+.chris-workspace h2,
+.chris-workspace h3,
+.chris-module h1,
+.chris-module h2,
+.chris-module h3 {
+  color: var(--chris-screen-green-deep);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.chris-reports-page .card,
+.chris-reports-page .panel,
+.chris-reports-page .kpi-card,
+.chris-reports-page .report-card,
+.chris-reports-page .analytics-card,
+.chris-settings-page .card,
+.chris-settings-page .panel,
+.chris-workspace .card,
+.chris-workspace .panel,
+.chris-module .card,
+.chris-module .panel,
+.chris-child-card {
+  background: var(--chris-screen-surface);
+  border: 1px solid var(--chris-screen-border);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.045);
+}
+
+.chris-reports-page th,
+.chris-reports-page .table-header,
+.chris-settings-page th,
+.chris-workspace th,
+.chris-module th {
+  color: var(--chris-screen-green-deep);
+  background: var(--chris-screen-soft);
+  font-weight: 800;
+}
+
+.chris-reports-page .metric,
+.chris-reports-page .kpi-value,
+.chris-analytics-card .value,
+.chris-summary-card .value {
+  color: var(--chris-screen-green);
+  font-weight: 800;
+}
+
+.chris-reports-page .accent,
+.chris-reports-page .gold,
+.chris-analytics-card .accent,
+.chris-summary-card .accent {
+  color: var(--chris-screen-gold);
+}
+
+.chris-reports-page button,
+.chris-settings-page button,
+.chris-workspace button,
+.chris-module button {
+  font-weight: 750;
+}
+
+.chris-reports-page button.primary,
+.chris-settings-page button.primary,
+.chris-workspace button.primary,
+.chris-module button.primary {
+  background: var(--chris-screen-green);
+  border-color: var(--chris-screen-green);
+  color: #FFFFFF;
+}
+
+.chris-reports-page button.primary:hover,
+.chris-settings-page button.primary:hover,
+.chris-workspace button.primary:hover,
+.chris-module button.primary:hover {
+  background: var(--chris-screen-green-deep);
+  border-color: var(--chris-screen-green-deep);
+}
+
+@media (max-width: 900px) {
+  .chris-reports-page,
+  .chris-settings-page,
+  .chris-workspace,
+  .chris-module {
+    overflow-x: hidden;
+  }
+
+  .chris-reports-page .card,
+  .chris-reports-page .panel,
+  .chris-reports-page .kpi-card,
+  .chris-reports-page .report-card,
+  .chris-reports-page .analytics-card,
+  .chris-child-card {
+    border-radius: 12px;
+  }
+}
