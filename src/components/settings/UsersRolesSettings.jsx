@@ -387,6 +387,22 @@ function UsersRolesSettings() {
       setEditingUser(user);
     };
 
+  useEffect(() => {
+    if (!editingUser) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const editor = document.getElementById("chris-user-editor");
+      if (editor) {
+        editor.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [editingUser]);
+
   /*
   ============================================================
   ACTIVATE / DEACTIVATE USER
@@ -739,7 +755,11 @@ function UsersRolesSettings() {
         "users" &&
         editingUser &&
         canManageUsers && (
-          <EditUserForm
+          <div
+            id="chris-user-editor"
+            style={{ scrollMarginTop: "24px" }}
+          >
+            <EditUserForm
             user={
               editingUser
             }
@@ -758,6 +778,7 @@ function UsersRolesSettings() {
               handleUserUpdated
             }
           />
+          </div>
         )}
 
       {/* USERS TAB */}
