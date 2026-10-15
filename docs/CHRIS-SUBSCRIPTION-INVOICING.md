@@ -3,12 +3,20 @@
 **Status: draft implementation only. Not deployed.** This change adds a server-reusable pricing catalogue; no routes, email sends, invoicing, entitlement enforcement or database migrations are enabled.
 
 ## Published catalogue / basis
-- Licence per employee **per month**: Basic ₦1,000; Standard ₦1,200; Premium ₦1,500.
-- Optional ESS per employee **per month**: Basic ₦500; Standard ₦600; Premium ₦750.
-- Onboarding **once per employee at initial implementation**: Basic ₦300; Standard ₦400; Premium ₦500. New hires later should not automatically incur repeat implementation charges.
-- Support per employee **per year**: Basic ₦500; Standard ₦600; Premium ₦700.
+- Licence per employee **per month**: Basic ₦1,200; Standard ₦1,500; Premium ₦1,700.
+- Optional ESS per employee **per month**: Basic ₦700; Standard ₦800; Premium ₦900.
+- Onboarding **once per employee at initial implementation**: Basic ₦500; Standard ₦500; Premium ₦500. New hires later should not automatically incur repeat implementation charges.
+- Support per employee **per year**: Basic ₦700; Standard ₦800; Premium ₦900.
 - Illustrative VAT 7.5% only when legally applicable and determined at invoice issuance. Billing frequency must be prominently disclosed.
 - Included HRIS & ESS entitlements are exported from `backend/src/services/subscriptionPricing.js`. Mandatory employee records, payslips and statutory access must not become inaccessible where applicable law or contract requires provision.
+
+## Approved commercial policy (pricing Version 2)
+- Full payment is required to commence deployment/implementation; target completion within one calendar month from confirmed payment date, subject to client readiness.
+- The first annual licence term starts on the verified payment date, **not** the production go-live date.
+- No complimentary grace period or free additional month applies.
+- Onboarding is ₦500 **per employee once** for every plan; excluded from ordinary renewals.
+- Renewals are annual from the confirmed payment anniversary; require payment for uninterrupted access. Any suspension policy requires separate contractual/legal approval and must protect statutory records and data export rights.
+- Manual payment verification currently changes invoice status only and **does not activate** a subscription, create entitlement periods, or enforce the licence calendar. Those capabilities remain release blockers.
 
 ## Proposed production workflow (requires implementation, QA and approval)
 1. Admin securely creates invitation with unique expiring signed token and emails recipient a portal link.
