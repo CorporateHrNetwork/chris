@@ -1116,7 +1116,6 @@ function EditUserForm({
                       fontSize: "16px",
                       boxShadow: "0 1px 3px rgba(15,23,42,0.10)",
                     }}
-                    }}
                   >
                     {showTemporaryPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
