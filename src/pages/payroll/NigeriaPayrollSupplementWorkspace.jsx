@@ -196,6 +196,18 @@ function ApprovalsWorkspace() {
     loadWorkflow(selectedRun?.id);
   }, [selectedRun?.id, loadWorkflow]);
 
+  const loadAuditReview = useCallback(async (runId) => {
+    if (!runId || !canAudit) return;
+    try {
+      setReviewLoading(true);
+      const result = await apiRequest(`/api/payroll/payslips?runId=${encodeURIComponent(runId)}`);
+      setReviewRows(Array.isArray(result?.data) ? result.data : (result?.data?.lines || []));
+    } catch (err) {
+      setError(err.message || "Unable to load the submitted payroll for audit review.");
+      setReviewRows([]);
+    } finally { setReviewLoading(false); }
+  }, [canAudit, setError]);
+
   useEffect(() => {
     if (canAudit && selectedRun?.id && ["PENDING_AUDIT", "AUDIT_PROCESSING"].includes(workflow?.stage)) {
       loadAuditReview(selectedRun.id);
@@ -210,18 +222,6 @@ function ApprovalsWorkspace() {
       await loadWorkflow(selectedRun.id);
     } catch (err) { setError(err.message); } finally { setBusy(""); }
   };
-
-  const loadAuditReview = useCallback(async (runId) => {
-    if (!runId || !canAudit) return;
-    try {
-      setReviewLoading(true);
-      const result = await apiRequest(`/api/payroll/payslips?runId=${encodeURIComponent(runId)}`);
-      setReviewRows(Array.isArray(result?.data) ? result.data : (result?.data?.lines || []));
-    } catch (err) {
-      setError(err.message || "Unable to load the submitted payroll for audit review.");
-      setReviewRows([]);
-    } finally { setReviewLoading(false); }
-  }, [canAudit, setError]);
 
   const exportAuditReview = async () => {
     if (!selectedRun?.id || !canAudit) return;
