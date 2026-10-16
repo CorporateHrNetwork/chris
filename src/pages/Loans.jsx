@@ -408,6 +408,7 @@ function Loans() {
   const dashboardMetrics = useMemo(() => {
     const financialLoans = loans.filter((loan) => ["ACTIVE", "PAUSED", "COMPLETED"].includes(loan.status));
     const active = loans.filter((loan) => loan.status === "ACTIVE");
+    const totalLoanAmount = financialLoans.reduce((sum, loan) => sum + Math.max(0, Number(loan.principalAmount || 0)), 0);
     const outstanding = loans.filter((loan) => ["ACTIVE", "PAUSED"].includes(loan.status))
       .reduce((sum, loan) => sum + Math.max(0, Number(loan.outstandingAmount || 0)), 0);
     const recovered = financialLoans.reduce((sum, loan) => {
@@ -415,7 +416,7 @@ function Loans() {
       const balance = Math.max(0, Number(loan.outstandingAmount || 0));
       return sum + Math.max(0, principal - balance);
     }, 0);
-    return { active: active.length, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
+    return { active: active.length, totalLoanAmount, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
   }, [loans]);
 
   const filteredLoans = useMemo(() => {
@@ -465,10 +466,11 @@ function Loans() {
         eyebrow="EMPLOYEE FINANCIAL SUPPORT"
         title="Loans Dashboard"
         description="ZERMATT loans are approved manually by the GM and paid outside CHRiS by Accounts. Authorized Branch HR records assigned-branch employees; Head HR manages the organization-wide register for payroll recovery and audit."
-        metricsColumns={4}
+        metricsColumns={5}
         metrics={[
           <DashboardCard key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
           <DashboardCard key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
+          <DashboardCard key="total-loan-amount" title="Total Loan Amount" value={loading ? "—" : money(dashboardMetrics.totalLoanAmount)} subtitle="Cumulative principal amount across active, paused and completed loans" icon={<FaFileInvoiceDollar />} tone="gold" />,
           <DashboardCard key="total-loan-balance" title="Total Loan Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Total outstanding balance across active and paused loans" icon={<FaBalanceScale />} tone="gold" />,
           <DashboardCard key="recovered" title="Principal Cleared" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Payroll/opening recoveries plus recorded external settlements" icon={<FaMoneyCheckAlt />} tone="green" />,
         ]}
