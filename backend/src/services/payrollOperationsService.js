@@ -112,8 +112,19 @@ function mapRun(row) {
 
 function mapRunLine(row) {
   if (!row) return null;
+  const details = typeof row.details === "string"
+    ? (() => { try { return JSON.parse(row.details); } catch { return {}; } })()
+    : (row.details || {});
+  const leaveAllowance = numberValue(
+    details?.leaveAllowance?.amount ??
+    details?.leaveAllowance?.value ??
+    details?.leaveAllowance?.total ??
+    row.leaveAllowance
+  ) || 0;
   return {
     ...row,
+    details,
+    leaveAllowance,
     baseSalary: numberValue(row.baseSalary) || 0,
     allowances: numberValue(row.allowances) || 0,
     deductions: numberValue(row.deductions) || 0,
