@@ -82,6 +82,7 @@ jobs:
             tests/zermattLeaveAttendanceBranchIntegrationAcceptance.test.js \
             tests/zermattLoanOriginationPayrollReopenAcceptance.test.js \
             tests/zermattLeaveAllowanceAcceptance.test.js \
+            tests/zermattLeaveAllowanceMonthlyRuntime.test.js \
             tests/zermattPayrollActivationRelease1Acceptance.test.js \
             tests/zermattPartTimePayrollExemptionAcceptance.test.js \
             tests/zermattReportingSecurityRelease1Acceptance.test.js \
