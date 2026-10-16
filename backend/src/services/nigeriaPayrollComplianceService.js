@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
 const { loadPeriodVariableItems, calculateVariableValue } = require("./zermattVariablePayrollService");
+const { applyZermattLeaveAllowanceToDraft } = require("./zermattLeaveAllowanceService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
@@ -679,7 +680,7 @@ async function getPeriod(client, organizationId, periodId) {
   };
 }
 
-async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodId, prismaClient = prisma }) {
+async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodId, freshRun = false, prismaClient = prisma }) {
   const period = await getPeriod(prismaClient, organizationId, periodId);
   if (period.status === "CLOSED") throw payrollError("PAYROLL_PERIOD_CLOSED", "Closed payroll periods cannot be recalculated.", 409);
   const policy = await getActivePolicy({ organizationId, asOf: period.periodEnd, prismaClient });
@@ -1042,7 +1043,8 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   if (existing[0] && !["DRAFT", "REJECTED"].includes(existing[0].status)) {
     throw payrollError("PAYROLL_RUN_NOT_RECALCULABLE", `Payroll run is ${existing[0].status} and cannot be recalculated.`, 409);
   }
-  const runId = existing[0]?.id || crypto.randomUUID();
+  const preservedRunIds = existing[0] && freshRun ? [existing[0].id] : [];
+  const runId = existing[0] && !freshRun ? existing[0].id : crypto.randomUUID();
 
   await prismaClient.$transaction(async (tx) => {
     if (existing[0]) {
@@ -1120,12 +1122,23 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     timeout: 30000,
   });
 
+  const leaveAllowance = organization.slug === "zermatt-liquor-limited"
+    ? await applyZermattLeaveAllowanceToDraft({
+        organizationId,
+        actorUserId,
+        runId,
+        periodId: period.id,
+        excludeApprovedRunIds: preservedRunIds,
+        prismaClient,
+      })
+    : null;
+
   await writeAudit(prismaClient, {
     organizationId,
     actorUserId,
     entityType: "PayrollRun",
     entityId: runId,
-    action: existing[0] ? "RECALCULATED_NIGERIA_DRAFT" : "CREATED_NIGERIA_DRAFT",
+    action: existing[0] && !freshRun ? "RECALCULATED_NIGERIA_DRAFT" : "CREATED_NIGERIA_DRAFT",
     newValue: {
       periodId: period.id,
       periodCode: period.code,
@@ -1133,8 +1146,16 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       policyCode: policy.code,
       policyVersion: policy.versionNumber,
       statutoryStatus: "CALCULATED_NIGERIA_2026",
+      freshRun: Boolean(freshRun),
+      preservedRunIds,
+      leaveAllowance: leaveAllowance ? {
+        beneficiaryCount: leaveAllowance.beneficiaryCount,
+        totalLeaveAllowance: leaveAllowance.totalLeaveAllowance,
+      } : null,
     },
-    reason: "Nigeria-compliant payroll draft calculation",
+    reason: freshRun
+      ? "Fresh Nigeria-compliant payroll draft calculation with Zermatt Leave Allowance and configured monthly components."
+      : "Nigeria-compliant payroll draft calculation",
   });
 
   const runRows = await prismaClient.$queryRawUnsafe(
@@ -1154,6 +1175,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     runId
   );
   return {
+    leaveAllowance,
     run: {
       ...runRows[0],
       periodStart: dateText(runRows[0].periodStart),
