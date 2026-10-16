@@ -216,6 +216,10 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         : null;
       const entitlementKey = eligibility.entitlementYear ? `${row.employeeId}:${eligibility.entitlementYear}` : null;
       const amount = entitlementKey && !alreadyPaid.has(entitlementKey) ? round2(calculation?.leaveAllowance || 0) : 0;
+      // The allowance application is intentionally idempotent. If this service is
+      // invoked twice for the same draft, retain an allowance already written to
+      // the line instead of subtracting it from net pay on the second pass.
+      const effectiveAmount = amount > 0 ? amount : previousAllowance;
 
       const benefitEarnings = Array.isArray(details.benefitEarnings)
         ? details.benefitEarnings.filter((item) => item?.code !== BENEFIT_CODE)
@@ -233,15 +237,15 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
       };
       delete nextDetails.leaveAllowance;
 
-      if (amount > 0) {
+      if (effectiveAmount > 0) {
         const leaveAllowance = {
           code: BENEFIT_CODE,
           name: "Leave Allowance",
           module: "BENEFITS",
           benefitType: "LEAVE_ALLOWANCE",
           employmentType: row.employmentType,
-          amount,
-          value: amount,
+          amount: effectiveAmount,
+          value: effectiveAmount,
           monthlyGrossSalary: calculation.monthlyGrossSalary,
           monthlyBasicSalary: calculation.monthlyBasicSalary,
           annualBasicSalary: calculation.annualBasicSalary,
@@ -269,7 +273,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         organizationId,
         runId,
         row.id,
-        round2(baseNet + amount),
+        round2(baseNet + effectiveAmount),
         JSON.stringify(nextDetails)
       );
     }
