@@ -1601,6 +1601,7 @@ router.post("/runs/draft", requirePermission("payroll.process"), requireZermattH
           organizationId: req.auth.organizationId,
           actorUserId: req.auth.userId,
           periodId: req.body?.periodId,
+          freshRun: req.body?.freshRun === true,
         })
       : await payroll.executeDraftPayroll({
           organizationId: req.auth.organizationId,
