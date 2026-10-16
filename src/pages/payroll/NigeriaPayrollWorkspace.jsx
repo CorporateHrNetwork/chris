@@ -233,22 +233,43 @@ function ExecuteNigeriaWorkspace() {
 }
 
 function NigeriaRunLines({ rows }) {
+  const componentKeys = (items, prefix) => [...new Set((items || [])
+    .map((item) => String(item?.name || item?.code || "").trim())
+    .filter(Boolean))];
+  const allowances = (rows || []).flatMap((row) => row.details?.allowanceItems || row.details?.customAllowances || []);
+  const deductions = (rows || []).flatMap((row) => row.details?.deductionItems || row.details?.customDeductions || []);
+  const allowanceNames = componentKeys(allowances, "ALW");
+  const deductionNames = componentKeys(deductions, "DED");
+  const columns = [
+    "Employee", "Days", "Basic", "Housing", "Transport", "Meal", "Medical", "Utility",
+    "Leave Allowance", ...allowanceNames.map((name) => `Allowance: ${name}`),
+    "PAYE", "Pension", ...deductionNames.map((name) => `Deduction: ${name}`),
+    "Advance", "Gross", "Net"
+  ];
+  const valueFor = (items, name) => {
+    const item = (items || []).find((entry) => String(entry?.name || entry?.code || "").trim() === name);
+    return Number(item?.value ?? item?.amount ?? 0);
+  };
   return (
-    <DataTable columns={["Employee", "Days", "Basic", "Housing", "Transport", "Meal", "Medical", "Utility", "Other Allow.", "PAYE", "Pension", "Other Ded.", "Advance", "Gross", "Net"]}>
+    <DataTable columns={columns}>
       {(rows || []).map((row) => {
         const details = row.details || {};
         const structure = details.salaryStructure || {};
         const statutory = details.statutory || {};
-        const otherAllow = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-        const otherDed = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+        const allowanceItems = details.allowanceItems || details.customAllowances || [];
+        const deductionItems = details.deductionItems || details.customDeductions || [];
+        const leaveAllowance = Number(details.leaveAllowance?.amount ?? details.leaveAllowance?.value ?? 0);
         return (
           <tr key={row.id}>
             <Td strong>{row.employeeNumber}</Td>
             <Td>{details.attendance ? `${details.attendance.payableDays}/${details.attendance.standardDays}` : "—"}</Td>
             <Td>{money(structure.basic, row.currency)}</Td><Td>{money(structure.housing, row.currency)}</Td><Td>{money(structure.transport, row.currency)}</Td>
             <Td>{money(structure.meal, row.currency)}</Td><Td>{money(structure.medical, row.currency)}</Td><Td>{money(structure.utility, row.currency)}</Td>
-            <Td>{money(otherAllow, row.currency)}</Td><Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td>
-            <Td>{money(otherDed, row.currency)}</Td><Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.grossPay, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
+            <Td strong={leaveAllowance > 0}>{leaveAllowance > 0 ? money(leaveAllowance, row.currency) : "—"}</Td>
+            {allowanceNames.map((name) => <Td key={`allow-${name}`}>{money(valueFor(allowanceItems, name), row.currency)}</Td>)}
+            <Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td>
+            {deductionNames.map((name) => <Td key={`ded-${name}`}>{money(valueFor(deductionItems, name), row.currency)}</Td>)}
+            <Td>{money(row.advanceRecovery, row.currency)}</Td><Td>{money(row.grossPay, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
           </tr>
         );
       })}
