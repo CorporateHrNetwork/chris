@@ -1,5 +1,46 @@
 const prisma = require("../config/prisma");
-const { calculateStructure, getActivePolicy } = require("./nigeriaPayrollComplianceService");
+
+function calculateStructure(gross, structure) {
+  const entries = Object.entries(structure || {});
+  const totalPercent = round2(entries.reduce((sum, [, rate]) => sum + Number(rate || 0), 0));
+  if (Math.abs(totalPercent - 100) > 0.001) {
+    const error = new Error(`Payroll salary structure must total 100%; configured total is ${totalPercent}%.`);
+    error.code = "INVALID_SALARY_STRUCTURE";
+    error.statusCode = 409;
+    throw error;
+  }
+  const amounts = {};
+  let assigned = 0;
+  entries.forEach(([key, rate], index) => {
+    const value = index === entries.length - 1 ? round2(gross - assigned) : round2(gross * Number(rate || 0) / 100);
+    amounts[key] = value;
+    assigned = round2(assigned + value);
+  });
+  return amounts;
+}
+
+function text(value) {
+  return String(value ?? "").trim();
+}
+
+async function getActivePolicy({ organizationId, asOf, prismaClient = prisma }) {
+  const effectiveDate = text(asOf) || new Date().toISOString().slice(0, 10);
+  const rows = await prismaClient.$queryRawUnsafe(
+    \`SELECT *
+       FROM "payroll_policy_versions"
+      WHERE "organizationId"=$1
+        AND "status"='ACTIVE'
+        AND "effectiveFrom" <= $2::date
+        AND ("effectiveTo" IS NULL OR "effectiveTo" >= $2::date)
+      ORDER BY "effectiveFrom" DESC, "versionNumber" DESC
+      LIMIT 1\`,
+    organizationId,
+    effectiveDate
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { ...row, salaryStructure: jsonValue(row.salaryStructure, {}) };
+}
 
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const BENEFIT_CODE = "ZERMATT_LEAVE_ALLOWANCE";
