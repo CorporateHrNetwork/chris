@@ -1774,10 +1774,12 @@ function payrollWorkbookModel(lines, employeeMeta) {
     for (const key of Object.keys(details.salaryStructure || {})) {
       if (String(key).toLowerCase() !== "basic") structureKeys.add(key);
     }
-    for (const item of details.customAllowances || []) {
+    const allowanceItems = details.allowanceItems || details.customAllowances || [];
+    const deductionItems = details.deductionItems || details.customDeductions || [];
+    for (const item of allowanceItems) {
       allowanceLabels.set(payrollComponentKey(item, "ALW"), payrollComponentLabel(item, "Allowance"));
     }
-    for (const item of details.customDeductions || []) {
+    for (const item of deductionItems) {
       deductionLabels.set(payrollComponentKey(item, "DED"), payrollComponentLabel(item, "Deduction"));
     }
   }
@@ -1841,8 +1843,10 @@ function payrollWorkbookModel(lines, employeeMeta) {
         meta.branchCode ||
         "",
     };
-    const allowanceValues = new Map((details.customAllowances || []).map((item) => [payrollComponentKey(item, "ALW"), Number(item.value || 0)]));
-    const deductionValues = new Map((details.customDeductions || []).map((item) => [payrollComponentKey(item, "DED"), Number(item.value || 0)]));
+    const allowanceItems = details.allowanceItems || details.customAllowances || [];
+    const deductionItems = details.deductionItems || details.customDeductions || [];
+    const allowanceValues = new Map(allowanceItems.map((item) => [payrollComponentKey(item, "ALW"), Number(item.value ?? item.amount ?? 0)]));
+    const deductionValues = new Map(deductionItems.map((item) => [payrollComponentKey(item, "DED"), Number(item.value ?? item.amount ?? 0)]));
     const employeePension = Number(statutory.employeePension || 0);
     const employerPension = Number(statutory.employerPension || 0);
 
