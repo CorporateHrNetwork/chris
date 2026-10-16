@@ -91,7 +91,7 @@ DECLARE
   v_count INTEGER;
 BEGIN
   FOR v_run IN
-    SELECT pr."id",pr."organizationId"
+    SELECT pr."id",pr."organizationId",pr."netPreviewTotal"
       FROM "payroll_runs" pr
       JOIN "organizations" o ON o."id"=pr."organizationId"
      WHERE o."slug"='zermatt-liquor-limited' AND pr."status"='DRAFT'
@@ -109,16 +109,16 @@ BEGIN
            GREATEST(0, COALESCE(pl."grossPay",0)-COALESCE(pl."deductions",0)-COALESCE(pl."advanceRecovery",0)-COALESCE(pl."loanRecovery",0))
            + GREATEST(0, COALESCE(NULLIF(pl."details"->'leaveAllowance'->>'amount','')::NUMERIC,0));
     GET DIAGNOSTICS v_count = ROW_COUNT;
-    IF v_count > 0 THEN
-      SELECT COALESCE(SUM("netPreview"),0) INTO v_after
-        FROM "payroll_run_lines" WHERE "organizationId"=v_run."organizationId" AND "runId"=v_run."id";
+    SELECT COALESCE(SUM("netPreview"),0) INTO v_after
+      FROM "payroll_run_lines" WHERE "organizationId"=v_run."organizationId" AND "runId"=v_run."id";
+    IF v_count > 0 OR v_run."netPreviewTotal" IS DISTINCT FROM v_after THEN
       UPDATE "payroll_runs" SET "netPreviewTotal"=v_after,"updatedAt"=CURRENT_TIMESTAMP
         WHERE "organizationId"=v_run."organizationId" AND "id"=v_run."id" AND "status"='DRAFT';
       INSERT INTO "organization_audits"
         ("id","organizationId","entityType","entityId","action","previousValue","newValue","reason","createdAt")
       VALUES
         (gen_random_uuid()::text,v_run."organizationId",'PayrollRun',v_run."id",'ZERMATT_LEAVE_ALLOWANCE_NET_PAY_REPAIRED',
-         jsonb_build_object('netPreviewTotal',v_before),
+         jsonb_build_object('netPreviewTotal',v_run."netPreviewTotal",'lineNetTotal',v_before),
          jsonb_build_object('netPreviewTotal',v_after,'repairedLines',v_count,'allowanceIncludedOnce',true),
          'Include saved Zermatt Leave Allowance in draft net salary after deductions and recoveries; preserve approved payroll.',CURRENT_TIMESTAMP);
     END IF;
