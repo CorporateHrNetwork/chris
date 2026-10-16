@@ -310,7 +310,7 @@ async function buildPayslipEmail(row) {
     ...customDeductions.map(componentRow),
     ["Salary Advance Recovery", row.advanceRecovery],
     ["Loan Recovery", row.loanRecovery],
-    ...(leaveAllowance > 0 ? [["Leave Allowance · After Tax / Non-taxable", leaveAllowance, true]] : []),
+    ...(leaveAllowance > 0 ? [["Leave Allowance", leaveAllowance, true]] : []),
     ["Net Pay", row.netPreview, true],
   ];
 

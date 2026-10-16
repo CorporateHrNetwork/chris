@@ -260,7 +260,7 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. Before approval, export the Draft Review Pack for external HR investigation/verification; it is clearly marked NOT FOR PAYOUT. After CHRiS approval, export the Approved Payout Pack for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
+        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. Before approval, export the Draft Review Pack for external HR investigation/verification; it is clearly marked NOT FOR PAYOUT. After CHRiS approval, export the Approved Payout Pack for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is included in the employee’s Net Salary.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
@@ -619,7 +619,7 @@ function PayrollLines({ rows, onViewPayslip }) {
                 {deductionColumns.map((item) => <Td key={`d-${item.id}`}>{money(deductionValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(row.advanceRecovery, row.currency)}</Td>
                 <Td>{money(row.loanRecovery, row.currency)}</Td>
-                <Td>{leaveAllowance != null && leaveAllowance > 0 ? `${money(leaveAllowance, row.currency)} · After tax` : ""}</Td>
+                <Td>{leaveAllowance != null && leaveAllowance > 0 ? money(leaveAllowance, row.currency) : ""}</Td>
                 <Td>{money(row.grossPay, row.currency)}</Td>
                 <Td strong>{money(row.netPreview, row.currency)}</Td>
                 <Td><button type="button" style={smallButton} onClick={() => onViewPayslip?.(row)}>{row.runStatus === "APPROVED" ? "View Payslip" : "View Preview"}</button></Td>
@@ -869,7 +869,7 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
             {customDeductions.map((item) => <PayslipLedgerRow key={`deduction-${payrollLineComponentKey(item)}`} label={payrollLineComponentLabel(item)} value={money(item.value, row.currency)} />)}
             <PayslipLedgerRow label="Salary Advance Recovery" value={money(row.advanceRecovery, row.currency)} />
             <PayslipLedgerRow label="Loan Recovery" value={money(row.loanRecovery, row.currency)} />
-            {leaveAllowance > 0 && <PayslipLedgerRow label="Leave Allowance · After Tax / Non-taxable" value={money(leaveAllowance, row.currency)} strong />}
+            {leaveAllowance > 0 && <PayslipLedgerRow label="Leave Allowance" value={money(leaveAllowance, row.currency)} strong />}
             <PayslipLedgerRow label="Net Pay" value={money(row.netPreview, row.currency)} net />
           </tbody>
         </table>
@@ -948,7 +948,7 @@ async function printPayslip(row, organization = {}) {
     ...customDeductions.map((item) => [payrollLineComponentLabel(item), money(item.value, row.currency)]),
     ["Salary Advance Recovery", money(row.advanceRecovery, row.currency)],
     ["Loan Recovery", money(row.loanRecovery, row.currency)],
-    ...(leaveAllowance > 0 ? [["Leave Allowance · After Tax / Non-taxable", money(leaveAllowance, row.currency), true]] : []),
+    ...(leaveAllowance > 0 ? [["Leave Allowance", money(leaveAllowance, row.currency), true]] : []),
     ["Net Pay", money(row.netPreview, row.currency), true],
   ];
   const detailItems = [
