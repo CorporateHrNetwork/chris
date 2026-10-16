@@ -106,20 +106,22 @@ async function getReferenceSalary({ organizationId, employeeId, asOfDate, prisma
   return rows[0] || null;
 }
 
-async function paidEntitlementKeys(client, organizationId, runId) {
+async function paidEntitlementKeys(client, organizationId, runId, excludeRunIds = []) {
+  const excluded = [runId, ...excludeRunIds].filter(Boolean);
   const rows = await client.$queryRawUnsafe(
     `SELECT pl."employeeId", pl."details"->'leaveAllowance'->>'entitlementYear' AS "entitlementYear"
        FROM "payroll_run_lines" pl
        JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
-      WHERE pl."organizationId"=$1 AND pr."status"='APPROVED' AND pl."runId"<>$2
+      WHERE pl."organizationId"=$1 AND pr."status"='APPROVED'
+        AND NOT (pl."runId" = ANY($2::text[]))
         AND pl."details" ? 'leaveAllowance'`,
     organizationId,
-    runId
+    excluded
   );
   return new Set(rows.map((row) => `${row.employeeId}:${row.entitlementYear}`));
 }
 
-async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, runId, periodId, prismaClient = prisma }) {
+async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, runId, periodId, excludeApprovedRunIds = [], prismaClient = prisma }) {
   const organization = await assertZermatt(prismaClient, organizationId);
   const periodRows = await prismaClient.$queryRawUnsafe(
     `SELECT "id","code","periodStart","periodEnd","payDate" FROM "payroll_periods"
@@ -150,7 +152,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
     organizationId,
     runId
   );
-  const alreadyPaid = await paidEntitlementKeys(prismaClient, organizationId, runId);
+  const alreadyPaid = await paidEntitlementKeys(prismaClient, organizationId, runId, excludeApprovedRunIds);
   const beneficiaries = [];
 
   await prismaClient.$transaction(async (tx) => {
