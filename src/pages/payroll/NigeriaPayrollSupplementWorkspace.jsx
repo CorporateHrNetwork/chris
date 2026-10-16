@@ -401,13 +401,27 @@ function ApprovalsWorkspace() {
                 <button style={secondaryButton} disabled={reviewLoading} onClick={() => loadAuditReview(selectedRun.id)}>{reviewLoading ? "Loading Payroll…" : canGM ? "View / Refresh Auditor-Approved Payroll" : "View / Refresh Submitted Payroll"}</button>
                 <button style={secondaryButton} disabled={busy === "audit-export"} onClick={exportAuditReview}>{busy === "audit-export" ? "Exporting…" : canGM ? "Export Auditor-Approved Payroll for Private Review" : "Export Review to Excel"}</button>
               </div>
-              {reviewRows.length > 0 && <DataTable columns={["Employee No", "Employee", "Basic", "Gross", "PAYE", "Pension", "Other Deductions", "Net"]}>
+              {reviewRows.length > 0 && <DataTable columns={["Employee No", "Employee", "Basic", "Gross", "Leave Allowance", "Other Allowances", "PAYE", "Pension", "Named Deductions", "Net"]}>
                 {reviewRows.map((row) => {
                   const details = row.details || {};
                   const statutory = details.statutory || {};
-                  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+                  const leaveAllowance = Number(details.leaveAllowance?.amount || details.leaveAllowance?.value || 0);
+                  const allowanceItems = (details.allowanceItems || details.customAllowances || []).filter((item) => Number(item.value || item.amount || 0) !== 0);
+                  const deductionItems = (details.deductionItems || details.customDeductions || []).filter((item) => Number(item.value || item.amount || 0) !== 0);
+                  const namedItems = (items) => items.length
+                    ? items.map((item) => `${item.name || item.code || "Configured component"}: ${money(item.value ?? item.amount, row.currency)}`).join(" • ")
+                    : "—";
                   return <tr key={row.id}>
-                    <Td strong>{row.employeeNumber || "—"}</Td><Td>{row.employeeName || "—"}</Td><Td>{money(row.baseSalary, row.currency)}</Td><Td>{money(row.grossPay, row.currency)}</Td><Td>{money(statutory.payeTax, row.currency)}</Td><Td>{money(statutory.employeePension, row.currency)}</Td><Td>{money(customDeductions, row.currency)}</Td><Td strong>{money(row.netPreview, row.currency)}</Td>
+                    <Td strong>{row.employeeNumber || "—"}</Td>
+                    <Td>{row.employeeName || "—"}</Td>
+                    <Td>{money(row.baseSalary, row.currency)}</Td>
+                    <Td>{money(row.grossPay, row.currency)}</Td>
+                    <Td strong={leaveAllowance > 0}>{leaveAllowance > 0 ? money(leaveAllowance, row.currency) : "—"}</Td>
+                    <Td>{namedItems(allowanceItems)}</Td>
+                    <Td>{money(statutory.payeTax, row.currency)}</Td>
+                    <Td>{money(statutory.employeePension, row.currency)}</Td>
+                    <Td>{namedItems(deductionItems)}</Td>
+                    <Td strong>{money(row.netPreview, row.currency)}</Td>
                   </tr>;
                 })}
               </DataTable>}
