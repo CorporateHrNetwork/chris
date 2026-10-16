@@ -469,7 +469,7 @@ function Loans() {
         metrics={[
           <DashboardCard key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
           <DashboardCard key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
-          <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Remaining payroll-recoverable balance" icon={<FaBalanceScale />} tone="gold" />,
+          <DashboardCard key="total-loan-balance" title="Total Loan Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Total outstanding balance across active and paused loans" icon={<FaBalanceScale />} tone="gold" />,
           <DashboardCard key="recovered" title="Principal Cleared" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Payroll/opening recoveries plus recorded external settlements" icon={<FaMoneyCheckAlt />} tone="green" />,
         ]}
         analytics={<AnalyticsPanel title="Zermatt Loan Control" subtitle="Manual approval outside CHRiS; payroll recovery inside CHRiS." icon={<FaChartLine />}><RecentActivityList items={activity} /></AnalyticsPanel>}
