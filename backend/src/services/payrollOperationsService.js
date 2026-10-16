@@ -166,11 +166,19 @@ async function writeAudit(prismaClient, { organizationId, actorUserId, entityTyp
 }
 
 async function listPeriods({ organizationId, prismaClient = prisma }) {
+  // Operational payroll periods are unique by calendar month. Legacy data may
+  // contain duplicate period records (for example OCT-2026 and 2026-10).
+  // Keep the canonical YYYY-MM period when present, otherwise keep the newest
+  // period record for that month. Historical database rows are preserved.
   const rows = await prismaClient.$queryRawUnsafe(
-    `SELECT "id", "code", "name", "periodStart", "periodEnd", "payDate", "status", "createdAt", "updatedAt"
+    `SELECT DISTINCT ON (date_trunc('month', "periodStart"))
+            "id", "code", "name", "periodStart", "periodEnd", "payDate", "status", "createdAt", "updatedAt"
        FROM "payroll_periods"
       WHERE "organizationId" = $1
-      ORDER BY "periodStart" DESC, "createdAt" DESC`,
+      ORDER BY date_trunc('month', "periodStart") DESC,
+               CASE WHEN "code" = to_char("periodStart", 'YYYY-MM') THEN 0 ELSE 1 END,
+               "updatedAt" DESC,
+               "createdAt" DESC`,
     organizationId
   );
   return rows.map(mapPeriod);
@@ -616,14 +624,21 @@ function componentValue(component, grossBase) {
 }
 
 async function listRuns({ organizationId, prismaClient = prisma }) {
+  // The operational list must expose one authoritative payroll run per
+  // calendar month. Older duplicate period/run records remain in the database
+  // for audit/recovery, but must not appear as a second active payroll.
   const rows = await prismaClient.$queryRawUnsafe(
-    `SELECT pr."id",pr."periodId",pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
+    `SELECT DISTINCT ON (date_trunc('month', pp."periodStart"))
+            pr."id",pr."periodId",pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
             pr."status",pr."employeeCount",pr."grossTotal",pr."deductionTotal",pr."netPreviewTotal",pr."statutoryStatus",
             pr."submittedAt",pr."approvedAt",pr."createdAt",pr."updatedAt"
        FROM "payroll_runs" pr
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
       WHERE pr."organizationId"=$1
-      ORDER BY pp."periodStart" DESC, pr."createdAt" DESC`,
+      ORDER BY date_trunc('month', pp."periodStart") DESC,
+               CASE WHEN pp."code" = to_char(pp."periodStart", 'YYYY-MM') THEN 0 ELSE 1 END,
+               pr."updatedAt" DESC,
+               pr."createdAt" DESC`,
     organizationId
   );
   return rows.map((row) => ({ ...mapRun(row), ...mapPeriod(row) }));
