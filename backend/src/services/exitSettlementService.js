@@ -1,6 +1,6 @@
 const prisma = require("../config/prisma");
 const { getEosbStatement } = require("./eosbService");
-const { calculateLeaveAllowance } = require("./zermattLeaveAllowanceService");
+const { calculateLeaveAllowance, ZERMATT_SLUG, ELIGIBLE_EMPLOYMENT_TYPE } = require("./zermattLeaveAllowanceService");
 const { getActivePolicy } = require("./nigeriaPayrollComplianceService");
 
 const SYSTEM_VARIABLE_CODES = {
@@ -263,7 +263,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   const monthlyGross = money(rate.amount);
   const dayRate = money(monthlyGross / 26);
   const hourRate = money(monthlyGross / 208);
-  const [period, eosb, balances, policy] = await Promise.all([
+  const [period, eosb, balances, policy, organization] = await Promise.all([
     exitPayrollPeriod(client, organizationId, lastWorkingDay),
     getEosbStatement({
       organizationId,
@@ -277,6 +277,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
       asOf: dateText(lastWorkingDay),
       prismaClient: client,
     }),
+    client.organization.findUnique({ where: { id: organizationId }, select: { slug: true } }),
   ]);
 
   const [approvedLine, variableInputs] = await Promise.all([
@@ -290,7 +291,8 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   let fullLeaveAllowance = 0;
   let leaveAllowanceCalculation = null;
   let leaveAllowanceProration = { factor: 0, accruedMonths: 0, serviceYearMonths: 12, serviceYearStart: null, serviceYearEnd: null };
-  if (policy) {
+  const leaveAllowanceEligible = organization?.slug !== ZERMATT_SLUG || exit.employee.employmentType === ELIGIBLE_EMPLOYMENT_TYPE;
+  if (policy && leaveAllowanceEligible) {
     leaveAllowanceCalculation = calculateLeaveAllowance({
       monthlyGross,
       salaryStructure: policy.salaryStructure,
@@ -348,6 +350,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
       },
       annualLeaveAllowance: {
         amount: annualLeaveAllowance,
+        eligible: leaveAllowanceEligible,
         fullAnnualAmount: fullLeaveAllowance,
         prorationFactor: leaveAllowanceProration.factor,
         accruedMonths: leaveAllowanceProration.accruedMonths,

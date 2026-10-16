@@ -317,7 +317,7 @@ router.post(
         message: !settings.enabled
           ? "Draft payroll calculated. Zermatt Leave Allowance reference processing is disabled in Benefits settings."
           : leaveAllowance.beneficiaryCount
-            ? `Draft payroll calculated. ${leaveAllowance.beneficiaryCount} employee(s) received referenced Zermatt Leave Allowance for this period.`
+            ? `Draft payroll calculated. ${leaveAllowance.beneficiaryCount} employee(s) received Zermatt Leave Allowance calculated from current Basic Salary for this period.`
             : "Draft payroll calculated. No imported Zermatt Leave Allowance reference applies to this period.",
         data: {
           run,

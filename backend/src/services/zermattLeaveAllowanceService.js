@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { getSettings } = require("./zermattLeaveAllowanceSettingsService");
 
 function calculateStructure(gross, structure) {
   const entries = Object.entries(structure || {});
@@ -185,18 +186,30 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
     throw error;
   }
 
-  const lineRows = await prismaClient.$queryRawUnsafe(
-    `SELECT pl.*,e."hireDate",e."locationId",e."status" AS "employeeStatus",e."employmentType"
-       FROM "payroll_run_lines" pl
-       JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
-      WHERE pl."organizationId"=$1 AND pl."runId"=$2 ORDER BY pl."employeeNumber"`,
-    organizationId,
-    runId
-  );
-  const alreadyPaid = await paidEntitlementKeys(prismaClient, organizationId, runId, excludeApprovedRunIds);
+  const settings = await getSettings(prismaClient, organizationId);
   const beneficiaries = [];
 
   await prismaClient.$transaction(async (tx) => {
+    const runs = await tx.$queryRawUnsafe(
+      `SELECT "status","periodId" FROM "payroll_runs"
+        WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE`,
+      organizationId, runId
+    );
+    if (runs[0]?.status !== "DRAFT" || runs[0]?.periodId !== periodId) {
+      const error = new Error("Leave Allowance can only update a draft in the selected payroll period.");
+      error.code = "LEAVE_ALLOWANCE_DRAFT_REQUIRED";
+      error.statusCode = 409;
+      throw error;
+    }
+    const lineRows = await tx.$queryRawUnsafe(
+      `SELECT pl.*,e."hireDate",e."locationId",e."status" AS "employeeStatus",e."employmentType"
+         FROM "payroll_run_lines" pl
+         JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
+        WHERE pl."organizationId"=$1 AND pl."runId"=$2 ORDER BY pl."employeeNumber"`,
+      organizationId,
+      runId
+    );
+    const alreadyPaid = await paidEntitlementKeys(tx, organizationId, runId, excludeApprovedRunIds);
     for (const row of lineRows) {
       const details = jsonValue(row.details, {});
       const previousAllowance = round2(details.leaveAllowance?.amount || details.leaveAllowance?.value || 0);
@@ -215,11 +228,10 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
           })
         : null;
       const entitlementKey = eligibility.entitlementYear ? `${row.employeeId}:${eligibility.entitlementYear}` : null;
-      const amount = entitlementKey && !alreadyPaid.has(entitlementKey) ? round2(calculation?.leaveAllowance || 0) : 0;
-      // The allowance application is intentionally idempotent. If this service is
-      // invoked twice for the same draft, retain an allowance already written to
-      // the line instead of subtracting it from net pay on the second pass.
-      const effectiveAmount = amount > 0 ? amount : previousAllowance;
+      const amount = settings.enabled && entitlementKey && !alreadyPaid.has(entitlementKey) ? round2(calculation?.leaveAllowance || 0) : 0;
+      // Remove the previous value before applying the newly calculated amount.
+      // Repeating a calculation is stable; changed eligibility/payment removes stale benefits.
+      const effectiveAmount = amount;
 
       const benefitEarnings = Array.isArray(details.benefitEarnings)
         ? details.benefitEarnings.filter((item) => item?.code !== BENEFIT_CODE)
