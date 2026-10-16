@@ -557,6 +557,10 @@ function payrollComponentColumns(rows = [], key) {
 }
 
 function PayrollLines({ rows, onViewPayslip }) {
+  const [leaveRecipientsOnly, setLeaveRecipientsOnly] = useState(false);
+  const leaveRecipients = (rows || []).filter((row) => Number(row.details?.leaveAllowance?.amount || 0) > 0);
+  const leaveTotal = leaveRecipients.reduce((total, row) => total + Number(row.details.leaveAllowance.amount), 0);
+  const tableRows = leaveRecipientsOnly ? leaveRecipients : (rows || []);
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
   const allowanceColumns = payrollComponentColumns(rows, "customAllowances");
   const deductionColumns = payrollComponentColumns(rows, "customDeductions");
@@ -568,8 +572,19 @@ function PayrollLines({ rows, onViewPayslip }) {
     "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip",
   ];
   return (
-    <EmployeeBatchSelector
-      rows={rows || []}
+    <>
+      <div style={branchViewBar}>
+        <div role="status">
+          <strong>Leave Allowance: {leaveRecipients.length} recipient(s) · {money(leaveTotal, rows?.[0]?.currency)}</strong>
+          <div style={branchViewText}>Totals cover all pages in this branch view. Only eligible anniversary-month employees have an amount; other rows remain blank.</div>
+        </div>
+        <button type="button" style={leaveRecipientsOnly ? activeBranchButton : branchButton} aria-pressed={leaveRecipientsOnly} onClick={() => setLeaveRecipientsOnly((current) => !current)}>
+          {leaveRecipientsOnly ? "Show all payroll employees" : "Show leave allowance recipients"}
+        </button>
+      </div>
+      <EmployeeBatchSelector
+      key={leaveRecipientsOnly ? "leave-recipients" : "all-payroll"}
+      rows={tableRows}
       getId={(row) => row.id}
       getSearchText={getSearchText}
       searchPlaceholder="Search employee number, name, employment type or cost centre"
@@ -614,6 +629,7 @@ function PayrollLines({ rows, onViewPayslip }) {
         </DataTable>
       )}
     </EmployeeBatchSelector>
+    </>
   );
 }
 
