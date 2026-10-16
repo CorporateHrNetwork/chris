@@ -27,7 +27,8 @@ test("bulk ESS provisioning never overwrites existing users and returns expiring
   assert.ok(users.includes("72 * 60 * 60 * 1000"));
   assert.ok(users.includes("activationUrl"));
   assert.ok(users.includes("ESS_USER_PROVISIONED"));
-  assert.ok(reset.includes('new URLSearchParams(location.search).get("token")'));
+  assert.ok(reset.includes('new URLSearchParams(location.search)'));
+  assert.ok(reset.includes('searchParams.get("token")'));
   assert.ok(settings.includes("Provision Zermatt ESS Accounts"));
   assert.ok(settings.includes("CHRiS-Zermatt-ESS-Activation-Links"));
 });
