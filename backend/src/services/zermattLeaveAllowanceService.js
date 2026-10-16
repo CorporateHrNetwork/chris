@@ -26,14 +26,14 @@ function text(value) {
 async function getActivePolicy({ organizationId, asOf, prismaClient = prisma }) {
   const effectiveDate = text(asOf) || new Date().toISOString().slice(0, 10);
   const rows = await prismaClient.$queryRawUnsafe(
-    \`SELECT *
+    `SELECT *
        FROM "payroll_policy_versions"
       WHERE "organizationId"=$1
         AND "status"='ACTIVE'
         AND "effectiveFrom" <= $2::date
         AND ("effectiveTo" IS NULL OR "effectiveTo" >= $2::date)
       ORDER BY "effectiveFrom" DESC, "versionNumber" DESC
-      LIMIT 1\`,
+      LIMIT 1`,
     organizationId,
     effectiveDate
   );
