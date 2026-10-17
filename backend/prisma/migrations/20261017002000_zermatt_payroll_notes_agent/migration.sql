@@ -41,4 +41,12 @@ CREATE TABLE "chris_payroll_note_salary_overrides" (
 ALTER TABLE "chris_payroll_note_events" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "chris_payroll_note_inbox" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "chris_payroll_note_salary_overrides" ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON "chris_payroll_note_events", "chris_payroll_note_inbox", "chris_payroll_note_salary_overrides" FROM anon, authenticated;
+REVOKE ALL ON "chris_payroll_note_events", "chris_payroll_note_inbox", "chris_payroll_note_salary_overrides" FROM PUBLIC;
+DO $$
+DECLARE client_role TEXT;
+BEGIN
+  FOR client_role IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated') LOOP
+    EXECUTE format('REVOKE ALL ON "chris_payroll_note_events", "chris_payroll_note_inbox", "chris_payroll_note_salary_overrides" FROM %I', client_role);
+  END LOOP;
+END;
+$$;
