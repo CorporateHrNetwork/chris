@@ -75,6 +75,9 @@ model Organization {
   statutoryRemittanceBatches         StatutoryRemittanceBatch[]
   statutoryLifecycleEvents           StatutoryLifecycleEvent[]
   exitSettlements                    ExitSettlement[]
+  billingSubscriptions              BillingSubscription[]
+  billingInvoices                   BillingInvoice[]
+  billingPayments                   BillingPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2309,4 +2312,74 @@ model ExitSettlement {
   @@unique([organizationId, exitProcessId])
   @@index([organizationId, employeeId, status])
   @@map("exit_settlements")
+}
+
+
+model BillingSubscription {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  planCode           String
+  status             String   @default("DRAFT")
+  contractedSeats    Int
+  complimentarySeats Int      @default(0)
+  annualAmountMinor  BigInt
+  currency           String   @default("NGN")
+  startsAt           DateTime?
+  endsAt             DateTime?
+  graceDays          Int      @default(0)
+  contractReference  String?
+  terms              Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoices     BillingInvoice[]
+
+  @@index([organizationId, status])
+  @@map("billing_subscriptions")
+}
+
+model BillingInvoice {
+  id             String   @id @default(uuid())
+  organizationId String
+  subscriptionId String?
+  invoiceNumber  String   @unique
+  status         String   @default("DRAFT")
+  currency       String   @default("NGN")
+  subtotalMinor  BigInt
+  vatMinor       BigInt   @default(0)
+  totalMinor     BigInt
+  dueAt          DateTime?
+  issuedAt       DateTime?
+  lineItems      Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription BillingSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  payments     BillingPayment[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("billing_invoices")
+}
+
+model BillingPayment {
+  id             String   @id @default(uuid())
+  organizationId String
+  invoiceId      String
+  amountMinor    BigInt
+  currency       String   @default("NGN")
+  status         String   @default("PENDING")
+  provider       String?
+  providerRef    String?
+  receivedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice      BillingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerRef])
+  @@index([organizationId, invoiceId])
+  @@map("billing_payments")
 }
