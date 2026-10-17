@@ -11,6 +11,7 @@ import RecentEmployees from "../components/dashboard/RecentEmployees";
 import Announcements from "../components/dashboard/Announcements";
 import QuickActions from "../components/dashboard/QuickActions";
 import PayrollSummary from "../components/dashboard/PayrollSummary";
+import PayrollNotesInbox from "../components/dashboard/PayrollNotesInbox";
 import WorkforceKpis from "../components/dashboard/WorkforceKpis";
 
 import { apiRequest } from "../services/api";
@@ -88,6 +89,7 @@ function Dashboard() {
   const [employeeLoading, setEmployeeLoading] = useState(true);
 
   const {
+    profile,
     hasPermission,
     loading: authorizationLoading,
   } = useAuthorization();
@@ -348,6 +350,7 @@ function Dashboard() {
         }}
       >
         <QuickActions />
+        <PayrollNotesInbox profile={profile} />
         {canViewPayroll && <PayrollSummary summary={payrollSummary} />}
       </div>
     </div>

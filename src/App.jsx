@@ -18,6 +18,7 @@ import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianc
 import ESSPortal from "./pages/ESSPortal";
 const Login = lazy(() => import("./pages/Login"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const PayrollNotes = lazy(() => import("./pages/PayrollNotes"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Employees = lazy(() => import("./pages/Employees"));
 const EmployeeDashboard = lazy(() => import("./pages/EmployeeDashboard"));
@@ -168,7 +169,7 @@ function App() {
         <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans /></PermissionLayout>} />
         <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
-        <Route path="/payroll/notes" element={<ProtectedLayout><CHRiSAutomationCentre mode="payroll" /></ProtectedLayout>} />
+        <Route path="/payroll/notes" element={<ProtectedLayout><PayrollNotes /></ProtectedLayout>} />
         <Route path="/performance/management" element={<ProtectedLayout><CHRiSAutomationCentre mode="performance" /></ProtectedLayout>} />
         <Route path="/training" element={<PermissionLayout permission="training.view"><Training /></PermissionLayout>} />
         <Route path="/reports" element={<PermissionLayout permission="reports.view"><Reports /></PermissionLayout>} />

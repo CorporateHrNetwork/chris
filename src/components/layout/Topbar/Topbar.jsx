@@ -46,6 +46,7 @@ const TOPBAR_SEARCH_ITEMS = [
   ["Allowances", "/payroll?workspace=allowances"],
   ["Deductions", "/payroll?workspace=deductions"],
   ["Payslips", "/payroll?workspace=payslips"],
+  ["Payroll Notes Inbox", "/payroll/notes"],
   ["Payroll Approvals", "/payroll?workspace=approvals"],
   ["Loans", "/loans"],
   ["Salary Advances", "/payroll?workspace=salary-advances"],

@@ -835,9 +835,16 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   const nsitfRule = policy.employerStatutoryRules?.nsitf || {};
   const itfRule = policy.employerStatutoryRules?.itf || {};
 
+  const noteSalaryRows = organization.slug === "zermatt-liquor-limited"
+    ? await prismaClient.$queryRawUnsafe(
+        'SELECT "employeeId","monthlyGross","noteId" FROM "chris_payroll_note_salary_overrides" WHERE "organizationId"=$1 AND "periodId"=$2',
+        organizationId, period.id
+      ) : [];
+  const noteSalaryByEmployee = new Map(noteSalaryRows.map(row => [row.employeeId, row]));
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
-    const scheduledMonthlyGross = round2(rate.amount || 0);
+    const salaryNote = noteSalaryByEmployee.get(employee.id);
+    const scheduledMonthlyGross = round2(salaryNote?.monthlyGross ?? rate.amount ?? 0);
     const standardDays = Number(policy.standardDays[employee.employmentType]);
     const attendanceInput = attendanceByEmployee.get(employee.id);
     const payableDays = attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
@@ -1017,6 +1024,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           employerStatutoryCost,
         },
         salaryAdvanceRecoveries: advances,
+        payrollNoteSalaryOverride: salaryNote ? { noteId: salaryNote.noteId, monthlyGross: scheduledMonthlyGross, scope: "THIS_PERIOD_ONLY" } : null,
         periodReset: {
           expectedDaysDefault: true,
           manualAttendanceCarryForward: false,
