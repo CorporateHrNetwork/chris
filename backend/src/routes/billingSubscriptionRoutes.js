@@ -55,6 +55,7 @@ router.post('/quotes', (req, res) => {
     const quote = calculateQuote({ planId, employeeCount, includeEss });
     const renewal = calculateRenewalQuote({ planId, employeeCount, includeEss });
     const mayPreview = req.auth.organization?.slug === ZERMATT && planId === 'premium';
+    const mayPreviewNegotiatedFirstYear = mayPreview && employeeCount === 320 && includeEss;
     const negotiatedRenewal = mayPreview
       ? calculateRenewalQuote({ planId, employeeCount, includeEss, complimentarySeats: Math.min(30, employeeCount) })
       : null;
@@ -64,7 +65,7 @@ router.post('/quotes', (req, res) => {
         quote,
         renewal,
         negotiatedRenewal,
-        negotiatedFirstYear: mayPreview ? {
+        negotiatedFirstYear: mayPreviewNegotiatedFirstYear ? {
           status: pendingZermattOffer.status,
           amountExcludingVat: pendingZermattOffer.firstYearAmountExcludingVat,
           indicativeVat: 750000,
