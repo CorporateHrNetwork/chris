@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { PGlite } = require("@electric-sql/pglite");
-const migration = fs.readFileSync(path.join(__dirname, "../prisma/billing-migration-review.sql"), "utf8");
+const migration = fs.readFileSync(path.join(__dirname, "../prisma/migrations/20261018010000_billing_foundation/migration.sql"), "utf8");
 test("billing migration enforces tenant relationships and money constraints in isolated PostgreSQL", async () => {
  const db = new PGlite();
  try {
