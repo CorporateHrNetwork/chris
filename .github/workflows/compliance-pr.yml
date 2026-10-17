@@ -91,6 +91,9 @@ jobs:
             tests/zermattReportingSecurityRelease1Acceptance.test.js \
             tests/zermattWorkforceControlsAndConnectedModulesAcceptance.test.js
 
+      - name: Validate shared CHRiS Billing & Subscription pricing
+        run: node --test tests/subscriptionPricing.test.js
+
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js
