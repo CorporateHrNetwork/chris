@@ -10,6 +10,7 @@ import MainLayout from "./layouts/MainLayout";
 import CHRiSAutomationCentre from "./pages/CHRiSAutomationCentre";
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
+const BillingWorkspace = lazy(() => import("./pages/billing/BillingWorkspace"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
@@ -200,7 +201,7 @@ function App() {
         <Route path="/organization" element={<ProtectedLayout><ModuleDashboard moduleKey="organization" /></ProtectedLayout>} />
         <Route path="/workflows" element={<ProtectedLayout><ModuleDashboard moduleKey="workflows" /></ProtectedLayout>} />
         <Route path="/employment-types" element={<ProtectedLayout><ModuleDashboard moduleKey="employmentTypes" /></ProtectedLayout>} />
-        <Route path="/billing" element={<ProtectedLayout><ModuleDashboard moduleKey="billing" /></ProtectedLayout>} />
+        <Route path="/billing" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
 
         <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -291,11 +292,12 @@ function App() {
         <Route path="/settings/notifications" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/settings/security" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/settings/system" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/subscription" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/usage" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/details" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/history" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/invoices" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/current-plan" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/subscription" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/usage" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/details" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/history" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/invoices" element={<ProtectedLayout><BillingWorkspace /></ProtectedLayout>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
