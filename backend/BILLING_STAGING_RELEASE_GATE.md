@@ -10,9 +10,9 @@ The existing `backend/package.json` start script runs `prisma migrate deploy` be
 2. Independently verify the staging database identity and network endpoint. Record an operator-confirmed fingerprint without exposing credentials.
 3. Confirm a staging restore/rollback procedure, and capture a baseline of representative **synthetic or anonymized** employee, payroll and organization records.
 4. Set `CHRIS_ENVIRONMENT=staging`, `CHRIS_BILLING_STAGING_APPROVED=true`, `CHRIS_BILLING_STAGING_DB_FINGERPRINT` to the verified identifier, `CHRIS_BILLING_STAGING_BACKUP_VERIFIED=true`, and the isolated `DATABASE_URL`. These are operator attestations, **not automated proof**.
-5. Run `node scripts/billing-staging-preflight.cjs` from `backend`. It performs no network calls or writes and must return `ready: true`.
+5. Run `node scripts/billing-staging-preflight.cjs` from `backend`. It performs no network calls or writes and must return `ready: true`. For a **separate staging service only**, configure the start command as `node scripts/start-billing-staging.cjs` (from the backend root), **not** the ordinary `npm start` command. The guarded command checks configuration before applying migrations and starting the API. It does not independently prove the database identity; confirm the actual connection out of band before use.
 6. Only after independent review, execute the 76 historical migrations on a fresh staging database, or the additive billing migration on a populated staging clone. Verify existing data counts, organization isolation, and Prisma Client generation.
 7. Run `node --test tests/billing*.test.js`, exercise real login/API requests, and validate all seven billing pages.
 8. Require a separate production change approval and a verified production backup before any merge/deploy to production.
 
-**Note:** The preflight is an advisory command and is not wired into the existing automatic startup. Passing it alone does not authorize a migration.
+**Note:** The preflight is enforced only by the separate `start-billing-staging.cjs` command. It is not wired into the existing production startup. Passing it alone does not authorize a migration.
