@@ -49,4 +49,31 @@ function calculateQuote({ planId, employeeCount, includeEss = true, waiveOnboard
     entitlements: getEntitlements(planId, includeEss)
   };
 }
-module.exports = { PLANS, HRIS, ESS, getEntitlements, calculateQuote };
+// Renewal quotation is distinct from first-year onboarding. Complimentary seats are
+// a separately approved tenant-specific concession, never a catalogue default.
+function calculateRenewalQuote({ planId, employeeCount, includeEss = true, complimentarySeats = 0, vatBasisPoints = 750 }) {
+  const p = PLANS[planId];
+  if (!p) throw new RangeError('Unknown plan');
+  if (!Number.isSafeInteger(employeeCount) || employeeCount < 1) throw new RangeError('Employee count must be a positive integer');
+  if (!Number.isSafeInteger(complimentarySeats) || complimentarySeats < 0 || complimentarySeats > employeeCount) {
+    throw new RangeError('Invalid complimentary seat count');
+  }
+  if (!Number.isSafeInteger(vatBasisPoints) || vatBasisPoints < 0 || vatBasisPoints > 10000) {
+    throw new RangeError('Invalid VAT rate');
+  }
+  const billableSeats = employeeCount - complimentarySeats;
+  const licence = p.licenceMonthly * billableSeats * 12;
+  const ess = includeEss ? p.essMonthly * billableSeats * 12 : 0;
+  const support = p.supportAnnual * billableSeats;
+  const subtotal = licence + ess + support;
+  const vat = Math.round(subtotal * vatBasisPoints / 10000);
+  if (![licence, ess, support, subtotal, vat, subtotal + vat].every(Number.isSafeInteger)) throw new RangeError('Amount exceeds safe range');
+  return {
+    currency: 'NGN', planId, employeeCount, includeEss, complimentarySeats,
+    billableSeats, onboarding: 0,
+    lineItems: { licence, ess, onboarding: 0, support },
+    subtotal, vatBasisPoints, vat, total: subtotal + vat,
+    quoteType: 'RENEWAL_ESTIMATE_ONLY'
+  };
+}
+module.exports = { PLANS, HRIS, ESS, getEntitlements, calculateQuote, calculateRenewalQuote };
