@@ -105,6 +105,9 @@ export default function BillingSubscriptions() {
   },[catalogue,planId,employees,includeEss]);
 
 
+  const current = catalogue?.plans?.[planId];
+  const zermattOffer = catalogue?.negotiatedOffer && planId === 'premium' ? catalogue.negotiatedOffer : null;
+  const moduleCatalogue = catalogue?.modules;
   const invoiceQuote = preview?.negotiatedFirstYear && planId === 'premium' && Number(employees) === 320 && includeEss
     ? { ...preview.negotiatedFirstYear, total: preview.negotiatedFirstYear.amountVatInclusive, subtotal: preview.negotiatedFirstYear.subtotalBeforeVat }
     : preview?.quote;
@@ -200,9 +203,6 @@ export default function BillingSubscriptions() {
   };
 
   const section = TABS.find(([route]) => route === location.pathname)?.[1] || 'Pricing Dashboard';
-  const current = catalogue?.plans?.[planId];
-  const zermattOffer = catalogue?.negotiatedOffer && planId === 'premium' ? catalogue.negotiatedOffer : null;
-  const moduleCatalogue = catalogue?.modules;
   return <main style={{ color:'var(--chris-text-main, #f5f8f6)', padding:'0 0 26px' }}>
     <header style={{ ...box, background:'linear-gradient(145deg, #0C5433 0%, #051E14 100%)', marginBottom:16 }}>
       <div style={{ color:'#E8C969', letterSpacing:'.12em', fontWeight:800, fontSize:11 }}>CHRiS | PEOPLE · PERFORMANCE · REWARDS</div>
