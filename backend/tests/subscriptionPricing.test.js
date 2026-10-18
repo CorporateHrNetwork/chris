@@ -71,3 +71,20 @@ test('complimentary seats never silently exceed eligible employees', () => {
  assert.throws(()=>calculateRenewalQuote({planId:'premium',employeeCount:320,complimentarySeats:-1}),RangeError);
  assert.throws(()=>calculateRenewalQuote({planId:'basic',employeeCount:0}),RangeError);
 });
+
+
+test('CHRiS module catalogue matches the Basic, Standard and Premium service schedule', () => {
+ const basic = getEntitlements('basic').hris;
+ const standard = getEntitlements('standard').hris;
+ const premium = getEntitlements('premium').hris;
+ assert.equal(basic.includes('dashboard'), true);
+ assert.equal(basic.includes('recruitment'), false);
+ assert.equal(standard.includes('recruitment'), true);
+ assert.equal(standard.includes('performance'), false);
+ assert.equal(premium.includes('performance'), true);
+ assert.equal(premium.includes('training_development'), true);
+ assert.equal(basic.includes('billing_subscription'), true);
+ assert.equal(getEntitlements('basic').ess.includes('leave_attendance'), false);
+ assert.equal(getEntitlements('standard').ess.includes('leave_attendance'), true);
+ assert.equal(getEntitlements('premium').ess.includes('performance_evaluation'), true);
+});
