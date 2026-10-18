@@ -42,7 +42,21 @@ test('published catalogue covers three plans and excludes first-year onboarding 
    assert.ok(annual.total < initial.total);
  }
 });
-test('Zermatt Premium illustrative 30 complimentary renewal seats', () => {
+test('Zermatt Premium renewal may use Standard pricing with no complimentary seats', () => {
+ const q=calculateRenewalQuote({planId:'premium',pricingBasisPlanId:'standard',employeeCount:320,includeEss:true,complimentarySeats:0});
+ assert.equal(q.planId,'premium');
+ assert.equal(q.pricingBasisPlanId,'standard');
+ assert.equal(q.billableSeats,320);
+ assert.equal(q.complimentarySeats,0);
+ assert.equal(q.lineItems.licence,5760000);
+ assert.equal(q.lineItems.ess,3072000);
+ assert.equal(q.lineItems.support,256000);
+ assert.equal(q.subtotal,9088000);
+ assert.equal(q.vat,681600);
+ assert.equal(q.total,9769600);
+});
+
+test('legacy complimentary-seat calculation remains supported as a generic pricing primitive', () => {
  const q=calculateRenewalQuote({planId:'premium',employeeCount:320,includeEss:true,complimentarySeats:30});
  assert.equal(q.billableSeats,290);
  assert.equal(q.lineItems.licence,5916000);

@@ -51,8 +51,8 @@ function calculateQuote({ planId, employeeCount, includeEss = true, waiveOnboard
 }
 // Renewal quotation is distinct from first-year onboarding. Complimentary seats are
 // a separately approved tenant-specific concession, never a catalogue default.
-function calculateRenewalQuote({ planId, employeeCount, includeEss = true, complimentarySeats = 0, vatBasisPoints = 750 }) {
-  const p = PLANS[planId];
+function calculateRenewalQuote({ planId, pricingBasisPlanId = planId, employeeCount, includeEss = true, complimentarySeats = 0, vatBasisPoints = 750 }) {
+  const p = PLANS[pricingBasisPlanId];
   if (!p) throw new RangeError('Unknown plan');
   if (!Number.isSafeInteger(employeeCount) || employeeCount < 1) throw new RangeError('Employee count must be a positive integer');
   if (!Number.isSafeInteger(complimentarySeats) || complimentarySeats < 0 || complimentarySeats > employeeCount) {
@@ -69,7 +69,7 @@ function calculateRenewalQuote({ planId, employeeCount, includeEss = true, compl
   const vat = Math.round(subtotal * vatBasisPoints / 10000);
   if (![licence, ess, support, subtotal, vat, subtotal + vat].every(Number.isSafeInteger)) throw new RangeError('Amount exceeds safe range');
   return {
-    currency: 'NGN', planId, employeeCount, includeEss, complimentarySeats,
+    currency: 'NGN', planId, pricingBasisPlanId, employeeCount, includeEss, complimentarySeats,
     billableSeats, onboarding: 0,
     lineItems: { licence, ess, onboarding: 0, support },
     subtotal, vatBasisPoints, vat, total: subtotal + vat,

@@ -8,7 +8,7 @@ const { PLANS, calculateQuote, calculateRenewalQuote } = require('../services/su
 
 const router = express.Router();
 const ZERMATT = 'zermatt-liquor-limited';
-const VERSION = 'CHRIS-PRICING-V2-2026-10';
+const VERSION = 'CHRIS-PRICING-V3-2026-10';
 const standardTerms = Object.freeze({
   licenceStart: 'VERIFIED_PAYMENT_DATE',
   licenceMonths: 12,
@@ -23,7 +23,8 @@ const pendingZermattOffer = Object.freeze({
   status: 'COUNTEROFFER_PENDING_SIGNED_ACCEPTANCE',
   firstYearAmountExcludingVat: 10000000,
   onboardingWaivedIfAccepted: true,
-  complimentaryRenewalSeatsIfAccepted: 30,
+  complimentaryRenewalSeatsIfAccepted: 0,
+  renewalPricingBasisPlanId: 'standard',
   renewalGraceDaysIfAccepted: 14,
   firstYearMidMonthPayrollIfAccepted: true,
   thirdPartyQuickBooksIntegrationIncluded: false,
@@ -57,7 +58,7 @@ router.post('/quotes', (req, res) => {
     const mayPreview = req.auth.organization?.slug === ZERMATT && planId === 'premium';
     const mayPreviewNegotiatedFirstYear = mayPreview && employeeCount === 320 && includeEss;
     const negotiatedRenewal = mayPreview
-      ? calculateRenewalQuote({ planId, employeeCount, includeEss, complimentarySeats: Math.min(30, employeeCount) })
+      ? calculateRenewalQuote({ planId, pricingBasisPlanId: 'standard', employeeCount, includeEss, complimentarySeats: 0 })
       : null;
     return res.json({
       data: {
