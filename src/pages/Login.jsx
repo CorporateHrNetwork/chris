@@ -19,6 +19,7 @@ import {
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
 import { API_BASE_URL } from "../services/api";
+import ConfigurationWelcome from "../components/auth/ConfigurationWelcome";
 
 /*
   CHRIS_TENANT_AWARE_LOGIN
@@ -29,11 +30,15 @@ import { API_BASE_URL } from "../services/api";
   CorporateHr Network remains the safe development fallback.
 */
 function Login() {
-  const organizationSlug =
+  const initialOrganizationSlug =
     new URLSearchParams(
       window.location.search
     ).get("organization") ||
     "corporatehr-network";
+  const welcomeEnabled = import.meta.env.VITE_CHRIS_WELCOME_GATE === "true";
+  const [organizationSlug, setOrganizationSlug] = useState(initialOrganizationSlug);
+  const [configurationPath, setConfigurationPath] = useState("");
+  const [showWelcome, setShowWelcome] = useState(welcomeEnabled);
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
@@ -432,9 +437,33 @@ function Login() {
             "0 28px 80px rgba(0,0,0,0.46), 0 0 30px rgba(8,122,67,0.12)",
         }}
       >
-        {mode === "login" ? (
+        {showWelcome ? (
+          <ConfigurationWelcome
+            initialSlug={new URLSearchParams(window.location.search).get("organization") || ""}
+            standardSlug={import.meta.env.VITE_CHRIS_STANDARD_ORGANIZATION_SLUG || ""}
+            onContinue={(slug, path) => {
+              setOrganizationSlug(slug);
+              setConfigurationPath(path);
+              setEmail("");
+              setPassword("");
+              setError("");
+              setNotice("");
+              setShowWelcome(false);
+            }}
+          />
+        ) : mode === "login" ? (
           <>
             <LoginHeader />
+            {welcomeEnabled && <>
+              <h2 style={{ color: "#D4AF37", fontSize: 18 }}>
+                {configurationPath === "standard" ? "CHRiS Standard Configuration" :
+                  organizationSlug === "zermatt-liquor-limited" ? "Welcome to Zermatt Liquor Limited" : "Welcome to your organization"}
+              </h2>
+              <p style={{ color: "#D7E4DC" }}>Workspace: {organizationSlug}</p>
+              <button type="button" style={backButtonStyle} onClick={() => {
+                setEmail(""); setPassword(""); setError(""); setNotice(""); setShowWelcome(true);
+              }}>Change path</button>
+            </>}
 
             {error && (
               <MessageBox
