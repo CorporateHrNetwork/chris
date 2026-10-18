@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { apiRequest, getStoredOrganization } from '../services/api';
+import { jsPDF } from 'jspdf';
 
 const TABS = [
   ['/billing','Pricing Dashboard'],
@@ -26,6 +27,29 @@ const ESS_MODULE_LABELS = {
   internal_communications:'Internal Communications', documents:'Documents'
 };
 const PLAN_IDS = ['basic','standard','premium'];
+
+const BILLER = {
+  name: 'Corporate Resources Network',
+  product: 'CHRiS | CorporateHr Network Information System',
+  bank: 'Zenith Bank',
+  account: '1312432840',
+  address: 'Office 10 & 12, Palatable Plaza, Agbara Estate, Lagos',
+  phone: '08068120880',
+  email: 'chris@crnetwork.com.ng',
+};
+const invoiceMoney = value => 'NGN ' + Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits:2, maximumFractionDigits:2 });
+async function imageDataUrl(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Unable to load CRNetwork logo');
+  const blob = await response.blob();
+  return await new Promise((resolve,reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 const lineLabels = [
   ['licence','HRIS licence — 12 months'],
   ['ess','Employee Self-Service — 12 months'],
@@ -59,6 +83,9 @@ export default function BillingSubscriptions() {
   const [preview,setPreview] = useState(null);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
+  const [invoiceEmail,setInvoiceEmail] = useState('');
+  const [invoiceBusy,setInvoiceBusy] = useState(false);
+  const [invoiceMessage,setInvoiceMessage] = useState('');
   useEffect(() => {
     let cancelled = false;
     apiRequest('/api/billing/catalogue')
@@ -76,6 +103,101 @@ export default function BillingSubscriptions() {
       .catch(err => { if(!cancelled){setPreview(null);setError(err.message || 'Unable to calculate estimate.');} });
     return () => { cancelled = true; };
   },[catalogue,planId,employees,includeEss]);
+
+
+  const invoiceQuote = preview?.negotiatedFirstYear && planId === 'premium' && Number(employees) === 320 && includeEss
+    ? { ...preview.negotiatedFirstYear, total: preview.negotiatedFirstYear.amountVatInclusive, subtotal: preview.negotiatedFirstYear.subtotalBeforeVat }
+    : preview?.quote;
+  const selectedHrisModules = moduleCatalogue && current
+    ? Object.entries(HRIS_MODULE_LABELS).filter(([key]) => moduleCatalogue.hris[key] <= current.tier).map(([,label]) => label)
+    : [];
+  const selectedEssModules = moduleCatalogue && current && includeEss
+    ? Object.entries(ESS_MODULE_LABELS).filter(([key]) => moduleCatalogue.ess[key] <= current.tier).map(([,label]) => label)
+    : [];
+  const invoiceNumber = 'CHRIS-INV-' + new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
+  const buildInvoicePdf = async () => {
+    if (!invoiceQuote || !current) throw new Error('Select a valid plan and employee count first.');
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const logo = await imageDataUrl('/crnetwork-logo.jpeg');
+    const left = 18;
+    doc.setTextColor(6,78,59);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(17);
+    doc.text(BILLER.name,left,18);
+    doc.setTextColor(154,116,16);
+    doc.setFontSize(9);
+    doc.text(BILLER.product,left,24);
+    doc.setDrawColor(11,107,67);
+    doc.setLineWidth(1);
+    doc.line(left,28,192,28);
+    doc.addImage(logo,'JPEG',160,10,32,16);
+    doc.setTextColor(23,33,28);
+    doc.setFontSize(9);
+    doc.setFont('helvetica','normal');
+    doc.text(BILLER.address,left,35);
+    doc.text('Phone: ' + BILLER.phone + '   Email: ' + BILLER.email,left,40);
+    doc.text('Bank: ' + BILLER.bank + '   Account: ' + BILLER.account,left,45);
+    doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(6,78,59);
+    doc.text('INVOICE',left,58);
+    doc.setFontSize(9); doc.setTextColor(71,85,105); doc.setFont('helvetica','normal');
+    doc.text('Invoice No: ' + invoiceNumber, left,64);
+    doc.text('Invoice Date: ' + new Date().toLocaleDateString('en-GB'), left,69);
+    doc.text('Plan: ' + current.label + '   Employees: ' + employees + '   ESS: ' + (includeEss ? 'Included' : 'Not selected'), left,74);
+    doc.setFont('helvetica','bold'); doc.setTextColor(6,78,59);
+    doc.text('BILL TO',left,84);
+    doc.setFont('helvetica','normal'); doc.setTextColor(23,33,28);
+    doc.text(catalogue?.organizationName || 'Customer',left,90);
+    let y=101;
+    const rows=[
+      ['CHRiS licence — 12 months', invoiceQuote.lineItems?.licence],
+      ['Employee Self-Service — 12 months', invoiceQuote.lineItems?.ess],
+      ['Onboarding — one-time per employee', invoiceQuote.lineItems?.onboarding],
+      ['Technical support — annual', invoiceQuote.lineItems?.support],
+    ].filter(([,amount]) => amount !== undefined);
+    doc.setFillColor(6,78,59); doc.setTextColor(255,255,255); doc.rect(left,y,174,9,'F');
+    doc.setFont('helvetica','bold'); doc.text('DESCRIPTION',left+3,y+6); doc.text('AMOUNT',189,y+6,{align:'right'});
+    y+=15; doc.setTextColor(23,33,28); doc.setFont('helvetica','normal');
+    rows.forEach(([label,amount])=>{ doc.text(label,left+3,y); doc.text(invoiceMoney(amount),189,y,{align:'right'}); doc.setDrawColor(220,226,222); doc.line(left,y+3,192,y+3); y+=9; });
+    y+=4; doc.setFont('helvetica','bold');
+    doc.text('Subtotal',left+95,y); doc.text(invoiceMoney(invoiceQuote.subtotal),189,y,{align:'right'}); y+=8;
+    doc.text('VAT (7.5%, illustrative)',left+95,y); doc.text(invoiceMoney(invoiceQuote.vat),189,y,{align:'right'}); y+=10;
+    doc.setFillColor(232,201,105); doc.setTextColor(7,25,18); doc.rect(left,y-5,174,12,'F');
+    doc.text('TOTAL',left+95,y+3); doc.text(invoiceMoney(invoiceQuote.total),189,y+3,{align:'right'});
+    y+=22; doc.setTextColor(6,78,59); doc.setFontSize(10); doc.text('CHRiS modules included with selected plan',left,y);
+    y+=7; doc.setTextColor(23,33,28); doc.setFontSize(8);
+    const moduleLines = [
+      ['CHRiS licence', selectedHrisModules],
+      ['ESS', includeEss ? selectedEssModules : ['Not selected']],
+    ];
+    moduleLines.forEach(([heading,items])=>{
+      doc.setFont('helvetica','bold'); doc.text(heading + ':',left,y); doc.setFont('helvetica','normal');
+      const text=items.join(' · '); const split=doc.splitTextToSize(text,145); doc.text(split,left+28,y); y += Math.max(6,split.length*4.5);
+    });
+    y+=4; doc.setTextColor(100,116,139); doc.setFontSize(7.5);
+    doc.text('Payment account: Corporate Resources Network | Zenith Bank | 1312432840',left,y); y+=4;
+    doc.text('Product: ' + BILLER.product,left,y); y+=4;
+    doc.text('This invoice reflects the selected plan quotation. Final tax treatment and contractual activation remain subject to the executed subscription terms.',left,y);
+    return { doc, invoiceNumber };
+  };
+  const downloadInvoice = async () => {
+    try { setInvoiceBusy(true); setInvoiceMessage(''); const result=await buildInvoicePdf(); result.doc.save(result.invoiceNumber + '.pdf'); setInvoiceMessage('Invoice PDF downloaded.'); }
+    catch(err){ setInvoiceMessage(err.message || 'Unable to create invoice PDF.'); }
+    finally{ setInvoiceBusy(false); }
+  };
+  const emailInvoice = async () => {
+    try {
+      if(!invoiceEmail.trim()) throw new Error('Enter the recipient email address.');
+      setInvoiceBusy(true); setInvoiceMessage('');
+      const result=await buildInvoicePdf();
+      const pdfBase64=result.doc.output('datauristring').split(',')[1];
+      const response=await apiRequest('/api/billing/invoice/email',{method:'POST',body:{
+        recipientEmail:invoiceEmail.trim(), pdfBase64,
+        invoice:{ invoiceNumber:result.invoiceNumber, planLabel:current.label, total:invoiceQuote.total }
+      }});
+      setInvoiceMessage(response?.data?.status === 'SENT' ? 'Invoice emailed successfully.' : 'Invoice email is pending configuration.');
+    } catch(err){ setInvoiceMessage(err.message || 'Unable to email invoice.'); }
+    finally{ setInvoiceBusy(false); }
+  };
 
   const section = TABS.find(([route]) => route === location.pathname)?.[1] || 'Pricing Dashboard';
   const current = catalogue?.plans?.[planId];
@@ -152,6 +274,31 @@ export default function BillingSubscriptions() {
       {preview.negotiatedRenewal && <PriceTable heading="Illustrative Premium renewal at Standard plan pricing" quote={preview.negotiatedRenewal}/>}
       <p style={{ margin:'12px 0 0', fontSize:12, color:'#E8C969' }}>Subject to signed acceptance, independently verified payment and final contract. QuickBooks third-party integration remains separately chargeable.</p>
     </section>}
+
+    {catalogue && invoiceQuote && <section style={{ ...box, marginTop:16, borderColor:'#D4AF37' }}>
+      <div style={{ color:'#E8C969', fontSize:11, fontWeight:900, letterSpacing:'.08em' }}>CHRiS INVOICE</div>
+      <h2 style={{ margin:'7px 0 8px', fontSize:20 }}>Invoice for selected plan</h2>
+      <p style={{ margin:'0 0 12px', color:'#C9D7CE', lineHeight:1.55 }}>Biller: <strong>Corporate Resources Network</strong> · Product: <strong>CHRiS | CorporateHr Network Information System</strong>.</p>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:12 }}>
+        <div style={{ padding:12, border:'1px solid rgba(212,175,55,.25)', borderRadius:10 }}>
+          <strong style={{ color:'#E8C969' }}>CHRiS licence modules — {current?.label}</strong>
+          <ul style={{ margin:'8px 0 0', paddingLeft:18 }}>{selectedHrisModules.map(m=><li key={m} style={{ marginBottom:4 }}>{m}</li>)}</ul>
+        </div>
+        <div style={{ padding:12, border:'1px solid rgba(212,175,55,.25)', borderRadius:10 }}>
+          <strong style={{ color:'#E8C969' }}>ESS modules — {includeEss ? current?.label : 'Not selected'}</strong>
+          <ul style={{ margin:'8px 0 0', paddingLeft:18 }}>{(includeEss ? selectedEssModules : ['ESS not selected']).map(m=><li key={m} style={{ marginBottom:4 }}>{m}</li>)}</ul>
+        </div>
+      </div>
+      <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'minmax(220px,1fr) auto auto', gap:10, alignItems:'end' }}>
+        <label style={{ display:'grid', gap:5 }}>Recipient email for invoice
+          <input type="email" value={invoiceEmail} onChange={e=>setInvoiceEmail(e.target.value)} placeholder="customer@example.com" style={input}/>
+        </label>
+        <button type="button" onClick={downloadInvoice} disabled={invoiceBusy} style={{ minHeight:40, padding:'8px 14px', border:0, borderRadius:9, background:'#D4AF37', color:'#071911', fontWeight:900, cursor:invoiceBusy?'wait':'pointer' }}>{invoiceBusy ? 'Processing…' : 'Download PDF'}</button>
+        <button type="button" onClick={emailInvoice} disabled={invoiceBusy} style={{ minHeight:40, padding:'8px 14px', border:'1px solid #D4AF37', borderRadius:9, background:'#173226', color:'#F5F8F6', fontWeight:900, cursor:invoiceBusy?'wait':'pointer' }}>Email Invoice</button>
+      </div>
+      {invoiceMessage && <p role="status" style={{ margin:'10px 0 0', color:'#E8C969' }}>{invoiceMessage}</p>}
+      <p style={{ margin:'10px 0 0', fontSize:12, color:'#9FB2A8' }}>Payment: Corporate Resources Network | Zenith Bank | 1312432840. Address: Office 10 & 12, Palatable Plaza, Agbara Estate, Lagos. Phone: 08068120880. Email: chris@crnetwork.com.ng.</p>
+    </section>
     {catalogue && <section style={box}>
       <h2 style={{ fontSize:18, margin:'0 0 8px' }}>Subscription and implementation policy</h2>
       <p style={{ margin:'0 0 8px', lineHeight:1.65 }}>100% upfront payment before implementation; licence starts on the independently confirmed payment date and runs for 12 months. Implementation target: one calendar month from payment, subject to client readiness.</p>
