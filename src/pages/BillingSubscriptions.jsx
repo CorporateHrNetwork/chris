@@ -165,13 +165,6 @@ export default function BillingSubscriptions() {
     doc.setFont('helvetica','normal');
     doc.text(BILLER.address,left,35);
     doc.text('Phone: ' + BILLER.phone + '   Email: ' + BILLER.email,left,40);
-    doc.setFillColor(240,246,242); doc.setDrawColor(11,107,67); doc.setLineWidth(.35);
-    doc.roundedRect(left,43,174,14,2,2,'FD');
-    doc.setTextColor(6,78,59); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
-    doc.text('PAYMENT ACCOUNT',left+4,48);
-    doc.setTextColor(23,33,28); doc.setFontSize(9);
-    doc.text(BILLER.bank + '  |  Account: ' + BILLER.account,left+4,53);
-    doc.text('Tax ID: ' + BILLER.taxId,left+104,53);
     doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(6,78,59);
     doc.text('INVOICE',left,66);
     doc.setFontSize(9); doc.setTextColor(71,85,105); doc.setFont('helvetica','normal');
@@ -195,7 +188,7 @@ export default function BillingSubscriptions() {
     rows.forEach(([label,amount])=>{ doc.text(label,left+3,y); doc.text(invoiceMoney(amount),189,y,{align:'right'}); doc.setDrawColor(220,226,222); doc.line(left,y+3,192,y+3); y+=9; });
     y+=4; doc.setFont('helvetica','bold');
     doc.text('Subtotal',left+95,y); doc.text(invoiceMoney(invoiceQuote.subtotal),189,y,{align:'right'}); y+=8;
-    doc.text('VAT (7.5%, illustrative)',left+95,y); doc.text(invoiceMoney(invoiceQuote.vat),189,y,{align:'right'}); y+=10;
+    doc.text('VAT (7.5%)',left+95,y); doc.text(invoiceMoney(invoiceQuote.vat),189,y,{align:'right'}); y+=10;
     doc.setFillColor(232,201,105); doc.setTextColor(7,25,18); doc.rect(left,y-5,174,12,'F');
     doc.text('TOTAL',left+95,y+3); doc.text(invoiceMoney(invoiceQuote.total),189,y+3,{align:'right'});
     y+=22; doc.setTextColor(6,78,59); doc.setFontSize(10); doc.text('CHRiS modules included with selected plan',left,y);
@@ -208,10 +201,17 @@ export default function BillingSubscriptions() {
       doc.setFont('helvetica','bold'); doc.text(heading + ':',left,y); doc.setFont('helvetica','normal');
       const text=items.join(' · '); const split=doc.splitTextToSize(text,145); doc.text(split,left+28,y); y += Math.max(6,split.length*4.5);
     });
-    y+=4; doc.setTextColor(100,116,139); doc.setFontSize(7.5);
-    doc.text('Payment account: Corporate Resources Network | Zenith Bank | 1312432840',left,y); y+=4;
-    doc.text('Product: ' + BILLER.product,left,y); y+=4;
-    doc.text('This invoice reflects the selected plan quotation. Final tax treatment and contractual activation remain subject to the executed subscription terms.',left,y);
+    y+=8;
+    doc.setFillColor(240,246,242); doc.setDrawColor(11,107,67); doc.setLineWidth(.45);
+    doc.roundedRect(left,y-5,174,28,2,2,'FD');
+    doc.setTextColor(6,78,59); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.text('PAYMENT & INVOICE INFORMATION',left+4,y+1); y+=7;
+    doc.setTextColor(23,33,28); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.text('Payment account: Corporate Resources Network | Zenith Bank | 1312432840',left+4,y); y+=5;
+    doc.setFont('helvetica','normal');
+    doc.text('Product: CHRiS | CorporateHr Network Information System',left+4,y); y+=5;
+    const footerNote = doc.splitTextToSize('This invoice reflects the selected plan quotation. Final tax treatment and contractual activation remain subject to the executed subscription terms.',166);
+    doc.text(footerNote,left+4,y);
     return { doc, invoiceNumber };
   };
   const downloadInvoice = async () => {
