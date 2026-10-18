@@ -57,7 +57,6 @@ export default function BillingSubscriptions() {
     const count = Number(employees);
     if(!Number.isSafeInteger(count) || count<1 || count>100000) return;
     let cancelled = false;
-    setError('');
     apiRequest('/api/billing/quotes', { method:'POST', body:{ planId, employeeCount: count, includeEss } })
       .then(result => { if(!cancelled) setPreview(result.data); })
       .catch(err => { if(!cancelled){setPreview(null);setError(err.message || 'Unable to calculate estimate.');} });
