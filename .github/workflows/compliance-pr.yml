@@ -94,6 +94,9 @@ jobs:
       - name: Validate shared CHRiS Billing & Subscription pricing
         run: node --test tests/subscriptionPricing.test.js
 
+      - name: Verify ESS statutory records and employee isolation
+        run: node --test tests/essStatutoryRecords.test.js
+
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js
