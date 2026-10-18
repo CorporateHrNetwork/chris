@@ -263,8 +263,8 @@ export default function BillingSubscriptions() {
       <p style={{ margin:'12px 0 0', fontSize:13, color:'#C9D7CE' }}>ESS is optional and separately billed. Where legally required, the agreement will preserve employee access to statutory information, payroll records and documents irrespective of the selected paid ESS features.</p>
     </section>}
     {preview && <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))', gap:16, marginBottom:16 }}>
-      <PriceTable heading="First year — standard catalogue" quote={preview.quote}/>
-      <PriceTable heading="Annual renewal — standard catalogue" quote={preview.renewal}/>
+      <PriceTable heading="First year - standard catalogue" quote={preview.quote}/>
+      <PriceTable heading="Annual renewal - standard catalogue" quote={preview.renewal}/>
     </div>}
     {zermattOffer && preview?.negotiatedFirstYear && <section style={{ ...box, marginBottom:16, borderColor:'#D4AF37' }}>
       <div style={{ fontSize:11, color:'#E8C969', fontWeight:900, letterSpacing:'.08em' }}>ZERMATT PREMIUM COUNTEROFFER — NOT YET CONTRACTED</div>
