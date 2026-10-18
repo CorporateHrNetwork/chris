@@ -23,7 +23,6 @@ const pendingZermattOffer = Object.freeze({
   status: 'COUNTEROFFER_PENDING_SIGNED_ACCEPTANCE',
   firstYearAmountExcludingVat: 10000000,
   onboardingWaivedIfAccepted: true,
-  complimentaryRenewalSeatsIfAccepted: 0,
   renewalPricingBasisPlanId: 'standard',
   renewalGraceDaysIfAccepted: 14,
   firstYearMidMonthPayrollIfAccepted: true,
