@@ -36,18 +36,40 @@ const BILLER = {
   address: 'Office 10 & 12, Palatable Plaza, Agbara Estate, Lagos',
   phone: '08068120880',
   email: 'chris@crnetwork.com.ng',
+  taxId: '2623799142200',
 };
 const invoiceMoney = value => 'NGN ' + Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits:2, maximumFractionDigits:2 });
 async function imageDataUrl(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error('Unable to load CRNetwork logo');
   const blob = await response.blob();
-  return await new Promise((resolve,reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  const sourceUrl = URL.createObjectURL(blob);
+  try {
+    return await new Promise((resolve,reject) => {
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const ctx = canvas.getContext('2d', { willReadFrequently:true });
+          ctx.drawImage(image, 0, 0);
+          const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = pixels.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            if (r >= 242 && g >= 242 && b >= 242) data[i + 3] = 0;
+          }
+          ctx.putImageData(pixels, 0, 0);
+          resolve({ dataUrl: canvas.toDataURL('image/png'), width: image.naturalWidth, height: image.naturalHeight });
+        } catch (err) { reject(err); }
+      };
+      image.onerror = reject;
+      image.src = sourceUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 const lineLabels = [
@@ -132,24 +154,35 @@ export default function BillingSubscriptions() {
     doc.setDrawColor(11,107,67);
     doc.setLineWidth(1);
     doc.line(left,28,192,28);
-    doc.addImage(logo,'JPEG',160,10,32,16);
+    const maxLogoWidth = 32;
+    const maxLogoHeight = 16;
+    const logoScale = Math.min(maxLogoWidth / logo.width, maxLogoHeight / logo.height);
+    const logoWidth = logo.width * logoScale;
+    const logoHeight = logo.height * logoScale;
+    doc.addImage(logo.dataUrl,'PNG',192 - logoWidth,10,logoWidth,logoHeight);
     doc.setTextColor(23,33,28);
     doc.setFontSize(9);
     doc.setFont('helvetica','normal');
     doc.text(BILLER.address,left,35);
     doc.text('Phone: ' + BILLER.phone + '   Email: ' + BILLER.email,left,40);
-    doc.text('Bank: ' + BILLER.bank + '   Account: ' + BILLER.account,left,45);
+    doc.setFillColor(240,246,242); doc.setDrawColor(11,107,67); doc.setLineWidth(.35);
+    doc.roundedRect(left,43,174,14,2,2,'FD');
+    doc.setTextColor(6,78,59); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.text('PAYMENT ACCOUNT',left+4,48);
+    doc.setTextColor(23,33,28); doc.setFontSize(9);
+    doc.text(BILLER.bank + '  |  Account: ' + BILLER.account,left+4,53);
+    doc.text('Tax ID: ' + BILLER.taxId,left+104,53);
     doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(6,78,59);
-    doc.text('INVOICE',left,58);
+    doc.text('INVOICE',left,66);
     doc.setFontSize(9); doc.setTextColor(71,85,105); doc.setFont('helvetica','normal');
-    doc.text('Invoice No: ' + invoiceNumber, left,64);
-    doc.text('Invoice Date: ' + new Date().toLocaleDateString('en-GB'), left,69);
-    doc.text('Plan: ' + current.label + '   Employees: ' + employees + '   ESS: ' + (includeEss ? 'Included' : 'Not selected'), left,74);
+    doc.text('Invoice No: ' + invoiceNumber, left,72);
+    doc.text('Invoice Date: ' + new Date().toLocaleDateString('en-GB'), left,77);
+    doc.text('Plan: ' + current.label + '   Employees: ' + employees + '   ESS: ' + (includeEss ? 'Included' : 'Not selected'), left,82);
     doc.setFont('helvetica','bold'); doc.setTextColor(6,78,59);
-    doc.text('BILL TO',left,84);
+    doc.text('BILL TO',left,92);
     doc.setFont('helvetica','normal'); doc.setTextColor(23,33,28);
-    doc.text(catalogue?.organizationName || 'Customer',left,90);
-    let y=101;
+    doc.text(catalogue?.organizationName || 'Customer',left,98);
+    let y=109;
     const rows=[
       ['CHRiS licence — 12 months', invoiceQuote.lineItems?.licence],
       ['Employee Self-Service — 12 months', invoiceQuote.lineItems?.ess],
