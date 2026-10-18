@@ -45,3 +45,52 @@ The gate is currently a login-entry flow, not an enforced interstitial for exist
 - Gate-enabled build: recorded in PR validation.
 
 No claim of complete staging parity, a completed security audit, production activation or complete application recovery is made.
+
+## Connected verification follow-up — 18 October 2026
+
+Desktop Commander reconnected. Read-only checks confirmed:
+- Supabase project chris-zermatt-pilot-db (ldmwsptljgnspwtwcdtm), PostgreSQL 17, ACTIVE_HEALTHY: 81 completed migrations and 113 public base tables.
+- Separate project chris-compliance-staging-db (amnbmmewmvbtiylhquin), PostgreSQL 17, ACTIVE_HEALTHY: 64 completed migrations and 95 public base tables.
+- Each contains corporatehr-network and zermatt-liquor-limited organizations. The staging Zermatt record is named Synthetic Staging.
+- The desktop backup connection targets the Zermatt project. Its local status marker records 17 October 2026 14:48 UTC. This is distinct from the cloud backup verified earlier.
+- Public frontend at https://chris.crnetwork.com.ng/login references https://chris-zermatt-api.onrender.com. Its deployed JavaScript bundle is index-CRIfBfWc.js. This does not verify the API's runtime database or deployed source SHA.
+- /api/health request timed out after 20 seconds; that alone does not establish an outage.
+- PR #120 compliance workflow 39115308473 passed.
+- Desktop checkout is on feature/billing-catalog-zermatt-contract-20261017 at 04efd3e and contains untracked work; it was not changed.
+
+### Verified database gap
+
+Staging lacks these 17 completed production migrations:
+- 20260927231500_allow_loan_legacy_reactivation
+- 20260929183500_zermatt_leave_allowance_reference_policy
+- 20260930173000_zermatt_department_cost_centre_reconciliation
+- 20260930182000_shared_takeaway_designations
+- 20261001184500_backfill_zermatt_housing_derived_rent_relief
+- 20261001191500_zermatt_employee_self_service_role
+- 20261001193000_zermatt_rent_relief_gross_11pct_x56
+- 20261001201500_zermatt_employee_news_portal
+- 20261002184000_internal_news_attachments
+- 20261007190000_chris_payroll_performance_automation
+- 20261008203000_ess_communications_categories
+- 20261013233000_payroll_sequential_approval_workflow
+- 20261014003000_payroll_approval_assignments
+- 20261014010000_employee_celebration_notification_ledger
+- 20261014150000_zermatt_payroll_approval_roles
+- 20261016110722_zermatt_leave_allowance_net_pay
+- 20261017002000_zermatt_payroll_notes_agent
+
+Staging lacks 18 production table names, including payroll approval workflows/events/assignments, internal news, employee celebration ledger, payroll notes/inboxes/events/overrides, performance/automation tables, designation department eligibility and leave allowance references. No staging-only public base table names were found. Table counts/names are not a full column, index, policy or data parity check.
+
+### Source reconciliation
+
+Candidate branch feat/zermatt-payroll-notes-agent-20261017 contains source for all 81 production migration names. Of their recorded checksums, 59 match file bytes exactly, 20 match after newline conversion, and 2 remain unexplained:
+- 20260821130000_add_employee_exit_cancellation_audit
+- 20260821170000_add_employee_line_manager_assignments
+
+All 17 migrations missing in staging are exact checksum matches in that candidate. This establishes migration-source availability, not a verified deployed application version. Candidate and main diverge (451 candidate-only commits and 38 main-only commits); do not merge wholesale.
+
+### Remaining execution prerequisites
+
+Preserve and restore-test the current staging database before an upgrade. Reconcile migration drift and inspect tenant-specific DML. Rehearse the candidate schema upgrade on an isolated copy; compare generic Standard and synthetic custom behavior. Resolve actual staging frontend/API host, deployed commits and runtime database mappings through the hosting account. Render connector still exposes a workspace with no service listing; the remembered service is not available there.
+
+No staging refresh, production writes, credential changes, project creation, migration-history alteration or deployment was performed. Do not mark old migrations as applied merely to bypass validation.
