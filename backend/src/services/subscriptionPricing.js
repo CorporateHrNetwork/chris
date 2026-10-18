@@ -21,6 +21,29 @@ const ESS = Object.freeze({
   performance_evaluation: 3, gratuity: 3, birthdays_anniversaries: 2,
   internal_communications: 2, documents: 1
 });
+const HRIS_LABELS = Object.freeze({
+  dashboard: 'Dashboard', support_requests: 'My Support Requests', employees: 'Employees', recruitment: 'Recruitment',
+  time_attendance: 'Time & Attendance', leave: 'Leave', payroll: 'Payroll', compensation_rewards: 'Compensation & Rewards',
+  benefits: 'Benefits', statutories: 'Statutories', performance: 'Performance', training_development: 'Training & Development',
+  assets: 'Assets', documents: 'Documents', reports_analytics: 'Reports & Analytics', organization: 'Organization',
+  workflows_approvals: 'Workflows & Approvals', employment_types: 'Employment Types', settings: 'Settings', billing_subscription: 'Billing & Subscription'
+});
+const ESS_LABELS = Object.freeze({
+  overview: 'Overview', my_profile: 'My Profile', onboarding: 'Onboarding status', statutory: 'Statutory',
+  payment_payroll: 'Payment & Payroll', payslips: 'Payslips', leave_attendance: 'Leave & Attendance',
+  performance_evaluation: 'Performance Evaluation', gratuity: 'Gratuity', birthdays_anniversaries: 'Birthday & Anniversaries',
+  internal_communications: 'Internal Communications', documents: 'Documents'
+});
+const REPORTING_SCOPE = Object.freeze({
+  basic: 'Essential payroll and statutory reporting',
+  standard: 'Extended operational reporting',
+  premium: 'Full advanced Reports & Analytics'
+});
+const MODULE_CATALOGUE = Object.freeze({
+  hris: Object.freeze(HRIS_LABELS),
+  ess: Object.freeze(ESS_LABELS),
+  reportingScope: REPORTING_SCOPE
+});
 function getEntitlements(planId, includeEss = true) {
   const plan = PLANS[planId];
   if (!plan) throw new RangeError('Unknown plan');
@@ -76,4 +99,4 @@ function calculateRenewalQuote({ planId, pricingBasisPlanId = planId, employeeCo
     quoteType: 'RENEWAL_ESTIMATE_ONLY'
   };
 }
-module.exports = { PLANS, HRIS, ESS, getEntitlements, calculateQuote, calculateRenewalQuote };
+module.exports = { PLANS, HRIS, ESS, HRIS_LABELS, ESS_LABELS, REPORTING_SCOPE, MODULE_CATALOGUE, getEntitlements, calculateQuote, calculateRenewalQuote };
