@@ -54,3 +54,13 @@ This is a navigation increment. It does not yet provide multi-client Standard on
 Rollback for the navigation gate: disable VITE_CHRIS_WELCOME_GATE and rebuild the frontend. Database migration rollback requires the separate tested recovery procedure; a frontend flag cannot reverse database changes.
 
 No production or staging database writes, environment edits, deployment, password changes, project creation or backup deletion were performed during this investigation.
+
+## Additional pre-upgrade checks
+
+PR #121 workflow 39118840207 passed. The complete local migration rehearsal applied 81 migrations.
+
+For the two old checksum differences, staging and production have identical inspected columns (37 in total across employee_exit_processes and employee_line_manager_assignments), constraints and indexes. This narrows the discrepancy but does not recover or authorize rewriting historical migration checksums. Staging has no unfinished, non-rolled-back migrations.
+
+The complete visible staging environment key list contains no SMTP_PASSWORD, RESEND_API_KEY, PAYSTACK_SECRET_KEY or OPENAI_API_KEY, and no linked environment groups. This checks credential configuration, not all application-side outbound behavior. Render startup is npx prisma migrate deploy && node src/server.js, with backend root and npm install && npx prisma generate build command.
+
+Automatic approval review rejected Download .env because it would export multiple credentials/signing keys beyond backup needs without explicit authorization. No export completed and no alternative secret extraction was attempted. Backup/restore validation is still blocked on an approved, narrowly scoped staging connection handling method. No upgrade or deployment has been attempted.
