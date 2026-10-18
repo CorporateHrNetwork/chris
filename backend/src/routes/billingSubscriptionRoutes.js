@@ -53,6 +53,54 @@ router.get('/catalogue', (req, res) => {
     },
   });
 });
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+function invoiceMoney(value) {
+  return 'NGN ' + Number(value || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+router.post('/invoice/email', async (req, res) => {
+  try {
+    const { recipientEmail, pdfBase64, invoice } = req.body || {};
+    if (!validEmail(recipientEmail)) return res.status(400).json({ error: 'A valid recipient email is required' });
+    if (typeof pdfBase64 !== 'string' || pdfBase64.length < 100 || pdfBase64.length > 12000000) {
+      return res.status(400).json({ error: 'Invoice PDF attachment is invalid or too large' });
+    }
+    if (!invoice || typeof invoice !== 'object') return res.status(400).json({ error: 'Invoice details are required' });
+    const apiKey = String(process.env.RESEND_API_KEY || '').trim();
+    if (!apiKey) return res.status(503).json({ error: 'Invoice email delivery is not configured' });
+    const from = String(process.env.BILLING_EMAIL_FROM || process.env.RESEND_FROM || 'Corporate Resources Network <noreply@crnetwork.com.ng>').trim();
+    const invoiceNumber = String(invoice.invoiceNumber || 'CHRIS-INVOICE').slice(0, 80);
+    const product = 'CHRiS | CorporateHr Network Information System';
+    const subject = product + ' Invoice ' + invoiceNumber;
+    const amount = invoiceMoney(invoice.total);
+    const html = '<!doctype html><html><body style="font-family:Arial,sans-serif;color:#17211c">' +
+      '<h2 style="color:#064e3b">Corporate Resources Network</h2><p><strong>' + product + '</strong></p>' +
+      '<p>Invoice <strong>' + invoiceNumber + '</strong> for <strong>' + String(invoice.planLabel || 'Selected Plan') + '</strong>.</p>' +
+      '<p>Total payable: <strong>' + amount + '</strong></p><p>The official invoice PDF is attached.</p><hr>' +
+      '<p style="font-size:12px;color:#64748b">Corporate Resources Network · Zenith Bank · 1312432840<br>Office 10 & 12, Palatable Plaza, Agbara Estate, Lagos · 08068120880 · chris@crnetwork.com.ng</p>' +
+      '</body></html>';
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from,
+        to: [String(recipientEmail).trim()],
+        subject,
+        html,
+        text: 'Corporate Resources Network\n' + product + '\nInvoice: ' + invoiceNumber + '\nPlan: ' + (invoice.planLabel || 'Selected Plan') + '\nTotal: ' + amount + '\n\nThe official invoice PDF is attached.',
+        attachments: [{ filename: invoiceNumber + '.pdf', content: pdfBase64, content_type: 'application/pdf' }],
+      }),
+    });
+    let body = null; try { body = await response.json(); } catch { body = null; }
+    if (!response.ok) return res.status(502).json({ error: body?.message || ('Invoice email delivery failed (' + response.status + ')') });
+    return res.json({ data: { status: 'SENT', channel: 'RESEND_API', providerMessageId: body?.id || null } });
+  } catch (err) {
+    console.error('[billing-invoice-email] delivery failed', err.message);
+    return res.status(500).json({ error: 'Unable to send invoice email' });
+  }
+});
 router.post('/quotes', (req, res) => {
   try {
     const { planId, includeEss, employeeCount } = req.body || {};
