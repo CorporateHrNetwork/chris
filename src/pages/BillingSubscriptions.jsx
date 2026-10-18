@@ -119,8 +119,8 @@ export default function BillingSubscriptions() {
       <div style={{ fontSize:11, color:'#E8C969', fontWeight:900, letterSpacing:'.08em' }}>ZERMATT PREMIUM COUNTEROFFER — NOT YET CONTRACTED</div>
       <h2 style={{ margin:'8px 0 10px', fontSize:19 }}>Negotiated concession preview</h2>
       <p style={{ margin:'0 0 10px', lineHeight:1.6 }}>First-year Premium offer: <strong>{displayMoney(preview.negotiatedFirstYear.amountExcludingVat)}</strong> excluding VAT; illustrative inclusive total <strong>{displayMoney(preview.negotiatedFirstYear.indicativeTotal)}</strong>. Onboarding waived if accepted.</p>
-      <p style={{ margin:'0 0 10px', fontSize:13, color:'#C9D7CE' }}>Offer includes 30 complimentary Premium seats on qualifying renewal, 14-day grace period for eligible renewals, and first-year mid-month payroll. No such concession applies automatically to invoices or existing subscriptions.</p>
-      {preview.negotiatedRenewal && <PriceTable heading="Illustrative Premium renewal with 30 complimentary seats" quote={preview.negotiatedRenewal}/>}
+      <p style={{ margin:'0 0 10px', fontSize:13, color:'#C9D7CE' }}>Zermatt Premium renewal is discounted using Standard plan pricing, with no complimentary-seat concession. The renewal retains Premium plan entitlements, subject to the agreed commercial terms. The 14-day grace period and first-year mid-month payroll remain proposal terms only.</p>
+      {preview.negotiatedRenewal && <PriceTable heading="Illustrative Premium renewal at Standard plan pricing" quote={preview.negotiatedRenewal}/>}
       <p style={{ margin:'12px 0 0', fontSize:12, color:'#E8C969' }}>Subject to signed acceptance, independently verified payment and final contract. QuickBooks third-party integration remains separately chargeable.</p>
     </section>}
     {catalogue && <section style={box}>
