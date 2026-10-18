@@ -67,6 +67,10 @@ const app = express();
 app.disable("x-powered-by");
 app.use(cors(corsOptionsDelegate));
 app.use(applySecurityHeaders);
+
+// Invoice PDFs can exceed Express's default 100 KB JSON limit.
+// Scope the larger parser only to the authenticated invoice-email endpoint.
+app.use("/api/billing/invoice/email", express.json({ limit: "12mb" }));
 app.use(express.json({
   verify: (req, res, buffer) => {
     if (req.path.includes("/support-desk/whatsapp/webhook")) req.rawBody = Buffer.from(buffer);
