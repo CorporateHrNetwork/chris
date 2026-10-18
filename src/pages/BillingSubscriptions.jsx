@@ -188,7 +188,7 @@ export default function BillingSubscriptions() {
     rows.forEach(([label,amount])=>{ doc.text(label,left+3,y); doc.text(invoiceMoney(amount),189,y,{align:'right'}); doc.setDrawColor(220,226,222); doc.line(left,y+3,192,y+3); y+=9; });
     y+=4; doc.setFont('helvetica','bold');
     doc.text('Subtotal',left+95,y); doc.text(invoiceMoney(invoiceQuote.subtotal),189,y,{align:'right'}); y+=8;
-    doc.text('VAT (7.5%, illustrative)',left+95,y); doc.text(invoiceMoney(invoiceQuote.vat),189,y,{align:'right'}); y+=10;
+    doc.text('VAT (7.5%)',left+95,y); doc.text(invoiceMoney(invoiceQuote.vat),189,y,{align:'right'}); y+=10;
     doc.setFillColor(232,201,105); doc.setTextColor(7,25,18); doc.rect(left,y-5,174,12,'F');
     doc.text('TOTAL',left+95,y+3); doc.text(invoiceMoney(invoiceQuote.total),189,y+3,{align:'right'});
     y+=22; doc.setTextColor(6,78,59); doc.setFontSize(10); doc.text('CHRiS modules included with selected plan',left,y);
