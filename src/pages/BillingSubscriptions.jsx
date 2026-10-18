@@ -107,15 +107,14 @@ export default function BillingSubscriptions() {
 
   const current = catalogue?.plans?.[planId];
   const zermattOffer = catalogue?.negotiatedOffer && planId === 'premium' ? catalogue.negotiatedOffer : null;
-  const moduleCatalogue = catalogue?.modules;
   const invoiceQuote = preview?.negotiatedFirstYear && planId === 'premium' && Number(employees) === 320 && includeEss
     ? { ...preview.negotiatedFirstYear, total: preview.negotiatedFirstYear.amountVatInclusive, subtotal: preview.negotiatedFirstYear.subtotalBeforeVat }
     : preview?.quote;
-  const selectedHrisModules = moduleCatalogue && current
-    ? Object.entries(HRIS_MODULE_LABELS).filter(([key]) => moduleCatalogue.hris[key] <= current.tier).map(([,label]) => label)
-    : [];
-  const selectedEssModules = moduleCatalogue && current && includeEss
-    ? Object.entries(ESS_MODULE_LABELS).filter(([key]) => moduleCatalogue.ess[key] <= current.tier).map(([,label]) => label)
+  const selectedHrisModules = (preview?.quote?.entitlements?.hris || [])
+    .map(key => HRIS_MODULE_LABELS[key])
+    .filter(Boolean);
+  const selectedEssModules = includeEss
+    ? (preview?.quote?.entitlements?.ess || []).map(key => ESS_MODULE_LABELS[key]).filter(Boolean)
     : [];
   const invoiceNumber = 'CHRIS-INV-' + new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
   const buildInvoicePdf = async () => {
@@ -248,19 +247,32 @@ export default function BillingSubscriptions() {
         Rates per employee: licence {displayMoney(current.licenceMonthly)}/month; ESS {displayMoney(current.essMonthly)}/month; onboarding {displayMoney(current.onboardingOnce)} once; support {displayMoney(current.supportAnnual)}/year.
       </p>}
     </section>}
-    {moduleCatalogue && <section style={{ ...box, marginBottom:16 }}>
-      <h2 style={{ margin:'0 0 10px', fontSize:19 }}>CHRiS HRIS modules by plan</h2>
-      <div style={{ overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', minWidth:760 }}><thead><tr><th style={{ textAlign:'left', padding:7 }}>HRIS main-menu module</th>{PLAN_IDS.map(id=><th key={id} style={{ padding:7, textAlign:'center' }}>{catalogue.plans[id].label}</th>)}</tr></thead><tbody>
-        {Object.entries(HRIS_MODULE_LABELS).map(([key,label])=><tr key={key} style={{ borderTop:'1px solid rgba(255,255,255,.08)' }}><td style={{ padding:7 }}>{label}</td>{PLAN_IDS.map(id=><td key={id} style={{ padding:7, textAlign:'center' }}>{moduleCatalogue.hris[key] <= catalogue.plans[id].tier ? 'Yes' : '—'}</td>)}</tr>)}
-      </tbody></table></div>
-      <p style={{ margin:'12px 0 0', fontSize:13, color:'#C9D7CE' }}>Reporting scope: Basic includes essential payroll and statutory reporting; Standard includes extended operational reporting; Premium includes full advanced Reports &amp; Analytics. The final service schedule will specify accepted module functions and implementation availability.</p>
-    </section>}
-    {moduleCatalogue && <section style={{ ...box, marginBottom:16 }}>
-      <h2 style={{ margin:'0 0 10px', fontSize:19 }}>Employee Self-Service (ESS) modules by plan</h2>
-      <div style={{ overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', minWidth:650 }}><thead><tr><th style={{ textAlign:'left', padding:7 }}>ESS module</th>{PLAN_IDS.map(id=><th key={id} style={{ padding:7, textAlign:'center' }}>{catalogue.plans[id].label}</th>)}</tr></thead><tbody>
-        {Object.entries(ESS_MODULE_LABELS).map(([key,label])=><tr key={key} style={{ borderTop:'1px solid rgba(255,255,255,.08)' }}><td style={{ padding:7 }}>{label}</td>{PLAN_IDS.map(id=><td key={id} style={{ padding:7, textAlign:'center' }}>{moduleCatalogue.ess[key] <= catalogue.plans[id].tier ? 'Yes' : '—'}</td>)}</tr>)}
-      </tbody></table></div>
-      <p style={{ margin:'12px 0 0', fontSize:13, color:'#C9D7CE' }}>ESS is optional and separately billed. Where legally required, the agreement will preserve employee access to statutory information, payroll records and documents irrespective of the selected paid ESS features.</p>
+    {preview?.quote?.entitlements && <section style={{ ...box, marginBottom:16, borderColor:'#D4AF37' }}>
+      <div style={{ color:'#E8C969', fontSize:11, fontWeight:900, letterSpacing:'.08em' }}>SELECTED PLAN MODULES</div>
+      <h2 style={{ margin:'7px 0 10px', fontSize:19 }}>{current?.label} plan modules</h2>
+      <p style={{ margin:'0 0 14px', color:'#C9D7CE', fontSize:13, lineHeight:1.55 }}>
+        Selecting a plan automatically updates the module entitlements below. These are the modules mapped to the selected plan; they are not a separate licence activation.
+      </p>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:12 }}>
+        <div style={{ padding:14, border:'1px solid rgba(212,175,55,.25)', borderRadius:10 }}>
+          <strong style={{ color:'#E8C969' }}>CHRiS modules</strong>
+          <ul style={{ margin:'10px 0 0', paddingLeft:20 }}>
+            {selectedHrisModules.map(module => <li key={module} style={{ marginBottom:6 }}>{module}</li>)}
+          </ul>
+        </div>
+        <div style={{ padding:14, border:'1px solid rgba(212,175,55,.25)', borderRadius:10 }}>
+          <strong style={{ color:'#E8C969' }}>Employee Self-Service (ESS)</strong>
+          {includeEss
+            ? <ul style={{ margin:'10px 0 0', paddingLeft:20 }}>{selectedEssModules.map(module => <li key={module} style={{ marginBottom:6 }}>{module}</li>)}</ul>
+            : <p style={{ margin:'10px 0 0', color:'#9FB2A8' }}>ESS is not selected. Enable “Include Employee Self-Service” to show the ESS modules mapped to this plan.</p>}
+        </div>
+      </div>
+      <p style={{ margin:'14px 0 0', fontSize:13, color:'#C9D7CE' }}>
+        Reporting scope: Basic includes essential payroll and statutory reporting; Standard includes extended operational reporting; Premium includes full advanced Reports &amp; Analytics.
+      </p>
+      <p style={{ margin:'8px 0 0', fontSize:12, color:'#9FB2A8' }}>
+        ESS is optional and separately billed. Where legally required, the agreement preserves employee access to statutory information, payroll records and documents irrespective of selected paid ESS features.
+      </p>
     </section>}
     {preview && <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))', gap:16, marginBottom:16 }}>
       <PriceTable heading="First year - standard catalogue" quote={preview.quote}/>
