@@ -17,6 +17,7 @@ import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianc
 
 import ESSPortal from "./pages/ESSPortal";
 const Login = lazy(() => import("./pages/Login"));
+const BillingSubscriptions = lazy(() => import("./pages/BillingSubscriptions"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const PayrollNotes = lazy(() => import("./pages/PayrollNotes"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -31,7 +32,6 @@ const BulkEmployeeImport = lazy(() => import("./pages/BulkEmployeeImport"));
 const EmployeeInvitations = lazy(() => import("./pages/EmployeeInvitations"));
 const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
 const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
-const EmployeeSelfService = lazy(() => import("./pages/EmployeeSelfService"));
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
 const InternalNewsManagement = lazy(() => import("./pages/InternalNewsManagement"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
@@ -203,7 +203,8 @@ function App() {
         <Route path="/organization" element={<ProtectedLayout><ModuleDashboard moduleKey="organization" /></ProtectedLayout>} />
         <Route path="/workflows" element={<ProtectedLayout><ModuleDashboard moduleKey="workflows" /></ProtectedLayout>} />
         <Route path="/employment-types" element={<ProtectedLayout><ModuleDashboard moduleKey="employmentTypes" /></ProtectedLayout>} />
-        <Route path="/billing" element={<ProtectedLayout><ModuleDashboard moduleKey="billing" /></ProtectedLayout>} />
+        <Route path="/billing" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/current-plan" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
 
         <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -294,11 +295,11 @@ function App() {
         <Route path="/settings/notifications" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/settings/security" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/settings/system" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/subscription" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/usage" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/details" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/history" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/invoices" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/subscription" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/usage" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/details" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/history" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/invoices" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
