@@ -32,7 +32,6 @@ const BulkEmployeeImport = lazy(() => import("./pages/BulkEmployeeImport"));
 const EmployeeInvitations = lazy(() => import("./pages/EmployeeInvitations"));
 const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
 const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
-const EmployeeSelfService = lazy(() => import("./pages/EmployeeSelfService"));
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
 const InternalNewsManagement = lazy(() => import("./pages/InternalNewsManagement"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));

@@ -55,7 +55,7 @@ export default function BillingSubscriptions() {
   useEffect(() => {
     if(!catalogue) return;
     const count = Number(employees);
-    if(!Number.isSafeInteger(count) || count<1 || count>100000){setPreview(null);return;}
+    if(!Number.isSafeInteger(count) || count<1 || count>100000) return;
     let cancelled = false;
     setError('');
     apiRequest('/api/billing/quotes', { method:'POST', body:{ planId, employeeCount: count, includeEss } })
