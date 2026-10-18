@@ -298,7 +298,7 @@ export default function BillingSubscriptions() {
       </div>
       {invoiceMessage && <p role="status" style={{ margin:'10px 0 0', color:'#E8C969' }}>{invoiceMessage}</p>}
       <p style={{ margin:'10px 0 0', fontSize:12, color:'#9FB2A8' }}>Payment: Corporate Resources Network | Zenith Bank | 1312432840. Address: Office 10 & 12, Palatable Plaza, Agbara Estate, Lagos. Phone: 08068120880. Email: chris@crnetwork.com.ng.</p>
-    </section>
+    </section>}
     {catalogue && <section style={box}>
       <h2 style={{ fontSize:18, margin:'0 0 8px' }}>Subscription and implementation policy</h2>
       <p style={{ margin:'0 0 8px', lineHeight:1.65 }}>100% upfront payment before implementation; licence starts on the independently confirmed payment date and runs for 12 months. Implementation target: one calendar month from payment, subject to client readiness.</p>
