@@ -39,6 +39,25 @@ const REPORTING_SCOPE = Object.freeze({
   standard: 'Extended operational reporting',
   premium: 'Full advanced Reports & Analytics'
 });
+const MODULE_CATALOGUE = Object.freeze({ hris: HRIS_LABELS, ess: ESS_LABELS, reportingScope: REPORTING_SCOPE });
+const HRIS_LABELS = Object.freeze({
+  dashboard: 'Dashboard', support_requests: 'My Support Requests', employees: 'Employees', recruitment: 'Recruitment',
+  time_attendance: 'Time & Attendance', leave: 'Leave', payroll: 'Payroll', compensation_rewards: 'Compensation & Rewards',
+  benefits: 'Benefits', statutories: 'Statutories', performance: 'Performance', training_development: 'Training & Development',
+  assets: 'Assets', documents: 'Documents', reports_analytics: 'Reports & Analytics', organization: 'Organization',
+  workflows_approvals: 'Workflows & Approvals', employment_types: 'Employment Types', settings: 'Settings', billing_subscription: 'Billing & Subscription'
+});
+const ESS_LABELS = Object.freeze({
+  overview: 'Overview', my_profile: 'My Profile', onboarding: 'Onboarding status', statutory: 'Statutory',
+  payment_payroll: 'Payment & Payroll', payslips: 'Payslips', leave_attendance: 'Leave & Attendance',
+  performance_evaluation: 'Performance Evaluation', gratuity: 'Gratuity', birthdays_anniversaries: 'Birthday & Anniversaries',
+  internal_communications: 'Internal Communications', documents: 'Documents'
+});
+const REPORTING_SCOPE = Object.freeze({
+  basic: 'Essential payroll and statutory reporting',
+  standard: 'Extended operational reporting',
+  premium: 'Full advanced Reports & Analytics'
+});
 const MODULE_CATALOGUE = Object.freeze({
   hris: Object.freeze(HRIS_LABELS),
   ess: Object.freeze(ESS_LABELS),
