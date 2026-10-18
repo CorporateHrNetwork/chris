@@ -31,7 +31,7 @@ function PriceTable({ heading, quote }) {
       <tr><th scope="row" style={{ textAlign:'left', padding:'9px 6px' }}>Indicative VAT (7.5%, if applicable)</th><td style={{ textAlign:'right', padding:'9px 6px' }}>{displayMoney(quote.vat)}</td></tr>
       <tr style={{ borderTop:'2px solid #D4AF37' }}><th scope="row" style={{ textAlign:'left', fontSize:17, padding:'12px 6px' }}>Estimated total</th><td style={{ textAlign:'right', fontWeight:900, fontSize:18, padding:'12px 6px', whiteSpace:'nowrap' }}>{displayMoney(quote.total)}</td></tr>
     </tbody></table>
-    {quote.billableSeats !== undefined && <p style={{ margin:'10px 0 0', fontSize:13, color:'#B8C9C0' }}>Billable seats: {quote.billableSeats} of {quote.employeeCount} — {quote.complimentarySeats} complimentary seats in this estimate.</p>}
+    {quote.billableSeats !== undefined && <p style={{ margin:'10px 0 0', fontSize:13, color:'#B8C9C0' }}>Billable seats: {quote.billableSeats} of {quote.employeeCount}.</p>}
   </section>;
 }
 
