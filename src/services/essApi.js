@@ -73,8 +73,11 @@ export async function essRequest(endpoint, options = {}) {
   }
 
   if (response.status === 401) {
-    clearEssAuthSession();
-    if (window.location.pathname !== "/ess") window.location.replace("/ess");
+    // A late response from an older request must not sign out a newer session.
+    if (headers.Authorization === `Bearer ${getEssAuthToken()}`) {
+      clearEssAuthSession();
+      if (window.location.pathname !== "/ess") window.location.replace("/ess");
+    }
     const error = new Error(
       result.message || "Your employee portal session has expired. Please sign in again."
     );
