@@ -637,6 +637,7 @@ const panelTitleStyle = { margin: 0, color: "#F7FAF8", fontSize: 17 };
 const panelSubtitleStyle = { color: "#9EB7A9", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
 const reportPrintCompatibilityColors = { title: "#064E3B", subtitle: "#64748B" };
 const reportPrintTitleColor = "#064E3B";
+const reportPrintCompatibilityStyle = { color: "#064E3B" };
 const reportPrintSubtitleColor = "#64748B";
 const summaryPanelTitleStyle = { margin: 0, color: "#FFFFFF", fontSize: 17, fontWeight: 900 };
 const summaryPanelSubtitleStyle = { color: "#FFFFFF", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
