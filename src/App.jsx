@@ -64,7 +64,7 @@ const BenefitChildPage = lazy(() => import("./pages/benefits/BenefitChildPage"))
 const Loans = lazy(() => import("./pages/Loans"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Training = lazy(() => import("./pages/Training"));
-const Reports = lazy(() => import("./pages/Reports"));
+import Reports from "./pages/Reports";
 const AuditTrail = lazy(() => import("./pages/AuditTrail"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Designations = lazy(() => import("./pages/Designations"));
@@ -252,7 +252,7 @@ function App() {
         <Route path="/reports/employees" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/headcount" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/branches" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/reports/recruitment" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/reports/recruitment" element={<Navigate to="/reports?view=recruitment" replace />} />
         <Route path="/reports/attendance" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/leave" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/payroll" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
