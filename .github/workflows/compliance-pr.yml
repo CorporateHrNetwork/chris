@@ -178,6 +178,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Test internal news confirmation lifecycle
+        run: node --test tests/internalNewsNotice.test.mjs
+
       - name: Build frontend
         run: npm run build
 

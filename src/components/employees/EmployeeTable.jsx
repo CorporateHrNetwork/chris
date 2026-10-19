@@ -3674,16 +3674,16 @@ const filtersPanelStyle = {
     "16px",
 
   background:
-    "#FFFFFF",
+    "var(--chris-ui-panel-background, #FFFFFF)",
 
   border:
-    "1px solid #E5E7EB",
+    "var(--chris-ui-panel-border, 1px solid #E5E7EB)",
 
   borderRadius:
-    "14px",
+    "var(--chris-ui-panel-radius, 14px)",
 
   boxShadow:
-    "0 5px 18px rgba(15,23,42,0.04)",
+    "var(--chris-ui-panel-shadow, 0 5px 18px rgba(15,23,42,0.04))",
 };
 
 const filterFieldStyle = {

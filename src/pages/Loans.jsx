@@ -638,7 +638,7 @@ function Loans() {
   );
 }
 
-const collateralCard = { padding: 13, borderRadius: 10, border: "1px solid rgba(212,175,55,.28)", background: "rgba(212,175,55,.055)", display: "grid", gap: 8 };
+const collateralCard = { padding: 13, borderRadius: "var(--chris-ui-panel-radius, 10px)", border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.28))", background: "var(--chris-ui-panel-background, rgba(212,175,55,.055))", display: "grid", gap: 8 };
 const collateralGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 8, color: "var(--chris-dashboard-text)", fontSize: 12 };
 const cellStyle = { padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)", verticalAlign: "top" };
 const loanTableWrapStyle = { overflowX: "auto", borderRadius: 12, border: "1px solid rgba(212,175,55,.16)", background: "rgba(3,20,13,.26)" };

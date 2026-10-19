@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../services/api";
 
-const card = { background:"var(--chris-dashboard-surface,#fff)", border:"1px solid var(--chris-dashboard-border,#ddd)", borderRadius:14, padding:18 };
+const card = { background:"var(--chris-ui-panel-background, var(--chris-dashboard-surface,#fff))", border:"var(--chris-ui-panel-border, 1px solid var(--chris-dashboard-border,#ddd))", borderRadius:"var(--chris-ui-panel-radius, 14px)", padding:18 };
 const button = { border:0, borderRadius:10, padding:"10px 14px", fontWeight:800, cursor:"pointer" };
 
 export default function CHRiSAutomationCentre({ mode="all" }) {

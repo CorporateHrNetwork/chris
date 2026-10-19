@@ -1127,6 +1127,6 @@ const summaryGrid = {
 
 const summaryCard = {
   padding: 10,
-  borderRadius: 9,
-  background: "rgba(212,175,55,.07)",
+  borderRadius: "var(--chris-ui-panel-radius, 9px)",
+  background: "var(--chris-ui-panel-background, rgba(212,175,55,.07))",
 };

@@ -250,7 +250,7 @@ const backButton = { marginBottom: 16, padding: 0, border: "none", background: "
 const eyebrow = { color: "var(--chris-gold)", fontSize: 10, fontWeight: 900, letterSpacing: ".14em" };
 const title = { margin: "7px 0 6px", fontSize: 30, fontWeight: 900 };
 const lead = { margin: 0, maxWidth: 920, color: "var(--chris-text-secondary)", lineHeight: 1.6 };
-const panel = { marginTop: 20, padding: 20, border: "1px solid rgba(212,175,55,.30)", borderRadius: 18, background: "linear-gradient(145deg,rgba(4,36,23,.94),rgba(2,19,13,.96))", boxShadow: "0 18px 42px rgba(0,0,0,.22)" };
+const panel = { marginTop: 20, padding: 20, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.30))", borderRadius: "var(--chris-ui-panel-radius, 18px)", background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(4,36,23,.94),rgba(2,19,13,.96)))", boxShadow: "var(--chris-ui-panel-shadow, 0 18px 42px rgba(0,0,0,.22))" };
 const panelHead = { display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 16 };
 const panelTitle = { margin: 0, color: "#F7FAF8", fontSize: 19 };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, alignItems: "end" };
@@ -277,6 +277,6 @@ const actionTitle = { margin: 0, color: "#F5F7F6", fontSize: 14 };
 const actionFields = { display: "grid", gap: 10, marginTop: 13 };
 
 const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginTop: 14 };
-const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.20)", borderRadius: 10, background: "rgba(255,255,255,.025)" };
+const summaryCard = { padding: 12, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.20))", borderRadius: "var(--chris-ui-panel-radius, 10px)", background: "var(--chris-ui-panel-background, rgba(255,255,255,.025))" };
 const summaryLabel = { marginBottom: 5, color: "#94A89D", fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em" };
 const buttonRow = { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" };

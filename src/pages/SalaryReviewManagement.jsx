@@ -107,7 +107,7 @@ const eyebrow={color:"var(--chris-gold)",fontSize:11,fontWeight:900,letterSpacin
 const title={margin:"6px 0",fontSize:30};
 const lead={color:"var(--chris-text-secondary)",lineHeight:1.65,maxWidth:1050};
 const layout={display:"grid",gridTemplateColumns:"minmax(0,2fr) minmax(320px,.8fr)",gap:16,alignItems:"start",marginTop:18};
-const panel={padding:18,border:"1px solid var(--chris-border-gold)",borderRadius:"var(--chris-radius-card)",background:"linear-gradient(145deg,rgba(12,38,26,.90),rgba(7,18,13,.96))"};
+const panel={padding:18,border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",borderRadius:"var(--chris-ui-panel-radius, var(--chris-radius-card))",background:"var(--chris-ui-panel-background, linear-gradient(145deg,rgba(12,38,26,.90),rgba(7,18,13,.96)))"};
 const toolbar={display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",alignItems:"end",marginBottom:12};
 const h2={margin:"0 0 5px",fontSize:19};
 const muted={color:"var(--chris-text-secondary)",fontSize:12,lineHeight:1.5};
@@ -116,7 +116,7 @@ const tableWrap={overflowX:"auto"}; const table={width:"100%",minWidth:800,borde
 const th={padding:10,textAlign:"left",borderBottom:"1px solid var(--chris-border-gold)",color:"var(--chris-gold)",fontSize:11};
 const td={padding:10,borderBottom:"1px solid var(--chris-border-soft)",fontSize:12,color:"var(--chris-text-secondary)"}; const tdStrong={...td,fontWeight:800,color:"var(--chris-text-main)"};
 const actionButton={border:"1px solid var(--chris-border-gold)",borderRadius:8,background:"rgba(212,175,55,.08)",color:"var(--chris-gold)",padding:"7px 9px",fontWeight:800,cursor:"pointer"};
-const employeeBox={padding:12,borderRadius:10,border:"1px solid var(--chris-border-soft)",background:"rgba(255,255,255,.025)"};
+const employeeBox={padding:12,borderRadius:"var(--chris-ui-panel-radius, 10px)",border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-soft))",background:"var(--chris-ui-panel-background, rgba(255,255,255,.025))"};
 const label={display:"grid",gap:6,fontSize:12,fontWeight:800,color:"var(--chris-text-secondary)"}; const notice={padding:11,borderRadius:9,border:"1px solid var(--chris-border-soft)",color:"var(--chris-text-secondary)",fontSize:11,lineHeight:1.55};
 const saveButton={border:0,borderRadius:9,padding:"11px 14px",background:"var(--chris-gold)",color:"#07140D",fontWeight:900,cursor:"pointer"};
 const errorBox={marginTop:12,padding:11,borderRadius:9,color:"#FCA5A5",background:"rgba(127,29,29,.35)"}; const successBox={marginTop:12,padding:11,borderRadius:9,color:"#86EFAC",background:"rgba(20,83,45,.35)"};

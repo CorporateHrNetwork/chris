@@ -4124,13 +4124,13 @@ const cardStyle = {
     "20px",
 
   background:
-    "#FFFFFF",
+    "var(--chris-ui-panel-background, #FFFFFF)",
 
   border:
-    "1px solid #E2E8F0",
+    "var(--chris-ui-panel-border, 1px solid #E2E8F0)",
 
   borderRadius:
-    "14px",
+    "var(--chris-ui-panel-radius, 14px)",
 };
 
 const mappingCardStyle = {
@@ -4505,13 +4505,13 @@ const summaryCardStyle = {
     "16px",
 
   border:
-    "1px solid #E2E8F0",
+    "var(--chris-ui-panel-border, 1px solid #E2E8F0)",
 
   borderRadius:
-    "12px",
+    "var(--chris-ui-panel-radius, 12px)",
 
   background:
-    "#FFFFFF",
+    "var(--chris-ui-panel-background, #FFFFFF)",
 };
 
 const summaryValueStyle = {
@@ -5043,10 +5043,10 @@ const lifecyclePanelStyle = {
   width: "min(720px, 100%)",
   maxHeight: "90vh",
   overflowY: "auto",
-  background: "#FFFFFF",
-  borderRadius: "16px",
-  border: "1px solid #E2E8F0",
-  boxShadow: "0 24px 70px rgba(15, 23, 42, 0.22)",
+  background: "var(--chris-ui-panel-background, #FFFFFF)",
+  borderRadius: "var(--chris-ui-panel-radius, 16px)",
+  border: "var(--chris-ui-panel-border, 1px solid #E2E8F0)",
+  boxShadow: "var(--chris-ui-panel-shadow, 0 24px 70px rgba(15, 23, 42, 0.22))",
   padding: "24px",
 };
 

@@ -251,7 +251,7 @@ function Field({ label, children }) {
   );
 }
 
-const panelStyle={background:"linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))",border:"1px solid var(--chris-border-gold)",borderRadius:"var(--chris-radius-card)",padding:20,boxShadow:"var(--chris-shadow-card)"};
+const panelStyle={background:"var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96)))",border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",borderRadius:"var(--chris-ui-panel-radius, var(--chris-radius-card))",padding:20,boxShadow:"var(--chris-ui-panel-shadow, var(--chris-shadow-card))"};
 const metricGridStyle={display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:16,marginBottom:18};
 const metricLabelStyle={color:"var(--chris-text-secondary)",fontSize:"var(--chris-font-sm)",fontWeight:700};
 const metricValueStyle={fontSize:28,fontWeight:800,marginTop:10};

@@ -140,7 +140,7 @@ function SopDocument({ sop, onClose }) {
 function List({ title, items }) { return <div style={{ marginTop: 14 }}><strong style={{ color: "var(--chris-gold)" }}>{title}</strong><ul style={{ color: "var(--chris-text-secondary)", lineHeight: 1.7 }}>{(items || []).map((item) => <li key={item}>{item}</li>)}</ul></div>; }
 function NumberedList({ title, items }) { return <div style={{ marginTop: 14 }}><strong style={{ color: "var(--chris-gold)" }}>{title}</strong><ol style={{ color: "var(--chris-text-secondary)", lineHeight: 1.7 }}>{(items || []).map((item) => <li key={item}>{item}</li>)}</ol></div>; }
 
-const panel = { background: "linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))", border: "1px solid var(--chris-border-gold)", borderRadius: "var(--chris-radius-card)", padding: 20, boxShadow: "var(--chris-shadow-card)" };
+const panel = { background: "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96)))", border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))", borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))", padding: 20, boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))" };
 const card = { ...panel, minHeight: 150 };
 const metrics = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 };
 const tabs = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 };

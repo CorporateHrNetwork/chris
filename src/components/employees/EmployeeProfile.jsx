@@ -7400,18 +7400,18 @@ const backButtonStyle = {
 };
 
 const headerCardStyle = {
-  background: "linear-gradient(135deg, rgba(12,38,26,.98), rgba(5,14,10,.99))",
-  border: "1px solid rgba(212,175,55,.42)",
-  borderRadius: "var(--chris-radius-card)",
+  background: "var(--chris-ui-panel-background, linear-gradient(135deg, rgba(12,38,26,.98), rgba(5,14,10,.99)))",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.42))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
   padding: "26px",
   marginBottom: "22px",
-  boxShadow: "0 18px 46px rgba(0,0,0,.28)",
+  boxShadow: "var(--chris-ui-panel-shadow, 0 18px 46px rgba(0,0,0,.28))",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "20px",
   flexWrap: "wrap",
-  color: "#F7FBF8",
+  color: "var(--chris-text-main, #F7FBF8)",
 };
 
 const profileIdentityStyle = {
@@ -7472,11 +7472,11 @@ const informationCardStyle = {
   padding: "24px",
   minHeight: "260px",
   background:
-    "linear-gradient(145deg, rgba(12,38,26,.94), rgba(7,18,13,.98))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
-  boxShadow: "var(--chris-shadow-card)",
-  color: "var(--chris-text-main)",
+    "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.94), rgba(7,18,13,.98)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
+  color: "var(--chris-text-main, var(--chris-text-main))",
 };
 
 const informationTitleStyle = {
@@ -7531,11 +7531,11 @@ const editCardStyle = {
   marginTop: "22px",
   padding: "26px",
   background:
-    "linear-gradient(145deg, rgba(12,38,26,.96), rgba(7,18,13,.98))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
-  boxShadow: "var(--chris-shadow-card)",
-  color: "var(--chris-text-main)",
+    "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.96), rgba(7,18,13,.98)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
+  color: "var(--chris-text-main, var(--chris-text-main))",
 };
 
 const editHeaderStyle = {
@@ -7669,11 +7669,11 @@ const transferCardStyle = {
   marginTop: "22px",
   padding: "clamp(18px, 3vw, 26px)",
   scrollMarginTop: "96px",
-  color: "var(--chris-text-main)",
-  background: "linear-gradient(145deg,rgba(12,38,26,.98),rgba(5,14,10,.99))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
-  boxShadow: "0 18px 46px rgba(0,0,0,.30)",
+  color: "var(--chris-text-main, var(--chris-text-main))",
+  background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(12,38,26,.98),rgba(5,14,10,.99)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  boxShadow: "var(--chris-ui-panel-shadow, 0 18px 46px rgba(0,0,0,.30))",
 };
 
 const transferHeaderStyle = {
@@ -8138,10 +8138,10 @@ const episodeCardStyle = {
     "18px",
 
   borderRadius:
-    "14px",
+    "var(--chris-ui-panel-radius, 14px)",
 
   background:
-    "#FFFFFF",
+    "var(--chris-ui-panel-background, #FFFFFF)",
 
   position:
     "relative",
@@ -8404,10 +8404,10 @@ const timelineLineStyle = {
 
 const lifecycleCardStyle = {
   padding: "17px",
-  background: "rgba(255,255,255,.025)",
+  background: "var(--chris-ui-panel-background, rgba(255,255,255,.025))",
   border:
-    "1px solid #DDECE4",
-  borderRadius: "13px",
+    "var(--chris-ui-panel-border, 1px solid #DDECE4)",
+  borderRadius: "var(--chris-ui-panel-radius, 13px)",
 };
 
 const lifecycleTopRowStyle = {

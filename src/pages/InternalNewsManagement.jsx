@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useTransientNotice from "../hooks/useTransientNotice";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const blank={category:"ANNOUNCEMENT",title:"",summary:"",body:"",status:"DRAFT",isPinned:false,expireAt:""};
@@ -13,22 +14,28 @@ export default function InternalNewsManagement(){
   const [rows,setRows]=useState([]);
   const [busy,setBusy]=useState("");
   const [error,setError]=useState("");
-  const [message,setMessage]=useState("");
+  const {message,showNotice,dismissNotice}=useTransientNotice();
   const [attachment,setAttachment]=useState(null);
   const formRef=useRef(null);
 
   const load=async()=>{const r=await apiRequest("/api/news");setRows(r.data||[]);};
-  useEffect(()=>{load().catch(e=>setError(e.message||"Unable to load internal news."));},[]);
+  useEffect(()=>{
+    let active=true;
+    apiRequest("/api/news")
+      .then(r=>{if(active)setRows(r.data||[]);})
+      .catch(e=>{if(active)setError(e.message||"Unable to load internal news.");});
+    return()=>{active=false;};
+  },[]);
 
   const submit=async(e)=>{
     e.preventDefault();
     try{
-      setBusy("save");setError("");setMessage("");
+      setBusy("save");setError("");dismissNotice();
       const payload=new FormData();
       Object.entries(form).forEach(([key,value])=>payload.append(key,String(value ?? "")));
       if(attachment) payload.append("attachment",attachment);
       const r=await apiRequest("/api/news",{method:"POST",body:payload});
-      setMessage(r.data?.status==="PUBLISHED"?"News published to Employee Self Service.":"News draft saved.");
+      showNotice(r.data?.status==="PUBLISHED"?"News published to Employee Self Service.":"News draft saved.");
       setForm(blank);setAttachment(null);formRef.current?.reset();await load();
     }catch(err){setError(err.message||"Unable to save internal news.");}
     finally{setBusy("");}
@@ -45,9 +52,9 @@ export default function InternalNewsManagement(){
 
   const changeStatus=async(id,status)=>{
     try{
-      setBusy(id+status);setError("");
+      setBusy(id+status);setError("");dismissNotice();
       await apiRequest(`/api/news/${id}/status`,{method:"PATCH",body:{status}});
-      setMessage(`News item moved to ${status}.`);await load();
+      showNotice(`News item moved to ${status}.`);await load();
     }catch(err){setError(err.message||"Unable to update news status.");}
     finally{setBusy("");}
   };
@@ -57,8 +64,8 @@ export default function InternalNewsManagement(){
     <h1 style={title}>Internal News & Opportunities</h1>
     <p style={lead}>Publish governed updates to Zermatt Employee Self Service. Use the category that best describes the communication; draft items are not visible to employees.</p>
 
-    {error?<div style={errorBox}>{error}</div>:null}
-    {message?<div style={successBox}>{message}</div>:null}
+    {error?<div role="alert" style={errorBox}>{error}</div>:null}
+    {message?<div role="status" aria-live="polite" className="chris-success-notice"><span>{message}</span><button type="button" onClick={dismissNotice} aria-label="Dismiss notification">×</button></div>:null}
 
     <form ref={formRef} onSubmit={submit} style={panel}>
       <div style={grid}>
@@ -104,7 +111,7 @@ const page={maxWidth:1180,margin:"0 auto"};
 const eyebrow={color:"#D4AF37",fontWeight:900,fontSize:11,letterSpacing:1.5};
 const title={margin:"6px 0",fontSize:32};
 const lead={maxWidth:900,color:"var(--chris-text-secondary)",lineHeight:1.6};
-const panel={marginTop:20,padding:20,border:"1px solid rgba(212,175,55,.35)",borderRadius:14,background:"linear-gradient(145deg,rgba(8,50,33,.96),rgba(3,20,13,.98))"};
+const panel={marginTop:20,padding:20,border:"var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.35))",borderRadius:"var(--chris-ui-panel-radius, 14px)",background:"var(--chris-ui-panel-background, linear-gradient(145deg,rgba(8,50,33,.96),rgba(3,20,13,.98)))"};
 const grid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:12};
 const field={display:"grid",gap:6,marginBottom:12,color:"#D4AF37",fontSize:12,fontWeight:800};
 const primary={border:0,borderRadius:9,padding:"11px 15px",background:"#D4AF37",color:"#07140D",fontWeight:900,cursor:"pointer"};
@@ -112,7 +119,6 @@ const small={...primary,padding:"7px 10px",fontSize:12};
 const table={width:"100%",borderCollapse:"collapse",minWidth:760};
 const pin={marginLeft:8,fontSize:10,padding:"2px 6px",borderRadius:999,background:"#D4AF37",color:"#07140D"};
 const errorBox={marginTop:14,padding:12,borderRadius:9,background:"rgba(185,28,28,.16)",color:"#FCA5A5"};
-const successBox={marginTop:14,padding:12,borderRadius:9,background:"rgba(46,233,139,.08)",color:"#2EE98B"};
 
 const attachmentField={...field,padding:14,border:"1px dashed rgba(212,175,55,.46)",borderRadius:10,background:"rgba(212,175,55,.05)"};
 const help={color:"#9DB8AA",fontWeight:500,lineHeight:1.5};

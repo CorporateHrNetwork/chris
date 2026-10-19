@@ -639,7 +639,7 @@ const metricsStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, m
 const metricStyle = { background: "var(--chris-panel-bg)", border: "1px solid var(--chris-border-gold)", borderRadius: "var(--chris-radius-card)", padding: 16, boxShadow: "var(--chris-shadow-soft)" };
 const metricLabelStyle = { fontSize: 11, fontWeight: 900, color: "var(--chris-text-secondary)", textTransform: "uppercase" };
 const metricValueStyle = { marginTop: 8, fontSize: 25, fontWeight: 900, color: "var(--chris-gold-bright)" };
-const panelStyle = { background: "var(--chris-panel-bg)", border: "1px solid var(--chris-border-gold)", borderRadius: "var(--chris-radius-card)", padding: 18, boxShadow: "var(--chris-shadow-card)", display: "grid", gap: 14 };
+const panelStyle = { background: "var(--chris-ui-panel-background, var(--chris-panel-bg))", border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))", borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))", padding: 18, boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))", display: "grid", gap: 14 };
 const sectionTitleStyle = { margin: "5px 0 0", fontSize: 20, color: "var(--chris-text-main)" };
 const panelSubtitleStyle = { margin: "6px 0 0", color: "var(--chris-text-secondary)", fontSize: 12, lineHeight: 1.5 };
 const formGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 };
@@ -661,7 +661,7 @@ const actionWrapStyle = { display: "flex", flexWrap: "wrap", gap: 6 };
 const miniButtonStyle = { border: "1px solid var(--chris-border-gold)", borderRadius: 7, padding: "6px 8px", background: "var(--chris-input-bg)", color: "var(--chris-gold-bright)", fontSize: 10, fontWeight: 800 };
 const miniDangerButtonStyle = { ...miniButtonStyle, color: "var(--chris-danger)", borderColor: "rgba(251,113,133,.32)" };
 const stageGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(125px, 1fr))", gap: 8 };
-const stageCardStyle = { background: "var(--chris-panel-bg)", border: "1px solid var(--chris-border-soft)", borderRadius: 10, padding: 12, display: "grid", gap: 4 };
+const stageCardStyle = { background: "var(--chris-ui-panel-background, var(--chris-panel-bg))", border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-soft))", borderRadius: "var(--chris-ui-panel-radius, 10px)", padding: 12, display: "grid", gap: 4 };
 const statusBaseStyle = { display: "inline-block", padding: "5px 8px", borderRadius: 999, fontSize: 10, fontWeight: 900, border: "1px solid var(--chris-border-soft)", background: "var(--chris-input-bg)" };
 
 export default RecruitmentTalentWorkspace;

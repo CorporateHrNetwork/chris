@@ -117,7 +117,7 @@ function Metric({ label, value }) {
   return <div style={metricStyle}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-const panelStyle = { marginTop: 18, padding: 18, border: "1px solid rgba(212,175,55,.38)", borderRadius: 14, background: "linear-gradient(145deg,rgba(8,50,33,.9),rgba(3,20,13,.96))" };
+const panelStyle = { marginTop: 18, padding: 18, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.38))", borderRadius: "var(--chris-ui-panel-radius, 14px)", background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(8,50,33,.9),rgba(3,20,13,.96)))" };
 const eyebrowStyle = { color: "#D4AF37", fontSize: 10, fontWeight: 900, letterSpacing: ".14em" };
 const titleStyle = { margin: "5px 0 4px", color: "#F7FAF8", fontSize: 18 };
 const helpStyle = { margin: "0 0 14px", color: "#A9BDB2", fontSize: 12, lineHeight: 1.55 };

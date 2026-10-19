@@ -158,7 +158,7 @@ function Td({ children, colSpan }) { return <td colSpan={colSpan} style={td}>{ch
 function Badge({ children }) { return <span style={badge}>{children}</span>; }
 function date(value) { if (!value) return "—"; const d = new Date(value); return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString(); }
 
-const panel = { background: "linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))", border: "1px solid var(--chris-border-gold)", borderRadius: "var(--chris-radius-card)", padding: 18, boxShadow: "var(--chris-shadow-card)" };
+const panel = { background: "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96)))", border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))", borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))", padding: 18, boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))" };
 const metrics = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 };
 const tabs = { display: "flex", gap: 8, flexWrap: "wrap", margin: "18px 0" };
 const tabButton = { border: "1px solid var(--chris-border-soft)", borderRadius: 9, background: "rgba(255,255,255,.03)", color: "var(--chris-text-secondary)", padding: "9px 11px", fontWeight: 800, cursor: "pointer" };

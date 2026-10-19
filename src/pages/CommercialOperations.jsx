@@ -186,10 +186,10 @@ export default function CommercialOperations() {
 
 function Metric({label,value}) { return <div style={panel}><div style={small}>{label.toUpperCase()}</div><div style={{ fontSize:28,fontWeight:900,marginTop:8 }}>{value}</div></div>; }
 function Detail({label,value}) { return <div style={detailCard}><div style={small}>{label.toUpperCase()}</div><div style={{ marginTop:6,fontWeight:700 }}>{value}</div></div>; }
-const panel={background:"linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))",border:"1px solid var(--chris-border-gold)",borderRadius:"var(--chris-radius-card)",padding:18,boxShadow:"var(--chris-shadow-card)"};
+const panel={background:"var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96)))",border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",borderRadius:"var(--chris-ui-panel-radius, var(--chris-radius-card))",padding:18,boxShadow:"var(--chris-ui-panel-shadow, var(--chris-shadow-card))"};
 const metricsGrid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18};
 const detailGrid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginTop:14};
-const detailCard={padding:12,border:"1px solid var(--chris-border-soft)",borderRadius:10,background:"rgba(255,255,255,.025)"};
+const detailCard={padding:12,border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-soft))",borderRadius:"var(--chris-ui-panel-radius, 10px)",background:"var(--chris-ui-panel-background, rgba(255,255,255,.025))"};
 const taskRow={display:"grid",gridTemplateColumns:"minmax(180px,.8fr) minmax(140px,.5fr) minmax(260px,1.7fr)",gap:12,padding:"10px 0",borderBottom:"1px solid var(--chris-border-soft)",alignItems:"start"};
 const table={width:"100%",borderCollapse:"collapse",minWidth:1300};
 const th={padding:"10px 8px",textAlign:"left",fontSize:11,color:"var(--chris-gold)",borderBottom:"1px solid var(--chris-border-soft)"};

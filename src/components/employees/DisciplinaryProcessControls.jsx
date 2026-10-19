@@ -418,10 +418,10 @@ const cardStyle = {
   display: "grid",
   gap: 10,
   alignContent: "start",
-  border: "1px solid #315443",
-  borderRadius: 11,
+  border: "var(--chris-ui-panel-border, 1px solid #315443)",
+  borderRadius: "var(--chris-ui-panel-radius, 11px)",
   padding: 14,
-  background: "#09251A",
+  background: "var(--chris-ui-panel-background, #09251A)",
 };
 const titleStyle = { margin: 0, color: "#EFF6F1", fontSize: 16 };
 const fieldStyle = { display: "grid", gap: 6 };

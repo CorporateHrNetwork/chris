@@ -533,11 +533,11 @@ const metricValueStyle = {
   color: "var(--chris-gold-bright)",
 };
 const panelStyle = {
-  background: "linear-gradient(145deg, var(--chris-panel-bg), var(--chris-panel-bg-soft))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
+  background: "var(--chris-ui-panel-background, linear-gradient(145deg, var(--chris-panel-bg), var(--chris-panel-bg-soft)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
   padding: 18,
-  boxShadow: "var(--chris-shadow-card)",
+  boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
   display: "grid",
   gap: 14,
 };

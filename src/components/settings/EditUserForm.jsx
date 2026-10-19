@@ -1953,13 +1953,13 @@ const employeeCardStyle = {
     "24px",
 
   background:
-    "#F8FAFC",
+    "var(--chris-ui-panel-background, #F8FAFC)",
 
   border:
-    "1px solid #DDE5E1",
+    "var(--chris-ui-panel-border, 1px solid #DDE5E1)",
 
   borderRadius:
-    "12px",
+    "var(--chris-ui-panel-radius, 12px)",
 };
 
 const inputStyle = {
