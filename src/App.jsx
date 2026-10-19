@@ -6,6 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 
+import SessionLoadingScreen from "./components/system/SessionLoadingScreen";
 import MainLayout from "./layouts/MainLayout";
 import CHRiSAutomationCentre from "./pages/CHRiSAutomationCentre";
 import "./styles/ChrisPrintVisualLanguage.css";
@@ -92,17 +93,7 @@ function PermissionLayout({ permission, children }) {
   );
 }
 
-function AppLoading() {
-  return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#07110C", color: "#F7D66A", fontFamily: "Arial, Helvetica, sans-serif" }}>
-      <div role="status" aria-live="polite" style={{ textAlign: "center" }}>
-        <div style={{ width: 52, height: 52, margin: "0 auto 14px", borderRadius: "50%", display: "grid", placeItems: "center", background: "#D4AF37", color: "#07140D", fontWeight: 900 }}>CH</div>
-        <div style={{ fontSize: 18, fontWeight: 900 }}>Loading CHRiS…</div>
-        <div style={{ marginTop: 6, color: "#AFC0B6", fontSize: 12 }}>Opening the selected workspace</div>
-      </div>
-    </div>
-  );
-}
+function AppLoading() { return <SessionLoadingScreen />; }
 
 function App() {
   return (

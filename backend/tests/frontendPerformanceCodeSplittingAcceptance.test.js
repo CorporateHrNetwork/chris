@@ -17,9 +17,13 @@ test("CHRiS route modules are lazy-loaded instead of bundled into initial startu
     'const Reports = lazy(() => import("./pages/Reports"));',
     'const Settings = lazy(() => import("./pages/Settings"));',
     'fallback={<AppLoading />}',
-    'Loading CHRiS…',
+    'import SessionLoadingScreen from "./components/system/SessionLoadingScreen";',
+    'function AppLoading() { return <SessionLoadingScreen />; }',
   ]) assert.ok(app.includes(expected), `Missing route code-splitting control: ${expected}`);
 
+  const startup = read("src/components/system/SessionLoadingScreen.jsx");
+  assert.ok(startup.includes('role="status"'));
+  assert.ok(startup.includes('Starting CHRiS'));
   assert.equal(/^import\s+Payroll\s+from\s+"\.\/pages\/Payroll";$/m.test(app), false);
   assert.equal(/^import\s+Employees\s+from\s+"\.\/pages\/Employees";$/m.test(app), false);
 });

@@ -6,6 +6,8 @@ import {
   verifyAuthSession,
 } from "../../services/api";
 
+import SessionLoadingScreen from "../system/SessionLoadingScreen";
+
 const RETURN_TO_KEY = "chris_return_to";
 
 function currentReturnTo() {
@@ -93,7 +95,7 @@ function ProtectedRoute({ children }) {
   }, []);
 
   if (authState === "checking") {
-    return <FullScreenMessage title="Connecting to CHRIS" message="Verifying your secure session..." />;
+    return <SessionLoadingScreen />;
   }
 
   if (authState === "offline") {

@@ -178,8 +178,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Test internal news confirmation lifecycle
-        run: node --test tests/internalNewsNotice.test.mjs
+      - name: Test news feedback and ESS session/data recovery
+        run: node --test --test-concurrency=1 tests/internalNewsNotice.test.mjs tests/essSessionRecovery.test.mjs
 
       - name: Build frontend
         run: npm run build
