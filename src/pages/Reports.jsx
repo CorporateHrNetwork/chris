@@ -96,9 +96,9 @@ function Reports() {
       setOperationalError("");
       let endpoint = "";
       if (activeView === "attendance") {
-        endpoint = \`/api/reports/operational/attendance?from=\${encodeURIComponent(attendanceFrom)}&to=\${encodeURIComponent(attendanceTo)}\`;
+        endpoint = `/api/reports/operational/attendance?from=${encodeURIComponent(attendanceFrom)}&to=${encodeURIComponent(attendanceTo)}`;
       } else if (activeView === "leave") {
-        endpoint = \`/api/reports/operational/leave?leaveYear=\${encodeURIComponent(leaveYear)}\`;
+        endpoint = `/api/reports/operational/leave?leaveYear=${encodeURIComponent(leaveYear)}`;
       } else if (activeView === "payroll") {
         endpoint = "/api/reports/operational/payroll";
       }
@@ -177,11 +177,11 @@ function Reports() {
       setExporting(true);
       let endpoint;
       if (CORE_VIEWS.has(activeView)) {
-        endpoint = \`/api/reports/release1/export.xlsx?view=\${encodeURIComponent(activeView)}\`;
+        endpoint = `/api/reports/release1/export.xlsx?view=${encodeURIComponent(activeView)}`;
       } else if (activeView === "attendance") {
-        endpoint = \`/api/reports/operational/attendance/export.xlsx?from=\${encodeURIComponent(attendanceFrom)}&to=\${encodeURIComponent(attendanceTo)}\`;
+        endpoint = `/api/reports/operational/attendance/export.xlsx?from=${encodeURIComponent(attendanceFrom)}&to=${encodeURIComponent(attendanceTo)}`;
       } else if (activeView === "leave") {
-        endpoint = \`/api/reports/operational/leave/export.xlsx?leaveYear=\${encodeURIComponent(leaveYear)}\`;
+        endpoint = `/api/reports/operational/leave/export.xlsx?leaveYear=${encodeURIComponent(leaveYear)}`;
       } else if (activeView === "payroll") {
         endpoint = "/api/reports/operational/payroll/export.xlsx";
       }
@@ -198,7 +198,7 @@ function Reports() {
   const scope = operational?.scope || report?.scope;
   const scopeLabel = scope?.mode === "HEAD_OFFICE_CONSOLIDATED"
     ? "HEAD OFFICE · CONSOLIDATED"
-    : \`${scope?.locationName || "BRANCH"}\${scope?.locationCode ? \` · ${scope.locationCode}\` : ""}\`;
+    : `${scope?.locationName || "BRANCH"}${scope?.locationCode ? ` · ${scope.locationCode}` : ""}`;
 
   return (
     <div className="chris-users-roles chris-reports-page" style={pageStyle}>
@@ -361,7 +361,7 @@ function EmployeeReport({ rows, totalRows, search, onSearch }) {
   return (
     <Panel
       title="Employee Report"
-      subtitle={\`${rows.length.toLocaleString("en-NG")} of ${totalRows.toLocaleString("en-NG")} current employees shown.\`}
+      subtitle={`${rows.length.toLocaleString("en-NG")} of ${totalRows.toLocaleString("en-NG")} current employees shown.`}
       actions={<input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search employee, branch, department..." style={searchStyle} />}
     >
       <div style={tableWrapStyle}>
@@ -454,15 +454,15 @@ function LeaveReport({ data, year, onYear }) {
   return (
     <>
       <MetricCards cards={cards} />
-      <Panel title="Leave Requests" subtitle={\`${data.summary?.requestCount || 0} leave request record(s) in the permitted scope.\`} actions={<label style={filterLabelStyle}>Leave year<input type="number" min="2000" max="2100" value={year} onChange={(e) => onYear(Number(e.target.value) || new Date().getFullYear())} style={yearInputStyle} /></label>}>
+      <Panel title="Leave Requests" subtitle={`${data.summary?.requestCount || 0} leave request record(s) in the permitted scope.`} actions={<label style={filterLabelStyle}>Leave year<input type="number" min="2000" max="2100" value={year} onChange={(e) => onYear(Number(e.target.value) || new Date().getFullYear())} style={yearInputStyle} /></label>}>
         <div style={tableWrapStyle}><table style={tableStyle}>
           <thead><tr>{["Employee", "Department", "Cost Centre", "Leave Type", "Policy", "Start", "End", "Units", "Status", "Branch"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
           <tbody>{(data.requests || []).map((row) => <tr key={row.id}>
-            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td><td style={tdStyle}>{row.department || "—"}</td><td style={tdStyle}>{row.costCentreCode ? \`${row.costCentreCode} · ${row.costCentre || ""}\` : (row.costCentre || "—")}</td><td style={tdStyle}>{row.leaveType || "—"}</td><td style={tdStyle}>{row.policy || "—"}</td><td style={tdStyle}>{row.startDate || "—"}</td><td style={tdStyle}>{row.endDate || "—"}</td><td style={tdStyle}>{row.requestedUnits}</td><td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{row.branch || "—"}</td>
+            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td><td style={tdStyle}>{row.department || "—"}</td><td style={tdStyle}>{row.costCentreCode ? `${row.costCentreCode} · ${row.costCentre || ""}` : (row.costCentre || "—")}</td><td style={tdStyle}>{row.leaveType || "—"}</td><td style={tdStyle}>{row.policy || "—"}</td><td style={tdStyle}>{row.startDate || "—"}</td><td style={tdStyle}>{row.endDate || "—"}</td><td style={tdStyle}>{row.requestedUnits}</td><td style={tdStyle}><StatusBadge value={row.status} /></td><td style={tdStyle}>{row.branch || "—"}</td>
           </tr>)}{!data.requests?.length && <tr><td colSpan={10} style={emptyCellStyle}>No leave requests are available in this scope.</td></tr>}</tbody>
         </table></div>
       </Panel>
-      <Panel title={\`${year} Leave Balances\`} subtitle="Entitlement, usage, committed requests and available balance.">
+      <Panel title={`${year} Leave Balances`} subtitle="Entitlement, usage, committed requests and available balance.">
         <div style={tableWrapStyle}><table style={tableStyle}>
           <thead><tr>{["Employee", "Leave Type", "Entitlement", "Used", "Pending", "Approved", "Available"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
           <tbody>{(data.balances || []).map((row) => <tr key={row.id}>
@@ -483,7 +483,7 @@ function PayrollAllocationTable({ title, rows, showCode = false }) {
           "Allocation", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"
         ].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
         <tbody>
-          {(rows || []).map((row) => <tr key={\`${row.code || ""}:${row.label}\`}>
+          {(rows || []).map((row) => <tr key={`${row.code || ""}:${row.label}`}>
             {showCode && <td style={tdStyle}>{row.code || "—"}</td>}
             <td style={tdStrongStyle}>{row.label}</td>
             <td style={tdStyle}>{Number(row.headcount || 0).toLocaleString("en-NG")}</td>
@@ -517,7 +517,7 @@ function PayrollReport({ data }) {
       <MetricCards cards={cards} />
       <PayrollAllocationTable title="Payroll by Department" rows={data.allocation?.byDepartment || []} />
       <PayrollAllocationTable title="Payroll by Cost Centre / Operating Unit" rows={data.allocation?.byCostCentre || []} showCode />
-      <Panel title="Payroll Run History" subtitle={latest ? \`Latest: ${latest.periodName || latest.periodCode || "Payroll period"} · ${friendlyLabel(latest.status)}\` : "No payroll run has been calculated yet."}>
+      <Panel title="Payroll Run History" subtitle={latest ? `Latest: ${latest.periodName || latest.periodCode || "Payroll period"} · ${friendlyLabel(latest.status)}` : "No payroll run has been calculated yet."}>
         <div style={controlNoteStyle}>{data.control}</div>
         <div style={tableWrapStyle}><table style={tableStyle}>
           <thead><tr>{["Period", "Status", "Statutory", "Employees", "Gross", "Deductions", "Net", "Pay Date"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
@@ -547,7 +547,7 @@ function BreakdownBars({ rows, total, maxRows = 12 }) {
   return <div style={{ display: "grid", gap: 11 }}>{visible.map((row) => {
     const count = Number(row.count || 0);
     const percentage = total ? Math.round((count / total) * 1000) / 10 : 0;
-    return <div key={row.name}><div style={barLabelRowStyle}><span>{friendlyLabel(row.name)}</span><strong>{count.toLocaleString("en-NG")} · {percentage}%</strong></div><div style={barTrackStyle}><div style={{ ...barFillStyle, width: \`${Math.max(2, (count / maximum) * 100)}%\` }} /></div></div>;
+    return <div key={row.name}><div style={barLabelRowStyle}><span>{friendlyLabel(row.name)}</span><strong>{count.toLocaleString("en-NG")} · {percentage}%</strong></div><div style={barTrackStyle}><div style={{ ...barFillStyle, width: `${Math.max(2, (count / maximum) * 100)}%` }} /></div></div>;
   })}{!visible.length && <div style={emptyTextStyle}>No report data available.</div>}</div>;
 }
 
@@ -559,7 +559,7 @@ function Panel({ title, subtitle, actions, children, variant = "default" }) {
   const summary = variant === "summary";
   return (
     <section
-      className={\`reports-panel chris-role-card\${summary ? " reports-panel--summary" : ""}\`}
+      className={`reports-panel chris-role-card${summary ? " reports-panel--summary" : ""}`}
       style={summary ? summaryPanelStyle : panelStyle}
     >
       <div style={panelHeaderStyle}>
