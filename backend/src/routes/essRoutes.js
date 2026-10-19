@@ -6,6 +6,8 @@ const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
 const { requireEssAuth } = require("../middleware/authMiddleware");
 
+const { ESS_STATUTORY_OBLIGATIONS_SQL } = require("../services/essStatutoryService");
+
 const router = express.Router();
 
 const ESS_EMPLOYEE_STATUSES = new Set(["ACTIVE", "PROBATION", "LEAVE"]);
@@ -246,7 +248,7 @@ router.get("/dashboard", requireEssAuth, async (req,res) => {
     const [onboardingRows,documents,statutory,attendance,payslips,leaveBalances,cycles,gratuityRows,newsRows,birthdayRows,anniversaryRows]=await Promise.all([
       prisma.$queryRawUnsafe('SELECT eo."id",eo."completionPercent",eo."currentStage",eo."status",eo."sectionProgress",eo."sectionData",t."sections" AS "templateSections",eo."updatedAt" FROM "employee_onboardings" eo JOIN "onboarding_workflow_templates" t ON t."id"=eo."templateId" AND t."organizationId"=eo."organizationId" WHERE eo."organizationId"=$1 AND eo."employeeId"=$2 ORDER BY eo."updatedAt" DESC LIMIT 1',orgId,eid),
       prisma.$queryRawUnsafe('SELECT "id","category","originalName","mimeType","sizeBytes","createdAt" FROM "employee_documents" WHERE "organizationId"=$1 AND "employeeId"=$2 ORDER BY "createdAt" DESC',orgId,eid),
-      prisma.$queryRawUnsafe('SELECT "id","obligationType","periodYear","periodMonth","currency","assessableBase","employeeAmount","employerAmount","totalLiability","amountRemitted","status","dueDate" FROM "statutory_obligations" WHERE "organizationId"=$1 AND "employeeId"=$2 ORDER BY "periodYear" DESC,"periodMonth" DESC,"obligationType"',orgId,eid),
+      prisma.$queryRawUnsafe(ESS_STATUTORY_OBLIGATIONS_SQL,orgId,eid),
       prisma.$queryRawUnsafe('SELECT "id","attendanceDate","clockIn","clockOut","status","lateMinutes","overtimeMinutes","source" FROM "attendance_records" WHERE "organizationId"=$1 AND "employeeId"=$2 ORDER BY "attendanceDate" DESC LIMIT 60',orgId,eid),
       prisma.$queryRawUnsafe('SELECT l."id",l."runId",l."currency",l."baseSalary",l."allowances",l."deductions",l."advanceRecovery",l."loanRecovery",l."grossPay",l."netPreview",l."statutoryStatus",l."details",r."status" AS "runStatus",r."approvedAt",p."code" AS "periodCode",p."name" AS "periodName",p."periodStart",p."periodEnd",p."payDate" FROM payroll_run_lines l JOIN payroll_runs r ON r."id"=l."runId" AND r."organizationId"=l."organizationId" JOIN payroll_periods p ON p."id"=r."periodId" AND p."organizationId"=r."organizationId" WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND r."status"=\'APPROVED\' ORDER BY p."periodStart" DESC,r."approvedAt" DESC',orgId,eid),
       prisma.$queryRawUnsafe('SELECT lb."id",lb."leaveYear",lb."openingBalance",lb."accrued",lb."carriedForward",lb."used",lb."adjusted",lt."name" AS "leaveType" FROM "leave_balances" lb JOIN "leave_types" lt ON lt."id"=lb."leaveTypeId" AND lt."organizationId"=lb."organizationId" WHERE lb."organizationId"=$1 AND lb."employeeId"=$2 ORDER BY lb."leaveYear" DESC,lt."name"',orgId,eid),
