@@ -441,10 +441,10 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
 const panel = {
   marginTop: 18,
   padding: 20,
-  borderRadius: 18,
-  border: "1px solid rgba(212,175,55,.3)",
-  background: "linear-gradient(145deg,#042417,#02130d)",
-  color: "#F7FAF8",
+  borderRadius: "var(--chris-ui-panel-radius, 18px)",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.3))",
+  background: "var(--chris-ui-panel-background, linear-gradient(145deg,#042417,#02130d))",
+  color: "var(--chris-text-main, #F7FAF8)",
 };
 const heading = { margin: "0 0 6px", fontSize: 21, color: "#F7FAF8" };
 const eyebrow = {
@@ -472,9 +472,9 @@ const summaryCard = {
   display: "grid",
   gap: 5,
   padding: 12,
-  borderRadius: 10,
-  border: "1px solid rgba(212,175,55,.18)",
-  background: "rgba(255,255,255,.02)",
+  borderRadius: "var(--chris-ui-panel-radius, 10px)",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.18))",
+  background: "var(--chris-ui-panel-background, rgba(255,255,255,.02))",
 };
 const summaryLabel = {
   color: "#D4AF37",
@@ -491,9 +491,9 @@ const workflowCard = {
   display: "grid",
   gap: 10,
   padding: 14,
-  borderRadius: 12,
-  border: "1px solid rgba(212,175,55,.2)",
-  background: "#061A11",
+  borderRadius: "var(--chris-ui-panel-radius, 12px)",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.2))",
+  background: "var(--chris-ui-panel-background, #061A11)",
 };
 const label = {
   display: "grid",

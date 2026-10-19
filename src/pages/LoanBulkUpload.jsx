@@ -294,6 +294,6 @@ const messageStyle = { padding: 12, marginBottom: 12, borderRadius: 10, border: 
 const errorText = { color: "#ef4444", marginTop: 4 };
 const warningText = { color: "var(--chris-dashboard-gold-bright)", marginTop: 4 };
 const aliasGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 };
-const aliasCard = { display: "grid", gap: 5, padding: 12, border: "1px solid var(--chris-dashboard-border)", borderRadius: 10, background: "var(--chris-dashboard-surface)" };
+const aliasCard = { display: "grid", gap: 5, padding: 12, border: "var(--chris-ui-panel-border, 1px solid var(--chris-dashboard-border))", borderRadius: "var(--chris-ui-panel-radius, 10px)", background: "var(--chris-ui-panel-background, var(--chris-dashboard-surface))" };
 
 export default LoanBulkUpload;

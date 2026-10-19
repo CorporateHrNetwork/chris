@@ -1047,9 +1047,9 @@ const employeeCardStyle = {
   marginTop: "14px",
   padding: "18px",
   border:
-    "1px solid #D1FAE5",
-  borderRadius: "12px",
-  background: "#FAFFFC",
+    "var(--chris-ui-panel-border, 1px solid #D1FAE5)",
+  borderRadius: "var(--chris-ui-panel-radius, 12px)",
+  background: "var(--chris-ui-panel-background, #FAFFFC)",
 };
 
 const employeeDetailsGridStyle = {

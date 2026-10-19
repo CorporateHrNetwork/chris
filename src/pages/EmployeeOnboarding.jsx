@@ -3459,14 +3459,14 @@ const cardGridStyle = {
 
 const workflowCardStyle = {
   borderRadius:
-    "var(--chris-radius-card)",
+    "var(--chris-ui-panel-radius, var(--chris-radius-card))",
   overflow: "hidden",
   border:
-    "1px solid var(--chris-border-gold)",
+    "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
   background:
-    "linear-gradient(145deg,rgba(12,38,26,.94),rgba(7,18,13,.98))",
+    "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(12,38,26,.94),rgba(7,18,13,.98)))",
   boxShadow:
-    "var(--chris-shadow-card)",
+    "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
 };
 
 const workflowVisualStyle = {
@@ -3617,11 +3617,11 @@ const statusCardGridStyle = {
 const recordCardStyle = {
   padding: 18,
   borderRadius:
-    "var(--chris-radius-card)",
+    "var(--chris-ui-panel-radius, var(--chris-radius-card))",
   border:
-    "1px solid var(--chris-border-soft)",
+    "var(--chris-ui-panel-border, 1px solid var(--chris-border-soft))",
   background:
-    "rgba(255,255,255,.018)",
+    "var(--chris-ui-panel-background, rgba(255,255,255,.018))",
 };
 
 const recordHeaderStyle = {

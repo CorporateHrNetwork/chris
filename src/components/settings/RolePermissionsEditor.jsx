@@ -1430,16 +1430,16 @@ STYLES
 
 const moduleCardStyle = {
   border:
-    "1px solid #E2E8F0",
+    "var(--chris-ui-panel-border, 1px solid #E2E8F0)",
 
   borderRadius:
-    "12px",
+    "var(--chris-ui-panel-radius, 12px)",
 
   overflow:
     "hidden",
 
   background:
-    "#FFFFFF",
+    "var(--chris-ui-panel-background, #FFFFFF)",
 };
 
 const moduleActionButtonStyle = {

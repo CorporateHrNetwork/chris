@@ -1647,7 +1647,7 @@ function InlineNotice({
   );
 }
 
-const panelStyle={background:"linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))",border:"1px solid var(--chris-border-gold)",borderRadius:"var(--chris-radius-card)",padding:20,boxShadow:"var(--chris-shadow-card)"};
+const panelStyle={background:"var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96)))",border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",borderRadius:"var(--chris-ui-panel-radius, var(--chris-radius-card))",padding:20,boxShadow:"var(--chris-ui-panel-shadow, var(--chris-shadow-card))"};
 const metricGridStyle={display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:14,margin:"18px 0"};
 const workspaceGridStyle={display:"grid",gridTemplateColumns:"minmax(370px,.95fr) minmax(650px,1.55fr)",gap:18,alignItems:"start",marginTop:18};
 const sourceGridStyle={display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,marginTop:16};

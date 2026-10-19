@@ -41,19 +41,19 @@ function QuickActions() {
 
 const cardStyle = {
   background:
-    "linear-gradient(145deg, rgba(255,255,255,0.985), rgba(246,250,247,0.97))",
+    "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(255,255,255,0.985), rgba(246,250,247,0.97)))",
 
   border:
-    "1px solid rgba(212,175,55,0.20)",
+    "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,0.20))",
 
   borderRadius:
-    "18px",
+    "var(--chris-ui-panel-radius, 18px)",
 
   padding:
     "24px",
 
   boxShadow:
-    "0 14px 34px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.90)",
+    "var(--chris-ui-panel-shadow, 0 14px 34px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.90))",
 
   minHeight:
     "280px",

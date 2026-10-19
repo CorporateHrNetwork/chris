@@ -1,0 +1,136 @@
+/* The main dashboard is the visual authority for authenticated workspaces.
+   Aliases are screen-scoped so reports keep their existing paper styling. */
+@media screen {
+  .chris-shell,
+  .essshell {
+    --chris-ui-panel-background: radial-gradient(circle at 18% 0%, rgba(36,217,118,.13), transparent 30%), linear-gradient(145deg, var(--chris-dashboard-surface-soft), var(--chris-dashboard-surface-deep));
+    --chris-ui-panel-border: 1px solid var(--chris-dashboard-border);
+    --chris-ui-panel-radius: var(--chris-dashboard-radius);
+    --chris-ui-panel-shadow: var(--chris-dashboard-shadow);
+    --chris-ui-canvas: radial-gradient(circle at 8% 5%, rgba(0,145,78,.14), transparent 25%), radial-gradient(circle at 92% 88%, rgba(212,175,55,.10), transparent 24%), linear-gradient(135deg, #07110c 0%, #0a1510 48%, #07100b 100%);
+
+    --chris-panel: var(--chris-dashboard-surface);
+    --chris-panel-deep: var(--chris-dashboard-surface-deep);
+    --chris-panel-soft: var(--chris-dashboard-surface-soft);
+    --chris-text: var(--chris-dashboard-text);
+    --chris-muted: var(--chris-dashboard-muted);
+    --chris-border: var(--chris-dashboard-border);
+    --chris-shadow: var(--chris-dashboard-shadow);
+    --chris-green-bright: var(--chris-dashboard-green-bright);
+    --chris-text-main: var(--chris-dashboard-text);
+    --chris-text-primary: var(--chris-dashboard-text);
+    --chris-text-on-dark: var(--chris-dashboard-text);
+    --chris-text-secondary: var(--chris-dashboard-muted);
+    --chris-text-muted: #9fb1a7;
+    --chris-text-on-dark-muted: var(--chris-dashboard-muted);
+    --chris-panel-bg: var(--chris-dashboard-surface);
+    --chris-panel-bg-soft: var(--chris-dashboard-surface-soft);
+    --chris-surface: var(--chris-dashboard-surface);
+    --chris-surface-white: var(--chris-dashboard-surface);
+    --chris-surface-soft-green: var(--chris-dashboard-surface-soft);
+    --chris-border-gold: var(--chris-dashboard-border);
+    --chris-card-shadow: var(--chris-dashboard-shadow);
+    --chris-shadow-card: var(--chris-dashboard-shadow);
+    --chris-radius-card: var(--chris-dashboard-radius);
+    --chris-input-bg: #062219;
+
+    color: var(--chris-dashboard-text);
+    font-family: var(--chris-font-family);
+    font-size: 14px;
+    line-height: 1.55;
+    color-scheme: dark;
+  }
+
+  .chris-shell :is(.chris-organization-structure,.chris-organization-locations) {
+    --org-panel: var(--chris-dashboard-surface-soft);
+    --org-panel-deep: var(--chris-dashboard-surface-deep);
+    --org-border: var(--chris-dashboard-border);
+    --org-muted: var(--chris-dashboard-muted);
+    --org-white: var(--chris-dashboard-text);
+  }
+
+  .chris-shell .chris-main-content {
+    background: var(--chris-ui-canvas) !important;
+  }
+
+  .chris-shell .chris-page :is(h1,h2,h3,h4,h5,h6) {
+    color: var(--chris-dashboard-text) !important;
+    font-family: var(--chris-font-family) !important;
+    line-height: 1.25 !important;
+  }
+  .chris-shell .chris-page h1 {
+    font-size: clamp(26px, 2.2vw, 30px) !important;
+    font-weight: 850 !important;
+    letter-spacing: -.02em;
+  }
+  .chris-shell .chris-page h2 { font-size: 20px !important; }
+  .chris-shell .chris-page h3 { font-size: 16px !important; }
+  .chris-shell .chris-page p { color: var(--chris-dashboard-muted); }
+  .chris-shell :is(button,input,select,textarea),
+  .essshell :is(button,input,select,textarea) { font-family: inherit !important; }
+
+  .chris-shell .chris-main-content .chris-page [style*="--chris-ui-panel-background"],
+  .chris-shell .chris-main-content :is(.chris-panel,.chris-card,.card,.panel,.dashboard-card,.metric-card,.stat-card,.summary-card,.chris-dashboard-card,.chris-analytics-panel,.chris-quick-action-card,.chris-quick-actions-section,.chris-role-card,.leave-request-modal,.chris-operational-panel),
+  .essshell :is(.card,.metric,.sectiontile) {
+    background: var(--chris-ui-panel-background) !important;
+    border: var(--chris-ui-panel-border) !important;
+    border-radius: var(--chris-ui-panel-radius) !important;
+    box-shadow: var(--chris-ui-panel-shadow) !important;
+    color: var(--chris-dashboard-text) !important;
+  }
+
+  .chris-shell .chris-page :is(input,select,textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+    background: var(--chris-input-bg) !important;
+    color: var(--chris-dashboard-text) !important;
+    border: 1px solid rgba(212,175,55,.42) !important;
+    border-radius: 10px !important;
+    font-size: 14px !important;
+    min-height: 40px;
+    padding: 9px 12px;
+    max-width: 100%;
+  }
+  .chris-shell .chris-page :is(input,textarea)::placeholder { color: #9fb1a7 !important; }
+  .chris-shell .chris-page select option { background: #062219; color: #f7faf8; }
+  .chris-shell .chris-page :is(input[type="checkbox"],input[type="radio"]) { accent-color: var(--chris-dashboard-gold); }
+  .chris-shell .chris-page :is(button,a,input,select,textarea):focus-visible {
+    outline: 2px solid var(--chris-dashboard-gold-bright) !important;
+    outline-offset: 3px;
+  }
+  .chris-shell .chris-page :is(button,input,select,textarea):disabled { opacity: .58; cursor: not-allowed; }
+
+  .chris-shell .chris-page table { font: inherit; color: var(--chris-dashboard-text); }
+  .chris-shell .chris-page thead { background: var(--chris-dashboard-surface-deep); }
+  .chris-shell .chris-page th { color: var(--chris-dashboard-muted) !important; }
+  .chris-shell .chris-page :is(th,td) { padding: 12px 14px; border-bottom: 1px solid var(--chris-dashboard-rule) !important; }
+
+  /* Do not move editing surfaces when a pointer crosses a card. */
+  .chris-shell .chris-main-content :is([class*="card"],[class*="Card"],[class*="panel"],[class*="Panel"],[class*="summary"],[class*="metric"],[class*="stat-"]):hover {
+    transform: none;
+  }
+  .chris-shell .chris-success-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 14px;
+    padding: 12px 16px;
+    border: 1px solid rgba(46,233,139,.4);
+    border-radius: 10px;
+    background: rgba(46,233,139,.08);
+    color: var(--chris-dashboard-green-bright);
+  }
+  .chris-shell .chris-success-notice button {
+    flex: 0 0 auto;
+    min-width: 36px;
+    min-height: 36px;
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-size: 20px;
+    line-height: 1;
+  }
+  @media (max-width: 680px) {
+    .chris-shell .chris-page :is(th,td) { padding: 10px; }
+  }
+}

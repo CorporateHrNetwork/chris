@@ -150,10 +150,10 @@ const managerActionButtonStyle = {
 };
 const panelStyle = {
   padding: 24,
-  border: "1px solid rgba(251,113,133,.35)",
-  borderRadius: "var(--chris-radius-card)",
-  background: "linear-gradient(145deg,rgba(35,18,18,.96),rgba(7,18,13,.98))",
-  color: "var(--chris-text-main)",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(251,113,133,.35))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(35,18,18,.96),rgba(7,18,13,.98)))",
+  color: "var(--chris-text-main, var(--chris-text-main))",
 };
 const eyebrowStyle = { margin: 0, color: "var(--chris-danger)", fontWeight: 900 };
 const titleStyle = { margin: "8px 0", color: "var(--chris-text-main)" };

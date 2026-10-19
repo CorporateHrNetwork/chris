@@ -286,7 +286,7 @@ export default function LineManagers() {
 }
 
 const hero = { padding: 24, marginBottom: 18, borderRadius: 20, border: "1px solid rgba(212,175,55,.55)", background: "linear-gradient(145deg,#063722,#02170f)" };
-const panel = { padding: 20, borderRadius: 18, border: "1px solid rgba(212,175,55,.3)", background: "linear-gradient(145deg,#042417,#02130d)", color: "#F7FAF8" };
+const panel = { padding: 20, borderRadius: "var(--chris-ui-panel-radius, 18px)", border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.3))", background: "var(--chris-ui-panel-background, linear-gradient(145deg,#042417,#02130d))", color: "var(--chris-text-main, #F7FAF8)" };
 const columns = { display: "grid", gridTemplateColumns: "minmax(280px,.8fr) minmax(0,1.3fr)", gap: 18 };
 const title = { margin: 0, color: "#F7FAF8", fontSize: 31 };
 const eyebrow = { color: "#D4AF37", fontSize: 10, fontWeight: 900, letterSpacing: ".13em", marginBottom: 6 };

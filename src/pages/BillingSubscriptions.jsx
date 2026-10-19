@@ -78,7 +78,7 @@ const lineLabels = [
   ['onboarding','Onboarding — once per employee'],
   ['support','Technical support — annual'],
 ];
-const box = { background:'#071B12', border:'1px solid rgba(212,175,55,.30)', borderRadius:14, padding:18, color:'#f5f8f6' };
+const box = { background:"var(--chris-ui-panel-background, #071B12)", border:"var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.30))", borderRadius:"var(--chris-ui-panel-radius, 14px)", padding:18, color:"var(--chris-text-main, #f5f8f6)" };
 const input = { width:'100%', minHeight:40, boxSizing:'border-box', borderRadius:9, border:'1px solid rgba(212,175,55,.45)', background:'#0B2118', color:'#ffffff', padding:'8px 10px', font:'inherit' };
 
 function PriceTable({ heading, quote }) {

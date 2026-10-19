@@ -166,6 +166,6 @@ function Summary({ label, value }) {
 const controls = { display: "flex", alignItems: "end", gap: 10, flexWrap: "wrap" };
 const field = { display: "grid", gap: 6, minWidth: 160 };
 const yearCard = { display: "grid", gap: 5, padding: "8px 12px", minWidth: 150, border: "1px solid rgba(212,175,55,.25)", borderRadius: 10 };
-const ruleBox = { marginTop: 14, padding: 12, borderRadius: 10, background: "rgba(255,255,255,.04)", color: "var(--chris-text-secondary)", lineHeight: 1.55, fontSize: 12 };
+const ruleBox = { marginTop: 14, padding: 12, borderRadius: "var(--chris-ui-panel-radius, 10px)", background: "var(--chris-ui-panel-background, rgba(255,255,255,.04))", color: "var(--chris-text-main, var(--chris-text-secondary))", lineHeight: 1.55, fontSize: 12 };
 const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10 };
-const summaryCard = { display: "grid", gap: 4, padding: 10, border: "1px solid rgba(212,175,55,.2)", borderRadius: 10, background: "rgba(255,255,255,.03)" };
+const summaryCard = { display: "grid", gap: 4, padding: 10, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.2))", borderRadius: "var(--chris-ui-panel-radius, 10px)", background: "var(--chris-ui-panel-background, rgba(255,255,255,.03))" };

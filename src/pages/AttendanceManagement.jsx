@@ -4,14 +4,14 @@ import { useNavigate } from "react-router-dom";
 
 const panel = {
   background:
-    "linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96))",
+    "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.90), rgba(7,18,13,.96)))",
   border:
-    "1px solid var(--chris-border-gold)",
+    "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
   borderRadius:
-    "var(--chris-radius-card)",
+    "var(--chris-ui-panel-radius, var(--chris-radius-card))",
   padding: 20,
   boxShadow:
-    "var(--chris-shadow-card)",
+    "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
 };
 
 const input = {

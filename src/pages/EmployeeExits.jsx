@@ -2582,10 +2582,10 @@ const twoColumn = {
 
 const panel = {
   padding: 20,
-  border: "1px solid rgba(212,175,55,.30)",
-  borderRadius: 18,
-  background: "linear-gradient(145deg,rgba(4,36,23,.94),rgba(2,19,13,.96))",
-  boxShadow: "0 18px 42px rgba(0,0,0,.22)",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.30))",
+  borderRadius: "var(--chris-ui-panel-radius, 18px)",
+  background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(4,36,23,.94),rgba(2,19,13,.96)))",
+  boxShadow: "var(--chris-ui-panel-shadow, 0 18px 42px rgba(0,0,0,.22))",
 };
 
 const employeeCard = {

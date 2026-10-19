@@ -208,12 +208,12 @@ function compactDuration(duration) {
 const panelStyle = {
   marginTop: "22px",
   padding: "22px",
-  borderRadius: "var(--chris-radius-card)",
-  border: "1px solid var(--chris-border-gold)",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
   background:
-    "linear-gradient(145deg,rgba(12,38,26,.94),rgba(7,18,13,.98))",
-  boxShadow: "var(--chris-shadow-card)",
-  color: "var(--chris-text-main)",
+    "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(12,38,26,.94),rgba(7,18,13,.98)))",
+  boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
+  color: "var(--chris-text-main, var(--chris-text-main))",
 };
 
 const headerStyle = {

@@ -110,7 +110,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
   );
 }
 
-const panelStyle = { marginTop: 16, padding: 16, border: "1px solid rgba(212,175,55,.35)", borderRadius: 12, background: "rgba(3,28,18,.62)" };
+const panelStyle = { marginTop: 16, padding: 16, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.35))", borderRadius: "var(--chris-ui-panel-radius, 12px)", background: "var(--chris-ui-panel-background, rgba(3,28,18,.62))" };
 const headingStyle = { color: "#D4AF37", fontSize: 11, fontWeight: 900, letterSpacing: ".1em" };
 const helpStyle = { margin: "7px 0 13px", color: "#A9BDB2", fontSize: 12, lineHeight: 1.55 };
 const gridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12, alignItems: "end" };
