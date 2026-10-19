@@ -306,13 +306,13 @@ function MetricCards({ cards }) {
       {cards.map((card) => (
         <div className="reports-kpi-card chris-role-card" key={card.title} style={kpiCardStyle}>
           <div style={kpiTopStyle}>
-            <span style={kpiLabelStyle}>{card.title}</span>
+            <span className="reports-kpi-label" style={kpiLabelStyle}>{card.title}</span>
             {card.icon && <span style={card.tone === "gold" ? iconGoldStyle : iconGreenStyle}>{card.icon}</span>}
           </div>
-          <div style={card.tone === "gold" ? kpiValueGoldStyle : kpiValueGreenStyle}>
+          <div className="reports-kpi-value" style={card.tone === "gold" ? kpiValueGoldStyle : kpiValueGreenStyle}>
             {card.format === "money" ? formatMoney(card.value) : Number(card.value || 0).toLocaleString("en-NG")}
           </div>
-          {card.subtitle && <div style={metricSubtitleStyle}>{card.subtitle}</div>}
+          {card.subtitle && <div className="reports-kpi-subtitle" style={metricSubtitleStyle}>{card.subtitle}</div>}
         </div>
       ))}
     </div>
@@ -547,7 +547,7 @@ function BreakdownBars({ rows, total, maxRows = 12 }) {
   return <div style={{ display: "grid", gap: 11 }}>{visible.map((row) => {
     const count = Number(row.count || 0);
     const percentage = total ? Math.round((count / total) * 1000) / 10 : 0;
-    return <div key={row.name}><div style={barLabelRowStyle}><span>{friendlyLabel(row.name)}</span><strong>{count.toLocaleString("en-NG")} · {percentage}%</strong></div><div style={barTrackStyle}><div style={{ ...barFillStyle, width: `${Math.max(2, (count / maximum) * 100)}%` }} /></div></div>;
+    return <div key={row.name}><div className="reports-breakdown-label" style={barLabelRowStyle}><span>{friendlyLabel(row.name)}</span><strong>{count.toLocaleString("en-NG")} · {percentage}%</strong></div><div style={barTrackStyle}><div style={{ ...barFillStyle, width: `${Math.max(2, (count / maximum) * 100)}%` }} /></div></div>;
   })}{!visible.length && <div style={emptyTextStyle}>No report data available.</div>}</div>;
 }
 
@@ -565,7 +565,7 @@ function Panel({ title, subtitle, actions, children, variant = "default" }) {
       <div style={panelHeaderStyle}>
         <div>
           <h2 style={summary ? summaryPanelTitleStyle : panelTitleStyle}>{title}</h2>
-          {subtitle && <div style={summary ? summaryPanelSubtitleStyle : panelSubtitleStyle}>{subtitle}</div>}
+          {subtitle && <div className="reports-panel-subtitle" style={summary ? summaryPanelSubtitleStyle : panelSubtitleStyle}>{subtitle}</div>}
         </div>
         {actions}
       </div>
