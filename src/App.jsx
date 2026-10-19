@@ -12,6 +12,7 @@ import CHRiSAutomationCentre from "./pages/CHRiSAutomationCentre";
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
+import RecruitmentReports from "./pages/RecruitmentReports";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
@@ -252,7 +253,7 @@ function App() {
         <Route path="/reports/employees" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/headcount" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/branches" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/reports/recruitment" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/reports/recruitment" element={<PermissionLayout permission="recruitment.view"><RecruitmentReports /></PermissionLayout>} />
         <Route path="/reports/attendance" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/leave" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/payroll" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
