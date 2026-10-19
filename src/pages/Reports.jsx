@@ -605,7 +605,8 @@ function formatMoney(value) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-const pageStyle = { padding: "4px 0 32px", color: "#EAF5EF" };
+const reportFontFamily = 'var(--chris-font-family, "Segoe UI", "Inter", Arial, sans-serif)';
+const pageStyle = { padding: "4px 0 32px", color: "#EAF5EF", fontFamily: reportFontFamily };
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, flexWrap: "wrap" };
 const eyebrowStyle = { color: "var(--chris-gold, #D4AF37)", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" };
 const titleStyle = { margin: "7px 0 0", fontSize: 30, color: "#F7FAF8" };
