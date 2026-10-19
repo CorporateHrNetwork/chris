@@ -35,6 +35,7 @@ const VIEWS = [
   { key: "attendance", label: "Attendance Reports", permission: "attendance.view" },
   { key: "leave", label: "Leave Reports", permission: "leave.view" },
   { key: "payroll", label: "Payroll Reports", permission: "payroll.view" },
+  { key: "recruitment", label: "Recruitment Reports", permission: "recruitment.view" },
 ];
 
 const CORE_VIEWS = new Set(["overview", "workforce", "employees", "headcount", "branches"]);
@@ -101,6 +102,18 @@ function Reports() {
         endpoint = `/api/reports/operational/leave?leaveYear=${encodeURIComponent(leaveYear)}`;
       } else if (activeView === "payroll") {
         endpoint = "/api/reports/operational/payroll";
+      } else if (activeView === "recruitment") {
+        const [summaryResult, requisitionResult] = await Promise.all([
+          apiRequest("/api/recruitment/summary"),
+          apiRequest("/api/recruitment/requisitions"),
+        ]);
+        setOperational({
+          summary: summaryResult?.data || {},
+          requisitions: requisitionResult?.data || [],
+          generatedAt: new Date().toISOString(),
+          scope: summaryResult?.data?.scope || null,
+        });
+        return;
       }
       if (!endpoint) return;
       const result = await apiRequest(endpoint);
@@ -184,6 +197,9 @@ function Reports() {
         endpoint = `/api/reports/operational/leave/export.xlsx?leaveYear=${encodeURIComponent(leaveYear)}`;
       } else if (activeView === "payroll") {
         endpoint = "/api/reports/operational/payroll/export.xlsx";
+      } else if (activeView === "recruitment") {
+        window.print();
+        return;
       }
       if (!endpoint) return;
       const file = await apiDownload(endpoint);
@@ -220,7 +236,7 @@ function Reports() {
             <FaPrint /> Print / Save PDF
           </button>
           <button type="button" style={primaryButtonStyle} onClick={exportExcel} disabled={exporting || loading || !viewData || Boolean(viewError)}>
-            <FaDownload /> {exporting ? "Exporting..." : "Export Excel"}
+            <FaDownload /> {activeView === "recruitment" ? "Print / Save PDF" : exporting ? "Exporting..." : "Export Excel"}
           </button>
         </div>
       </div>
@@ -277,6 +293,9 @@ function Reports() {
           {activeView === "payroll" && operational && (
             <PayrollReport data={operational} />
           )}
+          {activeView === "recruitment" && operational && (
+            <RecruitmentReport data={operational} />
+          )}
 
           <div className="reports-screen-footer reports-no-print" style={footerNoteStyle}>
             Generated {formatDateTime(operational?.generatedAt || report?.generatedAt)}. Report scope is enforced by the authenticated CHRiS operating context.
@@ -285,6 +304,63 @@ function Reports() {
         </div>
       )}
     </div>
+  );
+}
+
+function RecruitmentReport({ data }) {
+  const summary = data?.summary || {};
+  const requisitions = Array.isArray(data?.requisitions) ? data.requisitions : [];
+  const byStatus = requisitions.reduce((acc, row) => {
+    const status = String(row.status || "UNKNOWN").toUpperCase();
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  const cards = [
+    { title: "Total Requisitions", value: summary.totalRequisitions ?? requisitions.length, icon: <FaBriefcase />, tone: "gold" },
+    { title: "Open Positions", value: summary.openHeadcount ?? 0, icon: <FaUsers />, tone: "green" },
+    { title: "Pending Approval", value: summary.pendingApproval ?? byStatus.PENDING_APPROVAL ?? 0, icon: <FaClock />, tone: "gold" },
+    { title: "Returned", value: summary.returned ?? byStatus.RETURNED ?? 0, icon: <FaUserCheck />, tone: "green" },
+  ];
+
+  return (
+    <>
+      <MetricCards cards={cards} />
+      <Panel
+        title="Recruitment Report"
+        subtitle="Controlled recruitment demand and requisition status within the authenticated operating context."
+      >
+        <div style={tableWrapStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                {["Requisition", "Role", "Branch", "Employment Type", "Headcount", "Target Start", "Status"].map((heading) => (
+                  <th key={heading} style={thStyle}>{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {requisitions.map((row) => (
+                <tr key={row.id || row.requisitionNumber}>
+                  <td style={tdStrongStyle}>{row.requisitionNumber || "—"}</td>
+                  <td style={tdStyle}>
+                    <div style={{ color: "#F1F8F4", fontWeight: 800 }}>{row.title || "—"}</div>
+                    <div style={tableNoteStyle}>{row.departmentName || "Department not assigned"}</div>
+                  </td>
+                  <td style={tdStyle}>{row.locationCode || row.locationName || "—"}</td>
+                  <td style={tdStyle}>{row.employmentType || "—"}</td>
+                  <td style={tdStrongStyle}>{Number(row.requestedHeadcount || 0).toLocaleString("en-NG")}</td>
+                  <td style={tdStyle}>{row.targetStartDate || "—"}</td>
+                  <td style={tdStyle}><StatusBadge value={row.status} /></td>
+                </tr>
+              ))}
+              {!requisitions.length && (
+                <tr><td colSpan={7} style={emptyCellStyle}>No recruitment requisitions are recorded in this operating context yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </>
   );
 }
 
