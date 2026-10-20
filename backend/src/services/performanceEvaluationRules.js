@@ -34,7 +34,7 @@ function validateGoals(goals) {
   const seen = new Set(), totals = { results: 0, quality: 0, teamwork: 0 };
   for (const g of goals) {
     required(g.id, "Goal ID"); if (seen.has(g.id)) fail("Duplicate goal ID."); seen.add(g.id);
-    if (!(g.category in totals) || !Number.isFinite(g.weight) || g.weight <= 0) fail("Invalid goal category or weight.");
+    if (!Object.hasOwn(totals,g.category) || !Number.isFinite(g.weight) || g.weight <= 0) fail("Invalid goal category or weight.");
     totals[g.category] += g.weight;
     for (const k of ["title", "target", "measurement", "evidence"]) required(g[k], k);
     if (!Array.isArray(g.anchors) || g.anchors.length !== 5) fail("Five role-specific rating descriptions are required.");
@@ -53,7 +53,7 @@ function score(goals, ratings) {
     required(r.evidence, "Rating evidence"); total += g.weight * r.rating / 100;
   }
   // Classify the unrounded value; rounding cannot move an employee into a higher band.
-  const band = POLICY.bands.find(b => total >= b.minimum - 1e-10 && total < b.maximumExclusive - 1e-10);
+  const band = POLICY.bands.find(b => total >= b.minimum && total < b.maximumExclusive);
   if (!band) fail("Invalid weighted score.");
   return { score: Number(total.toFixed(4)), band: band.label };
 }

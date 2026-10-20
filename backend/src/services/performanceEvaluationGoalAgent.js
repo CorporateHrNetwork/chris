@@ -23,7 +23,7 @@ async function generateRoleGoals(role) {
     if(!response.ok) throw new Error("AI provider unavailable");
     const body=await response.json();
     const raw=body.output_text||body.output?.flatMap(i=>i.content||[]).find(p=>p.type==="output_text")?.text||"";
-    const parsed=JSON.parse(raw.replace(/^'''json|'''$/g,"").trim());
+    const parsed=JSON.parse(raw.slice(raw.indexOf("{"),raw.lastIndexOf("}")+1));
     R.validateGoals(parsed.goals);
     return {source:"AI_AGENT_DRAFT",goals:parsed.goals};
   } catch {

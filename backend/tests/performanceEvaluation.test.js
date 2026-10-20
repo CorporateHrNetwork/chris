@@ -167,3 +167,8 @@ test("a development follow-up never changes a validated rating",async()=>{
   const r=(await S.workspace(m.db,auth())).reviews[0];
   assert.equal(r.finalScore.score,3.4);assert.equal(r.followUp.status,"COMPLETED");
 });
+
+test("unknown category names cannot add uncounted score weight",()=>{
+  const gs=goals();gs.push({...gs[0],id:"extra",category:"__proto__",weight:10});
+  assert.throws(()=>R.validateGoals(gs));
+});
