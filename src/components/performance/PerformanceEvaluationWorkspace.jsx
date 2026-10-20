@@ -10,6 +10,11 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
   const [data,setData]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const [editing,setEditing]=useState(null),[goals,setGoals]=useState([]),[reason,setReason]=useState("");
   const [selected,setSelected]=useState(null),[form,setForm]=useState({});
+  const [showCompleted,setShowCompleted]=useState(false);
+  const completedStatuses=new Set(["ACKNOWLEDGED","CLOSED"]);
+  const completedCount=(data?.reviews||[]).filter(r=>completedStatuses.has(r.status)).length;
+  const priority=r=>r.actions.includes("manager")?0:r.actions.some(a=>["self","finalise","appeal","assign-appeal","acknowledge","dispute"].includes(a))?1:completedStatuses.has(r.status)?3:2;
+  const reviews=(data?.reviews||[]).filter(r=>showCompleted||!completedStatuses.has(r.status)).sort((a,b)=>priority(a)-priority(b)||String(b.updatedAt).localeCompare(String(a.updatedAt)));
   const request=essRequest||apiRequest;
   const load=useCallback(async()=>{
     try{const result=await request(base+(essRequest?"/ess":"/workspace"));setData(result.data);setError("");}
@@ -78,16 +83,25 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
         <ul>{data.notifications.slice(-30).reverse().map(n=><li key={n.id}>{n.message} · {n.createdAt}</li>)}</ul>
       </details>
       {!data.reviews.length&&<p>No performance scorecard is assigned to you yet. HR can check role and reporting-line exceptions.</p>}
-      {data.reviews.map(r=><article key={r.id} style={panel}>
+      {completedCount>0&&<label style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0"}}><input type="checkbox" checked={showCompleted} onChange={e=>setShowCompleted(e.target.checked)}/> Show completed reviews ({completedCount})</label>}
+      {reviews.map(r=><article key={r.id} style={panel}>
         <h3>{r.employeeName} · {r.employeeNumber}</h3>
+        {r.synthetic&&<p><strong>Fictional demonstration case</strong></p>}
         <p>{r.roleName} · {r.cycleId.replace("cycle:","")} · {r.status.replaceAll("_"," ")} · policy {r.policyVersion}</p>
         <p>Period: {r.effectiveFrom}–{r.endDate}. Self-review due {r.deadlines.self}; manager {r.deadlines.manager}; HR {r.deadlines.hr}.</p>
-        <details><summary>Applicable policy · {r.policyVersion}</summary><ol>{r.policy.rules.map(rule=><li key={rule}>{rule}</li>)}</ol></details>
+        <details><summary>Applicable policy · {r.policyVersion}</summary><ol>{r.policy.rules.map(rule=><li key={rule} style={{marginBottom:8}}>{rule}</li>)}</ol></details>
         <details><summary>Goals, weights and scoring evidence</summary>{r.goals.map(g=><div key={g.id}>
           <h4>{g.title} · {g.weight}%</h4><p>Target: {g.target}. Measure: {g.measurement}. Evidence: {g.evidence}.</p>
           <ol>{g.anchors.map((a,i)=><li key={i}>{a}</li>)}</ol>
         </div>)}</details>
-        {r.selfAssessment&&<p>Self-review: {r.selfAssessment.comments}. Evidence: {r.selfAssessment.evidence}</p>}
+        {r.selfAssessment&&<section aria-label="Employee self-assessment">
+          <h4>Employee self-assessment</h4>
+          <p><strong>Achievements, challenges and development needs</strong></p>
+          <p style={{whiteSpace:"pre-wrap"}}>{r.selfAssessment.comments}</p>
+          <p><strong>Supporting evidence</strong></p>
+          <p style={{whiteSpace:"pre-wrap"}}>{r.selfAssessment.evidence}</p>
+          {r.selfAssessment.submittedAt&&<p>Submitted: {new Intl.DateTimeFormat("en-NG",{dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Lagos"}).format(new Date(r.selfAssessment.submittedAt))}</p>}
+        </section>}
         {r.managerAssessment&&<><p>Manager discussion: {r.managerAssessment.discussion}</p><p>Follow-up: {r.managerAssessment.development}</p>
           <ul>{r.managerAssessment.ratings.map(v=><li key={v.goalId}>{r.goals.find(g=>g.id===v.goalId)?.title}: {v.rating}/5 · {v.evidence}</li>)}</ul></>}
         {r.finalScore&&<p><strong>{r.finalScore.score.toFixed(4)} / 5 · {r.finalScore.band}</strong></p>}

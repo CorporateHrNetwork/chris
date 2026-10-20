@@ -29,7 +29,7 @@ async function main(){
  const id="review:SYNTHETIC-INTERACTIVE:"+employee.id;
  if(!state.has(id)){
   const sample=[...state.values()].find(r=>r.kind==="review"&&r.employeeId===employee.id);
-  const card={...sample,id,cycleId:"cycle:SYNTHETIC-INTERACTIVE",synthetic:true,status:"GOALS_PUBLISHED",endDate:"2000-01-01",revision:1,
+  const card={...sample,id,cycleId:"cycle:SYNTHETIC-INTERACTIVE",synthetic:true,status:"GOALS_PUBLISHED",effectiveFrom:"2026-07-01",endDate:"2026-09-30",deadlines:{self:"2026-10-07",manager:"2026-10-14",hr:"2026-10-21"},revision:1,
    selfAssessment:null,managerAssessment:null,finalScore:null,hrComment:null,employeeResponse:null,appeal:null,followUp:null};
   await prisma.organizationAudit.create({data:{organizationId:org.id,entityType:"ZermattPerformanceEvaluation",entityId:id,action:"PE_REVIEW",newValue:card,reason:"Interactive synthetic completed-period fixture only"}});
  }

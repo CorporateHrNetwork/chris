@@ -109,11 +109,11 @@ async function main(){
  await request("/api/performance-evaluation/ess/reviews/"+encodeURIComponent(activeReview.id)+"/self",et,{comments:"Too early",evidence:"Synthetic"},"POST",409);
  check("Prospective exception reconciliation and premature review rejection");
  // A completed-period synthetic fixture enables full review rehearsal without changing the computer clock.
- const cy={...ws.cycles[0],id:"cycle:SYNTHETIC-COMPLETED",key:"SYNTHETIC-COMPLETED",end:"2000-01-01",deadlines:{self:"2000-01-08",manager:"2000-01-15",hr:"2000-01-22"},revision:1,synthetic:true};
+ const cy={...ws.cycles[0],id:"cycle:SYNTHETIC-COMPLETED",key:"SYNTHETIC-COMPLETED",start:"2026-07-01",effectiveFrom:"2026-07-01",end:"2026-09-30",deadlines:{self:"2026-10-07",manager:"2026-10-14",hr:"2026-10-21"},revision:1,synthetic:true};
  await prisma.organizationAudit.create({data:{organizationId:org.id,actorUserId:hr.id,entityType:"ZermattPerformanceEvaluation",entityId:cy.id,action:"PE_CYCLE",newValue:cy,reason:"Completed-period synthetic rehearsal fixture only"}});
  const completed=[];
  for(const r of ws.reviews){
-  const v={...r,id:"review:SYNTHETIC-COMPLETED:"+r.employeeId,cycleId:cy.id,status:"GOALS_PUBLISHED",endDate:"2000-01-01",deadlines:cy.deadlines,revision:1,synthetic:true};
+  const v={...r,id:"review:SYNTHETIC-COMPLETED:"+r.employeeId,cycleId:cy.id,status:"GOALS_PUBLISHED",effectiveFrom:"2026-07-01",endDate:"2026-09-30",deadlines:cy.deadlines,revision:1,synthetic:true};
   delete v.actions;
   await prisma.organizationAudit.create({data:{organizationId:org.id,actorUserId:hr.id,entityType:"ZermattPerformanceEvaluation",entityId:v.id,action:"PE_REVIEW",newValue:v,reason:"Completed-period synthetic rehearsal fixture only"}});
   completed.push(v);
