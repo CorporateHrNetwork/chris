@@ -31,7 +31,7 @@ async function locked(db, org, fn) {
   await assertEnabled(db,org);
   return db.$transaction(async tx=>{
     // Serialize the entire tenant so concurrent workers cannot open duplicate cycles or overwrite transitions.
-    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "chris-pe:"+org);
+    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))::text AS locked", "chris-pe:"+org);
     return fn(tx,await state(tx,org));
   },{timeout:30000});
 }
