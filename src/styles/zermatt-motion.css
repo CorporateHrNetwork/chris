@@ -7,3 +7,26 @@ main [class*="banner"],main [class*="Banner"],main [class*="hero"],main [class*=
 main [class*="banner"] img,main [class*="Banner"] img,main [class*="hero"] img,main [class*="Hero"] img{animation:zermattKenBurns 10s ease-in-out infinite alternate;transform-origin:center}
 @keyframes zermattKenBurns{0%{transform:scale(1)}100%{transform:scale(1.035)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}main [class*="card"]:hover,main [class*="Card"]:hover,main [class*="panel"]:hover,main [class*="Panel"]:hover,main [class*="summary"]:hover,main [class*="metric"]:hover,main [class*="stat-"]:hover{transform:none}}
+
+/* Slow zoom-in for pictures and text cards, shared with the portfolio.
+   Individual scale preserves existing layout and hover transforms. */
+@keyframes crnSlowZoomIn { from { opacity: .15; scale: .88; } to { opacity: 1; scale: 1; } }
+@keyframes crnPictureZoomIn { from { opacity: .25; scale: .94; } to { opacity: 1; scale: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  :is(main, #root) :is(.card, .logo-card, .metric, .panel, .summary-card, .stat-card, .feature-list > div, .testimonials blockquote, [class$="-card"], [class$="-panel"]).crn-zoom-visible {
+    transform-origin: center;
+    animation: crnSlowZoomIn 2.4s cubic-bezier(.2,.65,.3,1) both;
+  }
+  :is(main, #root) img.crn-zoom-visible:not([role="presentation"]):not([aria-hidden="true"]) {
+    transform-origin: center;
+    animation: crnPictureZoomIn 2.8s ease-out both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(main, #root) :is(img, .card, .logo-card, .metric, .panel, .summary-card, .stat-card, .feature-list > div, .testimonials blockquote, [class$="-card"], [class$="-panel"]) {
+    animation: none !important; scale: none !important;
+  }
+}
+@media print {
+  :is(main, #root) * { animation: none !important; scale: none !important; opacity: 1 !important; }
+}
