@@ -80,7 +80,7 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
       {!data.reviews.length&&<p>No performance scorecard is assigned to you yet. HR can check role and reporting-line exceptions.</p>}
       {data.reviews.map(r=><article key={r.id} style={panel}>
         <h3>{r.employeeName} · {r.employeeNumber}</h3>
-        <p>{r.roleName} · {r.status.replaceAll("_"," ")} · policy {r.policyVersion}</p>
+        <p>{r.roleName} · {r.cycleId.replace("cycle:","")} · {r.status.replaceAll("_"," ")} · policy {r.policyVersion}</p>
         <p>Period: {r.effectiveFrom}–{r.endDate}. Self-review due {r.deadlines.self}; manager {r.deadlines.manager}; HR {r.deadlines.hr}.</p>
         <details><summary>Applicable policy · {r.policyVersion}</summary><ol>{r.policy.rules.map(rule=><li key={rule}>{rule}</li>)}</ol></details>
         <details><summary>Goals, weights and scoring evidence</summary>{r.goals.map(g=><div key={g.id}>

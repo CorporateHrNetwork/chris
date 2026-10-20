@@ -70,3 +70,28 @@ Before merge/activation:
 ## Limits
 No deployment, production scheduler setting, API secret setup, actual role-catalog validation, or management policy sign-off is performed by committing this code.
 Disciplinary simplification remains a separate work item; this change does not alter sanctions or disciplinary approvals.
+
+
+## Local rehearsal completed — 20 October 2026
+A dedicated PostgreSQL 16 cluster on 127.0.0.1:55440 and database chris_pe_staging was created for synthetic tests on the connected Windows desktop. No live database connection or employee data was used.
+- The full 65-migration chain applied successfully.
+- Native frontend production build passed.
+- All 15 focused native Node workflow tests passed.
+- Nine PostgreSQL/HTTP/Chromium scenario checks passed: login and tenant isolation; role standard publication and missing-description denial; four concurrent opens; prospective exception reconciliation; complete HR review/return/release; independent corrected appeal; notification deduplication; real branch denial; desktop/mobile page rendering.
+- Six additional browser interaction checks passed: HR policy visibility; employee ESS submission; manager ratings/evidence/discussion; independent HR release; employee acknowledgment with 3.4 Meets expectations; no JavaScript page errors.
+- The browser rehearsal exposed a missing CHRiSAutomationCentre import in the existing route shell. This candidate supplies the lazy import and displays each card's cycle label.
+
+Rehearsal scripts:
+- backend/scripts/rehearse-performance-evaluation.cjs: fresh-database synthetic fixture and nine scenario checks.
+- backend/scripts/serve-performance-rehearsal.cjs: local role chooser and review server.
+- backend/scripts/rehearse-performance-browser.cjs: real form interactions; set CHRIS_PE_BROWSER_RESET_ONLY=true to reset only the designated interactive synthetic case.
+
+All scripts that access the fixture require the dedicated loopback host, port and database. The review server additionally checks the tenant's synthetic legal-name marker and binds to 127.0.0.1 only. Its password-free synthetic role selector must never be exposed through a tunnel or deployed publicly.
+The test server removes the API-only Content-Security-Policy from local non-API pages so it can serve the separately built frontend on the same loopback port. Production API security headers are unchanged.
+
+For local review on that connected computer, open http://127.0.0.1:55441/rehearsal while the review server and dedicated database are running.
+The quarterly scheduler stays disabled during this review. Actual live role targets, provider-backed AI generation and hosted CHRiS staging are not certified by these synthetic tests.
+The connected Render workspace exposed only the portfolio service during discovery, so no hosted CHRiS deployment was attempted.
+
+Stop the local review server when finished, and stop only the dedicated cluster with:
+"C:\Program Files\PostgreSQL\16\bin\pg_ctl.exe" -D "C:\Users\developer\Documents\chris-pe-testdata-140\pgdata" -m fast -w stop

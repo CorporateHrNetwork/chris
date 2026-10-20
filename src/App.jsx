@@ -57,6 +57,7 @@ const Payroll = lazy(() => import("./pages/Payroll"));
 const Benefits = lazy(() => import("./pages/Benefits"));
 const BenefitChildPage = lazy(() => import("./pages/benefits/BenefitChildPage"));
 const Loans = lazy(() => import("./pages/Loans"));
+const CHRiSAutomationCentre = lazy(() => import("./pages/CHRiSAutomationCentre"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Training = lazy(() => import("./pages/Training"));
 const Reports = lazy(() => import("./pages/Reports"));
