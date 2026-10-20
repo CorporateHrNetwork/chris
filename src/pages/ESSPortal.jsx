@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import PerformanceEvaluationWorkspace from "../components/performance/PerformanceEvaluationWorkspace";
 
 const API_BASE_URL = String(
   import.meta.env.VITE_API_BASE_URL || ""
@@ -256,6 +257,8 @@ export default function ESSPortal() {
           </div>
           <div style={statusPillStyle}>{display(employee?.status)}</div>
         </div>
+
+        <PerformanceEvaluationWorkspace essRequest={essRequest} />
 
         <Section title="Personal Information">
           <Info label="Email address" value={employee?.email} />

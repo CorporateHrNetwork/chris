@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
+import PerformanceEvaluationWorkspace from "../components/performance/PerformanceEvaluationWorkspace";
 import SearchableRegistrySelect from "../components/common/SearchableRegistrySelect";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -160,6 +161,7 @@ export default function LineManagers() {
   }
 
   return <div>
+    <PerformanceEvaluationWorkspace />
     <header style={hero}>
       <div style={eyebrow}>ORGANIZATION STRUCTURE</div>
       <h1 style={title}>Line Managers</h1>

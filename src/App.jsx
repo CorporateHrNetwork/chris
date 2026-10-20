@@ -162,7 +162,7 @@ function App() {
         <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
         <Route path="/payroll/notes" element={<ProtectedLayout><CHRiSAutomationCentre mode="payroll" /></ProtectedLayout>} />
-        <Route path="/performance/management" element={<ProtectedLayout><CHRiSAutomationCentre mode="performance" /></ProtectedLayout>} />
+        <Route path="/performance/management" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
         <Route path="/ess" element={<ESSPortal />} />
         <Route path="/training" element={<PermissionLayout permission="training.view"><Training /></PermissionLayout>} />
         <Route path="/reports" element={<PermissionLayout permission="reports.view"><Reports /></PermissionLayout>} />
@@ -221,12 +221,12 @@ function App() {
         <Route path="/statutories/itf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/remittances" element={<ProtectedLayout><ConsolidatedComplianceRoute><RemittanceWorkspace /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/statutories/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/goals-kpis" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/cycles" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/reviews" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/appraisals" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/improvement-plans" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/performance/goals-kpis" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/cycles" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/reviews" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/appraisals" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/improvement-plans" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/reports" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
         <Route path="/training/programs" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/training/calendar" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/training/employee-training" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />

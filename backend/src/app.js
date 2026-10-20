@@ -58,6 +58,8 @@ const eosbRoutes = require("./routes/eosbRoutes");
 const chrisAutomationRoutes = require("./routes/chrisAutomationRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
+const performanceEvaluationRoutes = require("./routes/performanceEvaluationRoutes");
+
 const app = express();
 
 app.disable("x-powered-by");
@@ -87,6 +89,7 @@ app.get("/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/ess", essRoutes);
+app.use("/api/performance-evaluation", performanceEvaluationRoutes);
 app.use("/api/support-desk", supportDeskCancellationRoutes);
 app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
