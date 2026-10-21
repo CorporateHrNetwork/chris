@@ -10,6 +10,7 @@ import MainLayout from "./layouts/MainLayout";
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
 const TransportSupportPreparation = lazy(() => import("./pages/payroll/TransportSupportPreparation"));
+const TransportSupportPayroll = lazy(() => import("./pages/payroll/TransportSupportPayroll"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
@@ -202,7 +203,8 @@ function App() {
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/periods" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/salary-rates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/payroll/transport-support" element={<ProtectedLayout><TransportSupportPreparation /></ProtectedLayout>} />
+        <Route path="/payroll/transport-support" element={<ProtectedLayout><TransportSupportPayroll /></ProtectedLayout>} />
+        <Route path="/payroll/full-salary-upload" element={<ProtectedLayout><TransportSupportPreparation /></ProtectedLayout>} />
         <Route path="/payroll/allowances" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/deductions" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/payslips" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />

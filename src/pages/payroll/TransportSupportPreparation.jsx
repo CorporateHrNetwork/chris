@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { apiDownload, apiRequest, saveDownloadedBlob } from '../../services/api';
+import { useNavigate } from 'react-router-dom';
 const endpoint='/api/payroll/full-salary-preparation';
 const money=v=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN'}).format(Number(v||0));
 export default function TransportSupportPreparation() {
+  const navigate=useNavigate();
   const [file,setFile]=useState(null),[preview,setPreview]=useState(null),[records,setRecords]=useState([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [enabled,setEnabled]=useState(false);
@@ -23,6 +25,7 @@ export default function TransportSupportPreparation() {
   }
   return <section style={{padding:24,maxWidth:1400,margin:'0 auto'}}>
     <h1>Transport Support Pay · Full Salary Preparation</h1>
+    <button onClick={()=>navigate('/payroll/transport-support')}>Open Transport Support Pay portal</button>
     <p>Upload the full agreed monthly salary once. CHRiS previews the mid-month and end-of-month allocations using each employee’s recorded employment type and hire date.</p>
     <p><strong>Preparation only:</strong> importing records does not activate payroll or change approved salaries. Mid-month loan recovery is always zero.</p>
     <p>1. Download template → 2. Enter full salaries and effective month → 3. Preview allocations → 4. Import for review.</p>
@@ -47,7 +50,7 @@ export default function TransportSupportPreparation() {
     <h2>Imported full salaries awaiting activation</h2>
     {!records.length?<p>No prepared salary records.</p>:<div style={{overflowX:'auto'}}><table style={{width:'100%',textAlign:'left'}}>
       <thead><tr>{['Employee No','Full Salary','Mid-month','End-month','Effective From','Status'].map(h=><th key={h}>{h}</th>)}</tr></thead>
-      <tbody>{records.map(r=><tr key={r.id}><td>{r.employeeNumber}</td><td>{money(r.fullMonthlyGross)}</td><td>{money(r.allocationPreview?.normalMidMonth)}</td><td>{money(r.allocationPreview?.endMonthGross)}</td><td>{String(r.effectiveFrom).slice(0,10)}</td><td>Pending activation</td></tr>)}</tbody>
+      <tbody>{records.map(r=><tr key={r.id}><td>{r.employeeNumber}</td><td>{money(r.fullMonthlyGross)}</td><td>{money(r.allocationPreview?.normalMidMonth)}</td><td>{money(r.allocationPreview?.endMonthGross)}</td><td>{String(r.effectiveFrom).slice(0,10)}</td><td>{r.activatedAt?'Activated':'Pending activation'}</td></tr>)}</tbody>
     </table></div>}
     <p>Previous unpaid amounts will be added on the following month’s 15th; previous overpaid amounts will be deducted in a separate column. They are reconciliations, not changes to the agreed full salary.</p>
   </section>;

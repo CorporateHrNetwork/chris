@@ -1,3 +1,4 @@
+const { splitSalary } = require("./zermattSalarySplit");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
@@ -600,21 +601,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     );
   }
 
-  const missingStandardDays = employees.filter((employee) => !Number(policy.standardDays?.[employee.employmentType]));
-  if (missingStandardDays.length) {
-    throw payrollError(
-      "PAYROLL_STANDARD_DAYS_NOT_CONFIGURED",
-      `${missingStandardDays.length} employee(s) have Employment Types without configured payroll standard days.`,
-      409,
-      {
-        employees: missingStandardDays.slice(0, 25).map((row) => ({ employeeNumber: row.employeeNumber, employmentType: row.employmentType })),
-        configuredStandardDays: policy.standardDays,
-      }
-    );
-  }
 
   const rateRows = await prismaClient.$queryRawUnsafe(
-    `SELECT DISTINCT ON ("employeeId") "employeeId","amount","currency","effectiveFrom","effectiveTo"
+    `SELECT DISTINCT ON ("employeeId") "employeeId","amount","currency","effectiveFrom","effectiveTo", NULLIF(to_jsonb(payroll_salary_rates)->>'fullMonthlyGross','')::numeric AS "fullMonthlyGross"
        FROM "payroll_salary_rates"
       WHERE "organizationId"=$1 AND "status"='ACTIVE'
         AND "effectiveFrom" <= $2::date
@@ -632,6 +621,19 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       `${missingRates.length} current employee(s) do not have an effective gross salary rate for ${period.code}.`,
       409,
       { employees: missingRates.slice(0, 25).map((row) => row.employeeNumber), total: missingRates.length }
+    );
+  }
+
+  const missingStandardDays = employees.filter((employee) => !rateByEmployee.get(employee.id)?.fullMonthlyGross && !Number(policy.standardDays?.[employee.employmentType]));
+  if (missingStandardDays.length) {
+    throw payrollError(
+      "PAYROLL_STANDARD_DAYS_NOT_CONFIGURED",
+      `${missingStandardDays.length} employee(s) have Employment Types without configured payroll standard days.`,
+      409,
+      {
+        employees: missingStandardDays.slice(0, 25).map((row) => ({ employeeNumber: row.employeeNumber, employmentType: row.employmentType })),
+        configuredStandardDays: policy.standardDays,
+      }
     );
   }
 
@@ -708,8 +710,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
 
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
-    const scheduledMonthlyGross = round2(rate.amount || 0);
-    const standardDays = Number(policy.standardDays[employee.employmentType]);
+    const splitAllocation = rate.fullMonthlyGross ? splitSalary({ fullMonthlyGross: rate.fullMonthlyGross, employmentType: employee.employmentType, hireDate: "2000-01-01", periodMonth: period.periodStart.slice(0,7) }) : null;
+    const scheduledMonthlyGross = splitAllocation ? splitAllocation.endMonthGross : round2(rate.amount || 0);
+    const standardDays = splitAllocation ? 26 : Number(policy.standardDays[employee.employmentType]);
     const attendanceInput = attendanceByEmployee.get(employee.id);
     const payableDays = attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
       ? standardDays
@@ -783,14 +786,14 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         .filter(([key]) => pensionableKeys.has(String(key).toLowerCase()))
         .reduce((sum, [, value]) => sum + Number(value || 0), 0)
     );
-    const employmentTypeExemption = statutoryEmploymentTypeExemption(employee.employmentType);
+    const employmentTypeExemption = splitAllocation ? { exempt: splitAllocation.midMonthPercentage===0, payeExempt: splitAllocation.midMonthPercentage===0, pensionExempt: splitAllocation.midMonthPercentage===0, source: "ZLL_FULL_SALARY_SPLIT_POLICY" } : statutoryEmploymentTypeExemption(employee.employmentType);
     const employeePension = employmentTypeExemption.pensionExempt
       ? 0
       : percent(pensionableBase, policy.pensionEmployeeRate);
     const employerPension = employmentTypeExemption.pensionExempt
       ? 0
       : percent(pensionableBase, policy.pensionEmployerRate);
-    const nhfEmployee = nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
+    const nhfEmployee = splitAllocation && employmentTypeExemption.exempt ? 0 : nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
 
     const recurringTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && row.recurring).reduce((sum, row) => sum + row.value, 0));
     const oneTimeTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && !row.recurring).reduce((sum, row) => sum + row.value, 0));
@@ -863,6 +866,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD",
         },
         scheduledMonthlyGross,
+        fullSalaryAllocation: splitAllocation,
         structuredGross,
         salaryStructure,
         customAllowances: customAllowanceItems,
@@ -1063,3 +1067,4 @@ module.exports = {
   statutoryEmploymentTypeExemption,
   payrollError,
 };
+

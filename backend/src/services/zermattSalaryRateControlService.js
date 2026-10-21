@@ -32,7 +32,8 @@ function positiveMoney(value, label) {
 function mapRate(row) {
   return {
     ...row,
-    amount: Number(row.amount || 0),
+    amount: Number(row.fullMonthlyGross ?? row.amount ?? 0),
+    endMonthGross: row.fullMonthlyGross == null ? null : Number(row.amount || 0),
     effectiveFrom: row.effectiveFrom ? new Date(row.effectiveFrom).toISOString().slice(0, 10) : null,
     effectiveTo: row.effectiveTo ? new Date(row.effectiveTo).toISOString().slice(0, 10) : null,
   };
@@ -99,7 +100,7 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
     }
 
     const previous = mapRate(existing);
-    const amount = positiveMoney(input?.amount ?? existing.amount, "Monthly Gross Salary");
+    const amount = positiveMoney(input?.amount ?? existing.fullMonthlyGross ?? existing.amount, "Monthly Gross Salary");
     const currency = text(input?.currency ?? existing.currency ?? "NGN").toUpperCase();
     const effectiveFrom = dateOnly(
       input?.effectiveFrom || new Date(existing.effectiveFrom).toISOString().slice(0, 10),
@@ -125,7 +126,7 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
       previous.effectiveTo
     );
     const financialChange =
-      amount !== Number(existing.amount) ||
+      amount !== Number(existing.fullMonthlyGross ?? existing.amount) ||
       currency !== String(existing.currency || "NGN").toUpperCase() ||
       effectiveFrom !== previous.effectiveFrom ||
       effectiveTo !== previous.effectiveTo;
