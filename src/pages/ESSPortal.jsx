@@ -42,7 +42,7 @@ export default function ESSPortal(){
  {tab==="payroll"&&<Payroll data={data}/>}{tab==="loans"&&<RunningLoans/>}
  {tab==="payslips"&&<Payslips data={data}/>}
  {tab==="leave"&&<LeaveAttendance data={data}/>}
- {tab==="performance"&&<Performance data={data} onSaved={()=>load()}/>}
+ {tab==="performance"&&<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>}
  {tab==="communications"&&<Communications data={data}/>}
  {tab==="gratuity"&&<Gratuity data={data}/>}
  {tab==="birthday"&&<BirthdayCard data={data}/>}
