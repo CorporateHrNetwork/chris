@@ -24,7 +24,7 @@ Pilot project: `ldmwsptljgnspwtwcdtm`. Staging: `amnbmmewmvbtiylhquin`.
 - Added the isolated `zzzz_block_midmonth_loan_recovery` trigger in both environments. Existing pilot loan-recovery functions were preserved. Entries with `details.payrollElement=MID_MONTH_TRANSPORT_SUPPORT` have zero loan recovery and no loan-recovery posting items; the guard restores only the loan amount recorded as actually deducted. Ordinary end-month entries are unchanged.
 - Tested the isolated guard using temporary records, including preservation of a leave amount and the unchanged end-month result. Temporary fixtures are removed at commit.
 - After explicit user approval on 21 October 2026, restored both staging loan functions to their exact recorded pre-experiment body hashes. The independent mid-month guard remains enabled. A staging approval test confirmed zero mid-month loan postings and rolled back all test changes. Staging and pilot employee/payroll totals and loan balances were unchanged; pilot function bodies were unchanged.
-- The new salary preparation table is provisioned ONLY in staging. Its Data API grants are explicit, RLS is enabled and anon/authenticated have no access. Server-only no-policy RLS is intentional.
+- The salary preparation table is provisioned in staging and pilot; no salary batch has been activated. Its Data API grants are explicit, RLS is enabled and anon/authenticated have no access. Server-only no-policy RLS is intentional.
 
 The October 30 change is not a reason to grant browser access to payroll. Every future Data API table needs an explicit, reviewed grant and the appropriate row policies. The current Prisma connection-string path does not need browser table grants.
 
@@ -42,14 +42,14 @@ The October 30 change is not a reason to grant browser access to payroll. Every 
 
 ## Release gates and validation
 
-The operating schema and salary-allocation trigger are provisioned in staging only, with no enabled configuration or salary activation. Production payroll remains on its existing authority until deployment verification and the first complete full-salary batch.
+The preparation and operating schemas and salary-allocation trigger are provisioned in staging and pilot. Both have zero enabled split configurations and zero activated full-salary authorities. Financial record counts/totals and loan balances were verified unchanged. Production payroll remains on its existing authority until application deployment verification and the first complete full-salary batch.
 
 Deployment prerequisites:
 1. Identify and verify the actual live API service/source commit. Desktop Commander still reported the device offline during this implementation.
 2. Run the dedicated PostgreSQL integration test and frontend build in `.github/workflows/zermatt-midmonth-payroll.yml`. The test refuses any database other than `chris_midmonth_test` and uses disposable fixtures only.
-3. Apply the reviewed preparation and operating schemas to the verified production target as part of the application release. Do not execute rollback files or previously applied security SQL indiscriminately.
+3. Database preparation is complete in the pilot. Verify schema presence during release; do not reapply CREATE statements or execute rollback files indiscriminately.
 4. Enable `CHRIS_ZERMATT_SALARY_PREPARATION_ENABLED=true` for imports and `CHRIS_ZERMATT_SPLIT_PAYROLL_RELEASE_READY=true` only after application checks pass.
 5. Import the fresh full-salary workbook, select its effective month, then activate it in the portal. No effective month or salary amounts are inferred.
 6. Rehearse a fresh encrypted restore before production activation. The latest full restore evidence previously inspected was the 16 October backup restored on 17 October.
 
-Local validation: `node --test backend/tests/zermattSalarySplit.test.js backend/tests/zermattMidmonthDomain.test.js` (17 tests) and backend syntax checks. The integration test is skipped locally when its disposable database is unavailable; it must pass in CI before release. The frontend build also runs in that workflow.
+Validation completed: 17 local domain/validation tests and syntax checks; all 18 tests (including the full PostgreSQL lifecycle integration test) passed in CI, with zero skips. Both the new payroll workflow and the existing CHRiS Compliance PR Gate passed, including frontend production builds. CI evidence: https://github.com/CorporateHrNetwork/chris/actions/runs/39521649243 and https://github.com/CorporateHrNetwork/chris/actions/runs/39521649326. Application deployment and signed-in end-to-end checks remain blocked because Desktop Commander reports the computer offline and connected Render only lists the portfolio service.
