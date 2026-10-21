@@ -155,6 +155,11 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
       throw controlError("SALARY_RATE_OVERLAP", "The edited effective period overlaps another active salary rate for this employee.", 409);
     }
 
+    // An unchanged full salary must not be sent back as a changed stored
+    // end-month amount when correcting only descriptive fields.
+    const writeAmount = amount === Number(existing.fullMonthlyGross ?? existing.amount)
+      ? Number(existing.amount)
+      : amount;
     const rows = await tx.$queryRawUnsafe(
       `UPDATE "payroll_salary_rates"
           SET "amount"=$3,"currency"=$4,"effectiveFrom"=$5::date,"effectiveTo"=$6::date,
@@ -163,7 +168,7 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
         RETURNING *`,
       organizationId,
       rateId,
-      amount,
+      writeAmount,
       currency,
       effectiveFrom,
       effectiveTo,

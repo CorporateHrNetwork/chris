@@ -922,7 +922,15 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         .filter(([key]) => pensionableKeys.has(String(key).toLowerCase()))
         .reduce((sum, [, value]) => sum + Number(value || 0), 0)
     );
-    const employmentTypeExemption = splitAllocation ? { exempt: splitAllocation.midMonthPercentage===0, payeExempt: splitAllocation.midMonthPercentage===0, pensionExempt: splitAllocation.midMonthPercentage===0, source: "ZLL_FULL_SALARY_SPLIT_POLICY" } : statutoryEmploymentTypeExemption(employee.employmentType);
+    const employmentTypeExemption = statutoryEmploymentTypeExemption(employee.employmentType);
+    if (splitAllocation) {
+      Object.assign(employmentTypeExemption, {
+        exempt: splitAllocation.midMonthPercentage === 0,
+        payeExempt: splitAllocation.midMonthPercentage === 0,
+        pensionExempt: splitAllocation.midMonthPercentage === 0,
+        source: "ZLL_FULL_SALARY_SPLIT_POLICY",
+      });
+    }
     const employeePension = employmentTypeExemption.pensionExempt
       ? 0
       : percent(pensionableBase, policy.pensionEmployeeRate);
