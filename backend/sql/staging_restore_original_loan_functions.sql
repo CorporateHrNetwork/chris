@@ -1,5 +1,6 @@
 -- STAGING ONLY: exact recorded functions before the experimental guards.
--- Not applied: automatic review rejected the replacement operation.
+-- Applied to staging only on 21 October 2026 after explicit user approval.
+-- Original function hashes verified; independent mid-month safeguard retained.
 CREATE OR REPLACE FUNCTION public.chris_apply_active_loan_recovery()
  RETURNS trigger
  LANGUAGE plpgsql
