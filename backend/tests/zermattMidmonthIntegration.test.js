@@ -33,9 +33,30 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
  function wrap(client) {return {$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)])}};}
  const db={...wrap(pool),$transaction:async fn=>{const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(wrap(c));await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}};
  const service=require('../src/services/zermattMidmonthService').createService(db);
+ const preparation=require('../src/services/zermattSalaryPreparationService').createService(db,(client,org)=>client.$queryRawUnsafe('SELECT * FROM employees WHERE "organizationId"=$1',org));
  try {
+  const correction={employeeNumber:'Z2',amount:'82000',effectiveFrom:'2026-11-01',reason:'Correct opening salary',preparationId:'p1'};
+  await assert.rejects(preparation.preview('zll','outsider',correction),/assigned Head HR/);
+  await assert.rejects(preparation.preview('other','outsider',correction),/current employee/);
+  await assert.rejects(preparation.preview('zll','hr',{...correction,preparationId:'p0'}),/different payroll month/);
+  const checked=await preparation.preview('zll','hr',correction);
+  assert.equal(checked.row.employeeName,'Two Employee');assert.equal(checked.row.allocation.endMonthGross,68880);
+  await preparation.save('zll','hr',{...correction,previewToken:checked.previewToken});
+  assert.equal(Number((await pool.query("SELECT \"fullMonthlyGross\" FROM zermatt_salary_split_preparations WHERE id='p1'")).rows[0].fullMonthlyGross),82000);
+  await assert.rejects(preparation.save('zll','hr',{...correction,previewToken:checked.previewToken}),/changed/);
+  const next=await preparation.preview('zll','hr',{...correction,amount:'80000'});
+  await preparation.save('zll','hr',{...correction,amount:'80000',previewToken:next.previewToken});
+  const stale=await preparation.preview('zll','hr',correction);
+  await pool.query("UPDATE employees SET \"lastName\"='Changed' WHERE id='e2'");
+  await assert.rejects(preparation.save('zll','hr',{...correction,previewToken:stale.previewToken}),/changed/);
+  await pool.query("UPDATE employees SET \"lastName\"='Employee' WHERE id='e2'");
+  assert.equal(Number((await pool.query('SELECT COUNT(*) as count FROM payroll_salary_rates')).rows[0].count),0);
+  assert.equal(Number((await pool.query('SELECT COUNT(*) as count FROM zermatt_midmonth_runs')).rows[0].count),0);
+  assert.equal(Number((await pool.query("SELECT amount FROM payroll_loans WHERE id='unchanged-loan'")).rows[0].amount),70000);
+  assert.equal(Number((await pool.query("SELECT COUNT(*) as count FROM organization_audits WHERE record->>'action'='INDIVIDUAL_CORRECTION'")).rows[0].count),2);
   await assert.rejects(service.activate('zll','outsider','2026-11'),/assigned/);
   const result=await service.activate('zll','hr','2026-11');assert.equal(result.employees,4);
+  await assert.rejects(preparation.preview('zll','hr',correction),/already activated/);
   const rates=(await pool.query('SELECT "employeeId",amount,"fullMonthlyGross" FROM payroll_salary_rates ORDER BY "employeeId"')).rows;
   assert.deepEqual(rates.map(r=>Number(r.amount)),[150000,67200,120000,90000]);
   assert.deepEqual(rates.map(r=>Number(r.fullMonthlyGross)),gross);
@@ -78,3 +99,4 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   assert.equal((await pool.query(`SELECT has_table_privilege('anon','public.zermatt_midmonth_lines','SELECT') as allowed`)).rows[0].allowed,false);
  } finally {await pool.end();}
 });
+

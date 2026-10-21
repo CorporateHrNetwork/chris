@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  Outlet,
 } from "react-router-dom";
 
 import SessionLoadingScreen from "./components/system/SessionLoadingScreen";
@@ -159,7 +160,11 @@ function App() {
         <Route path="/leave/balances" element={<PermissionLayout permission="leave.view"><LeaveBalances /></PermissionLayout>} />
         <Route path="/leave/policies" element={<PermissionLayout permission="leave.view"><LeavePolicies /></PermissionLayout>} />
 
-        <Route path="/payroll" element={<PermissionLayout permission="payroll.view"><Payroll /></PermissionLayout>} />
+        <Route element={<ProtectedLayout><Suspense fallback={<p role="status">Loading payroll workspace…</p>}><Outlet /></Suspense></ProtectedLayout>}>
+          <Route path="/payroll" element={<PermissionRoute permission="payroll.view"><Payroll /></PermissionRoute>} />
+          <Route path="/payroll/transport-support" element={<TransportSupportPayroll />} />
+          <Route path="/payroll/full-salary-upload" element={<TransportSupportPreparation />} />
+        </Route>
         <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans /></PermissionLayout>} />
         <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
@@ -204,8 +209,6 @@ function App() {
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/periods" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/salary-rates" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/payroll/transport-support" element={<ProtectedLayout><TransportSupportPayroll /></ProtectedLayout>} />
-        <Route path="/payroll/full-salary-upload" element={<ProtectedLayout><TransportSupportPreparation /></ProtectedLayout>} />
         <Route path="/payroll/allowances" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/deductions" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/payslips" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -305,3 +308,4 @@ function App() {
 }
 
 export default App;
+
