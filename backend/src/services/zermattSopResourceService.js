@@ -18,7 +18,19 @@ function sop(id, title, category, owner, purpose, trigger, steps, controls, reco
   };
 }
 
+const { POLICY: PERFORMANCE_POLICY } = require("./performanceEvaluationRules");
 const ZERMATT_SOPS = [
+  sop("quarterly-performance-evaluation", PERFORMANCE_POLICY.title, "PERFORMANCE",
+    "HR AI Performance Evaluation Agent / Line Manager / Employee / HR",
+    "Provide transparent quarterly role-based evaluation with published goals, weights, evidence and independent review.",
+    "Calendar quarter opening, with prospective HR-controlled partial-quarter initiation where required.",
+    PERFORMANCE_POLICY.rules,
+    ["Policy reference "+PERFORMANCE_POLICY.version,
+      "Use the published policy snapshot in each CHRiS scorecard.",
+      "AI drafts role standards; HR validates them before publication.",
+      "No retroactive targets or automatic adverse employment action.",
+      "All review and appeal decisions are auditable."],
+    ["Published role standards","cycle exceptions","employee self-review","manager evidence and feedback","HR validation","employee response","appeal","development actions"]),
   sop("recruitment-selection", "Recruitment & Selection SOP", "HR & EMPLOYMENT", "HR & Admin", "Provide a consistent, evidence-based process for approved hiring.", "Approved manpower request or replacement need.", ["Confirm approved vacancy, designation, employment level, location, cost centre and reporting line.", "Publish or source candidates using approved channels and retain applications.", "Screen candidates against documented role requirements without inventing evidence.", "Conduct structured interviews/assessments and record panel decisions.", "Complete reference/background checks appropriate to the role.", "Obtain hiring approval and issue the approved Zermatt offer template.", "Create the recruitment/onboarding handover in CHRiS."], ["No offer before documented approval.", "Use the authoritative Zermatt designation catalogue.", "Keep candidate information access-controlled and auditable."], ["Vacancy approval", "CV/application", "screening record", "interview scorecard", "approval", "offer", "recruitment handover"]),
   sop("employee-onboarding", "Employee Onboarding SOP", "HR & EMPLOYMENT", "HR & Admin / Line Manager", "Move an accepted candidate into productive employment with complete records, controls and induction.", "Accepted offer and confirmed commencement date.", ["Create/verify the employee record using the authorized ZLL employee-number process.", "Confirm identity, contact, emergency contact, bank and applicable statutory information.", "Assign authoritative designation, level, employment type, location, cost centre and manager.", "Issue/reconfirm JD, employment terms and required acknowledgements.", "Provision work tools and role-based system access.", "Complete Day 1, safety, security, privacy, payroll, leave and role induction.", "Set probation objectives and 30/60/90-day check-ins.", "Close onboarding only when required sections and evidence are complete."], ["Tenant-safe and branch-safe relations only.", "No guessed statutory or identity data.", "Access follows least privilege."], ["Employee profile", "signed terms", "JD", "induction sign-off", "asset issue", "probation objectives"]),
   sop("probation-confirmation", "Probation Review & Confirmation SOP", "HR & EMPLOYMENT", "Line Manager / HR & Admin", "Ensure confirmation or extension decisions are evidence-based and documented.", "Scheduled probation review or material performance concern during probation.", ["Review agreed probation objectives, attendance, conduct and training evidence.", "Obtain employee comments and line-manager recommendation.", "Record any coaching or identified gaps.", "Where standards are met, route confirmation for approval and issue confirmation letter.", "Where an extension is justified, document reasons, support, measurable expectations and revised review date.", "Update CHRiS effective-dated employment records without deleting history."], ["Do not backdate decisions without authorized basis.", "Employee must know the performance or conduct concerns being relied upon."], ["Probation review", "manager recommendation", "employee comments", "confirmation/extension approval", "letter"]),
@@ -69,3 +81,4 @@ function getZermattSopLibrary() {
 }
 
 module.exports = { ZERMATT_SOPS, getZermattSopLibrary };
+

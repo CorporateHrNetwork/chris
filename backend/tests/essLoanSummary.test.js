@@ -98,10 +98,11 @@ test('mid-month export omits loan column and keeps payment details aligned', asy
 });
 
 test('document-portal policy includes the agreed support-pay rules', () => {
-  const sandbox = { module: { exports: {} }, require: id => id.includes('EmploymentLevels') ? { ZERMATT_DESIGNATION_LEVELS: [], ZERMATT_EMPLOYMENT_LEVELS: [] } : { getZermattSopLibrary: () => ({ sops: [], categories: [], status: 'DRAFT' }) } };
+  const sandbox = { module: { exports: {} }, require: id => id.includes('performanceEvaluationRules') ? require('../src/services/performanceEvaluationRules') : id.includes('EmploymentLevels') ? { ZERMATT_DESIGNATION_LEVELS: [], ZERMATT_EMPLOYMENT_LEVELS: [] } : { getZermattSopLibrary: () => ({ sops: [], categories: [], status: 'DRAFT' }) } };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/services/zermattEmploymentResourceService.js'), 'utf8'), sandbox);
   const policy = sandbox.module.exports.getZermattEmploymentResourceLibrary().employmentPolicy;
   assert.ok(policy.sections.some(([heading]) => heading.includes('Mid-month Transport Support Pay')));
   const content = policy.sections.map(row => row.join(' ')).join(' ');
   for (const expected of ['100,000', '25%', '75%', '16%', '84%', '15th', '26-day', '57%', '11%', '10%', '9%', '8%', '5%', 'Previous Unpaid', 'Previous Overpaid', 'Loan recovery must never', 'before any new-hire proration', 'annual-leave calculation remains unchanged']) assert.ok(content.includes(expected), expected);
 });
+

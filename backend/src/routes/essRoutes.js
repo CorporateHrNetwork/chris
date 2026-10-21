@@ -240,6 +240,34 @@ router.get("/me", requireEssAuth, async (req, res) => {
   }
 });
 
+const essLeaveMessages={
+  INSUFFICIENT_LEAVE_BALANCE:"Requested leave exceeds your available balance after pending applications. Shorten the request and preview again.",
+  SPLIT_LEAVE_BY_YEAR:"Submit separate leave applications for each calendar year.",
+  LEAVE_NOT_ELIGIBLE:"You are not eligible for the selected leave policy. Contact HR if your employment record needs correction.",
+  LEAVE_REQUEST_OVERLAP:"These dates overlap an existing pending, approved or active leave request.",
+  BACKDATED_LEAVE_NOT_ALLOWED:"The selected policy does not allow backdated requests.",
+  MINIMUM_NOTICE_NOT_MET:"The selected policy requires more notice before leave starts.",
+  ATTACHMENT_REQUIRED:"Provide the supporting document reference required for this leave type.",
+  LEAVE_REASON_REQUIRED:"Enter a reason for your leave application.",
+  TENANT_ACTIVE_LEAVE_POLICY_NOT_FOUND:"Select an active leave policy applicable to your start date.",
+  INVALID_LEAVE_DATES:"Enter valid start and end dates, with the end date on or after the start date.",
+  MINIMUM_LEAVE_DURATION_NOT_MET:"The selected dates are shorter than this policy permits.",
+  MAXIMUM_LEAVE_DURATION_EXCEEDED:"The selected dates exceed this policy’s maximum request duration.",
+  LEAVE_PERIOD_HAS_NO_APPLICABLE_DAYS:"No chargeable leave days fall within the selected dates.",
+};
+function essLeaveEndpoint(action){return async(req,res)=>{
+  try {
+    const service=require("../services/essLeaveService");
+    const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
+    const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+    const data=action==="options"?await service.options(prisma,scope,req.query.asOfDate||today):await service[action](prisma,scope,req.body||{});
+    return res.status(action==="submit"?201:200).json({status:"success",data});
+  }catch(error){return res.status(error.statusCode||400).json({status:"error",code:error.message,message:essLeaveMessages[error.message]||"Unable to complete your leave application. Refresh the balances and contact HR if it persists."});}
+};}
+router.get("/leave/applications",requireEssAuth,essLeaveEndpoint("options"));
+router.post("/leave/preview",requireEssAuth,essLeaveEndpoint("preview"));
+router.post("/leave/applications",requireEssAuth,essLeaveEndpoint("submit"));
+
 router.get("/loans", requireEssAuth, async (req, res) => {
   try {
     const { getEmployeeLoanSummary } = require("../services/essLoanSummaryService");
@@ -316,6 +344,7 @@ router.get("/documents/:id/download",requireEssAuth,async(req,res)=>{
 });
 
 router.post("/performance/self-assessment",requireEssAuth,async(req,res)=>{
+  if(require("../services/performanceEvaluationService").enabled(req.essAuth.organizationId)) return res.status(409).json({status:"error",message:"Use your quarterly performance scorecard to submit this review."});
   try{
     const cycleId=String(req.body?.cycleId||"").trim();if(!cycleId)return res.status(400).json({status:"error",message:"Performance cycle is required."});
     const orgId=req.essAuth.organizationId,eid=req.essAuth.employeeId;
@@ -328,4 +357,5 @@ router.post("/performance/self-assessment",requireEssAuth,async(req,res)=>{
 });
 
 module.exports = router;
+
 

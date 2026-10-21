@@ -83,7 +83,7 @@ const EMPLOYMENT_POLICY = {
   id: "zermatt-employment-policy",
   title: "Zermatt Liquor Limited Employment Policy & Employee Handbook",
   category: "POLICY",
-  version: "1.1-draft-for-management-approval",
+  version: "1.2-draft-for-management-approval",
   sections: [
     ["1. Purpose & scope", "Sets minimum employment standards for Zermatt employees across Head Office, branches, Beer Barn, retail, warehouse, logistics and support functions. Statutory law prevails where it grants a mandatory right or obligation."],
     ["2. Employment categories", "Employment status, type, designation, employment level, location, manager and cost centre are authoritative CHRiS records. Changes require approved, effective-dated HR action."],
@@ -98,6 +98,7 @@ const EMPLOYMENT_POLICY = {
     ["7. Leave", "Leave is administered through approved policy, entitlement, request, approval, commencement and return-to-work records. Employees must complete required handover/replacement arrangements before proceeding on leave where applicable."],
     ["8. Leave Allowance", "Eligible Zermatt employees receive Leave Allowance under the approved company formula and eligibility rule configured in CHRiS. It is treated by Zermatt as an after-tax, non-taxable benefit and shown separately from taxable salary."],
     ["9. Pension & statutory obligations", "Applicable deductions and employer obligations are processed using current effective-dated statutory rules. HR/Payroll must retain reconciliation and remittance evidence."],
+    ["Quarterly Performance Evaluation", require("./performanceEvaluationRules").POLICY.rules.join(" ")],
     ["10. Conduct & ethics", "Employees must act honestly, protect company assets/stock/cash, avoid conflicts of interest, comply with lawful instructions, prevent theft/fraud and follow branch operating controls."],
     ["11. Respectful workplace", "Harassment, bullying, discrimination, retaliation and violence are prohibited. Complaints should be reported promptly and handled confidentially, fairly and without retaliation."],
     ["12. Alcohol, stock & cash controls", "Employees must follow authorization, stock movement, cash handling, sale, consumption, wastage, variance and security controls. Company products/assets may not be removed or consumed without authorization."],
@@ -263,3 +264,4 @@ function getZermattEmploymentResourceLibrary() {
 }
 
 module.exports = { getZermattEmploymentResourceLibrary, makeJobDescription };
+

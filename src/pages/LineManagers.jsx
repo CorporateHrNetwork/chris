@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
+import PerformanceEvaluationWorkspace from "../components/performance/PerformanceEvaluationWorkspace";
 import SearchableRegistrySelect from "../components/common/SearchableRegistrySelect";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -160,6 +161,7 @@ export default function LineManagers() {
   }
 
   return <div>
+    <PerformanceEvaluationWorkspace />
     <header style={hero}>
       <div style={eyebrow}>ORGANIZATION STRUCTURE</div>
       <h1 style={title}>Line Managers</h1>
@@ -303,3 +305,4 @@ const history = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(
 const actions = { gridColumn: "1/-1", display: "flex", justifyContent: "flex-end", gap: 10 };
 const primary = { minHeight: 42, padding: "0 16px", borderRadius: 9, border: "1px solid #D4AF37", background: "#D4AF37", color: "#08140E", fontWeight: 900 };
 const danger = { ...primary, borderColor: "#EF4444", background: "rgba(127,29,29,.25)", color: "#FCA5A5" };
+

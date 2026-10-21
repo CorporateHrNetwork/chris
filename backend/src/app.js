@@ -64,6 +64,8 @@ const employeeSelfServiceRoutes = require("./routes/employeeSelfServiceRoutes");
 const employeeNewsRoutes = require("./routes/employeeNewsRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
+const performanceEvaluationRoutes = require("./routes/performanceEvaluationRoutes");
+
 const app = express();
 
 app.disable("x-powered-by");
@@ -97,6 +99,7 @@ app.get("/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/ess", essRoutes);
+app.use("/api/performance-evaluation", performanceEvaluationRoutes);
 app.use("/api/support-desk", supportDeskCancellationRoutes);
 app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
@@ -164,4 +167,5 @@ app.use("/api/location-catalog", locationCatalogRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
 module.exports = app;
+
 

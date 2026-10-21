@@ -8,6 +8,12 @@ const exitSettlement = require("../services/exitSettlementService");
 
 const router = express.Router();
 router.use(requireAuth);
+router.use((req,res,next)=>{
+  const pe=require("../services/performanceEvaluationService");
+  if(pe.enabled(req.auth.organizationId) && req.path.startsWith("/performance/") && !["GET","HEAD"].includes(req.method))
+    return res.status(409).json({status:"error",message:"Use the quarterly performance evaluation workspace for this tenant."});
+  next();
+});
 
 const id = () => crypto.randomUUID();
 const text = (v) => String(v ?? "").trim();
@@ -283,3 +289,4 @@ router.post("/automation/ensure-current-payroll", requirePermission("payroll.man
 });
 
 module.exports = router;
+

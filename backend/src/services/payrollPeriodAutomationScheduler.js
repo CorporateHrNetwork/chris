@@ -45,6 +45,9 @@ function createPayrollPeriodAutomationScheduler({ prisma, intervalMs = 60 * 60 *
           console.log(`[CHRiS] Automatically opened ${code} payroll for ${org.name}.`);
         }
 
+        // Enrolled tenants use the reviewed, prospective quarterly workflow.
+        if (require("./performanceEvaluationService").enabled(org.id)) continue;
+
         const quarter = currentQuarter(now);
         const year = now.getUTCFullYear();
         const cycleExists = await prisma.$queryRawUnsafe(
@@ -86,3 +89,4 @@ function createPayrollPeriodAutomationScheduler({ prisma, intervalMs = 60 * 60 *
 }
 
 module.exports = { createPayrollPeriodAutomationScheduler };
+
