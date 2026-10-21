@@ -60,9 +60,9 @@ export default function TransportSupportPreparation() {
     {preview&&<>
       <h2>Allocation preview</h2><p>{preview.validRows} valid · {preview.invalidRows} requiring correction. Unworked days before a new hire’s resumption are not unpaid arrears.</p>
       <div style={{overflowX:'auto'}}><table style={{width:'100%',textAlign:'left'}}>
-        <thead><tr>{['Employee No','Employee Name','Branch','Employment Type','Full Salary','Mid-month %','Normal Mid-month','Eligible Days / 15','Mid-month Payable','End-month Gross','Loan Recovery','Validation','Correction'].map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
+        <thead><tr>{['Employee No','Employee Name','Branch','Employment Type','Full Salary','Mid-month %','Normal Mid-month','Eligible Days / 15','Mid-month Payable','End-month Gross','Validation','Correction'].map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
         <tbody>{preview.rows.map(row=><tr key={row.rowNumber}>
-          {[row.employeeNumber,row.employeeName,row.branch||'Unassigned',row.employmentType,row.amount==null?'—':money(row.amount),row.allocation?.midMonthPercentage??'—',row.allocation?money(row.allocation.normalMidMonth):'—',row.allocation?.eligibleDays??'—',row.allocation?money(row.allocation.midMonthPayable):'—',row.allocation?money(row.allocation.endMonthGross):'—',money(0),row.valid?'Ready':row.errors.join('; ')].map((v,i)=><td key={i} style={{padding:8,borderBottom:'1px solid #ddd'}}>{v}</td>)}
+          {[row.employeeNumber,row.employeeName,row.branch||'Unassigned',row.employmentType,row.amount==null?'—':money(row.amount),row.allocation?.midMonthPercentage??'—',row.allocation?money(row.allocation.normalMidMonth):'—',row.allocation?.eligibleDays??'—',row.allocation?money(row.allocation.midMonthPayable):'—',row.allocation?money(row.allocation.endMonthGross):'—',row.valid?'Ready':row.errors.join('; ')].map((v,i)=><td key={i} style={{padding:8,borderBottom:'1px solid #ddd'}}>{v}</td>)}
           <td><button type="button" disabled={busy||!row.employeeId} onClick={()=>editIndividual(row)}>Correct salary</button></td>
         </tr>)}</tbody>
       </table></div>
@@ -75,4 +75,5 @@ export default function TransportSupportPreparation() {
     <p>Previous unpaid amounts will be added on the following month’s 15th; previous overpaid amounts will be deducted in a separate column. They are reconciliations, not changes to the agreed full salary.</p>
   </section>;
 }
+
 

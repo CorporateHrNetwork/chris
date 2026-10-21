@@ -19,11 +19,11 @@ router.get('/runs/:id/export',async(req,res)=>{
   const data=await service.detail(req.auth.organizationId,req.auth.userId,req.params.id);
   const approved=['APPROVED','PAID'].includes(data.run.status);
   if(req.query.stage==='payout'&&!approved)invalid('Payout export requires General Manager approval.');
-  const rows=[['Employee No','Employee Name','Full Monthly Gross','Current Transport Support','Previous Unpaid','Previous Overpaid','Overpaid Deduction','Overpaid Remaining','Net Pay','Loan Recovery','Bank','Account Name','Account Number','Actual Paid','Payment Reference']];
+  const rows=[['Employee No','Employee Name','Full Monthly Gross','Current Transport Support','Previous Unpaid','Previous Overpaid','Overpaid Deduction','Overpaid Remaining','Net Pay','Bank','Account Name','Account Number','Actual Paid','Payment Reference']];
   for(const l of data.lines) {
    const s=l.snapshot,b=s.paymentDetails||{};
    if(req.query.stage==='payout'&&Number(l.netPay)>0&&(!b.bankName||!b.accountNumber))invalid(`Complete bank details and regenerate payroll for ${s.employeeNumber} before payout export.`);
-   rows.push([s.employeeNumber,s.employeeName,s.fullMonthlyGross,s.currentEntitlement,s.previousUnpaid,s.previousOverpaid,s.overpaidDeduction,s.overpaidRemaining,Number(l.netPay),0,b.bankName||'',b.accountName||'',b.accountNumber||'',l.actualPaid==null?'':Number(l.actualPaid),l.paymentReference||'']);
+   rows.push([s.employeeNumber,s.employeeName,s.fullMonthlyGross,s.currentEntitlement,s.previousUnpaid,s.previousOverpaid,s.overpaidDeduction,s.overpaidRemaining,Number(l.netPay),b.bankName||'',b.accountName||'',b.accountNumber||'',l.actualPaid==null?'':Number(l.actualPaid),l.paymentReference||'']);
   }
   const workbook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(rows),'Transport Support Pay');
   XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([['Payroll stage',data.run.status],['Payment date',`${new Date(data.run.periodMonth).toISOString().slice(0,7)}-15`],['Control','This export is not a payment confirmation. Record actual receipts, including zero payments, to create next-month balances.'],['Loan recovery',0]]),'Controls');
@@ -32,3 +32,4 @@ router.get('/runs/:id/export',async(req,res)=>{
  }catch(e){return sendError(res,e);}
 });
 module.exports=router;
+

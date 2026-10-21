@@ -34,8 +34,8 @@ export default function TransportSupportPayroll() {
   {detail&&<>
    <h2>{String(detail.run.periodMonth).slice(0,7)} · {detail.run.status.replaceAll('_',' ')}</h2>
    <button disabled={busy} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export`)))}>Download review register</button>{['APPROVED','PAID'].includes(detail.run.status)&&<button disabled={busy} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=payout`)))}>Download approved payout register</button>}
-   <div style={{overflowX:'auto'}}><table style={{width:'100%',textAlign:'left'}}><thead><tr>{['Employee','Full Salary','Current Support','Previous Unpaid','Previous Overpaid','Deducted Now','Net Pay','Loan Recovery',...(canPay?['Actual Paid','Payment Reference / Nonpayment Reason']:['Actual Paid'])].map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
-    <tbody>{detail.lines.map(l=><tr key={l.id}>{[`${l.snapshot.employeeNumber} · ${l.snapshot.employeeName}`,money(l.snapshot.fullMonthlyGross),money(l.snapshot.currentEntitlement),money(l.snapshot.previousUnpaid),money(l.snapshot.previousOverpaid),money(l.snapshot.overpaidDeduction),money(l.netPay),money(0)].map((v,i)=><td key={i} style={{padding:8,borderBottom:'1px solid #ddd'}}>{v}</td>)}
+   <div style={{overflowX:'auto'}}><table style={{width:'100%',textAlign:'left'}}><thead><tr>{['Employee','Full Salary','Current Support','Previous Unpaid','Previous Overpaid','Deducted Now','Net Pay',...(canPay?['Actual Paid','Payment Reference / Nonpayment Reason']:['Actual Paid'])].map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
+    <tbody>{detail.lines.map(l=><tr key={l.id}>{[`${l.snapshot.employeeNumber} · ${l.snapshot.employeeName}`,money(l.snapshot.fullMonthlyGross),money(l.snapshot.currentEntitlement),money(l.snapshot.previousUnpaid),money(l.snapshot.previousOverpaid),money(l.snapshot.overpaidDeduction),money(l.netPay)].map((v,i)=><td key={i} style={{padding:8,borderBottom:'1px solid #ddd'}}>{v}</td>)}
      {canPay?<><td><input aria-label={`Actual paid ${l.snapshot.employeeNumber}`} type="number" min="0" step="0.01" value={receipts[l.id]?.actualPaid??''} onChange={e=>setReceipts(s=>({...s,[l.id]:{...s[l.id],actualPaid:e.target.value}}))}/></td><td><input aria-label={`Payment reference ${l.snapshot.employeeNumber}`} value={receipts[l.id]?.reference||''} onChange={e=>setReceipts(s=>({...s,[l.id]:{...s[l.id],reference:e.target.value}}))}/></td></>:<td>{l.actualPaid==null?'Unconfirmed':money(l.actualPaid)}</td>}
     </tr>)}</tbody></table></div>
    <label>Review notes / payment batch reference <textarea style={{display:'block',width:'100%',minHeight:70}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
@@ -50,3 +50,4 @@ export default function TransportSupportPayroll() {
   </>}
  </section>;
 }
+
