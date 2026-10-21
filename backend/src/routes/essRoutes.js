@@ -240,6 +240,20 @@ router.get("/me", requireEssAuth, async (req, res) => {
   }
 });
 
+router.get("/loans", requireEssAuth, async (req, res) => {
+  try {
+    const { getEmployeeLoanSummary } = require("../services/essLoanSummaryService");
+    const data = await getEmployeeLoanSummary(prisma, {
+      organizationId: req.essAuth.organizationId,
+      employeeId: req.essAuth.employeeId,
+    });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    console.error("ESS loan summary error:", error);
+    return res.status(error.statusCode || 500).json({ status: "error", message: "Unable to load your loan summary. Please retry." });
+  }
+});
+
 router.get("/dashboard", requireEssAuth, async (req,res) => {
   try {
     const orgId=req.essAuth.organizationId,eid=req.essAuth.employeeId;
@@ -314,3 +328,4 @@ router.post("/performance/self-assessment",requireEssAuth,async(req,res)=>{
 });
 
 module.exports = router;
+
