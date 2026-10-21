@@ -31,8 +31,9 @@ async function getActivePolicy({
   organizationId,
   leaveTypeId,
   asOfDate = new Date(),
+  tx = prisma,
 }) {
-  return prisma.leavePolicy.findFirst({
+  return tx.leavePolicy.findFirst({
     where: {
       organizationId,
       leaveTypeId,
@@ -153,7 +154,20 @@ function policyEntitlementForService(policy, eligibilityResult) {
   return matching ? Number(matching.value) : decimalToNumber(policy.entitlementDays);
 }
 
-async function submitLeaveRequest({
+async function lockLeaveEmployee(tx, organizationId, employeeNumber) {
+  await tx.$queryRawUnsafe('SELECT id FROM public.employees WHERE "organizationId"=$1 AND "employeeNumber"=$2 FOR UPDATE', organizationId, employeeNumber);
+}
+async function lockRequestEmployee(tx, organizationId, requestId) {
+  await tx.$queryRawUnsafe('SELECT e.id FROM public.employees e JOIN public.leave_requests r ON r."employeeId"=e.id AND r."organizationId"=e."organizationId" WHERE r."organizationId"=$1 AND r.id=$2 FOR UPDATE OF e', organizationId, requestId);
+}
+async function submitLeaveRequest(input) {
+  return prisma.$transaction(async tx => {
+    await lockLeaveEmployee(tx, input.organizationId, input.employeeNumber);
+    return submitLeaveRequestInTransaction({ ...input, tx });
+  }, { timeout: 30000 });
+}
+
+async function submitLeaveRequestInTransaction({
   organizationId,
   actorUserId,
   employeeNumber,
@@ -163,9 +177,11 @@ async function submitLeaveRequest({
   endDate,
   reason,
   attachmentUrl,
+  strictAvailableBalance = false,
+  tx,
 }) {
   const employee =
-    await prisma.employee.findFirst({
+    await tx.employee.findFirst({
       where: {
         organizationId,
         employeeNumber,
@@ -174,6 +190,8 @@ async function submitLeaveRequest({
         id: true,
         employeeNumber: true,
         status: true,
+        gender: true,
+        employmentType: true,
       },
     });
 
@@ -184,7 +202,7 @@ async function submitLeaveRequest({
   }
 
   const leaveType =
-    await prisma.leaveType.findFirst({
+    await tx.leaveType.findFirst({
       where: {
         id: leaveTypeId,
         organizationId,
@@ -219,16 +237,23 @@ async function submitLeaveRequest({
   }
 
   const policy = leavePolicyId
-    ? await prisma.leavePolicy.findFirst({ where: { id: leavePolicyId, organizationId, status: "ACTIVE", isActive: true, effectiveFrom: { lte: start }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: start } }] } })
-    : await getActivePolicy({ organizationId, leaveTypeId, asOfDate: start });
+    ? await tx.leavePolicy.findFirst({ where: { id: leavePolicyId, organizationId, status: "ACTIVE", isActive: true, effectiveFrom: { lte: start }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: start } }] } })
+    : await getActivePolicy({ organizationId, leaveTypeId, asOfDate: start, tx });
 
   if (!policy) {
     throw new Error(leavePolicyId ? "TENANT_ACTIVE_LEAVE_POLICY_NOT_FOUND" : "LEAVE_POLICY_NOT_FOUND");
   }
+  if (strictAvailableBalance) {
+    const rules = policy.eligibilityRules || {};
+    if ((Array.isArray(rules.genders) && rules.genders.length && !rules.genders.includes(employee.gender)) ||
+        (Array.isArray(rules.employmentTypes) && rules.employmentTypes.length && !rules.employmentTypes.includes(employee.employmentType))) throw new Error("LEAVE_NOT_ELIGIBLE");
+    if (start.getUTCFullYear() !== end.getUTCFullYear()) throw new Error("SPLIT_LEAVE_BY_YEAR");
+    if (!String(reason || "").trim()) throw new Error("LEAVE_REASON_REQUIRED");
+  }
   leaveTypeId = policy.leaveTypeId;
 
   const calculation = await calculateLeaveRequestDays({
-    organizationId, employeeNumber, leaveTypeId, leavePolicyId: policy.id, startDate: start, endDate: end, policy,
+    organizationId, employeeNumber, leaveTypeId, leavePolicyId: policy.id, startDate: start, endDate: end, policy, tx,
   });
   const units = calculation.requestedUnits;
   if (units <= 0) throw new Error("LEAVE_PERIOD_HAS_NO_APPLICABLE_DAYS");
@@ -262,7 +287,7 @@ async function submitLeaveRequest({
   }
 
   const overlap =
-    await prisma.leaveRequest.findFirst({
+    await tx.leaveRequest.findFirst({
       where: {
         organizationId,
         employeeId:
@@ -295,22 +320,16 @@ async function submitLeaveRequest({
   const leaveYear =
     start.getFullYear();
 
-  const balance =
-    await findOrCreateBalance({
-      organizationId,
-      employeeId:
-        employee.id,
-      leaveTypeId,
-      leaveYear,
-      entitlementDays:
-        policyEntitlementForService(policy, eligibilityResult),
-    });
-
-  const available =
-    balanceAvailable(balance);
+  await tx.$queryRawUnsafe('SELECT id FROM public.leave_balances WHERE "organizationId"=$1 AND "employeeId"=$2 AND "leaveTypeId"=$3 AND "leaveYear"=$4 FOR UPDATE', organizationId, employee.id, leaveTypeId, leaveYear);
+  const balance = strictAvailableBalance
+    ? await tx.leaveBalance.findUnique({ where: { organizationId_employeeId_leaveTypeId_leaveYear: { organizationId, employeeId: employee.id, leaveTypeId, leaveYear } } })
+    : await findOrCreateBalance({ tx, organizationId, employeeId: employee.id, leaveTypeId, leaveYear, entitlementDays: policyEntitlementForService(policy, eligibilityResult) });
+  // The balance is shared by leave type/year, including requests under older policy versions.
+  const pending = await tx.leaveRequest.aggregate({ where: { organizationId, employeeId: employee.id, leaveTypeId, status: "PENDING", startDate: { gte: new Date(Date.UTC(leaveYear,0,1)), lt: new Date(Date.UTC(leaveYear+1,0,1)) } }, _sum: { requestedUnits: true } });
+  const available = balanceAvailable(balance) - decimalToNumber(pending._sum.requestedUnits);
 
   if (
-    !policy.allowNegativeBalance &&
+    (strictAvailableBalance || !policy.allowNegativeBalance) &&
     units > available
   ) {
     const error =
@@ -328,7 +347,7 @@ async function submitLeaveRequest({
   }
 
   if (
-    policy.allowNegativeBalance &&
+    !strictAvailableBalance && policy.allowNegativeBalance &&
     policy.maxNegativeDays !==
       null
   ) {
@@ -347,7 +366,7 @@ async function submitLeaveRequest({
     }
   }
 
-  return prisma.leaveRequest.create({
+  return tx.leaveRequest.create({
     data: {
       organizationId,
       employeeId:
@@ -388,17 +407,17 @@ async function submitLeaveRequest({
   });
 }
 
-async function calculateLeaveRequestDays({ organizationId, employeeNumber, leaveTypeId, leavePolicyId, startDate, endDate, policy: suppliedPolicy }) {
+async function calculateLeaveRequestDays({ organizationId, employeeNumber, leaveTypeId, leavePolicyId, startDate, endDate, policy: suppliedPolicy, tx = prisma }) {
   const start = utcDay(startDate), end = utcDay(endDate);
   if (end < start) throw new Error("INVALID_LEAVE_DATES");
-  const employee = await prisma.employee.findFirst({
+  const employee = await tx.employee.findFirst({
     where: { organizationId, employeeNumber },
     select: { id: true, shiftAssignments: { where: { effectiveFrom: { lte: end }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: start } }] }, take: 1, select: { id: true } } },
   });
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
-  const policy = suppliedPolicy || (leavePolicyId ? await prisma.leavePolicy.findFirst({ where: { id: leavePolicyId, organizationId, status: "ACTIVE", isActive: true } }) : await getActivePolicy({ organizationId, leaveTypeId, asOfDate: start }));
+  const policy = suppliedPolicy || (leavePolicyId ? await tx.leavePolicy.findFirst({ where: { id: leavePolicyId, organizationId, status: "ACTIVE", isActive: true } }) : await getActivePolicy({ organizationId, leaveTypeId, asOfDate: start, tx }));
   if (!policy) throw new Error(leavePolicyId ? "TENANT_ACTIVE_LEAVE_POLICY_NOT_FOUND" : "LEAVE_POLICY_NOT_FOUND");
-  const holidays = await prisma.publicHoliday.findMany({ where: { organizationId, holidayDate: { gte: start, lte: end } }, select: { holidayDate: true } });
+  const holidays = await tx.publicHoliday.findMany({ where: { organizationId, holidayDate: { gte: start, lte: end } }, select: { holidayDate: true } });
   const result = calculateLeaveDays({ startDate: start, endDate: end, policy, publicHolidays: holidays.map(item => item.holidayDate) });
   return { ...result, policyId: policy.id, policyName: policy.name, policyVersion: policy.versionNumber,
     employeeScheduleConfigured: employee.shiftAssignments.length > 0,
@@ -434,6 +453,7 @@ async function reviewLeaveRequest({
 
   return prisma.$transaction(
     async (tx) => {
+      await lockRequestEmployee(tx, organizationId, leaveRequestId);
       const request =
         await tx.leaveRequest.findFirst({
           where: {
@@ -591,6 +611,7 @@ async function cancelLeaveRequest({
 }) {
   return prisma.$transaction(
     async (tx) => {
+      await lockRequestEmployee(tx, organizationId, leaveRequestId);
       const request =
         await tx.leaveRequest.findFirst({
           where: {
@@ -808,6 +829,7 @@ async function commenceLeave({
   const commencementDate = parseLifecycleDate(effectiveDate, "INVALID_COMMENCEMENT_DATE");
 
   return prisma.$transaction(async (tx) => {
+      await lockRequestEmployee(tx, organizationId, leaveRequestId);
     const request = await tx.leaveRequest.findFirst({
       where: { id: leaveRequestId, organizationId },
       include: {
@@ -899,6 +921,7 @@ async function returnFromLeave({
   const actualReturnDate = parseLifecycleDate(returnDate, "INVALID_RETURN_DATE");
 
   return prisma.$transaction(async (tx) => {
+      await lockRequestEmployee(tx, organizationId, leaveRequestId);
     const request = await tx.leaveRequest.findFirst({
       where: { id: leaveRequestId, organizationId },
       include: {
@@ -1058,3 +1081,4 @@ module.exports = {
   getLeaveConsistency,
   getEmployeeBalances,
 };
+

@@ -192,7 +192,7 @@ async function getEmployeePolicyBalance({
         where: {
           organizationId,
           employeeId: employee.id,
-          leavePolicyId: policy.id,
+          leaveTypeId: policy.leaveTypeId,
           status: "PENDING",
           startDate: {
             gte: yearStart,
@@ -250,3 +250,4 @@ module.exports = {
   projectBalance,
   getEmployeePolicyBalance,
 };
+

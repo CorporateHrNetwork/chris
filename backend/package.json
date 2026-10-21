@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "npx prisma migrate deploy && node scripts/start-with-zermatt-v3.cjs",
-    "test:compliance": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceFutureReadiness.test.js",
+    "test:compliance": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceFutureReadiness.test.js && npm run test:performance-evaluation",
     "test:compliance:api": "DATABASE_URL=postgresql://test:test@127.0.0.1:5432/chris_test node --test tests/complianceAdministrativeApiAcceptance.test.js",
     "test:migration:compliance": "node scripts/complianceMigrationAcceptance.js",
     "test:leave:runtime": "node scripts/leaveRuntimeAcceptance.js",
@@ -17,7 +17,8 @@
     "zermatt:employment-level:v3:apply": "node scripts/apply-zermatt-employment-level-v3.cjs --apply",
     "zermatt:employment-level:v3:verify": "node scripts/verify-zermatt-employment-level-v3.cjs",
     "zermatt:role-grades:preview": "node scripts/reconcile-zermatt-v3-role-grades.cjs",
-    "zermatt:role-grades:apply": "node scripts/reconcile-zermatt-v3-role-grades.cjs --apply"
+    "zermatt:role-grades:apply": "node scripts/reconcile-zermatt-v3-role-grades.cjs --apply",
+    "test:performance-evaluation": "node --test tests/performanceEvaluation.test.js"
   },
   "keywords": [],
   "author": "",
