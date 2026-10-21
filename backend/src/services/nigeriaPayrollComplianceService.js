@@ -858,7 +858,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     }
     const prorationFactor = standardDays > 0 ? payableDays / standardDays : 0;
     const structuredGross = round2(scheduledMonthlyGross * prorationFactor);
-    const salaryStructure = calculateStructure(structuredGross, policy.salaryStructure);
+    const salaryStructure = calculateStructure(structuredGross, splitAllocation ? { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 } : policy.salaryStructure);
     const basicSalary = round2(salaryStructure.basic || 0);
     const structuredAllowances = round2(
       Object.entries(salaryStructure)
