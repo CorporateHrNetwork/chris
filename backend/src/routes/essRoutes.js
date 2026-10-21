@@ -262,7 +262,11 @@ function essLeaveEndpoint(action){return async(req,res)=>{
     const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
     const data=action==="options"?await service.options(prisma,scope,req.query.asOfDate||today):await service[action](prisma,scope,req.body||{});
     return res.status(action==="submit"?201:200).json({status:"success",data});
-  }catch(error){return res.status(error.statusCode||400).json({status:"error",code:error.message,message:essLeaveMessages[error.message]||"Unable to complete your leave application. Refresh the balances and contact HR if it persists."});}
+  }catch(error){
+    const businessCode=typeof error.message==="string"&&/^[A-Z][A-Z0-9_]{2,100}$/.test(error.message);
+    const code=businessCode?error.message:"ESS_LEAVE_REQUEST_FAILED";
+    return res.status(error.statusCode||(businessCode?400:500)).json({status:"error",code,message:essLeaveMessages[code]||"Unable to complete your leave application. Refresh the balances and contact HR if it persists."});
+  }
 };}
 router.get("/leave/applications",requireEssAuth,essLeaveEndpoint("options"));
 router.post("/leave/preview",requireEssAuth,essLeaveEndpoint("preview"));
