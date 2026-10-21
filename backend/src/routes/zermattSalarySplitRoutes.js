@@ -13,11 +13,11 @@ router.use((req,res,next)=> {
   if (!isZermatt(req) || !isHeadHr(req)) return res.status(403).json({status:'error',message:'This salary preparation portal is restricted to Zermatt Head HR.'});
   next();
 });
-const headers = ['Employee No','Full Monthly Gross Salary','Currency','Effective From','Reason'];
+const headers = ['Employee No','Full Monthly Gross Salary','Currency','Effective From','Reason','Employee Name (reference)','Employment Type (reference)','Hire Date (reference)'];
 function error(res,e) { return res.status(e.statusCode||400).json({status:'error',code:e.code||'SALARY_SPLIT_ERROR',message:e.statusCode ? e.message : 'Unable to complete salary preparation. Check the workbook and try again.'}); }
 function invalid(message) { const e=new Error(message); e.statusCode=400; throw e; }
 async function employees(client,organizationId) {
-  return client.employee.findMany({where:{organizationId,status:{in:['ACTIVE','PROBATION','LEAVE','SUSPENDED']}},select:{id:true,employeeNumber:true,employmentType:true,hireDate:true},orderBy:{employeeNumber:'asc'}});
+  return client.employee.findMany({where:{organizationId,status:{in:['ACTIVE','PROBATION','LEAVE','SUSPENDED']}},select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,employmentType:true,hireDate:true},orderBy:{employeeNumber:'asc'}});
 }
 
 function readWorkbook(buffer) {
@@ -32,11 +32,14 @@ router.get('/template',async(req,res)=>{
   try {
     const staff=await employees(prisma,req.auth.organizationId);
     const workbook=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([headers,...staff.map(e=>[e.employeeNumber,'','NGN','',''])]),'Full Salaries');
+    const sheet=XLSX.utils.aoa_to_sheet([headers,...staff.map(e=>[e.employeeNumber,'','NGN','','Opening full salary upload',[e.firstName,e.middleName,e.lastName].filter(Boolean).join(' '),e.employmentType,e.hireDate?new Date(e.hireDate).toISOString().slice(0,10):''])]);
+    sheet['!cols']=[18,27,12,19,34,46,24,21].map(wch=>({wch}));
+    XLSX.utils.book_append_sheet(workbook,sheet,'Full Salaries');
     XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
       ['CHRiS Zermatt Full Salary Preparation'],
       ['Enter FULL agreed monthly gross. Do not enter the reduced end-of-month amount.'],
       ['Employment Type and hire date are read from authoritative employee records.'],
+      ['Employee Name, Employment Type and Hire Date reference columns identify records; editing them does not change CHRiS employee authority.'],
       ['Effective From: YYYY-MM-01; Reason is required.'],
       ['Full-time >= ₦100,000: 25% mid-month, 75% end-month. Below ₦100,000: 16% and 84%.'],
       ['Other employment types: no mid-month; 100% end-month.'],
