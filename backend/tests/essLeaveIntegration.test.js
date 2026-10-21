@@ -26,7 +26,7 @@ test('isolated PostgreSQL/HTTP: ESS identity, strict balance, pending reservatio
   await prisma.leaveBalance.create({data:{organizationId:org.id,employeeId:employee.id,leaveTypeId:type.id,leaveYear:year,openingBalance:3}});
   await prisma.leaveBalance.create({data:{organizationId:org.id,employeeId:victim.id,leaveTypeId:type.id,leaveYear:year,openingBalance:100}});
   const token=jwt.sign({accessType:'ESS',organizationId:org.id,userId:user.id},process.env.JWT_SECRET,{expiresIn:'1h'});
-  async function request(path,body,auth=token){const response=await fetch(base+path,{method:body?'POST':'GET',headers:{...(auth?{Authorization:'Bearer '+auth}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,...await response.json()};}
+  async function request(path,body,auth=token){const response=await fetch(base+path,{method:body?'POST':'GET',headers:{...(auth?{Authorization:'Bearer '+auth}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return {...await response.json(),status:response.status};}
   const input=(start,end,extra={})=>({leavePolicyId:policy.id,startDate:day(start),endDate:day(end),reason:'Synthetic leave request',...extra});
   assert.equal((await request('/api/ess/leave/applications',null,null)).status,401);
   const forged=input(5,9,{employeeId:victim.id,employeeNumber:victim.employeeNumber,requestedUnits:0,strictAvailableBalance:false});
