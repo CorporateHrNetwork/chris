@@ -70,7 +70,9 @@ function mapSalaryRate(row) {
   if (!row) return null;
   return {
     ...row,
-    amount: numberValue(row.amount),
+    amount: numberValue(row.fullMonthlyGross ?? row.amount),
+    fullMonthlyGross: row.fullMonthlyGross == null ? null : numberValue(row.fullMonthlyGross),
+    endMonthGross: row.fullMonthlyGross == null ? null : numberValue(row.amount),
     effectiveFrom: row.effectiveFrom ? new Date(row.effectiveFrom).toISOString().slice(0, 10) : null,
     effectiveTo: row.effectiveTo ? new Date(row.effectiveTo).toISOString().slice(0, 10) : null,
   };
@@ -299,7 +301,7 @@ async function listSalaryRates({ organizationId, prismaClient = prisma }) {
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT sr."id", sr."employeeId", e."employeeNumber",
             CONCAT_WS(' ', e."firstName", e."middleName", e."lastName") AS "employeeName",
-            sr."amount", sr."currency", sr."frequency", sr."effectiveFrom", sr."effectiveTo",
+            sr."amount", sr."currency", sr."frequency", sr."effectiveFrom", sr."effectiveTo", to_jsonb(sr)->>'fullMonthlyGross' AS "fullMonthlyGross",
             sr."status", sr."reason", sr."createdAt", sr."updatedAt"
        FROM "payroll_salary_rates" sr
        JOIN "employees" e ON e."id" = sr."employeeId" AND e."organizationId" = sr."organizationId"
@@ -339,7 +341,7 @@ async function saveSalaryRate({ organizationId, actorUserId, input, prismaClient
     `INSERT INTO "payroll_salary_rates"
       ("id","organizationId","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdByUserId")
      VALUES ($1,$2,$3,$4,$5,'MONTHLY',$6::date,$7::date,'ACTIVE',$8,$9)
-     RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt"`,
+     RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt",to_jsonb(payroll_salary_rates)->>'fullMonthlyGross' AS "fullMonthlyGross"`,
     id,
     organizationId,
     employee.id,
@@ -378,7 +380,7 @@ async function retireSalaryRate({ organizationId, actorUserId, rateId, effective
     `UPDATE "payroll_salary_rates"
         SET "effectiveTo"=$3::date, "status"='RETIRED', "updatedAt"=CURRENT_TIMESTAMP
       WHERE "organizationId"=$1 AND "id"=$2
-      RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt"`,
+      RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt",to_jsonb(payroll_salary_rates)->>'fullMonthlyGross' AS "fullMonthlyGross"`,
     organizationId,
     rateId,
     endDate
@@ -1095,3 +1097,4 @@ module.exports = {
   listApprovals,
   operationalError,
 };
+

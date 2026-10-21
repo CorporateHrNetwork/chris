@@ -1,0 +1,37 @@
+name: Zermatt mid-month payroll validation
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'src/pages/payroll/**'
+      - 'src/App.jsx'
+      - '.github/workflows/zermatt-midmonth-payroll.yml'
+permissions:
+  contents: read
+jobs:
+  payroll:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: chris_midmonth_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: node --test tests/zermattSalarySplit.test.js tests/zermattMidmonthDomain.test.js tests/zermattMidmonthIntegration.test.js
+        working-directory: backend
+        env:
+          CHRIS_MIDMONTH_TEST_DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/chris_midmonth_test
+      - run: npm ci
+      - run: npm run build
