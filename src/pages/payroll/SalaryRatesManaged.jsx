@@ -256,7 +256,7 @@ export default function SalaryRatesManaged() {
       <button type="button" style={backButton} onClick={() => navigate("/payroll")}>← Payroll Dashboard</button>
       <div style={eyebrow}>PAYROLL OPERATIONS</div>
       <h1 style={titleStyle}>Salary Rates</h1>
-      {capabilities.isHeadHr && <button type="button" onClick={() => navigate('/payroll/transport-support')}>Full Salary Template &amp; Transport Support Preparation</button>}
+      {capabilities.isHeadHr && <><button type="button" onClick={() => navigate('/payroll/full-salary-upload')}>Full Salary Template &amp; Bulk Upload</button><button type="button" onClick={() => navigate('/payroll/transport-support')}>Transport Support Pay Portal</button></>}
       <p style={leadStyle}>Maintain effective-dated authoritative monthly gross salary rates. Branch HR & Admin Officers can enter and edit employees in their assigned branch; Head HR can manage the organization-wide register. {scopeText}</p>
 
       <Panel title={editingRate ? `Edit Salary Rate · ${editingRate.employeeNumber}` : "Individual Salary Rate"}>

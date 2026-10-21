@@ -2,9 +2,9 @@
 
 This change supplies a Head HR-only preparation portal. It does not activate the two payroll runs or replace the current salary authority.
 
-## Paths after this branch is deployed
+## Salary preparation endpoints after deployment
 
-- UI: `/payroll/transport-support`
+- Upload UI: `/payroll/full-salary-upload`; operating portal: `/payroll/transport-support`
 - Navigation: Payroll → Salary Rates → Full Salary Template & Transport Support Preparation.
 - Excel template: `GET /api/payroll/full-salary-preparation/template`
 - Preview: `POST /api/payroll/full-salary-preparation/preview` (multipart `file`).
@@ -23,20 +23,33 @@ Pilot project: `ldmwsptljgnspwtwcdtm`. Staging: `amnbmmewmvbtiylhquin`.
 - Staging's 95 application tables previously granted access to anon/authenticated. Removed those privileges while retaining the PostgreSQL backend and service-role path. Saved the exact prior grants for rollback. Production already denied browser table access.
 - Added the isolated `zzzz_block_midmonth_loan_recovery` trigger in both environments. Existing pilot loan-recovery functions were preserved. Entries with `details.payrollElement=MID_MONTH_TRANSPORT_SUPPORT` have zero loan recovery and no loan-recovery posting items; the guard restores only the loan amount recorded as actually deducted. Ordinary end-month entries are unchanged.
 - Tested the isolated guard using temporary records, including preservation of a leave amount and the unchanged end-month result. Temporary fixtures are removed at commit.
-- After explicit user approval on 21 October 2026, restored both staging loan functions to their exact recorded pre-experiment body hashes, with precondition checks. The independent mid-month guard remains enabled. A staging approval test confirmed zero mid-month loan postings and rolled back all test changes; employee/payroll totals and loan balances were unchanged in staging and pilot, and pilot function bodies were unchanged.
+- After explicit user approval on 21 October 2026, restored both staging loan functions to their exact recorded pre-experiment body hashes. The independent mid-month guard remains enabled. A staging approval test confirmed zero mid-month loan postings and rolled back all test changes. Staging and pilot employee/payroll totals and loan balances were unchanged; pilot function bodies were unchanged.
 - The new salary preparation table is provisioned ONLY in staging. Its Data API grants are explicit, RLS is enabled and anon/authenticated have no access. Server-only no-policy RLS is intentional.
 
 The October 30 change is not a reason to grant browser access to payroll. Every future Data API table needs an explicit, reviewed grant and the appropriate row policies. The current Prisma connection-string path does not need browser table grants.
 
-## Remaining release work
+## Implemented operating flow
 
-1. Identify the live API service, source branch and commit. The connected Render workspace lists only the portfolio; the Desktop Commander device was offline during this work. No payroll application deployment was attempted.
-2. Reconcile the existing deployed approval implementation with this branch. This branch adds no new approval or payout route and cannot bypass the regular workflow.
-3. Supply the first payroll month and fresh salary workbook. Provision the reviewed preparation schema in production only as part of the verified release.
-4. Connect reviewed full salaries to effective-dated end-month salary authority, with approved-period locks and rollback. Existing allowance/OT/public-holiday routines must receive the end-month gross; the leave calculation must retain its existing reference.
-5. Complete the separate mid-month run/approval/payout/reconciliation ledger using the regular Zermatt approval workflow. Every persisted mid-month line must carry the canonical payrollElement marker. Salary advance/loan recovery routines must not be invoked by this process.
-6. Previous unpaid is paid on the following month's 15th; previous overpaid is deducted in a separate column. Reconcile against confirmed actual payment, carry each outstanding balance once, and retain source-period/payment references. Pre-employment days are not arrears.
-7. Add new-hire salary-allocation provisioning once salary, employment type and resumption date are complete. Employee creation without a salary must remain incomplete, not infer a salary.
-8. Rehearse a fresh isolated restore and compare payroll before enabling any payroll activation. The latest verified full restore evidence in this session was the 16 October backup, restored on 17 October.
+- `/payroll/full-salary-upload`: template generation, live employee validation, atomic full-salary import for review. Pending imports can be corrected; activated authorities cannot be overwritten.
+- `/payroll/transport-support`: separate run register, activation month selection, generation/recalculation, auditor and GM decisions, approved payout export, actual-payment confirmation and audit history.
+- The four responsibility assignments are read from the existing regular payroll assignment table. Head HR submits, Payroll Auditor reviews, General Manager approves, Chief Accountant confirms actual payments. No new assignee list is invented.
+- Activation requires a complete salary batch for all current employees and cannot overlap approved payroll. It end-dates old rates, retains historical rows and creates new full-salary authorities with their end-month amount. The existing salary write trigger automatically provisions a new hire's full salary and both elements.
+- Regular Nigeria payroll uses the end-month amount for allowances, overtime/public holidays, the 26-day cycle and employee statutory calculations. Non-full-time employees have no employee statutory deductions under the configured split policy. Existing legacy periods retain their original behavior. No annual-leave routine or reference is modified.
+- Separate mid-month tables never invoke regular loan, salary-advance or statutory posting. The database loan guard remains as an additional boundary for any marked mid-month entries in regular tables.
+- Actual payment is explicitly entered for every line, including zero. Unpaid/overpaid differences become balances due at the next month's 15th. Old balances are consumed exactly once; overpayment recovery is capped at available support and any remainder stays outstanding. No negative payment is generated.
+- Runs must proceed month by month. An unreconciled preceding run blocks the next run, so missed payments cannot be silently omitted. Approved/paid runs are immutable, and duplicate confirmations cannot post duplicate balances.
+- Source hashes include salary authorities, employment data, balances and bank details. Changed source data must be regenerated and reviewed. Nonzero bank payouts require complete bank data before GM approval.
 
-Validation: `node --test backend/tests/zermattSalarySplit.test.js`; backend JavaScript syntax checks. A full frontend build and HTTP end-to-end test were not run because project dependencies were unavailable in this environment. This is a draft release, not client-ready payroll activation.
+## Release gates and validation
+
+The operating schema and salary-allocation trigger are provisioned in staging only, with no enabled configuration or salary activation. Production payroll remains on its existing authority until deployment verification and the first complete full-salary batch.
+
+Deployment prerequisites:
+1. Identify and verify the actual live API service/source commit. Desktop Commander still reported the device offline during this implementation.
+2. Run the dedicated PostgreSQL integration test and frontend build in `.github/workflows/zermatt-midmonth-payroll.yml`. The test refuses any database other than `chris_midmonth_test` and uses disposable fixtures only.
+3. Apply the reviewed preparation and operating schemas to the verified production target as part of the application release. Do not execute rollback files or previously applied security SQL indiscriminately.
+4. Enable `CHRIS_ZERMATT_SALARY_PREPARATION_ENABLED=true` for imports and `CHRIS_ZERMATT_SPLIT_PAYROLL_RELEASE_READY=true` only after application checks pass.
+5. Import the fresh full-salary workbook, select its effective month, then activate it in the portal. No effective month or salary amounts are inferred.
+6. Rehearse a fresh encrypted restore before production activation. The latest full restore evidence previously inspected was the 16 October backup restored on 17 October.
+
+Local validation: `node --test backend/tests/zermattSalarySplit.test.js backend/tests/zermattMidmonthDomain.test.js` (17 tests) and backend syntax checks. The integration test is skipped locally when its disposable database is unavailable; it must pass in CI before release. The frontend build also runs in that workflow.

@@ -70,9 +70,10 @@ router.post('/import',upload.single('file'),async(req,res)=>{
       if (req.body?.previewToken!==digest(rows)) invalid('The workbook or employee records changed. Preview the upload again.');
       const batchId=crypto.randomUUID();
       for(const row of rows) {
-        await tx.$executeRawUnsafe(`INSERT INTO public.zermatt_salary_split_preparations
+        const changed=await tx.$executeRawUnsafe(`INSERT INTO public.zermatt_salary_split_preparations
           (id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId")
-          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9::date,$10::jsonb,$11)`,crypto.randomUUID(),req.auth.organizationId,row.employeeId,row.amount,row.currency,row.effectiveFrom,row.reason,row.employmentType,row.hireDate,JSON.stringify(row.allocation),req.auth.userId);
+          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9::date,$10::jsonb,$11) ON CONFLICT("organizationId","employeeId","effectiveFrom") DO UPDATE SET "fullMonthlyGross"=EXCLUDED."fullMonthlyGross",reason=EXCLUDED.reason,"employmentTypeSnapshot"=EXCLUDED."employmentTypeSnapshot","hireDateSnapshot"=EXCLUDED."hireDateSnapshot","allocationPreview"=EXCLUDED."allocationPreview","createdByUserId"=EXCLUDED."createdByUserId","createdAt"=CURRENT_TIMESTAMP WHERE zermatt_salary_split_preparations."activatedAt" IS NULL`,crypto.randomUUID(),req.auth.organizationId,row.employeeId,row.amount,row.currency,row.effectiveFrom,row.reason,row.employmentType,row.hireDate,JSON.stringify(row.allocation),req.auth.userId);
+        if(changed!==1) invalid("An activated salary cannot be overwritten. Create an effective-dated salary review instead.");
       }
       await tx.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,entityType:'SalarySplitPreparation',entityId:batchId,action:'IMPORTED_FOR_REVIEW',newValue:{count:rows.length,status:'PENDING_ACTIVATION'},reason:'Full salaries prepared; regular payroll and loan balances unchanged.'}});
       return rows.length;
@@ -83,7 +84,7 @@ router.post('/import',upload.single('file'),async(req,res)=>{
 router.get('/',async(req,res)=>{
   try {
     if (process.env.CHRIS_ZERMATT_SALARY_PREPARATION_ENABLED!=='true') return res.json({status:'success',data:[],preparationEnabled:false});
-    const rows=await prisma.$queryRawUnsafe(`SELECT s.id,e."employeeNumber",s."fullMonthlyGross",s.currency,s."effectiveFrom",s.status,s."allocationPreview" FROM public.zermatt_salary_split_preparations s JOIN public.employees e ON e.id=s."employeeId" AND e."organizationId"=s."organizationId" WHERE s."organizationId"=$1 ORDER BY s."effectiveFrom" DESC,e."employeeNumber" LIMIT 2000`,req.auth.organizationId);
+    const rows=await prisma.$queryRawUnsafe(`SELECT s.id,e."employeeNumber",s."fullMonthlyGross",s.currency,s."effectiveFrom",s.status,s."activatedAt",s."allocationPreview" FROM public.zermatt_salary_split_preparations s JOIN public.employees e ON e.id=s."employeeId" AND e."organizationId"=s."organizationId" WHERE s."organizationId"=$1 ORDER BY s."effectiveFrom" DESC,e."employeeNumber" LIMIT 2000`,req.auth.organizationId);
     return res.json({status:'success',data:rows,preparationEnabled:true});
   } catch(e) { return error(res,e); }
 });
