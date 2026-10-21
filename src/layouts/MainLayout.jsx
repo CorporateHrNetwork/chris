@@ -55,6 +55,10 @@ function StandaloneBackButton() {
   if (MODULE_ROOTS.has(pathname)) return null;
 
   const goBack = () => {
+    if (["/payroll/full-salary-upload", "/payroll/transport-support"].includes(pathname)) {
+      navigate("/payroll?workspace=rates");
+      return;
+    }
     const routerHistoryIndex = Number(window.history.state?.idx);
     if (Number.isFinite(routerHistoryIndex) && routerHistoryIndex > 0) {
       navigate(-1);
@@ -340,3 +344,4 @@ function MainLayout({ children }) {
 }
 
 export default MainLayout;
+

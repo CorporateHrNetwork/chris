@@ -67,7 +67,8 @@ function prepareSalaryRows(source,staff) {
       amount=moneyCents(record['Full Monthly Gross Salary'])/100;
       if (employee) allocation=splitSalary({fullMonthlyGross:amount,employmentType:employee.employmentType,hireDate:employee.hireDate,periodMonth:effectiveFrom.slice(0,7)});
     } catch(e) { errors.push(e.message); }
-    return {rowNumber,employeeNumber,employeeId:employee?.id,employmentType:employee?.employmentType,hireDate:employee?.hireDate ? dateOnly(employee.hireDate) : null,amount,currency,effectiveFrom,reason,allocation,errors,valid:errors.length===0};
+    return {rowNumber,employeeNumber,employeeName:employee ? [employee.firstName,employee.middleName,employee.lastName].filter(Boolean).join(' ') : '',branch:employee?.location?.name||'',employeeId:employee?.id,employmentType:employee?.employmentType,hireDate:employee?.hireDate ? dateOnly(employee.hireDate) : null,amount,currency,effectiveFrom,reason,allocation,errors,valid:errors.length===0};
   });
 }
 module.exports = { POLICY_VERSION, splitSalary, dateOnly, moneyCents, prepareSalaryRows };
+
