@@ -1,5 +1,15 @@
-export const API_BASE_URL = String(
+const DEMO_HOST = "chris-sales-demo.onrender.com";
+const DEMO_API_BASE_URL = "https://chris-sales-demo-api.onrender.com";
+const isDemoHost =
+  typeof window !== "undefined" &&
+  window.location.hostname.toLowerCase() === DEMO_HOST;
+
+const configuredApiBaseUrl = String(
   import.meta.env.VITE_API_BASE_URL || ""
+).trim();
+
+export const API_BASE_URL = (
+  isDemoHost ? DEMO_API_BASE_URL : configuredApiBaseUrl
 ).replace(/\/+$/, "");
 
 const LAST_ORGANIZATION_SLUG_KEY = "chris_last_organization_slug";
