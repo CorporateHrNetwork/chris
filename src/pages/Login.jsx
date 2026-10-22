@@ -250,9 +250,10 @@ function Login() {
         )
       );
 
-      navigate("/", {
-        replace: true,
-      });
+      // A full navigation makes the newly persisted auth session authoritative
+      // before protected dashboard hooks mount. This prevents the first dashboard
+      // render from racing session/permission hydration and appearing empty until refresh.
+      window.location.replace("/");
     } catch (err) {
       console.error(
         "CHRIS login error:",
