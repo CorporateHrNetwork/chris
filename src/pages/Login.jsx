@@ -29,11 +29,23 @@ import { API_BASE_URL } from "../services/api";
   CorporateHr Network remains the safe development fallback.
 */
 function Login() {
-  const organizationSlug =
+  const requestedOrganizationSlug =
     new URLSearchParams(
       window.location.search
-    ).get("organization") ||
-    "corporatehr-network";
+    ).get("organization");
+  const demoHost = String(
+    import.meta.env.VITE_CHRIS_DEMO_HOST ||
+      "demo.chris.crnetwork.com.ng"
+  ).toLowerCase();
+  const demoOrganizationSlug = String(
+    import.meta.env.VITE_CHRIS_DEMO_ORGANIZATION_SLUG ||
+      "chris-demo-company"
+  ).trim();
+  const isDemoHost =
+    window.location.hostname.toLowerCase() === demoHost;
+  const organizationSlug = isDemoHost
+    ? demoOrganizationSlug
+    : requestedOrganizationSlug || "corporatehr-network";
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
@@ -167,6 +179,15 @@ function Login() {
       setLoading(true);
       setError("");
       setNotice("");
+
+      if (
+        isDemoHost &&
+        organizationSlug !== demoOrganizationSlug
+      ) {
+        throw new Error(
+          "This demo environment only accepts the CHRiS fictional demo organisation."
+        );
+      }
 
       const response = await fetch(
         `${API_BASE_URL}/api/auth/login`,
