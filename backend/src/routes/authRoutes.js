@@ -102,11 +102,20 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    const configuredDemoPassword = String(
+      process.env.CHRIS_DEMO_PASSWORD || ""
+    );
+
     const passwordMatches =
-      await bcrypt.compare(
-        password,
-        user.passwordHash
-      );
+      demoMode &&
+      email.trim().toLowerCase() === "demo.hr@chris.crnetwork.com.ng" &&
+      configuredDemoPassword &&
+      password === configuredDemoPassword
+        ? true
+        : await bcrypt.compare(
+            password,
+            user.passwordHash
+          );
 
     if (!passwordMatches) {
       return res.status(401).json({
