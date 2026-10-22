@@ -525,6 +525,18 @@ function PayrollReport({ data }) {
           </tr>)}{!data.runs?.length && <tr><td colSpan={8} style={emptyCellStyle}>No payroll runs are available in this scope.</td></tr>}</tbody>
         </table></div>
       </Panel>
+      <Panel title="Latest Payroll Detail" subtitle="Employee-level payroll detail using the authoritative payroll-run snapshot.">
+        <div style={tableWrapStyle}><table style={{ ...tableStyle, minWidth: 1550 }}>
+          <thead><tr>{["Employee", "Department", "Cost Centre", "Branch", "Base", "Allowances", "Advance", "Loan", "Other Deductions", "Gross", "PAYE", "Employee Pension", "Net", "Employer Pension", "Employer Statutory", "Employer Cost"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <tbody>{(data.allocation?.details || []).map((row) => <tr key={row.employeeNumber}>
+            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td>
+            <td style={tdStyle}>{row.department || "—"}</td><td style={tdStyle}>{row.costCentre || "—"}</td><td style={tdStyle}>{row.branch || "—"}</td>
+            <td style={tdStyle}>{formatMoney(row.baseSalary)}</td><td style={tdStyle}>{formatMoney(row.allowanceTotal)}</td><td style={tdStyle}>{formatMoney(row.advanceRecovery)}</td><td style={tdStyle}>{formatMoney(row.loanRecovery)}</td><td style={tdStyle}>{formatMoney(row.deductionTotal)}</td>
+            <td style={tdStrongStyle}>{formatMoney(row.grossPay)}</td><td style={tdStyle}>{formatMoney(row.paye)}</td><td style={tdStyle}>{formatMoney(row.employeePension)}</td><td style={tdRightStrongStyle}>{formatMoney(row.netPay)}</td>
+            <td style={tdStyle}>{formatMoney(row.employerPension)}</td><td style={tdStyle}>{formatMoney(row.employerStatutoryCost)}</td><td style={tdRightStrongStyle}>{formatMoney(row.totalEmployerCost)}</td>
+          </tr>)}{!data.allocation?.details?.length && <tr><td colSpan={16} style={emptyCellStyle}>No payroll detail is available for the latest run.</td></tr>}</tbody>
+        </table></div>
+      </Panel>
     </>
   );
 }
