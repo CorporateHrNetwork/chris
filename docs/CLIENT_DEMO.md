@@ -21,3 +21,5 @@ Fresh migrations; synthetic fixture; login; authenticated user, employees, dashb
 
 ## Isolation
 Neither live Zermatt nor the existing compliance staging database is used or changed by this deployment. Sample DB is initialized from migrations, not a copy of customer data.
+
+Hosted verification passed on 2026-10-22: health, demo login, employees, dashboard, payroll periods, leave policies, blocked restricted endpoints, rejected Zermatt tenant login, browser dashboard and employee directory. URL: https://chris-client-demo.onrender.com/login?organization=chris-demo-company
