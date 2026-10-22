@@ -63,6 +63,18 @@ const app = express();
 app.disable("x-powered-by");
 app.use(cors(corsOptionsDelegate));
 app.use(applySecurityHeaders);
+app.use((req, res, next) => {
+  const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+  if (demoMode && (req.path.startsWith("/api/commercial") || req.path.startsWith("/api/public/"))) {
+    return res.status(404).json({
+      status: "error",
+      code: "DEMO_ROUTE_DISABLED",
+      message: "This route is unavailable in the CHRiS demo environment.",
+    });
+  }
+  next();
+});
+
 app.use(express.json({
   verify: (req, res, buffer) => {
     if (req.path.includes("/support-desk/whatsapp/webhook")) req.rawBody = Buffer.from(buffer);
