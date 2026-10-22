@@ -109,6 +109,27 @@ app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
 app.use("/api/chris-automation", chrisAutomationRoutes);
 
+// Sales demo must never expose client-specific Zermatt endpoints or rules.
+app.use((req, res, next) => {
+  const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+  if (!demoMode) return next();
+  const demoBlocked = [
+    "/api/zermatt",
+    "/api/zermatt-",
+    "/api/payroll/zermatt",
+    "/api/loans/zermatt",
+    "/api/leave/zermatt",
+  ];
+  if (demoBlocked.some((prefix) => req.path.toLowerCase().startsWith(prefix))) {
+    return res.status(404).json({
+      status: "error",
+      code: "DEMO_CLIENT_SPECIFIC_ROUTE_DISABLED",
+      message: "Client-specific functionality is unavailable in the CHRiS sales demo.",
+    });
+  }
+  next();
+});
+
 app.use("/api", zermattHrLoanOptionRoutes);
 app.use("/api", activeBranchScopeRoutes);
 app.use("/api", activeBranchSupplementRoutes);
