@@ -33,14 +33,8 @@ function Login() {
     new URLSearchParams(
       window.location.search
     ).get("organization");
-  const demoHost = String(
-    import.meta.env.VITE_CHRIS_DEMO_HOST ||
-      "demo.chris.crnetwork.com.ng"
-  ).toLowerCase();
-  const demoOrganizationSlug = String(
-    import.meta.env.VITE_CHRIS_DEMO_ORGANIZATION_SLUG ||
-      "chris-demo-company"
-  ).trim();
+  const demoHost = "chris-sales-demo.onrender.com";
+  const demoOrganizationSlug = "chris-demo-company";
   const isDemoHost =
     window.location.hostname.toLowerCase() === demoHost;
   const organizationSlug = isDemoHost
