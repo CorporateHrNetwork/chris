@@ -10,6 +10,7 @@ import MainLayout from "./layouts/MainLayout";
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
+const CHRiSAutomationCentre = lazy(() => import("./pages/CHRiSAutomationCentre"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
