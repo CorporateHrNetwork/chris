@@ -35,11 +35,13 @@ function Login() {
     ).get("organization");
   const demoHost = "chris-sales-demo.onrender.com";
   const demoOrganizationSlug = "chris-demo-company";
+  const demoApiBaseUrl = "https://chris-sales-demo-api.onrender.com";
   const isDemoHost =
     window.location.hostname.toLowerCase() === demoHost;
   const organizationSlug = isDemoHost
     ? demoOrganizationSlug
     : requestedOrganizationSlug || "corporatehr-network";
+  const loginApiBaseUrl = isDemoHost ? demoApiBaseUrl : API_BASE_URL;
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
@@ -184,7 +186,7 @@ function Login() {
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/api/auth/login`,
+        `${loginApiBaseUrl}/api/auth/login`,
         {
           method: "POST",
 
@@ -297,7 +299,7 @@ function Login() {
         }
 
         const response = await fetch(
-          `${API_BASE_URL}/api/auth/forgot-password`,
+          `${loginApiBaseUrl}/api/auth/forgot-password`,
           {
             method: "POST",
 
