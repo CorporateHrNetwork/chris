@@ -33,7 +33,7 @@ function Login() {
     new URLSearchParams(
       window.location.search
     ).get("organization") ||
-    "corporatehr-network";
+    "chris-demo-company";
   const navigate = useNavigate();
 
   const emailRef = useRef(null);

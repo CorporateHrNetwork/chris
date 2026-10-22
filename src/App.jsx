@@ -1,3 +1,4 @@
+const CHRiSAutomationCentre = lazy(() => import("./pages/CHRiSAutomationCentre"));
 import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
