@@ -3344,7 +3344,7 @@ useEffect(() => {
               <label style={labelStyle}>Designation *</label>
               <select name="designationId" value={formData.designationId || ""} onChange={handleChange} required disabled={saving || !formData.departmentId} style={fieldStyle}>
                 <option value="">Select designation</option>
-                {editCatalog.filter((item) => item.department.id === formData.departmentId)
+                {editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId))
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((designation) => <option key={designation.id} value={designation.id}>{designation.name}</option>)}
               </select>
