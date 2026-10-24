@@ -9,6 +9,7 @@ const {
   prepareAssignmentRows,
   assignEmployee,
 } = require("../services/employeeEmploymentAssignmentService");
+const { buildAssignmentTemplateWorkbook } = require("../services/assignmentTemplateWorkbookService");
 const employmentLevelService = require("../services/employeeEmploymentLevelAssignmentService");
 const {
   synchronizeZermattEmployeeLevelLive,
@@ -322,27 +323,33 @@ router.get(
       const catalog = await listAssignmentCatalog(prisma, req.auth.organizationId);
       const employees = await prisma.employee.findMany({
         where: { organizationId: req.auth.organizationId, status: { in: ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"] }, exitDate: null },
-        select: { id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true, locationId: true },
+        select: {
+          id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true, employmentType: true, locationId: true,
+          costCentre: { select: { id: true, code: true, name: true } },
+          department: { select: { id: true, code: true, name: true } },
+          designation: { select: { id: true, code: true, name: true, careerLevel: true, reportsToDesignationId: true } },
+        },
         orderBy: { employeeNumber: "asc" },
       });
       const scopedEmployees = employees.filter(employee => !req.auth.activeLocationId || employee.locationId === req.auth.activeLocationId);
+      const currentAssignments = await prisma.employeeLineManagerAssignment.findMany({
+        where: { organizationId: req.auth.organizationId, employeeId: { in: scopedEmployees.map(employee => employee.id) }, effectiveTo: null },
+        select: { employeeId: true, effectiveFrom: true, manager: { select: { id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true, department: { select: { id: true, code: true, name: true } }, designation: { select: { id: true, code: true, name: true } } } } },
+      });
+      const currentAssignmentByEmployeeId = new Map(currentAssignments.map(assignment => [assignment.employeeId, assignment]));
       const managerOptionsByEmployee = {};
       for (const employee of scopedEmployees) {
         try {
-          const hierarchy = await require("../services/lineManagerService").resolveManagerCandidates(prisma, {
-            organizationId: req.auth.organizationId,
-            employeeId: employee.id,
-          });
-          managerOptionsByEmployee[employee.employeeNumber] = hierarchy.candidates.map((manager) => ({
-            employeeNumber: manager.employeeNumber,
-            label: `${manager.employeeNumber} — ${[manager.firstName, manager.middleName, manager.lastName].filter(Boolean).join(" ")} — ${manager.designation?.name || "No designation"}`,
-          }));
-        } catch {
-          managerOptionsByEmployee[employee.employeeNumber] = [];
-        }
+          const hierarchy = await require("../services/lineManagerService").resolveManagerCandidates(prisma, { organizationId: req.auth.organizationId, employeeId: employee.id });
+          managerOptionsByEmployee[employee.employeeNumber] = hierarchy.candidates;
+        } catch { managerOptionsByEmployee[employee.employeeNumber] = []; }
       }
-      const buffer = buildAssignmentTemplateWorkbook({
-        employees: scopedEmployees,
+      const templateEmployees = scopedEmployees.map(employee => {
+        const assignment = currentAssignmentByEmployeeId.get(employee.id);
+        return { ...employee, currentLineManager: assignment ? { ...assignment.manager, effectiveFrom: assignment.effectiveFrom } : null };
+      });
+      const buffer = await buildAssignmentTemplateWorkbook({
+        employees: templateEmployees,
         employmentTypes: catalog.employmentTypes,
         costCentres: catalog.costCentres,
         managerOptionsByEmployee,
