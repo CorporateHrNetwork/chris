@@ -524,7 +524,7 @@ function AssignmentWorkspace({
         </Card>
 
         <Card number="2" title="Bulk assign existing employees">
-          <p style={muted}>Download the workbook prefilled with current employees in your active scope. To cover every branch, select HEAD OFFICE first. Enter Line Manager Employee No using the Manager Reference sheet, Manager Effective From (YYYY-MM-DD), and Reason. Blank cells keep current values; untouched employees are skipped. You can also update Employment Type and Cost Centre. This upload does not create employees.</p>
+          <p style={muted}>Download the workbook prefilled with current employees in your active scope. To cover every branch, select HEAD OFFICE first. The sheet follows the CHRiS assignment workflow: Employee No, Employee Name, Employment Type, Cost Centre / Operating Unit, Line Manager Selection, Effective From and Reason. Use the dropdowns for Employment Type, Cost Centre and the employee-specific mapped reporting-line manager options. Blank assignment cells keep current values; untouched employees are skipped. This upload does not create employees.</p>
           <button type="button" style={secondaryButton} onClick={downloadAssignmentTemplate} disabled={busy}>
             {busy === "assignment-template" ? "Preparing…" : "Download Assignment Template"}
           </button>

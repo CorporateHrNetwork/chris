@@ -320,15 +320,32 @@ router.get(
   async (req, res) => {
     try {
       const catalog = await listAssignmentCatalog(prisma, req.auth.organizationId);
-      const managers = await prisma.employee.findMany({
+      const employees = await prisma.employee.findMany({
         where: { organizationId: req.auth.organizationId, status: { in: ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"] }, exitDate: null },
-        select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, locationId: true, designation: { select: { name: true } }, location: { select: { name: true } } },
+        select: { id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true, locationId: true },
         orderBy: { employeeNumber: "asc" },
       });
+      const scopedEmployees = employees.filter(employee => !req.auth.activeLocationId || employee.locationId === req.auth.activeLocationId);
+      const managerOptionsByEmployee = {};
+      for (const employee of scopedEmployees) {
+        try {
+          const hierarchy = await require("../services/lineManagerService").resolveManagerCandidates(prisma, {
+            organizationId: req.auth.organizationId,
+            employeeId: employee.id,
+          });
+          managerOptionsByEmployee[employee.employeeNumber] = hierarchy.candidates.map((manager) => ({
+            employeeNumber: manager.employeeNumber,
+            label: `${manager.employeeNumber} — ${[manager.firstName, manager.middleName, manager.lastName].filter(Boolean).join(" ")} — ${manager.designation?.name || "No designation"}`,
+          }));
+        } catch {
+          managerOptionsByEmployee[employee.employeeNumber] = [];
+        }
+      }
       const buffer = buildAssignmentTemplateWorkbook({
-        managers,
-        employees: managers.filter(employee => !req.auth.activeLocationId || employee.locationId === req.auth.activeLocationId),
+        employees: scopedEmployees,
         employmentTypes: catalog.employmentTypes,
+        costCentres: catalog.costCentres,
+        managerOptionsByEmployee,
       });
       res.setHeader(
         "Content-Disposition",
