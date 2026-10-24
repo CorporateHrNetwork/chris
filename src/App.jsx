@@ -4,20 +4,27 @@ import {
   Routes,
   Route,
   Navigate,
+  Outlet,
 } from "react-router-dom";
 
+import SessionLoadingScreen from "./components/system/SessionLoadingScreen";
 import MainLayout from "./layouts/MainLayout";
+import CHRiSAutomationCentre from "./pages/CHRiSAutomationCentre";
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
+const TransportSupportPreparation = lazy(() => import("./pages/payroll/TransportSupportPreparation"));
+const TransportSupportPayroll = lazy(() => import("./pages/payroll/TransportSupportPayroll"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
-const CHRiSAutomationCentre = lazy(() => import("./pages/CHRiSAutomationCentre"));
+import RecruitmentReports from "./pages/RecruitmentReports";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
+import ESSPortal from "./pages/ESSPortal";
 const Login = lazy(() => import("./pages/Login"));
-const ESSPortal = lazy(() => import("./pages/ESSPortal"));
+const BillingSubscriptions = lazy(() => import("./pages/BillingSubscriptions"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const PayrollNotes = lazy(() => import("./pages/PayrollNotes"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Employees = lazy(() => import("./pages/Employees"));
 const EmployeeDashboard = lazy(() => import("./pages/EmployeeDashboard"));
@@ -31,6 +38,7 @@ const EmployeeInvitations = lazy(() => import("./pages/EmployeeInvitations"));
 const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
 const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
+const InternalNewsManagement = lazy(() => import("./pages/InternalNewsManagement"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
 const LineManagers = lazy(() => import("./pages/LineManagers"));
 const EmployeeProfile = lazy(() => import("./components/employees/EmployeeProfile"));
@@ -61,6 +69,7 @@ const Loans = lazy(() => import("./pages/Loans"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Training = lazy(() => import("./pages/Training"));
 const Reports = lazy(() => import("./pages/Reports"));
+const AuditTrail = lazy(() => import("./pages/AuditTrail"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Designations = lazy(() => import("./pages/Designations"));
 const OrganizationProfile = lazy(() => import("./pages/OrganizationProfile"));
@@ -88,17 +97,7 @@ function PermissionLayout({ permission, children }) {
   );
 }
 
-function AppLoading() {
-  return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#07110C", color: "#F7D66A", fontFamily: "Arial, Helvetica, sans-serif" }}>
-      <div role="status" aria-live="polite" style={{ textAlign: "center" }}>
-        <div style={{ width: 52, height: 52, margin: "0 auto 14px", borderRadius: "50%", display: "grid", placeItems: "center", background: "#D4AF37", color: "#07140D", fontWeight: 900 }}>CH</div>
-        <div style={{ fontSize: 18, fontWeight: 900 }}>Loading CHRiS…</div>
-        <div style={{ marginTop: 6, color: "#AFC0B6", fontSize: 12 }}>Opening the selected workspace</div>
-      </div>
-    </div>
-  );
-}
+function AppLoading() { return <SessionLoadingScreen />; }
 
 function App() {
   return (
@@ -108,15 +107,18 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/employee-invite/:token" element={<EmployeeSelfOnboardingPublic />} />
+        <Route path="/ess" element={<ESSPortal />} />
 
         <Route path="/" element={<PermissionLayout permission="dashboard.view"><Dashboard /></PermissionLayout>} />
 
         <Route path="/employees" element={<PermissionLayout permission="employees.view"><EmployeeDashboard /></PermissionLayout>} />
         <Route path="/employees/add" element={<PermissionLayout permission="employees.create"><AddOnboardEmployeeEntry /></PermissionLayout>} />
+        <Route path="/employees/bulk-assignments" element={<PermissionLayout permission="employees.update"><BulkEmployeeImport assignmentsOnly /></PermissionLayout>} />
         <Route path="/employees/bulk-upload" element={<PermissionLayout permission="employees.create"><BulkEmployeeImport /></PermissionLayout>} />
         <Route path="/employees/invitations" element={<PermissionLayout permission="employees.create"><EmployeeInvitations /></PermissionLayout>} />
         <Route path="/employees/export-queue" element={<PermissionLayout permission="employees.update"><EmployeeExportQueue /></PermissionLayout>} />
         <Route path="/employees/governance" element={<PermissionLayout permission="employees.update"><EmployeeGovernance /></PermissionLayout>} />
+        <Route path="/employees/news" element={<PermissionLayout permission="employees.update"><InternalNewsManagement /></PermissionLayout>} />
         <Route path="/employees/directory" element={<PermissionLayout permission="employees.view"><Employees /></PermissionLayout>} />
         <Route path="/employees/profiles" element={<PermissionLayout permission="employees.view"><EmployeeModuleWorkspace mode="profiles" /></PermissionLayout>} />
         <Route path="/employees/onboarding" element={<PermissionLayout permission="employees.view"><OnboardingTracker /></PermissionLayout>} />
@@ -136,6 +138,7 @@ function App() {
         <Route path="/recruitment/offers" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="offers" /></PermissionLayout>} />
         <Route path="/recruitment/ats" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="ats" /></PermissionLayout>} />
         <Route path="/recruitment/talent-pool" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="talent-pool" /></PermissionLayout>} />
+        <Route path="/recruitment/hiring" element={<PermissionLayout permission="recruitment.view"><RecruitmentTalentWorkspace mode="hiring" /></PermissionLayout>} />
 
         <Route path="/attendance" element={<PermissionLayout permission="attendance.view"><AttendanceDashboard /></PermissionLayout>} />
         <Route path="/attendance/register" element={<PermissionLayout permission="attendance.view"><AttendanceRegister /></PermissionLayout>} />
@@ -158,15 +161,19 @@ function App() {
         <Route path="/leave/balances" element={<PermissionLayout permission="leave.view"><LeaveBalances /></PermissionLayout>} />
         <Route path="/leave/policies" element={<PermissionLayout permission="leave.view"><LeavePolicies /></PermissionLayout>} />
 
-        <Route path="/payroll" element={<PermissionLayout permission="payroll.view"><Payroll /></PermissionLayout>} />
+        <Route element={<ProtectedLayout><Suspense fallback={<p role="status">Loading payroll workspace…</p>}><Outlet /></Suspense></ProtectedLayout>}>
+          <Route path="/payroll" element={<PermissionRoute permission="payroll.view"><Payroll /></PermissionRoute>} />
+          <Route path="/payroll/transport-support" element={<TransportSupportPayroll />} />
+          <Route path="/payroll/full-salary-upload" element={<TransportSupportPreparation />} />
+        </Route>
         <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans /></PermissionLayout>} />
         <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
-        <Route path="/payroll/notes" element={<ProtectedLayout><CHRiSAutomationCentre mode="payroll" /></ProtectedLayout>} />
-        <Route path="/performance/management" element={<ProtectedLayout><CHRiSAutomationCentre mode="performance" /></ProtectedLayout>} />
-        <Route path="/ess" element={<ESSPortal />} />
+        <Route path="/payroll/notes" element={<ProtectedLayout><PayrollNotes /></ProtectedLayout>} />
+        <Route path="/performance/management" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
         <Route path="/training" element={<PermissionLayout permission="training.view"><Training /></PermissionLayout>} />
         <Route path="/reports" element={<PermissionLayout permission="reports.view"><Reports /></PermissionLayout>} />
+        <Route path="/reports/audit-trail" element={<PermissionLayout permission="reports.view"><AuditTrail /></PermissionLayout>} />
         <Route path="/settings" element={<PermissionLayout permission="settings.view"><Settings /></PermissionLayout>} />
         <Route path="/designations" element={<PermissionLayout permission="settings.view"><Designations /></PermissionLayout>} />
 
@@ -196,7 +203,8 @@ function App() {
         <Route path="/organization" element={<ProtectedLayout><ModuleDashboard moduleKey="organization" /></ProtectedLayout>} />
         <Route path="/workflows" element={<ProtectedLayout><ModuleDashboard moduleKey="workflows" /></ProtectedLayout>} />
         <Route path="/employment-types" element={<ProtectedLayout><ModuleDashboard moduleKey="employmentTypes" /></ProtectedLayout>} />
-        <Route path="/billing" element={<ProtectedLayout><ModuleDashboard moduleKey="billing" /></ProtectedLayout>} />
+        <Route path="/billing" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/current-plan" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
 
         <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -222,12 +230,12 @@ function App() {
         <Route path="/statutories/itf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/remittances" element={<ProtectedLayout><ConsolidatedComplianceRoute><RemittanceWorkspace /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/statutories/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/goals-kpis" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/cycles" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/reviews" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/appraisals" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/improvement-plans" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/performance/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/performance/goals-kpis" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/cycles" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/reviews" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/appraisals" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/improvement-plans" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
+        <Route path="/performance/reports" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
         <Route path="/training/programs" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/training/calendar" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/training/employee-training" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -253,7 +261,7 @@ function App() {
         <Route path="/reports/employees" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/headcount" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/branches" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/reports/recruitment" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/reports/recruitment" element={<PermissionLayout permission="recruitment.view"><RecruitmentReports /></PermissionLayout>} />
         <Route path="/reports/attendance" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/leave" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/reports/payroll" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
@@ -287,11 +295,11 @@ function App() {
         <Route path="/settings/notifications" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/settings/security" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/settings/system" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/subscription" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/usage" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/details" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/history" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/billing/invoices" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/billing/subscription" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/usage" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/details" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/history" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/invoices" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -301,3 +309,5 @@ function App() {
 }
 
 export default App;
+
+

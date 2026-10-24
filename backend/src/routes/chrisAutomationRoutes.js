@@ -8,6 +8,12 @@ const exitSettlement = require("../services/exitSettlementService");
 
 const router = express.Router();
 router.use(requireAuth);
+router.use((req,res,next)=>{
+  const pe=require("../services/performanceEvaluationService");
+  if(pe.enabled(req.auth.organizationId) && req.path.startsWith("/performance/") && !["GET","HEAD"].includes(req.method))
+    return res.status(409).json({status:"error",message:"Use the quarterly performance evaluation workspace for this tenant."});
+  next();
+});
 
 const id = () => crypto.randomUUID();
 const text = (v) => String(v ?? "").trim();
@@ -120,50 +126,7 @@ router.put("/settings", requirePermission("settings.manage"), async (req,res)=>{
   return res.json({status:"success",data:rows[0]});
 });
 
-router.get("/payroll-notes", requirePermission("payroll.view"), async (req,res)=>{
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT n.*, CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName", e."employeeNumber", l."name" AS "branchName"
-       FROM "chris_payroll_notes" n
-       LEFT JOIN "employees" e ON e."id"=n."employeeId" AND e."organizationId"=n."organizationId"
-       LEFT JOIN "organization_locations" l ON l."id"=n."branchId" AND l."organizationId"=n."organizationId"
-      WHERE n."organizationId"=$1
-      ORDER BY n."submittedAt" DESC LIMIT 250`,
-    req.auth.organizationId
-  );
-  return res.json({status:"success",data:rows});
-});
-
-router.post("/payroll-notes", requirePermission("payroll.view"), async (req,res)=>{
-  const note = text(req.body?.originalNote);
-  if (!note) return res.status(400).json({status:"error",message:"Payroll note is required."});
-  const row=(await prisma.$queryRawUnsafe(
-    `INSERT INTO "chris_payroll_notes" ("id","organizationId","employeeId","branchId","payrollPeriodId","category","originalNote","attachmentUrl","submittedByUserId")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    id(),req.auth.organizationId,text(req.body?.employeeId)||null,text(req.body?.branchId)||req.auth.activeLocationId||null,text(req.body?.payrollPeriodId)||null,text(req.body?.category)||"OTHER",note,text(req.body?.attachmentUrl)||null,req.auth.userId
-  ))[0];
-  return res.status(201).json({status:"success",message:"Payroll note submitted to Head HR and Head of Audit & Internal Control.",data:row});
-});
-
-router.patch("/payroll-notes/:id/review", requirePermission("payroll.manage"), async (req,res)=>{
-  const status=text(req.body?.status).toUpperCase();
-  if(!["UNDER_REVIEW","APPROVED","REJECTED","IMPLEMENTED"].includes(status)) return res.status(400).json({status:"error",message:"Invalid payroll note status."});
-  const reviewedNote=text(req.body?.reviewedNote)||null;
-  const aiAction=req.body?.aiAction || null;
-  const sets=["status=$3","reviewedNote=$4","headHrUserId=$5","aiAction=$6::jsonb","reviewedAt=CURRENT_TIMESTAMP","updatedAt=CURRENT_TIMESTAMP"];
-  if(status==="IMPLEMENTED") sets.push("implementedAt=CURRENT_TIMESTAMP");
-  const row=(await prisma.$queryRawUnsafe(`UPDATE "chris_payroll_notes" SET ${sets.join(",")} WHERE "id"=$1 AND "organizationId"=$2 RETURNING *`,req.params.id,req.auth.organizationId,status,reviewedNote,req.auth.userId,JSON.stringify(aiAction)))[0];
-  if(!row) return res.status(404).json({status:"error",message:"Payroll note not found."});
-  return res.json({status:"success",data:row});
-});
-
-router.post("/payroll-notes/:id/audit-review", requirePermission("payroll.view"), async (req,res)=>{
-  const row=(await prisma.$queryRawUnsafe(
-    `UPDATE "chris_payroll_notes" SET "auditUserId"=$3,"status"=CASE WHEN "status"='SUBMITTED' THEN 'UNDER_REVIEW' ELSE "status" END,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "organizationId"=$2 RETURNING *`,
-    req.params.id,req.auth.organizationId,req.auth.userId
-  ))[0];
-  if(!row) return res.status(404).json({status:"error",message:"Payroll note not found."});
-  return res.json({status:"success",data:row});
-});
+router.use("/payroll-notes", require("./payrollNoteRoutes"));
 
 router.get("/performance/employees", requirePermission("performance.view"), async (req,res)=>{
   const rows=await prisma.$queryRawUnsafe(
@@ -272,6 +235,8 @@ router.get("/performance/assessments", requirePermission("performance.view"), as
 });
 
 router.get("/payroll-dashboard/export", requirePermission("payroll.view"), async (req,res)=>{
+  const noteAccess = require("../services/payrollNoteWorkflowService").capabilities(req);
+  if (!noteAccess.canReview && !noteAccess.canAudit) return res.status(403).json({status:"error",message:"The payroll notes audit export is restricted to Head HR and Payroll Auditor."});
   try {
     const periodCode = text(req.query?.periodCode) || "2026-09";
     const periods = await prisma.$queryRawUnsafe(`SELECT "id","code","name","periodStart","periodEnd","payDate","status" FROM "payroll_periods" WHERE "organizationId"=$1 AND "code"=$2 LIMIT 1`, req.auth.organizationId, periodCode);
@@ -324,3 +289,4 @@ router.post("/automation/ensure-current-payroll", requirePermission("payroll.man
 });
 
 module.exports = router;
+
