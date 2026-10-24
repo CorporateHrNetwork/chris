@@ -5341,8 +5341,7 @@ router.patch(
       ----------------------------------------------------------
       */
 
-      const [designations, departments] = await Promise.all([
-        prisma.designation.findMany({
+      const designations = await prisma.designation.findMany({
           where: {
             organizationId,
 
@@ -5362,7 +5361,6 @@ router.patch(
               true,
           },
         });
-      ]);
 
 
       if (
