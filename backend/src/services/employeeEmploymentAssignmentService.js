@@ -1,4 +1,5 @@
 const XLSX = require("xlsx");
+const lineManagers = require("./lineManagerService");
 const {
   EMPLOYMENT_TYPES,
   normalizeEmploymentType,
@@ -33,9 +34,13 @@ const ASSIGNMENT_HEADERS = [
   "Employment Type",
   "Cost Centre / Operating Unit",
   "Reason",
+  "Line Manager Employee No",
+  "Manager Effective From",
+  "Employee Name (reference)",
 ];
 
 function normalizeText(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
   return String(value ?? "").trim().replace(/\s+/g, " ");
 }
 
@@ -130,12 +135,15 @@ async function listAssignmentCatalog(prisma, organizationId) {
   };
 }
 
-function buildAssignmentTemplateWorkbook({ employmentTypes = ZERMATT_EMPLOYMENT_TYPES } = {}) {
+function buildAssignmentTemplateWorkbook({ employmentTypes = ZERMATT_EMPLOYMENT_TYPES, employees = [], managers = [] } = {}) {
   const workbook = XLSX.utils.book_new();
   const instructions = [
     ["CHRiS Existing Employee Employment Assignment"],
     ["Use Employee No as the authoritative employee identifier."],
-    ["Complete Employment Type, Cost Centre / Operating Unit, or both."],
+    ["Complete Employment Type, Cost Centre / Operating Unit, and/or Line Manager Employee No. Blank cells keep current values."],
+    ["For line managers use an existing employee number from Manager Reference, not a name. Manager Effective From must be YYYY-MM-DD and not in the future."],
+    ["Enter a Reason for manager changes. Blank rows are skipped; delete employees you do not want to update."],
+    ["Managers must follow the designation hierarchy. Use the individual Line Managers page for authorized exceptions."],
     [`Employment Type values: ${employmentTypes.join(", ")}.`],
     ["Cost Centre may use the active CHRiS Cost Centre name or code."],
     ["Rows are validated before any assignment is applied."],
@@ -149,10 +157,15 @@ function buildAssignmentTemplateWorkbook({ employmentTypes = ZERMATT_EMPLOYMENT_
     workbook,
     XLSX.utils.aoa_to_sheet([
       ASSIGNMENT_HEADERS,
-      ["ZLL000001", employmentTypes[0] || "", "BB Takeaway", "Master-data assignment"],
+      ...employees.map(employee => [employee.employeeNumber, "", "", "", "", "", [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ")]),
     ]),
     "Employee Assignments"
   );
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["Employee No", "Employee Name", "Designation", "Location"],
+    ...managers.map(employee => [employee.employeeNumber, [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "), employee.designation?.name || "", employee.location?.name || ""]),
+  ]), "Manager Reference");
+  for (const name of workbook.SheetNames) workbook.Sheets[name]["!cols"] = Array(7).fill({ wch: 28 });
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
@@ -169,11 +182,19 @@ function parseAssignmentWorkbook(buffer) {
   }
   return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
     defval: "",
-    raw: false,
+    raw: true,
+  }).map(row => {
+    // Decode Excel serial dates directly: Date conversion can shift a calendar day across timezones.
+    for (const key of Object.keys(row)) {
+      if (normalizeHeader(key) !== "managereffectivefrom" || typeof row[key] !== "number") continue;
+      const date = XLSX.SSF.parse_date_code(row[key], { date1904: Boolean(workbook.Workbook?.WBProps?.date1904) });
+      if (date) row[key] = `${String(date.y).padStart(4, "0")}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+    }
+    return row;
   });
 }
 
-async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
+async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLocationId = null }) {
   const [organization, costCentres, employees] = await Promise.all([
     getOrganization(prisma, organizationId),
     listActiveCostCentres(prisma, organizationId),
@@ -187,6 +208,7 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
         lastName: true,
         employmentType: true,
         costCentreId: true,
+        locationId: true,
         costCentre: { select: { id: true, code: true, name: true } },
       },
     }),
@@ -196,7 +218,7 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
     employees.map((employee) => [String(employee.employeeNumber || "").toUpperCase(), employee])
   );
 
-  return parseAssignmentWorkbook(buffer).map((row, index) => {
+  const prepared = parseAssignmentWorkbook(buffer).map((row, index) => {
     const rowNumber = index + 2;
     const employeeNumber = getCell(row, ["Employee No", "Employee Number", "Employee ID"])
       .toUpperCase();
@@ -209,6 +231,10 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
       "Cost Centre Code",
     ]);
     const reason = getCell(row, ["Reason", "Notes"]);
+    const managerEmployeeNumber = getCell(row, ["Line Manager Employee No", "Line Manager Employee Number"]).toUpperCase();
+    const managerEffectiveFrom = getCell(row, ["Manager Effective From"]);
+    const manager = employeeByNumber.get(managerEmployeeNumber);
+    const skip = !employmentTypeInput && !costCentreInput && !managerEmployeeNumber && !managerEffectiveFrom && !reason;
     const employee = employeeByNumber.get(employeeNumber) || null;
     const employmentType = employmentTypeInput
       ? normalizeEmploymentTypeForOrganization(employmentTypeInput, organization.slug)
@@ -218,8 +244,9 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
 
     if (!employeeNumber) errors.push("Employee No is required.");
     if (employeeNumber && !employee) errors.push("Employee No was not found in this organization.");
-    if (!employmentTypeInput && !costCentreInput) {
-      errors.push("Provide Employment Type, Cost Centre / Operating Unit, or both.");
+    if (employee && activeLocationId && employee.locationId !== activeLocationId) errors.push("Employee is outside the active branch.");
+    if (!skip && !employmentTypeInput && !costCentreInput && !managerEmployeeNumber) {
+      errors.push("Provide Employment Type, Cost Centre / Operating Unit, or Line Manager Employee No.");
     }
     if (employmentTypeInput && !employmentType) {
       errors.push("Employment Type is not in the organization's authoritative catalogue.");
@@ -228,7 +255,10 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
       errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
     }
 
+    if (managerEmployeeNumber && !manager) errors.push("Line Manager Employee No was not found in this organization.");
+    if (managerEmployeeNumber && (!/^\d{4}-\d{2}-\d{2}$/.test(managerEffectiveFrom) || !lineManagers.parseEffectiveDate(managerEffectiveFrom) || new Date(managerEffectiveFrom).toISOString().slice(0, 10) !== managerEffectiveFrom)) errors.push("Manager Effective From must be a valid YYYY-MM-DD date.");
     return {
+      skip,
       rowNumber,
       valid: errors.length === 0,
       errors,
@@ -239,6 +269,8 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
               employmentType,
               costCentreId: costCentre?.id || null,
               reason,
+              managerEmployeeNumber,
+              managerEffectiveFrom,
             }
           : null,
       display: {
@@ -252,9 +284,31 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer }) {
         newEmploymentType: employmentType || null,
         currentCostCentre: employee?.costCentre?.name || null,
         newCostCentre: costCentre?.name || null,
+        managerEmployeeNumber,
+        managerEffectiveFrom,
+        managerName: manager ? [manager.firstName, manager.middleName, manager.lastName].filter(Boolean).join(" ") : "",
       },
     };
-  });
+  }).filter(row => !row.skip);
+  const counts = new Map();
+  for (const row of prepared) counts.set(row.display.employeeNumber, (counts.get(row.display.employeeNumber) || 0) + 1);
+  for (const row of prepared) {
+    if (counts.get(row.display.employeeNumber) > 1) row.errors.push("Duplicate Employee No in workbook.");
+    if (!row.errors.length && row.input.managerEmployeeNumber) {
+      try {
+        await lineManagers.validateLineManager(prisma, {
+          organizationId,
+          employeeId: employeeByNumber.get(row.input.employeeNumber).id,
+          managerEmployeeId: employeeByNumber.get(row.input.managerEmployeeNumber).id,
+          effectiveFrom: new Date(row.input.managerEffectiveFrom),
+          reason: row.input.reason,
+        });
+      } catch (error) { row.errors.push(error.message); }
+    }
+    row.valid = row.errors.length === 0;
+    if (!row.valid) row.input = null;
+  }
+  return prepared;
 }
 
 async function assignEmployee(
@@ -267,6 +321,9 @@ async function assignEmployee(
     costCentreId,
     costCentre: costCentreInput,
     reason,
+    managerEmployeeNumber,
+    managerEffectiveFrom,
+    activeLocationId = null,
   }
 ) {
   const [organization, employee, costCentres] = await Promise.all([
@@ -278,6 +335,7 @@ async function assignEmployee(
         employeeNumber: true,
         employmentType: true,
         costCentreId: true,
+        locationId: true,
       },
     }),
     listActiveCostCentres(prisma, organizationId),
@@ -289,11 +347,13 @@ async function assignEmployee(
     throw error;
   }
 
+  if (activeLocationId && employee.locationId !== activeLocationId) throw new Error("EMPLOYEE_OUTSIDE_ACTIVE_BRANCH");
+  const hasManager = Boolean(normalizeText(managerEmployeeNumber));
   const hasEmploymentType = normalizeText(employmentTypeInput) !== "";
   const costCentreValue = normalizeText(costCentreId || costCentreInput);
   const hasCostCentre = costCentreValue !== "";
-  if (!hasEmploymentType && !hasCostCentre) {
-    const error = new Error("Provide Employment Type, Cost Centre / Operating Unit, or both.");
+  if (!hasEmploymentType && !hasCostCentre && !hasManager) {
+    const error = new Error("Provide Employment Type, Cost Centre / Operating Unit, or Line Manager Employee No.");
     error.code = "ASSIGNMENT_REQUIRED";
     throw error;
   }
@@ -318,7 +378,7 @@ async function assignEmployee(
   const changed =
     employmentType !== employee.employmentType || nextCostCentreId !== employee.costCentreId;
 
-  if (!changed) {
+  if (!changed && !hasManager) {
     return {
       employeeNumber: employee.employeeNumber,
       employmentType: employee.employmentType,
@@ -328,6 +388,19 @@ async function assignEmployee(
   }
 
   return prisma.$transaction(async (tx) => {
+    let managerChanged = false;
+    if (hasManager) {
+      const manager = await tx.employee.findFirst({ where: { organizationId, employeeNumber: normalizeText(managerEmployeeNumber).toUpperCase() } });
+      if (!manager) throw new Error("MANAGER_NOT_FOUND");
+      const current = await tx.employeeLineManagerAssignment.findFirst({ where: { organizationId, employeeId: employee.id, effectiveTo: null } });
+      managerChanged = current?.managerEmployeeId !== manager.id;
+      await lineManagers.applyLineManager(tx, {
+        organizationId, employeeId: employee.id, managerEmployeeId: manager.id,
+        effectiveFrom: lineManagers.parseEffectiveDate(managerEffectiveFrom), reason,
+        performedByUserId: actorUserId,
+      });
+    }
+    if (!changed) return { ...employee, managerEmployeeNumber, managerEffectiveFrom, changed: managerChanged };
     const updated = await tx.employee.update({
       where: { id: employee.id },
       data: {
@@ -362,8 +435,8 @@ async function assignEmployee(
       },
     });
 
-    return { ...updated, changed: true };
-  });
+    return { ...updated, managerEmployeeNumber, managerEffectiveFrom, changed: true };
+  }, { isolationLevel: "Serializable" });
 }
 
 module.exports = {
