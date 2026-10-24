@@ -34,10 +34,22 @@ function Login() {
     .match(/[?&]=?(?:organization[-_])?([^&]+)/i)?.[1]
     ?.trim();
 
+  const configuredDemoSlug = String(
+    import.meta.env.VITE_CHRIS_DEMO_ORGANIZATION_SLUG || ""
+  ).trim();
+  const configuredDemoHost = String(
+    import.meta.env.VITE_CHRIS_DEMO_HOST || ""
+  ).trim().toLowerCase();
+  const isSalesDemoHost =
+    configuredDemoHost &&
+    window.location.hostname.toLowerCase() === configuredDemoHost;
+
   const organizationSlug =
     searchParams.get("organization")?.trim() ||
     legacyOrganization ||
-    "corporatehr-network";
+    (isSalesDemoHost && configuredDemoSlug
+      ? configuredDemoSlug
+      : "corporatehr-network");
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
