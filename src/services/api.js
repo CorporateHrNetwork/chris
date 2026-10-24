@@ -1,5 +1,23 @@
-export const API_BASE_URL = String(
+const CONFIGURED_API_BASE_URL = String(
   import.meta.env.VITE_API_BASE_URL || ""
+).trim();
+
+const CONFIGURED_DEMO_HOST = String(
+  import.meta.env.VITE_CHRIS_DEMO_HOST || ""
+).trim().toLowerCase();
+
+const CONFIGURED_DEMO_API_BASE_URL = String(
+  import.meta.env.VITE_CHRIS_DEMO_API_BASE_URL || ""
+).trim();
+
+const IS_SALES_DEMO_HOST =
+  CONFIGURED_DEMO_HOST &&
+  window.location.hostname.toLowerCase() === CONFIGURED_DEMO_HOST;
+
+export const API_BASE_URL = String(
+  IS_SALES_DEMO_HOST && CONFIGURED_DEMO_API_BASE_URL
+    ? CONFIGURED_DEMO_API_BASE_URL
+    : CONFIGURED_API_BASE_URL
 ).replace(/\/+$/, "");
 
 const LAST_ORGANIZATION_SLUG_KEY = "chris_last_organization_slug";
