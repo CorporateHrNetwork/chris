@@ -232,6 +232,16 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
   const employeeByNumber = new Map(
     employees.map((employee) => [String(employee.employeeNumber || "").toUpperCase(), employee])
   );
+  const employeeIdsByName = new Map();
+  for (const employee of employees) {
+    const fullName = normalizeText(
+      [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ")
+    ).toLowerCase();
+    if (!fullName) continue;
+    const ids = employeeIdsByName.get(fullName) || [];
+    ids.push(employee.id);
+    employeeIdsByName.set(fullName, ids);
+  }
 
   const prepared = parseAssignmentWorkbook(buffer).map((row, index) => {
     const rowNumber = index + 2;
@@ -247,11 +257,21 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
     ]);
     const reason = getCell(row, ["Reason", "Notes"]);
     const managerSelection = getCell(row, ["Line Manager Selection", "Line Manager Employee No", "Line Manager Employee Number"]);
-    const managerEmployeeNumber = (
+    const parsedManagerEmployeeNumber = (
       managerSelection.match(/^(ZLL\d+)\b/i)?.[1] ||
       managerSelection.match(/^([^—]+?)(?:\s+—\s+|$)/)?.[1] ||
-      managerSelection
+      ""
     ).trim().toUpperCase();
+    const managerNameKey = normalizeText(
+      parsedManagerEmployeeNumber
+        ? managerSelection.split(/\s+—\s+/)[1] || ""
+        : managerSelection
+    ).toLowerCase();
+    const managerNameMatches = managerNameKey ? employeeIdsByName.get(managerNameKey) || [] : [];
+    const managerEmployeeNumber = parsedManagerEmployeeNumber ||
+      (managerNameMatches.length === 1
+        ? String(employees.find((employee) => employee.id === managerNameMatches[0])?.employeeNumber || "").toUpperCase()
+        : "");
     const managerEffectiveFrom = getCell(row, ["Effective From", "Manager Effective From"]);
     const manager = employeeByNumber.get(managerEmployeeNumber);
     const skip = !employmentTypeInput && !costCentreInput && !managerEmployeeNumber && !managerEffectiveFrom && !reason;
