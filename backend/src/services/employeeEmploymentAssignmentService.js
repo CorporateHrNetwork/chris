@@ -371,6 +371,8 @@ async function assignEmployee(
     reason,
     managerEmployeeNumber,
     managerEffectiveFrom,
+    hierarchyOverride = false,
+    hierarchyOverrideReason = "",
     activeLocationId = null,
   }
 ) {
@@ -444,7 +446,10 @@ async function assignEmployee(
       managerChanged = current?.managerEmployeeId !== manager.id;
       await lineManagers.applyLineManager(tx, {
         organizationId, employeeId: employee.id, managerEmployeeId: manager.id,
-        effectiveFrom: lineManagers.parseEffectiveDate(managerEffectiveFrom), reason,
+        effectiveFrom: lineManagers.parseEffectiveDate(managerEffectiveFrom),
+        reason,
+        hierarchyOverride,
+        hierarchyOverrideReason,
         performedByUserId: actorUserId,
       });
     }
