@@ -22,6 +22,9 @@ function appendReportCoverSheet(workbook, { organization, reportTitle, scope, ge
     ["Document Owner", cleanOrganizationName(organization)],
     ["System", "CHRiS — CorporateHR Network Information System"],
     ["Brand Credit", "Powered by CHRiS"],
+    ...(String(organization?.slug || "").toLowerCase() === "chris-demo-company"
+      ? [["ENVIRONMENT", "DEMO ENVIRONMENT — FICTIONAL DATA ONLY — NOT PRODUCTION"]]
+      : []),
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet["!cols"] = [{ wch: 28 }, { wch: 72 }];
