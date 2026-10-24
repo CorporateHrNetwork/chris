@@ -40,15 +40,6 @@ function appendBeforeClosing(xml, closingTag, fragment) {
   return xml.replace(closingTag, fragment + closingTag);
 }
 
-function insertWorksheetDrawing(xml, drawingTag) {
-  // SpreadsheetML requires drawing before legacyDrawing, picture, and extLst.
-  // Appending it after legacyDrawing makes Excel repair the worksheet and can drop charts.
-  const laterWorksheetElement = /<(?:legacyDrawing(?:HF)?|drawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b/;
-  const match = laterWorksheetElement.exec(xml);
-  if (match) return xml.slice(0, match.index) + drawingTag + xml.slice(match.index);
-  return appendBeforeClosing(xml, "</worksheet>", drawingTag);
-}
-
 function nextRelationshipId(xml) {
   let max = 0;
   for (const match of xml.matchAll(/Id="rId(\d+)"/g)) {
@@ -230,7 +221,15 @@ function addNativeExcelCharts(buffer, charts = [], { sheetPath = "xl/worksheets/
   writeXml(cfb, relPath, sheetRels);
 
   sheetXml = sheetXml.replace(/<drawing\b[^>]*\/>/g, "");
-  sheetXml = insertWorksheetDrawing(sheetXml, '<drawing r:id="' + drawingRelId + '"/>');
+  // CT_Worksheet requires drawing before legacyDrawing (comments), pictures,
+  // controls, tables and extensions. Appending at the end makes Excel discard
+  // the entire dashboard when the sheet already contains comments.
+  const drawingReference = '<drawing r:id="' + drawingRelId + '"/>';
+  const followingElement = /<(?:legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b/;
+  const followingMatch = followingElement.exec(sheetXml);
+  sheetXml = followingMatch
+    ? sheetXml.slice(0, followingMatch.index) + drawingReference + sheetXml.slice(followingMatch.index)
+    : appendBeforeClosing(sheetXml, "</worksheet>", drawingReference);
   writeXml(cfb, sheetPath, sheetXml);
 
   const drawingXml =
