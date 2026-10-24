@@ -320,7 +320,14 @@ router.get(
   async (req, res) => {
     try {
       const catalog = await listAssignmentCatalog(prisma, req.auth.organizationId);
+      const managers = await prisma.employee.findMany({
+        where: { organizationId: req.auth.organizationId, status: { in: ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"] }, exitDate: null },
+        select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, locationId: true, designation: { select: { name: true } }, location: { select: { name: true } } },
+        orderBy: { employeeNumber: "asc" },
+      });
       const buffer = buildAssignmentTemplateWorkbook({
+        managers,
+        employees: managers.filter(employee => !req.auth.activeLocationId || employee.locationId === req.auth.activeLocationId),
         employmentTypes: catalog.employmentTypes,
       });
       res.setHeader(
@@ -354,6 +361,7 @@ router.post(
       const rows = await prepareAssignmentRows(prisma, {
         organizationId: req.auth.organizationId,
         buffer: req.file.buffer,
+        activeLocationId: req.auth.activeLocationId,
       });
       return res.json({
         status: "success",
@@ -386,6 +394,7 @@ router.post(
       const rows = await prepareAssignmentRows(prisma, {
         organizationId: req.auth.organizationId,
         buffer: req.file.buffer,
+        activeLocationId: req.auth.activeLocationId,
       });
       const results = [];
       for (const row of rows) {
@@ -403,6 +412,7 @@ router.post(
             organizationId: req.auth.organizationId,
             actorUserId: req.auth.userId,
             ...row.input,
+            activeLocationId: req.auth.activeLocationId,
           });
           results.push({
             rowNumber: row.rowNumber,
