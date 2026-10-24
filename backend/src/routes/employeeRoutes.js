@@ -6446,8 +6446,8 @@ router.get(
       const organizationId =
         req.auth.organizationId;
 
-      const designations =
-        await prisma.designation.findMany({
+      const [designations, departments] = await Promise.all([
+        prisma.designation.findMany({
           where: {
             organizationId,
           },
