@@ -8,7 +8,10 @@ import EssLeaveApplications from "../components/ess/EssLeaveApplications";
 import PerformanceEvaluationWorkspace from "../components/performance/PerformanceEvaluationWorkspace";
 import SessionLoadingScreen from "../components/system/SessionLoadingScreen";
 
-const ORG_SLUG = "zermatt-liquor-limited";
+const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
+const ORG_SLUG = typeof window !== "undefined" && window.location.hostname.toLowerCase() === SALES_DEMO_HOST
+  ? "chris-demo-company"
+  : "zermatt-liquor-limited";
 const normalizePerformance = value => (Array.isArray(value) ? value : []).map(item => ({...item,cycle:item?.cycle||{},assessment:item?.assessment||{},kpis:Array.isArray(item?.kpis)?item.kpis:[]}));
 const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["loans","Running Loans"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["gratuity","Gratuity"],["birthday","Birthday & Anniversaries"],["communications","Internal Communications"],["documents","Documents"]];
 const RATINGS = ["EXCELLENT","SATISFACTORY","ACCEPTABLE","UNSATISFACTORY"];
