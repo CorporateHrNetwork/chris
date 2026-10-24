@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../services/api";
+import { apiRequest, apiDownload, saveDownloadedBlob } from "../services/api";
 
-const card = { background:"var(--chris-ui-panel-background, var(--chris-dashboard-surface,#fff))", border:"var(--chris-ui-panel-border, 1px solid var(--chris-dashboard-border,#ddd))", borderRadius:"var(--chris-ui-panel-radius, 14px)", padding:18 };
+const card = { background:"var(--chris-dashboard-surface,#fff)", border:"1px solid var(--chris-dashboard-border,#ddd)", borderRadius:14, padding:18 };
 const button = { border:0, borderRadius:10, padding:"10px 14px", fontWeight:800, cursor:"pointer" };
 
 export default function CHRiSAutomationCentre({ mode="all" }) {
-  const [employees,setEmployees]=useState([]); const [kpis,setKpis]=useState([]);
+  const [notes,setNotes]=useState([]); const [employees,setEmployees]=useState([]); const [kpis,setKpis]=useState([]);
   const [settings,setSettings]=useState(null); const [loading,setLoading]=useState(true); const [message,setMessage]=useState("");
+  const [note,setNote]=useState({category:"OTHER",employeeId:"",originalNote:""});
   const [selectedEmployee,setSelectedEmployee]=useState(""); const [generating,setGenerating]=useState(false);
 
   const load=async()=>{
@@ -14,16 +15,26 @@ export default function CHRiSAutomationCentre({ mode="all" }) {
     try{
       const calls=[
         apiRequest("/api/chris-automation/settings").catch(()=>null),
+        apiRequest("/api/chris-automation/payroll-notes").catch(()=>({data:[]})),
         apiRequest("/api/chris-automation/performance/employees").catch(()=>({data:[]})),
         apiRequest("/api/chris-automation/performance/kpis").catch(()=>({data:[]})),
       ];
-      const [s,e,k]=await Promise.all(calls);
-      setSettings(s?.data||null); setEmployees(e?.data||[]); setKpis(k?.data||[]);
+      const [s,n,e,k]=await Promise.all(calls);
+      setSettings(s?.data||null); setNotes(n?.data||[]); setEmployees(e?.data||[]); setKpis(k?.data||[]);
     } finally { setLoading(false); }
   };
   useEffect(()=>{load()},[]);
   const currentEmployee=useMemo(()=>employees.find(e=>e.id===selectedEmployee),[employees,selectedEmployee]);
 
+  const submitNote=async(e)=>{
+    e.preventDefault(); setMessage("");
+    try{await apiRequest("/api/chris-automation/payroll-notes",{method:"POST",body:note}); setNote({category:"OTHER",employeeId:"",originalNote:""}); setMessage("Payroll note submitted to Head HR and Head of Audit & Internal Control."); await load();}
+    catch(err){setMessage(err.message)}
+  };
+  const review=async(id,status)=>{
+    try{await apiRequest(`/api/chris-automation/payroll-notes/${id}/review`,{method:"PATCH",body:{status,reviewedNote:"Reviewed in CHRiS"}}); await load();}
+    catch(err){setMessage(err.message)}
+  };
   const generate=async()=>{
     if(!selectedEmployee)return;
     setGenerating(true);setMessage("");
@@ -42,7 +53,20 @@ export default function CHRiSAutomationCentre({ mode="all" }) {
     {message&&<div style={{...card,borderColor:"#D4AF37"}}>{message}</div>}
 
     {(mode==="all"||mode==="payroll")&&<section style={{display:"grid",gap:16}}>
-      <div style={card}><h2>Branch Payroll Notes &amp; Updates</h2><a href="/payroll/notes">Open Payroll Notes Inbox and CHRiS Payroll Agent →</a></div>
+      <div style={{...card,display:"grid",gap:12}}>
+        <h2 style={{margin:0}}>Branch Payroll Notes & Updates</h2>
+        <p style={{margin:0,opacity:.72}}>Every submission is routed to both the Head HR Payroll Inbox and Head of Audit & Internal Control Payroll Inbox. Original notes are preserved.</p>
+        <form onSubmit={submitNote} style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <select value={note.employeeId} onChange={e=>setNote({...note,employeeId:e.target.value})} style={{padding:11,borderRadius:9,border:"1px solid #ccc"}}><option value="">Employee (optional)</option>{employees.map(e=><option key={e.id} value={e.id}>{e.employeeNumber} — {e.employeeName}</option>)}</select>
+          <select value={note.category} onChange={e=>setNote({...note,category:e.target.value})} style={{padding:11,borderRadius:9,border:"1px solid #ccc"}}>{["SALARY_CHANGE","ALLOWANCE","DEDUCTION","OVERTIME","ABSENCE","LEAVE","TRANSFER","EXIT","OTHER"].map(x=><option key={x}>{x}</option>)}</select>
+          <textarea required value={note.originalNote} onChange={e=>setNote({...note,originalNote:e.target.value})} placeholder="Enter payroll-impacting note/update…" style={{gridColumn:"1/-1",minHeight:100,padding:12,borderRadius:9,border:"1px solid #ccc"}}/>
+          <button style={{...button,background:"#D4AF37",gridColumn:"1/-1"}}>Submit Payroll Update</button>
+        </form>
+      </div>
+      <div style={card}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}><h3 style={{margin:0}}>Payroll Notes Inbox</h3><button onClick={async()=>{try{const d=await apiDownload("/api/chris-automation/payroll-dashboard/export?periodCode=2026-09");saveDownloadedBlob(d);setMessage("September 2026 payroll dashboard exported successfully.");}catch(err){setMessage(err.message)}}} style={{...button,background:"#333",color:"#fff"}}>Download September 2026 Dashboard</button></div>
+        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th align="left">Employee</th><th align="left">Category</th><th align="left">Original Note</th><th align="left">Status</th><th></th></tr></thead><tbody>{notes.map(n=><tr key={n.id} style={{borderTop:"1px solid #eee"}}><td>{n.employeeNumber||"—"}<br/><small>{n.employeeName||""}</small></td><td>{n.category}</td><td>{n.originalNote}</td><td>{n.status}</td><td style={{whiteSpace:"nowrap"}}>{n.status!=="APPROVED"&&n.status!=="IMPLEMENTED"&&<button onClick={()=>review(n.id,"APPROVED")} style={{...button,background:"#1f7a4d",color:"#fff",marginRight:6}}>Approve</button>}{n.status!=="IMPLEMENTED"&&<button onClick={()=>review(n.id,"IMPLEMENTED")} style={{...button,background:"#333",color:"#fff"}}>Implemented</button>}</td></tr>)}</tbody></table></div>
+      </div>
     </section>}
 
     {(mode==="all"||mode==="performance")&&<section style={{display:"grid",gap:16}}>
