@@ -127,7 +127,7 @@ function Sidebar() {
   useEffect(() => {
     const activeGroup = visibleGroups.find((group) => group.children?.some((child) => pathMatches(child.path, false)));
     if (!activeGroup) return;
-    setOpenGroups((current) => current[activeGroup.id] ? current : { ...current, [activeGroup.id]: true });
+    setOpenGroups((current) => current[activeGroup.id] ? current : { [activeGroup.id]: true });
   }, [location.pathname, visibleGroups]);
 
   const isChildActive = (childPath, routerActive) => {
@@ -149,7 +149,7 @@ function Sidebar() {
         {visibleGroups.map((group) => {
           if (!group.children) return <NavLink key={group.id} to={group.path} end={group.exact} style={({isActive})=>mainItemVisual(isActive)}><span style={iconStyle}>{group.icon}</span><span style={{flex:1}}>{group.label}</span></NavLink>;
           const isOpen=Boolean(openGroups[group.id]); const groupActive=group.children.some((child)=>pathMatches(child.path,false));
-          return <div key={group.id} style={{marginBottom:2}}><button type="button" onClick={()=>setOpenGroups((current)=>({...current,[group.id]:!current[group.id]}))} style={groupButtonVisual(groupActive)}><span style={iconStyle}>{group.icon}</span><span style={{flex:1,textAlign:"left"}}>{group.label}</span><span style={{fontSize:10,opacity:.9}}>{isOpen?<FaChevronDown/>:<FaChevronRight/>}</span></button>
+          return <div key={group.id} style={{marginBottom:2}}><button type="button" onClick={()=>setOpenGroups((current)=>current[group.id] ? {} : { [group.id]: true })} style={groupButtonVisual(groupActive)}><span style={iconStyle}>{group.icon}</span><span style={{flex:1,textAlign:"left"}}>{group.label}</span><span style={{fontSize:10,opacity:.9}}>{isOpen?<FaChevronDown/>:<FaChevronRight/>}</span></button>
             {isOpen&&<div style={childrenWrapStyle}>{group.children.map((child,index)=>child.planned?<button key={`${group.id}-${index}`} type="button" onClick={()=>handlePlannedItem(child.label)} style={plannedChildStyle}><span style={childDotStyle}/><span style={{flex:1,textAlign:"left"}}>{child.label}</span><span style={plannedBadgeStyle}>planned</span></button>:<NavLink key={`${group.id}-${index}`} to={child.path} end style={({isActive})=>childLinkVisual(isChildActive(child.path,isActive))}>{({isActive})=>{const active=isChildActive(child.path,isActive);return <><span style={{...childDotStyle,background:active?"var(--chris-gold, #D4AF37)":"rgba(255,255,255,.35)"}}/><span>{child.label}</span></>;}}</NavLink>)}</div>}
           </div>;
         })}
