@@ -5341,8 +5341,8 @@ router.patch(
       ----------------------------------------------------------
       */
 
-      const designations =
-        await prisma.designation.findMany({
+      const [designations, departments] = await Promise.all([
+        prisma.designation.findMany({
           where: {
             organizationId,
 
@@ -6471,6 +6471,18 @@ router.get(
                 isActive: true,
               },
             },
+            departmentEligibility: {
+              select: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    isActive: true,
+                  },
+                },
+              },
+            },
 
             careerTrack: true,
             careerLevel: true,
@@ -6502,17 +6514,26 @@ router.get(
                 "asc",
             },
           ],
-        });
+        }),
+        prisma.department.findMany({
+          where: {
+            organizationId,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+          orderBy: [{ name: "asc" }, { code: "asc" }],
+        }),
+      ]);
 
       return res.status(200).json({
-        status:
-          "success",
-
-        results:
-          designations.length,
-
-        data:
-          designations,
+        status: "success",
+        results: designations.length,
+        data: designations,
+        departments,
       });
     } catch (error) {
       console.error(
