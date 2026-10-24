@@ -3,6 +3,8 @@ import { Navigate } from "react-router-dom";
 import {
   clearAuthSession,
   getAuthToken,
+  getStoredUser,
+  getStoredOrganization,
   verifyAuthSession,
 } from "../../services/api";
 
@@ -32,7 +34,8 @@ function consumeReturnTo() {
 }
 
 function ProtectedRoute({ children }) {
-  const [authState, setAuthState] = useState("checking");
+  const hasCachedSession = Boolean(getAuthToken() && getStoredUser() && getStoredOrganization());
+  const [authState, setAuthState] = useState(() => hasCachedSession ? "authenticated" : "checking");
   const [connectionError, setConnectionError] = useState("");
 
   useEffect(() => {
@@ -54,20 +57,24 @@ function ProtectedRoute({ children }) {
       }
 
       try {
+        // A valid cached session can render immediately. Authentication is still
+        // revalidated in the background so reloads never block the HR workspace
+        // on the /api/auth/me round-trip.
         await verifyAuthSession();
-        if (active) {
-          setConnectionError("");
-          setAuthState("authenticated");
-        }
+        if (active) setConnectionError("");
       } catch (error) {
         if (!active) return;
-        if (error.code === "AUTH_INVALID") {
+        if (error.code === "AUTH_INVALID" || error.code === "ACCESS_FORBIDDEN") {
           clearAuthSession();
           setAuthState("unauthenticated");
           return;
         }
-        setConnectionError("CHRIS cannot connect to the server. Check your internet connection and try again.");
-        setAuthState("offline");
+        // Do not blank an already-rendered workspace because a background
+        // verification request is temporarily slow or unavailable.
+        if (!hasCachedSession) {
+          setConnectionError("CHRIS cannot connect to the server. Check your internet connection and try again.");
+          setAuthState("offline");
+        }
       }
     };
 
