@@ -84,6 +84,7 @@ function findCatalogRow(rows, value) {
     rows.find((row) => String(row.id || "").toLowerCase() === needle) ||
     rows.find((row) => normalizeText(row.code).toLowerCase() === needle) ||
     rows.find((row) => normalizeText(row.name).toLowerCase() === needle) ||
+    rows.find((row) => normalizeText([row.code, row.name].filter(Boolean).join(" - ")).toLowerCase() === needle) ||
     null
   );
 }
@@ -246,7 +247,11 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
     ]);
     const reason = getCell(row, ["Reason", "Notes"]);
     const managerSelection = getCell(row, ["Line Manager Selection", "Line Manager Employee No", "Line Manager Employee Number"]);
-    const managerEmployeeNumber = (managerSelection.match(/^([^—-]+?)(?:\\s+[—-]\\s+|$)/)?.[1] || managerSelection).trim().toUpperCase();
+    const managerEmployeeNumber = (
+      managerSelection.match(/^(ZLL\\d+)\\b/i)?.[1] ||
+      managerSelection.match(/^([^—]+?)(?:\\s+—\\s+|$)/)?.[1] ||
+      managerSelection
+    ).trim().toUpperCase();
     const managerEffectiveFrom = getCell(row, ["Effective From", "Manager Effective From"]);
     const manager = employeeByNumber.get(managerEmployeeNumber);
     const skip = !employmentTypeInput && !costCentreInput && !managerEmployeeNumber && !managerEffectiveFrom && !reason;
