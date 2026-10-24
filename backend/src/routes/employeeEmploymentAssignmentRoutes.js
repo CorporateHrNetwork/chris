@@ -5,7 +5,6 @@ const prisma = require("../config/prisma");
 const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
 const {
   listAssignmentCatalog,
-  buildAssignmentTemplateWorkbook,
   prepareAssignmentRows,
   assignEmployee,
 } = require("../services/employeeEmploymentAssignmentService");
