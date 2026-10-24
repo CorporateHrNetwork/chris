@@ -55,6 +55,7 @@ function EmployeeProfile() {
     useState(false);
 
   const [editCatalog, setEditCatalog] = useState([]);
+  const [editDepartments, setEditDepartments] = useState([]);
   const [employmentTypes, setEmploymentTypes] = useState([]);
   const [employmentTypeReason, setEmploymentTypeReason] = useState("");
   const [employmentTypeSaving, setEmploymentTypeSaving] = useState(false);
@@ -689,7 +690,7 @@ useEffect(() => {
     setFormData(
       (current) => {
         if (name === "departmentId") {
-          const department = editCatalog.find((item) => item.department?.id === value)?.department;
+          const department = editDepartments.find((item) => item.id === value) || editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).find((item) => item?.id === value);
           return { ...current, departmentId: value, department: department?.name || "", designationId: "", designation: "" };
         }
         if (name === "designationId") {
@@ -943,6 +944,7 @@ useEffect(() => {
           apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
         setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id).map((item) => ({ ...item, eligibleDepartments: [item.department, ...(item.departmentEligibility || []).map((entry) => entry?.department).filter(Boolean)].filter((department, index, list) => department?.id && list.findIndex((candidate) => candidate?.id === department.id) === index) })));
+        setEditDepartments((careerResult.departments || []).filter((department) => department?.isActive !== false && department?.id));
         setEmploymentTypes(typeResult.data?.employmentTypes || []);
         setEmploymentTypeReason("");
         setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
@@ -3334,8 +3336,7 @@ useEffect(() => {
               <label style={labelStyle}>Department *</label>
               <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
-                {Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values())
-                  .sort((a, b) => a.name.localeCompare(b.name))
+                {editDepartments.length ? editDepartments.slice().sort((a, b) => a.name.localeCompare(b.name)) : Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values()).sort((a, b) => a.name.localeCompare(b.name))
                   .map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? " (" + department.code + ")" : ""}</option>)}
               </select>
             </div>
@@ -3799,9 +3800,7 @@ useEffect(() => {
                 onClick={
                   openEditForm
                 }
-                style={
-                  actionButtonStyle
-                }
+                style={getQuickActionButtonStyle(editing)}
               >
                 Edit Employee
               </button>
@@ -3812,9 +3811,7 @@ useEffect(() => {
                   onClick={
                     openConfirmationForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(confirmationOpen)}
                 >
                   Confirm Employment
                 </button>
@@ -3833,9 +3830,7 @@ useEffect(() => {
                   onClick={
                     openSuspensionForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(suspensionOpen)}
                 >
                   Suspend Employee
                 </button>
@@ -3855,9 +3850,7 @@ useEffect(() => {
                   onClick={
                     openDeactivationForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(deactivationOpen)}
                 >
                   Deactivate Employee
                 </button>
@@ -3938,8 +3931,8 @@ useEffect(() => {
                 profile.status
               )
             }
-            style={{
-              ...actionButtonStyle,
+            style={getQuickActionButtonStyle(jobChangeOpen)}
+              /*
 
               opacity:
                 [
@@ -3966,7 +3959,7 @@ useEffect(() => {
                 )
                   ? "not-allowed"
                   : "pointer",
-            }}
+            */}
           >
             Job Change
           </button>
@@ -4021,15 +4014,7 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={() => activateProfileAction("leave")}
-                style={{
-                  ...actionButtonStyle,
-                  borderColor: leaveProfileOpen
-                    ? "var(--chris-gold)"
-                    : actionButtonStyle.borderColor,
-                  boxShadow: leaveProfileOpen
-                    ? "0 0 0 2px rgba(212,175,55,.16)"
-                    : actionButtonStyle.boxShadow,
-                }}
+                style={getQuickActionButtonStyle(leaveProfileOpen)}
               >
                 Leave Profile{leaveProfileOpen ? " • Active" : ""}
               </button>
@@ -4061,7 +4046,7 @@ useEffect(() => {
                     )}`
                   )
                 }
-                style={actionButtonStyle}
+                style={getQuickActionButtonStyle(requestedProfileAction === "payroll")}
               >
                 Payroll
               </button>
@@ -4075,7 +4060,7 @@ useEffect(() => {
                     )}`
                   )
                 }
-                style={actionButtonStyle}
+                style={getQuickActionButtonStyle(requestedProfileAction === "documents")}
               >
                 Documents
               </button>
@@ -7515,6 +7500,14 @@ const actionsGridStyle = {
     "repeat(2, 1fr)",
   gap: "12px",
 };
+
+const getQuickActionButtonStyle = (active = false) => ({
+  ...actionButtonStyle,
+  border: active ? "1px solid var(--chris-gold)" : actionButtonStyle.border,
+  background: active ? "linear-gradient(135deg,rgba(212,175,55,.18),rgba(8,122,67,.18))" : actionButtonStyle.background,
+  color: active ? "var(--chris-gold)" : actionButtonStyle.color,
+  boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
+});
 
 const actionButtonStyle = {
   border: "1px solid rgba(212,175,55,.34)",
