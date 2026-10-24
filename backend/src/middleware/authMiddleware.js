@@ -25,9 +25,16 @@ async function requireAuth(req, res, next) {
     if (!token) return res.status(401).json({ status: "error", message: "Authentication required." });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+    const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
     if (decoded.accessType === "ESS") {
-      return res.status(401).json({ status: "error", code: "ESS_SESSION_NOT_ALLOWED", message: "This session is restricted to the employee portal." });
+      return res.status(401).json({
+        status: "error",
+        code: "ESS_SESSION_NOT_ALLOWED",
+        message: "This session is restricted to the employee portal.",
+      });
     }
+
     const user = await prisma.user.findFirst({
       where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true },
       include: {
@@ -45,6 +52,9 @@ async function requireAuth(req, res, next) {
       },
     });
     if (!user) return res.status(401).json({ status: "error", message: "User account is unavailable." });
+    if (demoMode && user.organization.slug !== demoOrganizationSlug) {
+      return res.status(403).json({ status: "error", code: "DEMO_ORGANIZATION_REQUIRED", message: "This CHRiS demo environment only permits the fictional demo organisation." });
+    }
     if (user.organization.status !== "ACTIVE") {
       return res.status(403).json({ status: "error", message: "Organization access is currently unavailable." });
     }
@@ -81,12 +91,6 @@ async function requireAuth(req, res, next) {
       });
     }
 
-    // ZERMATT operating semantics:
-    // HEAD OFFICE means the consolidated company view (312 employees at the
-    // current Release-1 baseline). The physical HEAD_OFFICE location row is
-    // retained as organization metadata, but it is not a separate zero-headcount
-    // operating context. A stale/manual HEAD_OFFICE location header therefore
-    // normalizes safely to the consolidated context.
     if (
       user.organization?.slug === "zermatt-liquor-limited" &&
       String(requestedLocation?.type || "").toUpperCase() === "HEAD_OFFICE"
@@ -99,7 +103,6 @@ async function requireAuth(req, res, next) {
 
     req.auth = {
       userId: user.id,
-      employeeId: user.employeeId || null,
       organizationId: user.organizationId,
       email: user.email,
       organization: user.organization,
@@ -115,8 +118,6 @@ async function requireAuth(req, res, next) {
         state: location.state,
       })),
       activeLocationId: requestedLocationId,
-      // Null activeLocationId is the organization-wide consolidated operating
-      // context. For ZERMATT the business label for this context is HEAD OFFICE.
       consolidatedOrganization,
       consolidatedHeadOffice: consolidatedOrganization,
     };
@@ -137,31 +138,64 @@ async function requireAuth(req, res, next) {
   }
 }
 
-
 async function requireEssAuth(req, res, next) {
   try {
     const authorization = req.headers.authorization;
     if (!authorization || !authorization.startsWith("Bearer ")) {
       return res.status(401).json({ status: "error", message: "Employee portal authentication required." });
     }
+
     const token = authorization.split(" ")[1];
-    if (!token) return res.status(401).json({ status: "error", message: "Employee portal authentication required." });
+    if (!token) {
+      return res.status(401).json({ status: "error", message: "Employee portal authentication required." });
+    }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+    const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
     if (decoded.accessType !== "ESS") {
-      return res.status(401).json({ status: "error", code: "ESS_SESSION_REQUIRED", message: "An employee portal session is required." });
+      return res.status(401).json({
+        status: "error",
+        code: "ESS_SESSION_REQUIRED",
+        message: "An employee portal session is required.",
+      });
     }
 
     const user = await prisma.user.findFirst({
-      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true, employeeId: { not: null } },
-      include: { organization: true, employee: { select: { id: true, status: true } } },
+      where: {
+        id: decoded.userId,
+        organizationId: decoded.organizationId,
+        isActive: true,
+        employeeId: { not: null },
+      },
+      include: {
+        organization: true,
+        employee: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
     });
 
-    if (!user || !user.employee || !ESS_EMPLOYEE_STATUSES.has(user.employee.status)) {
-      return res.status(403).json({ status: "error", code: "ESS_ACCESS_REVOKED", message: "Employee portal access is unavailable for this account." });
+    if (demoMode && user.organization.slug !== demoOrganizationSlug) {
+      return res.status(403).json({ status: "error", code: "DEMO_ORGANIZATION_REQUIRED", message: "This CHRiS demo environment only permits the fictional demo organisation." });
     }
+
+    if (!user || !user.employee || !ESS_EMPLOYEE_STATUSES.has(user.employee.status)) {
+      return res.status(403).json({
+        status: "error",
+        code: "ESS_ACCESS_REVOKED",
+        message: "Employee portal access is unavailable for this account.",
+      });
+    }
+
     if (user.organization.status !== "ACTIVE") {
-      return res.status(403).json({ status: "error", message: "Organization access is currently unavailable." });
+      return res.status(403).json({
+        status: "error",
+        message: "Organization access is currently unavailable.",
+      });
     }
 
     req.essAuth = {
@@ -171,13 +205,20 @@ async function requireEssAuth(req, res, next) {
       email: user.email,
       organization: user.organization,
     };
+
     next();
   } catch (error) {
     console.error("ESS authentication error:", error);
     if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
-      return res.status(401).json({ status: "error", message: "Your employee portal session is invalid or has expired." });
+      return res.status(401).json({
+        status: "error",
+        message: "Your employee portal session is invalid or has expired.",
+      });
     }
-    return res.status(500).json({ status: "error", message: "Unable to authenticate employee portal request." });
+    return res.status(500).json({
+      status: "error",
+      message: "Unable to authenticate employee portal request.",
+    });
   }
 }
 
