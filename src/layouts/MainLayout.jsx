@@ -365,7 +365,7 @@ function MainLayout({ children }) {
             <div className="chris-support-escalation" aria-label="CHRiS Support Escalation">
               <span>Need support?</span>
               <a href="https://wa.me/2349112993759" target="_blank" rel="noreferrer">WhatsApp: +234 911 299 3759</a>
-              <a href="mailto:support@crnetwork.com.ng">Email: support@crnetwork.com.ng</a>
+              <a href="mailto:support@crnetwork.com.ng?subject=CHRiS%20Support%20Request" target="_self" aria-label="Email CHRiS Support">Email: support@crnetwork.com.ng</a>
             </div>
           </div>
         </main>
