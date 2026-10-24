@@ -385,6 +385,7 @@ router.post(
         organizationId: req.auth.organizationId,
         buffer: req.file.buffer,
         activeLocationId: req.auth.activeLocationId,
+        allowHierarchyOverride: true,
       });
       return res.json({
         status: "success",
@@ -418,6 +419,7 @@ router.post(
         organizationId: req.auth.organizationId,
         buffer: req.file.buffer,
         activeLocationId: req.auth.activeLocationId,
+        allowHierarchyOverride: true,
       });
       const results = [];
       for (const row of rows) {
