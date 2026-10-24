@@ -5,11 +5,84 @@ const crypto = require("crypto");
 
 const prisma = require("../config/prisma");
 
+const EMAIL_FROM = process.env.RESEND_FROM_EMAIL;
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://chris.crnetwork.com.ng";
+
+async function sendTransactionalEmail({ to, subject, html, text }) {
+  if (!process.env.RESEND_API_KEY || !EMAIL_FROM) {
+    throw new Error("Resend email is not configured (RESEND_API_KEY and RESEND_FROM_EMAIL are required).");
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html, text }),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Resend delivery failed (${response.status}): ${detail.slice(0, 300)}`);
+  }
+  return response.json();
+}
+
+function escapeEmailHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[char]));
+}
+
 const {
   requireAuth,
 } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+/*
+============================================================
+LOGIN
+============================================================
+*/
+router.post("/activate-employee", async (req, res) => {
+  const genericResponse = { status: "success", message: "If the details match an eligible employee record, an activation link will be sent to the registered email address." };
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const employeeNumber = String(req.body?.employeeNumber || "").trim();
+    const organizationSlug = String(req.body?.organizationSlug || "").trim().toLowerCase();
+    if (!email || !employeeNumber || !organizationSlug) return res.status(200).json(genericResponse);
+    const organization = await prisma.organization.findUnique({ where: { slug: organizationSlug } });
+    if (!organization || organization.status !== "ACTIVE") return res.status(200).json(genericResponse);
+    const employee = await prisma.employee.findFirst({
+      where: { organizationId: organization.id, employeeNumber, email: { equals: email, mode: "insensitive" }, status: { in: ["ACTIVE", "PROBATION", "LEAVE"] } },
+      select: { id: true, firstName: true, lastName: true, email: true, status: true, user: { select: { id: true, email: true, isActive: true } } },
+    });
+    if (!employee || !employee.email) return res.status(200).json(genericResponse);
+    let user = employee.user;
+    if (user && (!user.isActive || String(user.email).toLowerCase() !== email)) return res.status(200).json(genericResponse);
+    if (!user) {
+      const emailCollision = await prisma.user.findFirst({ where: { organizationId: organization.id, email }, select: { id: true } });
+      if (emailCollision) return res.status(200).json(genericResponse);
+      user = await prisma.user.create({
+        data: { organizationId: organization.id, employeeId: employee.id, email, firstName: employee.firstName, lastName: employee.lastName, passwordHash: await bcrypt.hash(crypto.randomBytes(48).toString("hex"), 12), isActive: true },
+        select: { id: true, email: true, isActive: true },
+      });
+    }
+    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null, portal: "ess" } });
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash, portal: "ess", expiresAt: new Date(Date.now() + 30 * 60 * 1000) } });
+    const link = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(rawToken)}&organization=${encodeURIComponent(organization.slug)}&mode=activation&portal=ess`;
+    try {
+      await sendTransactionalEmail({
+        to: email, subject: "Activate your CHRiS Employee Self-Service account",
+        text: `Hello ${employee.firstName || "there"},\\n\\nUse this secure link within 30 minutes to create your CHRiS ESS password: ${link}\\n\\nIf you did not request this, ignore this email.`,
+        html: `<div style="font-family:Arial,sans-serif;color:#173326;line-height:1.6"><h2>Activate your CHRiS employee account</h2><p>Hello ${escapeEmailHtml(employee.firstName || "there")},</p><p>Use this link within 30 minutes to create your password and access your personal Employee Self-Service portal.</p><p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#087A43;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">Activate my account</a></p><p>If you did not request this, ignore this email.</p></div>`,
+      });
+    } catch (mailError) { console.error("CHRiS activation email delivery error:", mailError.message); }
+    return res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error("ESS activation request error:", error);
+    return res.status(200).json(genericResponse);
+  }
+});
 
 /*
 ============================================================
@@ -36,22 +109,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const normalizedOrganizationSlug = organizationSlug.trim().toLowerCase();
-    const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
-    const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
-    if (demoMode && normalizedOrganizationSlug !== demoOrganizationSlug) {
-      return res.status(403).json({
-        status: "error",
-        code: "DEMO_ORGANIZATION_REQUIRED",
-        message: "This CHRiS demo environment only accepts the fictional demo organisation.",
-      });
-    }
+    const normalizedOrganizationSlug = organizationSlug.trim().toLowerCase().replace(/^organization[-_]/, "");
+    const normalizedEmail = email.trim().toLowerCase();
 
     const organization =
       await prisma.organization.findUnique({
-        where: {
-          slug: normalizedOrganizationSlug,
-        },
+        where: { slug: normalizedOrganizationSlug },
       });
 
     if (!organization) {
@@ -75,14 +138,12 @@ router.post("/login", async (req, res) => {
     const user =
       await prisma.user.findFirst({
         where: {
-          organizationId:
-            organization.id,
-
-          email: email
-            .trim()
-            .toLowerCase(),
-
+          organizationId: organization.id,
           isActive: true,
+          OR: [
+            { email: normalizedEmail },
+            { employee: { email: { equals: normalizedEmail, mode: "insensitive" } } },
+          ],
         },
 
         include: {
@@ -102,20 +163,11 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const configuredDemoPassword = String(
-      process.env.CHRIS_DEMO_PASSWORD || ""
-    );
-
     const passwordMatches =
-      demoMode &&
-      email.trim().toLowerCase() === "demo.hr@chris.crnetwork.com.ng" &&
-      configuredDemoPassword &&
-      password === configuredDemoPassword
-        ? true
-        : await bcrypt.compare(
-            password,
-            user.passwordHash
-          );
+      await bcrypt.compare(
+        password,
+        user.passwordHash
+      );
 
     if (!passwordMatches) {
       return res.status(401).json({
@@ -150,6 +202,7 @@ router.post("/login", async (req, res) => {
 
         user: {
           id: user.id,
+          employeeId: user.employeeId || null,
           email: user.email,
           firstName:
             user.firstName,
@@ -202,7 +255,10 @@ router.post(
       const {
         email,
         organizationSlug,
+        portal = "admin",
       } = req.body;
+
+      const normalizedPortal = portal === "ess" ? "ess" : "admin";
 
       if (
         !email?.trim() ||
@@ -215,13 +271,12 @@ router.post(
         });
       }
 
-      const normalizedOrganizationSlug = organizationSlug.trim().toLowerCase();
-      const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
-      const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
       const organization =
         await prisma.organization.findUnique({
           where: {
-            slug: normalizedOrganizationSlug,
+            slug: organizationSlug
+              .trim()
+              .toLowerCase(),
           },
         });
 
@@ -231,13 +286,6 @@ router.post(
         message:
           "If an active CHRIS account exists for this email, password reset instructions have been prepared.",
       };
-
-      if (demoMode && normalizedOrganizationSlug !== demoOrganizationSlug) {
-        return res.status(200).json({
-          status: "success",
-          message: "If an active CHRIS account exists for this email, password reset instructions have been prepared.",
-        });
-      }
 
       if (
         !organization ||
@@ -274,6 +322,7 @@ router.post(
           where: {
             userId: user.id,
             usedAt: null,
+            portal: normalizedPortal,
           },
         }
       );
@@ -300,34 +349,21 @@ router.post(
           data: {
             userId: user.id,
             tokenHash,
+            portal: normalizedPortal,
             expiresAt,
           },
         }
       );
 
-      const responseBody = {
-        ...genericResponse,
-      };
-
-      /*
-        Local development keeps the existing browser-assisted
-        reset flow. Production never returns the raw reset token
-        through the API response; delivery must happen through an
-        approved out-of-band channel.
-      */
-      if (
-        (process.env.NODE_ENV || "development") !==
-        "production"
-      ) {
-        responseBody.data = {
-          resetToken: rawToken,
-          expiresAt,
-        };
-      }
-
-      return res
-        .status(200)
-        .json(responseBody);
+      const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(rawToken)}&organization=${encodeURIComponent(organization.slug)}&portal=${encodeURIComponent(normalizedPortal)}`;
+      try {
+        await sendTransactionalEmail({
+          to: user.email, subject: "Reset your CHRiS password",
+          text: `A password reset was requested for your CHRiS account. Use this link within 15 minutes: ${resetLink}\\n\\nIf you did not request a reset, ignore this email.`,
+          html: `<div style="font-family:Arial,sans-serif;color:#173326;line-height:1.6"><h2>Reset your CHRiS password</h2><p>A password reset was requested for your CHRiS account.</p><p><a href="${resetLink}" style="display:inline-block;padding:12px 18px;background:#087A43;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold">Reset password</a></p><p>This link expires in 15 minutes. If you did not request a reset, ignore this email.</p></div>`,
+        });
+      } catch (mailError) { console.error("CHRiS password-reset email delivery error:", mailError.message); }
+      return res.status(200).json(genericResponse);
     } catch (error) {
       console.error(
         "Forgot password error:",
@@ -436,9 +472,9 @@ router.post(
             id: resetRecord.userId,
           },
 
-          data: {
-            passwordHash,
-          },
+          data: resetRecord.portal === "ess"
+            ? { essPasswordHash: passwordHash }
+            : { passwordHash },
         }),
 
         prisma.passwordResetToken.update(

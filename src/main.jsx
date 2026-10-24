@@ -10,6 +10,7 @@ import "./styles/chris-dashboard.css";
 import "./styles/chris-route-theme.js";
 import "./styles/chris-organization-visual.css";
 import "./styles/chris-organization-module-v4.css";
+import "./styles/chris-application-theme.css";
 
 const restoreTenantAwareLoginUrl = () => {
   if (window.location.pathname !== "/login") return;

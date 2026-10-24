@@ -22,10 +22,9 @@ import {
 import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
 import LoanProfile from "./LoanProfile";
 import LoanBulkUpload from "./LoanBulkUpload";
-import { apiDownload, apiRequest, getStoredOrganization, saveDownloadedBlob } from "../services/api";
+import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const MAX_REPAYMENT_MONTHS = 600;
-const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
 const today = () => new Date().toISOString().slice(0, 10);
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 const money = (value) => new Intl.NumberFormat("en-NG", {
@@ -104,10 +103,6 @@ function repaymentPlan(balanceValue, installmentValue, startMonth) {
 function Loans() {
   const navigate = useNavigate();
   const formRef = useRef(null);
-  const isSalesDemo = typeof window !== "undefined" && window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
-  const organizationName = getStoredOrganization()?.name || "the organization";
-  const approvalAuthority = isSalesDemo ? "authorized approver" : "GM";
-  const financeTeam = isSalesDemo ? "Finance" : "Accounts";
   const [summary, setSummary] = useState({});
   const [loans, setLoans] = useState([]);
   const [recoveries, setRecoveries] = useState([]);
@@ -413,6 +408,7 @@ function Loans() {
   const dashboardMetrics = useMemo(() => {
     const financialLoans = loans.filter((loan) => ["ACTIVE", "PAUSED", "COMPLETED"].includes(loan.status));
     const active = loans.filter((loan) => loan.status === "ACTIVE");
+    const totalLoanAmount = financialLoans.reduce((sum, loan) => sum + Math.max(0, Number(loan.principalAmount || 0)), 0);
     const outstanding = loans.filter((loan) => ["ACTIVE", "PAUSED"].includes(loan.status))
       .reduce((sum, loan) => sum + Math.max(0, Number(loan.outstandingAmount || 0)), 0);
     const recovered = financialLoans.reduce((sum, loan) => {
@@ -420,7 +416,7 @@ function Loans() {
       const balance = Math.max(0, Number(loan.outstandingAmount || 0));
       return sum + Math.max(0, principal - balance);
     }, 0);
-    return { active: active.length, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
+    return { active: active.length, totalLoanAmount, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
   }, [loans]);
 
   const filteredLoans = useMemo(() => {
@@ -434,16 +430,16 @@ function Loans() {
     {
       id: "policy",
       icon: <FaHandHoldingUsd />,
-      title: isSalesDemo ? "Manual Loan Approval" : "Manual GM Approval",
-      description: isSalesDemo ? "The organization’s authorized approver approves the loan outside CHRiS before authorized HR records it." : "GM approval takes place outside CHRiS before authorized HR records the amount.",
-      time: isSalesDemo ? "Organization policy" : "Zermatt policy",
+      title: "Manual GM Approval",
+      description: "GM approval takes place outside CHRiS before authorized HR records the amount.",
+      time: "Zermatt policy",
       tone: "success",
     },
     {
       id: "payment",
       icon: <FaFileInvoiceDollar />,
-      title: isSalesDemo ? "External Finance Disbursement" : "External Accounts Payment",
-      description: isSalesDemo ? "The organization’s Finance team completes disbursement outside CHRiS. Recording here does not issue a payment instruction." : "Accounts processes payment outside CHRiS. Recording here does not issue a payment instruction.",
+      title: "External Accounts Payment",
+      description: "Accounts processes payment outside CHRiS. Recording here does not issue a payment instruction.",
       time: "External process",
       tone: "success",
     },
@@ -469,20 +465,22 @@ function Loans() {
       <ModuleDashboardShell
         eyebrow="EMPLOYEE FINANCIAL SUPPORT"
         title="Loans Dashboard"
-        description={isSalesDemo ? `${organizationName} loans follow the organization’s configured approval and external disbursement process. Authorized HR records approved liabilities in CHRiS for payroll recovery and audit.` : "ZERMATT loans are approved manually by the GM and paid outside CHRiS by Accounts. Authorized Branch HR records assigned-branch employees; Head HR manages the organization-wide register for payroll recovery and audit."}
-        metricsColumns={4}
+        description="ZERMATT loans are approved manually by the GM and paid outside CHRiS by Accounts. Authorized Branch HR records assigned-branch employees; Head HR manages the organization-wide register for payroll recovery and audit."
+        metricsColumns={5}
         metrics={[
-          <DashboardCard key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
-          <DashboardCard key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
-          <DashboardCard key="outstanding" title="Outstanding Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Remaining payroll-recoverable balance" icon={<FaBalanceScale />} tone="gold" />,
-          <DashboardCard key="recovered" title="Principal Cleared" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Payroll/opening recoveries plus recorded external settlements" icon={<FaMoneyCheckAlt />} tone="green" />,
+          <DashboardCard compact key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
+          <DashboardCard compact key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
+          <DashboardCard compact key="total-loan-amount" title="Total Loan Amount" value={loading ? "—" : money(dashboardMetrics.totalLoanAmount)} subtitle="Cumulative principal amount across active, paused and completed loans" icon={<FaFileInvoiceDollar />} tone="gold" />,
+          <DashboardCard compact key="total-loan-balance" title="Total Loan Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Total outstanding balance across active and paused loans" icon={<FaBalanceScale />} tone="gold" />,
+          <DashboardCard compact key="recovered" title="Principal Cleared" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Payroll/opening recoveries plus recorded external settlements" icon={<FaMoneyCheckAlt />} tone="green" />,
         ]}
-        analytics={<AnalyticsPanel title={isSalesDemo ? "Loan Control" : "Zermatt Loan Control"} subtitle="Manual approval outside CHRiS; payroll recovery inside CHRiS." icon={<FaChartLine />}><RecentActivityList items={activity} /></AnalyticsPanel>}
-        recentActivity={<AnalyticsPanel title="Recording Rule" subtitle="CHRiS is not a loan-payment engine." icon={<FaFileInvoiceDollar />}><div style={{ display: "grid", gap: 8, lineHeight: 1.6 }}><strong>1. {isSalesDemo ? "Authorized approver approves manually." : "GM approves manually."}</strong><span>2. {isSalesDemo ? "Finance completes disbursement outside CHRiS." : "Accounts processes payment outside CHRiS."}</span><span>3. Authorized HR records the approved/disbursed amount.</span><span>4. CHRiS recovers the configured installment through payroll.</span><span>5. If an employee clears the balance outside payroll, HR records External Settlement; CHRiS does not fabricate a salary deduction.</span><span style={{ marginTop: 5 }}>{scopeText}</span></div></AnalyticsPanel>}
+        analytics={<AnalyticsPanel title="Zermatt Loan Control" subtitle="Manual approval outside CHRiS; payroll recovery inside CHRiS." icon={<FaChartLine />}><RecentActivityList items={activity} /></AnalyticsPanel>}
+        recentActivity={<AnalyticsPanel title="Recording Rule" subtitle="CHRiS is not a loan-payment engine." icon={<FaFileInvoiceDollar />}><div style={{ display: "grid", gap: 8, lineHeight: 1.6 }}><strong>1. GM approves manually.</strong><span>2. Accounts processes payment outside CHRiS.</span><span>3. Authorized HR records the approved/disbursed amount.</span><span>4. CHRiS recovers the configured installment through payroll.</span><span>5. If an employee clears the balance outside payroll, HR records External Settlement; CHRiS does not fabricate a salary deduction.</span><span style={{ marginTop: 5 }}>{scopeText}</span></div></AnalyticsPanel>}
         quickActions={[
           <QuickActionCard key="record" title="Record Approved Loan" subtitle="Record an already approved/disbursed employee loan" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
-          <QuickActionCard key="advances" title="Salary Advances" subtitle={isSalesDemo ? "Organization approval / external disbursement policy" : "Same manual GM approval / external payment policy"} icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
+          <QuickActionCard key="advances" title="Salary Advances" subtitle="Same manual GM approval / external payment policy" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
           ...(capabilities.canBulkPayrollInputs ? [<QuickActionCard key="bulk" title="Opening Loan Upload" subtitle="Maintain legacy/opening payroll balances" icon={<FaDownload />} onClick={() => setShowBulkUpload(true)} />] : []),
+          <QuickActionCard key="unpause" title="Unpause Loan" subtitle="Show paused loan accounts and restore payroll recovery" icon={<FaHandHoldingUsd />} onClick={() => { setLoanSearch("PAUSED"); window.requestAnimationFrame(() => document.getElementById("loan-register")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />,
           <QuickActionCard key="history" title="Recovery History" subtitle="Review posted payroll loan deductions" icon={<FaHistory />} onClick={() => document.getElementById("loan-recovery-history")?.scrollIntoView({ behavior: "smooth" })} />,
         ]}
       />
@@ -497,18 +495,18 @@ function Loans() {
             ? "Correct the permitted payroll-recovery terms. An increase in principal must be recorded as a Top-Up so collateral is revalidated; posted payroll history remains immutable."
             : topUpParent
               ? "The approved top-up is merged into this same loan account. Existing recoveries remain unchanged and the revised outstanding balance is redistributed using the monthly installment below."
-              : isSalesDemo ? "Use only after the organization’s authorized approver has approved the loan and Finance has completed disbursement outside CHRiS. Authorized HR records the financial liability for payroll recovery." : "Use only after the GM has manually approved the loan and Accounts has completed payment outside CHRiS. Authorized HR records the financial liability for payroll recovery."}
+              : "Use only after the GM has manually approved the loan and Accounts has completed payment outside CHRiS. Authorized HR records the financial liability for payroll recovery."}
           icon={<FaPlusCircle />}
         >
           <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(205px,1fr))", gap: 12 }}>
             <EmployeeSearchSelect label="Employee" value={topUpParent?.employeeNumber || editingLoan?.employeeNumber || form.employeeNumber} onChange={setEmployee} disabled={Boolean(topUpParent || editingLoan)} required placeholder="Search employee number or name" />
-            <label><small>{editingLoan ? "Cumulative Principal" : topUpParent ? `Top-Up Amount Approved by ${approvalAuthority}` : `Loan Amount Approved by ${approvalAuthority}`}</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.approvedAmount} onChange={setField("approvedAmount")} disabled={editingHistoryLocked} required /></label>
+            <label><small>{editingLoan ? "Cumulative Principal" : topUpParent ? "Top-Up Amount Approved by GM" : "Loan Amount Approved by GM"}</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.approvedAmount} onChange={setField("approvedAmount")} disabled={editingHistoryLocked} required /></label>
             <label><small>Monthly Installment</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>
-            {!editingLoan && <label><small>{isSalesDemo ? "Approval Date" : "GM Approval Date"}</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>}
-            {!editingLoan && <label><small>{isSalesDemo ? "External Finance Disbursement Date" : "External Accounts Payment Date"}</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>}
+            {!editingLoan && <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>}
+            {!editingLoan && <label><small>External Accounts Payment Date</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>}
             <label><small>Payroll Recovery Start Month</small><input style={inputStyle} type="month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required /></label>
-            {!editingLoan && !topUpParent && <div style={collateralCard}><strong>System References</strong><span>{isSalesDemo ? "CHRiS will generate the organization’s next sequential Approval Reference and Finance Disbursement Reference automatically when this loan is first recorded. The same authoritative references remain visible to authorized users." : "CHRiS will generate the next sequential GM Approval Reference and Accounts Payment Reference automatically when this loan is first recorded. The same authoritative references are visible at Branch and Head Office."}</span></div>}
-            <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required><option value="">{isSalesDemo ? "Select organization loan policy" : "Select ZERMATT loan policy"}</option>{form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}{loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}</select></label>
+            {!editingLoan && !topUpParent && <div style={collateralCard}><strong>System References</strong><span>CHRiS will generate the next sequential GM Approval Reference and Accounts Payment Reference automatically when this loan is first recorded. The same authoritative references are visible at Branch and Head Office.</span></div>}
+            <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required><option value="">Select ZERMATT loan policy</option>{form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}{loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}</select></label>
 
             {collateralLoading && <div style={collateralCard}><strong>Checking EoSB / internal-surety basis…</strong></div>}
             {!editingLoan && collateral && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
@@ -557,7 +555,7 @@ function Loans() {
               </div>
             </div>}
 
-            <label style={{ gridColumn: "1 / -1" }}><small>Recording Notes</small><textarea style={{ ...inputStyle, minHeight: 76, resize: "vertical" }} value={form.notes} onChange={setField("notes")} placeholder={isSalesDemo ? "Optional internal note; disbursement itself is processed outside CHRiS." : "Optional internal note; payment itself is processed outside CHRiS."} /></label>
+            <label style={{ gridColumn: "1 / -1" }}><small>Recording Notes</small><textarea style={{ ...inputStyle, minHeight: 76, resize: "vertical" }} value={form.notes} onChange={setField("notes")} placeholder="Optional internal note; payment itself is processed outside CHRiS." /></label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", gridColumn: "1 / -1" }}>
               <button style={primaryButton} disabled={Boolean(busy) || !validPlan}>{busy ? "Saving…" : editingLoan ? "Save Loan Changes" : topUpParent ? "Merge Approved Top-Up" : "Record Approved & Disbursed Loan"}</button>
               {(topUpParent || editingLoan) && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>Cancel</button>}
@@ -566,7 +564,7 @@ function Loans() {
         </AnalyticsPanel>
       </section>
 
-      <section style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
+      <section id="loan-register" style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px", scrollMarginTop: 96 }}>
         <AnalyticsPanel title="Loan Register" subtitle="One running loan account per facility. Approved top-ups increase the same account rather than creating a second loan." icon={<FaHandHoldingUsd />}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
             <input style={{ ...inputStyle, maxWidth: 360 }} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Search Loan / Employee — employee number, employee name, loan number, policy or status" />
@@ -574,33 +572,46 @@ function Loans() {
             <button style={secondaryButton} onClick={() => exportBulk("csv")} disabled={Boolean(busy)}>Export CSV</button>
             <button style={secondaryButton} onClick={() => exportBulk("pdf")} disabled={Boolean(busy)}>Export PDF</button>
           </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
-              <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
+          <div style={loanTableWrapStyle}>
+            <table style={loanTableStyle}>
+              <colgroup>
+                <col style={{ width: 150 }} />
+                <col style={{ width: 155 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 135 }} />
+                <col style={{ width: 105 }} />
+                <col style={{ width: 125 }} />
+                <col style={{ width: 115 }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 220 }} />
+              </colgroup>
+              <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head, index) => <th key={head} style={{ ...loanHeadStyle, ...(index >= 4 && index <= 7 ? { textAlign: "right" } : {}) }}>{head}</th>)}</tr></thead>
               <tbody>
                 {!loading && filteredLoans.length === 0 && <tr><td colSpan="11" style={{ padding: 16 }}>No loan records found.</td></tr>}
                 {filteredLoans.map((loan) => {
                   const recovered = Math.max(0, Number(loan.principalAmount || 0) - Number(loan.outstandingAmount || 0));
                   const current = ["ACTIVE", "PAUSED"].includes(loan.status);
-                  return <tr key={loan.id}>
-                    <td style={cellStyle}><strong>{loan.employeeNumber}</strong><br /><span>{loan.employeeName}</span></td>
-                    <td style={cellStyle}>{loan.loanNumber}<br /><span>{loan.purpose || "—"}</span></td>
-                    <td style={cellStyle}>{loan.gmApprovalReference || "—"}</td>
-                    <td style={cellStyle}>{loan.accountsPaymentReference || loan.disbursementReference || "—"}</td>
-                    <td style={cellStyle}>{money(loan.principalAmount)}</td>
-                    <td style={cellStyle}>{money(recovered)}</td>
-                    <td style={cellStyle}>{money(loan.outstandingAmount)}</td>
-                    <td style={cellStyle}>{money(loan.installmentAmount)}</td>
-                    <td style={cellStyle}>{loan.recoveryStartDate || "—"}</td>
-                    <td style={cellStyle}>{loan.status}</td>
-                    <td style={cellStyle}><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button style={secondaryButton} onClick={() => setSelectedLoanProfile(loan.id)}>View Profile</button>
-                      {capabilities.canManageLoans && current && <button style={secondaryButton} onClick={() => startEdit(loan)}>Edit</button>}
-                      {capabilities.canManageLoans && current && <button style={secondaryButton} onClick={() => startTopUp(loan)}>Top-Up</button>}
-                      {capabilities.canManageLoans && current && Number(loan.outstandingAmount || 0) > 0 && <button style={primaryButton} disabled={Boolean(busy)} onClick={() => completeExternally(loan)}>Mark Completed</button>}
-                      {capabilities.canManageLoans && loan.status === "ACTIVE" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
-                      {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={secondaryButton} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Resume</button>}
-                      {capabilities.canDeleteEmployeeFinancialInputs && recovered <= 0 && loan.status !== "COMPLETED" && <button style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteLoan(loan)}>Delete</button>}
+                  return <tr key={loan.id} style={loanRowStyle}>
+                    <td style={loanCellStyle}><strong style={loanPrimaryTextStyle}>{loan.employeeNumber}</strong><span style={loanSecondaryTextStyle}>{loan.employeeName}</span></td>
+                    <td style={loanCellStyle}><strong style={loanPrimaryTextStyle}>{loan.loanNumber}</strong><span style={loanSecondaryTextStyle}>{loan.purpose || "—"}</span></td>
+                    <td style={loanReferenceCellStyle}>{loan.gmApprovalReference || "—"}</td>
+                    <td style={loanReferenceCellStyle}>{loan.accountsPaymentReference || loan.disbursementReference || "—"}</td>
+                    <td style={loanMoneyCellStyle}>{money(loan.principalAmount)}</td>
+                    <td style={loanMoneyCellStyle}>{money(recovered)}</td>
+                    <td style={loanMoneyCellStyle}><strong>{money(loan.outstandingAmount)}</strong></td>
+                    <td style={loanMoneyCellStyle}>{money(loan.installmentAmount)}</td>
+                    <td style={loanCellStyle}>{loan.recoveryStartDate || "—"}</td>
+                    <td style={loanCellStyle}><span style={loanStatusStyle}>{loan.status}</span></td>
+                    <td style={loanActionCellStyle}><div style={loanActionGridStyle}>
+                      <button style={loanActionButtonStyle} onClick={() => setSelectedLoanProfile(loan.id)}>View Profile</button>
+                      {capabilities.canManageLoans && current && <button style={loanActionButtonStyle} onClick={() => startEdit(loan)}>Edit</button>}
+                      {capabilities.canManageLoans && current && <button style={loanActionButtonStyle} onClick={() => startTopUp(loan)}>Top-Up</button>}
+                      {capabilities.canManageLoans && current && Number(loan.outstandingAmount || 0) > 0 && <button style={loanPrimaryActionStyle} disabled={Boolean(busy)} onClick={() => completeExternally(loan)}>Mark Completed</button>}
+                      {capabilities.canManageLoans && loan.status === "ACTIVE" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "PAUSE")}>Pause</button>}
+                      {capabilities.canManageLoans && loan.status === "PAUSED" && <button style={loanActionButtonStyle} disabled={Boolean(busy)} onClick={() => statusAction(loan, "RESUME")}>Unpause Loan</button>}
+                      {capabilities.canDeleteEmployeeFinancialInputs && recovered <= 0 && loan.status !== "COMPLETED" && <button style={loanDangerActionStyle} disabled={Boolean(busy)} onClick={() => deleteLoan(loan)}>Delete</button>}
                     </div></td>
                   </tr>;
                 })}
@@ -627,8 +638,23 @@ function Loans() {
   );
 }
 
-const collateralCard = { padding: 13, borderRadius: 10, border: "1px solid rgba(212,175,55,.28)", background: "rgba(212,175,55,.055)", display: "grid", gap: 8 };
+const collateralCard = { padding: 13, borderRadius: "var(--chris-ui-panel-radius, 10px)", border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.28))", background: "var(--chris-ui-panel-background, rgba(212,175,55,.055))", display: "grid", gap: 8 };
 const collateralGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 8, color: "var(--chris-dashboard-text)", fontSize: 12 };
 const cellStyle = { padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)", verticalAlign: "top" };
+const loanTableWrapStyle = { overflowX: "auto", borderRadius: 12, border: "1px solid rgba(212,175,55,.16)", background: "rgba(3,20,13,.26)" };
+const loanTableStyle = { width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 1460, tableLayout: "fixed" };
+const loanHeadStyle = { textAlign: "left", padding: "12px 10px", borderBottom: "1px solid rgba(212,175,55,.24)", background: "rgba(3,30,20,.96)", color: "var(--chris-dashboard-text-muted)", fontSize: 11, lineHeight: 1.2, textTransform: "uppercase", letterSpacing: ".04em", verticalAlign: "bottom" };
+const loanRowStyle = { height: 88 };
+const loanCellStyle = { padding: "13px 10px", borderBottom: "1px solid rgba(255,255,255,.07)", verticalAlign: "middle", lineHeight: 1.35, overflowWrap: "anywhere" };
+const loanReferenceCellStyle = { ...loanCellStyle, fontVariantNumeric: "tabular-nums", fontSize: 12 };
+const loanMoneyCellStyle = { ...loanCellStyle, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+const loanPrimaryTextStyle = { display: "block", color: "var(--chris-dashboard-text)", fontWeight: 900, marginBottom: 3 };
+const loanSecondaryTextStyle = { display: "block", color: "var(--chris-dashboard-text-muted)", fontSize: 12, lineHeight: 1.35 };
+const loanStatusStyle = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 70, padding: "6px 9px", borderRadius: 999, border: "1px solid rgba(212,175,55,.34)", background: "rgba(212,175,55,.08)", color: "var(--chris-dashboard-gold-bright)", fontSize: 10, fontWeight: 900, letterSpacing: ".04em" };
+const loanActionCellStyle = { ...loanCellStyle, paddingRight: 8 };
+const loanActionGridStyle = { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 7, alignItems: "stretch" };
+const loanActionButtonStyle = { ...secondaryButton, width: "100%", minHeight: 36, padding: "8px 9px", whiteSpace: "nowrap", fontSize: 11 };
+const loanPrimaryActionStyle = { ...primaryButton, width: "100%", minHeight: 36, padding: "8px 9px", fontSize: 11, lineHeight: 1.1 };
+const loanDangerActionStyle = { ...dangerButton, width: "100%", minHeight: 36, padding: "8px 9px", fontSize: 11 };
 
 export default Loans;

@@ -45,8 +45,6 @@ function EmployeeProfile() {
   const [formData, setFormData] =
     useState(null);
 
-  const [editDepartments, setEditDepartments] = useState([]);
-
   const [loading, setLoading] =
     useState(true);
 
@@ -55,6 +53,22 @@ function EmployeeProfile() {
 
   const [editing, setEditing] =
     useState(false);
+
+  const [editCatalog, setEditCatalog] = useState([]);
+  const [editDepartments, setEditDepartments] = useState([]);
+  const [employmentTypes, setEmploymentTypes] = useState([]);
+  const [employmentTypeReason, setEmploymentTypeReason] = useState("");
+  const [employmentTypeSaving, setEmploymentTypeSaving] = useState(false);
+  const [employmentLevels, setEmploymentLevels] = useState([]);
+  const [employmentLevelState, setEmploymentLevelState] = useState(null);
+  const [employmentLevelSaving, setEmploymentLevelSaving] = useState(false);
+  const [employmentLevelForm, setEmploymentLevelForm] = useState({
+    levelNumber: "",
+    useDesignationDefault: false,
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    reason: "",
+    notes: "",
+  });
 
   const [error, setError] =
     useState("");
@@ -388,6 +402,7 @@ function EmployeeProfile() {
       const [
         result,
         lineManagerResult,
+        levelResult,
       ] = await Promise.all([
         apiRequest(
           `/api/employees/${encodeURIComponent(
@@ -397,6 +412,9 @@ function EmployeeProfile() {
         apiRequest(
           `/api/line-managers/employees/${encodeURIComponent(employeeNumber)}`
         ),
+        apiRequest(
+          `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`
+        ).catch(() => ({ data: null })),
       ]);
 
       const employee =
@@ -425,11 +443,29 @@ function EmployeeProfile() {
           employee.designation
             ?.name || "",
 
-        employmentLevel:
-          employee.designation?.employmentLevel?.name ||
-          (Number.isInteger(employee.designation?.careerLevel)
-            ? `Level ${employee.designation.careerLevel}`
-            : "Not Configured"),
+        departmentId: employee.departmentId || "",
+        designationId: employee.designationId || "",
+        employmentType: employee.employmentType || "",
+
+        employmentLevel: (() => {
+          const level = levelResult?.data?.effective || employee.designation?.employmentLevel;
+          if (level) {
+            return [level.code || `L${level.levelNumber ?? employee.designation?.careerLevel}`, level.name]
+              .filter(Boolean)
+              .join(" — ");
+          }
+          return Number.isInteger(employee.designation?.careerLevel)
+            ? `L${employee.designation.careerLevel}`
+            : "Not Configured";
+        })(),
+
+        employmentLevelNumber:
+          levelResult?.data?.effective?.levelNumber ??
+          employee.designation?.careerLevel ??
+          null,
+
+        employmentLevelSource:
+          levelResult?.data?.effective?.source || "DESIGNATION_DEFAULT",
 
         email:
           employee.email || "",
@@ -485,6 +521,7 @@ function EmployeeProfile() {
       setProfile(
         normalizedProfile
       );
+      setEmploymentLevelState(levelResult?.data || null);
 
       apiRequest("/api/employees/onboarding/status")
         .then((onboardingResult) => {
@@ -504,6 +541,10 @@ function EmployeeProfile() {
 
         designation:
           normalizedProfile.designation,
+
+        departmentId: normalizedProfile.departmentId,
+        designationId: normalizedProfile.designationId,
+        employmentType: normalizedProfile.employmentType,
 
         locationId:
           normalizedProfile.locationId,
@@ -638,7 +679,7 @@ useEffect(() => {
     loadLifecycleHistory();
     loadEmploymentEpisodes();
   }, [employeeNumber]);
-const handleChange = (
+  const handleChange = (
     event
   ) => {
     const {
@@ -647,10 +688,17 @@ const handleChange = (
     } = event.target;
 
     setFormData(
-      (current) => ({
-        ...current,
-        [name]: value,
-      })
+      (current) => {
+        if (name === "departmentId") {
+          const department = editDepartments.find((item) => item.id === value) || editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).find((item) => item?.id === value);
+          return { ...current, departmentId: value, department: department?.name || "", designationId: "", designation: "" };
+        }
+        if (name === "designationId") {
+          const designation = editCatalog.find((item) => item.id === value);
+          return { ...current, designationId: value, designation: designation?.name || "" };
+        }
+        return { ...current, [name]: value };
+      }
     );
   };
 
@@ -658,6 +706,15 @@ const handleChange = (
     event
   ) => {
     event.preventDefault();
+
+    if (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) {
+      setError("Use Review Job Change below to record the selected department and designation with an effective date and reason.");
+      return;
+    }
+    if (formData.employmentType !== profile.employmentType) {
+      setError("Save the Employment Type change with its reason using the button below before saving other details.");
+      return;
+    }
 
     if (
       !profile.locationId &&
@@ -713,6 +770,85 @@ const handleChange = (
     }
   };
 
+  const reviewEditJobChange = async () => {
+    const { departmentId, designationId } = formData;
+    if (await openJobChangeForm()) {
+      setJobChangeForm((current) => ({ ...current, departmentId, designationId }));
+    }
+  };
+
+  const saveEditEmploymentType = async () => {
+    if (!formData.employmentType || !employmentTypeReason.trim()) {
+      setError("Select an Employment Type and enter the reason for the change.");
+      return;
+    }
+    try {
+      const pendingEdit = { ...formData };
+      setEmploymentTypeSaving(true);
+      setError("");
+      const result = await apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-type`, {
+        method: "PUT",
+        body: JSON.stringify({ employmentType: formData.employmentType, reason: employmentTypeReason.trim() }),
+      });
+      await loadProfile();
+      // Preserve any other unsaved master-data selections in the open form.
+      setFormData(pendingEdit);
+      setEmploymentTypeReason("");
+      setSuccess(result.message || "Employment Type updated and audited.");
+    } catch (err) {
+      setError(err.message || "CHRiS could not update Employment Type.");
+    } finally {
+      setEmploymentTypeSaving(false);
+    }
+  };
+
+  const saveEditEmploymentLevel = async () => {
+    const reason = String(employmentLevelForm.reason || "").trim();
+    if (!employmentLevelForm.effectiveDate || !reason) {
+      setError("Select an effective date and enter the reason for the Employment Level change.");
+      return;
+    }
+    if (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber) {
+      setError("Select an Employment Level.");
+      return;
+    }
+
+    try {
+      setEmploymentLevelSaving(true);
+      setError("");
+      const result = await apiRequest(
+        `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`,
+        {
+          method: "PUT",
+          body: {
+            levelNumber: employmentLevelForm.useDesignationDefault
+              ? undefined
+              : Number(employmentLevelForm.levelNumber),
+            useDesignationDefault: employmentLevelForm.useDesignationDefault,
+            effectiveFrom: employmentLevelForm.effectiveDate,
+            reason,
+            notes: employmentLevelForm.notes,
+          },
+        }
+      );
+      setEmploymentLevelState(result?.data || null);
+      setEmploymentLevelForm((current) => ({
+        ...current,
+        levelNumber: String(result?.data?.effective?.levelNumber || ""),
+        useDesignationDefault: false,
+        effectiveDate: new Date().toISOString().slice(0, 10),
+        reason: "",
+        notes: "",
+      }));
+      await loadProfile();
+      setSuccess(result?.message || "Employment Level updated and audited.");
+    } catch (err) {
+      setError(err.message || "CHRiS could not update Employment Level.");
+    } finally {
+      setEmploymentLevelSaving(false);
+    }
+  };
+
   const handleCancel = () => {
     setEditing(false);
 
@@ -728,6 +864,10 @@ const handleChange = (
 
       designation:
         profile.designation,
+
+      departmentId: profile.departmentId,
+      designationId: profile.designationId,
+      employmentType: profile.employmentType,
 
       locationId:
         profile.locationId || "",
@@ -797,8 +937,25 @@ const handleChange = (
           })
         );
 
-        const careerResult = await apiRequest("/api/employees/career/designations");
+        const [careerResult, typeResult, levelCatalogResult, employeeLevelResult] = await Promise.all([
+          apiRequest("/api/employees/career/catalog"),
+          apiRequest("/api/employees/employment-types/catalog"),
+          apiRequest("/api/employees/career/employment-levels"),
+          apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
+        ]);
+        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id).map((item) => ({ ...item, eligibleDepartments: [item.department, ...(item.departmentEligibility || []).map((entry) => entry?.department).filter(Boolean)].filter((department, index, list) => department?.id && list.findIndex((candidate) => candidate?.id === department.id) === index) })));
         setEditDepartments((careerResult.departments || []).filter((department) => department?.isActive !== false && department?.id));
+        setEmploymentTypes(typeResult.data?.employmentTypes || []);
+        setEmploymentTypeReason("");
+        setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
+        setEmploymentLevelState(employeeLevelResult.data || null);
+        setEmploymentLevelForm({
+          levelNumber: String(employeeLevelResult.data?.effective?.levelNumber || ""),
+          useDesignationDefault: false,
+          effectiveDate: new Date().toISOString().slice(0, 10),
+          reason: "",
+          notes: "",
+        });
 
         if (
           !profile.locationId
@@ -1222,6 +1379,7 @@ const handleChange = (
               currentDepartmentId,
           })
         );
+        return true;
       } catch (err) {
         console.error(
           "Job Change catalogue load error:",
@@ -1231,11 +1389,13 @@ const handleChange = (
         setJobChangeCatalog(
           []
         );
+        setJobChangeOpen(false);
 
         setError(
           err.message ||
             "CHRIS could not load valid job-change positions."
         );
+        return false;
       } finally {
         setJobChangeCatalogLoading(
           false
@@ -2939,16 +3099,6 @@ const handleChange = (
         pageStyle
       }
     >
-      <button
-        type="button"
-        onClick={goBackFromProfile}
-        style={
-          backButtonStyle
-        }
-      >
-        {"<-"} Back
-      </button>
-
       {success && (
         <div
           style={
@@ -3091,9 +3241,10 @@ const handleChange = (
               </button>
 
               <button
-                type="submit"
+                type={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "button" : "submit"}
+                onClick={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? reviewEditJobChange : undefined}
                 disabled={
-                  saving
+                  saving || (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && !formData.designationId
                 }
                 style={{
                   ...saveButtonStyle,
@@ -3103,9 +3254,8 @@ const handleChange = (
                       : 1,
                 }}
               >
-                {saving
-                  ? "Saving..."
-                  : "Save Changes"}
+                {saving ? "Saving..." :
+                  formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "Review Job Change" : "Save Changes"}
               </button>
             </div>
           </div>
@@ -3183,38 +3333,111 @@ const handleChange = (
 
 
             <div>
-              <label style={labelStyle}>Department</label>
-              <select
-                name="department"
-                value={formData.department || ""}
-                onChange={handleChange}
-                required
-                disabled={saving}
-                style={fieldStyle}
-              >
+              <label style={labelStyle}>Department *</label>
+              <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
-                {editDepartments.slice().sort((a,b) => a.name.localeCompare(b.name)).map((department) => (
-                  <option key={department.id} value={department.name}>
-                    {department.name}{department.code ? " (" + department.code + ")" : ""}
-                  </option>
-                ))}
+                {editDepartments.length ? editDepartments.slice().sort((a, b) => a.name.localeCompare(b.name)) : Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values()).sort((a, b) => a.name.localeCompare(b.name))
+                  .map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? " (" + department.code + ")" : ""}</option>)}
               </select>
             </div>
 
-            <FormField
-              label="Designation"
-              name="designation"
-              value={
-                formData.designation
-              }
-              onChange={
-                handleChange
-              }
-              required
-              disabled={
-                saving
-              }
-            />
+            <div>
+              <label style={labelStyle}>Designation *</label>
+              <select name="designationId" value={formData.designationId || ""} onChange={handleChange} required disabled={saving || !formData.departmentId} style={fieldStyle}>
+                <option value="">Select designation</option>
+                {editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((designation) => <option key={designation.id} value={designation.id}>{designation.name}</option>)}
+              </select>
+              {(formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && (
+                <button type="button" onClick={reviewEditJobChange} disabled={!formData.departmentId || !formData.designationId || saving} style={actionButtonStyle}>
+                  Review Job Change
+                </button>
+              )}
+              <p style={promotionFieldHintStyle}>Department and designation changes require an effective date and reason. Review Job Change records them in Employment History.</p>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Employment Type</label>
+              <select name="employmentType" value={formData.employmentType || ""} onChange={handleChange} disabled={saving || employmentTypeSaving} style={fieldStyle}>
+                <option value="">Select employment type</option>
+                {employmentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              {formData.employmentType !== profile.employmentType && (
+                <>
+                  <input aria-label="Reason for Employment Type change" placeholder="Reason for Employment Type change" value={employmentTypeReason} onChange={(event) => setEmploymentTypeReason(event.target.value)} style={fieldStyle} disabled={employmentTypeSaving} />
+                  <button type="button" onClick={saveEditEmploymentType} disabled={!formData.employmentType || !employmentTypeReason.trim() || employmentTypeSaving} style={actionButtonStyle}>
+                    {employmentTypeSaving ? "Saving…" : "Save Employment Type"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div>
+              <label style={labelStyle}>Employment Level</label>
+              <select
+                value={employmentLevelForm.useDesignationDefault ? "DEFAULT" : employmentLevelForm.levelNumber}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEmploymentLevelForm((current) => ({
+                    ...current,
+                    useDesignationDefault: value === "DEFAULT",
+                    levelNumber: value === "DEFAULT" ? "" : value,
+                  }));
+                }}
+                disabled={saving || employmentLevelSaving}
+                style={fieldStyle}
+              >
+                <option value="">Select employment level</option>
+                {employmentLevelState?.currentOverride && (
+                  <option value="DEFAULT">
+                    Use designation default — {employmentLevelState?.designationDefault?.code || ""} {employmentLevelState?.designationDefault?.name || ""}
+                  </option>
+                )}
+                {employmentLevels
+                  .slice()
+                  .sort((a, b) => Number(b.levelNumber) - Number(a.levelNumber))
+                  .map((level) => (
+                    <option key={level.levelNumber} value={String(level.levelNumber)}>
+                      {level.code || `L${level.levelNumber}`} — {level.name}
+                    </option>
+                  ))}
+              </select>
+              <p style={promotionFieldHintStyle}>
+                Current: {employmentLevelState?.effective ? [employmentLevelState.effective.code || `L${employmentLevelState.effective.levelNumber}`, employmentLevelState.effective.name].filter(Boolean).join(" — ") : profile.employmentLevel}
+                {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
+              </p>
+              <input
+                type="date"
+                aria-label="Employment Level effective date"
+                value={employmentLevelForm.effectiveDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, effectiveDate: event.target.value }))}
+                style={fieldStyle}
+                disabled={employmentLevelSaving}
+              />
+              <input
+                aria-label="Reason for Employment Level change"
+                placeholder="Reason for Employment Level change"
+                value={employmentLevelForm.reason}
+                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
+                style={fieldStyle}
+                disabled={employmentLevelSaving}
+              />
+              <button
+                type="button"
+                onClick={saveEditEmploymentLevel}
+                disabled={
+                  employmentLevelSaving ||
+                  !employmentLevelForm.effectiveDate ||
+                  !employmentLevelForm.reason.trim() ||
+                  (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber)
+                }
+                style={actionButtonStyle}
+              >
+                {employmentLevelSaving ? "Saving…" : employmentLevelForm.useDesignationDefault ? "Reset Employment Level" : "Save Employment Level"}
+              </button>
+            </div>
 
             <div>
               <label
@@ -3474,6 +3697,10 @@ const handleChange = (
               value={profile.employmentLevel}
             />
             <InfoRow
+              label="Employment Level Source"
+              value={profile.employmentLevelSource === "EMPLOYEE_OVERRIDE" ? "Employee Override" : "Designation Default"}
+            />
+            <InfoRow
               label="Gender"
               value={profile.gender}
             />
@@ -3603,9 +3830,7 @@ const handleChange = (
                   onClick={
                     openSuspensionForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(suspensionOpen)}
                 >
                   Suspend Employee
                 </button>
@@ -3625,9 +3850,7 @@ const handleChange = (
                   onClick={
                     openDeactivationForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(deactivationOpen)}
                 >
                   Deactivate Employee
                 </button>
@@ -3710,7 +3933,6 @@ const handleChange = (
             }
             style={{
               ...getQuickActionButtonStyle(jobChangeOpen),
-
               opacity:
                 [
                   "Resigned",
@@ -3718,12 +3940,9 @@ const handleChange = (
                   "Retired",
                   "Suspended",
                   "Inactive",
-                ].includes(
-                  profile.status
-                )
+                ].includes(profile.status)
                   ? 0.5
                   : 1,
-
               cursor:
                 [
                   "Resigned",
@@ -3731,9 +3950,7 @@ const handleChange = (
                   "Retired",
                   "Suspended",
                   "Inactive",
-                ].includes(
-                  profile.status
-                )
+                ].includes(profile.status)
                   ? "not-allowed"
                   : "pointer",
             }}
@@ -3791,15 +4008,7 @@ const handleChange = (
               <button
                 type="button"
                 onClick={() => activateProfileAction("leave")}
-                style={{
-                  ...actionButtonStyle,
-                  borderColor: leaveProfileOpen
-                    ? "var(--chris-gold)"
-                    : actionButtonStyle.borderColor,
-                  boxShadow: leaveProfileOpen
-                    ? "0 0 0 2px rgba(212,175,55,.16)"
-                    : actionButtonStyle.boxShadow,
-                }}
+                style={getQuickActionButtonStyle(leaveProfileOpen)}
               >
                 Leave Profile{leaveProfileOpen ? " • Active" : ""}
               </button>
@@ -7147,6 +7356,7 @@ const pageStyle = {
   width: "100%",
   maxWidth: "1200px",
   margin: "0 auto",
+  color: "#F7FBF8",
 };
 
 const loadingStyle = {
@@ -7157,32 +7367,30 @@ const loadingStyle = {
 };
 
 const backButtonStyle = {
-  border: "none",
-  background:
-    "transparent",
-  color: "#087A43",
+  border: "1px solid rgba(212,175,55,.55)",
+  background: "rgba(212,175,55,.06)",
+  color: "#D4AF37",
+  borderRadius: "10px",
   fontSize: "14px",
-  fontWeight: "700",
+  fontWeight: "800",
   cursor: "pointer",
-  padding: 0,
+  padding: "10px 14px",
   marginBottom: "22px",
 };
 
 const headerCardStyle = {
-  background: "#FFFFFF",
-  border:
-    "1px solid #E5E7EB",
-  borderRadius: "18px",
+  background: "var(--chris-ui-panel-background, linear-gradient(135deg, rgba(12,38,26,.98), rgba(5,14,10,.99)))",
+  border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.42))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
   padding: "26px",
   marginBottom: "22px",
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  boxShadow: "var(--chris-ui-panel-shadow, 0 18px 46px rgba(0,0,0,.28))",
   display: "flex",
   alignItems: "center",
-  justifyContent:
-    "space-between",
+  justifyContent: "space-between",
   gap: "20px",
   flexWrap: "wrap",
+  color: "var(--chris-text-main, #F7FBF8)",
 };
 
 const profileIdentityStyle = {
@@ -7195,8 +7403,8 @@ const avatarStyle = {
   width: "72px",
   height: "72px",
   borderRadius: "50%",
-  background: "#E8F5EF",
-  color: "#087A43",
+  background: "rgba(212,175,55,.12)",
+  color: "#D4AF37",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -7207,27 +7415,27 @@ const avatarStyle = {
 
 const eyebrowStyle = {
   margin: "0 0 5px",
-  color: "var(--chris-text-secondary)",
+  color: "#AFC3B7",
   fontSize: "13px",
   fontWeight: "600",
 };
 
 const nameStyle = {
   margin: 0,
-  color: "var(--chris-text-main)",
+  color: "#FFFFFF",
   fontSize: "28px",
   fontWeight: "800",
 };
 
 const subtitleStyle = {
   margin: "6px 0 0",
-  color: "var(--chris-text-secondary)",
+  color: "#B8C9C0",
   fontSize: "14px",
 };
 
 const employeeNumberStyle = {
   margin: "5px 0 0",
-  color: "#087A43",
+  color: "#D4AF37",
   fontSize: "13px",
   fontWeight: "700",
 };
@@ -7243,40 +7451,37 @@ const informationCardStyle = {
   padding: "24px",
   minHeight: "260px",
   background:
-    "linear-gradient(145deg, rgba(12,38,26,.94), rgba(7,18,13,.98))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
-  boxShadow: "var(--chris-shadow-card)",
-  color: "var(--chris-text-main)",
+    "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.94), rgba(7,18,13,.98)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
+  color: "var(--chris-text-main, var(--chris-text-main))",
 };
 
 const informationTitleStyle = {
   margin: "0 0 18px",
-  color: "#087A43",
+  color: "#D4AF37",
   fontSize: "18px",
   fontWeight: "800",
 };
 
 const infoRowStyle = {
   display: "flex",
-  justifyContent:
-    "space-between",
-  alignItems:
-    "flex-start",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
   gap: "20px",
   padding: "13px 0",
-  borderBottom:
-    "1px solid #EEF2F1",
+  borderBottom: "1px solid rgba(212,175,55,.16)",
 };
 
 const infoLabelStyle = {
-  color: "var(--chris-text-secondary)",
+  color: "#AFC3B7",
   fontSize: "var(--chris-font-sm)",
   fontWeight: "600",
 };
 
 const infoValueStyle = {
-  color: "var(--chris-text-main)",
+  color: "#F7FBF8",
   fontSize: "var(--chris-font-sm)",
   fontWeight: "800",
   textAlign: "right",
@@ -7299,10 +7504,9 @@ const getQuickActionButtonStyle = (active = false) => ({
 });
 
 const actionButtonStyle = {
-  border:
-    "1px solid #D1E5DB",
+  border: "1px solid rgba(212,175,55,.34)",
   background: "rgba(255,255,255,.025)",
-  color: "#087A43",
+  color: "#D4AF37",
   borderRadius: "10px",
   padding: "12px",
   fontSize: "13px",
@@ -7314,11 +7518,11 @@ const editCardStyle = {
   marginTop: "22px",
   padding: "26px",
   background:
-    "linear-gradient(145deg, rgba(12,38,26,.96), rgba(7,18,13,.98))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
-  boxShadow: "var(--chris-shadow-card)",
-  color: "var(--chris-text-main)",
+    "var(--chris-ui-panel-background, linear-gradient(145deg, rgba(12,38,26,.96), rgba(7,18,13,.98)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  boxShadow: "var(--chris-ui-panel-shadow, var(--chris-shadow-card))",
+  color: "var(--chris-text-main, var(--chris-text-main))",
 };
 
 const editHeaderStyle = {
@@ -7452,11 +7656,11 @@ const transferCardStyle = {
   marginTop: "22px",
   padding: "clamp(18px, 3vw, 26px)",
   scrollMarginTop: "96px",
-  color: "var(--chris-text-main)",
-  background: "linear-gradient(145deg,rgba(12,38,26,.98),rgba(5,14,10,.99))",
-  border: "1px solid var(--chris-border-gold)",
-  borderRadius: "var(--chris-radius-card)",
-  boxShadow: "0 18px 46px rgba(0,0,0,.30)",
+  color: "var(--chris-text-main, var(--chris-text-main))",
+  background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(12,38,26,.98),rgba(5,14,10,.99)))",
+  border: "var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",
+  borderRadius: "var(--chris-ui-panel-radius, var(--chris-radius-card))",
+  boxShadow: "var(--chris-ui-panel-shadow, 0 18px 46px rgba(0,0,0,.30))",
 };
 
 const transferHeaderStyle = {
@@ -7921,10 +8125,10 @@ const episodeCardStyle = {
     "18px",
 
   borderRadius:
-    "14px",
+    "var(--chris-ui-panel-radius, 14px)",
 
   background:
-    "#FFFFFF",
+    "var(--chris-ui-panel-background, #FFFFFF)",
 
   position:
     "relative",
@@ -8187,10 +8391,10 @@ const timelineLineStyle = {
 
 const lifecycleCardStyle = {
   padding: "17px",
-  background: "rgba(255,255,255,.025)",
+  background: "var(--chris-ui-panel-background, rgba(255,255,255,.025))",
   border:
-    "1px solid #DDECE4",
-  borderRadius: "13px",
+    "var(--chris-ui-panel-border, 1px solid #DDECE4)",
+  borderRadius: "var(--chris-ui-panel-radius, 13px)",
 };
 
 const lifecycleTopRowStyle = {

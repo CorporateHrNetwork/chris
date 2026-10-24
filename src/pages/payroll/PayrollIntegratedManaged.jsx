@@ -77,7 +77,7 @@ export default function PayrollIntegratedManaged({ mode }) {
   const meta = {
     execute: ["Execute Payroll", "Calculate payroll with statutory deductions, Salary Advance recovery, Loan recovery and eligible after-tax benefits in one auditable payroll line."],
     payslips: ["Payslips", "Approved payroll payslips can be viewed, printed and emailed individually or in bulk. Draft payroll lines expose live preview payslips from Execute Payroll but cannot be emailed."],
-    statutory: ["Nigeria Statutory Review", "Review which payroll statutory items are active, employer-only, or require organization approval before activation."],
+    statutory: ["Nigeria Statutory Review", "Review which payroll statutory items are active, employer-only, or require ZERMATT approval before activation."],
   };
   const [title, description] = meta[mode] || meta.execute;
   return (
@@ -102,6 +102,7 @@ function ExecuteIntegrated() {
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [emailNotice, setEmailNotice] = useState("");
   const [branchView, setBranchView] = useState("");
   const [selectedPayslip, setSelectedPayslip] = useState(null);
   const payslipPreviewRef = useRef(null);
@@ -220,6 +221,9 @@ function ExecuteIntegrated() {
     try {
       setBusy(`email-${row.id}`); setError(""); setMessage("");
       const response = await apiRequest(`/api/payroll/payslips/${row.id}/email`, { method: "POST" });
+      if (response?.data?.status === "SENT") {
+        setEmailNotice(`Email sent successfully to ${response?.data?.email || row.employeeEmail || row.employeeNumber}.`);
+      }
       setMessage(response?.message || `Payslip email action completed for ${row.employeeNumber}.`);
     } catch (err) {
       setError(err.message || "Unable to email approved payslip.");
@@ -227,6 +231,12 @@ function ExecuteIntegrated() {
       setBusy("");
     }
   };
+
+  useEffect(() => {
+    if (!emailNotice) return undefined;
+    const timer = window.setTimeout(() => setEmailNotice(""), 7000);
+    return () => window.clearTimeout(timer);
+  }, [emailNotice]);
 
   useEffect(() => {
     if (!error) return undefined;
@@ -250,11 +260,12 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>This demo uses fictional payroll records and generic CHRiS controls. Calculate and review the draft payroll, inspect employee-level previews, and submit the run through the demo approval flow. Draft exports are review-only and must never be treated as payout instructions. Approved exports demonstrate downstream finance handoff using fictional data. Any organization-specific attendance, loan, salary-advance, leave-allowance, approval, or payout rule must be configured for the customer during implementation and is not represented here as a client-specific rule.</p>
+        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. Before approval, export the Draft Review Pack for external HR investigation/verification; it is clearly marked NOT FOR PAYOUT. After CHRiS approval, export the Approved Payout Pack for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is included in the employee’s Net Salary.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
       <Feedback error={periodsError || error || (!policyLoading && policyData?.configured === false ? "Nigeria payroll policy is not configured." : "")} />
+      {emailNotice && <div role="status" aria-live="polite" style={emailSuccessToastStyle}>✓ {emailNotice}</div>}
       {message && <div style={infoStyle}>{message}</div>}
 
       <Panel title="Payroll Runs">
@@ -525,11 +536,55 @@ function DashboardEmpty({ children }) {
   return <div style={dashboardEmptyStyle}>{children}</div>;
 }
 
+function payrollLineComponentKey(item = {}, prefix = "CMP") {
+  return String(item.code || item.name || item.inputId || item.installmentId || prefix).trim();
+}
+
+function payrollLineComponentLabel(item = {}) {
+  const code = String(item.code || "").trim();
+  const name = String(item.name || "").trim();
+  return [code, name].filter(Boolean).join(" — ") || "Payroll Component";
+}
+
+function payrollComponentColumns(rows = [], key) {
+  const map = new Map();
+  for (const row of rows || []) {
+    for (const item of row.details?.[key] || []) {
+      map.set(payrollLineComponentKey(item), payrollLineComponentLabel(item));
+    }
+  }
+  return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([id, label]) => ({ id, label }));
+}
+
 function PayrollLines({ rows, onViewPayslip }) {
+  const [leaveRecipientsOnly, setLeaveRecipientsOnly] = useState(false);
+  const leaveRecipients = (rows || []).filter((row) => Number(row.details?.leaveAllowance?.amount || 0) > 0);
+  const leaveTotal = leaveRecipients.reduce((total, row) => total + Number(row.details.leaveAllowance.amount), 0);
+  const tableRows = leaveRecipientsOnly ? leaveRecipients : (rows || []);
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
+  const allowanceColumns = payrollComponentColumns(rows, "customAllowances");
+  const deductionColumns = payrollComponentColumns(rows, "customDeductions");
+  const columns = [
+    "Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic",
+    ...allowanceColumns.map((item) => item.label),
+    "PAYE", "Pension",
+    ...deductionColumns.map((item) => item.label),
+    "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip",
+  ];
   return (
-    <EmployeeBatchSelector
-      rows={rows || []}
+    <>
+      <div style={branchViewBar}>
+        <div role="status">
+          <strong>Leave Allowance: {leaveRecipients.length} recipient(s) · {money(leaveTotal, rows?.[0]?.currency)}</strong>
+          <div style={branchViewText}>Totals cover all pages in this branch view. Only eligible anniversary-month employees have an amount; other rows remain blank.</div>
+        </div>
+        <button type="button" style={leaveRecipientsOnly ? activeBranchButton : branchButton} aria-pressed={leaveRecipientsOnly} onClick={() => setLeaveRecipientsOnly((current) => !current)}>
+          {leaveRecipientsOnly ? "Show all payroll employees" : "Show leave allowance recipients"}
+        </button>
+      </div>
+      <EmployeeBatchSelector
+      key={leaveRecipientsOnly ? "leave-recipients" : "all-payroll"}
+      rows={tableRows}
       getId={(row) => row.id}
       getSearchText={getSearchText}
       searchPlaceholder="Search employee number, name, employment type or cost centre"
@@ -540,15 +595,15 @@ function PayrollLines({ rows, onViewPayslip }) {
       ) : null}
     >
       {({ displayRows, isSelected, toggleOne, toggleFiltered, allFilteredSelected, someFilteredSelected }) => (
-        <DataTable columns={["Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic", "Other Earnings", "PAYE", "Pension", "Other Ded.", "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip"]}>
+        <DataTable columns={columns}>
           <tr style={{ display: "none" }}><td>{String(allFilteredSelected)}{String(someFilteredSelected)}<button type="button" onClick={toggleFiltered}>toggle</button></td></tr>
           {displayRows.map((row) => {
             const details = row.details || {};
             const statutory = details.statutory || {};
             const structure = details.salaryStructure || {};
-            const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-            const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-            const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+            const leaveAllowance = details.leaveAllowance?.amount == null ? null : Number(details.leaveAllowance.amount);
+            const allowanceValues = new Map((details.customAllowances || []).map((item) => [payrollLineComponentKey(item), Number(item.value || 0)]));
+            const deductionValues = new Map((details.customDeductions || []).map((item) => [payrollLineComponentKey(item), Number(item.value || 0)]));
             return (
               <tr key={row.id}>
                 <Td><input type="checkbox" aria-label={`Select ${row.employeeNumber} ${row.employeeName}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
@@ -558,13 +613,13 @@ function PayrollLines({ rows, onViewPayslip }) {
                 <Td>{details.attendance?.payableDays ?? "—"}{details.attendanceRecalculationRequired ? " *" : ""}</Td>
                 <Td>{details.attendance?.source ? String(details.attendance.source).replaceAll("_", " ") : "—"}</Td>
                 <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
-                <Td>{money(customAllowances, row.currency)}</Td>
+                {allowanceColumns.map((item) => <Td key={`a-${item.id}`}>{money(allowanceValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(statutory.payeTax, row.currency)}</Td>
                 <Td>{money(statutory.employeePension, row.currency)}</Td>
-                <Td>{money(customDeductions, row.currency)}</Td>
+                {deductionColumns.map((item) => <Td key={`d-${item.id}`}>{money(deductionValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(row.advanceRecovery, row.currency)}</Td>
                 <Td>{money(row.loanRecovery, row.currency)}</Td>
-                <Td>{leaveAllowance ? `${money(leaveAllowance, row.currency)} · After tax` : "—"}</Td>
+                <Td>{leaveAllowance != null && leaveAllowance > 0 ? money(leaveAllowance, row.currency) : ""}</Td>
                 <Td>{money(row.grossPay, row.currency)}</Td>
                 <Td strong>{money(row.netPreview, row.currency)}</Td>
                 <Td><button type="button" style={smallButton} onClick={() => onViewPayslip?.(row)}>{row.runStatus === "APPROVED" ? "View Payslip" : "View Preview"}</button></Td>
@@ -574,6 +629,7 @@ function PayrollLines({ rows, onViewPayslip }) {
         </DataTable>
       )}
     </EmployeeBatchSelector>
+    </>
   );
 }
 
@@ -583,6 +639,7 @@ function ApprovedPayslips() {
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [emailNotice, setEmailNotice] = useState("");
   const [emailError, setEmailError] = useState("");
   const [bulkRunId, setBulkRunId] = useState("");
   const approvedPayslipRef = useRef(null);
@@ -605,6 +662,9 @@ function ApprovedPayslips() {
     try {
       setBusy(`email-${row.id}`); setEmailError(""); setFeedback("");
       const response = await apiRequest(`/api/payroll/payslips/${row.id}/email`, { method: "POST" });
+      if (response?.data?.status === "SENT") {
+        setEmailNotice(`Email sent successfully to ${response?.data?.email || row.employeeEmail || row.employeeNumber}.`);
+      }
       setFeedback(response?.message || `Payslip email action completed for ${row.employeeNumber}.`);
     } catch (err) {
       setEmailError(err.message || "Unable to email approved payslip.");
@@ -630,6 +690,12 @@ function ApprovedPayslips() {
     }
   };
 
+
+  useEffect(() => {
+    if (!emailNotice) return undefined;
+    const timer = window.setTimeout(() => setEmailNotice(""), 7000);
+    return () => window.clearTimeout(timer);
+  }, [emailNotice]);
 
   useEffect(() => {
     if (!bulkRunId && approvedRuns.length) setBulkRunId(approvedRuns[0].id);
@@ -711,7 +777,7 @@ function ApprovedPayslips() {
             <DataTable loading={loading} columns={["Select", "Period", "Employee", "Email", "Gross", "PAYE", "Pension", "Advance", "Loan", "Leave Allowance", "Net", "Action"]}>
               {displayRows.map((row) => {
                 const statutory = row.details?.statutory || {};
-                const leaveAllowance = Number(row.details?.leaveAllowance?.amount || 0);
+                const leaveAllowance = row.details?.leaveAllowance?.amount == null ? null : Number(row.details.leaveAllowance.amount);
                 return <tr key={row.id}>
                   <Td><input type="checkbox" aria-label={`Select payslip ${row.employeeNumber} ${row.periodCode}`} checked={isSelected(row)} onChange={() => toggleOne(row)} /></Td>
                   <Td strong>{row.periodCode}</Td>
@@ -722,7 +788,7 @@ function ApprovedPayslips() {
                   <Td>{money(statutory.employeePension, row.currency)}</Td>
                   <Td>{money(row.advanceRecovery, row.currency)}</Td>
                   <Td>{money(row.loanRecovery, row.currency)}</Td>
-                  <Td>{leaveAllowance ? money(leaveAllowance, row.currency) : "—"}</Td>
+                  <Td>{leaveAllowance != null && leaveAllowance > 0 ? money(leaveAllowance, row.currency) : ""}</Td>
                   <Td strong>{money(row.netPreview, row.currency)}</Td>
                   <Td><div style={buttonRow}>
                     <button type="button" style={smallButton} onClick={() => setSelected(row)}>View Payslip</button>
@@ -735,6 +801,7 @@ function ApprovedPayslips() {
         </EmployeeBatchSelector>
       </Panel>
       <Feedback error={error || emailError} />
+      {emailNotice && <div role="status" aria-live="polite" style={emailSuccessToastStyle}>✓ {emailNotice}</div>}
       {feedback && <div style={infoStyle}>{feedback}</div>}
       {selected && <div ref={approvedPayslipRef} tabIndex={-1} style={payslipScrollAnchorStyle}>
         <PayslipCard
@@ -755,8 +822,8 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
   const structure = details.salaryStructure || {};
   const attendance = details.attendance || {};
   const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-  const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const customAllowances = details.customAllowances || [];
+  const customDeductions = details.customDeductions || [];
   const organizationName = payslipOrganizationName(organization);
   const logoUrl = payslipLogoUrl(organization);
   return (
@@ -767,8 +834,8 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
           : <div aria-hidden="true" style={payslipPreviewWatermarkTextStyle}>{organizationName}</div>}
         <div style={payslipPreviewContentStyle}>
           <div style={payslipPreviewHeaderStyle}>
-            {logoUrl && <img src={logoUrl} alt={`${organizationName} logo`} style={payslipPreviewLogoStyle} />}
-            <div style={payslipPreviewOrganizationNameStyle}>{organizationName}</div>
+            {logoUrl && <img src={logoUrl} alt={`${organizationName} logo`} style={{ ...payslipPreviewLogoStyle, mixBlendMode: "multiply" }} />}
+            {!logoUrl && <div style={payslipPreviewOrganizationNameStyle}>{organizationName}</div>}
             <div style={payslipPreviewTitleStyle}>EMPLOYEE PAYSLIP</div>
           </div>
       <div style={payslipIdentityGridStyle}>
@@ -795,14 +862,14 @@ function PayslipCard({ row, organization, onClose, onEmail, emailBusy = false })
             {Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => (
               <PayslipLedgerRow key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={money(value, row.currency)} />
             ))}
-            <PayslipLedgerRow label="Other Earnings" value={money(customAllowances, row.currency)} />
+            {customAllowances.map((item) => <PayslipLedgerRow key={`allowance-${payrollLineComponentKey(item)}`} label={payrollLineComponentLabel(item)} value={money(item.value, row.currency)} />)}
             <PayslipLedgerRow label="Taxable Gross Pay" value={money(row.grossPay, row.currency)} strong />
             <PayslipLedgerRow label="PAYE" value={money(statutory.payeTax, row.currency)} />
             <PayslipLedgerRow label="Pension" value={money(statutory.employeePension, row.currency)} />
-            <PayslipLedgerRow label="Other Deductions" value={money(customDeductions, row.currency)} />
+            {customDeductions.map((item) => <PayslipLedgerRow key={`deduction-${payrollLineComponentKey(item)}`} label={payrollLineComponentLabel(item)} value={money(item.value, row.currency)} />)}
             <PayslipLedgerRow label="Salary Advance Recovery" value={money(row.advanceRecovery, row.currency)} />
             <PayslipLedgerRow label="Loan Recovery" value={money(row.loanRecovery, row.currency)} />
-            {leaveAllowance > 0 && <PayslipLedgerRow label="Leave Allowance · After Tax / Non-taxable" value={money(leaveAllowance, row.currency)} strong />}
+            {leaveAllowance > 0 && <PayslipLedgerRow label="Leave Allowance" value={money(leaveAllowance, row.currency)} strong />}
             <PayslipLedgerRow label="Net Pay" value={money(row.netPreview, row.currency)} net />
           </tbody>
         </table>
@@ -861,27 +928,27 @@ function payslipLogoUrl(organization = {}) {
   return "";
 }
 
-function printPayslip(row, organization = {}) {
+async function printPayslip(row, organization = {}) {
   const details = row.details || {};
   const statutory = details.statutory || {};
   const structure = details.salaryStructure || {};
   const attendance = details.attendance || {};
   const leaveAllowance = Number(details.leaveAllowance?.amount || 0);
-  const customAllowances = (details.customAllowances || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
-  const customDeductions = (details.customDeductions || []).reduce((sum, item) => sum + Number(item.value || 0), 0);
+  const customAllowances = details.customAllowances || [];
+  const customDeductions = details.customDeductions || [];
   const organizationName = payslipOrganizationName(organization);
   const logoUrl = payslipLogoUrl(organization);
   const rows = [
     ["Basic", money(structure.basic ?? row.baseSalary, row.currency)],
     ...Object.entries(structure).filter(([key]) => key !== "basic").map(([key, value]) => [key.charAt(0).toUpperCase() + key.slice(1), money(value, row.currency)]),
-    ["Other Earnings", money(customAllowances, row.currency)],
+    ...customAllowances.map((item) => [payrollLineComponentLabel(item), money(item.value, row.currency)]),
     ["Taxable Gross Pay", money(row.grossPay, row.currency), true],
     ["PAYE", money(statutory.payeTax, row.currency)],
     ["Pension", money(statutory.employeePension, row.currency)],
-    ["Other Deductions", money(customDeductions, row.currency)],
+    ...customDeductions.map((item) => [payrollLineComponentLabel(item), money(item.value, row.currency)]),
     ["Salary Advance Recovery", money(row.advanceRecovery, row.currency)],
     ["Loan Recovery", money(row.loanRecovery, row.currency)],
-    ...(leaveAllowance > 0 ? [["Leave Allowance · After Tax / Non-taxable", money(leaveAllowance, row.currency), true]] : []),
+    ...(leaveAllowance > 0 ? [["Leave Allowance", money(leaveAllowance, row.currency), true]] : []),
     ["Net Pay", money(row.netPreview, row.currency), true],
   ];
   const detailItems = [
@@ -898,20 +965,48 @@ function printPayslip(row, organization = {}) {
     ["Running Loan Balance", money(row.runningLoanBalance, row.currency)],
   ];
   const logo = logoUrl ? `<img class="organization-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(organizationName)} logo">` : "";
+  const organizationTitle = logoUrl ? "" : `<h1 class="organization-name">${escapeHtml(organizationName)}</h1>`;
   const watermark = logoUrl ? `<img class="watermark" src="${escapeHtml(logoUrl)}" alt="" aria-hidden="true">` : `<div class="watermark-text">${escapeHtml(organizationName)}</div>`;
-  // Keep a same-origin about:blank handle long enough to write the document.
-  // `noopener` in windowFeatures can make browsers return null while still
-  // opening a blank tab. We remove opener immediately below instead.
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    window.alert("Allow pop-ups to print this payslip.");
+  const frame = document.createElement("iframe");
+  frame.setAttribute("title", "Employee Payslip print document");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0;";
+  document.body.appendChild(frame);
+
+  const printDocument = frame.contentDocument;
+  const printWindow = frame.contentWindow;
+  if (!printDocument || !printWindow) {
+    frame.remove();
+    window.alert("The payslip print preview could not be created.");
     return;
   }
-  printWindow.opener = null;
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title></title><style>
-    @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#f7f3e8;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;width:210mm;height:297mm;padding:10mm 14mm 9mm;overflow:hidden;background:#f7f3e8}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:8px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:92px;max-height:48px;margin:0 auto 5px;object-fit:contain}.organization-name{margin:0;color:#064e3b;font-size:17px;line-height:1.18}.document-title{margin:4px 0 0;color:#9a7410;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:8px 0 8px;text-align:center;color:#475569;font-size:8.5pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:9px}.detail{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#f7f3e8}.detail span{display:block;margin-bottom:2px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:8.2pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#f7f3e8}th,td{padding:5px 8px;border-bottom:1px solid #d8dee2;font-size:8.2pt}th{background:#f7f3e8!important;color:#064e3b!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:7pt;border-bottom:2px solid #064e3b;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:9.5pt}.payment-summary{margin-top:8px;padding-top:7px;border-top:2px solid #064e3b}.payment-title{margin:0 0 5px;color:#9a7410;font-size:7.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.payment-grid{display:grid;grid-template-columns:1fr;gap:5px}.payment-item{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#f7f3e8}.payment-item span{display:inline;margin-right:8px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.payment-item strong{font-size:8.2pt;overflow-wrap:anywhere}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px;border-top:1px solid #94a3b8;color:#64748b;font-size:6.8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}<h1 class="organization-name">${escapeHtml(organizationName)}</h1><h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)} · ${escapeHtml(row.employeeNumber)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><section class="payment-summary"><h3 class="payment-title">Loan Summary</h3><div class="payment-grid">${paymentItems.map(([label, value]) => `<div class="payment-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div></section><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),300));</script></body></html>`);
-  printWindow.document.close();
+
+  try {
+    printDocument.open();
+    printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title></title><style>
+    @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#ffffff;color:#17211c;font-family:Arial,Helvetica,sans-serif}.payslip{position:relative;width:210mm;min-height:0;padding:10mm 14mm 9mm;overflow:visible;background:#ffffff}.document-content{position:relative;z-index:1}.organization-header{text-align:center;padding-bottom:8px;border-bottom:2px solid #0b6b43}.organization-logo{display:block;max-width:92px;max-height:48px;margin:0 auto 5px;object-fit:contain;mix-blend-mode:multiply}.organization-name{margin:0;color:#064e3b;font-size:17px;line-height:1.18}.document-title{margin:4px 0 0;color:#9a7410;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.watermark{position:fixed;z-index:2;top:52%;left:50%;width:46%;max-width:300px;max-height:300px;transform:translate(-50%,-50%);object-fit:contain;opacity:.10;filter:grayscale(100%);mix-blend-mode:multiply;pointer-events:none}.watermark-text{position:fixed;z-index:2;top:52%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);width:78%;text-align:center;color:#064e3b;opacity:.09;font-size:42pt;font-weight:900;letter-spacing:.08em;mix-blend-mode:multiply;pointer-events:none}.reference{margin:8px 0 8px;text-align:center;color:#475569;font-size:8.5pt}.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:9px}.detail{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#ffffff}.detail span{display:block;margin-bottom:2px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.detail strong{font-size:8.2pt;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;background:#ffffff}th,td{padding:5px 8px;border-bottom:1px solid #d8dee2;font-size:8.2pt}th{background:#ffffff!important;color:#064e3b!important;text-align:left;text-transform:uppercase;letter-spacing:.06em;font-size:7pt;border-bottom:2px solid #064e3b;-webkit-print-color-adjust:exact;print-color-adjust:exact}th:last-child,td:last-child{text-align:right}.strong-row td{font-weight:700;color:#064e3b}.net-row td{border-top:2px solid #9a7410;border-bottom:2px solid #9a7410;font-size:9.5pt}.payment-summary{margin-top:8px;padding-top:7px;border-top:2px solid #064e3b}.payment-title{margin:0 0 5px;color:#9a7410;font-size:7.2pt;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.payment-grid{display:grid;grid-template-columns:1fr;gap:5px}.payment-item{padding:6px 8px;border:1px solid #d8c788;border-radius:6px;background:#ffffff}.payment-item span{display:inline;margin-right:8px;color:#64748b;font-size:6.8pt;text-transform:uppercase;letter-spacing:.04em}.payment-item strong{font-size:8.2pt;overflow-wrap:anywhere}.footer{display:flex;justify-content:space-between;gap:12px;margin-top:8px;padding-top:6px;border-top:1px solid #94a3b8;color:#64748b;font-size:6.8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style></head><body><article class="payslip">${watermark}<div class="document-content"><header class="organization-header">${logo}${organizationTitle}<h2 class="document-title">Employee Payslip</h2></header><p class="reference">${escapeHtml(row.periodCode)}</p><section class="details">${detailItems.map(([label, value]) => `<div class="detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</section><table><thead><tr><th>Earnings / Deductions</th><th>Amount</th></tr></thead><tbody>${rows.map(([label, value, strong], index) => `<tr class="${strong ? "strong-row" : ""}${index === rows.length - 1 ? " net-row" : ""}"><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody></table><section class="payment-summary"><h3 class="payment-title">Loan Summary</h3><div class="payment-grid">${paymentItems.map(([label, value]) => `<div class="payment-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div></section><footer class="footer"><span>${escapeHtml(row.runStatus === "APPROVED" ? "Generated from an approved CHRiS payroll run." : "CHRiS payroll preview — not approved for employee distribution.")}</span><span>${escapeHtml(new Date().toLocaleString("en-NG"))}</span></footer></div></article></body></html>`);
+    printDocument.close();
+
+    await Promise.all(Array.from(printDocument.images, (img) => {
+      if (img.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      });
+    }));
+    if (printDocument.fonts?.ready) await printDocument.fonts.ready;
+    await new Promise((resolve) =>
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))
+    );
+    printWindow.addEventListener("afterprint", () => frame.remove(), { once: true });
+    printWindow.focus();
+    printWindow.print();
+  } catch (error) {
+    frame.remove();
+    console.error("Unable to print payslip.", error);
+    window.alert("Unable to open the payslip print preview. Please refresh and try again.");
+  }
 }
 
 function StatutoryCatalogue() {
@@ -920,7 +1015,7 @@ function StatutoryCatalogue() {
   return (
     <>
       <Panel title={`Statutory Catalogue${data?.policyCode ? ` · ${data.policyCode} v${data.policyVersion}` : ""}`}>
-        <p style={controlNote}>CHRiS distinguishes employee deductions from employer-only obligations. Items marked REVIEW BEFORE ACTIVATION are visible for governance but are not deducted until the organization explicitly activates them and required employee/applicability data exists.</p>
+        <p style={controlNote}>CHRiS distinguishes employee deductions from employer-only obligations. Items marked REVIEW BEFORE ACTIVATION are visible for governance but are not deducted until ZERMATT explicitly activates them and required employee/applicability data exists.</p>
         <DataTable loading={loading} columns={["Item", "Category", "Frequency", "Status", "Configured Basis", "Payroll Effect"]}>
           {items.map((item) => <tr key={item.code}><Td strong>{item.name}</Td><Td>{item.category}</Td><Td>{item.payrollFrequency}</Td><Td><Badge>{item.status}</Badge></Td><Td>{item.basis}</Td><Td>{item.employeeEffect}</Td></tr>)}
         </DataTable>
@@ -954,7 +1049,7 @@ const backButton = { border: 0, background: "transparent", color: "#D4AF37", fon
 const eyebrow = { color: "#D4AF37", fontSize: 11, fontWeight: 900, letterSpacing: ".14em" };
 const titleStyle = { margin: "6px 0", fontSize: 32 };
 const leadStyle = { color: "#C7D3CC", lineHeight: 1.65, maxWidth: 1050, marginBottom: 22 };
-const panelStyle = { marginTop: 18, padding: 20, border: "1px solid rgba(212,175,55,.45)", borderRadius: 15, background: "linear-gradient(145deg,rgba(8,50,33,.94),rgba(3,20,13,.96))", boxShadow: "0 15px 38px rgba(0,0,0,.24)" };
+const panelStyle = { marginTop: 18, padding: 20, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.45))", borderRadius: "var(--chris-ui-panel-radius, 15px)", background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(8,50,33,.94),rgba(3,20,13,.96)))", boxShadow: "var(--chris-ui-panel-shadow, 0 15px 38px rgba(0,0,0,.24))" };
 const panelTitle = { margin: "0 0 15px", fontSize: 18, color: "#D4AF37" };
 const fieldLabel = { display: "grid", gap: 6, color: "#C7D3CC", fontSize: 12, fontWeight: 800, minWidth: 220 };
 const inputStyle = { width: "100%", boxSizing: "border-box", borderRadius: 9, border: "1px solid rgba(212,175,55,.35)", padding: "10px 11px", background: "rgba(255,255,255,.06)", color: "#F7FAF8", outline: "none" };
@@ -973,12 +1068,12 @@ const connectedDashboardEyebrowStyle = { color: "#D4AF37", fontSize: 10, fontWei
 const connectedDashboardTitleStyle = { margin: "5px 0 4px", color: "#F7FAF8", fontSize: 18 };
 const connectedDashboardSubtextStyle = { color: "#9FB7AA", fontSize: 11, lineHeight: 1.5, maxWidth: 760 };
 const dashboardStatusPillStyle = { padding: "7px 10px", borderRadius: 999, border: "1px solid rgba(212,175,55,.35)", background: "rgba(212,175,55,.08)", color: "#F7D66A", fontSize: 11, fontWeight: 900 };
-const dashboardKpiCardStyle = { minWidth: 0, padding: 12, borderRadius: 11, border: "1px solid rgba(212,175,55,.22)", background: "rgba(255,255,255,.04)" };
+const dashboardKpiCardStyle = { minWidth: 0, padding: 12, borderRadius: "var(--chris-ui-panel-radius, 11px)", border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.22))", background: "var(--chris-ui-panel-background, rgba(255,255,255,.04))" };
 const dashboardKpiLabelStyle = { color: "#9FB7AA", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".055em" };
 const dashboardKpiValueStyle = { marginTop: 6, color: "#F7FAF8", fontSize: "clamp(15px,2vw,21px)", fontWeight: 900, overflowWrap: "anywhere" };
 const dashboardKpiHintStyle = { marginTop: 4, color: "#D4AF37", fontSize: 9.5 };
 const dashboardChartGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))", gap: 12 };
-const dashboardChartCardStyle = { minWidth: 0, padding: 14, borderRadius: 12, border: "1px solid rgba(212,175,55,.18)", background: "rgba(1,15,10,.50)" };
+const dashboardChartCardStyle = { minWidth: 0, padding: 14, borderRadius: "var(--chris-ui-panel-radius, 12px)", border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.18))", background: "var(--chris-ui-panel-background, rgba(1,15,10,.50))" };
 const dashboardChartTitleStyle = { color: "#F7D66A", fontWeight: 900, fontSize: 13 };
 const dashboardChartSubtitleStyle = { marginTop: 3, color: "#8FA79A", fontSize: 10.5, lineHeight: 1.45 };
 const dashboardChartBodyStyle = { width: "100%", minHeight: 280, marginTop: 10 };
@@ -1003,9 +1098,10 @@ const tdStyle = { padding: "10px", borderBottom: "1px solid rgba(255,255,255,.08
 const badgeStyle = { display: "inline-block", padding: "4px 7px", borderRadius: 999, border: "1px solid rgba(212,175,55,.35)", color: "#F7D66A", fontSize: 10, fontWeight: 900, whiteSpace: "nowrap" };
 const errorStyle = { marginTop: 14, padding: 12, borderRadius: 10, background: "rgba(127,29,29,.35)", border: "1px solid rgba(248,113,113,.45)", color: "#FCA5A5" };
 const infoStyle = { marginTop: 14, padding: 12, borderRadius: 10, background: "rgba(14,71,48,.42)", border: "1px solid rgba(212,175,55,.35)", color: "#C7D3CC", lineHeight: 1.6 };
+const emailSuccessToastStyle = { position:"fixed", top:92, right:24, zIndex:1200, maxWidth:420, padding:"13px 16px", borderRadius:11, background:"#0D5B3A", border:"1px solid #2EE98B", color:"#F4FFF8", boxShadow:"0 16px 38px rgba(0,0,0,.35)", fontWeight:800, lineHeight:1.45 };
 const loadingStyle = { padding: 14, color: "#C7D3CC" };
 const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 };
-const summaryCard = { padding: 12, border: "1px solid rgba(212,175,55,.25)", borderRadius: 10, background: "rgba(255,255,255,.04)" };
+const summaryCard = { padding: 12, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.25))", borderRadius: "var(--chris-ui-panel-radius, 10px)", background: "var(--chris-ui-panel-background, rgba(255,255,255,.04))" };
 const summaryLabel = { color: "#9FB7AA", fontSize: 11, marginBottom: 5 };
 const batchSummaryStyle = { display: "flex", alignItems: "center", minHeight: 36, padding: "0 4px", color: "#C7D3CC", fontSize: 12 };
 const bulkPayslipEmailBarStyle = { display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", margin: "14px 0", padding: 14, border: "1px solid rgba(212,175,55,.30)", borderRadius: 12, background: "rgba(255,255,255,.035)" };
