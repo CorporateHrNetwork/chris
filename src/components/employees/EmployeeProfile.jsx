@@ -942,7 +942,7 @@ useEffect(() => {
           apiRequest("/api/employees/career/employment-levels"),
           apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
-        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id));
+        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id).map((item) => ({ ...item, eligibleDepartments: [item.department, ...(item.departmentEligibility || []).map((entry) => entry?.department).filter(Boolean)].filter((department, index, list) => department?.id && list.findIndex((candidate) => candidate?.id === department.id) === index) })));
         setEmploymentTypes(typeResult.data?.employmentTypes || []);
         setEmploymentTypeReason("");
         setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
@@ -3334,9 +3334,9 @@ useEffect(() => {
               <label style={labelStyle}>Department *</label>
               <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
-                {Array.from(new Map(editCatalog.map((item) => [item.department.id, item.department])).values())
+                {Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values())
                   .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  .map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? " (" + department.code + ")" : ""}</option>)}
               </select>
             </div>
 
@@ -3344,7 +3344,7 @@ useEffect(() => {
               <label style={labelStyle}>Designation *</label>
               <select name="designationId" value={formData.designationId || ""} onChange={handleChange} required disabled={saving || !formData.departmentId} style={fieldStyle}>
                 <option value="">Select designation</option>
-                {editCatalog.filter((item) => item.department.id === formData.departmentId)
+                {editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId))
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((designation) => <option key={designation.id} value={designation.id}>{designation.name}</option>)}
               </select>
