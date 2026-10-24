@@ -152,7 +152,7 @@ async function buildAssignmentTemplateWorkbook({
       row.getCell(7).dataValidation = {
         type: "list",
         allowBlank: true,
-        formulae: [`'Validation Lists'!${columnLetterValue}$2:${columnLetterValue}${managerList.length + 1}`],
+        formulae: ["'Validation Lists'!$" + columnLetterValue + "$2:$" + columnLetterValue + "$" + (managerList.length + 1)],
       };
       employeeManagerColumnByNumber.set(employee.employeeNumber, columnLetterValue);
       managerColumn += 1;
