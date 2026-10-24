@@ -33,6 +33,17 @@ function displayManager(manager) {
   ].filter(Boolean).join(" — ");
 }
 
+function columnLetter(number) {
+  let result = "";
+  let value = number;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
 function safeSheetText(value) {
   return String(value ?? "").replace(/\r?\n/g, " ").trim();
 }
@@ -113,7 +124,10 @@ async function buildAssignmentTemplateWorkbook({
       row.getCell(column).protection = { locked: true };
     });
 
-    // HR may correct the prefilled Employment Type and Cost Centre where necessary.
+    // HR may correct the prefilled Employment Type, Cost Centre and Line Manager where necessary.
+    [5, 6, 7, 8, 9].forEach((column) => {
+      row.getCell(column).protection = { locked: false };
+    });
     row.getCell(5).dataValidation = {
       type: "list",
       allowBlank: true,
@@ -130,9 +144,7 @@ async function buildAssignmentTemplateWorkbook({
     };
 
     if (managerList.length) {
-      const columnLetter = ExcelJS.utils?.getColumnLetter
-        ? ExcelJS.utils.getColumnLetter(managerColumn)
-        : String.fromCharCode(64 + managerColumn);
+      const columnLetterValue = columnLetter(managerColumn);
       validationSheet.getCell(1, managerColumn).value = employee.employeeNumber;
       managerList.forEach((value, managerIndex) => {
         validationSheet.getCell(managerIndex + 2, managerColumn).value = safeSheetText(value);
@@ -142,12 +154,10 @@ async function buildAssignmentTemplateWorkbook({
         allowBlank: true,
         formulae: [`'Validation Lists'!$${columnLetter}$2:$${columnLetter}$${managerList.length + 1}`],
       };
-      employeeManagerColumnByNumber.set(employee.employeeNumber, columnLetter);
+      employeeManagerColumnByNumber.set(employee.employeeNumber, columnLetterValue);
       managerColumn += 1;
     }
 
-    row.getCell(8).protection = { locked: false };
-    row.getCell(9).protection = { locked: false };
   });
 
   // Allow corrections only in fields intended for the assignment workflow.
