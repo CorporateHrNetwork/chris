@@ -258,9 +258,7 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
     const reason = getCell(row, ["Reason", "Notes"]);
     const managerSelection = getCell(row, ["Line Manager Selection", "Line Manager Employee No", "Line Manager Employee Number"]);
     const parsedManagerEmployeeNumber = (
-      managerSelection.match(/^(ZLL\d+)\b/i)?.[1] ||
-      managerSelection.match(/^([^—]+?)(?:\s+—\s+|$)/)?.[1] ||
-      ""
+      managerSelection.match(/^(ZLL\d+)\b/i)?.[1] || ""
     ).trim().toUpperCase();
     const managerNameKey = normalizeText(
       parsedManagerEmployeeNumber
