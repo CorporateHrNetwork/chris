@@ -18,7 +18,6 @@ const employmentEligibilityRoutes = require("./routes/employmentEligibilityRoute
 const employeeReportRoutes = require("./routes/employeeReportRoutes");
 const reportsRelease1Routes = require("./routes/reportsRelease1Routes");
 const reportsOperationalRoutes = require("./routes/reportsOperationalRoutes");
-const auditTrailRoutes = require("./routes/auditTrailRoutes");
 const recruitmentRoutes = require("./routes/recruitmentRoutes");
 const recruitmentVacancyRoutes = require("./routes/recruitmentVacancyRoutes");
 const recruitmentTalentRoutes = require("./routes/recruitmentTalentRoutes");
@@ -26,8 +25,6 @@ const employeeIntegrityRoutes = require("./routes/employeeIntegrityRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
-const { router: zermattSalarySplitRoutes } = require("./routes/zermattSalarySplitRoutes");
-const zermattMidmonthRoutes = require("./routes/zermattMidmonthRoutes");
 const payrollEmployeeOptionRoutes = require("./routes/payrollEmployeeOptionRoutes");
 const payrollLiabilityEditRoutes = require("./routes/payrollLiabilityEditRoutes");
 const payrollIntegrationRoutes = require("./routes/payrollIntegrationRoutes");
@@ -54,27 +51,30 @@ const supportDeskCancellationRoutes = require("./routes/supportDeskCancellationR
 const supportDeskClientLifecycleGuardRoutes = require("./routes/supportDeskClientLifecycleGuardRoutes");
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const commercialDemoRoutes = require("./routes/commercialDemoRoutes");
-const billingSubscriptionRoutes = require("./routes/billingSubscriptionRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
 const documentRoutes = require("./routes/documentRoutes");
 const operationalControlRoutes = require("./routes/operationalControlRoutes");
 const eosbRoutes = require("./routes/eosbRoutes");
 const chrisAutomationRoutes = require("./routes/chrisAutomationRoutes");
-const employeeSelfServiceRoutes = require("./routes/employeeSelfServiceRoutes");
-const employeeNewsRoutes = require("./routes/employeeNewsRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
-
-const performanceEvaluationRoutes = require("./routes/performanceEvaluationRoutes");
 
 const app = express();
 
 app.disable("x-powered-by");
 app.use(cors(corsOptionsDelegate));
 app.use(applySecurityHeaders);
+app.use((req, res, next) => {
+  const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+  if (demoMode && (req.path.startsWith("/api/commercial") || req.path.startsWith("/api/public/"))) {
+    return res.status(404).json({
+      status: "error",
+      code: "DEMO_ROUTE_DISABLED",
+      message: "This route is unavailable in the CHRiS demo environment.",
+    });
+  }
+  next();
+});
 
-// Invoice PDFs can exceed Express's default 100 KB JSON limit.
-// Scope the larger parser only to the authenticated invoice-email endpoint.
-app.use("/api/billing/invoice/email", express.json({ limit: "12mb" }));
 app.use(express.json({
   verify: (req, res, buffer) => {
     if (req.path.includes("/support-desk/whatsapp/webhook")) req.rawBody = Buffer.from(buffer);
@@ -99,19 +99,36 @@ app.get("/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/ess", essRoutes);
-app.use("/api/performance-evaluation", performanceEvaluationRoutes);
 app.use("/api/support-desk", supportDeskCancellationRoutes);
 app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/commercial", commercialDemoRoutes);
-app.use("/api/billing", billingSubscriptionRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
 app.use("/api/chris-automation", chrisAutomationRoutes);
-app.use("/api/ess", employeeSelfServiceRoutes);
-app.use("/api/news", employeeNewsRoutes);
+
+// Sales demo must never expose client-specific Zermatt endpoints or rules.
+app.use((req, res, next) => {
+  const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+  if (!demoMode) return next();
+  const demoBlocked = [
+    "/api/zermatt",
+    "/api/zermatt-",
+    "/api/payroll/zermatt",
+    "/api/loans/zermatt",
+    "/api/leave/zermatt",
+  ];
+  if (demoBlocked.some((prefix) => req.path.toLowerCase().startsWith(prefix))) {
+    return res.status(404).json({
+      status: "error",
+      code: "DEMO_CLIENT_SPECIFIC_ROUTE_DISABLED",
+      message: "Client-specific functionality is unavailable in the CHRiS sales demo.",
+    });
+  }
+  next();
+});
 
 app.use("/api", zermattHrLoanOptionRoutes);
 app.use("/api", activeBranchScopeRoutes);
@@ -131,7 +148,6 @@ app.use("/api/employment-eligibility", employmentEligibilityRoutes);
 app.use("/api/employee-reports", employeeReportRoutes);
 app.use("/api/reports", reportsRelease1Routes);
 app.use("/api/reports", reportsOperationalRoutes);
-app.use("/api/audit-trail", auditTrailRoutes);
 app.use("/api/recruitment", recruitmentRoutes);
 app.use("/api/recruitment", recruitmentVacancyRoutes);
 app.use("/api/recruitment", recruitmentTalentRoutes);
@@ -141,8 +157,6 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/zermatt", zermattOperationsRoutes);
 
 app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
-app.use("/api/payroll/full-salary-preparation", zermattSalarySplitRoutes);
-app.use("/api/payroll/transport-support", zermattMidmonthRoutes);
 app.use("/api", zermattFinancialSupportRoutes);
 app.use("/api", zermattHrPayrollInputRoutes);
 app.use("/api", zermattLeaveAllowanceRoutes);
@@ -167,5 +181,3 @@ app.use("/api/location-catalog", locationCatalogRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
 module.exports = app;
-
-
