@@ -942,7 +942,7 @@ useEffect(() => {
           apiRequest("/api/employees/career/employment-levels"),
           apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
-        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id));
+        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id).map((item) => ({ ...item, eligibleDepartments: [item.department, ...(item.departmentEligibility || []).map((entry) => entry?.department).filter(Boolean)].filter((department, index, list) => department?.id && list.findIndex((candidate) => candidate?.id === department.id) === index) })));
         setEmploymentTypes(typeResult.data?.employmentTypes || []);
         setEmploymentTypeReason("");
         setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
