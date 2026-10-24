@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 import SearchableRegistrySelect from "../components/common/SearchableRegistrySelect";
@@ -163,6 +163,7 @@ export default function LineManagers() {
     <header style={hero}>
       <div style={eyebrow}>ORGANIZATION STRUCTURE</div>
       <h1 style={title}>Line Managers</h1>
+      {canUpdate && <Link to="/employees/bulk-assignments" style={{ color: "#D4AF37" }}>Bulk upload line managers — download template and upload</Link>}
       <p style={muted}>Designation hierarchy determines eligible managers; the employee assignment records the actual reporting relationship.</p>
     </header>
 

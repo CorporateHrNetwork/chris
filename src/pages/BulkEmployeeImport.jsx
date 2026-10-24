@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
-export default function BulkEmployeeImport() {
+export default function BulkEmployeeImport({ assignmentsOnly = false }) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState("create");
+  const [mode, setMode] = useState(assignmentsOnly ? "assign" : "create");
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -256,13 +256,13 @@ export default function BulkEmployeeImport() {
     <section style={pageStyle}>
       <button type="button" style={backStyle} onClick={() => navigate("/employees/directory")}>← Employee Directory</button>
       <div style={eyebrow}>UNIFIED EMPLOYEE ONBOARDING</div>
-      <h1 style={title}>Bulk Onboarding</h1>
+      <h1 style={title}>{mode === "assign" ? "Bulk Employee Assignments" : "Bulk Onboarding"}</h1>
       <p style={lead}>
-        Bulk onboarding follows the same destination and payroll-readiness rules as individual onboarding. Enter each employee once; CHRiS validates organization mappings, derives mapped Cost Centre values, and creates the opening salary authority with the employee.
+        {mode === "assign" ? "Update existing employees using their Employee No. Upload line managers, employment types and cost centres, then validate and review before applying." : "Bulk onboarding follows the same destination and payroll-readiness rules as individual onboarding. Enter each employee once; CHRiS validates organization mappings, derives mapped Cost Centre values, and creates the opening salary authority with the employee."}
       </p>
 
       <div style={modeRow}>
-        <button type="button" style={mode === "create" ? activeModeButton : modeButton} onClick={() => switchMode("create")}>Bulk Onboarding</button>
+        {!assignmentsOnly && <button type="button" style={mode === "create" ? activeModeButton : modeButton} onClick={() => switchMode("create")}>Bulk Onboarding</button>}
         <button type="button" style={mode === "assign" ? activeModeButton : modeButton} onClick={() => switchMode("assign")}>Assign Existing Employees</button>
       </div>
 
@@ -523,7 +523,7 @@ function AssignmentWorkspace({
         </Card>
 
         <Card number="2" title="Bulk assign existing employees">
-          <p style={muted}>Download the assignment workbook. It uses Employee No as the authoritative identifier and does not create new employee records.</p>
+          <p style={muted}>Download the workbook prefilled with current employees in your active scope. To cover every branch, select HEAD OFFICE first. Enter Line Manager Employee No using the Manager Reference sheet, Manager Effective From (YYYY-MM-DD), and Reason. Blank cells keep current values; untouched employees are skipped. You can also update Employment Type and Cost Centre. This upload does not create employees.</p>
           <button type="button" style={secondaryButton} onClick={downloadAssignmentTemplate} disabled={busy}>
             {busy === "assignment-template" ? "Preparing…" : "Download Assignment Template"}
           </button>
@@ -623,7 +623,7 @@ function AssignmentResultTable({ rows, validation = false }) {
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={tableStyle}>
-        <thead><tr><th>Row</th><th>Employee</th><th>Employment Type</th><th>Cost Centre</th><th>Status</th><th>Details</th></tr></thead>
+        <thead><tr><th>Row</th><th>Employee</th><th>Employment Type</th><th>Cost Centre</th><th>Line Manager</th><th>Manager Effective From</th><th>Status</th><th>Details</th></tr></thead>
         <tbody>
           {(rows || []).map((row) => {
             const ok = validation ? row.valid : row.success;
@@ -635,6 +635,8 @@ function AssignmentResultTable({ rows, validation = false }) {
                 <td>{display?.employeeNumber || "-"}{display?.employeeName ? ` — ${display.employeeName}` : ""}</td>
                 <td>{display?.newEmploymentType || display?.employmentType || "Keep current"}</td>
                 <td>{display?.newCostCentre || display?.costCentre?.name || "Keep current"}</td>
+                <td>{display?.managerEmployeeNumber ? `${display.managerEmployeeNumber}${display.managerName ? ` — ${display.managerName}` : ""}` : "Keep current"}</td>
+                <td>{display?.managerEffectiveFrom || "—"}</td>
                 <td><span style={ok ? okBadge : badBadge}>{ok ? (validation ? "Valid" : display?.changed ? "Updated" : "Unchanged") : "Needs attention"}</span></td>
                 <td>{errors.length ? errors.join(" · ") : "Ready"}</td>
               </tr>

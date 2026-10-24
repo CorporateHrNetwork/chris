@@ -174,96 +174,105 @@ async function assertNoCycle(tx, organizationId, employeeId, managerEmployeeId) 
   }
 }
 
-async function setLineManager(prisma, input) {
+async function validateLineManager(tx, input) {
   const { organizationId, employeeId, managerEmployeeId, effectiveFrom } = input;
+  if (!(effectiveFrom instanceof Date) || Number.isNaN(effectiveFrom.getTime())) throw new Error("INVALID_EFFECTIVE_DATE");
   if (effectiveFrom > new Date()) throw new Error("FUTURE_EFFECTIVE_DATE");
-  return prisma.$transaction(async (tx) => {
-    const [employee, manager, current] = await Promise.all([
-      tx.employee.findFirst({ where: { id: employeeId, organizationId } }),
-      tx.employee.findFirst({
-        where: { id: managerEmployeeId, organizationId },
-        include: { department: true, designation: true, location: true },
-      }),
-      tx.employeeLineManagerAssignment.findFirst({
-        where: { organizationId, employeeId, effectiveTo: null },
-      }),
-    ]);
-    if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
-    if (!manager) throw new Error("MANAGER_NOT_FOUND");
-    if (!CURRENT_STATUSES.includes(employee.status) || employee.exitDate) throw new Error("EMPLOYEE_NOT_CURRENT");
-    if (employee.id === manager.id) throw new Error("SELF_MANAGER");
-    if (!CURRENT_STATUSES.includes(manager.status) || manager.exitDate) throw new Error("MANAGER_NOT_CURRENT");
-    if (current && effectiveFrom < current.effectiveFrom) throw new Error("INVALID_EFFECTIVE_DATE");
-    if (current && !String(input.reason || "").trim()) throw new Error("CHANGE_REASON_REQUIRED");
+  const [employee, manager, current] = await Promise.all([
+    tx.employee.findFirst({ where: { id: employeeId, organizationId } }),
+    tx.employee.findFirst({
+      where: { id: managerEmployeeId, organizationId },
+      include: { department: true, designation: true, location: true },
+    }),
+    tx.employeeLineManagerAssignment.findFirst({
+      where: { organizationId, employeeId, effectiveTo: null },
+    }),
+  ]);
+  if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
+  if (!manager) throw new Error("MANAGER_NOT_FOUND");
+  if (!CURRENT_STATUSES.includes(employee.status) || employee.exitDate) throw new Error("EMPLOYEE_NOT_CURRENT");
+  if (employee.id === manager.id) throw new Error("SELF_MANAGER");
+  if (!CURRENT_STATUSES.includes(manager.status) || manager.exitDate) throw new Error("MANAGER_NOT_CURRENT");
+  if (current && effectiveFrom < current.effectiveFrom) throw new Error("INVALID_EFFECTIVE_DATE");
+  if (current && !String(input.reason || "").trim()) throw new Error("CHANGE_REASON_REQUIRED");
 
-    const hierarchy = await resolveManagerCandidates(tx, { organizationId, employeeId });
-    const hierarchyCandidateIds = new Set(hierarchy.candidates.map((candidate) => candidate.id));
-    const hierarchyOverride = Boolean(input.hierarchyOverride);
-    const hierarchyOverrideReason = String(input.hierarchyOverrideReason || "").trim();
+  const hierarchy = await resolveManagerCandidates(tx, { organizationId, employeeId });
+  const hierarchyCandidateIds = new Set(hierarchy.candidates.map((candidate) => candidate.id));
+  const hierarchyOverride = Boolean(input.hierarchyOverride);
+  const hierarchyOverrideReason = String(input.hierarchyOverrideReason || "").trim();
 
-    if (!hierarchyCandidateIds.has(manager.id)) {
-      if (!hierarchyOverride) throw new Error("MANAGER_OUTSIDE_DESIGNATION_HIERARCHY");
-      if (!hierarchyOverrideReason) throw new Error("HIERARCHY_OVERRIDE_REASON_REQUIRED");
-    }
+  if (!hierarchyCandidateIds.has(manager.id)) {
+    if (!hierarchyOverride) throw new Error("MANAGER_OUTSIDE_DESIGNATION_HIERARCHY");
+    if (!hierarchyOverrideReason) throw new Error("HIERARCHY_OVERRIDE_REASON_REQUIRED");
+  }
 
-    await assertNoCycle(tx, organizationId, employee.id, manager.id);
+  await assertNoCycle(tx, organizationId, employee.id, manager.id);
 
-    if (current?.managerEmployeeId === manager.id) {
-      return tx.employeeLineManagerAssignment.findUnique({
-        where: { id: current.id },
-        include: assignmentInclude,
-      });
-    }
+  return { employee, manager, current, hierarchy, hierarchyOverride, hierarchyOverrideReason };
+}
 
-    if (current) {
-      await tx.employeeLineManagerAssignment.update({
-        where: { id: current.id },
-        data: { effectiveTo: effectiveFrom },
-      });
-    }
+async function setLineManager(prisma, input) {
+  return prisma.$transaction((tx) => applyLineManager(tx, input), { isolationLevel: "Serializable" });
+}
 
-    const created = await tx.employeeLineManagerAssignment.create({
-      data: {
-        organizationId,
+async function applyLineManager(tx, input) {
+  const { organizationId, employeeId, managerEmployeeId, effectiveFrom } = input;
+  const { employee, manager, current, hierarchy, hierarchyOverride, hierarchyOverrideReason } = await validateLineManager(tx, input);
+  if (current?.managerEmployeeId === manager.id) {
+    return tx.employeeLineManagerAssignment.findUnique({
+      where: { id: current.id },
+      include: assignmentInclude,
+    });
+  }
+
+  if (current) {
+    await tx.employeeLineManagerAssignment.update({
+      where: { id: current.id },
+      data: { effectiveTo: effectiveFrom },
+    });
+  }
+
+  const created = await tx.employeeLineManagerAssignment.create({
+    data: {
+      organizationId,
+      employeeId,
+      managerEmployeeId,
+      effectiveFrom,
+      reason: String(input.reason || "").trim() || null,
+      notes: String(input.notes || "").trim() || null,
+      performedByUserId: input.performedByUserId || null,
+    },
+    include: assignmentInclude,
+  });
+
+  await tx.organizationAudit.create({
+    data: {
+      organizationId,
+      actorUserId: input.performedByUserId || null,
+      entityType: "EmployeeLineManagerAssignment",
+      entityId: created.id,
+      action: hierarchyOverride ? "LINE_MANAGER_HIERARCHY_OVERRIDE_ASSIGNED" : "LINE_MANAGER_ASSIGNED",
+      previousValue: current
+        ? { managerEmployeeId: current.managerEmployeeId, effectiveFrom: current.effectiveFrom }
+        : null,
+      newValue: {
         employeeId,
         managerEmployeeId,
         effectiveFrom,
-        reason: String(input.reason || "").trim() || null,
-        notes: String(input.notes || "").trim() || null,
-        performedByUserId: input.performedByUserId || null,
+        hierarchyStatus: hierarchy.hierarchyStatus,
+        directReportsToDesignation: hierarchy.directReportsToDesignation,
+        resolvedManagerDesignation: hierarchy.resolvedManagerDesignation,
+        hierarchyHops: hierarchy.hierarchyHops,
+        hierarchyOverride,
+        hierarchyOverrideReason: hierarchyOverride ? hierarchyOverrideReason : null,
       },
-      include: assignmentInclude,
-    });
-
-    await tx.organizationAudit.create({
-      data: {
-        organizationId,
-        actorUserId: input.performedByUserId || null,
-        entityType: "EmployeeLineManagerAssignment",
-        entityId: created.id,
-        action: hierarchyOverride ? "LINE_MANAGER_HIERARCHY_OVERRIDE_ASSIGNED" : "LINE_MANAGER_ASSIGNED",
-        previousValue: current
-          ? { managerEmployeeId: current.managerEmployeeId, effectiveFrom: current.effectiveFrom }
-          : null,
-        newValue: {
-          employeeId,
-          managerEmployeeId,
-          effectiveFrom,
-          hierarchyStatus: hierarchy.hierarchyStatus,
-          directReportsToDesignation: hierarchy.directReportsToDesignation,
-          resolvedManagerDesignation: hierarchy.resolvedManagerDesignation,
-          hierarchyHops: hierarchy.hierarchyHops,
-          hierarchyOverride,
-          hierarchyOverrideReason: hierarchyOverride ? hierarchyOverrideReason : null,
-        },
-        reason: hierarchyOverride
-          ? hierarchyOverrideReason
-          : String(input.reason || "").trim() || "Designation hierarchy line-manager assignment",
-      },
-    });
-
-    return created;
+      reason: hierarchyOverride
+        ? hierarchyOverrideReason
+        : String(input.reason || "").trim() || "Designation hierarchy line-manager assignment",
+    },
   });
+
+  return created;
 }
 
 async function removeLineManager(prisma, input) {
@@ -325,6 +334,8 @@ module.exports = {
   parseEffectiveDate,
   resolveManagerCandidates,
   setLineManager,
+  applyLineManager,
+  validateLineManager,
   removeLineManager,
   closeLineManagerAssignmentsForExit,
 };
