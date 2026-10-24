@@ -35,7 +35,8 @@
     "multer": "^2.2.0",
     "pg": "^8.22.0",
     "prisma": "^7.9.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
