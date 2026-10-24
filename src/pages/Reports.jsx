@@ -17,7 +17,6 @@ import {
 } from "react-icons/fa";
 
 import "./Reports.css";
-import "../components/settings/UsersRolesSettings.chris.css";
 import { PrintableReportHeader, PrintableReportFooter } from "../components/reporting/PrintableReportBranding";
 
 import {
@@ -201,7 +200,7 @@ function Reports() {
     : `${scope?.locationName || "BRANCH"}${scope?.locationCode ? ` · ${scope.locationCode}` : ""}`;
 
   return (
-    <div className="chris-users-roles chris-reports-page" style={pageStyle}>
+    <div className="chris-reports-page" style={pageStyle}>
       <div className="reports-screen-header" style={headerStyle}>
         <div>
           <div style={eyebrowStyle}>REPORTING & INSIGHTS</div>
@@ -304,7 +303,7 @@ function MetricCards({ cards }) {
   return (
     <div className="reports-kpi-grid" style={kpiGridStyle}>
       {cards.map((card) => (
-        <div className="reports-kpi-card chris-role-card" key={card.title} style={kpiCardStyle}>
+        <div className="reports-kpi-card" key={card.title} style={kpiCardStyle}>
           <div style={kpiTopStyle}>
             <span style={kpiLabelStyle}>{card.title}</span>
             {card.icon && <span style={card.tone === "gold" ? iconGoldStyle : iconGreenStyle}>{card.icon}</span>}
@@ -526,6 +525,18 @@ function PayrollReport({ data }) {
           </tr>)}{!data.runs?.length && <tr><td colSpan={8} style={emptyCellStyle}>No payroll runs are available in this scope.</td></tr>}</tbody>
         </table></div>
       </Panel>
+      <Panel title="Latest Payroll Detail" subtitle="Employee-level payroll detail using the authoritative payroll-run snapshot.">
+        <div style={tableWrapStyle}><table style={{ ...tableStyle, minWidth: 1550 }}>
+          <thead><tr>{["Employee", "Department", "Cost Centre", "Branch", "Base", "Allowances", "Advance", "Loan", "Other Deductions", "Gross", "PAYE", "Employee Pension", "Net", "Employer Pension", "Employer Statutory", "Employer Cost"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+          <tbody>{(data.allocation?.details || []).map((row) => <tr key={row.employeeNumber}>
+            <td style={tdStrongStyle}>{row.employeeNumber} · {row.employeeName}</td>
+            <td style={tdStyle}>{row.department || "—"}</td><td style={tdStyle}>{row.costCentre || "—"}</td><td style={tdStyle}>{row.branch || "—"}</td>
+            <td style={tdStyle}>{formatMoney(row.baseSalary)}</td><td style={tdStyle}>{formatMoney(row.allowanceTotal)}</td><td style={tdStyle}>{formatMoney(row.advanceRecovery)}</td><td style={tdStyle}>{formatMoney(row.loanRecovery)}</td><td style={tdStyle}>{formatMoney(row.deductionTotal)}</td>
+            <td style={tdStrongStyle}>{formatMoney(row.grossPay)}</td><td style={tdStyle}>{formatMoney(row.paye)}</td><td style={tdStyle}>{formatMoney(row.employeePension)}</td><td style={tdRightStrongStyle}>{formatMoney(row.netPay)}</td>
+            <td style={tdStyle}>{formatMoney(row.employerPension)}</td><td style={tdStyle}>{formatMoney(row.employerStatutoryCost)}</td><td style={tdRightStrongStyle}>{formatMoney(row.totalEmployerCost)}</td>
+          </tr>)}{!data.allocation?.details?.length && <tr><td colSpan={16} style={emptyCellStyle}>No payroll detail is available for the latest run.</td></tr>}</tbody>
+        </table></div>
+      </Panel>
     </>
   );
 }
@@ -559,7 +570,7 @@ function Panel({ title, subtitle, actions, children, variant = "default" }) {
   const summary = variant === "summary";
   return (
     <section
-      className={`reports-panel chris-role-card${summary ? " reports-panel--summary" : ""}`}
+      className={`reports-panel${summary ? " reports-panel--summary" : ""}`}
       style={summary ? summaryPanelStyle : panelStyle}
     >
       <div style={panelHeaderStyle}>
@@ -605,8 +616,7 @@ function formatMoney(value) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-const reportFontFamily = 'var(--chris-font-family, "Segoe UI", "Inter", Arial, sans-serif)';
-const pageStyle = { padding: "4px 0 32px", color: "#EAF5EF", fontFamily: reportFontFamily };
+const pageStyle = { padding: "4px 0 32px", color: "#EAF5EF" };
 const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, flexWrap: "wrap" };
 const eyebrowStyle = { color: "var(--chris-gold, #D4AF37)", fontSize: 11, fontWeight: 900, letterSpacing: ".12em" };
 const titleStyle = { margin: "7px 0 0", fontSize: 30, color: "#F7FAF8" };
@@ -620,7 +630,7 @@ const tabBarStyle = { marginTop: 22, display: "flex", gap: 8, flexWrap: "wrap", 
 const tabStyle = { ...buttonBaseStyle, border: "1px solid rgba(255,255,255,.10)", background: "rgba(5,44,28,.72)", color: "#AFC5B9" };
 const activeTabStyle = { ...tabStyle, color: "#FFFFFF", borderColor: "rgba(212,175,55,.55)", background: "linear-gradient(135deg,rgba(8,122,67,.45),rgba(212,175,55,.10))" };
 const kpiGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(155px,1fr))", gap: 13, marginTop: 20 };
-const kpiCardStyle = { border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.28))", background: "var(--chris-ui-panel-background, linear-gradient(145deg,#063722,#02170f))", borderRadius: "var(--chris-ui-panel-radius, 15px)", padding: 16, boxShadow: "var(--chris-ui-panel-shadow, 0 10px 28px rgba(0,0,0,.17))" };
+const kpiCardStyle = { border: "1px solid rgba(212,175,55,.28)", background: "linear-gradient(145deg,#063722,#02170f)", borderRadius: 15, padding: 16, boxShadow: "0 10px 28px rgba(0,0,0,.17)" };
 const kpiTopStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 };
 const kpiLabelStyle = { fontSize: 10, fontWeight: 900, color: "#DDECE4", textTransform: "uppercase", letterSpacing: ".035em" };
 const iconGreenStyle = { color: "#2EE98B", fontSize: 17 };
@@ -630,18 +640,13 @@ const kpiValueGreenStyle = { ...kpiValueBaseStyle, color: "#2EE98B" };
 const kpiValueGoldStyle = { ...kpiValueBaseStyle, color: "#F6D35D" };
 const metricSubtitleStyle = { marginTop: 5, color: "#91A99C", fontSize: 9 };
 const twoColumnStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(390px,1fr))", gap: 18, marginTop: 20 };
-const panelStyle = { marginTop: 20, border: "var(--chris-ui-panel-border, 1px solid rgba(212,175,55,.20))", borderRadius: "var(--chris-ui-panel-radius, 17px)", padding: 20, background: "var(--chris-ui-panel-background, linear-gradient(145deg,rgba(6,55,34,.93),rgba(2,23,15,.95)))", boxShadow: "var(--chris-ui-panel-shadow, 0 12px 30px rgba(0,0,0,.18))", overflow: "hidden" };
-const summaryPanelStyle = { ...panelStyle, background: "#FFFFFF", color: "#FFFFFF" };
+const panelStyle = { marginTop: 20, border: "1px solid rgba(212,175,55,.20)", borderRadius: 17, padding: 20, background: "linear-gradient(145deg,rgba(6,55,34,.93),rgba(2,23,15,.95))", boxShadow: "0 12px 30px rgba(0,0,0,.18)", overflow: "hidden" };
+const summaryPanelStyle = { ...panelStyle, background: "#FFFFFF", border: "1px solid rgba(6,78,59,.18)", boxShadow: "0 10px 26px rgba(0,0,0,.12)" };
 const panelHeaderStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" };
 const panelTitleStyle = { margin: 0, color: "#F7FAF8", fontSize: 17 };
 const panelSubtitleStyle = { color: "#9EB7A9", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
-const reportPrintCompatibilityColors = { title: "#064E3B", subtitle: "#64748B" };
-const reportPrintTitleColor = "#064E3B";
-const reportPrintCompatibilityStyle = { color: "#064E3B" };
-const reportPrintSubtitleColor = "#64748B";
-const reportPrintSubtitleCompatibilityStyle = { color: "#64748B" };
-const summaryPanelTitleStyle = { margin: 0, color: "#FFFFFF", fontSize: 17, fontWeight: 900 };
-const summaryPanelSubtitleStyle = { color: "#FFFFFF", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
+const summaryPanelTitleStyle = { margin: 0, color: "#064E3B", fontSize: 17, fontWeight: 900 };
+const summaryPanelSubtitleStyle = { color: "#64748B", marginTop: 4, fontSize: 11, lineHeight: 1.45 };
 const tableWrapStyle = { width: "100%", overflowX: "auto", maxHeight: 620, overflowY: "auto" };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 720, fontSize: 11 };
 const compactTableWrapStyle = { width: "100%", overflowX: "visible", maxHeight: 620, overflowY: "auto" };
@@ -657,10 +662,10 @@ const filterRowStyle = { display: "flex", gap: 8, flexWrap: "wrap" };
 const filterLabelStyle = { display: "flex", alignItems: "center", gap: 7, color: "#AFC5B9", fontSize: 10, fontWeight: 800 };
 const dateInputStyle = { padding: "7px 9px", borderRadius: 8, border: "1px solid rgba(212,175,55,.24)", background: "#052719", color: "#F7FAF8" };
 const yearInputStyle = { ...dateInputStyle, width: 82 };
-const barLabelRowStyle = { display: "flex", justifyContent: "space-between", gap: 12, color: "#FFFFFF", fontSize: 11, marginBottom: 5 };
+const barLabelRowStyle = { display: "flex", justifyContent: "space-between", gap: 12, color: "#243B31", fontSize: 11, marginBottom: 5 };
 const barTrackStyle = { height: 7, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" };
 const barFillStyle = { height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#087A43,#D4AF37)" };
-const emptyTextStyle = { color: "#FFFFFF", fontSize: 12 };
+const emptyTextStyle = { color: "#64748B", fontSize: 12 };
 const statusBadgeStyle = { display: "inline-flex", padding: "4px 8px", borderRadius: 999, background: "rgba(46,233,139,.10)", color: "#76F3B2", fontSize: 9, fontWeight: 900, whiteSpace: "nowrap" };
 const tableNoteStyle = { marginTop: 12, color: "#91A99C", fontSize: 10 };
 const controlNoteStyle = { marginBottom: 14, padding: "9px 11px", borderLeft: "3px solid #D4AF37", background: "rgba(212,175,55,.06)", color: "#AFC5B9", fontSize: 10, lineHeight: 1.5 };
