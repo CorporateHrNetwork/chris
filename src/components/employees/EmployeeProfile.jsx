@@ -3334,9 +3334,9 @@ useEffect(() => {
               <label style={labelStyle}>Department *</label>
               <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
-                {Array.from(new Map(editCatalog.map((item) => [item.department.id, item.department])).values())
+                {Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values())
                   .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  .map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? " (" + department.code + ")" : ""}</option>)}
               </select>
             </div>
 
