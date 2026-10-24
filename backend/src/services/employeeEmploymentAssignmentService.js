@@ -31,12 +31,12 @@ const ZERMATT_EMPLOYMENT_TYPE_ALIASES = new Map([
 
 const ASSIGNMENT_HEADERS = [
   "Employee No",
+  "Employee Name",
   "Employment Type",
   "Cost Centre / Operating Unit",
+  "Line Manager Selection",
+  "Effective From",
   "Reason",
-  "Line Manager Employee No",
-  "Manager Effective From",
-  "Employee Name (reference)",
 ];
 
 function normalizeText(value) {
@@ -135,40 +135,54 @@ async function listAssignmentCatalog(prisma, organizationId) {
   };
 }
 
-function buildAssignmentTemplateWorkbook({ employmentTypes = ZERMATT_EMPLOYMENT_TYPES, employees = [], managers = [] } = {}) {
+function buildAssignmentTemplateWorkbook({ employmentTypes = ZERMATT_EMPLOYMENT_TYPES, costCentres = [], employees = [], managerOptionsByEmployee = {} } = {}) {
   const workbook = XLSX.utils.book_new();
-  const instructions = [
-    ["CHRiS Existing Employee Employment Assignment"],
-    ["Use Employee No as the authoritative employee identifier."],
-    ["Complete Employment Type, Cost Centre / Operating Unit, and/or Line Manager Employee No. Blank cells keep current values."],
-    ["For line managers use an existing employee number from Manager Reference, not a name. Manager Effective From must be YYYY-MM-DD and not in the future."],
-    ["Enter a Reason for manager changes. Blank rows are skipped; delete employees you do not want to update."],
-    ["Managers must follow the designation hierarchy. Use the individual Line Managers page for authorized exceptions."],
-    [`Employment Type values: ${employmentTypes.join(", ")}.`],
-    ["Cost Centre may use the active CHRiS Cost Centre name or code."],
-    ["Rows are validated before any assignment is applied."],
-  ];
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet(instructions),
-    "Instructions"
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([
-      ASSIGNMENT_HEADERS,
-      ...employees.map(employee => [employee.employeeNumber, "", "", "", "", "", [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ")]),
+  const rows = [
+    ASSIGNMENT_HEADERS,
+    ...employees.map((employee) => [
+      employee.employeeNumber,
+      [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "),
+      "",
+      "",
+      "",
+      "",
+      "",
     ]),
-    "Employee Assignments"
-  );
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ["Employee No", "Employee Name", "Designation", "Location"],
-    ...managers.map(employee => [employee.employeeNumber, [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "), employee.designation?.name || "", employee.location?.name || ""]),
-  ]), "Manager Reference");
-  for (const name of workbook.SheetNames) workbook.Sheets[name]["!cols"] = Array(7).fill({ wch: 28 });
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet["!cols"] = [
+    { wch: 16 }, { wch: 34 }, { wch: 22 }, { wch: 34 },
+    { wch: 54 }, { wch: 18 }, { wch: 34 },
+  ];
+  sheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  const employmentFormula = `"${employmentTypes.map((value) => String(value).replace(/"/g, '""')).join(",")}"`;
+  const costCentreValues = costCentres.map((row) => `${row.code} - ${row.name}`);
+  const costCentreFormula = `"${costCentreValues.map((value) => String(value).replace(/"/g, '""')).join(",")}"`;
+
+  employees.forEach((employee, index) => {
+    const row = index + 2;
+    if (employmentFormula.length <= 255) {
+      sheet[`C${row}`] = sheet[`C${row}`] || { t: "s", v: "" };
+      sheet[`C${row}`].dataValidation = { type: "list", allowBlank: true, formula1: employmentFormula };
+    }
+    if (costCentreFormula.length <= 255) {
+      sheet[`D${row}`] = sheet[`D${row}`] || { t: "s", v: "" };
+      sheet[`D${row}`].dataValidation = { type: "list", allowBlank: true, formula1: costCentreFormula };
+    }
+    const options = managerOptionsByEmployee[employee.employeeNumber] || [];
+    const managerFormula = `"${options.map((option) => String(option.label).replace(/"/g, '""')).join(",")}"`;
+    if (options.length && managerFormula.length <= 255) {
+      sheet[`E${row}`] = sheet[`E${row}`] || { t: "s", v: "" };
+      sheet[`E${row}`].dataValidation = { type: "list", allowBlank: true, formula1: managerFormula };
+    }
+    sheet[`F${row}`] = sheet[`F${row}`] || { t: "s", v: "" };
+    sheet[`F${row}`].z = "yyyy-mm-dd";
+  });
+
+  XLSX.utils.book_append_sheet(workbook, sheet, "Employee Assignments");
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
-
 function parseAssignmentWorkbook(buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const sheetName =
@@ -186,7 +200,7 @@ function parseAssignmentWorkbook(buffer) {
   }).map(row => {
     // Decode Excel serial dates directly: Date conversion can shift a calendar day across timezones.
     for (const key of Object.keys(row)) {
-      if (normalizeHeader(key) !== "managereffectivefrom" || typeof row[key] !== "number") continue;
+      if (!["managereffectivefrom", "effectivefrom"].includes(normalizeHeader(key)) || typeof row[key] !== "number") continue;
       const date = XLSX.SSF.parse_date_code(row[key], { date1904: Boolean(workbook.Workbook?.WBProps?.date1904) });
       if (date) row[key] = `${String(date.y).padStart(4, "0")}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
     }
@@ -231,8 +245,9 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
       "Cost Centre Code",
     ]);
     const reason = getCell(row, ["Reason", "Notes"]);
-    const managerEmployeeNumber = getCell(row, ["Line Manager Employee No", "Line Manager Employee Number"]).toUpperCase();
-    const managerEffectiveFrom = getCell(row, ["Manager Effective From"]);
+    const managerSelection = getCell(row, ["Line Manager Selection", "Line Manager Employee No", "Line Manager Employee Number"]);
+    const managerEmployeeNumber = (managerSelection.match(/^([^—-]+?)(?:\\s+[—-]\\s+|$)/)?.[1] || managerSelection).trim().toUpperCase();
+    const managerEffectiveFrom = getCell(row, ["Effective From", "Manager Effective From"]);
     const manager = employeeByNumber.get(managerEmployeeNumber);
     const skip = !employmentTypeInput && !costCentreInput && !managerEmployeeNumber && !managerEffectiveFrom && !reason;
     const employee = employeeByNumber.get(employeeNumber) || null;
@@ -246,7 +261,7 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
     if (employeeNumber && !employee) errors.push("Employee No was not found in this organization.");
     if (employee && activeLocationId && employee.locationId !== activeLocationId) errors.push("Employee is outside the active branch.");
     if (!skip && !employmentTypeInput && !costCentreInput && !managerEmployeeNumber) {
-      errors.push("Provide Employment Type, Cost Centre / Operating Unit, or Line Manager Employee No.");
+      errors.push("Provide Employment Type, Cost Centre / Operating Unit, or Line Manager Selection.");
     }
     if (employmentTypeInput && !employmentType) {
       errors.push("Employment Type is not in the organization's authoritative catalogue.");
@@ -255,8 +270,8 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
       errors.push("Cost Centre / Operating Unit was not found in the active CHRiS catalogue.");
     }
 
-    if (managerEmployeeNumber && !manager) errors.push("Line Manager Employee No was not found in this organization.");
-    if (managerEmployeeNumber && (!/^\d{4}-\d{2}-\d{2}$/.test(managerEffectiveFrom) || !lineManagers.parseEffectiveDate(managerEffectiveFrom) || new Date(managerEffectiveFrom).toISOString().slice(0, 10) !== managerEffectiveFrom)) errors.push("Manager Effective From must be a valid YYYY-MM-DD date.");
+    if (managerEmployeeNumber && !manager) errors.push("Line Manager Selection was not found in this organization.");
+    if (managerEmployeeNumber && (!/^\d{4}-\d{2}-\d{2}$/.test(managerEffectiveFrom) || !lineManagers.parseEffectiveDate(managerEffectiveFrom) || new Date(managerEffectiveFrom).toISOString().slice(0, 10) !== managerEffectiveFrom)) errors.push("Effective From must be a valid YYYY-MM-DD date.");
     return {
       skip,
       rowNumber,
