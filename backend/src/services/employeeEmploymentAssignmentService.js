@@ -209,7 +209,7 @@ function parseAssignmentWorkbook(buffer) {
   });
 }
 
-async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLocationId = null }) {
+async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLocationId = null, allowHierarchyOverride = false }) {
   const [organization, costCentres, employees] = await Promise.all([
     getOrganization(prisma, organizationId),
     listActiveCostCentres(prisma, organizationId),
@@ -311,6 +311,10 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
               reason,
               managerEmployeeNumber,
               managerEffectiveFrom,
+              hierarchyOverride: allowHierarchyOverride,
+              hierarchyOverrideReason: allowHierarchyOverride
+                ? "Temporary management-approved line-manager assignment via approved bulk workbook upload."
+                : "",
             }
           : null,
       display: {
@@ -342,6 +346,10 @@ async function prepareAssignmentRows(prisma, { organizationId, buffer, activeLoc
           managerEmployeeId: employeeByNumber.get(row.input.managerEmployeeNumber).id,
           effectiveFrom: new Date(row.input.managerEffectiveFrom),
           reason: row.input.reason,
+          hierarchyOverride: allowHierarchyOverride,
+          hierarchyOverrideReason: allowHierarchyOverride
+            ? "Temporary management-approved line-manager assignment via approved bulk workbook upload."
+            : "",
         });
       } catch (error) { row.errors.push(error.message); }
     }
