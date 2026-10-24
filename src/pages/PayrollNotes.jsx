@@ -5,6 +5,44 @@ import './PayrollNotes.css';
 const ROOT='/api/chris-automation/payroll-notes';
 const blank={employeeId:'',payrollPeriodId:'',category:'OTHER',originalNote:''};
 const money=v=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN',maximumFractionDigits:2}).format(Number(v || 0));
+function SpeechToText({value,onChange,disabled=false}) {
+  const [listening,setListening]=useState(false);
+  const [supported,setSupported]=useState(true);
+  useEffect(()=>{setSupported(Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));},[]);
+  const toggle=()=>{
+    if(!supported) return;
+    if(listening){ window.__chrisSpeechRecognition?.stop(); return; }
+    const Recognition=window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition=new Recognition();
+    recognition.lang='en-NG';
+    recognition.continuous=true;
+    recognition.interimResults=true;
+    const base=value || '';
+    let finalText='';
+    recognition.onresult=(event)=>{
+      let interim='';
+      for(let i=event.resultIndex;i<event.results.length;i++){
+        const transcript=event.results[i][0].transcript;
+        if(event.results[i].isFinal) finalText += transcript + ' ';
+        else interim += transcript;
+      }
+      const next=(base + (base && finalText ? ' ' : '') + finalText + interim).trim();
+      onChange(next);
+    };
+    recognition.onend=()=>{setListening(false);window.__chrisSpeechRecognition=null;};
+    recognition.onerror=()=>{setListening(false);window.__chrisSpeechRecognition=null;};
+    window.__chrisSpeechRecognition=recognition;
+    recognition.start();
+    setListening(true);
+  };
+  return <div className="pn-speech">
+    <button type="button" className="pn-secondary" onClick={toggle} disabled={disabled || !supported} aria-pressed={listening} title={supported ? 'Speak payroll note' : 'Speech recognition is not supported by this browser'}>
+      {listening ? '■ Stop speaking' : '🎙 Speak'}
+    </button>
+    {!supported && <span className="pn-speech-hint">Voice transcription is not supported in this browser. You can type the note normally.</span>}
+    {listening && <span className="pn-speech-hint">Listening… speak clearly. You can edit the transcription before submitting.</span>}
+  </div>;
+}
 const fields=[['monthlyGross','Monthly gross'],['payableDays','Payable days'],['baseSalary','Basic'],['allowances','Allowances'],['grossPay','Gross pay'],['paye','PAYE'],['pension','Employee pension'],['deductions','All deductions'],['advanceRecovery','Salary advance'],['loanRecovery','Loan recovery'],['leaveAllowance','Leave allowance'],['netPreview','Net salary'],['employerCosts','Employer costs']];
 function Comparison({value}) {
   if (!value) return null;
@@ -38,10 +76,10 @@ export default function PayrollNotes() {
       <div className="pn-grid"><label>Employee<select required value={form.employeeId} onChange={e=>setForm({...form,employeeId:e.target.value})}><option value="">Select employee</option>{options.employees.map(e=><option key={e.id} value={e.id}>{e.employeeNumber} · {e.firstName} {e.lastName}</option>)}</select></label>
       <label>Payroll month<select required value={form.payrollPeriodId} onChange={e=>setForm({...form,payrollPeriodId:e.target.value})}><option value="">Select open payroll month</option>{options.periods.filter(p=>p.status==='OPEN').map(p=><option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</select></label>
       <label>Category<select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{['SALARY_CHANGE','ALLOWANCE','DEDUCTION','OVERTIME','ABSENCE','LEAVE','TRANSFER','EXIT','OTHER'].map(c=><option key={c}>{c}</option>)}</select></label></div>
-      <label>Payroll-impacting note<textarea required maxLength={12000} value={form.originalNote} onChange={e=>setForm({...form,originalNote:e.target.value})} placeholder="Explain the change, amount or quantity, effective month and supporting approval reference."/></label><button disabled={busy}>Submit Payroll Note</button></form></details>}
+      <label>Payroll-impacting note<SpeechToText value={form.originalNote} onChange={originalNote=>setForm({...form,originalNote})}/><textarea required maxLength={12000} value={form.originalNote} onChange={e=>setForm({...form,originalNote:e.target.value})} placeholder="Explain the change, amount or quantity, effective month and supporting approval reference."/></label><button disabled={busy}>Submit Payroll Note</button></form></details>}
     {data && <section className="pn-card"><div className="pn-toolbar"><h2>{caps.canReview ? 'Head HR Payroll Inbox' : caps.canAudit ? 'Auditor Payroll Inbox' : 'Branch Payroll Notes'}</h2><button className="pn-secondary" disabled={busy} onClick={()=>run(load)}>Refresh</button></div><label>Filter notes<input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Employee, branch, month or status"/></label><div className="pn-scroll"><table><thead><tr><th>Employee / Branch</th><th>Month / Category</th><th>Status</th><th>Received</th><th>Action</th></tr></thead><tbody>{data.notes.filter(row=>[row.employeeNumber,row.employeeName,row.branchName,row.periodCode,row.status].join(' ').toLowerCase().includes(filter.toLowerCase())).map(row=><tr key={row.id}><td><strong>{row.unread && '● '}{row.employeeNumber} · {row.employeeName}</strong><br/>{row.branchName}</td><td>{row.periodCode}<br/>{row.category}</td><td>{row.status}</td><td>{new Date(row.submittedAt).toLocaleString('en-NG')}</td><td><button disabled={busy} className="pn-secondary" onClick={()=>run(()=>open(row.id))}>Open</button></td></tr>)}</tbody></table></div>{!data.notes.length && <p>No payroll notes have been submitted.</p>}</section>}
     {n && <><section className="pn-card"><div className="pn-toolbar"><h2>{n.employeeNumber} · {n.employeeName} · {n.periodCode}</h2><span>{n.branchName} · {n.status} · Revision {n.revision}</span></div><h3>Original branch submission</h3><p className="pn-original">{n.originalNote}</p>
-      {(caps.canReview || caps.canAudit) && <><label>Head HR reviewed instruction<textarea disabled={!editable || busy} value={instruction} maxLength={12000} onChange={e=>setInstruction(e.target.value)}/></label>
+      {(caps.canReview || caps.canAudit) && <><label>Head HR reviewed instruction<SpeechToText value={instruction} onChange={setInstruction} disabled={!editable || busy}/><textarea disabled={!editable || busy} value={instruction} maxLength={12000} onChange={e=>setInstruction(e.target.value)}/></label>
       {editable && <><button disabled={busy} className="pn-secondary" onClick={()=>run(async()=>{const r=await apiRequest(`${ROOT}/suggest`,{method:'POST',body:{instruction}});setActions(r.data.actions || []);setMessage((r.data.questions || []).join(' ') || 'AI action suggestion ready. Review each action and save the instruction.');})}>Ask AI to Draft Action Plan</button><p>Confirm exact amounts and quantities. Actions apply to this employee and payroll month. A monthly gross override does not change contractual salary for future months.</p></>}
       <h3>Reviewed action plan</h3>{actions.map((a,i)=><div className="pn-action" key={i}><label>Action<select disabled={!editable || busy} value={a.type} onChange={e=>setActions(list=>list.map((v,j)=>j===i ? {type:e.target.value} : v))}><option value="VARIABLE_INPUT">Allowance / Deduction / Overtime</option><option value="ATTENDANCE">Correct payable days</option><option value="MONTHLY_GROSS">Monthly gross override (this month)</option></select></label>
         {a.type==='VARIABLE_INPUT' && <><label>Component<select disabled={!editable || busy} value={a.componentCode || ''} onChange={e=>update(i,{componentCode:e.target.value,amount:'',quantity:''})}><option value="">Select component</option>{options.components.map(c=><option key={c.id} value={c.code}>{c.kind} · {c.name} ({c.calculationType})</option>)}</select></label><label>Mode<select disabled={!editable || busy} value={a.mode || ''} onChange={e=>update(i,{mode:e.target.value})}><option value="">Select mode</option><option value="ADD">Add to existing input</option><option value="SET">Replace existing input total</option><option value="REMOVE">Remove existing input</option></select></label>{a.mode==='REMOVE' ? <span>Remove this component input for the selected month.</span> : options.components.find(c=>c.code===a.componentCode)?.calculationType==='ENTERED_AMOUNT' ? <label>Amount (NGN)<input disabled={!editable || busy} type="number" min="0.01" step="0.01" value={a.amount ?? ''} onChange={e=>update(i,{amount:e.target.value,quantity:undefined})}/></label> : <label>Quantity (days / hours)<input disabled={!editable || busy} type="number" min="0.0001" step="0.0001" value={a.quantity ?? ''} onChange={e=>update(i,{quantity:e.target.value,amount:undefined})}/></label>}</>}

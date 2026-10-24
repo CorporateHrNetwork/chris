@@ -153,6 +153,32 @@ function MainLayout({ children }) {
           outline-offset: 2px;
         }
 
+        .chris-support-escalation {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin: 24px auto 4px;
+          padding: 10px 14px;
+          border: 1px solid rgba(212,175,55,0.22);
+          border-radius: 12px;
+          background: rgba(255,255,255,0.035);
+          color: rgba(255,255,255,0.78);
+          font-size: 12px;
+        }
+
+        .chris-support-escalation a {
+          color: #f3d56a;
+          font-weight: 800;
+          text-decoration: none;
+        }
+
+        .chris-support-escalation a:hover,
+        .chris-support-escalation a:focus-visible {
+          text-decoration: underline;
+        }
+
         @media (max-width: 860px) {
           .chris-shell {
             display: block !important;
@@ -336,6 +362,11 @@ function MainLayout({ children }) {
           >
             <StandaloneBackButton />
             {children}
+            <div className="chris-support-escalation" aria-label="CHRiS Support Escalation">
+              <span>Need support?</span>
+              <a href="https://wa.me/2349112993759" target="_blank" rel="noreferrer">WhatsApp: +234 911 299 3759</a>
+              <a href="mailto:support@crnetwork.com.ng">Email: support@crnetwork.com.ng</a>
+            </div>
           </div>
         </main>
       </div>
