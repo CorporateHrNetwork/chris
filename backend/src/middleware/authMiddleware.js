@@ -25,6 +25,8 @@ async function requireAuth(req, res, next) {
     if (!token) return res.status(401).json({ status: "error", message: "Authentication required." });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+    const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
     if (decoded.accessType === "ESS") {
       return res.status(401).json({
         status: "error",
@@ -50,6 +52,9 @@ async function requireAuth(req, res, next) {
       },
     });
     if (!user) return res.status(401).json({ status: "error", message: "User account is unavailable." });
+    if (demoMode && user.organization.slug !== demoOrganizationSlug) {
+      return res.status(403).json({ status: "error", code: "DEMO_ORGANIZATION_REQUIRED", message: "This CHRiS demo environment only permits the fictional demo organisation." });
+    }
     if (user.organization.status !== "ACTIVE") {
       return res.status(403).json({ status: "error", message: "Organization access is currently unavailable." });
     }
@@ -146,6 +151,8 @@ async function requireEssAuth(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+    const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
     if (decoded.accessType !== "ESS") {
       return res.status(401).json({
         status: "error",
@@ -171,6 +178,10 @@ async function requireEssAuth(req, res, next) {
         },
       },
     });
+
+    if (demoMode && user.organization.slug !== demoOrganizationSlug) {
+      return res.status(403).json({ status: "error", code: "DEMO_ORGANIZATION_REQUIRED", message: "This CHRiS demo environment only permits the fictional demo organisation." });
+    }
 
     if (!user || !user.employee || !ESS_EMPLOYEE_STATUSES.has(user.employee.status)) {
       return res.status(403).json({

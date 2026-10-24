@@ -36,12 +36,21 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    const normalizedOrganizationSlug = organizationSlug.trim().toLowerCase();
+    const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+    const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
+    if (demoMode && normalizedOrganizationSlug !== demoOrganizationSlug) {
+      return res.status(403).json({
+        status: "error",
+        code: "DEMO_ORGANIZATION_REQUIRED",
+        message: "This CHRiS demo environment only accepts the fictional demo organisation.",
+      });
+    }
+
     const organization =
       await prisma.organization.findUnique({
         where: {
-          slug: organizationSlug
-            .trim()
-            .toLowerCase(),
+          slug: normalizedOrganizationSlug,
         },
       });
 
@@ -93,11 +102,20 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    const configuredDemoPassword = String(
+      process.env.CHRIS_DEMO_PASSWORD || ""
+    );
+
     const passwordMatches =
-      await bcrypt.compare(
-        password,
-        user.passwordHash
-      );
+      demoMode &&
+      email.trim().toLowerCase() === "demo.hr@chris.crnetwork.com.ng" &&
+      configuredDemoPassword &&
+      password === configuredDemoPassword
+        ? true
+        : await bcrypt.compare(
+            password,
+            user.passwordHash
+          );
 
     if (!passwordMatches) {
       return res.status(401).json({
@@ -197,12 +215,13 @@ router.post(
         });
       }
 
+      const normalizedOrganizationSlug = organizationSlug.trim().toLowerCase();
+      const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+      const demoOrganizationSlug = String(process.env.CHRIS_DEMO_ORGANIZATION_SLUG || "chris-demo-company").trim().toLowerCase();
       const organization =
         await prisma.organization.findUnique({
           where: {
-            slug: organizationSlug
-              .trim()
-              .toLowerCase(),
+            slug: normalizedOrganizationSlug,
           },
         });
 
@@ -212,6 +231,13 @@ router.post(
         message:
           "If an active CHRIS account exists for this email, password reset instructions have been prepared.",
       };
+
+      if (demoMode && normalizedOrganizationSlug !== demoOrganizationSlug) {
+        return res.status(200).json({
+          status: "success",
+          message: "If an active CHRIS account exists for this email, password reset instructions have been prepared.",
+        });
+      }
 
       if (
         !organization ||

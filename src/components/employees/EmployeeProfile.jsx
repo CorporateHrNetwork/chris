@@ -45,6 +45,8 @@ function EmployeeProfile() {
   const [formData, setFormData] =
     useState(null);
 
+  const [editDepartments, setEditDepartments] = useState([]);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -794,6 +796,9 @@ const handleChange = (
               "",
           })
         );
+
+        const careerResult = await apiRequest("/api/employees/career/designations");
+        setEditDepartments((careerResult.departments || []).filter((department) => department?.isActive !== false && department?.id));
 
         if (
           !profile.locationId
@@ -3177,20 +3182,24 @@ const handleChange = (
             </div>
 
 
-            <FormField
-              label="Department"
-              name="department"
-              value={
-                formData.department
-              }
-              onChange={
-                handleChange
-              }
-              required
-              disabled={
-                saving
-              }
-            />
+            <div>
+              <label style={labelStyle}>Department</label>
+              <select
+                name="department"
+                value={formData.department || ""}
+                onChange={handleChange}
+                required
+                disabled={saving}
+                style={fieldStyle}
+              >
+                <option value="">Select department</option>
+                {editDepartments.slice().sort((a,b) => a.name.localeCompare(b.name)).map((department) => (
+                  <option key={department.id} value={department.name}>
+                    {department.name}{department.code ? " (" + department.code + ")" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <FormField
               label="Designation"
@@ -3564,9 +3573,7 @@ const handleChange = (
                 onClick={
                   openEditForm
                 }
-                style={
-                  actionButtonStyle
-                }
+                style={getQuickActionButtonStyle(editing)}
               >
                 Edit Employee
               </button>
@@ -3577,9 +3584,7 @@ const handleChange = (
                   onClick={
                     openConfirmationForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(confirmationOpen)}
                 >
                   Confirm Employment
                 </button>
@@ -3704,7 +3709,7 @@ const handleChange = (
               )
             }
             style={{
-              ...actionButtonStyle,
+              ...getQuickActionButtonStyle(jobChangeOpen),
 
               opacity:
                 [
@@ -3826,7 +3831,7 @@ const handleChange = (
                     )}`
                   )
                 }
-                style={actionButtonStyle}
+                style={getQuickActionButtonStyle(requestedProfileAction === "payroll")}
               >
                 Payroll
               </button>
@@ -3840,7 +3845,7 @@ const handleChange = (
                     )}`
                   )
                 }
-                style={actionButtonStyle}
+                style={getQuickActionButtonStyle(requestedProfileAction === "documents")}
               >
                 Documents
               </button>
@@ -7284,6 +7289,14 @@ const actionsGridStyle = {
     "repeat(2, 1fr)",
   gap: "12px",
 };
+
+const getQuickActionButtonStyle = (active = false) => ({
+  ...actionButtonStyle,
+  border: active ? "1px solid var(--chris-gold)" : actionButtonStyle.border,
+  background: active ? "linear-gradient(135deg,rgba(212,175,55,.18),rgba(8,122,67,.18))" : actionButtonStyle.background,
+  color: active ? "var(--chris-gold)" : actionButtonStyle.color,
+  boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
+});
 
 const actionButtonStyle = {
   border:

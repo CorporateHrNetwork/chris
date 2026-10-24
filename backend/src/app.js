@@ -63,6 +63,18 @@ const app = express();
 app.disable("x-powered-by");
 app.use(cors(corsOptionsDelegate));
 app.use(applySecurityHeaders);
+app.use((req, res, next) => {
+  const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+  if (demoMode && (req.path.startsWith("/api/commercial") || req.path.startsWith("/api/public/"))) {
+    return res.status(404).json({
+      status: "error",
+      code: "DEMO_ROUTE_DISABLED",
+      message: "This route is unavailable in the CHRiS demo environment.",
+    });
+  }
+  next();
+});
+
 app.use(express.json({
   verify: (req, res, buffer) => {
     if (req.path.includes("/support-desk/whatsapp/webhook")) req.rawBody = Buffer.from(buffer);
@@ -96,6 +108,27 @@ app.use("/api/documents", documentRoutes);
 app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
 app.use("/api/chris-automation", chrisAutomationRoutes);
+
+// Sales demo must never expose client-specific Zermatt endpoints or rules.
+app.use((req, res, next) => {
+  const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
+  if (!demoMode) return next();
+  const demoBlocked = [
+    "/api/zermatt",
+    "/api/zermatt-",
+    "/api/payroll/zermatt",
+    "/api/loans/zermatt",
+    "/api/leave/zermatt",
+  ];
+  if (demoBlocked.some((prefix) => req.path.toLowerCase().startsWith(prefix))) {
+    return res.status(404).json({
+      status: "error",
+      code: "DEMO_CLIENT_SPECIFIC_ROUTE_DISABLED",
+      message: "Client-specific functionality is unavailable in the CHRiS sales demo.",
+    });
+  }
+  next();
+});
 
 app.use("/api", zermattHrLoanOptionRoutes);
 app.use("/api", activeBranchScopeRoutes);

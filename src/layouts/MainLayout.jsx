@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/layout/Sidebar/Sidebar";
 import Topbar from "../components/layout/Topbar/Topbar";
+import DemoEnvironmentBanner from "../components/demo/DemoEnvironmentBanner";
 
 const MODULE_ROOTS = new Set([
   "/",
@@ -251,6 +252,7 @@ function MainLayout({ children }) {
           position: "relative",
         }}
       >
+        <DemoEnvironmentBanner />
         <Topbar />
 
         <main

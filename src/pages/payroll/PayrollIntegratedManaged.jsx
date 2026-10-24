@@ -77,7 +77,7 @@ export default function PayrollIntegratedManaged({ mode }) {
   const meta = {
     execute: ["Execute Payroll", "Calculate payroll with statutory deductions, Salary Advance recovery, Loan recovery and eligible after-tax benefits in one auditable payroll line."],
     payslips: ["Payslips", "Approved payroll payslips can be viewed, printed and emailed individually or in bulk. Draft payroll lines expose live preview payslips from Execute Payroll but cannot be emailed."],
-    statutory: ["Nigeria Statutory Review", "Review which payroll statutory items are active, employer-only, or require ZERMATT approval before activation."],
+    statutory: ["Nigeria Statutory Review", "Review which payroll statutory items are active, employer-only, or require organization approval before activation."],
   };
   const [title, description] = meta[mode] || meta.execute;
   return (
@@ -250,7 +250,7 @@ function ExecuteIntegrated() {
           <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "Select payroll period"], ...selectablePeriods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
           <button type="button" style={primaryButton} disabled={!periodId || busy || policyLoading || policyData?.configured === false} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Payroll"}</button>
         </div>
-        <p style={controlNote}>For ZERMATT, Branch HR & Admin Officers review attendance and may enter or edit worked days only for employees within their assigned branch; the same authoritative attendance input immediately feeds Head Office payroll and marks any existing draft for recalculation. The Head of HR prepares, calculates/processes, submits and approves payroll in CHRiS. Each employee payroll line has a live payslip preview before approval; email delivery is enabled only after approval. Before approval, export the Draft Review Pack for external HR investigation/verification; it is clearly marked NOT FOR PAYOUT. After CHRiS approval, export the Approved Payout Pack for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS. Loan installments become eligible from the configured recovery month. Salary Advance defaults to ₦0 in each new payroll period and appears only when an active repayment schedule is due for that period. Loan and scheduled Salary Advance balances reduce only on payroll approval. ZERMATT Leave Allowance, when due, is added after PAYE as a non-taxable after-tax benefit.</p>
+        <p style={controlNote}>This demo uses fictional payroll records and generic CHRiS controls. Calculate and review the draft payroll, inspect employee-level previews, and submit the run through the demo approval flow. Draft exports are review-only and must never be treated as payout instructions. Approved exports demonstrate downstream finance handoff using fictional data. Any organization-specific attendance, loan, salary-advance, leave-allowance, approval, or payout rule must be configured for the customer during implementation and is not represented here as a client-specific rule.</p>
         <ManualWorkedDaysPanel periods={selectablePeriods} onSaved={async () => { setMessage("Worked days saved. Recalculate the affected payroll before submission."); await load(); }} />
       </Panel>
 
@@ -920,7 +920,7 @@ function StatutoryCatalogue() {
   return (
     <>
       <Panel title={`Statutory Catalogue${data?.policyCode ? ` · ${data.policyCode} v${data.policyVersion}` : ""}`}>
-        <p style={controlNote}>CHRiS distinguishes employee deductions from employer-only obligations. Items marked REVIEW BEFORE ACTIVATION are visible for governance but are not deducted until ZERMATT explicitly activates them and required employee/applicability data exists.</p>
+        <p style={controlNote}>CHRiS distinguishes employee deductions from employer-only obligations. Items marked REVIEW BEFORE ACTIVATION are visible for governance but are not deducted until the organization explicitly activates them and required employee/applicability data exists.</p>
         <DataTable loading={loading} columns={["Item", "Category", "Frequency", "Status", "Configured Basis", "Payroll Effect"]}>
           {items.map((item) => <tr key={item.code}><Td strong>{item.name}</Td><Td>{item.category}</Td><Td>{item.payrollFrequency}</Td><Td><Badge>{item.status}</Badge></Td><Td>{item.basis}</Td><Td>{item.employeeEffect}</Td></tr>)}
         </DataTable>
