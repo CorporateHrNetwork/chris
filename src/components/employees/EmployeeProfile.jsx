@@ -3931,9 +3931,8 @@ useEffect(() => {
                 profile.status
               )
             }
-            style={getQuickActionButtonStyle(jobChangeOpen)}
-              /*
-
+            style={{
+              ...getQuickActionButtonStyle(jobChangeOpen),
               opacity:
                 [
                   "Resigned",
@@ -3941,12 +3940,9 @@ useEffect(() => {
                   "Retired",
                   "Suspended",
                   "Inactive",
-                ].includes(
-                  profile.status
-                )
+                ].includes(profile.status)
                   ? 0.5
                   : 1,
-
               cursor:
                 [
                   "Resigned",
@@ -3954,12 +3950,10 @@ useEffect(() => {
                   "Retired",
                   "Suspended",
                   "Inactive",
-                ].includes(
-                  profile.status
-                )
+                ].includes(profile.status)
                   ? "not-allowed"
                   : "pointer",
-            */}
+            }}
           >
             Job Change
           </button>
