@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/layout/Sidebar/Sidebar";
 import Topbar from "../components/layout/Topbar/Topbar";
+import DemoEnvironmentBanner from "../components/demo/DemoEnvironmentBanner";
 
 const MODULE_ROOTS = new Set([
   "/",
@@ -55,10 +56,6 @@ function StandaloneBackButton() {
   if (MODULE_ROOTS.has(pathname)) return null;
 
   const goBack = () => {
-    if (["/payroll/full-salary-upload", "/payroll/transport-support"].includes(pathname)) {
-      navigate("/payroll?workspace=rates");
-      return;
-    }
     const routerHistoryIndex = Number(window.history.state?.idx);
     if (Number.isFinite(routerHistoryIndex) && routerHistoryIndex > 0) {
       navigate(-1);
@@ -151,32 +148,6 @@ function MainLayout({ children }) {
         .chris-standalone-back:focus-visible {
           outline: 2px solid #d4af37;
           outline-offset: 2px;
-        }
-
-        .chris-support-escalation {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          flex-wrap: wrap;
-          margin: 24px auto 4px;
-          padding: 10px 14px;
-          border: 1px solid rgba(212,175,55,0.22);
-          border-radius: 12px;
-          background: rgba(255,255,255,0.035);
-          color: rgba(255,255,255,0.78);
-          font-size: 12px;
-        }
-
-        .chris-support-escalation a {
-          color: #f3d56a;
-          font-weight: 800;
-          text-decoration: none;
-        }
-
-        .chris-support-escalation a:hover,
-        .chris-support-escalation a:focus-visible {
-          text-decoration: underline;
         }
 
         @media (max-width: 860px) {
@@ -281,6 +252,7 @@ function MainLayout({ children }) {
           position: "relative",
         }}
       >
+        <DemoEnvironmentBanner />
         <Topbar />
 
         <main
@@ -362,11 +334,6 @@ function MainLayout({ children }) {
           >
             <StandaloneBackButton />
             {children}
-            <div className="chris-support-escalation" aria-label="CHRiS Support Escalation">
-              <span>Need support?</span>
-              <a href="https://wa.me/2349112993759" target="_blank" rel="noreferrer">WhatsApp: +234 911 299 3759</a>
-              <a href="mailto:support@crnetwork.com.ng?subject=CHRiS%20Support%20Request" target="_self" aria-label="Email CHRiS Support">Email: support@crnetwork.com.ng</a>
-            </div>
           </div>
         </main>
       </div>
@@ -375,4 +342,3 @@ function MainLayout({ children }) {
 }
 
 export default MainLayout;
-
