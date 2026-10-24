@@ -112,6 +112,7 @@ function App() {
 
         <Route path="/employees" element={<PermissionLayout permission="employees.view"><EmployeeDashboard /></PermissionLayout>} />
         <Route path="/employees/add" element={<PermissionLayout permission="employees.create"><AddOnboardEmployeeEntry /></PermissionLayout>} />
+        <Route path="/employees/bulk-assignments" element={<PermissionLayout permission="employees.update"><BulkEmployeeImport assignmentsOnly /></PermissionLayout>} />
         <Route path="/employees/bulk-upload" element={<PermissionLayout permission="employees.create"><BulkEmployeeImport /></PermissionLayout>} />
         <Route path="/employees/invitations" element={<PermissionLayout permission="employees.create"><EmployeeInvitations /></PermissionLayout>} />
         <Route path="/employees/export-queue" element={<PermissionLayout permission="employees.update"><EmployeeExportQueue /></PermissionLayout>} />
