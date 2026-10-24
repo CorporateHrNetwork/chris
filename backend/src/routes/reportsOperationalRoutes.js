@@ -335,23 +335,43 @@ async function latestPayrollAllocation(req, latestRun) {
         Number(line.advanceRecovery || 0) +
         Number(line.loanRecovery || line.details?.loanRecoveryTotal || 0);
 
+      const details = line.details || {};
+      const allowanceItems = Array.isArray(details.allowanceItems) ? details.allowanceItems : [];
+      const deductionItems = Array.isArray(details.deductionItems) ? details.deductionItems : [];
+      const statutory = details.statutory || {};
       return {
         employeeNumber: line.employeeNumber,
         employeeName: line.employeeName,
+        currency: line.currency || "NGN",
         departmentCode,
         department,
         costCentreCode,
         costCentre,
         branchCode,
         branch,
+        employmentType: snapshot.employmentType || null,
+        designationCode: snapshot.designationCode || null,
+        designation: snapshot.designationName || null,
+        baseSalary: Number(line.baseSalary || 0),
+        allowanceTotal: Number(line.allowances || 0),
+        deductionTotal: Number(line.deductions || 0),
+        advanceRecovery: Number(line.advanceRecovery || 0),
+        loanRecovery: Number(line.loanRecovery || 0),
         grossPay,
         totalDeductions,
         netPay: Number(line.netPreview || 0),
         paye,
         employeePension,
         employerPension,
+        nsitfEmployer: Number(statutory.nsitfEmployer || 0),
+        itfEmployerAccrual: Number(statutory.itfEmployerAccrual || 0),
         employerStatutoryCost,
         totalEmployerCost: grossPay + employerStatutoryCost,
+        statutoryStatus: line.statutoryStatus || details.statutoryStatus || null,
+        allowanceItems,
+        deductionItems,
+        statutoryDetails: statutory,
+        controlNote: details.statutoryControl || null,
       };
     });
 
@@ -444,6 +464,61 @@ router.get(
     }
   }
 );
+
+function appendPayrollDashboardSheet(workbook, data) {
+  const totals = data.totals || {};
+  const rows = [
+    ["CHRiS PAYROLL DASHBOARD"],
+    ["Report Scope", data.scope?.locationName || data.scope?.locationCode || "Head Office · All Branches"],
+    ["Generated At", data.generatedAt || ""],
+    [],
+    ["PAYROLL KPI", "VALUE"],
+    ["Payroll Runs", Number(totals.runCount || 0)],
+    ["Employees in Latest Run", Number(totals.latestEmployeeCount || 0)],
+    ["Gross Payroll", Number(totals.latestGrossPayroll || 0)],
+    ["Total Deductions", Number(totals.latestDeductions || 0)],
+    ["Net Payroll", Number(totals.latestNetPayroll || 0)],
+    ["Employer Statutory Cost", Number(totals.latestEmployerStatutoryCost || 0)],
+    ["Total Employer Cost", Number(totals.latestTotalEmployerCost || 0)],
+    [],
+    ["PAYROLL BY BRANCH"],
+    ["Branch", "Code", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"],
+    ...(data.allocation?.byBranch || []).map((item) => [
+      item.label || "", item.code || "", Number(item.headcount || 0),
+      Number(item.grossPayroll || 0), Number(item.deductions || 0), Number(item.netPayroll || 0),
+      Number(item.paye || 0), Number(item.employerPension || 0),
+      Number(item.employerStatutoryCost || 0), Number(item.totalEmployerCost || 0),
+    ]),
+    [],
+    ["PAYROLL BY DEPARTMENT"],
+    ["Department", "Code", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"],
+    ...(data.allocation?.byDepartment || []).map((item) => [
+      item.label || "", item.code || "", Number(item.headcount || 0),
+      Number(item.grossPayroll || 0), Number(item.deductions || 0), Number(item.netPayroll || 0),
+      Number(item.paye || 0), Number(item.employerPension || 0),
+      Number(item.employerStatutoryCost || 0), Number(item.totalEmployerCost || 0),
+    ]),
+    [],
+    ["PAYROLL BY COST CENTRE / OPERATING UNIT"],
+    ["Cost Centre", "Code", "Headcount", "Gross Payroll", "Deductions", "Net Payroll", "PAYE", "Employer Pension", "Employer Statutory Cost", "Total Employer Cost"],
+    ...(data.allocation?.byCostCentre || []).map((item) => [
+      item.label || "", item.code || "", Number(item.headcount || 0),
+      Number(item.grossPayroll || 0), Number(item.deductions || 0), Number(item.netPayroll || 0),
+      Number(item.paye || 0), Number(item.employerPension || 0),
+      Number(item.employerStatutoryCost || 0), Number(item.totalEmployerCost || 0),
+    ]),
+    [],
+    ["CONTROL"],
+    [data.control || "Payroll execution and approval remain subject to CHRiS payroll controls."],
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet["!cols"] = [
+    { wch: 34 }, { wch: 18 }, { wch: 14 }, { wch: 20 }, { wch: 18 },
+    { wch: 20 }, { wch: 18 }, { wch: 22 }, { wch: 28 }, { wch: 22 },
+  ];
+  sheet["!freeze"] = { xSplit: 0, ySplit: 5 };
+  XLSX.utils.book_append_sheet(workbook, sheet, "Payroll Dashboard");
+}
 
 function appendSheet(workbook, rows, name) {
   const data = Array.isArray(rows) && rows.length ? rows : [{ message: "No records available" }];
@@ -544,12 +619,97 @@ router.get(
         scope: data.scope,
         generatedAt: data.generatedAt,
       });
+      appendPayrollDashboardSheet(workbook, data);
       appendSheet(workbook, [data.totals], "Payroll Summary");
       appendSheet(workbook, data.runs, "Payroll Runs");
+      appendSheet(workbook, (data.runs || []).map((run) => ({
+        "Period": run.periodName || run.periodCode || "",
+        "Period Code": run.periodCode || "",
+        "Period Start": run.periodStart || "",
+        "Period End": run.periodEnd || "",
+        "Pay Date": run.payDate || "",
+        "Run Status": run.status || "",
+        "Statutory Status": run.statutoryStatus || "",
+        "Employee Count": Number(run.employeeCount || 0),
+        "Gross Total": Number(run.grossTotal || 0),
+        "Deduction Total": Number(run.deductionTotal || 0),
+        "Net Preview Total": Number(run.netPreviewTotal || 0),
+        "Submitted At": run.submittedAt || "",
+        "Approved At": run.approvedAt || "",
+      })), "Approval Control");
       appendSheet(workbook, data.allocation?.byDepartment || [], "By Department");
       appendSheet(workbook, data.allocation?.byCostCentre || [], "By Cost Centre");
       appendSheet(workbook, data.allocation?.byBranch || [], "By Branch");
-      appendSheet(workbook, data.allocation?.details || [], "Payroll Detail");
+
+      const detailRows = data.allocation?.details || [];
+      appendSheet(workbook, detailRows.map((row) => ({
+        "Employee No.": row.employeeNumber,
+        "Employee": row.employeeName,
+        "Employment Type": row.employmentType || "",
+        "Designation": row.designation || "",
+        "Department": row.department || "",
+        "Department Code": row.departmentCode || "",
+        "Cost Centre": row.costCentre || "",
+        "Cost Centre Code": row.costCentreCode || "",
+        "Branch": row.branch || "",
+        "Branch Code": row.branchCode || "",
+        "Currency": row.currency || "NGN",
+        "Base Salary": row.baseSalary,
+        "Allowances": row.allowanceTotal,
+        "Advance Recovery": row.advanceRecovery,
+        "Loan Recovery": row.loanRecovery,
+        "Other Deductions": row.deductionTotal,
+        "Gross Pay": row.grossPay,
+        "PAYE": row.paye,
+        "Employee Pension": row.employeePension,
+        "Net Pay": row.netPay,
+        "Employer Pension": row.employerPension,
+        "NSITF Employer": row.nsitfEmployer,
+        "ITF Employer Accrual": row.itfEmployerAccrual,
+        "Employer Statutory Cost": row.employerStatutoryCost,
+        "Total Employer Cost": row.totalEmployerCost,
+        "Statutory Status": row.statutoryStatus || "",
+      })), "Payroll Detail");
+
+      const componentRows = [];
+      for (const row of detailRows) {
+        for (const item of row.allowanceItems || []) {
+          componentRows.push({
+            "Employee No.": row.employeeNumber,
+            "Employee": row.employeeName,
+            "Component Type": "ALLOWANCE",
+            "Code": item.code || "",
+            "Component": item.name || "",
+            "Amount": Number(item.value || 0),
+            "Currency": row.currency || "NGN",
+          });
+        }
+        for (const item of row.deductionItems || []) {
+          componentRows.push({
+            "Employee No.": row.employeeNumber,
+            "Employee": row.employeeName,
+            "Component Type": "DEDUCTION",
+            "Code": item.code || "",
+            "Component": item.name || "",
+            "Amount": Number(item.value || 0),
+            "Currency": row.currency || "NGN",
+          });
+        }
+      }
+      appendSheet(workbook, componentRows, "Pay Components");
+
+      appendSheet(workbook, detailRows.map((row) => ({
+        "Employee No.": row.employeeNumber,
+        "Employee": row.employeeName,
+        "Gross Pay": row.grossPay,
+        "PAYE": row.paye,
+        "Employee Pension": row.employeePension,
+        "Employer Pension": row.employerPension,
+        "NSITF Employer": row.nsitfEmployer,
+        "ITF Employer Accrual": row.itfEmployerAccrual,
+        "Employer Statutory Cost": row.employerStatutoryCost,
+        "Statutory Status": row.statutoryStatus || "",
+      })), "Statutory");
       await auditExport(
         req,
         "payroll",

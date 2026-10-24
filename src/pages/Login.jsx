@@ -29,15 +29,19 @@ import { API_BASE_URL } from "../services/api";
   CorporateHr Network remains the safe development fallback.
 */
 function Login() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const legacyOrganization = String(window.location.search || "")
-    .match(/[?&]=?(?:organization[-_])?([^&]+)/i)?.[1]
-    ?.trim();
-
-  const organizationSlug =
-    searchParams.get("organization")?.trim() ||
-    legacyOrganization ||
-    "corporatehr-network";
+  const requestedOrganizationSlug =
+    new URLSearchParams(
+      window.location.search
+    ).get("organization");
+  const demoHost = "chris-sales-demo.onrender.com";
+  const demoOrganizationSlug = "chris-demo-company";
+  const demoApiBaseUrl = "https://chris-sales-demo-api.onrender.com";
+  const isDemoHost =
+    window.location.hostname.toLowerCase() === demoHost;
+  const organizationSlug = isDemoHost
+    ? demoOrganizationSlug
+    : requestedOrganizationSlug || "corporatehr-network";
+  const loginApiBaseUrl = isDemoHost ? demoApiBaseUrl : API_BASE_URL;
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
@@ -172,8 +176,17 @@ function Login() {
       setError("");
       setNotice("");
 
+      if (
+        isDemoHost &&
+        organizationSlug !== demoOrganizationSlug
+      ) {
+        throw new Error(
+          "This demo environment only accepts the CHRiS fictional demo organisation."
+        );
+      }
+
       const response = await fetch(
-        `${API_BASE_URL}/api/auth/login`,
+        `${loginApiBaseUrl}/api/auth/login`,
         {
           method: "POST",
 
@@ -204,14 +217,6 @@ function Login() {
       }
 
       clearExistingSession();
-
-      // Preserve the authenticated tenant for future protected-route redirects.
-      if (result.data.organization?.slug) {
-        localStorage.setItem(
-          "chris_last_organization_slug",
-          result.data.organization.slug
-        );
-      }
 
       /*
         Remember Me checked:
@@ -245,15 +250,10 @@ function Login() {
         )
       );
 
-      const roleNames = (result.data.user?.roles || []).map((role) => String(role || "").trim().toLowerCase());
-      const employeeSelfServiceOnly =
-        Boolean(result.data.user?.employeeId) &&
-        roleNames.includes("employee self service") &&
-        !roleNames.some((role) => role !== "employee self service");
-
-      navigate(employeeSelfServiceOnly ? "/ess" : "/", {
-        replace: true,
-      });
+      // A full navigation makes the newly persisted auth session authoritative
+      // before protected dashboard hooks mount. This prevents the first dashboard
+      // render from racing session/permission hydration and appearing empty until refresh.
+      window.location.replace("/");
     } catch (err) {
       console.error(
         "CHRIS login error:",
@@ -300,7 +300,7 @@ function Login() {
         }
 
         const response = await fetch(
-          `${API_BASE_URL}/api/auth/forgot-password`,
+          `${loginApiBaseUrl}/api/auth/forgot-password`,
           {
             method: "POST",
 
@@ -311,8 +311,8 @@ function Login() {
 
             body: JSON.stringify({
               email: normalizedEmail,
+
               organizationSlug,
-              portal: "admin",
             }),
           }
         );

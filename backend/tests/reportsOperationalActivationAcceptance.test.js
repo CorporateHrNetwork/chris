@@ -38,6 +38,17 @@ expect(route, 'req.auth.activeLocationId', "Operational reports do not use the a
 expect(route, 'e."locationId"=$2', "Branch payroll report is not filtered through employee branch membership.");
 expect(route, '"REPORT_EXPORT_DOWNLOADED"', "Operational Excel exports are not audited.");
 expect(route, 'XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })', "Operational report exports are not real XLSX workbooks.");
+expect(route, 'function appendPayrollDashboardSheet(workbook, data)', "Payroll Excel export must build a dedicated dashboard worksheet.");
+expect(route, 'XLSX.utils.book_append_sheet(workbook, sheet, "Payroll Dashboard")', "Payroll Dashboard worksheet is not added to the export workbook.");
+expect(route, 'appendPayrollDashboardSheet(workbook, data);', "Operational payroll export does not invoke the dashboard worksheet builder.");
+for (const field of [
+  '"PAYROLL KPI"',
+  '"PAYROLL BY BRANCH"',
+  '"PAYROLL BY DEPARTMENT"',
+  '"PAYROLL BY COST CENTRE / OPERATING UNIT"',
+  '"Total Employer Cost"',
+]) expect(route, field, `Payroll Dashboard is missing expected section: ${field}`);
+
 
 expect(page, 'window.addEventListener("chris:location-context-changed"', "Reports do not reload when global branch context changes.");
 expect(sidebar, 'permission: "attendance.view"', "Attendance report navigation is not permission-aware.");

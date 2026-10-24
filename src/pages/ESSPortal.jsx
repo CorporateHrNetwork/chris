@@ -1,206 +1,553 @@
-import { useCallback, useEffect, useState } from "react";
-import { FiEye, FiEyeOff, FiLock, FiMail } from "react-icons/fi";
-import loginBackground from "../assets/images/login-bg.png";
-import chrisLogo from "../assets/images/chris-logo.png";
-import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "../services/essApi";
+import { useEffect, useState } from "react";
 
-import EssLeaveApplications from "../components/ess/EssLeaveApplications";
-import PerformanceEvaluationWorkspace from "../components/performance/PerformanceEvaluationWorkspace";
-import SessionLoadingScreen from "../components/system/SessionLoadingScreen";
+const API_BASE_URL = String(
+  import.meta.env.VITE_API_BASE_URL || ""
+).replace(/\/+$/, "");
 
-const ORG_SLUG = "zermatt-liquor-limited";
-const normalizePerformance = value => (Array.isArray(value) ? value : []).map(item => ({...item,cycle:item?.cycle||{},assessment:item?.assessment||{},kpis:Array.isArray(item?.kpis)?item.kpis:[]}));
-const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["loans","Running Loans"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["gratuity","Gratuity"],["birthday","Birthday & Anniversaries"],["communications","Internal Communications"],["documents","Documents"]];
-const RATINGS = ["EXCELLENT","SATISFACTORY","ACCEPTABLE","UNSATISFACTORY"];
-const money=(v,c="NGN")=>Number.isFinite(Number(v))?new Intl.NumberFormat("en-NG",{style:"currency",currency:c||"NGN",maximumFractionDigits:2}).format(Number(v)): "—";
-const date=v=>{if(!v)return "—";const d=new Date(v);return Number.isNaN(d.getTime())?"—":new Intl.DateTimeFormat("en-NG",{day:"2-digit",month:"short",year:"numeric"}).format(d)};
-const title=v=>String(v||"").replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
-const val=v=>v===null||v===undefined||v===""?"—":String(v);
-const initials=e=>[e?.firstName,e?.lastName].filter(Boolean).map(x=>x[0]).join("").slice(0,2).toUpperCase()||"CH";
-const icon=k=>({overview:"⌂",profile:"👤",onboarding:"✓",statutory:"▣",payroll:"₦",loans:"₦",payslips:"▤",leave:"◷",performance:"★",gratuity:"₦",birthday:"🎂",communications:"✉",documents:"▤"}[k]||"•");
+const ORGANIZATION_SLUG = "zermatt-liquor-limited";
 
-export default function ESSPortal(){
- const [auth,setAuth]=useState(false),[data,setData]=useState(null),[tab,setTab]=useState("overview"),[navOpen,setNavOpen]=useState(false),[loading,setLoading]=useState(()=>Boolean(getEssAuthToken())),[error,setError]=useState(""),[login,setLogin]=useState({email:"",password:""}),[submitting,setSubmitting]=useState(false);
- const load=useCallback(async(isActive=()=>true)=>{const requestToken=getEssAuthToken();setLoading(true);setError("");try{const r=await essRequest("/api/ess/dashboard");if(!isActive()||getEssAuthToken()!==requestToken)return;const d=r?.data||{};setData({profile:d.profile||{},onboarding:{completionPercent:0,currentStage:null,status:"NOT_STARTED",sectionProgress:{},sections:[],data:{},documents:[],...(d.onboarding||{})},statutory:{registered:{},obligations:[],...(d.statutory||{})},payment:d.payment||{},payroll:{payslips:[],latestPayslip:null,previews:[],latestCalculation:null,...(d.payroll||{})},leaveBalances:Array.isArray(d.leaveBalances)?d.leaveBalances:[],attendance:Array.isArray(d.attendance)?d.attendance:[],performance:normalizePerformance(d.performance),gratuity:d.gratuity||null,birthday:d.birthday||{},birthdays:Array.isArray(d.birthdays)?d.birthdays:[],workAnniversaries:Array.isArray(d.workAnniversaries)?d.workAnniversaries:[],news:Array.isArray(d.news)?d.news:[]});setAuth(true)}catch(e){if(!isActive())return;const authFailure=e.code==="ESS_AUTH_INVALID"||e.code==="ESS_EMPLOYEE_ACCESS_REVOKED";if(getEssAuthToken()!==requestToken&&(!authFailure||getEssAuthToken()))return;if(e.code==="ESS_AUTH_INVALID"||e.code==="ESS_EMPLOYEE_ACCESS_REVOKED"){clearEssAuthSession();setAuth(false);setData(null);setLoading(false);}setError(e.message||"Unable to load your employee portal dashboard.")}finally{if(isActive()&&getEssAuthToken()===requestToken)setLoading(false)}},[]);
- useEffect(()=>{
-   if(window.location.search)window.history.replaceState({},document.title,"/ess");
-   let active=true;
-   if(getEssAuthToken()) Promise.resolve().then(()=>{if(active)load(()=>active);});
-   return()=>{active=false;};
- },[load]);
-  const submit=async e=>{e.preventDefault();setSubmitting(true);setError("");try{const r=await essRequest("/api/ess/login",{method:"POST",body:{...login,organizationSlug:ORG_SLUG}});sessionStorage.setItem("chris_ess_token",r.data.token);sessionStorage.setItem("chris_ess_employee",JSON.stringify(r.data.employee||{}));sessionStorage.setItem("chris_ess_organization",JSON.stringify(r.data.organization||{}));setTab("birthday");await load()}catch(e){setError(e.message||"Invalid employee login credentials.")}finally{setSubmitting(false)}};
- const signOut=()=>{clearEssAuthSession();setAuth(false);setData(null);setLoading(false);setTab("overview");setError("");setLogin({email:"",password:""});window.history.replaceState({},document.title,"/ess")};
- if(loading&&!data)return <SessionLoadingScreen/>;
- if(!auth&&getEssAuthToken()&&error)return <><style>{CSS}</style><div className="essshell"><div className="loading" role="alert"><Brand/><h2>Unable to load your portal</h2><p>{error}</p><button className="ghost" onClick={()=>load()}>Retry</button><button className="ghost" onClick={signOut}>Sign out</button></div></div></>;
- if(!auth||!data)return <><style>{CSS}</style><Login login={login} setLogin={setLogin} submit={submit} submitting={submitting} error={error}/></>;
- return <><style>{CSS}</style><div className="essshell"><div className="app"><header><div className="headleft"><div className="ess-nav-holder"><button className="ess-menu-toggle" type="button" aria-label="Open page menu" aria-expanded={navOpen} onClick={()=>setNavOpen(v=>!v)}><span className="menu-glyph">☰</span><span>Pages</span><span className="menu-chevron">{navOpen?"▲":"▼"}</span></button>{navOpen&&<><button className="ess-menu-backdrop" aria-label="Close page menu" onClick={()=>setNavOpen(false)}/><nav className="ess-page-dropdown" aria-label="Employee pages">{NAV.map(([k,l])=><button className={tab===k?"ess-dropdown-item selected":"ess-dropdown-item"} key={k} onClick={()=>{setTab(k);setNavOpen(false)}}><i>{icon(k)}</i><span>{l}</span>{k==="onboarding"&&<b>{data.onboarding.completionPercent}%</b>}</button>)}</nav></>}</div><div className="brandrow"><Brand small/><div><strong>CHRiS</strong><small>Employee Self-Service</small></div></div></div><div className="headuser"><div className="avatar">{initials(data.profile)}</div><div><b>{data.profile.name}</b><small>{data.profile.designation?.name||"Employee"} · {data.profile.employeeNumber}</small></div><button className="ghost" onClick={signOut}>Sign out</button></div></header><div className="body"><aside><span className="caption">MY CHRiS</span>{NAV.map(([k,l])=><button className={tab===k?"nav active":"nav"} key={k} onClick={()=>setTab(k)}><i>{icon(k)}</i><span>{l}</span>{k==="onboarding"&&<b>{data.onboarding.completionPercent}%</b>}</button>)}<div className="sidefoot">Private employee access<br/><small>Only your own CHRiS record is available.</small></div></aside><main>
- {error&&<div role="alert" className="card">{error}<button className="ghost" onClick={()=>load()}>Retry</button></div>}
- {tab==="overview"&&<Overview data={data} go={setTab}/>}
- {tab==="profile"&&<Profile data={data}/>}
- {tab==="onboarding"&&<Onboarding data={data}/>}
- {tab==="statutory"&&<Statutory data={data}/>}
- {tab==="payroll"&&<Payroll data={data}/>}{tab==="loans"&&<RunningLoans/>}
- {tab==="payslips"&&<Payslips data={data}/>}
- {tab==="leave"&&<LeaveAttendance data={data}/>}
- {tab==="performance"&&<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>}
- {tab==="communications"&&<Communications data={data}/>}
- {tab==="gratuity"&&<Gratuity data={data}/>}
- {tab==="birthday"&&<BirthdayCard data={data}/>}
- {tab==="documents"&&<Documents data={data}/>}
- </main></div></div></div></>;
+function getEssAuthToken() {
+  return localStorage.getItem("chris_ess_token") || sessionStorage.getItem("chris_ess_token") || null;
 }
 
-function Overview({data,go}){const p=data.profile,o=data.onboarding,latest=data.payroll.latestPayslip||data.payroll.latestCalculation,perf=data.performance?.[0];return <Page h="Welcome back" s="Your personal CHRiS workspace for employee information, payroll, leave and performance."><div className="hero"><div className="person"><div className="bigavatar">{initials(p)}</div><div><span className="eyebrow">ZERMATT LIQUOR LIMITED</span><h1>{p.name}</h1><p>{p.designation?.name||"Employee"} · {p.department?.name||"—"} · {p.location?.name||"—"}</p></div></div><span className="pill">{title(p.status)}</span></div><div className="metrics"><Metric l="Onboarding" v={o.completionPercent+"%"} s={o.currentStage||"Profile registration"} go={()=>go("onboarding")}/><Metric l="Payroll records" v={data.payroll.payslips.length+(data.payroll.previews||[]).length} s="Payslips and calculation previews" go={()=>go("payslips")}/><Metric l="Leave records" v={data.leaveBalances.length} s="Current balances" go={()=>go("leave")}/><Metric l="Performance" v={perf?.assessment?.finalRating?title(perf.assessment.finalRating):"In progress"} s="Quarterly evaluation" go={()=>go("performance")}/></div><div className="twocol"><Card t="Onboarding registration" a="Open" click={()=>go("onboarding")}><Progress v={o.completionPercent}/><p className="muted">{Object.values(o.sectionProgress||{}).filter(x=>x.completed).length} of {Object.keys(o.sectionProgress||{}).length} sections completed.</p></Card><Card t={latest?.runStatus==="APPROVED"?"Latest payslip":"Latest payroll calculation"} a="View" click={()=>go("payslips")}>{latest?<div className="latest"><div><small>{latest.periodName||latest.periodCode}</small><strong>{money(latest.netPreview,latest.currency)}</strong></div><small>{latest.runStatus!=="APPROVED"?"Preview · awaiting approval":`Pay date ${date(latest.payDate)}`}</small></div>:<Empty t="No approved payslip is available yet."/>}</Card></div><Card t="Quick access"><div className="quickgrid">{[["profile","My Profile","Personal and employment information"],["statutory","Statutory","PAYE, pension and statutory registration"],["payroll","Payment & Payroll","Bank/payment and payroll summary"],["performance","Performance Evaluation","Objectives, self-assessment and outcomes"]].map(x=><button className="quick" key={x[0]} onClick={()=>go(x[0])}><span>{icon(x[0])}</span><div><b>{x[1]}</b><small>{x[2]}</small></div>→</button>)}</div></Card></Page>}
-
-function Profile({data}){const p=data.profile||{},x=(data.onboarding?.data||{})["personal-details"]||{};return <Page h="My Profile" s="Your complete employee master record as maintained in CHRiS."><Card t="Identity"><Info items={[["Employee Number",p.employeeNumber],["Full Name",p.name],["Email",p.email],["Phone",p.phone],["Gender",title(p.gender)],["Date of Birth",date(x.dateOfBirth)],["Marital Status",x.maritalStatus],["Nationality",x.nationality],["Residential Address",x.residentialAddress],["State",x.state],["LGA",x.lga],["Identification Type",x.idType],["Identification Number",x.idNumber]]}/></Card><Card t="Employment"><Info items={[["Department",p.department?.name],["Designation",p.designation?.name],["Employment Level",p.employmentLevel?.name||p.designation?.employmentLevel?.name],["Employment Type",p.employmentType],["Location / Branch",p.location?.name],["Cost Centre",p.costCentre?.name],["Date Employed",date(p.hireDate)],["Current Service Start",date(p.employmentEpisodes?.[0]?.startDate||p.hireDate)],["Confirmation Date",date(p.confirmationDate)],["Line Manager",p.lineManager?.name],["Manager Designation",p.lineManager?.designation]]}/></Card></Page>}
-
-function Onboarding({data}){const o=data.onboarding;return <Page h="Onboarding & Registration" s="Track every section of your CHRiS employee registration and see what remains outstanding."><Card><div className="proghead"><div><span className="eyebrow">REGISTRATION COMPLETION</span><strong>{o.completionPercent}%</strong></div><span>{o.status==="COMPLETED"?"Completed":o.currentStage||"In progress"}</span></div><Progress v={o.completionPercent}/></Card><div className="sectiongrid">{(o.sections||[]).map(s=>{const p=o.sectionProgress?.[s.key]||{};return <div className="sectiontile" key={s.key}><div className={p.completed?"check done":"check"}>{p.completed?"✓":"!"}</div><div><b>{s.label||title(s.key)}</b><small>{p.completedItems||0} of {p.totalItems||0} items completed · {p.required?"Required":"Optional"}</small></div><span>{p.completed?"Complete":"Pending"}</span></div>})}</div><Card t="Registration data"><Groups data={o.data}/></Card></Page>}
-
-function Statutory({data}){const s=data.statutory.registered||{};return <Page h="Statutory Information" s="Your current statutory calculations and reversal history. Draft figures are provisional until payroll approval."><Card t="Registration details"><Info items={[["Tax Identification Number",s.taxIdentificationNumber],["PAYE State",s.payeState],["Pension PFA",s.pensionPfa],["Pension PFA Code",s.pensionPfaCode],["Pension PIN",s.pensionPin],["NHIA / Health Status",s.nhiaStatus||s.nhiaRegistrationStatus],["NHIA Number",s.nhiaNumber||s.nhiaId],["Other Statutory Status",s.otherStatutoryStatus],["Other Notes",s.otherStatutoryNotes]]}/></Card><Card t="Payroll statutory obligations"><Table rows={data.statutory.obligations} empty="No statutory calculations are available yet." cols={[["Period",r=>r.periodYear+"-"+String(r.periodMonth).padStart(2,"0")],["Type",r=>title(r.obligationType)],["Employee",r=>money(r.employeeAmount,r.currency)],["Employer",r=>money(r.employerAmount,r.currency)],["Remitted",r=>money(r.amountRemitted,r.currency)],["Status",r=>title(r.status)],["Record",r=>r.recordKind==="HISTORY"?"Reversal history":"Current calculation"]]}/></Card></Page>}
-
-function Payroll({data}){const p=data.payment||{},latest=data.payroll.latestCalculation||data.payroll.latestPayslip;return <Page h="Payment & Payroll" s="Your registered payment instructions and latest payroll information."><Card t="Payment information"><Info items={[["Bank Name",p.bankName],["Account Name",p.accountName],["Account Number",p.accountNumber],["Bank Code",p.bankCode],["Payment Method",p.paymentMethod],["Payroll Currency",p.payrollCurrency]]}/></Card><Card t="Payroll summary"><Info items={[["Approved Payslips",data.payroll.payslips.length],["Payroll Previews",(data.payroll.previews||[]).length],["Latest Gross Pay",latest?money(latest.grossPay,latest.currency):"—"],["Latest Net Pay",latest?money(latest.netPreview,latest.currency):"—"],["Payroll Status",latest?title(latest.runStatus):"—"],["Latest Pay Date",date(latest?.payDate)]]}/>{latest&&latest.runStatus!=="APPROVED"&&<p className="muted">Preview only — awaiting payroll approval. These figures may change.</p>}</Card></Page>}
-
-function RunningLoans(){
- const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
- useEffect(()=>{let active=true;setLoading(true);setError("");setRows([]);essRequest("/api/ess/loans").then(r=>{if(active)setRows(r.data||[])}).catch(e=>{if(active)setError(e.message||"Unable to load your loan summary.")}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[revision]);
- const monthLabel=value=>value?new Date(value+"-01T00:00:00Z").toLocaleDateString("en-NG",{month:"long",year:"numeric",timeZone:"UTC"}):"—";
- return <Page h="Running Loan Summary" s="Your own loan balances and repayment schedule."><Card t="My loans" a="Refresh" click={()=>setRevision(v=>v+1)}>
- <p className="muted">Total paid includes recorded opening repayments, posted payroll recoveries and recorded external settlements. Reversed recoveries are excluded. Expected final deduction months follow the current schedule and may change after pauses or corrections. Loan recovery is through end-of-month payroll; no loan deduction is made from Mid-month Transport Support Pay.</p>
- {loading?<p role="status">Loading your loan summary…</p>:error?<p role="alert">{error}</p>:<Table rows={rows} empty="You have no running or completed loan records." cols={[["Loan",r=>r.loanNumber],["Loan Amount",r=>money(r.loanAmount,r.currency)],["Monthly Installment",r=>money(r.monthlyInstallment,r.currency)],["Total Paid So Far",r=>money(r.totalPaid,r.currency)],["Balance",r=>money(r.balance,r.currency)],["Expected Final Deduction Month",r=>monthLabel(r.expectedFinalDeductionMonth)],["Last Recorded Deduction",r=>monthLabel(r.lastRecordedDeductionMonth)],["Status",r=>title(r.status)]]}/>}
- </Card></Page>
+function clearEssAuthSession() {
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem("chris_ess_token");
+    storage.removeItem("chris_ess_employee");
+    storage.removeItem("chris_ess_organization");
+  }
 }
 
-function Payslips({data}){return <Page h="Payslips & Payroll Previews" s="Approved payslips and provisional payroll calculations are shown separately."><Card t="Approved payslips"><Table rows={data.payroll.payslips} empty="No approved payslips are available yet." cols={[["Period",r=>r.periodName||r.periodCode],["Period End",r=>date(r.periodEnd)],["Pay Date",r=>date(r.payDate)],["Gross",r=>money(r.grossPay,r.currency)],["Deductions",r=>money(r.deductions,r.currency)],["Net Pay",r=>money(r.netPreview,r.currency)],["",r=><Download id={r.id}/>]]}/></Card><Card t="Payroll previews — awaiting approval"><p className="muted">These are provisional calculations, not approved payslips or confirmation of payment.</p><Table rows={data.payroll.previews||[]} empty="No provisional payroll calculations are available." cols={[["Period",r=>r.periodName||r.periodCode],["Gross",r=>money(r.grossPay,r.currency)],["Deductions",r=>money(r.deductions,r.currency)],["Net Pay",r=>money(r.netPreview,r.currency)],["Status",r=>title(r.runStatus)]]}/></Card></Page>}
+async function essRequest(endpoint, options = {}) {
+  const token = getEssAuthToken();
+  const rawBody = options.body;
+  const requestBody =
+    rawBody !== undefined && rawBody !== null && typeof rawBody === "object"
+      ? JSON.stringify(rawBody)
+      : rawBody;
 
-function LeaveAttendance({data}){return <Page h="Leave & Attendance" s="Your leave balances and recent attendance records."><EssLeaveApplications/><Card t="Recent attendance"><Table rows={data.attendance} empty="No attendance records are available." cols={[["Date",r=>date(r.attendanceDate)],["Status",r=>title(r.status)],["Clock In",r=>r.clockIn?new Date(r.clockIn).toLocaleTimeString("en-NG",{hour:"2-digit",minute:"2-digit"}):"—"],["Clock Out",r=>r.clockOut?new Date(r.clockOut).toLocaleTimeString("en-NG",{hour:"2-digit",minute:"2-digit"}):"—"],["Late",r=>r.lateMinutes+" min"],["Overtime",r=>r.overtimeMinutes+" min"]]}/></Card></Page>}
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      body: requestBody,
+      headers: {
+        ...(requestBody !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Cache-Control": "no-cache",
+        ...(options.headers || {}),
+      },
+      cache: "no-store",
+    });
+  } catch {
+    const error = new Error("The employee portal cannot connect to the CHRiS server. Check your internet connection and try again.");
+    error.code = "NETWORK_UNAVAILABLE";
+    throw error;
+  }
 
-function Performance({data,onSaved}){const current=data.performance?.[0];const [answers,setAnswers]=useState({}),[comments,setComments]=useState(""),[rating,setRating]=useState("SATISFACTORY"),[busy,setBusy]=useState(false),[msg,setMsg]=useState("");if(!current)return <Page h="Performance Evaluation" s="Quarterly performance evaluation, objectives and self-assessment."><Card><Empty t="No performance cycle has been opened for your employee record yet."/></Card></Page>;const submitted=["MANAGER_APPROVAL_PENDING","FINAL"].includes(current.assessment?.status);const submit=async()=>{setBusy(true);setMsg("");try{const assessment={overallRating:rating,comments,improvementAreas:comments,kpis:current.kpis.map(k=>({kpiId:k.id,rating:answers[k.id]?.rating||"SATISFACTORY",comment:answers[k.id]?.comment||""}))};await essRequest("/api/ess/performance/self-assessment",{method:"POST",body:{cycleId:current.cycle.id,assessment}});setMsg("Self-assessment submitted to your line manager.");await onSaved()}catch(e){setMsg(e.message||"Unable to submit self-assessment.")}finally{setBusy(false)}};return <Page h="Performance Evaluation" s={"Quarter "+(current.cycle.quarter||"—")+" • "+(current.cycle.year||"—")+" • Quarterly appraisal workflow"}><Card t="Objectives & KPIs"><div className="workflow"><span className="step done">1. Objectives published</span><span className={submitted?"step done":"step active"}>2. Self-assessment</span><span className={current.assessment?.status==="FINAL"?"step done":"step"}>3. Line manager assessment</span><span className="step">4. Final outcome</span></div>{current.kpis.length?current.kpis.map(k=><div className="kpi" key={k.id}><div><span>{k.weight}%</span><b>{k.title}</b></div><p>{k.objective}</p><small>Measure: {k.measurement} · Target: {k.target}</small><div className="kpiinputs"><select disabled={submitted} value={answers[k.id]?.rating||current.assessment?.selfAssessment?.kpis?.find(x=>x.kpiId===k.id)?.rating||"SATISFACTORY"} onChange={e=>setAnswers(a=>({...a,[k.id]:{...a[k.id],rating:e.target.value}}))}>{RATINGS.map(x=><option key={x}>{x}</option>)}</select><input disabled={submitted} placeholder="Evidence / comment" value={answers[k.id]?.comment||""} onChange={e=>setAnswers(a=>({...a,[k.id]:{...a[k.id],comment:e.target.value}}))}/></div></div>):<Empty t="Your approved objectives have not yet been published for this cycle."/>}</Card><Card t="Self-assessment"><label className="field">Overall self-rating<select disabled={submitted} value={rating} onChange={e=>setRating(e.target.value)}>{RATINGS.map(x=><option key={x}>{x}</option>)}</select></label><label className="field">Comments / improvement areas<textarea disabled={submitted} rows="4" value={comments} onChange={e=>setComments(e.target.value)} placeholder="Summarise achievements, evidence and improvement areas."/></label>{msg&&<div className="notice">{msg}</div>}{!submitted&&<button className="primary" disabled={busy||!current.kpis.length} onClick={submit}>{busy?"Submitting…":"Submit self-assessment"}</button>}{current.assessment?.finalRating&&<div className="outcome"><b>Final outcome: {title(current.assessment.finalRating)}</b><span>{current.assessment.improvementNotes||"No improvement note recorded."}</span>{current.promotionPipeline&&<strong>Promotion / LRT review: {title(current.promotionPipeline.status)}</strong>}{current.pip&&<strong>Performance Improvement Plan: {title(current.pip.status)}</strong>}</div>}</Card></Page>}
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    result = { status: "error", message: "Invalid server response." };
+  }
 
-function Gratuity({data}){const g=data.gratuity||{};const [now,setNow]=useState(new Date());useEffect(()=>{const id=setInterval(()=>setNow(new Date()),60000);return()=>clearInterval(id)},[]);const start=g.serviceStartDate?new Date(g.serviceStartDate):null;const days=start?Math.max(0,Math.floor((Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())-Date.UTC(start.getFullYear(),start.getMonth(),start.getDate()))/86400000)):0;const months=days/30;const gross=Number(g.grossMonthly||0);const accrued=gross*(days/30)*0.075;const approved=g.gratuitySeverance!=null?Number(g.gratuitySeverance):null;return <Page h="Gratuity" s="Your gratuity entitlement accrues automatically each day from your recorded service date."><div className="metrics"><div className="metric"><span>No. of Days in System</span><strong>{days.toLocaleString()}</strong><small>Actual calendar days in service</small></div><div className="metric"><span>Equivalent Months</span><strong>{months.toFixed(2)}</strong><small>Days ÷ 30</small></div><div className="metric"><span>Gratuity Calculation</span><strong>7.5%</strong><small>Gross Monthly × Days ÷ 30 × 7.5%</small></div><div className="metric"><span>Gratuity as of Today</span><strong>{money(accrued,g.currency||"NGN")}</strong><small>Recalculated automatically each day</small></div></div><Card t="Gratuity calculation details"><Info items={[["Service Start Date",date(start)],["Gross Monthly Salary",gross?money(gross,g.currency||"NGN"):"Not available in payroll"],["Calculation Rule",g.calculationRule||"Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%"],["Days in Service",days.toLocaleString()],["Equivalent Months",months.toFixed(2)],["Accrued Gratuity Today",money(accrued,g.currency||"NGN")],["Approved Exit Settlement",approved==null?"Not yet approved":money(approved,g.currency||"NGN")],["Status",title(g.status||"ACCRUING")]]}/></Card></Page>}
+  if (response.status === 401) {
+    clearEssAuthSession();
+    if (window.location.pathname !== "/ess") window.location.replace("/ess");
+    const error = new Error(result.message || "Your employee portal session has expired. Please sign in again.");
+    error.code = "ESS_AUTH_INVALID";
+    throw error;
+  }
 
-function BirthdayCard({data}){const p=data.profile||{},birthdays=data.birthdays||[],anniversaries=data.workAnniversaries||[];const dob=data.birthday?.dateOfBirth;const birth=dob?new Date(dob):null;const now=new Date();const todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());const next=birth?new Date(now.getFullYear(),birth.getMonth(),birth.getDate()):null;if(next&&next<todayStart)next.setFullYear(now.getFullYear()+1);const days=next?Math.ceil((next-todayStart)/86400000):0;const today=!!next&&next.getTime()===todayStart.getTime();if(birthdays.length||anniversaries.length)return <Page h="Birthday & Work Anniversary" s="Today we celebrate members of the Zermatt Liquor Limited family."><div className="celebration-grid">{birthdays.length>0&&<section className="birthday-card birthday-announcement"><div className="birthday-top"><span className="eyebrow">TODAY'S BIRTHDAY CELEBRATION</span><span className="birthday-confetti">✦</span></div><div className="birthday-icon">🎂</div><h1>Happy Birthday to Our Colleagues!</h1><p>Join Zermatt Liquor Limited in celebrating our colleagues whose birthdays fall today.</p><div className="celebration-list">{birthdays.map((e,i)=><div className="celebration-person" key={e.id||i}><div className="celebration-avatar">{initials(e)}</div><div><strong>{[e.firstName,e.middleName,e.lastName].filter(Boolean).join(" ")}</strong><span>{e.designation||"Employee"}{e.employeeNumber?" · "+e.employeeNumber:""}</span><p>“Happy Birthday, {[e.firstName,e.lastName].filter(Boolean).join(" ")}! May your new year bring you joy, good health, greater achievements and continued success. From everyone at Zermatt Liquor Limited.”</p></div></div>)}</div></section>}{anniversaries.length>0&&<section className="birthday-card anniversary-announcement"><div className="birthday-top"><span className="eyebrow">TODAY'S WORK ANNIVERSARIES</span><span className="birthday-confetti">✦</span></div><div className="birthday-icon">🏆</div><h1>Congratulations to Our Colleagues!</h1><p>We celebrate the dedication and service of our colleagues marking a work anniversary today.</p><div className="celebration-list">{anniversaries.map((e,i)=>{const years=Math.max(1,now.getFullYear()-new Date(e.hireDate).getFullYear());return <div className="celebration-person" key={e.id||i}><div className="celebration-avatar">🏆</div><div><strong>{[e.firstName,e.middleName,e.lastName].filter(Boolean).join(" ")}</strong><span>{e.designation||"Employee"} · {years}{years===1?"st":years===2?"nd":years===3?"rd":"th"} Work Anniversary</span><p>“Congratulations on your {years}{years===1?"st":years===2?"nd":years===3?"rd":"th"} work anniversary! Thank you for your commitment and contribution to Zermatt Liquor Limited. We celebrate you today.”</p></div></div>})}</div></section>}</div></Page>;if(!dob)return <Page h="Birthday & Work Anniversary" s="Your personalized Zermatt birthday card and birthday information."><Card><Empty t="Your date of birth is not yet recorded in your CHRiS employee profile."/><p className="muted">Please contact HR/Admin to update your personal details.</p></Card></Page>;return <Page h="Birthday & Work Anniversary" s="Your personalized Zermatt birthday card and birthday information."><section className="birthday-card"><div className="birthday-top"><span className="eyebrow">ZERMATT LIQUOR LIMITED</span><span className="birthday-confetti">✦</span></div><div className="birthday-icon">🎂</div><h1>{today?"Happy Birthday, "+p.firstName+"!":"A Birthday Celebration for "+p.firstName}</h1><p>{today?"Wishing you a wonderful birthday filled with joy, good health and success.":"Your next birthday is "+date(next)+"."}</p><div className="birthday-message">“May the year ahead bring you greater achievements, memorable moments and continued success. Happy Birthday from everyone at Zermatt Liquor Limited.”</div><div className="birthday-meta"><span>Date of Birth <b>{date(birth)}</b></span><span>{today?"Today":"Countdown"} <b>{today?"🎉":days+" day"+(days===1?"":"s")}</b></span></div></section></Page>}
+  if (!response.ok) {
+    const error = new Error(result.message || "Unable to complete employee portal request.");
+    error.code = result.code || "ESS_REQUEST_FAILED";
+    error.details = result.details || null;
+    throw error;
+  }
 
-function cleanCommunicationText(value){return String(value??"").replace(/\\r\\n|\\n|\\r/g,"\n").replace(/\n{3,}/g,"\n\n").trim()}
-function Communications({data}){const rows=data.news||[];const groups=[["NEWS & UPDATES",rows.filter(x=>["ANNOUNCEMENT","EVENT","POLICY_HR_UPDATE"].includes(x.category))],["MEMOS",rows.filter(x=>x.category==="MEMO")],["CAREER OPPORTUNITIES",rows.filter(x=>x.category==="INTERNAL_CAREER")],["NEWLY PROMOTED EMPLOYEES",rows.filter(x=>x.category==="PROMOTION")],["TRANSFERS",rows.filter(x=>x.category==="TRANSFER")],["SEPARATED EMPLOYEES",rows.filter(x=>["RETIREMENT","RESIGNATION","TERMINATION"].includes(x.category))]];return <Page h="Internal Communications" s="Official Zermatt Liquor Limited news, memos, opportunities and employee announcements published by HR/Admin."><div className="communication-summary">{groups.map(([label,items])=><div className="communication-chip" key={label}><b>{items.length}</b><span>{label}</span></div>)}</div>{rows.length===0?<Card><Empty t="There are no published internal communications at this time."/></Card>:groups.map(([label,items])=>items.length?<section className="communication-section" key={label}><div className="communication-section-head"><h3>{label}</h3><span>{items.length} {items.length===1?"item":"items"}</span></div><div className="communication-list">{items.map(row=><article className={row.isPinned?"communication-card pinned":"communication-card"} key={row.id}><div className="communication-card-top"><span className="communication-category">{title(row.category)}</span>{row.isPinned&&<span className="communication-pin">PINNED</span>}</div><h3>{row.title}</h3>{row.summary&&<p className="communication-summary-text">{row.summary}</p>}<div className="communication-body">{cleanCommunicationText(row.body)}</div><small>{row.publishAt?date(row.publishAt):"Published"}</small></article>)}</div></section>:null)}</Page>}
-
-function Documents({data}){return <Page h="Documents" s="Documents attached to your CHRiS employee record."><Card><Table rows={data.onboarding.documents} empty="No employee documents are available." cols={[["Document",r=>r.originalName],["Category",r=>title(r.category)],["Type",r=>r.mimeType||"—"],["Uploaded",r=>date(r.createdAt)],["",r=><Doc id={r.id}/>]]}/></Card></Page>}
-
-async function downloadFile(url,name){
- const r=await fetch(url,{headers:{Authorization:"Bearer "+getEssAuthToken()}});
- if(!r.ok) throw Error("The requested file could not be downloaded.");
- const blob=await r.blob(); const objectUrl=URL.createObjectURL(blob); const link=document.createElement("a");
- link.href=objectUrl; link.download=name; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(objectUrl);
+  return result;
 }
-function Download({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/payslips/"+id+"/download","CHRiS_Payslip.xlsx").catch(e=>alert(e.message))}>Download</button>}
-function Doc({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/documents/"+id+"/download","CHRiS_Document").catch(e=>alert(e.message))}>Download</button>}
 
-function Page({h,s,children}){return <><div className="pagehead"><span className="eyebrow">CHRiS EMPLOYEE PORTAL</span><h2>{h}</h2><p>{s}</p></div>{children}</>}
-function Card({t,a,click,children}){return <section className="card">{t&&<div className="cardhead"><h3>{t}</h3>{a&&<button className="link" onClick={click}>{a} →</button>}</div>}{children}</section>}
-function Metric({l,v,s,go}){return <button className="metric" onClick={go}><span>{l}</span><strong>{v}</strong><small>{s}</small></button>}
-function Progress({v}){return <div className="progress"><span style={{width:Math.max(0,Math.min(100,Number(v)||0))+"%"}}/></div>}
-function Info({items}){return <div className="infogrid">{items.map(([l,v])=><div className="info" key={l}><small>{l}</small><b>{val(v)}</b></div>)}</div>}
-function Groups({data}){const groups=data&&typeof data==="object"&&!Array.isArray(data)?data:{};return <div>{Object.entries(groups).map(([k,v])=><div className="group" key={k}><h4>{title(k)}</h4><Info items={v&&typeof v==="object"&&!Array.isArray(v)?Object.entries(v).map(([a,b])=>[title(a),typeof b==="object"?JSON.stringify(b):b]):[[title(k),v]]}/></div>)}</div>}
-function Table({rows=[],cols,empty="No records available."}){if(!rows.length)return <Empty t={empty}/>;return <div className="tablewrap"><table><thead><tr>{cols.map(([h],i)=><th key={h||i}>{h}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={r.id||i}>{cols.map(([h,f],j)=><td key={h||j}>{f(r)}</td>)}</tr>)}</tbody></table></div>}
-function Empty({t}){return <div className="empty">{t}</div>}
-function Brand({small=false}){return <img src={chrisLogo} alt="CHRiS" className={small?"brandlogo small":"brandlogo"}/>}
-
-function Login({login,setLogin,submit,submitting,error}){
- const [showPassword,setShowPassword]=useState(false);
- const [mode,setMode]=useState("login");
- const [supportEmail,setSupportEmail]=useState("");
- const [employeeNumber,setEmployeeNumber]=useState("");
- const [supportBusy,setSupportBusy]=useState(false);
- const [supportMessage,setSupportMessage]=useState("");
- const [supportError,setSupportError]=useState("");
- useEffect(()=>{
-   const clearFields=()=>{setLogin({email:"",password:""});setShowPassword(false);};
-   clearFields();
-   const a=window.setTimeout(clearFields,100),b=window.setTimeout(clearFields,600);
-   const onShow=()=>clearFields();
-   window.addEventListener("pageshow",onShow);
-   return()=>{window.clearTimeout(a);window.clearTimeout(b);window.removeEventListener("pageshow",onShow)};
- },[setLogin]);
- const submitSupport=async e=>{
-   e.preventDefault();setSupportBusy(true);setSupportMessage("");setSupportError("");
-   try{
-     const endpoint=mode==="activate"?"/api/auth/activate-employee":"/api/auth/forgot-password";
-     const body=mode==="activate"?{email:supportEmail,employeeNumber,organizationSlug:ORG_SLUG}:{email:supportEmail,organizationSlug:ORG_SLUG};
-     const response=await fetch(`${API_BASE_URL}${endpoint}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-     const result=await response.json();
-     if(!response.ok)throw new Error(result.message||"We could not process your request. Please try again.");
-     setSupportMessage(result.message||"If the details match an eligible account, instructions will be sent to your registered email.");
-   }catch(e){setSupportError(e.message||"We could not process your request. Please try again.");}
-   finally{setSupportBusy(false);}
- };
- return <main className="esslogin" style={{backgroundImage:`linear-gradient(135deg,rgba(3,45,29,.42),rgba(0,0,0,.16)),url(${loginBackground})`}}>
-   <div className="esslogin-glow"/>
-   <div className="ess-admin-login-card">
-     <div className="ess-admin-header">
-       <div className="ess-welcome">Welcome to</div>
-       <img src={chrisLogo} alt="CHRIS" className="ess-admin-logo"/>
-       <div className="ess-corporate">Zermatt Liquor Limited</div>
-       <div className="ess-portal-title">Employee Self-Service</div>
-       <div className="ess-divider" aria-hidden="true"/>
-     </div>
-     {mode==="login"?<>
-       {error&&<div className="ess-error">{error}</div>}
-       <form onSubmit={submit} autoComplete="off">
-         <input type="text" name="username" autoComplete="username" tabIndex="-1" aria-hidden="true" className="autofill-decoy"/>
-         <input type="password" name="password" autoComplete="current-password" tabIndex="-1" aria-hidden="true" className="autofill-decoy"/>
-         <label className="ess-field-label">Email Address<div className="ess-input-wrap"><FiMail className="ess-input-icon" size={18}/><input required type="email" name="chris_account_identifier" autoComplete="off" spellCheck="false" value={login.email} onChange={e=>setLogin({...login,email:e.target.value})} placeholder="Enter your registered email address"/></div></label>
-         <label className="ess-field-label">Password<div className="ess-input-wrap ess-password-wrap"><FiLock className="ess-input-icon" size={18}/><input required type={showPassword?"text":"password"} name="chris_secure_access" autoComplete="new-password" value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} placeholder="Enter your password"/><button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} title={showPassword?"Hide password":"Show password"}>{showPassword?<FiEyeOff size={19}/>:<FiEye size={19}/>}</button></div></label>
-         <button className="ess-signin" disabled={submitting}>{submitting?"Signing in...":"Sign In"}</button>
-       </form>
-       <div className="ess-account-links"><button type="button" onClick={()=>{setMode("forgot");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Forgot Password?</button><span>·</span><button type="button" onClick={()=>{setMode("activate");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Activate Account</button></div>
-     </>:<>
-       <h2 className="ess-support-title">{mode==="activate"?"Activate your account":"Reset your password"}</h2>
-       <p className="ess-support-copy">{mode==="activate"?"Enter your employee number and the email address registered in CHRiS.":"Enter your registered email address to receive a secure password-reset link."}</p>
-       {supportMessage&&<div className="ess-support-success" role="status">{supportMessage}</div>}
-       {supportError&&<div className="ess-error" role="alert">{supportError}</div>}
-       {!supportMessage&&<form onSubmit={submitSupport} autoComplete="off">
-         {mode==="activate"&&<label className="ess-field-label">Employee Number<div className="ess-input-wrap"><input required value={employeeNumber} onChange={e=>setEmployeeNumber(e.target.value)} placeholder="Enter your employee number" autoComplete="off"/></div></label>}
-         <label className="ess-field-label">Registered Email Address<div className="ess-input-wrap"><FiMail className="ess-input-icon" size={18}/><input required type="email" value={supportEmail} onChange={e=>setSupportEmail(e.target.value)} placeholder="Enter your registered email" autoComplete="email"/></div></label>
-         <button className="ess-signin" disabled={supportBusy}>{supportBusy?"Please wait…":mode==="activate"?"Send Activation Link":"Send Reset Link"}</button>
-       </form>}
-       <button type="button" className="ess-support-back" onClick={()=>{setMode("login");setSupportMessage("");setSupportError("");}}>← Back to Sign In</button>
-     </>}
-     <div className="ess-login-footer"><span>People</span><b>|</b><span>Performance</span><b>|</b><span>Rewards</span></div>
-   </div>
- </main>
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-NG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
-const CSS=`
-*{box-sizing:border-box}
-html,body,#root{margin:0;min-height:100%;font-family:Inter,Arial,Helvetica,sans-serif}
-body{background:#07110C;color:#F3F7F4}
-.esslogin{min-height:100vh;position:relative;display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box;background-size:cover;background-position:center;background-repeat:no-repeat}
-.esslogin-glow{position:absolute;inset:0;background:radial-gradient(circle at 18% 20%,rgba(212,175,55,.13),transparent 38%);pointer-events:none}
-.ess-admin-login-card{width:100%;max-width:460px;position:relative;z-index:1;background:linear-gradient(180deg,rgba(3,12,8,.94),rgba(5,24,15,.92));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(212,175,55,.38);border-radius:24px;padding:38px;box-shadow:0 28px 80px rgba(0,0,0,.46),0 0 30px rgba(8,122,67,.12)}
-.ess-admin-header{text-align:center;margin-bottom:28px}
-.ess-welcome{color:#D4AF37;font-size:16px;font-weight:800;letter-spacing:.04em;margin-bottom:8px}
-.ess-admin-logo{display:block;width:245px;max-width:92%;height:auto;margin:0 auto 5px;object-fit:contain;animation:chrisEssLogoPulse 2.5s ease-in-out infinite}
-@keyframes chrisEssLogoPulse{0%,100%{opacity:1;transform:scale(1);filter:drop-shadow(0 0 6px rgba(0,155,74,.24)) drop-shadow(0 0 5px rgba(212,175,55,.15))}50%{opacity:.64;transform:scale(1.035);filter:drop-shadow(0 0 14px rgba(0,185,88,.40)) drop-shadow(0 0 11px rgba(212,175,55,.28))}}
-.ess-corporate{margin-top:3px;color:#087A43;font-size:17px;font-weight:900;line-height:1.25;letter-spacing:.01em;text-shadow:0 0 9px rgba(8,122,67,.22)}
-.ess-information{margin-top:5px;color:#D4AF37;font-size:10px;font-weight:800;line-height:1.3;letter-spacing:.16em;text-transform:uppercase;text-shadow:0 0 8px rgba(212,175,55,.18)}\n.ess-portal-title{margin-top:12px;color:#F3F7F4;font-size:15px;font-weight:800;line-height:1.3;letter-spacing:.01em}
-.ess-divider{width:62%;height:1px;margin:15px auto 0;background:linear-gradient(90deg,transparent 0%,rgba(8,122,67,.72) 25%,rgba(212,175,55,.92) 50%,rgba(8,122,67,.72) 75%,transparent 100%)}
-.ess-field-label{display:block;margin-bottom:18px;color:#D7E4DC;font-size:13px;font-weight:800}
-.ess-input-wrap{position:relative;width:100%;margin-top:8px}
-.ess-input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#64748B;pointer-events:none}
-.ess-input-wrap input{width:100%;padding:13px 50px 13px 43px;box-sizing:border-box;border:1px solid rgba(8,122,67,.70);border-radius:11px;background:rgba(2,10,7,.62);color:#F8FAF9;font-size:14px;outline:none}
-.ess-input-wrap input:focus{border-color:#D4AF37;box-shadow:0 0 0 3px rgba(212,175,55,.10)}
-.ess-password-wrap .ess-input-icon{color:#D4AF37}.ess-password-wrap input{padding-right:50px;border-color:rgba(8,122,67,.70);border-radius:11px;background:rgba(2,10,7,.62);color:#F8FAF9;font-size:14px}.ess-password-wrap input:focus{border-color:#D4AF37;box-shadow:0 0 0 3px rgba(212,175,55,.10)}.password-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent!important;color:#D4AF37;border:none;border-radius:8px;cursor:pointer;padding:0;transition:none!important;box-shadow:none!important;outline:none!important}
-.password-toggle:hover,.password-toggle:focus,.password-toggle:focus-visible,.password-toggle:active{background:transparent!important;color:#D4AF37!important;transform:translateY(-50%)!important;transition:none!important;box-shadow:none!important;outline:none!important}
-.autofill-decoy{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.ess-signin{width:100%;border:none;border-radius:11px;padding:14px;background:linear-gradient(90deg,#075F36,#0B7A45);color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 8px 22px rgba(0,0,0,.30),0 0 14px rgba(8,122,67,.18)}
-.ess-signin:disabled{background:#688B79;cursor:not-allowed;opacity:.8}
-.ess-error{margin-bottom:20px;padding:13px 15px;background:rgba(254,242,242,.94);border:1px solid #FECACA;border-radius:10px;color:#B91C1C;font-size:13px;font-weight:600;line-height:1.5}
-.ess-account-links{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:16px;font-size:13px;color:#D4AF37}.ess-account-links button,.ess-support-back{background:none;border:0;color:#D4AF37;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:5px}.ess-support-title{margin:0 0 8px;color:#F3F7F4;font-size:21px;text-align:center}.ess-support-copy{margin:0 0 22px;color:#C7D7CE;font-size:13px;line-height:1.6;text-align:center}.ess-support-success{margin-bottom:18px;padding:13px 15px;background:rgba(8,122,67,.18);border:1px solid rgba(8,180,100,.55);border-radius:10px;color:#D7FBE6;font-size:13px;line-height:1.6}.ess-support-back{display:block;margin:14px auto 0}
-.ess-login-footer{margin-top:28px!important;height:auto!important;min-height:0!important;background:none!important;background-image:none!important;border:0!important;border-top:0!important;box-shadow:none!important;outline:0!important;padding:0!important;position:relative;display:flex;justify-content:center;gap:10px;color:#7FAF96;font-size:12px;font-weight:700}.ess-login-footer:before,.ess-login-footer:after{content:none!important;display:none!important;border:0!important;background:none!important;box-shadow:none!important}
-.ess-login-footer b{color:#D4AF37}
-@media(max-width:760px){.esslogin{padding:18px}.ess-admin-login-card{padding:28px 24px;border-radius:20px}.ess-admin-logo{width:220px}.ess-welcome{font-size:15px}.ess-corporate{font-size:16px}}
 
-.headleft{display:flex;align-items:center;gap:18px;min-width:0}.ess-nav-holder{position:relative;z-index:30}.ess-menu-toggle{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid rgba(212,175,55,.58);border-radius:10px;background:linear-gradient(145deg,rgba(8,122,67,.28),rgba(2,23,15,.92));color:#f7faf8;font-weight:800;cursor:pointer;white-space:nowrap}.menu-glyph{font-size:18px;color:#f2cf57;line-height:1}.menu-chevron{font-size:9px;color:#f2cf57}.ess-page-dropdown{position:absolute;top:calc(100% + 10px);left:0;width:280px;max-width:calc(100vw - 28px);max-height:min(72vh,620px);overflow-y:auto;padding:8px;border:1px solid rgba(212,175,55,.48);border-radius:14px;background:rgba(2,14,9,.99);box-shadow:0 20px 48px rgba(0,0,0,.55);z-index:32}.ess-dropdown-item{display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;margin:2px 0;border:1px solid transparent;border-radius:9px;background:transparent;color:#c7d3cc;text-align:left;font-size:13px;font-weight:750}.ess-dropdown-item i{width:24px;flex:0 0 24px;text-align:center;color:#f2cf57;font-style:normal}.ess-dropdown-item span{flex:1}.ess-dropdown-item b{color:#2ee98b;font-size:10px}.ess-dropdown-item.selected{border-color:rgba(212,175,55,.42);background:rgba(8,122,67,.28);color:#fff}.ess-menu-backdrop{position:fixed;inset:0;z-index:31;border:0;background:transparent;cursor:default}\n.essshell{min-height:100vh;background:linear-gradient(135deg,#020b07 0%,#041b10 55%,#020906 100%);color:#f7faf8}.essshell .app{min-height:100vh;display:flex;flex-direction:column}.essshell header{height:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:space-between;padding:12px 28px;border-bottom:1px solid rgba(212,175,55,.35);background:rgba(2,14,9,.96);box-shadow:0 8px 24px rgba(0,0,0,.24)}.brandrow,.headuser,.person,.cardhead,.proghead,.latest,.workflow,.kpiinputs,.birthday-top,.birthday-meta{display:flex;align-items:center}.brandrow{gap:10px}.brandrow strong{display:block;font-size:16px}.brandrow small,.headuser small{display:block;color:#9fb1a7;font-size:11px;margin-top:2px}.brandlogo.small{width:42px;height:42px;object-fit:contain}.headuser{gap:11px}.avatar,.bigavatar{display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#087a43,#032b1b);border:1px solid rgba(212,175,55,.65);color:#f2cf57;font-weight:900}.avatar{width:38px;height:38px;font-size:12px}.headuser b{font-size:13px}.ghost{margin-left:12px;padding:9px 13px;border:1px solid rgba(212,175,55,.55);border-radius:9px;background:rgba(255,255,255,.04);color:#f2cf57;font-weight:800}.essshell .body{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:calc(100vh - 76px)}.essshell aside{padding:22px 14px;border-right:1px solid rgba(212,175,55,.25);background:rgba(2,14,9,.82)}.caption{display:block;padding:0 12px 12px;color:#f2cf57;font-size:11px;font-weight:900;letter-spacing:.15em}.nav{width:100%;display:flex;align-items:center;gap:11px;margin:3px 0;padding:10px 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:#c7d3cc;text-align:left;font-weight:750}.nav i{width:24px;text-align:center;font-style:normal;color:#f2cf57}.nav b{margin-left:auto;color:#2ee98b;font-size:11px}.nav.active{background:linear-gradient(145deg,rgba(8,122,67,.30),rgba(2,23,15,.82));border-color:rgba(212,175,55,.45);color:#fff}.sidefoot{margin:28px 10px 0;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);color:#9fb1a7;font-size:11px;line-height:1.6}.essshell main{min-width:0}.essshell .body>main{padding:30px 34px 46px;overflow:auto}.essshell button{transition:none!important;transform:none!important}.essshell button:hover,.essshell button:focus,.essshell button:active{transition:none!important;transform:none!important;filter:none!important}.pagehead{max-width:1200px;margin:0 auto 22px}.eyebrow{display:block;color:#f2cf57;font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase}.pagehead h2{margin:7px 0 6px;font-size:28px;line-height:1.2;color:#f7faf8}.pagehead p{margin:0;max-width:900px;color:#9fb1a7;font-size:13px;line-height:1.55}.essshell .body>main>*:not(.pagehead){max-width:1200px;margin-left:auto;margin-right:auto}.hero{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:24px 26px;margin-bottom:20px;border:1px solid rgba(212,175,55,.48);border-radius:20px;background:radial-gradient(circle at 18% 0%,rgba(46,233,139,.10),transparent 32%),linear-gradient(145deg,#063722,#02170f);box-shadow:0 18px 42px rgba(0,0,0,.28)}.person{gap:16px}.bigavatar{width:68px;height:68px;font-size:20px}.person h1{margin:4px 0 5px;font-size:25px;color:#f7faf8}.person p{margin:0;color:#9fb1a7;font-size:13px}.pill,.proghead>span{padding:7px 11px;border:1px solid rgba(46,233,139,.35);border-radius:999px;background:rgba(8,122,67,.18);color:#a7f3d0;font-size:11px;font-weight:800}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:20px}.metric{min-width:0;padding:19px;text-align:left;border:1px solid rgba(212,175,55,.42);border-radius:16px;background:linear-gradient(145deg,#063722,#02170f);color:#f7faf8;box-shadow:0 12px 30px rgba(0,0,0,.22)}.metric span,.metric small{display:block;color:#9fb1a7;font-size:11px}.metric strong{display:block;margin:8px 0 5px;color:#2ee98b;font-size:27px}.twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}.card{padding:20px 22px;margin-bottom:18px;border:1px solid rgba(212,175,55,.40);border-radius:18px;background:linear-gradient(145deg,#063722,#02170f);box-shadow:0 12px 30px rgba(0,0,0,.22)}.cardhead{justify-content:space-between;gap:12px;margin-bottom:15px}.card h3{margin:0;color:#f7faf8;font-size:15px}.link{border:0;background:transparent;color:#f2cf57;font-weight:800}.latest{justify-content:space-between;gap:20px}.latest strong{display:block;margin-top:5px;color:#2ee98b;font-size:23px}.muted,.empty{color:#9fb1a7;font-size:13px;line-height:1.55}.progress{height:9px;overflow:hidden;margin:13px 0;border-radius:999px;background:rgba(255,255,255,.08)}.progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#087a43,#2ee98b)}.quickgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.quick{display:flex;align-items:center;gap:12px;min-height:70px;padding:13px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(255,255,255,.035);color:#f7faf8;text-align:left}.quick>span{font-size:19px;color:#f2cf57}.quick div{min-width:0;flex:1}.quick b,.quick small{display:block}.quick small{margin-top:4px;color:#9fb1a7;font-size:11px}.infogrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.info{padding:13px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.025)}.info small{display:block;color:#9fb1a7;font-size:10px;margin-bottom:5px}.info b{display:block;color:#f7faf8;font-size:12px;line-height:1.4;word-break:break-word}.proghead{justify-content:space-between;gap:20px}.proghead strong{display:block;margin-top:4px;color:#2ee98b;font-size:28px}.sectiongrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:18px}.sectiontile{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(255,255,255,.025)}.check{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:rgba(212,175,55,.14);color:#f2cf57;font-weight:900}.check.done{background:rgba(8,122,67,.3);color:#2ee98b}.sectiontile div:nth-child(2){min-width:0;flex:1}.sectiontile b,.sectiontile small{display:block}.sectiontile small{margin-top:4px;color:#9fb1a7;font-size:10px}.sectiontile>span{font-size:10px;color:#c7d3cc}.group{margin-bottom:18px}.group h4{margin:0 0 10px;color:#f2cf57;font-size:13px}.tablewrap{width:100%;overflow-x:auto}.tablewrap table{width:100%;border-collapse:collapse;min-width:700px}.tablewrap th,.tablewrap td{padding:11px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.08);font-size:11px;white-space:nowrap}.tablewrap th{color:#f2cf57;text-transform:uppercase;font-size:9px;letter-spacing:.08em}.tablewrap td{color:#c7d3cc}.tablebtn{padding:7px 10px;border:1px solid rgba(212,175,55,.48);border-radius:8px;background:rgba(255,255,255,.04);color:#f2cf57;font-weight:800;font-size:10px}.field{display:block;margin-bottom:15px;color:#c7d3cc;font-size:12px;font-weight:800}.field select,.field textarea{display:block;width:100%;margin-top:7px;padding:11px;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:#032216;color:#f7faf8}.field textarea{resize:vertical}.workflow{gap:8px;flex-wrap:wrap;margin-bottom:18px}.step{padding:7px 10px;border:1px solid rgba(255,255,255,.10);border-radius:999px;color:#9fb1a7;font-size:10px}.step.active,.step.done{border-color:rgba(212,175,55,.50);color:#f2cf57}.kpi{padding:16px 0;border-top:1px solid rgba(255,255,255,.08)}.kpi>div:first-child{display:flex;gap:9px;align-items:center}.kpi>div:first-child span{color:#2ee98b;font-size:11px;font-weight:900}.kpi>div:first-child b{color:#f7faf8;font-size:13px}.kpi p,.kpi small{display:block;margin:6px 0;color:#9fb1a7;font-size:11px}.kpiinputs{gap:10px}.kpiinputs select,.kpiinputs input{min-width:0;padding:10px;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:#032216;color:#f7faf8}.kpiinputs select{width:180px}.kpiinputs input{flex:1}.primary{padding:11px 16px;border:0;border-radius:9px;background:#087a43;color:#fff;font-weight:900}.notice{margin:12px 0;padding:10px;border:1px solid rgba(46,233,139,.25);border-radius:9px;color:#a7f3d0;background:rgba(8,122,67,.12)}.outcome{display:grid;gap:5px;margin-top:16px;padding:14px;border:1px solid rgba(212,175,55,.35);border-radius:10px}.outcome span{color:#9fb1a7;font-size:12px}.birthday-card{padding:40px;text-align:center;border:1px solid rgba(212,175,55,.62);border-radius:22px;background:radial-gradient(circle at 50% 0%,rgba(212,175,55,.12),transparent 36%),linear-gradient(145deg,#063722,#02170f);box-shadow:0 20px 50px rgba(0,0,0,.30)}.birthday-top{justify-content:space-between}.birthday-confetti{color:#f2cf57;font-size:24px}.birthday-icon{margin:28px auto 12px;font-size:64px}.birthday-card h1{margin:0;color:#f7faf8;font-size:28px}.birthday-card>p{max-width:700px;margin:10px auto;color:#9fb1a7}.birthday-message{max-width:760px;margin:24px auto;padding:18px;border:1px solid rgba(255,255,255,.08);border-radius:12px;color:#c7d3cc;background:rgba(255,255,255,.03);line-height:1.7}.birthday-meta{justify-content:center;gap:35px;margin-top:22px;color:#9fb1a7;font-size:11px}.birthday-meta b{display:block;margin-top:4px;color:#f2cf57;font-size:13px}.celebration-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.birthday-announcement,.anniversary-announcement{text-align:center}.celebration-list{display:grid;gap:12px;margin-top:20px;text-align:left}.celebration-person{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid rgba(255,255,255,.09);border-radius:12px;background:rgba(255,255,255,.035)}.celebration-avatar{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:50%;background:rgba(8,122,67,.28);border:1px solid rgba(212,175,55,.45);color:#f2cf57;font-weight:900}.celebration-person strong,.celebration-person span{display:block}.celebration-person span{margin-top:3px;color:#9fb1a7;font-size:11px}.celebration-person p{margin:8px 0 0;color:#c7d3cc;font-size:12px;line-height:1.6}.communication-summary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:18px}.communication-chip{padding:13px;border:1px solid rgba(212,175,55,.32);border-radius:12px;background:rgba(255,255,255,.025)}.communication-chip b{display:block;color:#2ee98b;font-size:20px}.communication-chip span{display:block;margin-top:4px;color:#9fb1a7;font-size:9px;line-height:1.3}.communication-section{margin-bottom:22px}.communication-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 10px}.communication-section-head h3{margin:0;color:#f2cf57;font-size:13px}.communication-section-head span{color:#9fb1a7;font-size:10px}.communication-list{display:grid;gap:12px}.communication-card{padding:18px;border:1px solid rgba(212,175,55,.28);border-radius:14px;background:linear-gradient(145deg,#063722,#02170f)}.communication-card.pinned{border-color:rgba(212,175,55,.62)}.communication-card-top{display:flex;gap:8px;align-items:center}.communication-category,.communication-pin{padding:4px 7px;border-radius:999px;font-size:9px;font-weight:900}.communication-category{background:rgba(8,122,67,.2);color:#a7f3d0}.communication-pin{background:#D4AF37;color:#07140D}.communication-card h3{margin:10px 0 6px;color:#f7faf8;font-size:16px}.communication-summary-text{margin:0 0 9px;color:#c7d3cc;font-weight:700;font-size:12px}.communication-body{color:#9fb1a7;font-size:12px;line-height:1.65;white-space:pre-wrap}.communication-card small{display:block;margin-top:12px;color:#7f9488;font-size:10px}.loading{min-height:100vh;display:grid;place-content:center;text-align:center;padding:30px}.loading .brandlogo{width:180px;margin:0 auto 18px}.loading h2{margin-bottom:8px}.loading p{color:#9fb1a7}.autofill-decoy{left:-9999px;top:-9999px}
-@media(max-width:1050px){.essshell .body{display:block}.essshell aside{display:none}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.infogrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.celebration-grid{grid-template-columns:1fr}.communication-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.essshell header{height:auto;min-height:70px;padding:12px 14px;gap:10px}.headleft{gap:10px}.brandrow{gap:6px}.brandrow strong{font-size:14px}.brandrow small{font-size:10px}.brandlogo.small{width:34px;height:34px}.headuser{gap:7px}.headuser>div:nth-child(2){display:none}.ghost{margin-left:0;padding:8px 9px;font-size:11px}.ess-menu-toggle{padding:9px 10px;gap:6px}.ess-menu-toggle>span:nth-child(2){font-size:12px}.ess-page-dropdown{width:270px}.essshell .body>main{padding:20px 16px 35px}.hero{align-items:flex-start;flex-direction:column}.twocol,.sectiongrid,.quickgrid{grid-template-columns:1fr}.infogrid{grid-template-columns:1fr}.kpiinputs{align-items:stretch;flex-direction:column}.kpiinputs select{width:100%}.birthday-card{padding:26px 18px}.birthday-meta{flex-direction:column;gap:14px}}
-`;
+function display(value) {
+  return value === null || value === undefined || value === "" ? "—" : value;
+}
 
+export default function ESSPortal() {
+  const [authenticated, setAuthenticated] = useState(Boolean(getEssAuthToken()));
+  const [employee, setEmployee] = useState(null);
+  const [organization, setOrganization] = useState(null);
+  const [loading, setLoading] = useState(Boolean(getEssAuthToken()));
+  const [message, setMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
+  useEffect(() => {
+    if (!getEssAuthToken()) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+    essRequest("/api/ess/me")
+      .then((result) => {
+        if (!active) return;
+        setEmployee(result?.data?.employee || null);
+        setOrganization(result?.data?.organization || null);
+        setAuthenticated(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setAuthenticated(false);
+        setEmployee(null);
+        setOrganization(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setLoading(true);
+
+    try {
+      const result = await essRequest("/api/ess/login", {
+        method: "POST",
+        body: {
+          email,
+          password,
+          organizationSlug: ORGANIZATION_SLUG,
+        },
+      });
+
+      const token = result?.data?.token;
+      if (!token) throw new Error("Employee portal authentication was not returned by the server.");
+
+      localStorage.setItem("chris_ess_token", token);
+      localStorage.setItem("chris_ess_employee", JSON.stringify(result.data.employee || {}));
+      localStorage.setItem("chris_ess_organization", JSON.stringify(result.data.organization || {}));
+
+      const profile = await essRequest("/api/ess/me");
+      setEmployee(profile?.data?.employee || null);
+      setOrganization(profile?.data?.organization || result.data.organization || null);
+      setAuthenticated(true);
+      setEmail("");
+      setPassword("");
+    } catch (error) {
+      setMessage(error.message || "Unable to sign in to the employee portal.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = () => {
+    clearEssAuthSession();
+    setAuthenticated(false);
+    setEmployee(null);
+    setOrganization(null);
+    setMessage("");
+    setPassword("");
+  };
+
+  if (loading && !employee && authenticated) {
+    return <PortalShell><LoadingState /></PortalShell>;
+  }
+
+  if (!authenticated) {
+    return (
+      <PortalShell>
+        <section style={cardStyle}>
+          <div style={eyebrowStyle}>ZERMATT LIQUOR LIMITED</div>
+          <h1 style={headingStyle}>Employee Self-Service</h1>
+          <p style={subheadingStyle}>
+            Sign in to your personal CHRiS employee portal. Your access is limited to your own employee record.
+          </p>
+
+          {message && (
+            <div role="alert" style={errorStyle}>{message}</div>
+          )}
+
+          <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+            <label style={labelStyle}>
+              Employee email
+              <input
+                required
+                autoComplete="username"
+                type="email"
+                placeholder="Enter the email registered in CHRiS"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={labelStyle}>
+              Password
+              <input
+                required
+                autoComplete="current-password"
+                type="password"
+                placeholder="Enter your CHRiS employee portal password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                style={inputStyle}
+              />
+            </label>
+
+            <button disabled={loading} type="submit" style={{ ...buttonStyle, opacity: loading ? 0.7 : 1 }}>
+              {loading ? "Signing in…" : "Sign in to my portal"}
+            </button>
+          </form>
+
+          <div style={securityNoteStyle}>
+            <strong>Private employee access</strong>
+            <span>This page does not provide access to the CHRiS administration system or other employees' records.</span>
+          </div>
+          <div style={footerStyle}>Powered by CHRiS • Corporate Resources Network</div>
+        </section>
+      </PortalShell>
+    );
+  }
+
+  return (
+    <PortalShell>
+      <section style={profileCardStyle}>
+        <div style={topBarStyle}>
+          <div>
+            <div style={eyebrowStyle}>{organization?.name || "ZERMATT LIQUOR LIMITED"}</div>
+            <h1 style={{ ...headingStyle, marginBottom: 4 }}>My Employee Portal</h1>
+            <p style={{ ...subheadingStyle, marginBottom: 0 }}>
+              Welcome, {display(employee?.firstName)}. This is your private CHRiS profile.
+            </p>
+          </div>
+          <button type="button" onClick={signOut} style={signOutStyle}>Sign out</button>
+        </div>
+
+        <div style={profileHeroStyle}>
+          <div style={avatarStyle}>
+            {String(employee?.firstName || "E").charAt(0).toUpperCase()}
+            {String(employee?.lastName || "").charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#073B24" }}>
+              {[employee?.firstName, employee?.middleName, employee?.lastName].filter(Boolean).join(" ")}
+            </div>
+            <div style={{ marginTop: 4, color: "#64748B", fontWeight: 700 }}>
+              Employee No. {display(employee?.employeeNumber)}
+            </div>
+          </div>
+          <div style={statusPillStyle}>{display(employee?.status)}</div>
+        </div>
+
+        <Section title="Personal Information">
+          <Info label="Email address" value={employee?.email} />
+          <Info label="Phone number" value={employee?.phone} />
+          <Info label="Gender" value={employee?.gender} />
+        </Section>
+
+        <Section title="Employment Information">
+          <Info label="Department" value={employee?.department?.name} />
+          <Info label="Designation" value={employee?.designation?.name} />
+          <Info label="Employment type" value={employee?.employmentType} />
+          <Info label="Location / Branch" value={employee?.location?.name} />
+          <Info label="Cost centre" value={employee?.costCentre?.name} />
+          <Info label="Date employed" value={formatDate(employee?.hireDate)} />
+          <Info label="Confirmation date" value={formatDate(employee?.confirmationDate)} />
+        </Section>
+
+        <div style={privacyBannerStyle}>
+          <strong>Your data is scoped to you.</strong>
+          <span>The portal obtains your employee ID from your authenticated account. It does not accept an employee number in the URL, so changing URLs cannot switch the profile to another employee.</span>
+        </div>
+
+        <div style={footerStyle}>CHRiS Employee Self-Service • {API_BASE_URL ? "Secure API connection" : "Secure CHRiS connection"}</div>
+      </section>
+    </PortalShell>
+  );
+}
+
+function Section({ title, children }) {
+  return (
+    <section style={{ marginTop: 24 }}>
+      <h2 style={sectionTitleStyle}>{title}</h2>
+      <div style={infoGridStyle}>{children}</div>
+    </section>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div style={infoItemStyle}>
+      <div style={infoLabelStyle}>{label}</div>
+      <div style={infoValueStyle}>{display(value)}</div>
+    </div>
+  );
+}
+
+function PortalShell({ children }) {
+  return (
+    <main style={shellStyle}>
+      <div style={brandMarkStyle}>CH</div>
+      {children}
+    </main>
+  );
+}
+
+function LoadingState() {
+  return (
+    <section style={{ ...cardStyle, textAlign: "center" }}>
+      <div style={brandMarkStyle}>CH</div>
+      <h1 style={headingStyle}>Opening your portal…</h1>
+      <p style={subheadingStyle}>Verifying your secure employee session.</p>
+    </section>
+  );
+}
+
+const shellStyle = {
+  minHeight: "100vh",
+  display: "grid",
+  placeItems: "center",
+  padding: "48px 20px",
+  boxSizing: "border-box",
+  background: "linear-gradient(135deg, #F4F8F6 0%, #EEF3F0 100%)",
+  fontFamily: "Inter, Arial, Helvetica, sans-serif",
+  color: "#0F172A",
+};
+
+const cardStyle = {
+  width: "min(480px, 100%)",
+  boxSizing: "border-box",
+  background: "#FFFFFF",
+  border: "1px solid #DDE8E1",
+  borderRadius: 20,
+  padding: 32,
+  boxShadow: "0 18px 50px rgba(7, 59, 36, 0.10)",
+};
+
+const profileCardStyle = {
+  ...cardStyle,
+  width: "min(980px, 100%)",
+  padding: 34,
+};
+
+const brandMarkStyle = {
+  width: 54,
+  height: 54,
+  marginBottom: 16,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 14,
+  background: "#087A43",
+  color: "#F7D66A",
+  fontWeight: 950,
+  fontSize: 18,
+  boxShadow: "0 8px 22px rgba(8, 122, 67, 0.18)",
+};
+
+const eyebrowStyle = {
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 1.25,
+  color: "#087A43",
+  textTransform: "uppercase",
+};
+
+const headingStyle = {
+  margin: "7px 0 8px",
+  color: "#073B24",
+  fontSize: 30,
+  lineHeight: 1.15,
+  fontWeight: 950,
+};
+
+const subheadingStyle = {
+  margin: "0 0 24px",
+  color: "#64748B",
+  fontSize: 14,
+  lineHeight: 1.65,
+};
+
+const labelStyle = {
+  display: "grid",
+  gap: 7,
+  color: "#334155",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "13px 14px",
+  border: "1px solid #CBD5E1",
+  borderRadius: 10,
+  outline: "none",
+  fontSize: 14,
+  color: "#0F172A",
+  background: "#FFFFFF",
+};
+
+const buttonStyle = {
+  width: "100%",
+  border: 0,
+  borderRadius: 10,
+  padding: "13px 16px",
+  background: "#087A43",
+  color: "#FFFFFF",
+  fontSize: 14,
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const errorStyle = {
+  marginBottom: 16,
+  padding: "11px 12px",
+  borderRadius: 10,
+  background: "#FEF2F2",
+  border: "1px solid #FECACA",
+  color: "#991B1B",
+  fontSize: 13,
+  lineHeight: 1.5,
+};
+
+const securityNoteStyle = {
+  display: "grid",
+  gap: 4,
+  marginTop: 22,
+  padding: 13,
+  borderRadius: 10,
+  background: "#F0FDF4",
+  border: "1px solid #BBF7D0",
+  color: "#166534",
+  fontSize: 12,
+  lineHeight: 1.55,
+};
+
+const footerStyle = {
+  marginTop: 22,
+  textAlign: "center",
+  color: "#94A3B8",
+  fontSize: 11,
+};
+
+const topBarStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 20,
+  flexWrap: "wrap",
+};
+
+const signOutStyle = {
+  border: "1px solid #CBD5E1",
+  borderRadius: 9,
+  background: "#FFFFFF",
+  color: "#334155",
+  padding: "9px 13px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const profileHeroStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+  flexWrap: "wrap",
+  marginTop: 26,
+  padding: 18,
+  borderRadius: 14,
+  background: "#F8FAFC",
+  border: "1px solid #E2E8F0",
+};
+
+const avatarStyle = {
+  width: 58,
+  height: 58,
+  flex: "0 0 58px",
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "50%",
+  background: "#087A43",
+  color: "#F7D66A",
+  fontWeight: 950,
+  fontSize: 17,
+};
+
+const statusPillStyle = {
+  marginLeft: "auto",
+  padding: "7px 11px",
+  borderRadius: 999,
+  background: "#DCFCE7",
+  color: "#166534",
+  fontSize: 11,
+  fontWeight: 900,
+};
+
+const sectionTitleStyle = {
+  margin: "0 0 12px",
+  color: "#073B24",
+  fontSize: 15,
+  fontWeight: 900,
+};
+
+const infoGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 10,
+};
+
+const infoItemStyle = {
+  padding: 13,
+  borderRadius: 10,
+  border: "1px solid #E2E8F0",
+  background: "#FFFFFF",
+};
+
+const infoLabelStyle = {
+  color: "#94A3B8",
+  fontSize: 10,
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
+};
+
+const infoValueStyle = {
+  marginTop: 5,
+  color: "#1E293B",
+  fontSize: 13,
+  fontWeight: 700,
+  wordBreak: "break-word",
+};
+
+const privacyBannerStyle = {
+  display: "grid",
+  gap: 4,
+  marginTop: 26,
+  padding: 14,
+  borderRadius: 10,
+  background: "#F8FAFC",
+  border: "1px solid #E2E8F0",
+  color: "#475569",
+  fontSize: 12,
+  lineHeight: 1.55,
+};
 

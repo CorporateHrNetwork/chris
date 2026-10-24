@@ -1,12 +1,7 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
-const exitSettlementService = require("./exitSettlementService");
 const { confirmPayrollObligations } = require("./statutoryObligationService");
-const {
-  postDeductionInstallments,
-  loadPeriodVariableItems,
-  calculateVariableValue,
-} = require("./zermattVariablePayrollService");
+const { postDeductionInstallments } = require("./zermattVariablePayrollService");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 const PERIOD_STATUSES = ["OPEN", "LOCKED", "CLOSED"];
@@ -70,9 +65,7 @@ function mapSalaryRate(row) {
   if (!row) return null;
   return {
     ...row,
-    amount: numberValue(row.fullMonthlyGross ?? row.amount),
-    fullMonthlyGross: row.fullMonthlyGross == null ? null : numberValue(row.fullMonthlyGross),
-    endMonthGross: row.fullMonthlyGross == null ? null : numberValue(row.amount),
+    amount: numberValue(row.amount),
     effectiveFrom: row.effectiveFrom ? new Date(row.effectiveFrom).toISOString().slice(0, 10) : null,
     effectiveTo: row.effectiveTo ? new Date(row.effectiveTo).toISOString().slice(0, 10) : null,
   };
@@ -114,19 +107,8 @@ function mapRun(row) {
 
 function mapRunLine(row) {
   if (!row) return null;
-  const details = typeof row.details === "string"
-    ? (() => { try { return JSON.parse(row.details); } catch { return {}; } })()
-    : (row.details || {});
-  const leaveAllowance = numberValue(
-    details?.leaveAllowance?.amount ??
-    details?.leaveAllowance?.value ??
-    details?.leaveAllowance?.total ??
-    row.leaveAllowance
-  ) || 0;
   return {
     ...row,
-    details,
-    leaveAllowance,
     baseSalary: numberValue(row.baseSalary) || 0,
     allowances: numberValue(row.allowances) || 0,
     deductions: numberValue(row.deductions) || 0,
@@ -179,19 +161,11 @@ async function writeAudit(prismaClient, { organizationId, actorUserId, entityTyp
 }
 
 async function listPeriods({ organizationId, prismaClient = prisma }) {
-  // Operational payroll periods are unique by calendar month. Legacy data may
-  // contain duplicate period records (for example OCT-2026 and 2026-10).
-  // Keep the canonical YYYY-MM period when present, otherwise keep the newest
-  // period record for that month. Historical database rows are preserved.
   const rows = await prismaClient.$queryRawUnsafe(
-    `SELECT DISTINCT ON (date_trunc('month', "periodStart"))
-            "id", "code", "name", "periodStart", "periodEnd", "payDate", "status", "createdAt", "updatedAt"
+    `SELECT "id", "code", "name", "periodStart", "periodEnd", "payDate", "status", "createdAt", "updatedAt"
        FROM "payroll_periods"
       WHERE "organizationId" = $1
-      ORDER BY date_trunc('month', "periodStart") DESC,
-               CASE WHEN "code" = to_char("periodStart", 'YYYY-MM') THEN 0 ELSE 1 END,
-               "updatedAt" DESC,
-               "createdAt" DESC`,
+      ORDER BY "periodStart" DESC, "createdAt" DESC`,
     organizationId
   );
   return rows.map(mapPeriod);
@@ -301,7 +275,7 @@ async function listSalaryRates({ organizationId, prismaClient = prisma }) {
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT sr."id", sr."employeeId", e."employeeNumber",
             CONCAT_WS(' ', e."firstName", e."middleName", e."lastName") AS "employeeName",
-            sr."amount", sr."currency", sr."frequency", sr."effectiveFrom", sr."effectiveTo", to_jsonb(sr)->>'fullMonthlyGross' AS "fullMonthlyGross",
+            sr."amount", sr."currency", sr."frequency", sr."effectiveFrom", sr."effectiveTo",
             sr."status", sr."reason", sr."createdAt", sr."updatedAt"
        FROM "payroll_salary_rates" sr
        JOIN "employees" e ON e."id" = sr."employeeId" AND e."organizationId" = sr."organizationId"
@@ -341,7 +315,7 @@ async function saveSalaryRate({ organizationId, actorUserId, input, prismaClient
     `INSERT INTO "payroll_salary_rates"
       ("id","organizationId","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdByUserId")
      VALUES ($1,$2,$3,$4,$5,'MONTHLY',$6::date,$7::date,'ACTIVE',$8,$9)
-     RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt",to_jsonb(payroll_salary_rates)->>'fullMonthlyGross' AS "fullMonthlyGross"`,
+     RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt"`,
     id,
     organizationId,
     employee.id,
@@ -380,7 +354,7 @@ async function retireSalaryRate({ organizationId, actorUserId, rateId, effective
     `UPDATE "payroll_salary_rates"
         SET "effectiveTo"=$3::date, "status"='RETIRED', "updatedAt"=CURRENT_TIMESTAMP
       WHERE "organizationId"=$1 AND "id"=$2
-      RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt",to_jsonb(payroll_salary_rates)->>'fullMonthlyGross' AS "fullMonthlyGross"`,
+      RETURNING "id","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdAt","updatedAt"`,
     organizationId,
     rateId,
     endDate
@@ -637,21 +611,14 @@ function componentValue(component, grossBase) {
 }
 
 async function listRuns({ organizationId, prismaClient = prisma }) {
-  // The operational list must expose one authoritative payroll run per
-  // calendar month. Older duplicate period/run records remain in the database
-  // for audit/recovery, but must not appear as a second active payroll.
   const rows = await prismaClient.$queryRawUnsafe(
-    `SELECT DISTINCT ON (date_trunc('month', pp."periodStart"))
-            pr."id",pr."periodId",pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
+    `SELECT pr."id",pr."periodId",pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
             pr."status",pr."employeeCount",pr."grossTotal",pr."deductionTotal",pr."netPreviewTotal",pr."statutoryStatus",
             pr."submittedAt",pr."approvedAt",pr."createdAt",pr."updatedAt"
        FROM "payroll_runs" pr
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
       WHERE pr."organizationId"=$1
-      ORDER BY date_trunc('month', pp."periodStart") DESC,
-               CASE WHEN pp."code" = to_char(pp."periodStart", 'YYYY-MM') THEN 0 ELSE 1 END,
-               pr."updatedAt" DESC,
-               pr."createdAt" DESC`,
+      ORDER BY pp."periodStart" DESC, pr."createdAt" DESC`,
     organizationId
   );
   return rows.map((row) => ({ ...mapRun(row), ...mapPeriod(row) }));
@@ -690,8 +657,27 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
     },
     orderBy: { employeeNumber: "asc" },
   });
-  const exitProcessesForPeriod = await prismaClient.employeeExitProcess.findMany({ where: { organizationId, status: { in: ["IN_PROGRESS", "READY_TO_COMPLETE"] }, lastWorkingDay: { gte: period.periodStart, lte: period.periodEnd } }, select: { id: true, employeeId: true, lastWorkingDay: true } });
-  for (const exitProcess of exitProcessesForPeriod) { try { await exitSettlementService.calculateSettlement({ organizationId, actorUserId, exitProcessId: exitProcess.id, input: {}, prismaClient }); } catch (error) { console.warn("Automatic settlement calculation deferred:", exitProcess.id, error.message); } }
+  const exitProcessesForPeriod = await prismaClient.employeeExitProcess.findMany({
+    where: {
+      organizationId,
+      status: { in: ["IN_PROGRESS", "READY_TO_COMPLETE"] },
+      lastWorkingDay: { gte: period.periodStart, lte: period.periodEnd },
+    },
+    select: { id: true, employeeId: true, lastWorkingDay: true },
+  });
+  for (const exitProcess of exitProcessesForPeriod) {
+    try {
+      await exitSettlementService.calculateSettlement({
+        organizationId,
+        actorUserId,
+        exitProcessId: exitProcess.id,
+        input: {},
+        prismaClient,
+      });
+    } catch (error) {
+      console.warn("Automatic exit settlement calculation deferred:", exitProcess.id, error.message);
+    }
+  }
 
   if (!employees.length) throw operationalError("NO_PAYROLL_EMPLOYEES", "There are no current employees to include in payroll.", 409);
 
@@ -749,45 +735,26 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
     organizationId,
     period.periodEnd
   );
-  const variableItemsByEmployee = await loadPeriodVariableItems({
-    organizationId,
-    period,
-    employeeIds: employees.map((employee) => employee.id),
-    prismaClient,
-  });
 
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
     const baseSalary = Number(rate.amount || 0);
     const applicable = componentRows.filter((component) => !component.employeeId || component.employeeId === employee.id);
-    const variable = variableItemsByEmployee.get(employee.id) || { allowances: [], deductions: [] };
-    const configuredAllowanceItems = applicable
+    const allowanceItems = applicable
       .filter((component) => component.kind === "ALLOWANCE")
-      .map((component) => ({ ...component, value: componentValue(component, baseSalary), source: "CONFIGURED_COMPONENT" }));
-    const variableAllowanceItems = variable.allowances.map((item) => ({
-      ...item,
-      value: calculateVariableValue(item, baseSalary),
-      source: item.frequency || "VARIABLE_INPUT",
-    }));
-    const allowanceItems = [...configuredAllowanceItems, ...variableAllowanceItems];
-    const grossPay = Math.round((baseSalary + allowanceItems.reduce((sum, row) => sum + Number(row.value || 0), 0)) * 100) / 100;
-    const configuredDeductionItems = applicable
+      .map((component) => ({ ...component, value: componentValue(component, baseSalary) }));
+    const grossPay = Math.round((baseSalary + allowanceItems.reduce((sum, row) => sum + row.value, 0)) * 100) / 100;
+    const deductionItems = applicable
       .filter((component) => component.kind === "DEDUCTION")
-      .map((component) => ({ ...component, value: componentValue(component, grossPay), source: "CONFIGURED_COMPONENT" }));
-    const variableDeductionItems = variable.deductions.map((item) => ({
-      ...item,
-      value: calculateVariableValue(item, grossPay),
-      source: item.frequency || "VARIABLE_INPUT",
-    }));
-    const deductionItems = [...configuredDeductionItems, ...variableDeductionItems];
+      .map((component) => ({ ...component, value: componentValue(component, grossPay) }));
     const advances = advanceRows
       .filter((advance) => advance.employeeId === employee.id)
       .map((advance) => ({
         id: advance.id,
         value: Math.min(Number(advance.outstandingAmount || 0), Number(advance.installmentAmount || 0)),
       }));
-    const allowances = Math.round(allowanceItems.reduce((sum, row) => sum + Number(row.value || 0), 0) * 100) / 100;
-    const deductions = Math.round(deductionItems.reduce((sum, row) => sum + Number(row.value || 0), 0) * 100) / 100;
+    const allowances = Math.round(allowanceItems.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
+    const deductions = Math.round(deductionItems.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
     const advanceRecovery = Math.round(advances.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
     const netPreview = Math.max(0, Math.round((grossPay - deductions - advanceRecovery) * 100) / 100);
     return {
@@ -815,18 +782,8 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
           locationCode: employee.location?.code || null,
           locationName: employee.location?.name || null,
         },
-        allowanceItems: allowanceItems.map(({ id, code, name, value, inputId, calculationType, quantity, taxable, reference, remarks, source }) => ({
-          id: id || null, inputId: inputId || null, code, name, value,
-          calculationType: calculationType || null, quantity: quantity ?? null, taxable: taxable ?? null,
-          reference: reference || null, remarks: remarks || null, source: source || "CONFIGURED_COMPONENT",
-        })),
-        deductionItems: deductionItems.map(({ id, code, name, value, inputId, installmentId, planId, calculationType, quantity, installmentNumber, installmentCount, taxable, reference, remarks, source }) => ({
-          id: id || null, inputId: inputId || null, installmentId: installmentId || null, planId: planId || null,
-          code, name, value, calculationType: calculationType || null, quantity: quantity ?? null,
-          installmentNumber: installmentNumber ?? null, installmentCount: installmentCount ?? null,
-          taxable: taxable ?? null, reference: reference || null, remarks: remarks || null,
-          source: source || "CONFIGURED_COMPONENT",
-        })),
+        allowanceItems: allowanceItems.map(({ id, code, name, value }) => ({ id, code, name, value })),
+        deductionItems: deductionItems.map(({ id, code, name, value }) => ({ id, code, name, value })),
         salaryAdvanceRecoveries: advances,
         statutoryControl: "PAYE/pension statutory calculations are not automatically derived in Release-1. Net Preview is not a payment instruction until manual statutory review is confirmed in Payroll Approvals.",
       },
@@ -1097,4 +1054,3 @@ module.exports = {
   listApprovals,
   operationalError,
 };
-

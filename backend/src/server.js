@@ -13,23 +13,18 @@ const {
 const {
   createZermattAnnualCarryoverScheduler,
 } = require("./services/zermattAnnualCarryoverScheduler");
-const { createPayrollPeriodAutomationScheduler } = require("./services/payrollPeriodAutomationScheduler");
-
-const { createScheduler } = require("./services/performanceEvaluationService");
-const performanceEvaluationScheduler = createScheduler(prisma);
 
 const PORT = process.env.PORT || 5000;
+const demoMode = String(process.env.CHRIS_DEMO_MODE || "").toLowerCase() === "true";
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
 
 console.log(`CHRIS Paystack configured: ${paystackConfigured ? "YES" : "NO"}`);
 
 const snapshotScheduler = createWorkforceSnapshotScheduler({ prisma });
 const annualCarryoverScheduler = createZermattAnnualCarryoverScheduler({ prisma });
-const payrollPeriodAutomationScheduler = createPayrollPeriodAutomationScheduler({ prisma });
 const server = app.listen(PORT, async () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);
-  performanceEvaluationScheduler.start();
-  if (shouldAutoStartSnapshotScheduler()) {
+  if (!demoMode && shouldAutoStartSnapshotScheduler()) {
     try {
       await snapshotScheduler.start();
       console.log("CHRIS workforce snapshot scheduler started.");
@@ -37,17 +32,15 @@ const server = app.listen(PORT, async () => {
       console.error("CHRIS workforce snapshot scheduler startup failed:", error);
     }
   }
-  try {
-    await payrollPeriodAutomationScheduler.start();
-    console.log("CHRIS payroll/performance automation scheduler started.");
-  } catch (error) {
-    console.error("CHRIS payroll/performance automation scheduler startup failed:", error);
-  }
-  try {
-    await annualCarryoverScheduler.start();
+  if (!demoMode) {
+    try {
+      await annualCarryoverScheduler.start();
     console.log("CHRIS ZERMATT Annual Leave carryover scheduler started.");
   } catch (error) {
-    console.error("CHRIS ZERMATT Annual Leave carryover scheduler startup failed:", error);
+      console.error("CHRIS ZERMATT Annual Leave carryover scheduler startup failed:", error);
+    }
+  } else {
+    console.log("CHRIS demo mode: background schedulers disabled.");
   }
 });
 
@@ -57,9 +50,7 @@ async function shutdown(signal) {
   shuttingDown = true;
   console.log(`CHRIS API received ${signal}; shutting down.`);
   snapshotScheduler.stop();
-  performanceEvaluationScheduler.stop();
   annualCarryoverScheduler.stop();
-  payrollPeriodAutomationScheduler.stop();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);
@@ -68,4 +59,3 @@ async function shutdown(signal) {
 
 process.once("SIGINT", () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));
-
