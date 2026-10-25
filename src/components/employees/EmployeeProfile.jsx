@@ -1094,7 +1094,12 @@ useEffect(() => {
               );
 
           setLocations(
-            activeLocations
+            activeLocations.map((location) => ({
+              ...location,
+              name: safeDisplayValue(location?.name),
+              code: safeDisplayValue(location?.code),
+              city: safeDisplayValue(location?.city),
+            }))
           );
         }
 
@@ -3661,12 +3666,12 @@ useEffect(() => {
                             location.id
                           }
                         >
-                          {location.name}
-                          {location.code
-                            ? ` (${location.code})`
+                          {safeDisplayValue(location?.name)}
+                          {safeDisplayValue(location?.code)
+                            ? ` (${safeDisplayValue(location?.code)})`
                             : ""}
-                          {location.city
-                            ? ` - ${location.city}`
+                          {safeDisplayValue(location?.city)
+                            ? ` - ${safeDisplayValue(location?.city)}`
                             : ""}
                         </option>
                       )
