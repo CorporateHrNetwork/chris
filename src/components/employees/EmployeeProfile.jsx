@@ -995,7 +995,15 @@ useEffect(() => {
             (department) => department?.isActive !== false && department?.id
           )
         );
-        setEmploymentTypes(typeCatalog);
+        setEmploymentTypes(
+          typeCatalog
+            .map((type) =>
+              typeof type === "string"
+                ? type
+                : type?.value || type?.name || type?.code || ""
+            )
+            .filter(Boolean)
+        );
         setEmploymentTypeReason("");
         setEmploymentLevels(
           levelCatalog.filter((level) => level?.isActive !== false)
@@ -3428,11 +3436,11 @@ useEffect(() => {
               <label style={labelStyle}>Employment Type</label>
               <select name="employmentType" value={formData.employmentType || ""} onChange={handleChange} disabled={saving || employmentTypeSaving} style={fieldStyle}>
                 <option value="">Select employment type</option>
-                {employmentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                {employmentTypes.map((type) => <option key={String(type)} value={String(type)}>{String(type)}</option>)}
               </select>
               {formData.employmentType !== profile.employmentType && (
                 <>
-                  <input aria-label="Reason for Employment Type change" placeholder="Reason for Employment Type change" value={employmentTypeReason} onChange={(event) => setEmploymentTypeReason(event.target.value)} style={fieldStyle} disabled={employmentTypeSaving} />
+                  <input id="employmentTypeReason" name="employmentTypeReason" aria-label="Reason for Employment Type change" placeholder="Reason for Employment Type change" value={employmentTypeReason} onChange={(event) => setEmploymentTypeReason(event.target.value)} style={fieldStyle} disabled={employmentTypeSaving} />
                   <button type="button" onClick={saveEditEmploymentType} disabled={!formData.employmentType || !employmentTypeReason.trim() || employmentTypeSaving} style={actionButtonStyle}>
                     {employmentTypeSaving ? "Saving…" : "Save Employment Type"}
                   </button>
@@ -3443,6 +3451,8 @@ useEffect(() => {
             <div>
               <label style={labelStyle}>Employment Level</label>
               <select
+                id="employmentLevel"
+                name="employmentLevel"
                 value={employmentLevelForm.useDesignationDefault ? "DEFAULT" : employmentLevelForm.levelNumber}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -3476,6 +3486,8 @@ useEffect(() => {
               </p>
               <input
                 type="date"
+                id="employmentLevelEffectiveDate"
+                name="employmentLevelEffectiveDate"
                 aria-label="Employment Level effective date"
                 value={employmentLevelForm.effectiveDate}
                 max={new Date().toISOString().slice(0, 10)}
@@ -3485,6 +3497,8 @@ useEffect(() => {
               />
               <input
                 aria-label="Reason for Employment Level change"
+                id="employmentLevelReason"
+                name="employmentLevelReason"
                 placeholder="Reason for Employment Level change"
                 value={employmentLevelForm.reason}
                 onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
