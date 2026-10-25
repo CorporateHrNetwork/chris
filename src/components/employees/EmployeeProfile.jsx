@@ -7387,6 +7387,20 @@ function getRouteActionButtonStyle(action, activeAction) {
   const active = action === activeAction;
   return getQuickActionButtonStyle(active);
 }
+function safeSortByDisplayName(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter(Boolean)
+    .slice()
+    .sort((a, b) => {
+      const aName = safeDisplayValue(a?.name || a?.label || a?.code);
+      const bName = safeDisplayValue(b?.name || b?.label || b?.code);
+      return aName.localeCompare(bName, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    });
+}
+
 function safeDisplayValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string" || typeof value === "number") return String(value);
