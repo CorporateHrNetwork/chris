@@ -3473,7 +3473,7 @@ useEffect(() => {
               <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
                 {editDepartments.length ? safeSortByDisplayName(editDepartments) : safeSortByDisplayName(Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values()))
-                  .map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? " (" + department.code + ")" : ""}</option>)}
+                  .map((department) => <option key={department.id} value={department.id}>{safeDisplayValue(department.name)}{safeDisplayValue(department.code) ? " (" + safeDisplayValue(department.code) + ")" : ""}</option>)}
               </select>
             </div>
 
@@ -3482,7 +3482,7 @@ useEffect(() => {
               <select name="designationId" value={formData.designationId || ""} onChange={handleChange} required disabled={saving || !formData.departmentId} style={fieldStyle}>
                 <option value="">Select designation</option>
                 {safeSortByDisplayName(editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId)))
-                  .map((designation) => <option key={designation.id} value={designation.id}>{designation.name}</option>)}
+                  .map((designation) => <option key={designation.id} value={designation.id}>{safeDisplayValue(designation.name)}</option>)}
               </select>
               {(formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && (
                 <button type="button" onClick={reviewEditJobChange} disabled={!formData.departmentId || !formData.designationId || saving} style={actionButtonStyle}>
@@ -3528,7 +3528,7 @@ useEffect(() => {
                 <option value="">Select employment level</option>
                 {employmentLevelState?.currentOverride && (
                   <option value="DEFAULT">
-                    Use designation default — {employmentLevelState?.designationDefault?.code || ""} {employmentLevelState?.designationDefault?.name || ""}
+                    Use designation default — {safeDisplayValue(employmentLevelState?.designationDefault?.code)} {safeDisplayValue(employmentLevelState?.designationDefault?.name)}
                   </option>
                 )}
                 {employmentLevels
@@ -3536,12 +3536,12 @@ useEffect(() => {
                   .sort((a, b) => Number(b.levelNumber) - Number(a.levelNumber))
                   .map((level) => (
                     <option key={level.levelNumber} value={String(level.levelNumber)}>
-                      {level.code || `L${level.levelNumber}`} — {level.name}
+                      {safeDisplayValue(level.code) || `L${safeDisplayValue(level.levelNumber)}`} — {safeDisplayValue(level.name)}
                     </option>
                   ))}
               </select>
               <p style={promotionFieldHintStyle}>
-                Current: {employmentLevelState?.effective ? [employmentLevelState.effective.code || `L${employmentLevelState.effective.levelNumber}`, employmentLevelState.effective.name].filter(Boolean).join(" — ") : profile.employmentLevel}
+                Current: {employmentLevelState?.effective ? [safeDisplayValue(employmentLevelState.effective.code) || `L${safeDisplayValue(employmentLevelState.effective.levelNumber)}`, safeDisplayValue(employmentLevelState.effective.name)].filter(Boolean).join(" — ") : safeDisplayValue(profile.employmentLevel)}
                 {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
               </p>
               <input
@@ -7403,8 +7403,13 @@ function safeSortByDisplayName(items) {
 
 function safeDisplayValue(value) {
   if (value === null || value === undefined) return "";
-  if (typeof value === "string" || typeof value === "number") return String(value);
-  if (typeof value === "object") return String(value.name || value.value || value.code || "");
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(safeDisplayValue).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    const candidate = value.name ?? value.label ?? value.value ?? value.code ?? value.title ?? value.description ?? value.id;
+    if (candidate === value) return "";
+    return safeDisplayValue(candidate);
+  }
   return String(value);
 }
 
