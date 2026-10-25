@@ -29,6 +29,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Test sales demo tenant resolution
+        run: node --test tests/salesDemoTenantResolution.test.js
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
