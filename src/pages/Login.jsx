@@ -34,21 +34,16 @@ function Login() {
     .match(/[?&]=?(?:organization[-_])?([^&]+)/i)?.[1]
     ?.trim();
 
-  const configuredDemoSlug = String(
-    import.meta.env.VITE_CHRIS_DEMO_ORGANIZATION_SLUG || ""
-  ).trim();
-  const configuredDemoHost = String(
-    import.meta.env.VITE_CHRIS_DEMO_HOST || ""
-  ).trim().toLowerCase();
+  const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
+  const SALES_DEMO_ORGANIZATION_SLUG = "chris-demo-company";
   const isSalesDemoHost =
-    configuredDemoHost &&
-    window.location.hostname.toLowerCase() === configuredDemoHost;
+    window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
 
   const organizationSlug =
     searchParams.get("organization")?.trim() ||
     legacyOrganization ||
-    (isSalesDemoHost && configuredDemoSlug
-      ? configuredDemoSlug
+    (isSalesDemoHost
+      ? SALES_DEMO_ORGANIZATION_SLUG
       : "corporatehr-network");
   const navigate = useNavigate();
 
