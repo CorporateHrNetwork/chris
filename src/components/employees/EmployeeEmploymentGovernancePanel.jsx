@@ -5,13 +5,24 @@ import SearchableRegistrySelect from "../common/SearchableRegistrySelect";
 
 const today = new Date().toISOString().slice(0, 10);
 
+function displayText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map(displayText).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    const candidate = value.name ?? value.label ?? value.value ?? value.code ?? value.title ?? value.description ?? value.id;
+    return candidate === value ? "" : displayText(candidate);
+  }
+  return String(value);
+}
+
 function designationLabel(item) {
   return [
-    item?.code || "NO-CODE",
-    item?.name,
-    item?.department?.name || "No department",
+    displayText(item?.code) || "NO-CODE",
+    displayText(item?.name),
+    displayText(item?.department?.name) || "No department",
     item?.employmentLevel
-      ? `${item.employmentLevel.code || `L${item.employmentLevel.levelNumber}`} — ${item.employmentLevel.name}`
+      ? `${displayText(item.employmentLevel.code) || `L${displayText(item.employmentLevel.levelNumber)}`} — ${displayText(item.employmentLevel.name)}`
       : "Level not configured",
   ]
     .filter(Boolean)
@@ -19,7 +30,7 @@ function designationLabel(item) {
 }
 
 function levelLabel(item) {
-  return [item?.code || (item?.levelNumber != null ? `L${item.levelNumber}` : null), item?.name].filter(Boolean).join(" — ");
+  return [displayText(item?.code) || (item?.levelNumber != null ? `L${displayText(item.levelNumber)}` : null), displayText(item?.name)].filter(Boolean).join(" — ");
 }
 
 export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onChanged }) {
@@ -255,8 +266,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
       <div style={summaryGrid}>
         <div style={summaryCard}>
           <span style={summaryLabel}>Current Designation</span>
-          <strong>{levelState?.employee?.designation?.name || "Not configured"}</strong>
-          <small>{levelState?.employee?.designation?.code || ""}</small>
+          <strong>{displayText(levelState?.employee?.designation?.name) || "Not configured"}</strong>
+          <small>{displayText(levelState?.employee?.designation?.code)}</small>
         </div>
         <div style={summaryCard}>
           <span style={summaryLabel}>Designation Default Level</span>
