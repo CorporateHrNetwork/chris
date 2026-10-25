@@ -949,9 +949,9 @@ useEffect(() => {
         );
 
         const [careerResult, typeResult, levelCatalogResult, employeeLevelResult] = await Promise.all([
-          apiRequest("/api/employees/career/catalog"),
-          apiRequest("/api/employees/employment-types/catalog"),
-          apiRequest("/api/employees/career/employment-levels"),
+          apiRequest("/api/employees/career/catalog").catch(() => ({ data: [], departments: [] })),
+          apiRequest("/api/employees/employment-types/catalog").catch(() => ({ data: { employmentTypes: [] } })),
+          apiRequest("/api/employees/career/employment-levels").catch(() => ({ data: [] })),
           apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
         const careerCatalog = Array.isArray(careerResult?.data)
