@@ -448,12 +448,10 @@ function EmployeeProfile() {
           .join(" "),
 
         department:
-          employee.department
-            ?.name || "",
+          safeDisplayValue(employee.department?.name) || "",
 
         designation:
-          employee.designation
-            ?.name || "",
+          safeDisplayValue(employee.designation?.name) || "",
 
         departmentId: employee.departmentId || "",
         designationId: employee.designationId || "",
@@ -515,13 +513,11 @@ function EmployeeProfile() {
           "",
 
         locationName:
-          employee.location
-            ?.name ||
+          safeDisplayValue(employee.location?.name) ||
           "Not Assigned",
 
         locationCode:
-          employee.location
-            ?.code ||
+          safeDisplayValue(employee.location?.code) ||
           "",
 
         lineManagerAssignments:
@@ -3598,6 +3594,8 @@ useEffect(() => {
                 <>
                   <input
                     type="text"
+                    id="employee-work-location"
+                    name="workLocation"
                     value={`${profile.locationName}${
                       profile.locationCode
                         ? ` (${profile.locationCode})`
@@ -7352,6 +7350,7 @@ function FormField({
       </label>
 
       <input
+        id={name}
         name={name}
         type={type}
         value={
