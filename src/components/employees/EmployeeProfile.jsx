@@ -3552,6 +3552,12 @@ useEffect(() => {
                 Current: {employmentLevelState?.effective ? [safeDisplayValue(employmentLevelState.effective.code) || `L${safeDisplayValue(employmentLevelState.effective.levelNumber)}`, safeDisplayValue(employmentLevelState.effective.name)].filter(Boolean).join(" — ") : safeDisplayValue(profile.employmentLevel)}
                 {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
               </p>
+              <label htmlFor="employmentLevelEffectiveDate" style={labelStyle}>
+                Employment Level Effective Date *
+              </label>
+              <p style={promotionFieldHintStyle}>
+                Required only when changing this employee's Employment Level. Department and Designation Job Changes use their own effective date below.
+              </p>
               <input
                 type="date"
                 id="employmentLevelEffectiveDate"
@@ -3562,7 +3568,11 @@ useEffect(() => {
                 onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, effectiveDate: event.target.value }))}
                 style={fieldStyle}
                 disabled={employmentLevelSaving}
+                required
               />
+              <label htmlFor="employmentLevelReason" style={labelStyle}>
+                Employment Level Change Reason *
+              </label>
               <input
                 aria-label="Reason for Employment Level change"
                 id="employmentLevelReason"
@@ -3572,6 +3582,7 @@ useEffect(() => {
                 onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
                 style={fieldStyle}
                 disabled={employmentLevelSaving}
+                required
               />
               <button
                 type="button"
@@ -5536,16 +5547,13 @@ useEffect(() => {
             </div>
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
-                Effective Date *
+              <label htmlFor="jobChangeEffectiveDate" style={labelStyle}>
+                Job Change Effective Date *
               </label>
 
               <input
                 type="date"
+                id="jobChangeEffectiveDate"
                 name="effectiveDate"
                 value={
                   transferForm.effectiveDate
@@ -6000,20 +6008,15 @@ useEffect(() => {
 
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
-                Reason *
+              <label htmlFor="jobChangeReason" style={labelStyle}>
+                Job Change Reason *
               </label>
 
               <input
                 type="text"
+                id="jobChangeReason"
                 name="reason"
-                value={
-                  jobChangeForm.reason
-                }
+                value={jobChangeForm.reason}
                 onChange={
                   handleJobChangeChange
                 }
