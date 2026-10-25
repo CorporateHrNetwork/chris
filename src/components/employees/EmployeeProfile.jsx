@@ -929,6 +929,7 @@ useEffect(() => {
 
   const openEditForm =
     async () => {
+      if (!profile || !formData) return;
       clearRouteProfileAction();
       setActiveQuickAction("edit");
       setSuccess("");
@@ -1010,9 +1011,13 @@ useEffect(() => {
             }))
         );
         setEditDepartments(
-          careerDepartments.filter(
-            (department) => department?.isActive !== false && department?.id
-          )
+          careerDepartments
+            .filter((department) => department?.isActive !== false && department?.id)
+            .map((department) => ({
+              ...department,
+              name: safeDisplayValue(department.name),
+              code: safeDisplayValue(department.code),
+            }))
         );
         setEmploymentTypes(
           typeCatalog
@@ -1025,7 +1030,15 @@ useEffect(() => {
         );
         setEmploymentTypeReason("");
         setEmploymentLevels(
-          levelCatalog.filter((level) => level?.isActive !== false)
+          levelCatalog
+            .filter((level) => level?.isActive !== false)
+            .map((level) => ({
+              ...level,
+              name: safeDisplayValue(level.name),
+              code: safeDisplayValue(level.code),
+              levelNumber: Number(level.levelNumber),
+            }))
+            .filter((level) => Number.isFinite(level.levelNumber))
         );
         setEmploymentLevelState(employeeLevelResult.data || null);
         setEmploymentLevelForm({
@@ -7337,19 +7350,15 @@ function ErrorMessage({
 
 function getRouteActionButtonStyle(action, activeAction) {
   const active = action === activeAction;
-
-  return {
-    ...actionButtonStyle,
-    border: active
-      ? "1px solid var(--chris-gold)"
-      : actionButtonStyle.border,
-    background: active
-      ? "linear-gradient(135deg,rgba(212,175,55,.22),rgba(8,122,67,.24))"
-      : actionButtonStyle.background,
-    color: active ? "#07110C" : actionButtonStyle.color,
-    boxShadow: active ? "0 0 0 3px rgba(212,175,55,.30), 0 8px 22px rgba(0,0,0,.24)" : "none",
-  };
+  return getQuickActionButtonStyle(active);
 }
+function safeDisplayValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (typeof value === "object") return String(value.name || value.value || value.code || "");
+  return String(value);
+}
+
 function formatGender(value) {
   switch (String(value || "").trim().toUpperCase()) {
     case "MALE":
@@ -7605,7 +7614,7 @@ const actionsGridStyle = {
 const getQuickActionButtonStyle = (active = false) => ({
   ...actionButtonStyle,
   border: active ? "2px solid #F0D66D" : actionButtonStyle.border,
-  background: active ? "linear-gradient(135deg,#D4AF37,#F0D66D)" : actionButtonStyle.background,
+  background: active ? "#D4AF37" : actionButtonStyle.background,
   color: active ? "var(--chris-gold)" : actionButtonStyle.color,
   boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
 });
