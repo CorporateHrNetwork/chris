@@ -30,6 +30,12 @@ const service = read(
   "services",
   "employeeEmploymentLevelAssignmentService.js"
 );
+const editChangeSetService = read(
+  backendRoot,
+  "src",
+  "services",
+  "employeeEditChangeSetService.js"
+);
 const liveService = read(
   backendRoot,
   "src",
@@ -146,7 +152,8 @@ expect(governedProfileRoutes, "STRUCTURE_CHANGE_REQUIRES_CONTROLLED_JOB_CHANGE",
 expect(employeeProfile, "const level = levelResult?.data?.effective || employee.designation?.employmentLevel;", "Employee Profile no longer resolves the effective Employment Level with designation default fallback.");
 expect(employeeProfile, ".join(\" — \")", "Employee Profile no longer presents Employment Level as L-code — description.");
 expect(employeeProfile, 'apiRequest("/api/employees/career/employment-levels")', "Employee Profile edit must load the active assignable Employment Level catalogue.");
-expect(employeeProfile, "effectiveFrom: employmentLevelForm.effectiveDate", "Employee Profile must send Employment Level effectiveFrom to the governed API.");
+expect(employeeProfile, "effectiveFrom: submittedLevelEffectiveFrom", "Employee Profile must include the Employment Level date in its combined change set using the effectiveFrom contract.");
+expect(editChangeSetService, "new Date(levelChange.effectiveFrom)", "Combined Employee Edit must map effectiveFrom into the Employment Level assignment service.");
 
 const governedMount = appSource.indexOf('app.use("/api/employees", employeeProfileGovernanceRoutes);');
 const legacyEmployeeMount = appSource.indexOf('app.use("/api/employees", employeeRoutes);');
