@@ -996,7 +996,11 @@ useEffect(() => {
               ...item,
               name: safeDisplayValue(item.name),
               code: safeDisplayValue(item.code),
-              department: item.department ? { ...item.department, name: safeDisplayValue(item.department.name), code: safeDisplayValue(item.department.code) } : item.department,
+              department: item.department ? {
+                ...item.department,
+                name: safeDisplayValue(item.department.name),
+                code: safeDisplayValue(item.department.code),
+              } : item.department,
               eligibleDepartments: [
                 item.department,
                 ...(Array.isArray(item?.departmentEligibility)
@@ -1004,7 +1008,16 @@ useEffect(() => {
                       .map((entry) => entry?.department)
                       .filter(Boolean)
                   : []),
-              ].filter(
+              ]
+                .filter(
+                  (department) => department?.id
+                )
+                .map((department) => ({
+                  ...department,
+                  name: safeDisplayValue(department.name),
+                  code: safeDisplayValue(department.code),
+                }))
+                .filter(
                 (department, index, list) =>
                   department?.id &&
                   list.findIndex(
@@ -3447,7 +3460,7 @@ useEffect(() => {
               <label style={labelStyle}>Department *</label>
               <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
-                {editDepartments.length ? editDepartments.slice().sort((a, b) => a.name.localeCompare(b.name)) : Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values()).sort((a, b) => a.name.localeCompare(b.name))
+                {editDepartments.length ? safeSortByDisplayName(editDepartments) : safeSortByDisplayName(Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values()))
                   .map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? " (" + department.code + ")" : ""}</option>)}
               </select>
             </div>
@@ -3456,8 +3469,7 @@ useEffect(() => {
               <label style={labelStyle}>Designation *</label>
               <select name="designationId" value={formData.designationId || ""} onChange={handleChange} required disabled={saving || !formData.departmentId} style={fieldStyle}>
                 <option value="">Select designation</option>
-                {editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId))
-                  .sort((a, b) => a.name.localeCompare(b.name))
+                {safeSortByDisplayName(editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId)))
                   .map((designation) => <option key={designation.id} value={designation.id}>{designation.name}</option>)}
               </select>
               {(formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && (
@@ -7618,7 +7630,7 @@ const getQuickActionButtonStyle = (active = false) => ({
   ...actionButtonStyle,
   border: active ? "2px solid #F0D66D" : actionButtonStyle.border,
   background: active ? "#D4AF37" : actionButtonStyle.background,
-  color: active ? "var(--chris-gold)" : actionButtonStyle.color,
+  color: active ? "#07110C" : actionButtonStyle.color,
   boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
 });
 
