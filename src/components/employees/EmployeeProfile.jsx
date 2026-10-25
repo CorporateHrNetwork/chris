@@ -943,11 +943,52 @@ useEffect(() => {
           apiRequest("/api/employees/career/employment-levels"),
           apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`).catch(() => ({ data: null })),
         ]);
-        setEditCatalog((careerResult.data || []).filter((item) => item.isActive !== false && item.department?.id).map((item) => ({ ...item, eligibleDepartments: [item.department, ...(item.departmentEligibility || []).map((entry) => entry?.department).filter(Boolean)].filter((department, index, list) => department?.id && list.findIndex((candidate) => candidate?.id === department.id) === index) })));
-        setEditDepartments((careerResult.departments || []).filter((department) => department?.isActive !== false && department?.id));
-        setEmploymentTypes(typeResult.data?.employmentTypes || []);
+        const careerCatalog = Array.isArray(careerResult?.data)
+          ? careerResult.data
+          : [];
+        const careerDepartments = Array.isArray(careerResult?.departments)
+          ? careerResult.departments
+          : [];
+        const typeCatalog = Array.isArray(typeResult?.data?.employmentTypes)
+          ? typeResult.data.employmentTypes
+          : Array.isArray(typeResult?.data)
+            ? typeResult.data
+            : [];
+        const levelCatalog = Array.isArray(levelCatalogResult?.data)
+          ? levelCatalogResult.data
+          : [];
+
+        setEditCatalog(
+          careerCatalog
+            .filter((item) => item?.isActive !== false && item?.department?.id)
+            .map((item) => ({
+              ...item,
+              eligibleDepartments: [
+                item.department,
+                ...(Array.isArray(item?.departmentEligibility)
+                  ? item.departmentEligibility
+                      .map((entry) => entry?.department)
+                      .filter(Boolean)
+                  : []),
+              ].filter(
+                (department, index, list) =>
+                  department?.id &&
+                  list.findIndex(
+                    (candidate) => candidate?.id === department.id
+                  ) === index
+              ),
+            }))
+        );
+        setEditDepartments(
+          careerDepartments.filter(
+            (department) => department?.isActive !== false && department?.id
+          )
+        );
+        setEmploymentTypes(typeCatalog);
         setEmploymentTypeReason("");
-        setEmploymentLevels((levelCatalogResult.data || []).filter((level) => level.isActive !== false));
+        setEmploymentLevels(
+          levelCatalog.filter((level) => level?.isActive !== false)
+        );
         setEmploymentLevelState(employeeLevelResult.data || null);
         setEmploymentLevelForm({
           levelNumber: String(employeeLevelResult.data?.effective?.levelNumber || ""),
