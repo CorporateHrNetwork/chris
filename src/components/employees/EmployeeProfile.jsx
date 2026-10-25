@@ -69,11 +69,8 @@ function EmployeeProfile() {
   const [editCatalog, setEditCatalog] = useState([]);
   const [editDepartments, setEditDepartments] = useState([]);
   const [employmentTypes, setEmploymentTypes] = useState([]);
-  const [employmentTypeReason, setEmploymentTypeReason] = useState("");
-  const [employmentTypeSaving, setEmploymentTypeSaving] = useState(false);
   const [employmentLevels, setEmploymentLevels] = useState([]);
   const [employmentLevelState, setEmploymentLevelState] = useState(null);
-  const [employmentLevelSaving, setEmploymentLevelSaving] = useState(false);
   const [employmentLevelForm, setEmploymentLevelForm] = useState({
     levelNumber: "",
     useDesignationDefault: false,
@@ -86,6 +83,12 @@ function EmployeeProfile() {
     : Boolean(employmentLevelForm.levelNumber) &&
       String(employmentLevelForm.levelNumber) !==
         String(employmentLevelState?.effective?.levelNumber ?? "");
+  const jobChangePending = Boolean(profile && formData && (
+    formData.departmentId !== profile.departmentId ||
+    formData.designationId !== profile.designationId
+  ));
+  const employmentTypeChangePending = Boolean(profile && formData &&
+    formData.employmentType !== profile.employmentType);
 
   const [error, setError] =
     useState("");
@@ -569,7 +572,7 @@ function EmployeeProfile() {
           normalizedProfile.phone,
 
         gender:
-          normalizedProfile.gender,
+          normalizeGenderValue(employee.gender),
 
         status:
           normalizedProfile.status,
@@ -589,6 +592,7 @@ function EmployeeProfile() {
             normalizedProfile.exitDate
           ),
       });
+      return levelResult?.data || null;
     } catch (err) {
       console.error(
         "Employee profile error:",
@@ -700,11 +704,22 @@ useEffect(() => {
       value,
     } = event.target;
 
+    if (name === "departmentId") {
+      const selectedDesignation = editCatalog.find((item) => item.id === formData.designationId);
+      const designationEligible = selectedDesignation && (selectedDesignation.eligibleDepartments || [selectedDesignation.department]).some((department) => department?.id === value);
+      const designationId = designationEligible ? formData.designationId : "";
+      setJobChangeForm((current) => ({ ...current, departmentId: value, designationId }));
+    } else if (name === "designationId") {
+      setJobChangeForm((current) => ({ ...current, departmentId: formData.departmentId, designationId: value }));
+    }
+
     setFormData(
       (current) => {
         if (name === "departmentId") {
           const department = editDepartments.find((item) => item.id === value) || editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).find((item) => item?.id === value);
-          return { ...current, departmentId: value, department: department?.name || "", designationId: "", designation: "" };
+          const selectedDesignation = editCatalog.find((item) => item.id === current.designationId);
+          const designationEligible = selectedDesignation && (selectedDesignation.eligibleDepartments || [selectedDesignation.department]).some((candidate) => candidate?.id === value);
+          return { ...current, departmentId: value, department: department?.name || "", designationId: designationEligible ? current.designationId : "", designation: designationEligible ? current.designation : "" };
         }
         if (name === "designationId") {
           const designation = editCatalog.find((item) => item.id === value);
@@ -719,24 +734,72 @@ useEffect(() => {
     event
   ) => {
     event.preventDefault();
+    const submittedField = (name, fallback = "") => event.currentTarget.elements.namedItem(name)?.value ?? fallback;
+    const submittedJobEffectiveDate = submittedField("jobChangeEffectiveDate", jobChangeForm.effectiveDate);
+    const submittedJobReason = String(submittedField("jobChangeReason", jobChangeForm.reason) || "").trim();
+    const submittedType = submittedField("employmentType", formData.employmentType);
+    const submittedTypeReason = String(submittedField("employmentTypeReason") || "").trim();
+    const submittedLevel = submittedField("employmentLevel", employmentLevelForm.useDesignationDefault ? "DEFAULT" : employmentLevelForm.levelNumber);
+    const submittedLevelEffectiveFrom = submittedField("employmentLevelEffectiveDate", employmentLevelForm.effectiveDate);
+    const submittedLevelReason = String(submittedField("employmentLevelReason", employmentLevelForm.reason) || "").trim();
+    const submittedJobNotes = String(submittedField("jobChangeNotes", jobChangeForm.notes) || "").trim();
+    const submittedLevelNotes = String(submittedField("employmentLevelNotes", employmentLevelForm.notes) || "").trim();
 
-    if (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) {
-      setError("Use Review Job Change below to record the selected department and designation with an effective date and reason.");
+    if (jobChangePending && (!submittedJobEffectiveDate || !submittedJobReason)) {
+      setError("A Job Change effective date and reason are required when Department or Designation changes.");
       return;
     }
-    if (formData.employmentType !== profile.employmentType) {
-      setError("Save the Employment Type change with its reason using the button below before saving other details.");
+    if (employmentTypeChangePending && (!submittedType || !submittedTypeReason)) {
+      setError("Select an Employment Type and enter the reason for the change.");
+      return;
+    }
+    if (employmentLevelChangePending && (!submittedLevelEffectiveFrom || !submittedLevelReason || (submittedLevel !== "DEFAULT" && !submittedLevel))) {
+      setError("Select the Employment Level effective date and enter the change reason.");
       return;
     }
 
-    if (
-      !profile.locationId &&
-      !formData.locationId
-    ) {
-      setError(
-        "Select the employee's initial work location before saving."
-      );
+    const profileFields = ["name", "email", "phone", "gender", "status", "hireDate", "confirmationDate", "exitDate", "locationId", "nationalIdentificationNumber"];
+    const profileBaseline = {
+      ...profile,
+      hireDate: toDateInput(profile.hireDate),
+      confirmationDate: toDateInput(profile.confirmationDate),
+      exitDate: toDateInput(profile.exitDate),
+      gender: profile.gender || "UNSPECIFIED",
+      locationId: profile.locationId || "",
+    };
+    const changedProfile = {};
+    for (const field of profileFields) {
+      const submittedValue = field === "gender" ? String(formData[field] || "UNSPECIFIED").toUpperCase() : formData[field];
+      const existingValue = field === "gender" ? String(profileBaseline[field] || "UNSPECIFIED").toUpperCase() : profileBaseline[field];
+      if (String(submittedValue ?? "") !== String(existingValue ?? "")) {
+        changedProfile[field] = submittedValue === "" && ["hireDate", "confirmationDate", "exitDate", "nationalIdentificationNumber"].includes(field)
+          ? null
+          : submittedValue;
+      }
+    }
+    const changes = {};
+    if (Object.keys(changedProfile).length) changes.profile = changedProfile;
+    if (jobChangePending) changes.jobChange = {
+      departmentId: formData.departmentId,
+      designationId: formData.designationId,
+      reason: submittedJobReason,
+      effectiveDate: submittedJobEffectiveDate,
+      notes: submittedJobNotes,
+    };
+    if (employmentTypeChangePending) changes.employmentType = {
+      employmentType: submittedType,
+      reason: submittedTypeReason,
+    };
+    if (employmentLevelChangePending) changes.employmentLevel = {
+      levelNumber: submittedLevel === "DEFAULT" ? undefined : Number(submittedLevel),
+      useDesignationDefault: submittedLevel === "DEFAULT",
+      effectiveFrom: submittedLevelEffectiveFrom,
+      reason: submittedLevelReason,
+      notes: submittedLevelNotes,
+    };
 
+    if (!profile.locationId && !formData.locationId && changes.profile && !Object.hasOwn(changes.profile, "locationId")) {
+      setError("Select the employee's initial work location before saving.");
       return;
     }
 
@@ -745,25 +808,31 @@ useEffect(() => {
       setError("");
       setSuccess("");
 
-      await apiRequest(
-        `/api/employees/${encodeURIComponent(
-          employeeNumber
-        )}`,
-        {
-          method: "PUT",
-          body: JSON.stringify(
-            formData
-          ),
-        }
+      const result = await apiRequest(
+        `/api/employees/${encodeURIComponent(employeeNumber)}/edit-change-set`,
+        { method: "PUT", body: JSON.stringify({ changes }) }
       );
 
-      await loadProfile();
+      const [refreshedEmploymentLevel] = await Promise.all([
+        loadProfile(),
+        ...(jobChangePending ? [loadLifecycleHistory()] : []),
+      ]);
+
+      if (employmentLevelChangePending || refreshedEmploymentLevel?.effective?.levelNumber != null) {
+        setEmploymentLevelForm((current) => ({
+          ...current,
+          levelNumber: String(refreshedEmploymentLevel?.effective?.levelNumber ?? result?.data?.employmentLevel?.effective?.levelNumber ?? current.levelNumber),
+          useDesignationDefault: false,
+          effectiveDate: new Date().toISOString().slice(0, 10),
+          reason: "",
+          notes: "",
+        }));
+      }
+      if (jobChangePending) setJobChangeForm((current) => ({ ...current, effectiveDate: new Date().toISOString().slice(0, 10), reason: "", notes: "" }));
 
       setEditing(false);
 
-      setSuccess(
-        "Employee updated successfully."
-      );
+      setSuccess(result.message || "Employee changes saved successfully.");
 
       setTimeout(() => {
         setSuccess("");
@@ -780,89 +849,6 @@ useEffect(() => {
       );
     } finally {
       setSaving(false);
-    }
-  };
-
-  const reviewEditJobChange = async () => {
-    const { departmentId, designationId } = formData;
-    if (await openJobChangeForm()) {
-      setJobChangeForm((current) => ({ ...current, departmentId, designationId }));
-    }
-  };
-
-  const saveEditEmploymentType = async () => {
-    if (!formData.employmentType || !employmentTypeReason.trim()) {
-      setError("Select an Employment Type and enter the reason for the change.");
-      return;
-    }
-    try {
-      const pendingEdit = { ...formData };
-      setEmploymentTypeSaving(true);
-      setError("");
-      const result = await apiRequest(`/api/employees/${encodeURIComponent(employeeNumber)}/employment-type`, {
-        method: "PUT",
-        body: JSON.stringify({ employmentType: formData.employmentType, reason: employmentTypeReason.trim() }),
-      });
-      await loadProfile();
-      // Preserve any other unsaved master-data selections in the open form.
-      setFormData(pendingEdit);
-      setEmploymentTypeReason("");
-      setSuccess(result.message || "Employment Type updated and audited.");
-    } catch (err) {
-      setError(err.message || "CHRiS could not update Employment Type.");
-    } finally {
-      setEmploymentTypeSaving(false);
-    }
-  };
-
-  const saveEditEmploymentLevel = async () => {
-    const reason = String(employmentLevelForm.reason || "").trim();
-    if (!employmentLevelChangePending) {
-      setError("Select a different Employment Level before saving.");
-      return;
-    }
-    if (!employmentLevelForm.effectiveDate || !reason) {
-      setError("Select an effective date and enter the reason for the Employment Level change.");
-      return;
-    }
-    if (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber) {
-      setError("Select an Employment Level.");
-      return;
-    }
-
-    try {
-      setEmploymentLevelSaving(true);
-      setError("");
-      const result = await apiRequest(
-        `/api/employees/${encodeURIComponent(employeeNumber)}/employment-level`,
-        {
-          method: "PUT",
-          body: {
-            levelNumber: employmentLevelForm.useDesignationDefault
-              ? undefined
-              : Number(employmentLevelForm.levelNumber),
-            useDesignationDefault: employmentLevelForm.useDesignationDefault,
-            effectiveFrom: employmentLevelForm.effectiveDate,
-            reason,
-            notes: employmentLevelForm.notes,
-          },
-        }
-      );
-      setEmploymentLevelState(result?.data || null);
-      setEmploymentLevelForm((current) => ({
-        ...current,
-        levelNumber: String(result?.data?.effective?.levelNumber || ""),
-        useDesignationDefault: false,
-        effectiveDate: new Date().toISOString().slice(0, 10),
-        reason: "",
-        notes: "",
-      }));
-      await loadProfile();
-      setSuccess(result?.message || "Employment Level updated and audited.");
-    } catch (err) {
-      setError(err.message || "CHRiS could not update Employment Level.");
-    } finally {
-      setEmploymentLevelSaving(false);
     }
   };
 
@@ -897,7 +883,7 @@ useEffect(() => {
         profile.phone,
 
       gender:
-        profile.gender,
+        normalizeGenderValue(profile.gender),
 
       status:
         profile.status,
@@ -1049,7 +1035,6 @@ useEffect(() => {
             )
             .filter(Boolean)
         );
-        setEmploymentTypeReason("");
         setEmploymentLevels(
           levelCatalog
             .filter((level) => level?.isActive !== false)
@@ -3387,11 +3372,8 @@ useEffect(() => {
               </button>
 
               <button
-                type={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "button" : "submit"}
-                onClick={formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? reviewEditJobChange : undefined}
-                disabled={
-                  saving || (formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && !formData.designationId
-                }
+                type="submit"
+                disabled={saving}
                 style={{
                   ...saveButtonStyle,
                   opacity:
@@ -3400,8 +3382,7 @@ useEffect(() => {
                       : 1,
                 }}
               >
-                {saving ? "Saving..." :
-                  formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId ? "Review Job Change" : "Save Changes"}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
@@ -3501,26 +3482,40 @@ useEffect(() => {
                 {safeSortByDisplayName(editCatalog.filter((item) => (item.eligibleDepartments || [item.department]).some((department) => department?.id === formData.departmentId)))
                   .map((designation) => <option key={designation.id} value={designation.id}>{safeDisplayValue(designation.name)}</option>)}
               </select>
-              {(formData.departmentId !== profile.departmentId || formData.designationId !== profile.designationId) && (
-                <button type="button" onClick={reviewEditJobChange} disabled={!formData.departmentId || !formData.designationId || saving} style={actionButtonStyle}>
-                  Review Job Change
-                </button>
-              )}
-              <p style={promotionFieldHintStyle}>Department and designation changes require an effective date and reason. Review Job Change records them in Employment History.</p>
+              <p style={promotionFieldHintStyle}>A Job Change date and reason are required only when Department or Designation changes. The change is recorded in Employment History when you save.</p>
             </div>
+
+            {jobChangePending && (
+              <div style={{ gridColumn: "1 / -1", ...promotionOptionsMessageStyle }}>
+                <strong>Job Change</strong>
+                <p style={promotionFieldHintStyle}>Required only because Department or Designation changed.</p>
+                <div style={promotionGridStyle}>
+                  <div>
+                    <label htmlFor="jobChangeEffectiveDate" style={labelStyle}>Job Change Effective Date *</label>
+                    <input type="date" id="jobChangeEffectiveDate" name="jobChangeEffectiveDate" defaultValue={jobChangeForm.effectiveDate} required disabled={saving} style={fieldStyle} />
+                  </div>
+                  <div>
+                    <label htmlFor="jobChangeReason" style={labelStyle}>Job Change Reason *</label>
+                    <input type="text" id="jobChangeReason" name="jobChangeReason" defaultValue={jobChangeForm.reason} required disabled={saving} style={fieldStyle} />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label htmlFor="jobChangeNotes" style={labelStyle}>Job Change Notes</label>
+                    <textarea id="jobChangeNotes" name="jobChangeNotes" defaultValue={jobChangeForm.notes} disabled={saving} rows={3} style={promotionTextareaStyle} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div>
               <label style={labelStyle}>Employment Type</label>
-              <select name="employmentType" value={formData.employmentType || ""} onChange={handleChange} disabled={saving || employmentTypeSaving} style={fieldStyle}>
+              <select name="employmentType" value={formData.employmentType || ""} onChange={handleChange} disabled={saving} style={fieldStyle}>
                 <option value="">Select employment type</option>
                 {employmentTypes.map((type) => <option key={String(type)} value={String(type)}>{String(type)}</option>)}
               </select>
-              {formData.employmentType !== profile.employmentType && (
+              {employmentTypeChangePending && (
                 <>
-                  <input id="employmentTypeReason" name="employmentTypeReason" aria-label="Reason for Employment Type change" placeholder="Reason for Employment Type change" value={employmentTypeReason} onChange={(event) => setEmploymentTypeReason(event.target.value)} style={fieldStyle} disabled={employmentTypeSaving} />
-                  <button type="button" onClick={saveEditEmploymentType} disabled={!formData.employmentType || !employmentTypeReason.trim() || employmentTypeSaving} style={actionButtonStyle}>
-                    {employmentTypeSaving ? "Saving…" : "Save Employment Type"}
-                  </button>
+                  <label htmlFor="employmentTypeReason" style={labelStyle}>Employment Type Change Reason *</label>
+                  <input id="employmentTypeReason" name="employmentTypeReason" aria-label="Reason for Employment Type change" placeholder="Reason for Employment Type change" required style={fieldStyle} disabled={saving} />
                 </>
               )}
             </div>
@@ -3539,7 +3534,7 @@ useEffect(() => {
                     levelNumber: value === "DEFAULT" ? "" : value,
                   }));
                 }}
-                disabled={saving || employmentLevelSaving}
+                disabled={saving}
                 style={fieldStyle}
               >
                 <option value="">Select employment level</option>
@@ -3561,52 +3556,16 @@ useEffect(() => {
                 Current: {employmentLevelState?.effective ? [safeDisplayValue(employmentLevelState.effective.code) || `L${safeDisplayValue(employmentLevelState.effective.levelNumber)}`, safeDisplayValue(employmentLevelState.effective.name)].filter(Boolean).join(" — ") : safeDisplayValue(profile.employmentLevel)}
                 {employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE" ? " · employee override" : " · designation default"}
               </p>
-              <label htmlFor="employmentLevelEffectiveDate" style={labelStyle}>
-                Employment Level Effective Date *
-              </label>
-              <p style={promotionFieldHintStyle}>
-                Required only when changing this employee's Employment Level. Department and Designation Job Changes use their own effective date below.
-              </p>
-              <input
-                type="date"
-                id="employmentLevelEffectiveDate"
-                name="employmentLevelEffectiveDate"
-                aria-label="Employment Level effective date"
-                value={employmentLevelForm.effectiveDate}
-                max={new Date().toISOString().slice(0, 10)}
-                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, effectiveDate: event.target.value }))}
-                style={fieldStyle}
-                disabled={employmentLevelSaving}
-                required={employmentLevelChangePending}
-              />
-              <label htmlFor="employmentLevelReason" style={labelStyle}>
-                Employment Level Change Reason *
-              </label>
-              <input
-                aria-label="Reason for Employment Level change"
-                id="employmentLevelReason"
-                name="employmentLevelReason"
-                placeholder="Reason for Employment Level change"
-                value={employmentLevelForm.reason}
-                onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
-                style={fieldStyle}
-                disabled={employmentLevelSaving}
-                required={employmentLevelChangePending}
-              />
-              <button
-                type="button"
-                onClick={saveEditEmploymentLevel}
-                disabled={
-                  employmentLevelSaving ||
-                  !employmentLevelChangePending ||
-                  !employmentLevelForm.effectiveDate ||
-                  !employmentLevelForm.reason.trim() ||
-                  (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber)
-                }
-                style={actionButtonStyle}
-              >
-                {employmentLevelSaving ? "Saving…" : employmentLevelForm.useDesignationDefault ? "Reset Employment Level" : "Save Employment Level"}
-              </button>
+              {employmentLevelChangePending && (
+                <div style={{ marginTop: "12px", ...promotionOptionsMessageStyle }}>
+                  <strong>Employment Level Change</strong>
+                  <p style={promotionFieldHintStyle}>Required only when the selected Employment Level differs from the current employee-specific level.</p>
+                  <label htmlFor="employmentLevelEffectiveDate" style={labelStyle}>Employment Level Effective Date *</label>
+                  <input type="date" id="employmentLevelEffectiveDate" name="employmentLevelEffectiveDate" aria-label="Employment Level effective date" defaultValue={employmentLevelForm.effectiveDate} max={new Date().toISOString().slice(0, 10)} style={fieldStyle} disabled={saving} required />
+                  <label htmlFor="employmentLevelReason" style={labelStyle}>Employment Level Change Reason *</label>
+                  <input aria-label="Reason for Employment Level change" id="employmentLevelReason" name="employmentLevelReason" placeholder="Reason for Employment Level change" defaultValue={employmentLevelForm.reason} style={fieldStyle} disabled={saving} required />
+                </div>
+              )}
             </div>
 
             <div>
@@ -3670,7 +3629,6 @@ useEffect(() => {
                     onChange={
                       handleChange
                     }
-                    required
                     disabled={
                       saving
                     }
@@ -7447,6 +7405,13 @@ function formatGender(value) {
     default:
       return "Not Specified";
   }
+}
+
+function normalizeGenderValue(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return ["MALE", "FEMALE", "OTHER", "UNSPECIFIED"].includes(normalized)
+    ? normalized
+    : "UNSPECIFIED";
 }
 
 

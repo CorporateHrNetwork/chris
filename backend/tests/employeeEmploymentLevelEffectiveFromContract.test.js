@@ -31,8 +31,15 @@ test("Employee Employment Level route maps the parsed date to the effectiveFrom 
 test("EmployeeProfile continues to submit its Employment Level date as effectiveFrom", () => {
   assert.match(
     profileSource,
-    /effectiveFrom:\s*employmentLevelForm\.effectiveDate/
+    /effectiveFrom:\s*submittedLevelEffectiveFrom/
   );
+  assert.match(profileSource, /submittedField\("employmentLevelEffectiveDate",\s*employmentLevelForm\.effectiveDate\)/);
+  assert.match(profileSource, /changes\.employmentLevel\s*=\s*\{/);
+});
+
+test("Employee Edit validates Job Change and Employment Level metadata only for their changed fields", () => {
+  assert.match(profileSource, /if \(jobChangePending && \(!submittedJobEffectiveDate \|\| !submittedJobReason\)\)/);
+  assert.match(profileSource, /if \(employmentLevelChangePending && \(!submittedLevelEffectiveFrom \|\| !submittedLevelReason/);
 });
 
 test("Job Change validation reads only its own date and reason state", () => {

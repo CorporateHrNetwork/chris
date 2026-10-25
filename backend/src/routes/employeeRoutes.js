@@ -15,6 +15,7 @@ const {
   createEmployee,
 } = require("../services/employeeCreationService");
 const { assertTenantNinAvailable } = require("../services/employeeIdentityService");
+const { saveEmployeeEditChangeSet } = require("../services/employeeEditChangeSetService");
 const {
   parseEffectiveDate: parseEmploymentLevelEffectiveDate,
   getEmploymentLevelState,
@@ -53,6 +54,42 @@ router.get(
         code: error.message,
         message: String(error.message || "Unable to load Employment Level.").replaceAll("_", " ").toLowerCase(),
         details: error.details,
+      });
+    }
+  }
+);
+
+router.put(
+  "/:employeeNumber/edit-change-set",
+  requirePermission("employees.update"),
+  async (req, res) => {
+    try {
+      const result = await saveEmployeeEditChangeSet(prisma, {
+        organizationId: req.auth.organizationId,
+        employeeNumber: req.params.employeeNumber,
+        actorUserId: req.auth.userId || null,
+        activeLocationId: req.auth.activeLocationId || null,
+        changes: req.body?.changes || {},
+      });
+      return res.json({ status: "success", message: "Employee changes saved successfully.", data: result });
+    } catch (error) {
+      const clientErrors = new Set([
+        "EMPLOYEE_NOT_FOUND", "EMPLOYEE_NOT_CURRENT", "EMPLOYEE_EXITED", "EMPLOYMENT_LEVEL_NOT_ACTIVE",
+        "DESIGNATION_REQUIRED", "INVALID_EMPLOYMENT_LEVEL", "INVALID_EFFECTIVE_DATE", "FUTURE_EFFECTIVE_DATE",
+        "EMPLOYMENT_LEVEL_REASON_REQUIRED", "EMPLOYMENT_LEVEL_MAPPING_REQUIRED",
+        "CURRENT_EMPLOYMENT_LEVEL_OVERRIDE_NOT_FOUND", "EMPLOYMENT_TYPE_REQUIRED",
+        "EMPLOYMENT_TYPE_CHANGE_REASON_REQUIRED", "INVALID_EMPLOYMENT_TYPE", "DEPARTMENT_REQUIRED",
+        "DEPARTMENT_NOT_FOUND", "DESIGNATION_NOT_FOUND", "DESIGNATION_INACTIVE",
+        "DEPARTMENT_DESIGNATION_MISMATCH", "DESIGNATION_UNMAPPED", "INITIAL_EMPLOYEE_LOCATION_REQUIRED",
+        "INVALID_EMPLOYEE_LOCATION", "LOCATION_CHANGE_REQUIRES_TRANSFER", "INVALID_EMPLOYEE_NAME",
+        "EMAIL_REQUIRED", "PHONE_REQUIRED", "INVALID_GENDER", "INVALID_EMPLOYEE_STATUS", "INVALID_EMPLOYEE_DATE",
+        "INVALID_NIN", "DUPLICATE_EMPLOYEE_NIN",
+      ]);
+      const statusCode = error.statusCode || (error.code === "P2002" ? 409 : clientErrors.has(error.message) ? 400 : 500);
+      return res.status(statusCode).json({
+        status: "error",
+        code: error.code || "EMPLOYEE_EDIT_CHANGE_SET_FAILED",
+        message: statusCode === 500 ? "Unable to save employee changes." : error.message || "Unable to save employee changes.",
       });
     }
   }
