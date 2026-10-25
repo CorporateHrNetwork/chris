@@ -992,8 +992,11 @@ useEffect(() => {
         setEditCatalog(
           careerCatalog
             .filter((item) => item?.isActive !== false && item?.department?.id)
-            .map((item) => ({
+             .map((item) => ({
               ...item,
+              name: safeDisplayValue(item.name),
+              code: safeDisplayValue(item.code),
+              department: item.department ? { ...item.department, name: safeDisplayValue(item.department.name), code: safeDisplayValue(item.department.code) } : item.department,
               eligibleDepartments: [
                 item.department,
                 ...(Array.isArray(item?.departmentEligibility)
