@@ -316,6 +316,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
               type="date"
               required
               style={input}
+              id="governance-designation-effectiveDate"
+              name="governance-designation-effectiveDate"
               value={designationForm.effectiveDate}
               onChange={(event) =>
                 setDesignationForm({ ...designationForm, effectiveDate: event.target.value })
@@ -327,6 +329,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
             <textarea
               required
               style={textarea}
+              id="governance-designation-reason"
+              name="governance-designation-reason"
               value={designationForm.reason}
               onChange={(event) =>
                 setDesignationForm({ ...designationForm, reason: event.target.value })
@@ -337,6 +341,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
             Notes
             <textarea
               style={textarea}
+              id="governance-designation-notes"
+              name="governance-designation-notes"
               value={designationForm.notes}
               onChange={(event) =>
                 setDesignationForm({ ...designationForm, notes: event.target.value })
@@ -381,6 +387,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
               type="date"
               required
               style={input}
+              id="governance-level-effectiveFrom"
+              name="governance-level-effectiveFrom"
               value={levelForm.effectiveFrom}
               onChange={(event) =>
                 setLevelForm({ ...levelForm, effectiveFrom: event.target.value })
@@ -392,6 +400,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
             <textarea
               required
               style={textarea}
+              id="governance-level-reason"
+              name="governance-level-reason"
               value={levelForm.reason}
               onChange={(event) =>
                 setLevelForm({ ...levelForm, reason: event.target.value })
@@ -402,6 +412,8 @@ export default function EmployeeEmploymentGovernancePanel({ employeeNumber, onCh
             Notes
             <textarea
               style={textarea}
+              id="governance-level-notes"
+              name="governance-level-notes"
               value={levelForm.notes}
               onChange={(event) =>
                 setLevelForm({ ...levelForm, notes: event.target.value })

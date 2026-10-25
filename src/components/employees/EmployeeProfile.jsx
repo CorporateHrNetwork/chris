@@ -3473,8 +3473,15 @@ useEffect(() => {
               <label style={labelStyle}>Department *</label>
               <select name="departmentId" value={formData.departmentId || ""} onChange={handleChange} required disabled={saving} style={fieldStyle}>
                 <option value="">Select department</option>
-                {editDepartments.length ? safeSortByDisplayName(editDepartments) : safeSortByDisplayName(Array.from(new Map(editCatalog.flatMap((item) => item.eligibleDepartments || [item.department]).filter((department) => department?.id).map((department) => [department.id, department])).values()))
-                  .map((department) => <option key={department.id} value={department.id}>{safeDisplayValue(department.name)}{safeDisplayValue(department.code) ? " (" + safeDisplayValue(department.code) + ")" : ""}</option>)}
+                {safeSortByDisplayName(
+                  editDepartments.length
+                    ? editDepartments
+                    : Array.from(new Map(
+                        editCatalog.flatMap((item) => item.eligibleDepartments || [item.department])
+                          .filter((department) => department?.id)
+                          .map((department) => [department.id, department])
+                      ).values())
+                ).map((department) => <option key={department.id} value={department.id}>{safeDisplayValue(department.name)}{safeDisplayValue(department.code) ? " (" + safeDisplayValue(department.code) + ")" : ""}</option>)}
               </select>
             </div>
 
@@ -7339,6 +7346,7 @@ function FormField({
   return (
     <div>
       <label
+        htmlFor={name}
         style={
           labelStyle
         }
