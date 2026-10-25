@@ -35,16 +35,15 @@ function Login() {
     ?.trim();
 
   const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
-  const SALES_DEMO_ORGANIZATION_SLUG = "chris-demo-company";
+  const SALES_DEMO_ORGANIZATION_SLUG = "chris-client-demo-10";
   const isSalesDemoHost =
     window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
 
-  const organizationSlug =
-    searchParams.get("organization")?.trim() ||
-    legacyOrganization ||
-    (isSalesDemoHost
-      ? SALES_DEMO_ORGANIZATION_SLUG
-      : "corporatehr-network");
+  const organizationSlug = isSalesDemoHost
+    ? SALES_DEMO_ORGANIZATION_SLUG
+    : searchParams.get("organization")?.trim() ||
+      legacyOrganization ||
+      "corporatehr-network";
   const navigate = useNavigate();
 
   const emailRef = useRef(null);
