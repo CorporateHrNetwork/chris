@@ -32,11 +32,21 @@ function EmployeeProfile() {
   const handledProfileAction = useRef("");
   const promotionWorkflowRef = useRef(null);
   const transferWorkflowRef = useRef(null);
+  const leaveProfileRef = useRef(null);
 
   const activateProfileAction = (action) => {
     navigate(buildEmployeeProfileTarget(employeeNumber, action), {
       state: location.state,
     });
+  };
+
+  const clearRouteProfileAction = () => {
+    if (requestedProfileAction) {
+      navigate(buildEmployeeProfileTarget(employeeNumber), {
+        replace: true,
+        state: location.state,
+      });
+    }
   };
   const [profile, setProfile] =
     useState(null);
@@ -917,6 +927,7 @@ useEffect(() => {
   const openEditForm =
     async () => {
       try {
+        clearRouteProfileAction();
         setSuccess("");
         setError("");
 
@@ -2063,6 +2074,7 @@ useEffect(() => {
 
   const openConfirmationForm =
     () => {
+      clearRouteProfileAction();
       setError("");
       setSuccess("");
 
@@ -2246,6 +2258,7 @@ useEffect(() => {
 
   const openSuspensionForm =
     () => {
+      clearRouteProfileAction();
       setError("");
       setSuccess("");
 
@@ -2564,6 +2577,7 @@ useEffect(() => {
 
   const openReactivationForm =
     () => {
+      clearRouteProfileAction();
       setError("");
       setSuccess("");
 
@@ -2824,6 +2838,7 @@ useEffect(() => {
 
   const openDeactivationForm =
     () => {
+      clearRouteProfileAction();
       setError("");
       setSuccess("");
 
@@ -3068,6 +3083,17 @@ useEffect(() => {
 
 
   useEffect(() => {
+    if (requestedProfileAction === "leave" && leaveProfileRef.current) {
+      const frame = window.requestAnimationFrame(() => {
+        leaveProfileRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+
     const target =
       requestedProfileAction === "promotion" && promotionOpen
         ? promotionWorkflowRef.current
@@ -3084,7 +3110,7 @@ useEffect(() => {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [requestedProfileAction, promotionOpen, transferOpen]);
+  }, [requestedProfileAction, promotionOpen, transferOpen, leaveProfileOpen]);
   if (loading) {
     return (
       <div
@@ -3908,9 +3934,7 @@ useEffect(() => {
                   onClick={
                     openReactivationForm
                   }
-                  style={
-                    actionButtonStyle
-                  }
+                  style={getQuickActionButtonStyle(reactivationOpen)}
                 >
                   Reactivate Employee
                 </button>
@@ -4101,7 +4125,9 @@ useEffect(() => {
               </button>
             </div>
           </InformationCard>
-          <EmployeeLeaveProfilePanel employeeNumber={employeeNumber} open={leaveProfileOpen} onClose={() => navigate(`/employees/${encodeURIComponent(employeeNumber)}`, { state: location.state })} />
+          <div ref={leaveProfileRef}>
+            <EmployeeLeaveProfilePanel employeeNumber={employeeNumber} open={leaveProfileOpen} onClose={() => navigate(`/employees/${encodeURIComponent(employeeNumber)}`, { state: location.state })} />
+          </div>
         </div>
       )}
       {confirmationOpen &&
