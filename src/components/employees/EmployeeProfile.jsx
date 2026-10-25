@@ -35,6 +35,7 @@ function EmployeeProfile() {
   const leaveProfileRef = useRef(null);
 
   const activateProfileAction = (action) => {
+    setActiveQuickAction(action);
     navigate(buildEmployeeProfileTarget(employeeNumber, action), {
       state: location.state,
     });
@@ -63,6 +64,7 @@ function EmployeeProfile() {
 
   const [editing, setEditing] =
     useState(false);
+  const [activeQuickAction, setActiveQuickAction] = useState("");
 
   const [editCatalog, setEditCatalog] = useState([]);
   const [editDepartments, setEditDepartments] = useState([]);
@@ -861,6 +863,7 @@ useEffect(() => {
 
   const handleCancel = () => {
     setEditing(false);
+    setActiveQuickAction("");
 
     setError("");
     setSuccess("");
@@ -926,8 +929,24 @@ useEffect(() => {
 
   const openEditForm =
     async () => {
+      clearRouteProfileAction();
+      setActiveQuickAction("edit");
+      setSuccess("");
+      setError("");
+      setTransferOpen(false);
+      setPromotionOpen(false);
+      setJobChangeOpen(false);
+      setConfirmationOpen(false);
+      setSuspensionOpen(false);
+      setReactivationOpen(false);
+      setDeactivationOpen(false);
+      setFormData((current) => ({
+        ...current,
+        locationId: profile.locationId || "",
+      }));
+      setEditing(true);
+
       try {
-        clearRouteProfileAction();
         setSuccess("");
         setError("");
 
@@ -1038,17 +1057,13 @@ useEffect(() => {
           );
         }
 
-        setEditing(true);
       } catch (err) {
         console.error(
           "Edit employee location catalogue load error:",
           err
         );
 
-        setError(
-          err.message ||
-            "CHRIS could not load active work locations."
-        );
+        console.warn("CHRIS opened Edit Employee with limited optional catalogue data.");
       }
     };
 
@@ -1320,6 +1335,7 @@ useEffect(() => {
 
   const openJobChangeForm =
     async () => {
+      setActiveQuickAction("job-change");
       try {
         setError("");
         setSuccess("");
@@ -2082,6 +2098,7 @@ useEffect(() => {
 
   const openConfirmationForm =
     () => {
+      setActiveQuickAction("confirm");
       clearRouteProfileAction();
       setError("");
       setSuccess("");
@@ -2266,6 +2283,7 @@ useEffect(() => {
 
   const openSuspensionForm =
     () => {
+      setActiveQuickAction("suspend");
       clearRouteProfileAction();
       setError("");
       setSuccess("");
@@ -2585,6 +2603,7 @@ useEffect(() => {
 
   const openReactivationForm =
     () => {
+      setActiveQuickAction("reactivate");
       clearRouteProfileAction();
       setError("");
       setSuccess("");
@@ -2846,6 +2865,7 @@ useEffect(() => {
 
   const openDeactivationForm =
     () => {
+      setActiveQuickAction("deactivate");
       clearRouteProfileAction();
       setError("");
       setSuccess("");
@@ -3881,7 +3901,8 @@ useEffect(() => {
                 onClick={
                   openEditForm
                 }
-                style={getQuickActionButtonStyle(editing)}
+                aria-pressed={activeQuickAction === "edit" || editing}
+                style={getQuickActionButtonStyle(activeQuickAction === "edit" || editing)}
               >
                 Edit Employee
               </button>
@@ -3892,7 +3913,8 @@ useEffect(() => {
                   onClick={
                     openConfirmationForm
                   }
-                  style={getQuickActionButtonStyle(confirmationOpen)}
+                  aria-pressed={activeQuickAction === "confirm" || confirmationOpen}
+                  style={getQuickActionButtonStyle(activeQuickAction === "confirm" || confirmationOpen)}
                 >
                   Confirm Employment
                 </button>
@@ -3911,7 +3933,8 @@ useEffect(() => {
                   onClick={
                     openSuspensionForm
                   }
-                  style={getQuickActionButtonStyle(suspensionOpen)}
+                  aria-pressed={activeQuickAction === "suspend" || suspensionOpen}
+                  style={getQuickActionButtonStyle(activeQuickAction === "suspend" || suspensionOpen)}
                 >
                   Suspend Employee
                 </button>
@@ -3931,7 +3954,8 @@ useEffect(() => {
                   onClick={
                     openDeactivationForm
                   }
-                  style={getQuickActionButtonStyle(deactivationOpen)}
+                  aria-pressed={activeQuickAction === "deactivate" || deactivationOpen}
+                  style={getQuickActionButtonStyle(activeQuickAction === "deactivate" || deactivationOpen)}
                 >
                   Deactivate Employee
                 </button>
@@ -3948,7 +3972,8 @@ useEffect(() => {
                   onClick={
                     openReactivationForm
                   }
-                  style={getQuickActionButtonStyle(reactivationOpen)}
+                  aria-pressed={activeQuickAction === "reactivate" || reactivationOpen}
+                  style={getQuickActionButtonStyle(activeQuickAction === "reactivate" || reactivationOpen)}
                 >
                   Reactivate Employee
                 </button>
@@ -4011,7 +4036,7 @@ useEffect(() => {
               )
             }
             style={{
-              ...getQuickActionButtonStyle(jobChangeOpen),
+              ...getQuickActionButtonStyle(activeQuickAction === "job-change" || jobChangeOpen),
               opacity:
                 [
                   "Resigned",
@@ -4087,7 +4112,8 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={() => activateProfileAction("leave")}
-                style={getQuickActionButtonStyle(leaveProfileOpen)}
+                aria-pressed={activeQuickAction === "leave" || leaveProfileOpen}
+                style={getQuickActionButtonStyle(activeQuickAction === "leave" || leaveProfileOpen)}
               >
                 Leave Profile{leaveProfileOpen ? " • Active" : ""}
               </button>
@@ -7320,8 +7346,8 @@ function getRouteActionButtonStyle(action, activeAction) {
     background: active
       ? "linear-gradient(135deg,rgba(212,175,55,.22),rgba(8,122,67,.24))"
       : actionButtonStyle.background,
-    color: active ? "var(--chris-gold)" : actionButtonStyle.color,
-    boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
+    color: active ? "#07110C" : actionButtonStyle.color,
+    boxShadow: active ? "0 0 0 3px rgba(212,175,55,.30), 0 8px 22px rgba(0,0,0,.24)" : "none",
   };
 }
 function formatGender(value) {
@@ -7578,8 +7604,8 @@ const actionsGridStyle = {
 
 const getQuickActionButtonStyle = (active = false) => ({
   ...actionButtonStyle,
-  border: active ? "1px solid var(--chris-gold)" : actionButtonStyle.border,
-  background: active ? "linear-gradient(135deg,rgba(212,175,55,.18),rgba(8,122,67,.18))" : actionButtonStyle.background,
+  border: active ? "2px solid #F0D66D" : actionButtonStyle.border,
+  background: active ? "linear-gradient(135deg,#D4AF37,#F0D66D)" : actionButtonStyle.background,
   color: active ? "var(--chris-gold)" : actionButtonStyle.color,
   boxShadow: active ? "0 0 0 2px rgba(212,175,55,.12)" : "none",
 });
