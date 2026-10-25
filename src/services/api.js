@@ -2,21 +2,16 @@ const CONFIGURED_API_BASE_URL = String(
   import.meta.env.VITE_API_BASE_URL || ""
 ).trim();
 
-const CONFIGURED_DEMO_HOST = String(
-  import.meta.env.VITE_CHRIS_DEMO_HOST || ""
-).trim().toLowerCase();
-
-const CONFIGURED_DEMO_API_BASE_URL = String(
-  import.meta.env.VITE_CHRIS_DEMO_API_BASE_URL || ""
-).trim();
+const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
+const SALES_DEMO_API_BASE_URL = "https://chris-sales-demo-api.onrender.com";
 
 const IS_SALES_DEMO_HOST =
-  CONFIGURED_DEMO_HOST &&
-  window.location.hostname.toLowerCase() === CONFIGURED_DEMO_HOST;
+  typeof window !== "undefined" &&
+  window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
 
 export const API_BASE_URL = String(
-  IS_SALES_DEMO_HOST && CONFIGURED_DEMO_API_BASE_URL
-    ? CONFIGURED_DEMO_API_BASE_URL
+  IS_SALES_DEMO_HOST
+    ? SALES_DEMO_API_BASE_URL
     : CONFIGURED_API_BASE_URL
 ).replace(/\/+$/, "");
 
