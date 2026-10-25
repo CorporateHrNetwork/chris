@@ -137,6 +137,8 @@ export default function BranchContextSelector({ compact = false }) {
       >
         <span style={labelStyle}>{compact ? "BRANCH" : "OPERATING CONTEXT"}</span>
         <select
+          id="chris-branch-context"
+          name="branchContext"
           aria-label="CHRiS branch context"
           value={value}
           onChange={change}
