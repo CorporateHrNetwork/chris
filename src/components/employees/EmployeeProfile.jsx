@@ -833,7 +833,7 @@ useEffect(() => {
               ? undefined
               : Number(employmentLevelForm.levelNumber),
             useDesignationDefault: employmentLevelForm.useDesignationDefault,
-            effectiveFrom: employmentLevelForm.effectiveDate,
+            effectiveDate: employmentLevelForm.effectiveDate,
             reason,
             notes: employmentLevelForm.notes,
           },
