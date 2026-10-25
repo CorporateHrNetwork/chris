@@ -1056,7 +1056,19 @@ useEffect(() => {
             }))
             .filter((level) => Number.isFinite(level.levelNumber))
         );
-        setEmploymentLevelState(employeeLevelResult.data || null);
+        const rawEmploymentLevelState = employeeLevelResult?.data || null;
+        const normalizeLevel = (level) => level ? {
+          ...level,
+          code: safeDisplayValue(level.code),
+          name: safeDisplayValue(level.name),
+          levelNumber: Number(level.levelNumber),
+        } : null;
+        const normalizedEmploymentLevelState = rawEmploymentLevelState ? {
+          ...rawEmploymentLevelState,
+          effective: normalizeLevel(rawEmploymentLevelState.effective),
+          designationDefault: normalizeLevel(rawEmploymentLevelState.designationDefault),
+        } : null;
+        setEmploymentLevelState(normalizedEmploymentLevelState);
         setEmploymentLevelForm({
           levelNumber: String(employeeLevelResult.data?.effective?.levelNumber || ""),
           useDesignationDefault: false,
@@ -4148,14 +4160,16 @@ useEffect(() => {
 
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setActiveQuickAction("onboarding");
                   navigate(
                     `/employees/${encodeURIComponent(
                       employeeNumber
-                    )}/onboarding`
-                  )
-                }
-                style={actionButtonStyle}
+                    )}/onboarding`,
+                    { state: location.state }
+                  );
+                }}
+                style={getQuickActionButtonStyle(activeQuickAction === "onboarding" || requestedProfileAction === "onboarding")}
               >
                 {onboardingRecord?.status === "COMPLETED"
                   ? "Review Onboarding"
@@ -4166,28 +4180,34 @@ useEffect(() => {
 
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setActiveQuickAction("payroll");
                   navigate(
                     `/payroll?employeeNumber=${encodeURIComponent(
                       employeeNumber
-                    )}`
-                  )
-                }
-                style={getQuickActionButtonStyle(requestedProfileAction === "payroll")}
+                    )}`,
+                    { state: location.state }
+                  );
+                }}
+                aria-pressed={activeQuickAction === "payroll" || requestedProfileAction === "payroll"}
+                style={getQuickActionButtonStyle(activeQuickAction === "payroll" || requestedProfileAction === "payroll")}
               >
                 Payroll
               </button>
 
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setActiveQuickAction("documents");
                   navigate(
                     `/documents?employeeNumber=${encodeURIComponent(
                       employeeNumber
-                    )}`
-                  )
-                }
-                style={getQuickActionButtonStyle(requestedProfileAction === "documents")}
+                    )}`,
+                    { state: location.state }
+                  );
+                }}
+                aria-pressed={activeQuickAction === "documents" || requestedProfileAction === "documents"}
+                style={getQuickActionButtonStyle(activeQuickAction === "documents" || requestedProfileAction === "documents")}
               >
                 Documents
               </button>
