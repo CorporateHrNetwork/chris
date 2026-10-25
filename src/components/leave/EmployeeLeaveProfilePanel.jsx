@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import useAuthorization from "../../hooks/useAuthorization";
@@ -101,7 +102,7 @@ export default function EmployeeLeaveProfilePanel({
 
   const employee = data?.employee;
 
-  return (
+  const panel = (
     <div
       style={overlay}
       role="presentation"
@@ -410,6 +411,8 @@ export default function EmployeeLeaveProfilePanel({
       </section>
     </div>
   );
+
+  return createPortal(panel, document.body);
 }
 
 function ProfileSection({ title, children }) {
@@ -464,14 +467,15 @@ function LeaveSummary({ request, active = false }) {
 const overlay = {
   position: "fixed",
   inset: 0,
-  zIndex: 1400,
+  zIndex: 2147483000,
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "center",
   padding: "clamp(12px, 3vh, 24px) 16px",
   overflowX: "hidden",
   overflowY: "auto",
-  background: "rgba(0,0,0,.78)",
+  background: "rgba(0,0,0,.82)",
+  isolation: "isolate",
 };
 
 const modal = {
