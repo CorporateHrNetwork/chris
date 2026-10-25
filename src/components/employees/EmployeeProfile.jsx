@@ -81,6 +81,11 @@ function EmployeeProfile() {
     reason: "",
     notes: "",
   });
+  const employmentLevelChangePending = employmentLevelForm.useDesignationDefault
+    ? employmentLevelState?.effective?.source === "EMPLOYEE_OVERRIDE"
+    : Boolean(employmentLevelForm.levelNumber) &&
+      String(employmentLevelForm.levelNumber) !==
+        String(employmentLevelState?.effective?.levelNumber ?? "");
 
   const [error, setError] =
     useState("");
@@ -812,6 +817,10 @@ useEffect(() => {
 
   const saveEditEmploymentLevel = async () => {
     const reason = String(employmentLevelForm.reason || "").trim();
+    if (!employmentLevelChangePending) {
+      setError("Select a different Employment Level before saving.");
+      return;
+    }
     if (!employmentLevelForm.effectiveDate || !reason) {
       setError("Select an effective date and enter the reason for the Employment Level change.");
       return;
@@ -3568,7 +3577,7 @@ useEffect(() => {
                 onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, effectiveDate: event.target.value }))}
                 style={fieldStyle}
                 disabled={employmentLevelSaving}
-                required
+                required={employmentLevelChangePending}
               />
               <label htmlFor="employmentLevelReason" style={labelStyle}>
                 Employment Level Change Reason *
@@ -3582,13 +3591,14 @@ useEffect(() => {
                 onChange={(event) => setEmploymentLevelForm((current) => ({ ...current, reason: event.target.value }))}
                 style={fieldStyle}
                 disabled={employmentLevelSaving}
-                required
+                required={employmentLevelChangePending}
               />
               <button
                 type="button"
                 onClick={saveEditEmploymentLevel}
                 disabled={
                   employmentLevelSaving ||
+                  !employmentLevelChangePending ||
                   !employmentLevelForm.effectiveDate ||
                   !employmentLevelForm.reason.trim() ||
                   (!employmentLevelForm.useDesignationDefault && !employmentLevelForm.levelNumber)
@@ -5547,13 +5557,13 @@ useEffect(() => {
             </div>
 
             <div>
-              <label htmlFor="jobChangeEffectiveDate" style={labelStyle}>
-                Job Change Effective Date *
+              <label htmlFor="transferEffectiveDate" style={labelStyle}>
+                Transfer Effective Date *
               </label>
 
               <input
                 type="date"
-                id="jobChangeEffectiveDate"
+                id="transferEffectiveDate"
                 name="effectiveDate"
                 value={
                   transferForm.effectiveDate
@@ -5978,16 +5988,13 @@ useEffect(() => {
             }}
           >
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
-                Effective Date *
+              <label htmlFor="jobChangeEffectiveDate" style={labelStyle}>
+                Job Change Effective Date *
               </label>
 
               <input
                 type="date"
+                id="jobChangeEffectiveDate"
                 name="effectiveDate"
                 value={
                   jobChangeForm

@@ -63,7 +63,11 @@ router.put(
   requirePermission("employees.update"),
   async (req, res) => {
     try {
-      const effectiveDate = parseEmploymentLevelEffectiveDate(req.body?.effectiveDate);
+      // Employment Level assignment callers use effectiveFrom. Keep the legacy
+      // effectiveDate alias accepted for existing clients.
+      const effectiveDate = parseEmploymentLevelEffectiveDate(
+        req.body?.effectiveFrom ?? req.body?.effectiveDate
+      );
       if (!effectiveDate) {
         return res.status(400).json({
           status: "error",
