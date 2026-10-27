@@ -1,3 +1,4 @@
+const { employmentWindow } = require("./newHirePayrollProrationService");
 const XLSX = require('xlsx');
 const { createHash } = require('node:crypto');
 const { employeeTemplateScope, employeeName, normalizeName } = require('./payrollVariableInputTemplateService');
@@ -71,6 +72,10 @@ async function prepare(db,auth,periodId,buffer,lock=false) {
     if(employee && String(row.Branch).trim()!==(employee.location?.name || '')) errors.push('Employee branch has changed. Download a fresh template.');
     if(String(row['Payroll Period']).trim()!==period.code) errors.push('Payroll period does not match the selected period.');
     if(typeof row['Worked Days']==='boolean' || !Number.isFinite(days) || days<0 || days>maxDays) errors.push(`Worked Days must be between 0 and ${maxDays}.`);
+    if(employee?.hireDate) {
+      const window = employmentWindow({ hireDate: employee.hireDate, periodStart: period.periodStart, periodEnd: period.periodEnd });
+      if(window.futureHire || (window.newHire && days > window.maximumCalendarDays)) errors.push(`Employment starts ${window.hireDate}; payable days cannot include days before employment. Maximum ${window.maximumCalendarDays} calendar days in this period. Enter actual verified workdays, not a full-cycle default.`);
+    }
     if(!notes || notes.length>1000) errors.push('Enter a reason of 1–1,000 characters.');
     if(seen.has(number)) errors.push('Duplicate Employee No in this workbook.'); seen.add(number);
     const before=employee ? byEmployee.get(employee.id) : null;
