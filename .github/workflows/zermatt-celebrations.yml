@@ -1,0 +1,49 @@
+name: Zermatt daily employee celebrations
+on:
+  pull_request:
+    paths: ["backend/**", ".github/workflows/zermatt-celebrations.yml"]
+  schedule:
+    # First attempt 08:07 Lagos; hourly same-day recovery while the free API may sleep.
+    - cron: '7 7-18 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: zermatt-employee-celebrations
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: backend
+      - run: node --test tests/zermattCelebrationDelivery.test.js tests/zermattCelebrationAutomationHttp.test.js
+        working-directory: backend
+  deliver:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch today's Zermatt celebrations
+        env:
+          CELEBRATION_TOKEN: ${{ secrets.CHRIS_CELEBRATION_CRON_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$CELEBRATION_TOKEN" ]; then
+            echo 'CHRIS_CELEBRATION_CRON_TOKEN must be configured before scheduled delivery can run.'
+            exit 1
+          fi
+          curl --silent --show-error --fail-with-body --max-time 540 \
+            --request POST \
+            --header "Authorization: Bearer $CELEBRATION_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            'https://chris-zermatt-api.onrender.com/api/internal/zermatt-celebrations/dispatch'
