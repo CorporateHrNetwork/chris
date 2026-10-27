@@ -1,3 +1,4 @@
+const payrollIncidents = require("../services/payrollReportIncidentService");
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
@@ -1744,7 +1745,7 @@ function payrollSheetName(value, used) {
   return candidate;
 }
 
-function payrollWorkbookModel(lines, employeeMeta) {
+function payrollWorkbookModel(lines, employeeMeta, incidents = []) {
   const structureKeys = new Set();
   const allowanceLabels = new Map();
   const deductionLabels = new Map();
@@ -1781,6 +1782,7 @@ function payrollWorkbookModel(lines, employeeMeta) {
     "NSITF Employer", "ITF Employer",
     ...deductionColumns.map((item) => item.label),
     "Payroll Deductions", "Salary Advance", "Loan Recovery", "Leave Allowance", "Net Pay",
+    "Expected Days", "Worked Days", "Days Difference", "Payroll Notes",
   ];
 
   const rows = lines.map((line) => {
@@ -1872,6 +1874,10 @@ function payrollWorkbookModel(lines, employeeMeta) {
         Number(line.loanRecovery ?? details.loanRecoveryTotal ?? 0),
         details.leaveAllowance?.amount == null ? "" : Number(details.leaveAllowance.amount),
         Number(line.netPreview || 0),
+        details.attendance?.standardDays ?? "",
+        details.attendance?.payableDays ?? "",
+        details.attendance?.standardDays != null && details.attendance?.payableDays != null ? Number(details.attendance.payableDays) - Number(details.attendance.standardDays) : "",
+        payrollIncidents.summaryFor(incidents, line.employeeId),
       ],
       line,
       meta,
@@ -1891,7 +1897,7 @@ function payrollAppendRegisterSheet(workbook, sheetName, headers, rows) {
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
 }
 
-function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage }) {
+function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage, incidentSources = {} }) {
   const workbook = XLSX.utils.book_new();
   workbook.Workbook = workbook.Workbook || {};
   workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
@@ -1911,7 +1917,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       ? "AUDITOR-APPROVED — GM PRIVATE EXTERNAL REVIEW — NOT YET GM APPROVED"
       : "PRE-APPROVAL REVIEW — NOT FOR PAYOUT";
 
-  const model = payrollWorkbookModel(lines, employeeMeta);
+  const incidents = payrollIncidents.buildIncidents({ run, lines, employeeMeta, sources: incidentSources });
+  const model = payrollWorkbookModel(lines, employeeMeta, incidents);
   const total = (selector) => model.rows.reduce((sum, row) => sum + Number(selector(row) || 0), 0);
   const headerIndex = Object.fromEntries(model.headers.map((header, index) => [header, index]));
   const totalByHeader = (header) => {
@@ -2358,7 +2365,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval, including employee bank/account and statutory details for verification."],
     [],
     ["Workbook Contents"],
-    ["Payroll Dashboard with native Excel charts and Branch / Department / Cost Centre analysis, consolidated Payroll Register, separate branch payroll sheets, full statutory identifiers and contributions, all configured allowance/deduction components, and workflow-specific review/payout sheets."],
+    ["Payroll Dashboard with native Excel charts and Branch / Department / Cost Centre analysis, consolidated Payroll Register, separate branch payroll sheets, full statutory identifiers and contributions, all configured allowance/deduction components, Payroll Notes & Incidents, Worked Days Exceptions, and workflow-specific review/payout sheets."],
     [],
     ["Governance"],
     [isApproved
@@ -2368,6 +2375,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   control["!cols"] = [{ wch: 28 }, { wch: 118 }];
   XLSX.utils.book_append_sheet(workbook, control, "Workflow Control");
 
+  payrollIncidents.appendIncidentSheets(workbook, incidents);
   payrollAppendRegisterSheet(workbook, "Payroll Register", model.headers, model.rows);
 
   for (const branch of branches) {
@@ -2565,7 +2573,8 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
     select: { name: true, legalName: true },
   });
 
-  return { run, lines, employeeMeta, organization: organization || {} };
+  const incidentSources = await payrollIncidents.loadSources(prisma, organizationId, run, lines);
+  return { run, lines, employeeMeta, incidentSources, organization: organization || {} };
 }
 
 async function auditPayrollExport({ organizationId, actorUserId, run, action, stage }) {
