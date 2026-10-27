@@ -845,19 +845,19 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         organizationId, period.id
       ) : [];
   const noteSalaryByEmployee = new Map(noteSalaryRows.map(row => [row.employeeId, row]));
-  // New hires must never inherit a complete payroll cycle when actual payable
-  // workdays have not been confirmed. Validate all employees before any run writes.
+  // Full-time new hires use the agreed six-day week automatically. Authorized
+  // attendance exceptions take precedence; validate them before any run writes.
   const employmentDaysByEmployee = new Map();
   if (organization.slug === "zermatt-liquor-limited") {
     const issues = [];
     for (const employee of employees) {
       const rate = rateByEmployee.get(employee.id);
       const basis = rate.fullMonthlyGross ? 26 : Number(policy.standardDays[employee.employmentType]);
-      const result = resolvePayableDays({ hireDate: employee.hireDate, periodStart: period.periodStart, periodEnd: period.periodEnd, standardDays: basis, attendanceInput: attendanceByEmployee.get(employee.id) });
+      const result = resolvePayableDays({ hireDate: employee.hireDate, periodStart: period.periodStart, periodEnd: period.periodEnd, standardDays: basis, employmentType: employee.employmentType, attendanceInput: attendanceByEmployee.get(employee.id) });
       employmentDaysByEmployee.set(employee.id, result);
       if (result.requiresVerifiedDays || result.invalidDays) issues.push({ employeeNumber: employee.employeeNumber, hireDate: result.hireDate, maximumCalendarDays: result.maximumCalendarDays, issue: result.requiresVerifiedDays ? "HR-confirmed payable days required" : "Worked days exceed employment window or are invalid" });
     }
-    if (issues.length) throw payrollError("NEW_HIRE_WORKED_DAYS_REQUIRED", `Confirm payable workdays from the employment effective date for ${issues.map(row => `${row.employeeNumber} (${row.hireDate})`).join(", ")}. New hires cannot default to a full payroll cycle. Use Authorized HR Manual Worked Days or Bulk Upload, then recalculate.`, 409, { employees: issues, rule: "ACTUAL_PAYABLE_WORKDAYS_FROM_EMPLOYMENT_DATE" });
+    if (issues.length) throw payrollError("NEW_HIRE_WORKED_DAYS_REQUIRED", `Confirm payable workdays from the employment effective date for ${issues.map(row => `${row.employeeNumber} (${row.hireDate})`).join(", ")}. Correct the HR-entered worked-days exception, then recalculate. Full-time new hires otherwise use automatic one-off-day-per-seven-day proration.`, 409, { employees: issues, rule: "ACTUAL_PAYABLE_WORKDAYS_FROM_EMPLOYMENT_DATE" });
   }
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
@@ -1025,7 +1025,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           source: employmentDays?.source || (attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT"),
           notes: employmentDays?.notes || attendanceInput?.notes || null,
           hrNotes: attendanceInput?.notes || null,
-          employmentProration: employmentDays?.newHire ? { rule: employmentDays.rule, employmentEffectiveDate: employmentDays.hireDate, eligibleFrom: employmentDays.eligibleFrom, periodEnd: employmentDays.periodEnd, verifiedPayableDays: payableDays, maximumCalendarDays: employmentDays.maximumCalendarDays } : null,
+          employmentProration: employmentDays?.newHire && (employmentDays.automatic || employmentDays.source === "NEW_HIRE_VERIFIED_WORKED_DAYS") ? { rule: employmentDays.rule, employmentEffectiveDate: employmentDays.hireDate, eligibleFrom: employmentDays.eligibleFrom, periodEnd: employmentDays.periodEnd, verifiedPayableDays: payableDays, maximumCalendarDays: employmentDays.maximumCalendarDays, automatic: employmentDays.automatic === true, weeklyOffDays: employmentDays.weeklyOffDays } : null,
           manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD",
         },
         scheduledMonthlyGross,
