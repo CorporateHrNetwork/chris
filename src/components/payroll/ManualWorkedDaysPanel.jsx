@@ -67,7 +67,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
     <section style={panelStyle}>
       <div style={headingStyle}>AUTHORIZED HR · MANUAL WORKED DAYS</div>
       <p style={helpStyle}>
-        Use this where attendance clocking is not configured or an approved absence/attendance exception must be reflected in payroll. Branch HR & Admin Officers may maintain employees in their assigned branch; Head HR may work organization-wide. Manual Worked Days apply only to the selected payroll period. When you move to the next period, the entry fields reset and CHRiS returns the employee to Expected Days unless a new exception is entered. Historical entries remain available for audit.
+        Use this where attendance clocking is not configured or an approved absence/attendance exception must be reflected in payroll. Branch HR & Admin Officers may maintain employees in their assigned branch; Head HR may work organization-wide. Full-time new hires are automatically prorated from their employment effective date, allowing one off day per complete seven calendar days and up to 26 normal payable days. Manual Worked Days override this calculation for verified exceptions and apply only to the selected payroll period. When you move to the next period, the entry fields reset and CHRiS returns the employee to the applicable automatic days unless a new exception is entered. Historical entries remain available for audit.
       </p>
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div style={messageStyle}>{message}</div>}
