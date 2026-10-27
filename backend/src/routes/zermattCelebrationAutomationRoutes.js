@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const { verifyGithubCelebrationToken } = require('../services/celebrationGithubOidc');
 const { createZermattCelebrationScheduler } = require('../services/zermattCelebrationScheduler');
 
 function authorized(req, env = process.env) {
@@ -11,9 +12,9 @@ function authorized(req, env = process.env) {
 }
 function createRouter({ prisma, scheduler = createZermattCelebrationScheduler({ prisma }) } = {}) {
 const router = express.Router();
-router.use((req, res, next) => {
+router.use(async (req, res, next) => {
   res.set('Cache-Control', 'no-store');
-  if (!authorized(req)) return res.status(401).json({ status: 'error', code: 'UNAUTHORIZED' });
+  if (!authorized(req) && !(await verifyGithubCelebrationToken(String(req.get('authorization') || '').replace(/^Bearer /, '')))) return res.status(401).json({ status: 'error', code: 'UNAUTHORIZED' });
   return next();
 });
 router.get('/status', (_req, res) => res.json({ status: 'success', data: scheduler.readiness() }));
