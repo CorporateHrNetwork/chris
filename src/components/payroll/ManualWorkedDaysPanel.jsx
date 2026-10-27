@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import WorkedDaysBulkUpload from "./WorkedDaysBulkUpload";
 import EmployeeSearchSelect from "../EmployeeSearchSelect";
 import { apiRequest } from "../../services/api";
 
@@ -105,6 +106,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
           </button>
         </div>
       </form>
+      <WorkedDaysBulkUpload key={periodId} periodId={periodId} onSaved={onSaved} />
       {selectedPeriod && <div style={periodStyle}>Attendance period: {selectedPeriod.periodStart} → {selectedPeriod.periodEnd}</div>}
     </section>
   );

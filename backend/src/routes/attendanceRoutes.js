@@ -72,6 +72,8 @@ router.use(
   requireAuth
 );
 
+router.use("/worked-days/bulk", require("./workedDaysBulkRoutes"));
+
 function attendanceScopeError(code, message, statusCode = 403) {
   const error = new Error(message);
   error.code = code;
