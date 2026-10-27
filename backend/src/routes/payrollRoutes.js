@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
+const { employeeTemplateScope, employeeName: templateEmployeeName, normalizeName, hasPayrollEntry, variableInputTemplateBuffer } = require("../services/payrollVariableInputTemplateService");
 const { addNativeExcelCharts } = require("../services/excelNativeChartService");
 
 const prisma = require("../config/prisma");
@@ -1247,51 +1248,26 @@ router.delete("/deduction-plans/:id", requirePermission("payroll.manage"), async
 });
 
 
-function variableInputTemplateBuffer(kind) {
-  const normalizedKind = String(kind || "ALLOWANCE").trim().toUpperCase() === "DEDUCTION" ? "DEDUCTION" : "ALLOWANCE";
-  const workbook = XLSX.utils.book_new();
-  const instructions = normalizedKind === "DEDUCTION"
-    ? [
-        ["CHRiS Variable Deductions Bulk Import"],
-        ["Use ONE_TIME for a deduction that applies only to one payroll period."],
-        ["Use RECURRING for a finite installment plan. Enter Total Amount and either Number of Installments or Installment Amount."],
-        ["Recurring schedules begin from Start Payroll Period and automatically stop after the final installment month."],
-        ["Component Code must exist in the Other Deductions catalogue."],
-      ]
-    : [
-        ["CHRiS Variable Allowances Bulk Import"],
-        ["Allowances are payroll-period inputs."],
-        ["For Bonus and Previous Payroll Short-pay enter Amount."],
-        ["For Previous Month Outstanding, Public Holiday and Extra Day Overtime enter Quantity as days."],
-        ["For Extra Hour Overtime enter Quantity as hours. CHRiS uses Gross/208 × Hours × 1.25."],
-        ["Component Code must exist in the Other Allowances catalogue."],
-      ];
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(instructions), "Instructions");
-  const headers = [
-    "Employee No", "Kind", "Component Code", "Frequency", "Payroll Period", "Amount", "Quantity",
-    "Reference Payroll Period", "Total Amount", "Schedule By", "Number of Installments",
-    "Installment Amount", "Start Payroll Period", "Reference", "Remarks"
-  ];
-  const examples = normalizedKind === "DEDUCTION"
-    ? [
-        ["ZLL000001", "DEDUCTION", "DED-BBSB", "RECURRING", "", "", "", "", 30000, "INSTALLMENT_COUNT", 3, "", "2026-09", "BBS-001", "September to November"],
-        ["ZLL000002", "DEDUCTION", "DED-ZSB", "ONE_TIME", "2026-09", 12500, "", "", "", "", "", "", "", "ZSB-001", "September sales bill"],
-      ]
-    : [
-        ["ZLL000001", "ALLOWANCE", "ALW-PH", "ONE_TIME", "2026-09", "", 1, "", "", "", "", "", "", "PH-SEP", "1 public holiday worked"],
-        ["ZLL000002", "ALLOWANCE", "ALW-EHOT", "ONE_TIME", "2026-09", "", 4, "", "", "", "", "", "", "OT-SEP", "4 extra hours"],
-        ["ZLL000003", "ALLOWANCE", "ALW-PMO", "ONE_TIME", "2026-09", "", 2, "2026-08", "", "", "", "", "", "PMO-AUG", "2 regular work days outstanding"],
-      ];
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([headers, ...examples]), "Payroll Inputs");
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-}
-
 router.get("/variable-inputs/template", requirePermission("payroll.manage"), async (req, res) => {
   try {
-    const kind = String(req.query?.kind || "ALLOWANCE").trim().toUpperCase() === "DEDUCTION" ? "DEDUCTION" : "ALLOWANCE";
+    const kind = String(req.query?.kind || "ALLOWANCE").trim().toUpperCase();
+    if (!["ALLOWANCE", "DEDUCTION"].includes(kind)) throw payroll.operationalError("INVALID_COMPONENT_KIND", "Template kind must be ALLOWANCE or DEDUCTION.");
+    const [employees, components, periods] = await Promise.all([
+      prisma.employee.findMany({
+        where: employeeTemplateScope(req.auth),
+        select: { employeeNumber: true, firstName: true, middleName: true, lastName: true, location: { select: { name: true } } },
+        orderBy: { employeeNumber: "asc" },
+      }),
+      variablePayroll.listVariableComponents({ organizationId: req.auth.organizationId, kind }),
+      payroll.listPeriods({ organizationId: req.auth.organizationId }),
+    ]);
+    const requestedPeriod = String(req.query?.payrollPeriodId || "").trim();
+    const period = requestedPeriod ? periods.find(period => period.id === requestedPeriod) : null;
+    if (requestedPeriod && (!period || period.status === "CLOSED")) throw payroll.operationalError("INVALID_PAYROLL_PERIOD", "Select an available payroll period for the template.");
+    res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Disposition", `attachment; filename="CHRiS_${kind === "DEDUCTION" ? "Deductions" : "Allowances"}_Bulk_Input_Template.xlsx"`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    return res.send(variableInputTemplateBuffer(kind));
+    return res.send(variableInputTemplateBuffer({ kind, employees, components, periods, payrollPeriodCode: period?.code || "" }));
   } catch (error) {
     return sendError(res, error, "Unable to generate payroll input template.");
   }
@@ -1329,8 +1305,11 @@ async function prepareVariableInputWorkbook(req, buffer, requestedKind) {
   const employeeMap = new Map(employees.map((row) => [String(row.employeeNumber).toUpperCase(), row]));
   const allowedLocations = new Set((req.auth?.availableLocations || []).map((location) => location.id).filter(Boolean));
 
-  return sourceRows.map((row, index) => {
+  const enteredRows = sourceRows.map((row, index) => ({ row, rowNumber: Number.isInteger(row.__rowNum__) ? row.__rowNum__ + 1 : index + 2 })).filter(({ row }) => hasPayrollEntry(row));
+  if (!enteredRows.length) throw payroll.operationalError("EMPTY_PAYROLL_INPUTS", "Complete a component and its amount or quantity for at least one employee before validating.");
+  return enteredRows.map(({ row, rowNumber }) => {
     const employeeNumber = getCell(row, ["Employee No", "Employee Number", "Employee ID"]).toUpperCase();
+    const suppliedEmployeeName = getCell(row, ["Employee Name", "Full Name"]);
     const rowKind = (getCell(row, ["Kind"]) || kind).toUpperCase();
     const componentCode = getCell(row, ["Component Code", "Code"]).toUpperCase();
     const frequency = (getCell(row, ["Frequency"]) || "ONE_TIME").toUpperCase().replace(/[ -]+/g, "_");
@@ -1354,6 +1333,7 @@ async function prepareVariableInputWorkbook(req, buffer, requestedKind) {
     const errors = [];
 
     if (!employee) errors.push("Employee Number was not found.");
+    if (employee && suppliedEmployeeName && normalizeName(suppliedEmployeeName) !== normalizeName(templateEmployeeName(employee))) errors.push("Employee Name does not match Employee No. Download a fresh template or correct the employee identity.");
     if (employee && req.auth?.activeLocationId && employee.locationId !== req.auth.activeLocationId) errors.push("Employee is outside the active branch.");
     if (employee && req.auth?.locationScope !== "ALL_LOCATIONS" && (!employee.locationId || !allowedLocations.has(employee.locationId))) errors.push("Employee is outside your assigned branch/location scope.");
     if (rowKind !== kind) errors.push(`Kind must be ${kind}.`);
@@ -1411,7 +1391,7 @@ async function prepareVariableInputWorkbook(req, buffer, requestedKind) {
           remarks,
         };
     return {
-      rowNumber: index + 2,
+      rowNumber,
       valid: errors.length === 0,
       errors,
       input,
