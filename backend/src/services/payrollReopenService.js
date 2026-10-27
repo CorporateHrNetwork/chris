@@ -1,3 +1,4 @@
+const { resetWorkflowForCorrection } = require("./payrollWorkflowReopenService");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { reversePayrollObligations } = require("./statutoryObligationService");
@@ -141,8 +142,11 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
       explanation
     );
 
+    const approvalWorkflow = await resetWorkflowForCorrection({ prismaClient: tx, organizationId, runId, actorUserId, reason: explanation });
+
     const newValue = {
       status: "DRAFT",
+      approvalWorkflow,
       statutoryStatus: "RECALCULATION_REQUIRED",
       loanRecoveriesReversed: loanRecoveries.length,
       loanRecoveryAmountRestored: money(loanRecoveries.reduce((sum, row) => sum + Number(row.amount || 0), 0)),
@@ -174,6 +178,7 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
       runId,
       periodCode: run.periodCode,
       status: "DRAFT",
+      approvalWorkflow,
       statutoryStatus: "RECALCULATION_REQUIRED",
       reason: explanation,
       ...newValue,
