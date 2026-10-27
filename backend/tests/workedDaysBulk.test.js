@@ -50,7 +50,7 @@ test('closed, foreign, duplicate periods and submitted/approved/reviewed payroll
 test('preview shows replacement; import preserves hours, records actor/reason and marks draft stale',async()=>{
  const db=database();db.state.runs=[{id:'r',status:'DRAFT'}];db.state.inputs=[{id:'old',organizationId:'org',employeeId:'e1',workedDays:26,workedHours:208,notes:'Previous',updatedAt:'old'}];
  const b=buffer([entry()]);const p=await preview(db,b);assert.equal(p.rows[0].previousDays,26);assert.equal(p.rows[0].action,'UPDATE');
- const result=await service.importWorkbook(db,auth,'p',b,p.previewToken);assert.equal(result.importedRows,1);assert.equal(db.state.inputs[0].workedDays,24);assert.equal(db.state.inputs[0].workedHours,208);assert.equal(db.state.inputs[0].recordedByUserId,'hr');assert.equal(db.state.audits[0].reason,'Approved absence');assert.equal(db.state.audits[0].oldValue.workedDays,26);assert.equal(result.payrollDraftFreshness.markedRuns,1);
+ const result=await service.importWorkbook(db,auth,'p',b,p.previewToken);assert.equal(result.importedRows,1);assert.equal(db.state.inputs[0].workedDays,24);assert.equal(db.state.inputs[0].workedHours,208);assert.equal(db.state.inputs[0].recordedByUserId,'hr');assert.equal(db.state.audits[0].reason,'Approved absence');assert.equal(db.state.audits[0].previousValue.workedDays,26);assert.equal(result.payrollDraftFreshness.markedRuns,1);
 });
 test('changed file, changed existing record, changed scope, changed period status require new preview',async()=>{
  const db=database();const b=buffer([entry()]);const p=await preview(db,b);

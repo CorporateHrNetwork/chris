@@ -46,7 +46,7 @@ jobs:
         run: npx prisma generate
 
       - name: Validate payroll employee upload templates
-        run: node --test tests/payrollEmployeeUploadTemplates.test.js tests/workedDaysBulk.test.js
+        run: node --test tests/payrollEmployeeUploadTemplates.test.js tests/workedDaysBulk.test.js tests/payrollReportIncidents.test.js
 
       - name: Check critical backend syntax
         run: |
