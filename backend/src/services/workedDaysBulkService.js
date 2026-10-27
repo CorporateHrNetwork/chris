@@ -5,20 +5,23 @@ const { markDraftRunsRecalculationRequired } = require('./payrollDraftFreshnessS
 const HEADERS = ['Employee No', 'Employee Name', 'Branch', 'Payroll Period', 'Worked Days', 'Reason / Notes'];
 function fail(message, statusCode = 400) { const error = new Error(message); error.statusCode = statusCode; throw error; }
 function date(value) { return value instanceof Date ? value.toISOString().slice(0,10) : String(value).slice(0,10); }
-async function context(db, auth, periodId, lock = false) {
+async function context(db, auth, periodId, { lock = false, requireEditable = true } = {}) {
   const period = (await db.$queryRawUnsafe(`SELECT * FROM "payroll_periods" WHERE "organizationId"=$1 AND "id"=$2${lock ? ' FOR UPDATE' : ''}`, auth.organizationId, String(periodId || '')))[0];
   if (!period || period.status !== 'OPEN') fail('Select an open payroll period.', 409);
   const canonical = (await db.$queryRawUnsafe(`SELECT "id" FROM "payroll_periods" WHERE "organizationId"=$1 AND date_trunc('month',"periodStart")=date_trunc('month',$2::date) ORDER BY CASE WHEN "code"=to_char("periodStart",'YYYY-MM') THEN 0 ELSE 1 END,"updatedAt" DESC,"createdAt" DESC LIMIT 1`, auth.organizationId, period.periodStart))[0];
   if (canonical?.id !== period.id) fail('Select the current calendar-month payroll period, rather than a legacy duplicate.',409);
-  const runs = await db.$queryRawUnsafe(`SELECT r."id",r."status" FROM "payroll_runs" r JOIN "payroll_periods" p ON p."organizationId"=r."organizationId" AND p."id"=r."periodId" WHERE r."organizationId"=$1 AND date_trunc('month',p."periodStart")=date_trunc('month',$2::date)${lock ? ' FOR UPDATE OF r' : ''}`,auth.organizationId,period.periodStart);
-  if (runs.some(r => !['DRAFT','REJECTED'].includes(r.status))) fail('Payroll is submitted or finalized. Return it to HR correction before importing worked days.',409);
-  const workflows = await db.$queryRawUnsafe(`SELECT w."stage" FROM "payroll_approval_workflows" w JOIN "payroll_runs" r ON r."organizationId"=w."organizationId" AND r."id"=w."runId" JOIN "payroll_periods" p ON p."organizationId"=r."organizationId" AND p."id"=r."periodId" WHERE r."organizationId"=$1 AND date_trunc('month',p."periodStart")=date_trunc('month',$2::date)${lock ? ' FOR UPDATE OF w' : ''}`,auth.organizationId,period.periodStart);
-  if (workflows.some(w => !['DRAFT','AUDIT_DISAPPROVED'].includes(w.stage))) fail('Payroll is under review. Return it to HR correction before importing.',409);
+  // Downloading a scoped roster never mutates payroll and must remain available during review.
+  if (requireEditable) {
+    const runs = await db.$queryRawUnsafe(`SELECT r."id",r."status" FROM "payroll_runs" r JOIN "payroll_periods" p ON p."organizationId"=r."organizationId" AND p."id"=r."periodId" WHERE r."organizationId"=$1 AND date_trunc('month',p."periodStart")=date_trunc('month',$2::date)${lock ? ' FOR UPDATE OF r' : ''}`,auth.organizationId,period.periodStart);
+    if (runs.some(r => !['DRAFT','REJECTED'].includes(r.status))) fail('Payroll is submitted or finalized. Return it to HR correction before importing worked days.',409);
+    const workflows = await db.$queryRawUnsafe(`SELECT w."stage" FROM "payroll_approval_workflows" w JOIN "payroll_runs" r ON r."organizationId"=w."organizationId" AND r."id"=w."runId" JOIN "payroll_periods" p ON p."organizationId"=r."organizationId" AND p."id"=r."periodId" WHERE r."organizationId"=$1 AND date_trunc('month',p."periodStart")=date_trunc('month',$2::date)${lock ? ' FOR UPDATE OF w' : ''}`,auth.organizationId,period.periodStart);
+    if (workflows.some(w => !['DRAFT','AUDIT_DISAPPROVED'].includes(w.stage))) fail('Payroll is under review. Return it to HR correction before importing.',409);
+  }
   const employees = await db.employee.findMany({where:employeeTemplateScope(auth), include:{location:{select:{name:true}}},orderBy:{employeeNumber:'asc'}});
   return {period, employees};
 }
 async function template(db, auth, periodId) {
-  const {period, employees} = await context(db,auth,periodId);
+  const {period, employees} = await context(db,auth,periodId,{requireEditable:false});
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([HEADERS,...employees.map(e=>[String(e.employeeNumber),employeeName(e),e.location?.name || '',period.code,'',''])]);
   ws['!cols']=[20,34,26,22,18,65].map(wch=>({wch}));
@@ -52,7 +55,7 @@ function parseWorkbook(buffer) {
   return rows;
 }
 async function prepare(db,auth,periodId,buffer,lock=false) {
-  const {period,employees}=await context(db,auth,periodId,lock);
+  const {period,employees}=await context(db,auth,periodId,{lock});
   const rows=parseWorkbook(buffer);
   const roster=new Map(employees.map(e=>[e.employeeNumber.toUpperCase(),e]));
   const existing=await db.attendancePayrollInput.findMany({where:{organizationId:auth.organizationId,employeeId:{in:employees.map(e=>e.id)},periodStart:new Date(date(period.periodStart)),periodEnd:new Date(date(period.periodEnd))}});
