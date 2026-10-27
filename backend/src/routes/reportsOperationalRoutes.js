@@ -1,3 +1,4 @@
+const payrollIncidents = require("../services/payrollReportIncidentService");
 const express = require("express");
 const XLSX = require("xlsx");
 
@@ -549,7 +550,18 @@ router.get(
       appendSheet(workbook, data.allocation?.byDepartment || [], "By Department");
       appendSheet(workbook, data.allocation?.byCostCentre || [], "By Cost Centre");
       appendSheet(workbook, data.allocation?.byBranch || [], "By Branch");
-      appendSheet(workbook, data.allocation?.details || [], "Payroll Detail");
+      const permittedEmployees = new Set((data.allocation?.details || []).map(row => row.employeeNumber));
+      const incidentLines = data.latest?.id ? (await payroll.listRunLines({ organizationId: req.auth.organizationId, runId: data.latest.id })).filter(line => permittedEmployees.has(line.employeeNumber)) : [];
+      const incidentMeta = new Map(incidentLines.map(line => [line.employeeId, { branch: (data.allocation?.details || []).find(row => row.employeeNumber === line.employeeNumber)?.branch || "" }]));
+      const incidentSources = await payrollIncidents.loadSources(prisma, req.auth.organizationId, data.latest, incidentLines);
+      const incidents = payrollIncidents.buildIncidents({ run: data.latest || {}, lines: incidentLines, employeeMeta: incidentMeta, sources: incidentSources });
+      const lineMap = new Map(incidentLines.map(line => [line.employeeNumber, line]));
+      appendSheet(workbook, (data.allocation?.details || []).map(row => {
+        const line = lineMap.get(row.employeeNumber) || {};
+        const attendance = line.details?.attendance || {};
+        return { ...row, expectedDays: attendance.standardDays ?? "", workedDays: attendance.payableDays ?? "", daysDifference: attendance.standardDays != null && attendance.payableDays != null ? Number(attendance.payableDays) - Number(attendance.standardDays) : "", payrollNotes: payrollIncidents.summaryFor(incidents, line.employeeId) };
+      }), "Payroll Detail");
+      payrollIncidents.appendIncidentSheets(workbook, incidents);
       await auditExport(
         req,
         "payroll",
