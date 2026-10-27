@@ -92,7 +92,7 @@ async function importWorkbook(db,auth,periodId,buffer,previewToken) {
       const {employee,before,workedDays,notes}=input;
       const key={organizationId:auth.organizationId,employeeId:employee.id,periodStart:new Date(date(prepared.period.periodStart)),periodEnd:new Date(date(prepared.period.periodEnd))};
       const saved=await tx.attendancePayrollInput.upsert({where:{organizationId_employeeId_periodStart_periodEnd:key},create:{...key,workedDays,workedHours:null,notes,recordedByUserId:auth.userId},update:{workedDays,notes,recordedByUserId:auth.userId}});
-      await tx.organizationAudit.create({data:{organizationId:auth.organizationId,actorUserId:auth.userId,entityType:'AttendancePayrollInput',entityId:saved.id,action:'BULK_WORKED_DAYS_IMPORTED',oldValue:before?{workedDays:before.workedDays,notes:before.notes}:undefined,newValue:{employeeNumber:employee.employeeNumber,periodId:prepared.period.id,workedDays,notes},reason:notes}});
+      await tx.organizationAudit.create({data:{organizationId:auth.organizationId,actorUserId:auth.userId,entityType:'AttendancePayrollInput',entityId:saved.id,action:'BULK_WORKED_DAYS_IMPORTED',previousValue:before?{workedDays:before.workedDays,notes:before.notes}:undefined,newValue:{employeeNumber:employee.employeeNumber,periodId:prepared.period.id,workedDays,notes},reason:notes}});
     }
     const freshness=await markDraftRunsRecalculationRequired({organizationId:auth.organizationId,actorUserId:auth.userId,reason:`Authorized HR imported worked days for ${prepared.inputs.length} employees in ${prepared.period.code}.`,prismaClient:tx});
     return {importedRows:prepared.inputs.length,skippedRows:prepared.data.skippedRows,payrollDraftFreshness:freshness};
