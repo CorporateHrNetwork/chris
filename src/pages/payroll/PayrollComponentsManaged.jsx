@@ -373,7 +373,9 @@ export default function PayrollComponentsManaged({ kind }) {
   const downloadTemplate = async () => {
     try {
       setBusy("download"); setError("");
-      const file = await apiDownload(`/api/payroll/variable-inputs/template?kind=${kind}`);
+      const params = new URLSearchParams({ kind });
+      if (form.payrollPeriodId) params.set("payrollPeriodId", form.payrollPeriodId);
+      const file = await apiDownload(`/api/payroll/variable-inputs/template?${params}`);
       saveDownloadedBlob(file);
     } catch (requestError) {
       setError(requestError?.message || "Unable to download bulk-upload template.");
@@ -483,12 +485,12 @@ export default function PayrollComponentsManaged({ kind }) {
       </Panel>
 
       <Panel title="Bulk Upload">
-        <p style={controlNote}>Download the controlled Excel template, complete employee/component inputs, validate the workbook, review row-level errors, then import. Formula-based allowances require days/hours, not a manually calculated amount.</p>
+        <p style={controlNote}>Download the Excel template with Employee No, Employee Name and Branch already filled in. Complete only employees with an allowance or deduction; untouched rows are skipped. Keep each employee number and name together. Validate / Preview, review the rows, then Confirm Import. Formula-based allowances require days/hours, not a manually calculated amount.</p>
         <div style={buttonRow}>
-          <button type="button" style={smallButton} disabled={busy === "download"} onClick={downloadTemplate}>{busy === "download" ? "Preparing…" : "Download Template"}</button>
+          <button type="button" style={smallButton} disabled={busy === "download"} onClick={downloadTemplate}>{busy === "download" ? "Preparing…" : `Download Template (${isDeduction ? "Deductions" : "Allowances"})`}</button>
           <input type="file" accept=".xlsx,.xls" onChange={(event) => { setBulkFile(event.target.files?.[0] || null); setBulkPreview(null); }} />
           <button type="button" style={smallButton} disabled={!bulkFile || busy === "preview"} onClick={previewBulk}>{busy === "preview" ? "Validating…" : "Validate / Preview"}</button>
-          <button type="button" style={primaryButton} disabled={!bulkFile || !bulkPreview || bulkPreview.invalidRows > 0 || busy === "import"} onClick={importBulk}>{busy === "import" ? "Importing…" : "Confirm Import"}</button>
+          <button type="button" style={primaryButton} disabled={!bulkFile || !bulkPreview || !bulkPreview.validRows || bulkPreview.invalidRows > 0 || busy === "import"} onClick={importBulk}>{busy === "import" ? "Importing…" : "Confirm Import"}</button>
         </div>
         {bulkPreview && <div style={bulkSummary}>
           <strong>{bulkPreview.totalRows} rows</strong> · {bulkPreview.validRows} valid · {bulkPreview.invalidRows} errors
