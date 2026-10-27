@@ -71,3 +71,30 @@ test('malformed/empty/formula workbooks are rejected and bulk routes enforce exi
  const routes=fs.readFileSync(path.join(__dirname,'../src/routes/workedDaysBulkRoutes.js'),'utf8');assert.match(routes,/router.use\(requireAnyPermission\('attendance.manage','payroll.manage'\)\)/);
  const parent=fs.readFileSync(path.join(__dirname,'../src/routes/attendanceRoutes.js'),'utf8');assert.ok(parent.indexOf('requireAuth\n')<parent.indexOf('router.use("/worked-days/bulk"'));
 });
+
+
+test('Head Office and branch template downloads remain available during payroll review and after approval, with import locks intact',async()=>{
+ const contexts=[
+  {...auth,activeLocationId:null},
+  {...auth,activeLocationId:'a'},
+  {...auth,locationScope:'ASSIGNED_LOCATIONS',availableLocations:[{id:'b'}],activeLocationId:'b'},
+ ];
+ for(const status of ['DRAFT','SUBMITTED','PENDING_APPROVAL','APPROVED']) {
+  for(const stage of ['DRAFT','AUDIT_REVIEW','AUDIT_APPROVED','GM_APPROVED']) {
+   for(const requestAuth of contexts) {
+    const db=database();db.state.runs=[{id:'r',status}];db.state.workflows=[{stage}];
+    const b=await service.template(db,requestAuth,'p');
+    const rows=XLSX.utils.sheet_to_json(XLSX.read(b,{type:'buffer'}).Sheets['Worked Days']);
+    assert.equal(rows.length,requestAuth.activeLocationId?1:2);
+    if(requestAuth.activeLocationId) assert.equal(rows[0].Branch,requestAuth.activeLocationId==='a'?'Abuja':'Lagos');
+    assert.equal(db.state.writes,0);assert.equal(db.state.audits.length,0);
+    if(status!=='DRAFT' || stage!=='DRAFT') {
+     const employee=requestAuth.activeLocationId==='b'?entry('ZLL000002','Synthetic Two','Lagos'):entry();
+     await assert.rejects(service.prepare(db,requestAuth,'p',buffer([employee])));
+     await assert.rejects(service.importWorkbook(db,requestAuth,'p',buffer([employee]),'stale-preview'));
+     assert.equal(db.state.writes,0);
+    }
+   }
+  }
+ }
+});
