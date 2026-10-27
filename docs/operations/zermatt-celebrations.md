@@ -4,7 +4,7 @@ Birthday and completed-year work anniversary greetings use Africa/Lagos calendar
 
 ## Activation
 
-Only on the live Zermatt API, set `CHRIS_CELEBRATION_AUTOMATION_ENABLED=true`. Leave this unset in demo and staging. Set a random secret of at least 32 characters as `CHRIS_CELEBRATION_CRON_TOKEN`, with the same secret in GitHub Actions. Never commit credentials. The scheduled workflow must be present in the repository **default branch** to run automatically; the live API branch alone does not activate GitHub schedules. Start time is 08:07 Lagos with hourly same-day recovery through 19:07. GitHub schedules can be delayed; this is best effort, not a delivery-time SLA. An internal 15-minute timer supplements it while the API is running. Neither path backfills past dates.
+Only on the live Zermatt API, set `CHRIS_CELEBRATION_AUTOMATION_ENABLED=true`. Leave this unset in demo and staging. Set `CHRIS_CELEBRATION_GITHUB_OIDC_ENABLED=true` on the live API. GitHub Actions authenticates with short-lived signed OIDC tokens, pinned to this repository ID, owner ID, main branch and exact workflow path; no shared GitHub secret is required. Optional administrator status access uses a random secret of at least 32 characters in `CHRIS_CELEBRATION_CRON_TOKEN`. Never commit credentials. The scheduled workflow must be present in the repository **default branch** to run automatically; the live API branch alone does not activate GitHub schedules. Start time is 08:07 Lagos with hourly same-day recovery through 19:07. GitHub schedules can be delayed; this is best effort, not a delivery-time SLA. An internal 15-minute timer supplements it while the API is running, between 08:00 and 20:00 Lagos. Neither path backfills past dates.
 
 Email needs `RESEND_API_KEY` and an actual verified sender mailbox in `CELEBRATION_EMAIL_FROM` (or existing `PAYROLL_EMAIL_FROM` / `RESEND_FROM`). The display name is overridden, not the verified mailbox domain.
 
@@ -23,3 +23,5 @@ The existing unique ledger claim prevents concurrent duplicate sends per tenant,
 - https://resend.com/docs/dashboard/emails/idempotency-keys
 - https://developers.termii.com/messaging-api
 - https://developers.termii.com/sender-id
+
+- https://docs.github.com/en/actions/reference/security/oidc
