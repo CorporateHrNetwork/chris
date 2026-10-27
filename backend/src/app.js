@@ -109,6 +109,7 @@ app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
+app.use("/api/internal/zermatt-celebrations", require("./routes/zermattCelebrationAutomationRoutes").createRouter({ prisma: require("./config/prisma") }));
 app.use("/api/chris-automation", chrisAutomationRoutes);
 app.use("/api/ess", employeeSelfServiceRoutes);
 app.use("/api/news", employeeNewsRoutes);
