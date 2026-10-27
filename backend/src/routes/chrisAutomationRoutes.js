@@ -1,3 +1,4 @@
+const payrollIncidents = require("../services/payrollReportIncidentService");
 const express = require("express");
 const crypto = require("crypto");
 const XLSX = require("xlsx");
@@ -244,12 +245,14 @@ router.get("/payroll-dashboard/export", requirePermission("payroll.view"), async
     const period=periods[0];
     const runs=await prisma.$queryRawUnsafe(`SELECT "id","status","employeeCount","grossTotal","deductionTotal","netPreviewTotal","submittedAt","approvedAt" FROM "payroll_runs" WHERE "organizationId"=$1 AND "periodId"=$2 ORDER BY "createdAt" DESC LIMIT 1`,req.auth.organizationId,period.id);
     const run=runs[0]||null;
-    const lines=run?await prisma.$queryRawUnsafe(`SELECT "employeeNumber","employeeName","baseSalary","allowances","deductions","advanceRecovery","loanRecovery","grossPay","netPreview","statutoryStatus" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "employeeNumber"`,req.auth.organizationId,run.id):[];
-    const notes=await prisma.$queryRawUnsafe(`SELECT "category","originalNote","reviewedNote","status","submittedAt","reviewedAt","implementedAt" FROM "chris_payroll_notes" WHERE "organizationId"=$1 AND ("payrollPeriodId"=$2 OR "payrollPeriodId" IS NULL) ORDER BY "submittedAt"`,req.auth.organizationId,period.id);
+    const lines=run?await prisma.$queryRawUnsafe(`SELECT "employeeId","details","employeeNumber","employeeName","baseSalary","allowances","deductions","advanceRecovery","loanRecovery","grossPay","netPreview","statutoryStatus" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "employeeNumber"`,req.auth.organizationId,run.id):[];
+    const reportRun={...run,periodId:period.id,periodCode:period.code};
+    const incidentSources=await payrollIncidents.loadSources(prisma,req.auth.organizationId,reportRun,lines);
+    const incidents=payrollIncidents.buildIncidents({run:reportRun,lines,sources:incidentSources});
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Period:period.name,Code:period.code,Start:period.periodStart,End:period.periodEnd,Status:period.status,RunStatus:run?.status||"NOT RUN",Employees:run?.employeeCount||0,Gross:run?.grossTotal||0,Deductions:run?.deductionTotal||0,Net:run?.netPreviewTotal||0}]),"Dashboard");
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lines),"Payroll Lines");
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(notes),"Payroll Notes & Audit");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lines.map(({details,employeeId,...line})=>({...line,expectedDays:details?.attendance?.standardDays ?? "",workedDays:details?.attendance?.payableDays ?? "",daysDifference:details?.attendance?.standardDays != null && details?.attendance?.payableDays != null ? Number(details.attendance.payableDays)-Number(details.attendance.standardDays):"",payrollNotes:payrollIncidents.summaryFor(incidents,employeeId)}))),"Payroll Lines");
+    payrollIncidents.appendIncidentSheets(wb,incidents);
     const buffer=XLSX.write(wb,{type:"buffer",bookType:"xlsx"});
     res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition",`attachment; filename="CHRIS_${period.code}_Payroll_Dashboard.xlsx"`);
