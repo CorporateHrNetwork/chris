@@ -487,7 +487,7 @@ export default function PayrollComponentsManaged({ kind }) {
       <Panel title="Bulk Upload">
         <p style={controlNote}>Download the Excel template with Employee No, Employee Name and Branch already filled in. Complete only employees with an allowance or deduction; untouched rows are skipped. Keep each employee number and name together. Validate / Preview, review the rows, then Confirm Import. Formula-based allowances require days/hours, not a manually calculated amount.</p>
         <div style={buttonRow}>
-          <button type="button" style={smallButton} disabled={busy === "download"} onClick={downloadTemplate}>{busy === "download" ? "Preparing…" : `Download ${isDeduction ? "Deductions" : "Allowances"} Template`}</button>
+          <button type="button" style={smallButton} disabled={busy === "download"} onClick={downloadTemplate}>{busy === "download" ? "Preparing…" : `Download Template (${isDeduction ? "Deductions" : "Allowances"})`}</button>
           <input type="file" accept=".xlsx,.xls" onChange={(event) => { setBulkFile(event.target.files?.[0] || null); setBulkPreview(null); }} />
           <button type="button" style={smallButton} disabled={!bulkFile || busy === "preview"} onClick={previewBulk}>{busy === "preview" ? "Validating…" : "Validate / Preview"}</button>
           <button type="button" style={primaryButton} disabled={!bulkFile || !bulkPreview || !bulkPreview.validRows || bulkPreview.invalidRows > 0 || busy === "import"} onClick={importBulk}>{busy === "import" ? "Importing…" : "Confirm Import"}</button>
