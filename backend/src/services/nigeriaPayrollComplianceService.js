@@ -1,3 +1,4 @@
+const { resolvePayableDays } = require("./newHirePayrollProrationService");
 const { splitSalary } = require("./zermattSalarySplit");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
@@ -706,7 +707,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   if (String(policy.jurisdiction || "").toUpperCase() !== "NG") throw payrollError("PAYROLL_JURISDICTION_UNSUPPORTED", "The active payroll policy is not a Nigeria policy.", 409);
 
   const employees = await prismaClient.employee.findMany({
-    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES } },
+    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES }, ...(organization.slug === "zermatt-liquor-limited" ? { OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }] } : {}) },
     select: {
       id: true,
       employeeNumber: true,
@@ -714,6 +715,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       middleName: true,
       lastName: true,
       employmentType: true,
+      hireDate: true,
       costCentreId: true,
     },
     orderBy: { employeeNumber: "asc" },
@@ -843,14 +845,29 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         organizationId, period.id
       ) : [];
   const noteSalaryByEmployee = new Map(noteSalaryRows.map(row => [row.employeeId, row]));
+  // New hires must never inherit a complete payroll cycle when actual payable
+  // workdays have not been confirmed. Validate all employees before any run writes.
+  const employmentDaysByEmployee = new Map();
+  if (organization.slug === "zermatt-liquor-limited") {
+    const issues = [];
+    for (const employee of employees) {
+      const rate = rateByEmployee.get(employee.id);
+      const basis = rate.fullMonthlyGross ? 26 : Number(policy.standardDays[employee.employmentType]);
+      const result = resolvePayableDays({ hireDate: employee.hireDate, periodStart: period.periodStart, periodEnd: period.periodEnd, standardDays: basis, attendanceInput: attendanceByEmployee.get(employee.id) });
+      employmentDaysByEmployee.set(employee.id, result);
+      if (result.requiresVerifiedDays || result.invalidDays) issues.push({ employeeNumber: employee.employeeNumber, hireDate: result.hireDate, maximumCalendarDays: result.maximumCalendarDays, issue: result.requiresVerifiedDays ? "HR-confirmed payable days required" : "Worked days exceed employment window or are invalid" });
+    }
+    if (issues.length) throw payrollError("NEW_HIRE_WORKED_DAYS_REQUIRED", `Confirm payable workdays from the employment effective date for ${issues.map(row => `${row.employeeNumber} (${row.hireDate})`).join(", ")}. New hires cannot default to a full payroll cycle. Use Authorized HR Manual Worked Days or Bulk Upload, then recalculate.`, 409, { employees: issues, rule: "ACTUAL_PAYABLE_WORKDAYS_FROM_EMPLOYMENT_DATE" });
+  }
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
     const salaryNote = noteSalaryByEmployee.get(employee.id);
-    const splitAllocation = rate.fullMonthlyGross ? splitSalary({ fullMonthlyGross: salaryNote?.monthlyGross ?? rate.fullMonthlyGross, employmentType: employee.employmentType, hireDate: "2000-01-01", periodMonth: period.periodStart.slice(0,7) }) : null;
+    const splitAllocation = rate.fullMonthlyGross ? splitSalary({ fullMonthlyGross: salaryNote?.monthlyGross ?? rate.fullMonthlyGross, employmentType: employee.employmentType, hireDate: employee.hireDate ? dateText(employee.hireDate) : "2000-01-01", periodMonth: period.periodStart.slice(0,7) }) : null;
     const scheduledMonthlyGross = splitAllocation ? splitAllocation.endMonthGross : round2(salaryNote?.monthlyGross ?? rate.amount ?? 0);
     const standardDays = splitAllocation ? 26 : Number(policy.standardDays[employee.employmentType]);
     const attendanceInput = attendanceByEmployee.get(employee.id);
-    const payableDays = attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
+    const employmentDays = employmentDaysByEmployee.get(employee.id);
+    const payableDays = employmentDays ? employmentDays.payableDays : attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
       ? standardDays
       : Number(attendanceInput.workedDays);
     if (!Number.isFinite(payableDays) || payableDays < 0) {
@@ -1005,8 +1022,10 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           standardDays,
           payableDays: round2(payableDays),
           prorationFactor: round2(prorationFactor),
-          source: attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT",
-          notes: attendanceInput?.notes || null,
+          source: employmentDays?.source || (attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT"),
+          notes: employmentDays?.notes || attendanceInput?.notes || null,
+          hrNotes: attendanceInput?.notes || null,
+          employmentProration: employmentDays?.newHire ? { rule: employmentDays.rule, employmentEffectiveDate: employmentDays.hireDate, eligibleFrom: employmentDays.eligibleFrom, periodEnd: employmentDays.periodEnd, verifiedPayableDays: payableDays, maximumCalendarDays: employmentDays.maximumCalendarDays } : null,
           manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD",
         },
         scheduledMonthlyGross,
