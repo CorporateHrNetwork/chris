@@ -41,7 +41,7 @@ function buildIncidents({run={},lines=[],employeeMeta=new Map(),sources={}}) {
  for(const input of sources.attendance || []) {
   const line=byId.get(input.employeeId);if(!line)continue;
   const attendance=object(line.details).attendance || {};const expected=number(attendance.standardDays),current=number(input.workedDays);
-  if(current===null || (current===number(attendance.payableDays) && text(input.notes)===text(attendance.notes)))continue;
+  if(current===null || (current===number(attendance.payableDays) && text(input.notes)===text(Object.prototype.hasOwnProperty.call(attendance,'hrNotes') ? attendance.hrNotes : attendance.notes)))continue;
   result.push({period:run.periodCode,runId:run.id,employeeId:line.employeeId,employeeNumber:line.employeeNumber,employeeName:line.employeeName,branch:object(line.details).organizationSnapshot?.locationName || employeeMeta.get(line.employeeId)?.branch || '',category:'WORKED DAYS INPUT CHANGED',source:'LATEST MANUAL ATTENDANCE INPUT',treatment:'NOT IN RUN SNAPSHOT — RECALCULATION REQUIRED',expectedDays:expected,workedDays:current,difference:expected!==null?round(current-expected):null,reason:input.notes || 'No reason recorded; HR verification required.',recordedBy:input.recordedBy,submittedAt:input.updatedAt});
  }
  return result;
