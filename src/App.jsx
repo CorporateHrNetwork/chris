@@ -166,7 +166,8 @@ function App() {
           <Route path="/payroll/transport-support" element={<TransportSupportPayroll />} />
           <Route path="/payroll/full-salary-upload" element={<TransportSupportPreparation />} />
         </Route>
-        <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans /></PermissionLayout>} />
+        <Route path="/loans/completed" element={<PermissionLayout permission="loans.view"><Loans key="completed" completedOnly /></PermissionLayout>} />
+        <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans key="active" /></PermissionLayout>} />
         <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
         <Route path="/payroll/notes" element={<ProtectedLayout><PayrollNotes /></ProtectedLayout>} />
