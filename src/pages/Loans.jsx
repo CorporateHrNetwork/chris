@@ -100,7 +100,7 @@ function repaymentPlan(balanceValue, installmentValue, startMonth) {
   };
 }
 
-function Loans() {
+function Loans({ completedOnly = false }) {
   const navigate = useNavigate();
   const formRef = useRef(null);
   const [summary, setSummary] = useState({});
@@ -151,7 +151,18 @@ function Loans() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const refresh = () => load();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
+
+  const registerLoans = useMemo(() => loans.filter((loan) => completedOnly ? loan.status === "COMPLETED" : ["ACTIVE", "PAUSED"].includes(loan.status)), [loans, completedOnly]);
+  const visibleRecoveries = useMemo(() => {
+    const ids = new Set(registerLoans.map((loan) => loan.id));
+    return recoveries.filter((row) => ids.has(row.loanId));
+  }, [registerLoans, recoveries]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -414,7 +425,7 @@ function Loans() {
   const exportBulk = async (format) => {
     try {
       setBusy(`export-${format}`);
-      saveDownloadedBlob(await apiDownload(`/api/loans/reports/export?format=${format}`));
+      saveDownloadedBlob(await apiDownload(`/api/loans/reports/export?format=${format}&view=${completedOnly ? "completed" : "active"}`));
     } catch (requestError) {
       setError(requestError?.message || "Unable to export loan report.");
     } finally {
@@ -423,10 +434,10 @@ function Loans() {
   };
 
   const dashboardMetrics = useMemo(() => {
-    const financialLoans = loans.filter((loan) => ["ACTIVE", "PAUSED", "COMPLETED"].includes(loan.status));
-    const active = loans.filter((loan) => loan.status === "ACTIVE");
+    const financialLoans = registerLoans.filter((loan) => ["ACTIVE", "PAUSED", "COMPLETED"].includes(loan.status));
+    const active = registerLoans.filter((loan) => loan.status === "ACTIVE");
     const totalLoanAmount = financialLoans.reduce((sum, loan) => sum + Math.max(0, Number(loan.principalAmount || 0)), 0);
-    const outstanding = loans.filter((loan) => ["ACTIVE", "PAUSED"].includes(loan.status))
+    const outstanding = registerLoans.filter((loan) => ["ACTIVE", "PAUSED"].includes(loan.status))
       .reduce((sum, loan) => sum + Math.max(0, Number(loan.outstandingAmount || 0)), 0);
     const recovered = financialLoans.reduce((sum, loan) => {
       const principal = Number(loan.principalAmount || 0);
@@ -434,14 +445,14 @@ function Loans() {
       return sum + Math.max(0, principal - balance);
     }, 0);
     return { active: active.length, totalLoanAmount, outstanding, recovered, borrowers: new Set(financialLoans.map((loan) => loan.employeeId || loan.employeeNumber)).size };
-  }, [loans]);
+  }, [registerLoans]);
 
   const filteredLoans = useMemo(() => {
     const term = loanSearch.trim().toLowerCase();
-    if (!term) return loans;
-    return loans.filter((loan) => [loan.employeeNumber, loan.employeeName, loan.loanNumber, loan.purpose, loan.status]
+    if (!term) return registerLoans;
+    return registerLoans.filter((loan) => [loan.employeeNumber, loan.employeeName, loan.loanNumber, loan.purpose, loan.status]
       .filter(Boolean).join(" ").toLowerCase().includes(term));
-  }, [loans, loanSearch]);
+  }, [registerLoans, loanSearch]);
 
   const activity = [
     {
@@ -464,7 +475,7 @@ function Loans() {
       id: "recovery",
       icon: <FaBalanceScale />,
       title: "Payroll Recovery",
-      description: `${recoveries.filter((row) => row.status === "POSTED").length} posted loan recovery transaction(s).`,
+      description: `${visibleRecoveries.filter((row) => row.status === "POSTED").length} posted loan recovery transaction(s).`,
       time: loading ? "Checking" : "Live",
       tone: "success",
     },
@@ -481,28 +492,31 @@ function Loans() {
     <>
       <ModuleDashboardShell
         eyebrow="EMPLOYEE FINANCIAL SUPPORT"
-        title="Loans Dashboard"
+        title={completedOnly ? "Completed Loans" : "Active Loans"}
         description="ZERMATT loans are approved manually by the GM and paid outside CHRiS by Accounts. Authorized Branch HR records assigned-branch employees; Head HR manages the organization-wide register for payroll recovery and audit."
         metricsColumns={5}
         metrics={[
-          <DashboardCard compact key="active" title="Active Loan Accounts" value={loading ? "—" : dashboardMetrics.active} subtitle="Running payroll recovery accounts" icon={<FaHandHoldingUsd />} tone="green" />,
-          <DashboardCard compact key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees with recorded financial loan history" icon={<FaUsers />} tone="gold" />,
-          <DashboardCard compact key="total-loan-amount" title="Total Loan Amount" value={loading ? "—" : money(dashboardMetrics.totalLoanAmount)} subtitle="Cumulative principal amount across active, paused and completed loans" icon={<FaFileInvoiceDollar />} tone="gold" />,
+          <DashboardCard compact key="active" title={completedOnly ? "Completed Loan Accounts" : "Active Loan Accounts"} value={loading ? "—" : completedOnly ? registerLoans.length : dashboardMetrics.active} subtitle={completedOnly ? "Fully repaid accounts retained for audit" : "Running payroll recovery accounts"} icon={<FaHandHoldingUsd />} tone="green" />,
+          <DashboardCard compact key="borrowers" title="Borrowers" value={loading ? "—" : dashboardMetrics.borrowers} subtitle="Employees in this loan register" icon={<FaUsers />} tone="gold" />,
+          <DashboardCard compact key="total-loan-amount" title="Total Loan Amount" value={loading ? "—" : money(dashboardMetrics.totalLoanAmount)} subtitle="Cumulative principal amount in this loan register" icon={<FaFileInvoiceDollar />} tone="gold" />,
           <DashboardCard compact key="total-loan-balance" title="Total Loan Balance" value={loading ? "—" : money(dashboardMetrics.outstanding)} subtitle="Total outstanding balance across active and paused loans" icon={<FaBalanceScale />} tone="gold" />,
           <DashboardCard compact key="recovered" title="Principal Cleared" value={loading ? "—" : money(dashboardMetrics.recovered)} subtitle="Payroll/opening recoveries plus recorded external settlements" icon={<FaMoneyCheckAlt />} tone="green" />,
         ]}
         analytics={<AnalyticsPanel title="Zermatt Loan Control" subtitle="Manual approval outside CHRiS; payroll recovery inside CHRiS." icon={<FaChartLine />}><RecentActivityList items={activity} /></AnalyticsPanel>}
         recentActivity={<AnalyticsPanel title="Recording Rule" subtitle="CHRiS is not a loan-payment engine." icon={<FaFileInvoiceDollar />}><div style={{ display: "grid", gap: 8, lineHeight: 1.6 }}><strong>1. GM approves manually.</strong><span>2. Accounts processes payment outside CHRiS.</span><span>3. Authorized HR records the approved/disbursed amount.</span><span>4. CHRiS recovers the configured installment through payroll.</span><span>5. If an employee clears the balance outside payroll, HR records External Settlement; CHRiS does not fabricate a salary deduction.</span><span style={{ marginTop: 5 }}>{scopeText}</span></div></AnalyticsPanel>}
         quickActions={[
+          <QuickActionCard key="register-view" title={completedOnly ? "Active Loans" : "Completed Loans"} subtitle={completedOnly ? "Return to running loan accounts" : "View fully repaid loan accounts and history"} icon={<FaHistory />} onClick={() => navigate(completedOnly ? "/loans" : "/loans/completed")} />,
+          ...(!completedOnly ? [
           <QuickActionCard key="record" title="Record Approved Loan" subtitle="Record an already approved/disbursed employee loan" icon={<FaPlusCircle />} onClick={() => formRef.current?.scrollIntoView({ behavior: "smooth" })} />,
           <QuickActionCard key="advances" title="Salary Advances" subtitle="Same manual GM approval / external payment policy" icon={<FaMoneyCheckAlt />} onClick={() => navigate("/payroll?workspace=salary-advances")} />,
           ...(capabilities.canBulkPayrollInputs ? [<QuickActionCard key="bulk" title="Opening Loan Upload" subtitle="Maintain legacy/opening payroll balances" icon={<FaDownload />} onClick={() => setShowBulkUpload(true)} />] : []),
           <QuickActionCard key="unpause" title="Unpause Loan" subtitle="Show paused loan accounts and restore payroll recovery" icon={<FaHandHoldingUsd />} onClick={() => { setLoanSearch("PAUSED"); window.requestAnimationFrame(() => document.getElementById("loan-register")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} />,
+          ] : []),
           <QuickActionCard key="history" title="Recovery History" subtitle="Review posted payroll loan deductions" icon={<FaHistory />} onClick={() => document.getElementById("loan-recovery-history")?.scrollIntoView({ behavior: "smooth" })} />,
         ]}
       />
 
-      <section ref={formRef} style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
+      {!completedOnly && <section ref={formRef} style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
         {error && <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid #b91c1c", color: "#b91c1c" }}>{error}</div>}
         {message && <div style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid var(--chris-dashboard-border)", color: "var(--chris-dashboard-text)" }}>{message}</div>}
 
@@ -583,10 +597,10 @@ function Loans() {
             </div>
           </form>
         </AnalyticsPanel>
-      </section>
+      </section>}
 
       <section id="loan-register" style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px", scrollMarginTop: 96 }}>
-        <AnalyticsPanel title="Loan Register" subtitle="One running loan account per facility. Approved top-ups increase the same account rather than creating a second loan." icon={<FaHandHoldingUsd />}>
+        <AnalyticsPanel title={completedOnly ? "Completed Loan Register" : "Active Loan Register"} subtitle={completedOnly ? "Fully repaid loans move here automatically. Profiles and payment history remain available." : "Active and paused loan accounts. Fully repaid accounts move automatically to Completed Loans."} icon={<FaHandHoldingUsd />}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
             <input style={{ ...inputStyle, maxWidth: 360 }} value={loanSearch} onChange={(event) => setLoanSearch(event.target.value)} placeholder="Search Loan / Employee — employee number, employee name, loan number, policy or status" />
             <button style={secondaryButton} onClick={() => exportBulk("xlsx")} disabled={Boolean(busy)}>Bulk Loan Report · XLSX</button>
@@ -610,7 +624,7 @@ function Loans() {
               </colgroup>
               <thead><tr>{["Employee", "Loan", "GM Approval Ref", "Accounts Payment Ref", "Cumulative Principal", "Cleared", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head, index) => <th key={head} style={{ ...loanHeadStyle, ...(index >= 4 && index <= 7 ? { textAlign: "right" } : {}) }}>{head}</th>)}</tr></thead>
               <tbody>
-                {!loading && filteredLoans.length === 0 && <tr><td colSpan="11" style={{ padding: 16 }}>No loan records found.</td></tr>}
+                {!loading && filteredLoans.length === 0 && <tr><td colSpan="11" style={{ padding: 16 }}>{completedOnly ? "No completed loans found." : "No active or paused loans found."}</td></tr>}
                 {filteredLoans.map((loan) => {
                   const recovered = Math.max(0, Number(loan.principalAmount || 0) - Number(loan.outstandingAmount || 0));
                   const current = ["ACTIVE", "PAUSED"].includes(loan.status);
@@ -648,8 +662,8 @@ function Loans() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead><tr>{["Date", "Employee", "Loan", "Payroll Period", "Amount", "Status"].map((head) => <th key={head} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--chris-dashboard-border)" }}>{head}</th>)}</tr></thead>
               <tbody>
-                {!loading && !recoveries.length && <tr><td colSpan="6" style={{ padding: 16 }}>No approved payroll loan recoveries have posted yet.</td></tr>}
-                {recoveries.map((row) => <tr key={row.id}><td style={cellStyle}>{row.recoveryDate}</td><td style={cellStyle}><strong>{row.employeeNumber}</strong> — {row.employeeName}</td><td style={cellStyle}>{row.loanNumber}</td><td style={cellStyle}>{row.payrollPeriodCode}</td><td style={cellStyle}>{money(row.amount)}</td><td style={cellStyle}>{row.status}</td></tr>)}
+                {!loading && !visibleRecoveries.length && <tr><td colSpan="6" style={{ padding: 16 }}>No approved payroll loan recoveries have posted yet.</td></tr>}
+                {visibleRecoveries.map((row) => <tr key={row.id}><td style={cellStyle}>{row.recoveryDate}</td><td style={cellStyle}><strong>{row.employeeNumber}</strong> — {row.employeeName}</td><td style={cellStyle}>{row.loanNumber}</td><td style={cellStyle}>{row.payrollPeriodCode}</td><td style={cellStyle}>{money(row.amount)}</td><td style={cellStyle}>{row.status}</td></tr>)}
               </tbody>
             </table>
           </div>
