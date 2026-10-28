@@ -108,7 +108,7 @@ function individualReportData(profile) {
     ["Status", loan.status],
   ];
 
-  const scheduleHeaders = ["Installment", "Period", "Due Date", "Opening Balance", "Principal", "Interest", "Total Deduction", "Amount Paid", "Status"];
+  const scheduleHeaders = ["Installment", "Period", "Due Date", "Opening Balance", "Principal", "Interest", "Total Deduction", "Amount Paid", "Status", "History Review Note"];
   const scheduleRows = profile.amortizationSchedule.map((row) => [
     row.installmentNumber,
     row.period,
@@ -119,6 +119,7 @@ function individualReportData(profile) {
     row.totalDeduction,
     row.amountPaid,
     row.status,
+    row.reconciliationNote || "",
   ]);
 
   const recoveryHeaders = ["Date", "Payroll Period", "Amount", "Status"];
@@ -159,7 +160,7 @@ function exportIndividualLoan(profile, format) {
       ...data.summaryRows.map(([field, value]) => `${field}: ${value}`),
       "",
       "Amortization Schedule",
-      ...data.scheduleRows.map((row) => `#${row[0]} | ${row[1]} | Due ${row[2]} | Principal ${row[4]} | Paid ${row[7]} | ${row[8]}`),
+      ...data.scheduleRows.map((row) => `#${row[0]} | ${row[1]} | Due ${row[2]} | Principal ${row[4]} | Paid ${row[7]} | ${row[8]}${row[9] ? ` | ${row[9]}` : ""}`),
       "",
       "Recovery History",
       ...data.recoveryRows.map((row) => `${row[0]} | ${row[1]} | ${row[2]} | ${row[3]}`),

@@ -73,3 +73,10 @@ test('September repair restores exactly the confirmed 62 recoveries once and ref
  assert.equal((await db.query(`SELECT count(*) n FROM organization_audits WHERE action='ACTUAL_SALARY_DEDUCTION_CONFIRMED'`)).rows[0].n,62);
  }finally{await db.close();}
 });
+
+test('actual paid recovery remains visible after a migrated schedule already exhausts principal',()=>{
+ const vm=require('node:vm');const module={exports:{}};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/services/loanProfileService.js'),'utf8'),{require:()=>({}),module,exports:module.exports,Date,Number,Math,Map,Set});
+ const schedule=module.exports.buildAmortizationSchedule({principalAmount:100000,installmentAmount:50000,recoveryStartDate:'2026-07-31',legacyPeriodEvents:[{periodStart:'2026-07-01',status:'PAID',amount:50000},{periodStart:'2026-08-01',status:'PAID',amount:50000}],recoveries:[{recoveryDate:'2026-09-30',status:'POSTED',amount:50000}]});
+ const sep=schedule.find(row=>row.dueDate==='2026-09-30');assert.equal(sep.status,'PAID');assert.equal(sep.amountPaid,50000);assert.equal(sep.principalAmount,0);assert.ok(sep.reconciliationNote);assert.equal(schedule.reduce((sum,row)=>sum+row.principalAmount,0),100000);
+});

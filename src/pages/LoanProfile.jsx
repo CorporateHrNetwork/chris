@@ -156,11 +156,12 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
         </AnalyticsPanel>
 
         <AnalyticsPanel title="Loan Amortization Schedule" subtitle="Zero-interest monthly recovery plan. External settlement appears as a separate zero-payroll-deduction settlement event and closes the remaining schedule." icon={<FaMoneyBillWave />}>
+          {amortizationSchedule.some((row) => row.reconciliationNote) && <p role="status">History review required: actual paid recoveries extend beyond the migrated opening schedule. These payments are shown as paid without allocating the same principal twice.</p>}
           <Table headers={["#", "Period", "Due Date", "Opening Balance", "Principal", "Interest", "Total Deduction", "Amount Paid", "Status", "Action"]}>
             {amortizationSchedule.map((row) => (
               <tr key={`${row.installmentNumber}-${row.dueDate}-${row.status}`}>
                 <Cell>{row.installmentNumber}</Cell>
-                <Cell strong>{row.period}</Cell>
+                <Cell strong>{row.period}{row.reconciliationNote && <small style={{ display: "block" }}>{row.reconciliationNote}</small>}</Cell>
                 <Cell>{row.dueDate}</Cell>
                 <Cell>{money(row.outstandingBalance)}</Cell>
                 <Cell>{money(row.principalAmount)}</Cell>
