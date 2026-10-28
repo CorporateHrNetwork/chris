@@ -10,6 +10,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   CREATE TABLE organizations(id text PRIMARY KEY,slug text);
   CREATE TABLE users(id text PRIMARY KEY);
   CREATE TABLE employees(id text PRIMARY KEY,"organizationId" text,"employeeNumber" text,"firstName" text,"middleName" text,"lastName" text,"employmentType" text,"hireDate" date,status text);
+  CREATE TABLE employee_lifecycle_events(id text PRIMARY KEY,"organizationId" text,"employeeId" text,"eventType" text,"effectiveDate" timestamp);
   CREATE TABLE payroll_salary_rates(id text PRIMARY KEY,"organizationId" text,"employeeId" text,amount numeric,currency text DEFAULT 'NGN',frequency text,"effectiveFrom" date,"effectiveTo" date,status text,reason text,"createdByUserId" text,"updatedAt" timestamptz DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE payroll_periods(id text PRIMARY KEY,"organizationId" text,"periodStart" date,"periodEnd" date);
   CREATE TABLE payroll_runs(id text PRIMARY KEY,"organizationId" text,"periodId" text,status text,"statutoryStatus" text,"updatedAt" timestamptz);
@@ -94,6 +95,11 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   assert.equal(one.previousUnpaid,25000);assert.equal(one.netPay,75000);
   assert.equal(two.previousOverpaid,5200);assert.equal(two.netPay,7600);
   assert.equal(four.previousUnpaid,20000);assert.equal(four.netPay,50000);
+  await pool.query(`UPDATE employees SET status='INACTIVE' WHERE id='e4';INSERT INTO employee_lifecycle_events VALUES('dec-deactivation','zll','e4','DEACTIVATED','2026-12-15'),('same-month-reactivated','zll','e1','DEACTIVATED','2026-12-10');`);
+  await service.generate('zll','hr','2026-12');
+  const excluded=await service.detail('zll','hr',december);
+  assert.ok(!excluded.lines.some(l=>['e4','e1'].includes(l.employeeId)),'deactivation excludes its full month even with unpaid balances or same-month reactivation');
+  assert.equal(Number((await pool.query(`SELECT SUM(amount) amount FROM zermatt_midmonth_balances WHERE "employeeId"='e4' AND kind='UNPAID'`)).rows[0].amount),20000,'carry-forward ledger is retained');
   assert.equal(Number((await pool.query('SELECT amount FROM payroll_loans')).rows[0].amount),70000);
   assert.equal((await pool.query('SELECT count(*)::int as n FROM payroll_runs')).rows[0].n,0);
   assert.equal((await pool.query(`SELECT has_table_privilege('anon','public.zermatt_midmonth_lines','SELECT') as allowed`)).rows[0].allowed,false);

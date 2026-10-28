@@ -707,7 +707,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   if (String(policy.jurisdiction || "").toUpperCase() !== "NG") throw payrollError("PAYROLL_JURISDICTION_UNSUPPORTED", "The active payroll policy is not a Nigeria policy.", 409);
 
   const employees = await prismaClient.employee.findMany({
-    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES }, ...(organization.slug === "zermatt-liquor-limited" ? { OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }] } : {}) },
+    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES }, ...(organization.slug === "zermatt-liquor-limited" ? { lifecycleEvents: { none: { eventType: "DEACTIVATED", effectiveDate: { gte: new Date(`${period.periodStart.slice(0, 7)}-01T00:00:00.000Z`), lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } } }, OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }] } : {}) },
     select: {
       id: true,
       employeeNumber: true,
