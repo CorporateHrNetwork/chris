@@ -3,9 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname,'../src/services/eosbService.js'),'utf8');
-function fixture({type='Full-time',amount=200000,committed=false,cover=300000,suretyType='Full-time',surety='S', own=159485.76, totalExposure=0, currentLoan=0, excludeLoanId=null}={}) {
- const employees = [{id:'app',employeeNumber:'A',employmentType:type,status:'ACTIVE',hireDate:'2020-01-01'}, {id:'surety',employeeNumber:'S',employmentType:suretyType,status:'ACTIVE',hireDate:'2020-01-01'}];
+function fixture({type='Full-time',amount=200000,committed=false,cover=300000,suretyType='Full-time',surety='S', own=159485.76, totalExposure=0, currentLoan=0, excludeLoanId=null, appGuarantee=0, suretyHire='2020-01-01', suretyStatus='ACTIVE'}={}) {
+ const employees = [{id:'app',employeeNumber:'A',employmentType:type,status:'ACTIVE',hireDate:'2020-01-01'}, {id:'surety',employeeNumber:'S',employmentType:suretyType,status:suretyStatus,hireDate:suretyHire}];
  const client = {organization:{findUnique:async()=>({id:'org',slug:'zermatt-liquor-limited'})},employee:{findFirst:async({where})=>employees.find(e=>e.employeeNumber===where.employeeNumber)},$queryRawUnsafe:async(sql,...params)=>{
+  if(sql.includes('JOIN LATERAL') && params[1]==='A' && appGuarantee) return [{id:'guaranteed',outstandingAmount:appGuarantee,assessment:{surety:{coveredAmount:appGuarantee}}}];
   if(sql.includes('JOIN LATERAL')) return committed && params[1]==='S' ? [{id:'other',outstandingAmount:1000,assessment:{surety:{coveredAmount:1000}}}]:[];
   if(sql.includes('payroll_salary_rates'))return employees.map(e=>({employeeId:e.id,amount:(e.id==='app'?own:cover)/(.075*(2492/30)),effectiveFrom:'2010-01-01'}));
   if(sql.includes('SELECT \"outstandingAmount\"')) return [{outstandingAmount:currentLoan}];
@@ -44,4 +45,12 @@ test('Postgres reservations isolate tenants and release only closed or repaid lo
 test('top-up restores only its own exposure before assessing the merged balance',async()=>{
  const a=await fixture({amount:300000,totalExposure:250000,currentLoan:200000,excludeLoanId:'current'});
  assert.equal(a.availableCollateral,109485.76);assert.equal(a.surety.coveredAmount,190514.24);
+});
+
+test('committed surety collateral is unavailable for the surety’s own borrowing',async()=>{
+ const a=await fixture({appGuarantee:40000});assert.equal(a.availableCollateral,119485.76);assert.equal(a.surety.coveredAmount,80514.24);
+});
+test('full-time sureties must satisfy EoSB eligibility and all sureties must be current',async()=>{
+ await assert.rejects(fixture({suretyHire:'2026-08-01'}),{code:'LOAN_SURETY_COLLATERAL_INSUFFICIENT'});
+ await assert.rejects(fixture({suretyType:'Expatriate',suretyStatus:'EXITED'}),{code:'LOAN_SURETY_NOT_CURRENT'});
 });
