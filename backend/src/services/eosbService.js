@@ -269,20 +269,25 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
 
 async function listEosbAccounts({ organizationId, asOf = new Date(), prismaClient = prisma }) {
   const organization = await resolveOrganization(prismaClient, organizationId);
-  const [employees, rates, loans] = await Promise.all([
+  const [employees, rates, loans, guarantees] = await Promise.all([
     prismaClient.employee.findMany({ where: { organizationId }, select: employeeSelect, orderBy: { employeeNumber: "asc" } }),
     grossSalaryRates(prismaClient, organizationId),
     loanExposureRows(prismaClient, organizationId),
+    suretyCommitments(prismaClient, organizationId, null),
   ]);
   return employees.map((employee) => {
     const calculationDate = effectiveAsOf(employee, asOf);
-    return buildStatement({
+    const statement = buildStatement({
       organization,
       employee,
       asOf,
       salaryRate: salaryRateForDate(rates, employee.id, calculationDate),
       exposure: exposureFor(loans, employee.id),
     });
+    const reserved = roundMoney(guarantees.filter((row) => row.assessment?.surety?.employeeNumber === employee.employeeNumber).reduce((sum, row) => sum + Math.min(Number(row.assessment.surety.coveredAmount || 0), Number(row.outstandingAmount || 0)), 0));
+    statement.loanCollateral.existingSuretyExposure = reserved;
+    statement.loanCollateral.availableCollateral = Math.max(roundMoney(statement.loanCollateral.availableCollateral - reserved), 0);
+    return statement;
   });
 }
 
@@ -303,7 +308,7 @@ async function suretyCommitments(client, organizationId, employeeNumber, exclude
        WHERE l."organizationId"=$1 AND ($3::text IS NULL OR l."id"<>$3)
          AND l."status" NOT IN ('COMPLETED','CANCELLED','REJECTED')
          AND l."outstandingAmount">0
-         AND c.assessment->'surety'->>'employeeNumber'=$2`,
+         AND ($2::text IS NULL OR c.assessment->'surety'->>'employeeNumber'=$2)`,
     organizationId, employeeNumber, excludeLoanId
   );
 }
