@@ -89,7 +89,7 @@ router.get("/reports/export", mayView, async (req, res) => {
     const format = exportFormat(req.query?.format);
     const visibleLoans = await listVisibleLoans({ organizationId: req.auth.organizationId, userId: req.auth.userId });
     const visibleIds = new Set(visibleLoans.map((loan) => loan.id));
-    const allRows = await getBulkLoanReport({ organizationId: req.auth.organizationId });
+    const allRows = await getBulkLoanReport({ organizationId: req.auth.organizationId, view: req.query?.view });
     return sendExport(res, exportBulkLoans(allRows.filter((row) => visibleIds.has(row.loanId)), format));
   } catch (error) {
     return sendError(res, error, "Unable to export loan report.");
