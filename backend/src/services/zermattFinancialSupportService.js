@@ -311,13 +311,14 @@ async function applyApprovedDisbursedLoanTopUp({
       throw policyError("TOPUP_ACCOUNT_NOT_CURRENT", "Top-up can only be recorded against an Active or Paused loan account.", 409);
     }
 
-    const evidence = await tx.organizationAudit.findFirst({ where: { organizationId, entityType: "PayrollLoan", entityId: loanId, action: { in: ["LOAN_APPROVED_DISBURSED_RECORDED_BY_HR", "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR"] } }, orderBy: { createdAt: "desc" } });
-    const priorSurety = evidence?.newValue?.collateral?.surety?.employeeNumber;
+    const evidence = await tx.organizationAudit.findFirst({ where: { organizationId, entityId: loanId, OR: [{ entityType: "LoanCollateral" }, { entityType: "PayrollLoan", action: { in: ["LOAN_APPROVED_DISBURSED_RECORDED_BY_HR", "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR"] } }] }, orderBy: { createdAt: "desc" } });
+    const previousCollateral = evidence?.newValue?.collateral || evidence?.newValue;
+    const priorSurety = previousCollateral?.surety?.employeeNumber;
     if (priorSurety && input?.suretyEmployeeNumber && priorSurety !== input.suretyEmployeeNumber) throw policyError("LOAN_SURETY_CHANGE_NOT_ALLOWED", "The existing surety must remain until the loan is fully repaid.", 409);
     collateralAssessment = await assessLoanCollateral({ organizationId, employeeNumber: existing.employeeNumber, requestedAmount: Number(existing.outstandingAmount || 0) + topUpAmount, suretyEmployeeNumber: priorSurety || input?.suretyEmployeeNumber, excludeLoanId: loanId, prismaClient: tx });
     // Keep the existing guarantee for the full outstanding loan period even if
     // subsequent EoSB growth would now cover the entire balance.
-    if (priorSurety && !collateralAssessment.surety) collateralAssessment.surety = evidence.newValue.collateral.surety;
+    if (priorSurety && !collateralAssessment.surety) collateralAssessment.surety = previousCollateral.surety;
     const currentPrincipal = Number(existing.principalAmount || 0);
     const currentOutstanding = Math.max(0, Number(existing.outstandingAmount || 0));
     const installmentAmount = positiveMoney(input?.installmentAmount || existing.installmentAmount, "New Monthly Installment");
