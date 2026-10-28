@@ -126,6 +126,7 @@ function Loans() {
   const [form, setForm] = useState(emptyForm());
   const [collateral, setCollateral] = useState(null);
   const [collateralLoading, setCollateralLoading] = useState(false);
+  const [suretyCheck, setSuretyCheck] = useState(null);
 
   const load = async () => {
     try {
@@ -183,6 +184,22 @@ function Loans() {
     })();
     return () => { active = false; };
   }, [form.employeeNumber, topUpParent, editingLoan]);
+
+  useEffect(() => {
+    setSuretyCheck(null);
+    if (editingLoan || topUpParent || !form.employeeNumber || !form.suretyEmployeeNumber || !(Number(form.approvedAmount) > 0)) return undefined;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ validate: "true", requestedAmount: form.approvedAmount, suretyEmployeeNumber: form.suretyEmployeeNumber });
+        const result = await apiRequest(`/api/eosb/collateral/${encodeURIComponent(form.employeeNumber)}?${params}`);
+        if (active) setSuretyCheck({ assessment: result?.data?.assessment });
+      } catch (error) {
+        if (active) setSuretyCheck({ error: error?.message || "Surety validation failed." });
+      }
+    }, 300);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [form.employeeNumber, form.suretyEmployeeNumber, form.approvedAmount, editingLoan, topUpParent]);
 
   const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -261,7 +278,7 @@ function Loans() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!editingLoan && collateral?.loanCollateral?.mode === "SURETY_REQUIRED" && !form.suretyEmployeeNumber) {
+    if (!editingLoan && !topUpParent && (collateral?.loanCollateral?.mode === "SURETY_REQUIRED" || Number(form.approvedAmount) > Number(collateral?.loanCollateral?.availableCollateral || 0)) && !form.suretyEmployeeNumber) {
       setError("This employee requires an internal employee surety. Select the surety before recording the approved amount.");
       return;
     }
@@ -510,15 +527,19 @@ function Loans() {
 
             {collateralLoading && <div style={collateralCard}><strong>Checking EoSB / internal-surety basis…</strong></div>}
             {!editingLoan && collateral && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
-              <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Collateral Control</strong>
+              <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Loan Surety & System Approval</strong>
+              <p>Surety covers only the loan shortfall after available applicant EoSB. Other employment types require full surety cover. A full-time surety must have sufficient eligible EoSB; expatriates qualify without EoSB. Each surety may guarantee only one outstanding loan until fully repaid. Self-guarantees are prohibited. CHRiS validates eligibility before recording; GM approval and Accounts payment remain external.</p>
               <div style={collateralGrid}>
                 <span>Service: <strong>{collateral.service?.serviceDays || 0} days</strong></span>
                 <span>EoSB: <strong>{money(collateral.eosb?.accruedValue)}</strong></span>
                 <span>Existing secured exposure: <strong>{money(collateral.loanCollateral?.existingLoanExposure)}</strong></span>
                 <span>Available EoSB collateral: <strong>{money(collateral.loanCollateral?.availableCollateral)}</strong></span>
+                <span>Shortfall requiring surety: <strong>{money(Math.max(0, Number(form.approvedAmount || 0) - Number(collateral.loanCollateral?.availableCollateral || 0)))}</strong></span>
                 <span>Basis: <strong>{collateral.loanCollateral?.mode === "EOSB" ? "EoSB-backed" : "Internal Surety-backed"}</strong></span>
               </div>
-              {collateral.loanCollateral?.mode === "SURETY_REQUIRED" && <EmployeeSearchSelect label="Surety Employee" value={form.suretyEmployeeNumber} onChange={(value) => setForm((current) => ({ ...current, suretyEmployeeNumber: value }))} required placeholder="Search active internal employee" />}
+              {(Boolean(topUpParent) || collateral.loanCollateral?.mode === "SURETY_REQUIRED" || Number(form.approvedAmount) > Number(collateral.loanCollateral?.availableCollateral || 0)) && <EmployeeSearchSelect label="Loan Surety" suretyFor={topUpParent?.employeeNumber || form.employeeNumber} value={form.suretyEmployeeNumber} onChange={(value) => setForm((current) => ({ ...current, suretyEmployeeNumber: value }))} required placeholder="Search full-time or expatriate employee" />}
+              {suretyCheck?.error && <p role="alert">{suretyCheck.error}</p>}
+              {suretyCheck?.assessment?.surety && <p>Surety validated: {suretyCheck.assessment.surety.name} · Cover: {money(suretyCheck.assessment.surety.coveredAmount)}. Eligibility will be checked again when recording.</p>}
             </div>}
 
             {editingLoan && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>

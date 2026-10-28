@@ -251,7 +251,7 @@ function buildStatement({ organization, employee, asOf, salaryRate, exposure }) 
   };
 }
 
-async function getEosbStatement({ organizationId, employeeNumber, asOf = new Date(), prismaClient = prisma }) {
+async function getEosbStatement({ organizationId, employeeNumber, asOf = new Date(), excludeLoanId = null, prismaClient = prisma }) {
   const organization = await resolveOrganization(prismaClient, organizationId);
   const employee = await resolveEmployee(prismaClient, organizationId, employeeNumber);
   const calculationDate = effectiveAsOf(employee, asOf);
@@ -259,77 +259,89 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
     grossSalaryRates(prismaClient, organizationId, employee.id),
     loanExposureRows(prismaClient, organizationId, employee.id),
   ]);
-  return buildStatement({
-    organization,
-    employee,
-    asOf,
-    salaryRate: salaryRateForDate(rates, employee.id, calculationDate),
-    exposure: exposureFor(loans, employee.id),
-  });
+  const statement = buildStatement({ organization, employee, asOf, salaryRate: salaryRateForDate(rates, employee.id, calculationDate), exposure: exposureFor(loans, employee.id) });
+  const guarantees = await suretyCommitments(prismaClient, organizationId, employee.employeeNumber, excludeLoanId);
+  const reserved = roundMoney(guarantees.reduce((sum, row) => sum + Math.min(Number(row.assessment?.surety?.coveredAmount || 0), Number(row.outstandingAmount || 0)), 0));
+  statement.loanCollateral.existingSuretyExposure = reserved;
+  statement.loanCollateral.availableCollateral = Math.max(roundMoney(statement.loanCollateral.availableCollateral - reserved), 0);
+  return statement;
 }
 
 async function listEosbAccounts({ organizationId, asOf = new Date(), prismaClient = prisma }) {
   const organization = await resolveOrganization(prismaClient, organizationId);
-  const [employees, rates, loans] = await Promise.all([
+  const [employees, rates, loans, guarantees] = await Promise.all([
     prismaClient.employee.findMany({ where: { organizationId }, select: employeeSelect, orderBy: { employeeNumber: "asc" } }),
     grossSalaryRates(prismaClient, organizationId),
     loanExposureRows(prismaClient, organizationId),
+    suretyCommitments(prismaClient, organizationId, null),
   ]);
   return employees.map((employee) => {
     const calculationDate = effectiveAsOf(employee, asOf);
-    return buildStatement({
+    const statement = buildStatement({
       organization,
       employee,
       asOf,
       salaryRate: salaryRateForDate(rates, employee.id, calculationDate),
       exposure: exposureFor(loans, employee.id),
     });
+    const reserved = roundMoney(guarantees.filter((row) => row.assessment?.surety?.employeeNumber === employee.employeeNumber).reduce((sum, row) => sum + Math.min(Number(row.assessment.surety.coveredAmount || 0), Number(row.outstandingAmount || 0)), 0));
+    statement.loanCollateral.existingSuretyExposure = reserved;
+    statement.loanCollateral.availableCollateral = Math.max(roundMoney(statement.loanCollateral.availableCollateral - reserved), 0);
+    return statement;
   });
 }
 
-async function assessLoanCollateral({ organizationId, employeeNumber, requestedAmount, suretyEmployeeNumber, asOf = new Date(), prismaClient = prisma }) {
+// Latest collateral evidence per live loan is authoritative; paid-off loans release
+// the reservation. Historical audit events remain immutable.
+async function suretyCommitments(client, organizationId, employeeNumber, excludeLoanId = null) {
+  return client.$queryRawUnsafe(
+    `SELECT l."id",l."outstandingAmount",c.assessment
+       FROM "payroll_loans" l
+       JOIN LATERAL (
+         SELECT COALESCE(a."newValue"->'collateral',a."newValue") AS assessment
+         FROM "organization_audits" a
+         WHERE a."organizationId"=l."organizationId" AND a."entityId"=l."id"
+           AND a."entityType" IN ('LoanCollateral','PayrollLoan')
+           AND (a."newValue" ? 'collateral' OR a."entityType"='LoanCollateral')
+         ORDER BY a."createdAt" DESC,a."id" DESC LIMIT 1
+       ) c ON TRUE
+       WHERE l."organizationId"=$1 AND ($3::text IS NULL OR l."id"<>$3)
+         AND l."status" NOT IN ('COMPLETED','CANCELLED','REJECTED')
+         AND l."outstandingAmount">0
+         AND ($2::text IS NULL OR c.assessment->'surety'->>'employeeNumber'=$2)`,
+    organizationId, employeeNumber, excludeLoanId
+  );
+}
+
+async function assessLoanCollateral({ organizationId, employeeNumber, requestedAmount, suretyEmployeeNumber, excludeLoanId = null, asOf = new Date(), prismaClient = prisma }) {
   const amount = Number(requestedAmount || 0);
   if (!Number.isFinite(amount) || amount <= 0) throw eosbError("INVALID_LOAN_AMOUNT", "Requested loan amount must be greater than zero.");
   const statement = await getEosbStatement({ organizationId, employeeNumber, asOf, prismaClient });
-
-  if (statement.loanCollateral.mode === "EOSB") {
-    if (!statement.eosb.calculationReady) {
-      throw eosbError("EOSB_CALCULATION_NOT_READY", statement.eosb.missingReason || "EoSB calculation is not ready.", 409);
-    }
-    if (amount > statement.loanCollateral.availableCollateral) {
-      throw eosbError(
-        "LOAN_EXCEEDS_EOSB_COLLATERAL",
-        `Requested loan exceeds available EoSB collateral of ${statement.loanCollateral.availableCollateral.toFixed(2)}.`,
-        409,
-        { requestedAmount: amount, availableCollateral: statement.loanCollateral.availableCollateral }
-      );
-    }
-    return { ...statement.loanCollateral, requestedAmount: roundMoney(amount), approvedByRule: true, surety: null };
+  let ownExposure = 0;
+  if (excludeLoanId) {
+    const rows = await prismaClient.$queryRawUnsafe(`SELECT "outstandingAmount" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 AND "employeeId"=$3`, organizationId, excludeLoanId, statement.employee.id);
+    ownExposure = Math.max(Number(rows[0]?.outstandingAmount || 0), 0);
   }
-
+  const available = statement.loanCollateral.mode === "EOSB" && statement.eosb.calculationReady
+    ? Math.max(roundMoney(statement.loanCollateral.grossEosbValue - Math.max(statement.loanCollateral.existingLoanExposure - ownExposure, 0) - statement.loanCollateral.existingSuretyExposure), 0) : 0;
+  const shortfall = Math.max(roundMoney(amount - available), 0);
+  const base = { ...statement.loanCollateral, availableCollateral: available, requestedAmount: roundMoney(amount), applicantCoveredAmount: roundMoney(amount - shortfall), shortfall, approvedByRule: true };
+  if (!shortfall) return { ...base, surety: null };
   const suretyNumber = text(suretyEmployeeNumber).toUpperCase();
-  if (!suretyNumber) {
-    throw eosbError("LOAN_SURETY_REQUIRED", statement.loanCollateral.reason || "An internal employee surety is required for this loan application.", 409);
-  }
-  if (suretyNumber === statement.employee.employeeNumber) {
-    throw eosbError("LOAN_SELF_SURETY_NOT_ALLOWED", "An employee cannot act as their own loan surety.", 409);
-  }
+  if (!suretyNumber) throw eosbError("LOAN_SURETY_REQUIRED", `A qualifying employee surety is required to cover the shortfall of ${shortfall.toFixed(2)}.`, 409, { shortfall });
+  if (suretyNumber === statement.employee.employeeNumber) throw eosbError("LOAN_SELF_SURETY_NOT_ALLOWED", "An employee cannot act as their own loan surety.", 409);
   const surety = await resolveEmployee(prismaClient, organizationId, suretyNumber);
-  if (!CURRENT_STATUSES.has(String(surety.status || "").toUpperCase())) {
-    throw eosbError("LOAN_SURETY_NOT_CURRENT", "Select a current employee as surety.", 409);
+  if (!CURRENT_STATUSES.has(String(surety.status || "").toUpperCase())) throw eosbError("LOAN_SURETY_NOT_CURRENT", "Select a current employee as surety.", 409);
+  const expatriate = normalizeEmploymentType(surety.employmentType) === "EXPATRIATE";
+  if (!expatriate && !isFullTime(surety.employmentType)) throw eosbError("LOAN_SURETY_TYPE_INELIGIBLE", "Only full-time or expatriate employees may act as sureties.", 409);
+  if ((await suretyCommitments(prismaClient, organizationId, suretyNumber, excludeLoanId)).length) throw eosbError("LOAN_SURETY_ALREADY_COMMITTED", "This employee already guarantees an outstanding loan. Only one loan may be guaranteed until it is fully repaid.", 409);
+  let suretyAvailable = null;
+  if (!expatriate) {
+    const cover = await getEosbStatement({ organizationId, employeeNumber: suretyNumber, asOf, excludeLoanId, prismaClient });
+    suretyAvailable = Number(cover.loanCollateral.availableCollateral || 0);
+    if (!cover.eosb.eligible || !cover.eosb.calculationReady || cover.loanCollateral.mode !== "EOSB" || suretyAvailable < shortfall) throw eosbError("LOAN_SURETY_COLLATERAL_INSUFFICIENT", "The full-time surety must be EoSB eligible with sufficient available EoSB to cover the shortfall.", 409, { shortfall, availableCollateral: suretyAvailable });
   }
-
-  return {
-    ...statement.loanCollateral,
-    requestedAmount: roundMoney(amount),
-    approvedByRule: true,
-    surety: {
-      employeeId: surety.id,
-      employeeNumber: surety.employeeNumber,
-      name: employeeName(surety),
-      coveredAmount: roundMoney(amount),
-    },
-  };
+  return { ...base, surety: { employeeId: surety.id, employeeNumber: surety.employeeNumber, name: employeeName(surety), employmentType: surety.employmentType, eosbExempt: expatriate, availableCollateral: suretyAvailable, coveredAmount: shortfall } };
 }
 
 module.exports = {

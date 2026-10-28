@@ -146,13 +146,7 @@ router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor, async (req, res
       prismaClient: prisma,
     });
     const topUpAmount = req.body?.topUpAmount ?? req.body?.principalAmount;
-    const collateral = await assessLoanCollateral({
-      organizationId: req.auth.organizationId,
-      employeeNumber: existing.employeeNumber,
-      requestedAmount: topUpAmount,
-      suretyEmployeeNumber: req.body?.suretyEmployeeNumber,
-      prismaClient: prisma,
-    });
+    const collateral = null; // Assessed atomically against the merged balance in the service.
     const data = await applyApprovedDisbursedLoanTopUp({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,
