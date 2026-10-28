@@ -189,7 +189,7 @@ router.post("/bulk/correction/import", requirePermission("payroll.manage"), uplo
 router.get("/reports/export", requirePermission("payroll.view"), async (req, res) => {
   try {
     const format = exportFormat(req.query?.format);
-    const rows = await getBulkLoanReport({ organizationId: req.auth.organizationId });
+    const rows = await getBulkLoanReport({ organizationId: req.auth.organizationId, view: req.query?.view });
     return sendExport(res, exportBulkLoans(rows, format));
   } catch (error) {
     return sendError(res, error, "Unable to export bulk loan report.");

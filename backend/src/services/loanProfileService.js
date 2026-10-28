@@ -475,7 +475,8 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
   };
 }
 
-async function getBulkLoanReport({ organizationId, prismaClient = prisma }) {
+async function getBulkLoanReport({ organizationId, view = null, prismaClient = prisma }) {
+  const statuses = view === "completed" ? ["COMPLETED"] : view === "active" ? ["ACTIVE", "PAUSED"] : null;
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT l."id",l."loanNumber",e."employeeNumber",
             CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
@@ -484,9 +485,10 @@ async function getBulkLoanReport({ organizationId, prismaClient = prisma }) {
             l."externalSettlementAmount",l."externalSettlementDate",l."externalSettlementSource",l."externalSettlementReference"
        FROM "payroll_loans" l
        JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
-      WHERE l."organizationId"=$1
+      WHERE l."organizationId"=$1 AND ($2::text[] IS NULL OR l."status"=ANY($2::text[]))
       ORDER BY e."employeeNumber" ASC,l."createdAt" ASC`,
-    organizationId
+    organizationId,
+    statuses
   );
 
   return rows.map((row) => {

@@ -51,7 +51,7 @@ const MENU_GROUPS = [
     {label:"Leave Overview",path:"/leave"},{label:"Leave Requests",path:"/leave/requests"},{label:"Active Leave",path:"/leave/active"},{label:"Return to Work",path:"/leave/returns"},{label:"Leave Calendar",path:"/leave/calendar"},{label:"Leave Balances",path:"/leave/balances"},{label:"Leave Entitlements",path:"/leave/entitlements"},{label:"Leave Policies",path:"/leave/policies"},{label:"Leave Exceptions",path:"/leave/exceptions"}
   ]},
   { id:"payroll", label:"Payroll", icon:<FaMoneyCheckAlt/>, permission:"payroll.view", children:[
-    {label:"Payroll Notes & Agent",path:"/payroll/notes",notesOnly:true},{label:"Payroll Dashboard",path:"/payroll"},{label:"Execute Payroll",path:"/payroll?workspace=execute"},{label:"Payroll Periods",path:"/payroll?workspace=periods"},{label:"Salary Rates",path:"/payroll?workspace=rates"},{label:"Allowances",path:"/payroll?workspace=allowances"},{label:"Deductions",path:"/payroll?workspace=deductions"},{label:"Payslips",path:"/payroll?workspace=payslips"},{label:"Loans",path:"/loans"},{label:"Salary Advances",path:"/payroll?workspace=salary-advances"},{label:"Paid Leave",path:"/payroll?workspace=paid-leave"},{label:"Payroll Approvals",path:"/payroll?workspace=approvals"}
+    {label:"Payroll Notes & Agent",path:"/payroll/notes",notesOnly:true},{label:"Payroll Dashboard",path:"/payroll"},{label:"Execute Payroll",path:"/payroll?workspace=execute"},{label:"Payroll Periods",path:"/payroll?workspace=periods"},{label:"Salary Rates",path:"/payroll?workspace=rates"},{label:"Allowances",path:"/payroll?workspace=allowances"},{label:"Deductions",path:"/payroll?workspace=deductions"},{label:"Payslips",path:"/payroll?workspace=payslips"},{label:"Active Loans",path:"/loans"},{label:"Completed Loans",path:"/loans/completed"},{label:"Salary Advances",path:"/payroll?workspace=salary-advances"},{label:"Paid Leave",path:"/payroll?workspace=paid-leave"},{label:"Payroll Approvals",path:"/payroll?workspace=approvals"}
   ]},
   { id:"compensation", label:"Compensation & Rewards", icon:<FaMoneyBillWave/>, adminOnly:true, children:[
     {label:"Compensation Dashboard",path:"/compensation"},{label:"Salary Structure",path:"/compensation/salary-structure"},{label:"Grades & Levels",path:"/compensation/grades-levels"},{label:"Salary Bands",path:"/compensation/salary-bands"},{label:"Compensation Reviews",path:"/compensation/reviews"},{label:"Salary Adjustments",path:"/compensation/adjustments"},{label:"Promotions",path:"/compensation/promotions"},{label:"Bonuses & Incentives",path:"/compensation/bonuses-incentives"},{label:"Total Rewards",path:"/compensation/total-rewards"}
@@ -119,6 +119,7 @@ function Sidebar() {
     const queryIndex = childPath.indexOf("?");
     const pathname = queryIndex === -1 ? childPath : childPath.slice(0, queryIndex);
     const search = queryIndex === -1 ? "" : childPath.slice(queryIndex);
+    if (pathname === "/loans") return location.pathname === pathname;
     if (location.pathname !== pathname) return pathname !== "/" && location.pathname.startsWith(`${pathname}/`);
     if (includeQuery && queryIndex !== -1) return location.search === search;
     return true;
