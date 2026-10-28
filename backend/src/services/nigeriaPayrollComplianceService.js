@@ -1090,7 +1090,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       const postedLoanRecoveries = await tx.$queryRawUnsafe(
         `SELECT COUNT(*)::int AS "count", COALESCE(SUM("amount"),0) AS "amount"
            FROM "payroll_loan_recoveries"
-          WHERE "organizationId"=$1 AND "runId"=$2 AND "status"='POSTED'`,
+          WHERE "organizationId"=$1 AND "runId"=$2 AND "status"='POSTED' AND "confirmedPaidAt" IS NULL`,
         organizationId,
         runId
       );

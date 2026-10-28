@@ -59,7 +59,7 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
     const loanRecoveries = await tx.$queryRawUnsafe(
       `SELECT "id","loanId","amount","status"
          FROM "payroll_loan_recoveries"
-        WHERE "organizationId"=$1 AND "runId"=$2 AND "status"='POSTED'
+        WHERE "organizationId"=$1 AND "runId"=$2 AND "status"='POSTED' AND "confirmedPaidAt" IS NULL
         FOR UPDATE`,
       organizationId,
       runId
