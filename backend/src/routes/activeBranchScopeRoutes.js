@@ -957,7 +957,7 @@ router.get("/loans/reports/export", branchOnly, loanMayView, async (req, res) =>
     }
     const loans = await branchLoans(req);
     const ids = new Set(loans.map((loan) => loan.id));
-    const report = await getBulkLoanReport({ organizationId: req.auth.organizationId });
+    const report = await getBulkLoanReport({ organizationId: req.auth.organizationId, view: req.query?.view });
     const file = exportBulkLoans(report.filter((row) => ids.has(row.loanId)), format);
     res.setHeader("Content-Type", file.contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);
