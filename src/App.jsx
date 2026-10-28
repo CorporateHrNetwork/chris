@@ -26,6 +26,7 @@ const BillingSubscriptions = lazy(() => import("./pages/BillingSubscriptions"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const PayrollNotes = lazy(() => import("./pages/PayrollNotes"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const DeactivatedEmployees = lazy(() => import("./pages/DeactivatedEmployees"));
 const Employees = lazy(() => import("./pages/Employees"));
 const EmployeeDashboard = lazy(() => import("./pages/EmployeeDashboard"));
 const EmployeeAnalytics = lazy(() => import("./pages/EmployeeAnalytics"));
@@ -119,6 +120,7 @@ function App() {
         <Route path="/employees/export-queue" element={<PermissionLayout permission="employees.update"><EmployeeExportQueue /></PermissionLayout>} />
         <Route path="/employees/governance" element={<PermissionLayout permission="employees.update"><EmployeeGovernance /></PermissionLayout>} />
         <Route path="/employees/news" element={<PermissionLayout permission="employees.update"><InternalNewsManagement /></PermissionLayout>} />
+        <Route path="/employees/deactivated" element={<PermissionLayout permission="employees.view"><DeactivatedEmployees /></PermissionLayout>} />
         <Route path="/employees/directory" element={<PermissionLayout permission="employees.view"><Employees /></PermissionLayout>} />
         <Route path="/employees/profiles" element={<PermissionLayout permission="employees.view"><EmployeeModuleWorkspace mode="profiles" /></PermissionLayout>} />
         <Route path="/employees/onboarding" element={<PermissionLayout permission="employees.view"><OnboardingTracker /></PermissionLayout>} />

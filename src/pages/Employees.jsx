@@ -275,6 +275,7 @@ function Employees({
           </p>
         </div>
 
+        <button type="button" style={exportButtonStyle} onClick={() => navigate("/employees/deactivated")}>Deactivated Employees</button>
         {!authorizationLoading &&
           canCreateEmployee && (
             <button
