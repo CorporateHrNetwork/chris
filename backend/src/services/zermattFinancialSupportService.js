@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { markDraftRunsRecalculationRequired } = require("./payrollDraftFreshnessService");
 
+const { assessLoanCollateral } = require("./eosbService");
+
 const MAX_REPAYMENT_MONTHS = 600;
 
 function policyError(code, message, statusCode = 400, details) {
@@ -201,6 +203,9 @@ async function recordApprovedDisbursedLoan({
   const plan = repaymentPlan(approvedAmount, installmentAmount, recoveryStartDate);
 
   const created = await prismaClient.$transaction(async (tx) => {
+    // Serialize collateral decisions and evidence with the liability write.
+    await tx.$queryRawUnsafe(`SELECT "id" FROM "organizations" WHERE "id"=$1 FOR UPDATE`, organizationId);
+    collateralAssessment = await assessLoanCollateral({ organizationId, employeeNumber: employee.employeeNumber, requestedAmount: approvedAmount, suretyEmployeeNumber: input?.suretyEmployeeNumber, prismaClient: tx });
     const references = await nextLoanReferences(tx, organizationId);
     const metadata = {
       ...approvalMetadata(input),
@@ -290,6 +295,7 @@ async function applyApprovedDisbursedLoanTopUp({
   const metadata = approvalMetadata(input);
 
   return prismaClient.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(`SELECT "id" FROM "organizations" WHERE "id"=$1 FOR UPDATE`, organizationId);
     const rows = await tx.$queryRawUnsafe(
       `SELECT l.*,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName"
          FROM "payroll_loans" l
@@ -305,6 +311,13 @@ async function applyApprovedDisbursedLoanTopUp({
       throw policyError("TOPUP_ACCOUNT_NOT_CURRENT", "Top-up can only be recorded against an Active or Paused loan account.", 409);
     }
 
+    const evidence = await tx.organizationAudit.findFirst({ where: { organizationId, entityType: "PayrollLoan", entityId: loanId, action: { in: ["LOAN_APPROVED_DISBURSED_RECORDED_BY_HR", "LOAN_TOPUP_APPROVED_DISBURSED_MERGED_BY_HR"] } }, orderBy: { createdAt: "desc" } });
+    const priorSurety = evidence?.newValue?.collateral?.surety?.employeeNumber;
+    if (priorSurety && input?.suretyEmployeeNumber && priorSurety !== input.suretyEmployeeNumber) throw policyError("LOAN_SURETY_CHANGE_NOT_ALLOWED", "The existing surety must remain until the loan is fully repaid.", 409);
+    collateralAssessment = await assessLoanCollateral({ organizationId, employeeNumber: existing.employeeNumber, requestedAmount: Number(existing.outstandingAmount || 0) + topUpAmount, suretyEmployeeNumber: priorSurety || input?.suretyEmployeeNumber, excludeLoanId: loanId, prismaClient: tx });
+    // Keep the existing guarantee for the full outstanding loan period even if
+    // subsequent EoSB growth would now cover the entire balance.
+    if (priorSurety && !collateralAssessment.surety) collateralAssessment.surety = evidence.newValue.collateral.surety;
     const currentPrincipal = Number(existing.principalAmount || 0);
     const currentOutstanding = Math.max(0, Number(existing.outstandingAmount || 0));
     const installmentAmount = positiveMoney(input?.installmentAmount || existing.installmentAmount, "New Monthly Installment");
