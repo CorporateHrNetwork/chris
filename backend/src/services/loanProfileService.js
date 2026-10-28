@@ -234,6 +234,16 @@ function buildAmortizationSchedule({
     monthOffset += 1;
   }
 
+  // A migrated nominal schedule must never hide an actual posted deduction.
+  // Keep the payment visible without allocating principal twice; opening-history
+  // inconsistencies require review rather than silently changing old evidence.
+  const representedMonths = new Set(schedule.map((row) => row.dueDate.slice(0, 7)));
+  for (const [key, amount] of postedByMonth) {
+    if (representedMonths.has(key) || amount <= 0) continue;
+    schedule.push({ installmentNumber: 0, period: monthLabel(`${key}-01`), dueDate: dateText(monthEnd(`${key}-01`)), outstandingBalance: 0, principalAmount: 0, interestAmount: 0, totalDeduction: amount, amountPaid: amount, outstandingAfter: 0, status: "PAID", paymentSource: "RECORDED_PAYROLL_RECOVERY", reconciliationNote: "Actual paid recovery outside the original schedule. Earlier opening-history entries already allocate the principal; review the migrated history. This payment is not allocated to principal again." });
+  }
+  schedule.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  schedule.forEach((row, index) => { row.installmentNumber = index + 1; });
   return applyExternalSettlementToSchedule(schedule, externalSettlement);
 }
 
