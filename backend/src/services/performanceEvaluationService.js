@@ -68,6 +68,7 @@ async function isManager(db,org,a,r) {
 }
 async function profileRows(db, org, a, s) {
   if (!a.hr && !a.employeeId) return [];
+  if (!a.hr && !await db.employee.findFirst({where:{id:a.employeeId,organizationId:org,status:{in:eligible},exitDate:null}})) return [];
   const now = new Date();
   const current = {effectiveTo:null,effectiveFrom:{lte:now}};
   const employees = await db.employee.findMany({where:{organizationId:org,status:{in:eligible},exitDate:null,
