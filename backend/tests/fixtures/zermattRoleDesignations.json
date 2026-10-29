@@ -1,0 +1,482 @@
+[
+  {
+    "name": "Accountant",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "Accounts Assistant",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "Accounts Officer",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "Assistant Bar Team Leader",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Assistant BB Takeaway Team Leader",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Assistant Housekeeping Supervisor",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Assistant Kitchen Team Leader / Sous Chef",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Assistant Storekeeper",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Audit Assistant",
+    "department": "Audit & Internal Control"
+  },
+  {
+    "name": "AV / Sound Technician",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Bar Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Bar Team Leader",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Bartender",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "BB Takeaway Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "BB Takeaway Cashier",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "BB Takeaway Shredder",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "BB Takeaway Team Leader",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Beer Barn Assistant Branch Operations Manager",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Beer Barn Assistant Floor Operations Manager",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Beer Barn Branch Operations Manager",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Beer Barn Cashier",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Beer Barn Floor Operations Manager",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Beer Barn Floor Operations Supervisor",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Bottle Service Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Bouncer",
+    "department": "Security"
+  },
+  {
+    "name": "Branch Accountant",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "Cash Officer",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "CCTV / Surveillance Officer",
+    "department": "Security"
+  },
+  {
+    "name": "Chief Accountant",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "Chief Bouncer / Security Team Leader",
+    "department": "Security"
+  },
+  {
+    "name": "Cleaner",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Company Secretary",
+    "department": "Executive Management"
+  },
+  {
+    "name": "Cook / Chef",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Dancer",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Deputy General Manager",
+    "department": "Executive Management"
+  },
+  {
+    "name": "Dispatch / Logistics Officer",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Domestic Staff - Housekeeper",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Driver",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Drummer",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Employee Relations Officer",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Entertainment Manager / Coordinator",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Executive Assistant",
+    "department": "Executive Management"
+  },
+  {
+    "name": "Facilities / Maintenance Officer",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Facilities Maintenance Officer",
+    "department": "Facilities Management"
+  },
+  {
+    "name": "Fleet Officer",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "General Manager",
+    "department": "Executive Management"
+  },
+  {
+    "name": "Head of Audit & Internal Control",
+    "department": "Audit & Internal Control"
+  },
+  {
+    "name": "Head of HR & Admin",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Head of Security",
+    "department": "Security"
+  },
+  {
+    "name": "Host / Hostess",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Housekeeper",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Housekeeping Team Leader",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "HR & Admin Assistant",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "HR & Admin Manager",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "HR & Admin Officer",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Hype Man / MC",
+    "department": "Entertainment"
+  },
+  {
+    "name": "ICT Assistant",
+    "department": "ICT"
+  },
+  {
+    "name": "ICT Manager / Head of ICT",
+    "department": "ICT"
+  },
+  {
+    "name": "ICT Officer",
+    "department": "ICT"
+  },
+  {
+    "name": "Intermediate DJ",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Internal Auditor",
+    "department": "Audit & Internal Control"
+  },
+  {
+    "name": "Internal Control Manager",
+    "department": "Audit & Internal Control"
+  },
+  {
+    "name": "Internal Control Officer",
+    "department": "Audit & Internal Control"
+  },
+  {
+    "name": "Inventory Control Officer",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Inventory Systems & Stock Control Officer",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "IT Support Officer",
+    "department": "ICT"
+  },
+  {
+    "name": "Junior DJ",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Kitchen Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Kitchen Team Leader / Head Chef",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Learning & Development Officer",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Loader / Warehouse Operative",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Logistics Officer",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Maintenance Technician",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Managing Director",
+    "department": "Executive Management"
+  },
+  {
+    "name": "Motor Boy / Driver Assistant",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Network Administrator",
+    "department": "ICT"
+  },
+  {
+    "name": "Payroll & Benefits Officer",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Personal Assistant / Executive Secretary",
+    "department": "Executive Management"
+  },
+  {
+    "name": "Pool Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Procurement Assistant",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "Procurement Cost Control Officer",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "Procurement Manager",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "Procurement Officer",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "Purchasing Officer",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "Recruitment & Onboarding Officer",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Sales Representative",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Security Guard",
+    "department": "Security"
+  },
+  {
+    "name": "Security Officer",
+    "department": "Security"
+  },
+  {
+    "name": "Security Supervisor",
+    "department": "Security"
+  },
+  {
+    "name": "Senior Accountant",
+    "department": "Accounts & Finance"
+  },
+  {
+    "name": "Senior DJ",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Senior Driver",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Senior Housekeeper",
+    "department": "Housekeeping & Facilities"
+  },
+  {
+    "name": "Senior HR & Admin Officer",
+    "department": "Human Resources & Administration"
+  },
+  {
+    "name": "Senior Internal Auditor",
+    "department": "Audit & Internal Control"
+  },
+  {
+    "name": "Senior Procurement Officer",
+    "department": "Purchase & Procurement"
+  },
+  {
+    "name": "Senior Sales Representative",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Senior Security Officer",
+    "department": "Security"
+  },
+  {
+    "name": "Senior Service Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Shisha Attendant",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Shop Attendant",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Sound Engineer",
+    "department": "Entertainment"
+  },
+  {
+    "name": "Storekeeper",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Systems Administrator",
+    "department": "ICT"
+  },
+  {
+    "name": "Traffic Marshal",
+    "department": "Security"
+  },
+  {
+    "name": "Traffic Marshal Team Leader",
+    "department": "Security"
+  },
+  {
+    "name": "Transport & Logistics Manager",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Transport Supervisor",
+    "department": "Transport & Logistics"
+  },
+  {
+    "name": "Waiter",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Waitress",
+    "department": "Beer Barn Operations"
+  },
+  {
+    "name": "Warehouse & Stores Manager",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Warehouse Assistant",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Warehouse Officer",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Warehouse Supervisor",
+    "department": "Warehouse & Stores"
+  },
+  {
+    "name": "Zermatt Assistant Branch Operations Manager",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Zermatt Assistant Floor Operations Manager",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Zermatt Branch Operations Manager",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Zermatt Cashier",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Zermatt Floor Operations Manager",
+    "department": "Zermatt Operations"
+  },
+  {
+    "name": "Zermatt Floor Operations Supervisor",
+    "department": "Zermatt Operations"
+  }
+]

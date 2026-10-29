@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "../../services/api";
 
+import { RoleProfileCards } from "./RoleProfileCards";
+
 const base="/api/performance-evaluation";
 const panel={padding:18,margin:"16px 0",border:"1px solid currentColor",borderRadius:10};
 const field={display:"block",boxSizing:"border-box",width:"100%",padding:10,margin:"6px 0 12px",font:"inherit"};
 const button={padding:"10px 14px",margin:"6px 8px 6px 0",font:"inherit",cursor:"pointer"};
-const titles={self:"Submit self-review",manager:"Submit manager assessment",finalise:"Validate and release",return:"Return to manager",acknowledge:"Acknowledge receipt",dispute:"Dispute result","assign-appeal":"Assign appeal reviewer",appeal:"Record appeal decision",reassign:"Apply updated reporting line","follow-up":"Record development follow-up"};
+const titles={"self-draft":"Save / update self-assessment draft",self:"Submit self-review",manager:"Submit manager assessment",finalise:"Validate and release",return:"Return to manager",acknowledge:"Acknowledge receipt",dispute:"Dispute result","assign-appeal":"Assign appeal reviewer",appeal:"Record appeal decision",reassign:"Apply updated reporting line","follow-up":"Record development follow-up"};
 export default function PerformanceEvaluationWorkspace({essRequest,children=null}) {
   const [data,setData]=useState(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const [editing,setEditing]=useState(null),[goals,setGoals]=useState([]),[reason,setReason]=useState("");
@@ -31,13 +33,14 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
   if(!data&&!error)return <p role="status">Loading performance evaluation…</p>;
   function start(r,action){
     setSelected({review:r,action});
-    setForm({comments:"",evidence:"",discussion:"",development:"",reviewerUserId:"",reviseRating:false,followUpStatus:"OPEN",followUpDate:"",ratings:r.goals.map(g=>({goalId:g.id,rating:"",evidence:""}))});
+    setForm({comments:r.selfAssessmentDraft?.comments||"",evidence:r.selfAssessmentDraft?.evidence||"",discussion:"",development:"",reviewerUserId:"",reviseRating:false,followUpStatus:"OPEN",followUpDate:"",ratings:r.goals.map(g=>({goalId:g.id,rating:r.selfAssessmentDraft?.ratings?.find(v=>v.goalId===g.id)?.rating||"",evidence:r.selfAssessmentDraft?.ratings?.find(v=>v.goalId===g.id)?.evidence||""}))});
   }
   function goalChange(i,k,v){setGoals(old=>old.map((g,j)=>j===i?{...g,[k]:v}:g));}
   return <section aria-label="Quarterly performance evaluation" style={{margin:"18px 0"}}>
     <h2>Quarterly performance evaluation</h2>
     {error&&<p role="alert">{error}</p>}
     {data?.enabled&&<>
+      <RoleProfileCards profiles={data.profiles||[]}/>
       <details style={panel} open={!data.policy}>
         <summary>Performance evaluation rules and HR policy · {data.policy?.version||"Awaiting publication"}</summary>
         {data.policy?<><p>{data.policy.title}</p><ol>{data.policy.rules.map(rule=><li key={rule} style={{marginBottom:8}}>{rule}</li>)}</ol>
@@ -94,12 +97,15 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
           <h4>{g.title} · {g.weight}%</h4><p>Target: {g.target}. Measure: {g.measurement}. Evidence: {g.evidence}.</p>
           <ol>{g.anchors.map((a,i)=><li key={i}>{a}</li>)}</ol>
         </div>)}</details>
+        {r.description&&<details><summary>Job description for this assessment period</summary><p style={{whiteSpace:'pre-wrap'}}>{r.description}</p></details>}
+        {r.selfAssessmentDraft&&<p>Self-assessment draft saved {r.selfAssessmentDraft.updatedAt}. It has not been submitted to your manager.</p>}
         {r.selfAssessment&&<section aria-label="Employee self-assessment">
           <h4>Employee self-assessment</h4>
           <p><strong>Achievements, challenges and development needs</strong></p>
           <p style={{whiteSpace:"pre-wrap"}}>{r.selfAssessment.comments}</p>
           <p><strong>Supporting evidence</strong></p>
           <p style={{whiteSpace:"pre-wrap"}}>{r.selfAssessment.evidence}</p>
+          {r.selfAssessment.ratings&&<ul>{r.selfAssessment.ratings.map(v=><li key={v.goalId}>{r.goals.find(g=>g.id===v.goalId)?.title}: {v.rating}/5 · {v.evidence}</li>)}</ul>}
           {r.selfAssessment.submittedAt&&<p>Submitted: {new Intl.DateTimeFormat("en-NG",{dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Lagos"}).format(new Date(r.selfAssessment.submittedAt))}</p>}
         </section>}
         {r.managerAssessment&&<><p>Manager discussion: {r.managerAssessment.discussion}</p><p>Follow-up: {r.managerAssessment.development}</p>
@@ -112,20 +118,23 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
         {r.appealDeadline&&<p>Dispute deadline: {r.appealDeadline}. Acknowledgment confirms receipt, not agreement.</p>}
         {r.actions.map(action=><button type="button" style={button} key={action} disabled={busy} onClick={()=>start(r,action)}>{titles[action]}</button>)}
       </article>)}
-      {selected&&<form style={panel} onSubmit={e=>{e.preventDefault();perform((essRequest?"/ess":"")+"/reviews/"+encodeURIComponent(selected.review.id)+"/"+selected.action,selected.action==="appeal"?{comments:form.comments,...(form.reviseRating?{ratings:form.ratings}:{})}:form);}}>
+      {selected&&<form style={panel} onSubmit={e=>{e.preventDefault();perform((essRequest?"/ess":"")+"/reviews/"+encodeURIComponent(selected.review.id)+"/"+selected.action,selected.action==="self-draft"?{...form,ratings:form.ratings.filter(v=>v.rating!=="")}:selected.action==="appeal"?{comments:form.comments,...(form.reviseRating?{ratings:form.ratings}:{})}:form);}}>
         <h3>{titles[selected.action]} · {selected.review.employeeNumber}</h3>
         {selected.action==="appeal"&&<label><input type="checkbox" checked={form.reviseRating} onChange={e=>setForm({...form,reviseRating:e.target.checked})}/> Revise ratings after independent evidence review</label>}
-        {selected.action==="manager"||(selected.action==="appeal"&&form.reviseRating)?<>
+        {["manager","self","self-draft"].includes(selected.action)||(selected.action==="appeal"&&form.reviseRating)?<>
           {selected.review.goals.map((g,i)=><fieldset key={g.id} style={{minWidth:0}}>
             <legend>{g.title} · {g.weight}%</legend>
-            <label>Rating<select required style={field} value={form.ratings[i].rating} onChange={e=>setForm({...form,ratings:form.ratings.map((v,j)=>j===i?{...v,rating:Number(e.target.value)}:v)})}>
+            <label>Rating<select required={selected.action!=="self-draft"} style={field} value={form.ratings[i].rating} onChange={e=>setForm({...form,ratings:form.ratings.map((v,j)=>j===i?{...v,rating:e.target.value===""?"":Number(e.target.value)}:v)})}>
               <option value="">Choose a rating</option>{g.anchors.map((a,j)=><option key={j} value={j+1}>{j+1} — {a}</option>)}
             </select></label>
-            <label>Evidence<textarea required style={field} value={form.ratings[i].evidence} onChange={e=>setForm({...form,ratings:form.ratings.map((v,j)=>j===i?{...v,evidence:e.target.value}:v)})}/></label>
+            <label>Evidence<textarea required={selected.action!=="self-draft"} style={field} value={form.ratings[i].evidence} onChange={e=>setForm({...form,ratings:form.ratings.map((v,j)=>j===i?{...v,evidence:e.target.value}:v)})}/></label>
           </fieldset>)}
           {selected.action==="manager"?<>
           <label>Feedback discussion record<textarea required style={field} value={form.discussion} onChange={e=>setForm({...form,discussion:e.target.value})}/></label>
           <label>Development and follow-up plan<textarea required style={field} value={form.development} onChange={e=>setForm({...form,development:e.target.value})}/></label>
+          </>:['self','self-draft'].includes(selected.action)?<>
+            <label>Achievements and challenges<textarea required={selected.action==='self'} style={field} value={form.comments} onChange={e=>setForm({...form,comments:e.target.value})}/></label>
+            <label>Supporting evidence<textarea required={selected.action==='self'} style={field} value={form.evidence} onChange={e=>setForm({...form,evidence:e.target.value})}/></label>
           </>:<label>Appeal decision and reasons<textarea required style={field} value={form.comments} onChange={e=>setForm({...form,comments:e.target.value})}/></label>}
         </>:selected.action==="assign-appeal"?<label>Independent appeal reviewer<select required style={field} value={form.reviewerUserId} onChange={e=>setForm({...form,reviewerUserId:e.target.value})}><option value="">Choose an independent reviewer</option>{data.reviewerCandidates.filter(u=>![selected.review.managerUserId,selected.review.hrUserId].includes(u.id)&&![selected.review.employeeId,selected.review.managerEmployeeId].includes(u.employeeId)).map(u=><option key={u.id} value={u.id}>{u.label}</option>)}</select></label>:<>
           <label>{selected.action==="self"?"Achievements and challenges":"Comments / reasons"}<textarea required={selected.action!=="acknowledge"} style={field} value={form.comments} onChange={e=>setForm({...form,comments:e.target.value})}/></label>
@@ -135,7 +144,7 @@ export default function PerformanceEvaluationWorkspace({essRequest,children=null
           </>}
           {selected.action==="self"&&<label>Supporting evidence<textarea required style={field} value={form.evidence} onChange={e=>setForm({...form,evidence:e.target.value})}/></label>}
         </>}
-        <button style={button} disabled={busy}>Submit</button><button type="button" style={button} disabled={busy} onClick={()=>setSelected(null)}>Cancel</button>
+        <button style={button} disabled={busy}>{selected.action==="self-draft"?"Save draft":"Submit"}</button><button type="button" style={button} disabled={busy} onClick={()=>setSelected(null)}>Cancel</button>
       </form>}
     </>}
   </section>;
