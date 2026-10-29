@@ -9,6 +9,19 @@ test('every branch and employee appears exactly once in each statutory split, in
  assert.equal(read('Branch Statutory Summary').length,3);assert.equal(read('Branch Statutory Summary').reduce((s,r)=>s+r['Total PAYE Charge'],0),10000);assert.equal(read('Branch Statutory Summary').reduce((s,r)=>s+r['Leave Allowance'],0),30000);
  assert.equal(wb.SheetNames.filter(n=>/^PAYE \d/.test(n)).length,6);assert.equal(read('Completed Loans')[0]['Loan No'],'LN1');assert.equal(read('Active Loans')[0]['Loan No'],'LN2');assert.match(read('Draft Payroll Notes')[1].Notes,/DRAFT/);
  const saved=XLSX.read(XLSX.write(wb,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});assert.equal(saved.SheetNames.length,wb.SheetNames.length);assert.equal(saved.Sheets['PAYE - Missing Details'].D2.t,'s');
+ const headers=['Employee No','Employee Name','PFA','RSA PIN','Employee Contributions','Employer Contributions','Branch'];
+ for(const name of ['Pension - Details Present','Pension - Missing Details']) {
+  const table=XLSX.utils.sheet_to_json(saved.Sheets[name],{header:1,defval:''});
+  assert.deepEqual(table[0],headers);assert.ok(table.every(r=>r.length===7));
+ }
+ const present=XLSX.utils.sheet_to_json(saved.Sheets['Pension - Details Present'])[0];
+ assert.deepEqual(present,{'Employee No':'A','Employee Name':'Synthetic A',PFA:'PFA','RSA PIN':'PEN001','Employee Contributions':6240,'Employer Contributions':7800,Branch:'Abuja'});
+ assert.equal(saved.Sheets['Pension - Details Present'].D2.t,'s');assert.equal(saved.Sheets['Pension - Details Present'].E2.t,'n');
+ const summary=read('Branch Statutory Summary');
+ assert.deepEqual(summary.map(r=>[r.Branch,r['Pension Details Present'],r['Pension Missing Details']]),[['Abuja',1,0],['Lagos',0,1],['Port Harcourt',0,1]]);
+ const missingRows=XLSX.utils.sheet_to_json(saved.Sheets['Pension - Missing Details']);
+ assert.equal(missingRows.find(r=>r['Employee No']==='C')['Employee Contributions'],0);
+ assert.doesNotMatch(read('Draft Payroll Notes').find(r=>r.Subject==='Pension layout').Notes,/requires attachment/);
 });
 test('loan and review evidence retrieval bind tenant and permitted branch IDs',async()=>{
  const calls=[];const db={$queryRawUnsafe:async(...args)=>(calls.push(args),[])};
