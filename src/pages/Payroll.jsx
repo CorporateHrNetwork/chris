@@ -28,6 +28,7 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
+const AccountantPayroll = lazy(() => import("./payroll/AccountantPayroll"));
 const PayrollWorkspace = lazy(() => import("./payroll/PayrollWorkspace"));
 const NigeriaPayrollSupplementWorkspace = lazy(() => import("./payroll/NigeriaPayrollSupplementWorkspace"));
 const SalaryAdvancesManaged = lazy(() => import("./payroll/SalaryAdvancesManaged"));
@@ -70,6 +71,13 @@ function Payroll() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workspace = searchParams.get("workspace") || "";
+  const [accessProfile, setAccessProfile] = useState(undefined);
+  useEffect(() => {
+    let active = true;
+    apiRequest('/api/auth/me').then(r => { if(active) setAccessProfile(r.data || null); })
+      .catch(() => { if(active) setAccessProfile(null); });
+    return () => { active = false; };
+  }, []);
   const [readiness, setReadiness] = useState(null);
   const [compliance, setCompliance] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +115,11 @@ function Payroll() {
     return () => { active = false; };
   }, [workspace]);
 
+  if (accessProfile === undefined) return <PayrollWorkspaceLoading />;
+  if (accessProfile?.organization?.slug === 'zermatt-liquor-limited' &&
+      (accessProfile.roles || []).some(role => String(role).trim().toUpperCase().replace(/_/g,' ') === 'BRANCH ACCOUNTANT')) {
+    return <Suspense fallback={<PayrollWorkspaceLoading />}><AccountantPayroll /></Suspense>;
+  }
   if (WORKSPACES.has(workspace)) {
     let workspaceView = <PayrollWorkspace mode={workspace} />;
     if (["execute", "payslips", "statutory"].includes(workspace)) workspaceView = <PayrollIntegratedManaged mode={workspace} />;
