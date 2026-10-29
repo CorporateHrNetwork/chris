@@ -32,7 +32,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
         working-directory: backend
-      - run: node --test tests/performanceEvaluation.test.js tests/zermattRoleProfiles.test.js tests/essLoanSummary.test.js tests/zermattSalarySplit.test.js tests/zermattSalaryWorkbook.test.js tests/zermattMidmonthDomain.test.js tests/zermattMidmonthIntegration.test.js
+      - run: node --test tests/performanceEvaluation.test.js tests/zermattRoleProfiles.test.js tests/confirmedRoleManagers.test.js tests/essLoanSummary.test.js tests/zermattSalarySplit.test.js tests/zermattSalaryWorkbook.test.js tests/zermattMidmonthDomain.test.js tests/zermattMidmonthIntegration.test.js
         working-directory: backend
         env:
           CHRIS_MIDMONTH_TEST_DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/chris_midmonth_test
