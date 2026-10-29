@@ -95,6 +95,35 @@ function seededReview(m){
   m.seed("review:test",{kind:"review",id:"review:test",employeeId:"employee",employeeNumber:"SYN-001",managerEmployeeId:"manager",
     status:"GOALS_PUBLISHED",endDate:"2000-01-01",goals:goals(),policy:R.POLICY,deadlines:{self:"2000-01-08",manager:"2000-01-15",hr:"2000-01-22"}});
 }
+test('employee saves private per-goal drafts during the period; nobody else may save or see the draft',async()=>{
+ const m=mock();
+ m.seed('review:draft',{kind:'review',id:'review:draft',employeeId:'employee',employeeNumber:'SYN-001',managerEmployeeId:'manager',status:'GOALS_PUBLISHED',effectiveFrom:'2000-01-01',endDate:'2200-12-31',goals:goals(),policy:R.POLICY,deadlines:{},selfRatingRequired:true});
+ const employee={organizationId:ORG,userId:'employee-user',employeeId:'employee'};
+ const saved=await S.transition(m.db,employee,'review:draft','self-draft',{comments:'Work in progress',ratings:[ratings()[0]]},true);
+ assert.equal(saved.status,'GOALS_PUBLISHED');assert.equal(saved.selfAssessmentDraft.ratings.length,1);assert.equal(saved.managerAssessment,undefined);assert.equal(saved.finalScore,undefined);
+ await assert.rejects(()=>S.transition(m.db,{...employee,employeeId:'manager'},'review:draft','self-draft',{comments:'Attempt'},true),/Only the employee/);
+ await assert.rejects(()=>S.transition(m.db,employee,'review:draft','self',{comments:'Early',evidence:'Evidence',ratings:ratings()},true),/after the assessment period/);
+ await assert.rejects(()=>S.transition(m.db,employee,'review:draft','self-draft',{ratings:[{goalId:'foreign',rating:3,evidence:'X'}]},true),/distinct scorecard goals/);
+ const own=await S.workspace(m.db,employee,true);assert.ok(own.reviews[0].actions.includes('self-draft'));
+ const manager=await S.workspace(m.db,{organizationId:ORG,userId:'manager-user',employeeId:'manager'},true);assert.equal(manager.reviews[0].selfAssessmentDraft,undefined);
+ const hr=await S.workspace(m.db,auth());assert.equal(hr.reviews[0].selfAssessmentDraft,undefined);
+});
+test('required employee self-ratings submit after period end without creating a manager score or final result',async()=>{
+ const m=mock();m.seed('review:ratings',{kind:'review',id:'review:ratings',employeeId:'employee',managerEmployeeId:'manager',employeeNumber:'SYN-001',status:'GOALS_PUBLISHED',effectiveFrom:'2000-01-01',endDate:'2000-03-31',goals:goals(),policy:R.POLICY,deadlines:{},selfRatingRequired:true});
+ const a={organizationId:ORG,userId:'employee-user',employeeId:'employee'};
+ await assert.rejects(()=>S.transition(m.db,a,'review:ratings','self',{comments:'Summary',evidence:'Records'},true),/Rate every goal/);
+ const saved=await S.transition(m.db,a,'review:ratings','self',{comments:'Summary',evidence:'Records',ratings:ratings()},true);
+ assert.equal(saved.status,'MANAGER_PENDING');assert.equal(saved.selfAssessment.selfScore.score,3.4);assert.equal(saved.finalScore,undefined);assert.equal(saved.managerAssessment,undefined);
+});
+test('role profile access exposes only the employee and current direct reports, with no unlinked-user fallback',async()=>{
+ const m=mock();m.seed('template:published',{kind:'template',id:'template:published',roleId:'role',roleName:'Storekeeper',status:'PUBLISHED',publishedAt:'2026-01-01',description:'Inventory duties',goals:goals(),version:1});
+ m.employees[0].lineManagerAssignments=[{managerEmployeeId:'manager',manager:m.employees[1]}];
+ m.employees.push({id:'stranger',employeeNumber:'SYN-OTHER',designationId:'role',status:'ACTIVE',exitDate:null});
+ m.db.employee.findMany=async()=>m.employees;
+ const own=await S.roleProfiles(m.db,{organizationId:ORG,userId:'employee-user',employeeId:'employee'},true);assert.deepEqual(own.profiles.map(p=>p.employeeId),['employee']);assert.ok(own.profiles[0].standard);
+ const manager=await S.roleProfiles(m.db,{organizationId:ORG,userId:'manager-user',employeeId:'manager'},true);assert.deepEqual(manager.profiles.map(p=>p.employeeId),['employee','manager']);
+ const unlinked=await S.roleProfiles(m.db,{organizationId:ORG,userId:'appeal-user',employeeId:null},true);assert.deepEqual(unlinked.profiles,[]);
+});
 test("ESS identity and current reporting line enforce self-review and manager boundaries",async()=>{
   const m=mock();seededReview(m);
   await assert.rejects(()=>S.transition(m.db,{...auth("manager-user"),employeeId:"manager"},"review:test","self",{comments:"x",evidence:"x"},true),/Only the employee/);
