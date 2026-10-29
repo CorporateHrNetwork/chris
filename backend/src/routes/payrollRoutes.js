@@ -1,3 +1,4 @@
+const supplementaryReports = require("../services/payrollSupplementaryReportService");
 const payrollIncidents = require("../services/payrollReportIncidentService");
 const express = require("express");
 const multer = require("multer");
@@ -1946,7 +1947,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   const advances = totalByHeader("Salary Advance");
   const loans = totalByHeader("Loan Recovery");
   const employerStatutory = employerPension + nsitf + itf;
-  const totalEmployerCost = gross + employerStatutory;
+  const leaveAllowance = totalByHeader("Leave Allowance");
+  const totalEmployerCost = gross + employerStatutory + leaveAllowance;
 
   const dataEndRow = model.rows.length + 1;
   const payrollRegisterSheet = "Payroll Register";
@@ -2027,7 +2029,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       employeePension: sumHeader("Employee Pension"),
       employerPension: sumHeader("Employer Pension"),
       employerStatutory: employerStatutoryValue,
-      employerCost: grossValue + employerStatutoryValue,
+      leaveAllowance: sumHeader("Leave Allowance"),
+      employerCost: grossValue + employerStatutoryValue + sumHeader("Leave Allowance"),
       ...extra,
     };
   };
@@ -2053,13 +2056,16 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   ].filter(Boolean).join("+");
   const selectedTotalEmployerCostFormula = [
     selectedSumFormula("Gross Pay"),
+    selectedSumFormula("Leave Allowance"),
     selectedEmployerStatutoryFormula,
   ].filter(Boolean).join("+");
 
   const selectedKpis = [
     ["Employee Headcount", formulaCell(selectedHeadcountFormula, model.rows.length), "count"],
     ["Gross Payroll", formulaCell(selectedSumFormula("Gross Pay"), gross), "money"],
-    ["Net Payroll", formulaCell(selectedSumFormula("Net Pay"), net), "money"],
+    ["Net Salary", formulaCell(`${selectedSumFormula("Net Pay")}-${selectedSumFormula("Leave Allowance")}`, net-leaveAllowance), "money"],
+    ["Total Net Payable", formulaCell(selectedSumFormula("Net Pay"), net), "money"],
+    ["Leave Allowance", formulaCell(selectedSumFormula("Leave Allowance"), leaveAllowance), "money"],
     ["PAYE", formulaCell(selectedSumFormula("PAYE"), paye), "money"],
     ["Employee Pension", formulaCell(selectedSumFormula("Employee Pension"), employeePension), "money"],
     ["Employer Pension", formulaCell(selectedSumFormula("Employer Pension"), employerPension), "money"],
@@ -2106,7 +2112,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   dashboardRows.push(["Metric", "Amount"]);
   const selectedChartMetrics = [
     ["Gross Payroll", gross],
-    ["Net Payroll", net],
+    ["Net Salary", net-leaveAllowance],
     ["Payroll Deductions", payrollDeductions],
     ["PAYE", paye],
     ["Employer Statutory Cost", employerStatutory],
@@ -2127,39 +2133,39 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   dashboardRows.push([], ["BRANCH PAYROLL COMPARISON"]);
   const branchHeaderRowIndex = dashboardRows.length;
   dashboardRows.push([
-    "Branch", "Headcount", "Gross Payroll", "Net Payroll", "PAYE",
-    "Employee Pension", "Employer Pension", "Employer Cost", "Open Branch Sheet"
+    "Branch", "Headcount", "Gross Payroll", "Net Salary", "PAYE",
+    "Employee Pension", "Employer Pension", "Employer Cost", "Open Branch Sheet", "Leave Allowance", "Total Net Payable"
   ]);
   const branchDashboardLinks = [];
   for (const stat of branchStats) {
     const rowIndex = dashboardRows.length;
     dashboardRows.push([
-      stat.branch, stat.headcount, stat.gross, stat.net, stat.paye,
-      stat.employeePension, stat.employerPension, stat.employerCost, "Open Branch Sheet",
+      stat.branch, stat.headcount, stat.gross, stat.net-stat.leaveAllowance, stat.paye,
+      stat.employeePension, stat.employerPension, stat.employerCost, "Open Branch Sheet", stat.leaveAllowance, stat.net,
     ]);
     branchDashboardLinks.push({ rowIndex, branch: stat.branch });
   }
 
   dashboardRows.push([], ["DEPARTMENT PAYROLL ALLOCATION"]);
   const departmentHeaderRowIndex = dashboardRows.length;
-  dashboardRows.push(["Department", "Headcount", "Gross Payroll", "Net Payroll", "Deductions", "Employer Cost"]);
+  dashboardRows.push(["Department", "Headcount", "Gross Payroll", "Net Payroll", "Deductions", "Employer Cost", "Leave Allowance"]);
   const departmentDashboardRows = [];
   for (const stat of departmentStats) {
     const rowIndex = dashboardRows.length;
     dashboardRows.push([
-      stat.department, stat.headcount, stat.gross, stat.net, stat.deductions, stat.employerCost,
+      stat.department, stat.headcount, stat.gross, stat.net, stat.deductions, stat.employerCost, stat.leaveAllowance,
     ]);
     departmentDashboardRows.push({ rowIndex, stat });
   }
 
   dashboardRows.push([], ["COST CENTRE / OPERATING UNIT PAYROLL ALLOCATION"]);
   const costCentreHeaderRowIndex = dashboardRows.length;
-  dashboardRows.push(["Cost Centre Code", "Cost Centre / Operating Unit", "Headcount", "Gross Payroll", "Net Payroll", "Deductions", "Employer Cost"]);
+  dashboardRows.push(["Cost Centre Code", "Cost Centre / Operating Unit", "Headcount", "Gross Payroll", "Net Payroll", "Deductions", "Employer Cost", "Leave Allowance"]);
   const costCentreDashboardRows = [];
   for (const stat of costCentreStats) {
     const rowIndex = dashboardRows.length;
     dashboardRows.push([
-      stat.code, stat.costCentre, stat.headcount, stat.gross, stat.net, stat.deductions, stat.employerCost,
+      stat.code, stat.costCentre, stat.headcount, stat.gross, stat.net, stat.deductions, stat.employerCost, stat.leaveAllowance,
     ]);
     costCentreDashboardRows.push({ rowIndex, stat });
   }
@@ -2196,14 +2202,14 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   const dashboard = XLSX.utils.aoa_to_sheet(dashboardRows);
   dashboard["!cols"] = [
     { wch: 32 }, { wch: 28 }, { wch: 38 }, { wch: 20 },
-    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 22 },
+    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 22 },
   ];
 
   if (branchStats.length) {
     dashboard["!autofilter"] = {
       ref: XLSX.utils.encode_range({
         s: { r: branchHeaderRowIndex, c: 0 },
-        e: { r: branchHeaderRowIndex + branchStats.length, c: 8 },
+        e: { r: branchHeaderRowIndex + branchStats.length, c: 10 },
       }),
     };
   }
@@ -2247,7 +2253,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     if (dashboard[linkCell] && branchSheet) {
       dashboard[linkCell].l = { Target: `#'${branchSheet}'!A1`, Tooltip: `Open ${branch} payroll register` };
     }
-    for (let column = 2; column <= 7; column += 1) {
+    for (const column of [2,3,4,5,6,7,9,10]) {
       const amountCell = XLSX.utils.encode_cell({ r: rowIndex, c: column });
       if (dashboard[amountCell]) dashboard[amountCell].z = "#,##0.00";
     }
@@ -2313,11 +2319,11 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
           color: "2EE98B",
         },
         {
-          name: "Net Payroll",
+          name: "Net Salary",
           categoriesRange: chartRange("A", branchHeaderRowIndex + 1, branchHeaderRowIndex + branchStats.length),
           valuesRange: chartRange("D", branchHeaderRowIndex + 1, branchHeaderRowIndex + branchStats.length),
           categories: branchStats.map((row) => row.branch),
-          values: branchStats.map((row) => row.net),
+          values: branchStats.map((row) => row.net-row.leaveAllowance),
           color: "F2CF57",
         },
       ],
@@ -2376,6 +2382,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   XLSX.utils.book_append_sheet(workbook, control, "Workflow Control");
 
   payrollIncidents.appendIncidentSheets(workbook, incidents);
+  if (organization.slug === "zermatt-liquor-limited") supplementaryReports.appendSheets(workbook, { run, rows: model.rows, loans: incidentSources.loans || [], decisions: incidentSources.decisions || [] });
   payrollAppendRegisterSheet(workbook, "Payroll Register", model.headers, model.rows);
 
   for (const branch of branches) {
@@ -2528,7 +2535,7 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
     department: { select: { name: true, code: true } },
     designation: { select: { name: true, code: true } },
     costCentre: { select: { name: true, code: true } },
-    location: { select: { name: true, code: true } },
+    location: { select: { id: true, name: true, code: true } },
     onboardings: {
       orderBy: { updatedAt: "desc" },
       take: 1,
@@ -2557,6 +2564,7 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
       costCentreCode: employee.costCentre?.code || "",
       branch: employee.location?.name || employee.location?.code || "Unassigned",
       branchCode: employee.location?.code || "",
+      locationId: employee.location?.id || null,
       email: employee.email || "",
       bankName: includePaymentDetails ? String(payment.bankName || "").trim() : "",
       accountName: includePaymentDetails ? String(payment.accountName || "").trim() : "",
@@ -2570,10 +2578,12 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
 
   const organization = await prisma.organization.findUnique({
     where: { id: organizationId },
-    select: { name: true, legalName: true },
+    select: { name: true, legalName: true, slug: true },
   });
 
   const incidentSources = await payrollIncidents.loadSources(prisma, organizationId, run, lines);
+  if (organization?.slug === "zermatt-liquor-limited") incidentSources.loans = await supplementaryReports.loadLoans(prisma, organizationId, [...employeeMeta.values()].map(m => m.locationId).filter(Boolean));
+  if (organization?.slug === "zermatt-liquor-limited") incidentSources.decisions = await supplementaryReports.loadDecisions(prisma, organizationId, run.id);
   return { run, lines, employeeMeta, incidentSources, organization: organization || {} };
 }
 

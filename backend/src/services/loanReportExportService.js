@@ -119,7 +119,7 @@ function individualReportData(profile) {
     row.totalDeduction,
     row.amountPaid,
     row.status,
-    row.reconciliationNote || "",
+    row.reconciliationNote || row.confirmationNote || "",
   ]);
 
   const recoveryHeaders = ["Date", "Payroll Period", "Amount", "Status"];

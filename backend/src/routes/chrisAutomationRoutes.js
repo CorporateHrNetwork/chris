@@ -1,3 +1,4 @@
+const supplementaryReports = require("../services/payrollSupplementaryReportService");
 const payrollIncidents = require("../services/payrollReportIncidentService");
 const express = require("express");
 const crypto = require("crypto");
@@ -239,8 +240,8 @@ router.get("/payroll-dashboard/export", requirePermission("payroll.view"), async
   const noteAccess = require("../services/payrollNoteWorkflowService").capabilities(req);
   if (!noteAccess.canReview && !noteAccess.canAudit) return res.status(403).json({status:"error",message:"The payroll notes audit export is restricted to Head HR and Payroll Auditor."});
   try {
-    const periodCode = text(req.query?.periodCode) || "2026-09";
-    const periods = await prisma.$queryRawUnsafe(`SELECT "id","code","name","periodStart","periodEnd","payDate","status" FROM "payroll_periods" WHERE "organizationId"=$1 AND "code"=$2 LIMIT 1`, req.auth.organizationId, periodCode);
+    const periodCode = text(req.query?.periodCode) || new Date().toISOString().slice(0,7);
+    const periods = await prisma.$queryRawUnsafe(`SELECT "id","code","name","periodStart","periodEnd","payDate","status" FROM "payroll_periods" WHERE "organizationId"=$1 AND "code"=$2 AND "archivedAt" IS NULL LIMIT 1`, req.auth.organizationId, periodCode);
     if(!periods[0]) return res.status(404).json({status:"error",message:`Payroll period ${periodCode} was not found.`});
     const period=periods[0];
     const runs=await prisma.$queryRawUnsafe(`SELECT "id","status","employeeCount","grossTotal","deductionTotal","netPreviewTotal","submittedAt","approvedAt" FROM "payroll_runs" WHERE "organizationId"=$1 AND "periodId"=$2 ORDER BY "createdAt" DESC LIMIT 1`,req.auth.organizationId,period.id);
@@ -250,9 +251,10 @@ router.get("/payroll-dashboard/export", requirePermission("payroll.view"), async
     const incidentSources=await payrollIncidents.loadSources(prisma,req.auth.organizationId,reportRun,lines);
     const incidents=payrollIncidents.buildIncidents({run:reportRun,lines,sources:incidentSources});
     const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Period:period.name,Code:period.code,Start:period.periodStart,End:period.periodEnd,Status:period.status,RunStatus:run?.status||"NOT RUN",Employees:run?.employeeCount||0,Gross:run?.grossTotal||0,Deductions:run?.deductionTotal||0,Net:run?.netPreviewTotal||0}]),"Dashboard");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet([{Period:period.name,Code:period.code,Start:period.periodStart,End:period.periodEnd,Status:period.status,RunStatus:run?.status||"NOT RUN",Employees:run?.employeeCount||0,Gross:run?.grossTotal||0,Deductions:run?.deductionTotal||0,NetSalary:Number(run?.netPreviewTotal||0)-lines.reduce((s,l)=>s+Number(l.details?.leaveAllowance?.amount||0),0),LeaveAllowance:lines.reduce((s,l)=>s+Number(l.details?.leaveAllowance?.amount||0),0),TotalNetPayable:run?.netPreviewTotal||0}]),"Dashboard");
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(lines.map(({details,employeeId,...line})=>({...line,expectedDays:details?.attendance?.standardDays ?? "",workedDays:details?.attendance?.payableDays ?? "",daysDifference:details?.attendance?.standardDays != null && details?.attendance?.payableDays != null ? Number(details.attendance.payableDays)-Number(details.attendance.standardDays):"",payrollNotes:payrollIncidents.summaryFor(incidents,employeeId)}))),"Payroll Lines");
     payrollIncidents.appendIncidentSheets(wb,incidents);
+    if(run) await supplementaryReports.appendForLines(prisma,req.auth.organizationId,wb,reportRun,lines,req.auth.activeLocationId || null);
     const buffer=XLSX.write(wb,{type:"buffer",bookType:"xlsx"});
     res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition",`attachment; filename="CHRIS_${period.code}_Payroll_Dashboard.xlsx"`);
@@ -269,7 +271,7 @@ router.post("/automation/ensure-current-payroll", requirePermission("payroll.man
   const start=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),1));
   const end=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth()+1,0));
   const code=`${today.getUTCFullYear()}-${String(today.getUTCMonth()+1).padStart(2,"0")}`;
-  const existing=await prisma.$queryRawUnsafe(`SELECT * FROM "payroll_periods" WHERE "organizationId"=$1 AND "code"=$2 LIMIT 1`,org,code);
+  const existing=await prisma.$queryRawUnsafe(`SELECT * FROM "payroll_periods" WHERE "organizationId"=$1 AND "code"=$2 AND "archivedAt" IS NULL LIMIT 1`,org,code);
   let period=existing[0];
   if(!period){
     period=await payroll.createPeriod({organizationId:org,actorUserId:req.auth.userId,input:{code,name:start.toLocaleString("en-US",{month:"long",year:"numeric"})+" Payroll",periodStart:start.toISOString().slice(0,10),periodEnd:end.toISOString().slice(0,10),reason:"Automatic first-of-month CHRiS payroll opening"}});

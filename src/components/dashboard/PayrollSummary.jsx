@@ -92,11 +92,19 @@ function PayrollSummary({ summary }) {
               value={formatNaira(latestRun.grossTotal)}
             />
             <SummaryItem
+              label="Leave Allowance"
+              value={formatNaira(latestRun.leaveAllowanceTotal)}
+            />
+            <SummaryItem
               label="Deductions"
               value={formatNaira(latestRun.deductionTotal)}
             />
             <SummaryItem
-              label="Net Payroll"
+              label="Net Salary"
+              value={formatNaira(Number(latestRun.netPreviewTotal || 0) - Number(latestRun.leaveAllowanceTotal || 0))}
+            />
+            <SummaryItem
+              label="Total Net Payable"
               value={formatNaira(latestRun.netPreviewTotal)}
             />
           </div>
