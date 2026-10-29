@@ -1,3 +1,4 @@
+const accountantAccess = require('../services/branchAccountantPayrollAccessService');
 const supplementaryReports = require("../services/payrollSupplementaryReportService");
 const payrollIncidents = require("../services/payrollReportIncidentService");
 const express = require("express");
@@ -1904,15 +1905,20 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
   const isApproved = stage === "APPROVED_PAYOUT";
   const isGMReview = stage === "GM_REVIEW";
+  const isAccountantReview = stage === "ACCOUNTANT_REVIEW";
   const organizationName = String(
     organization.legalName || organization.name || "Organisation"
   ).replace(/\s*[—-]\s*SYNTHETIC STAGING ACCEPTANCE\s*$/i, "").trim();
-  const title = isApproved
+  const title = isAccountantReview
+    ? `${organizationName} Payroll — Accountant Review Copy`
+    : isApproved
     ? `${organizationName} Approved Payroll — External Approval & Payout Pack`
     : isGMReview
       ? `${organizationName} Auditor-Approved Payroll — GM Private External Review Pack`
       : `${organizationName} Draft Payroll — External HR Review Pack`;
-  const controlLabel = isApproved
+  const controlLabel = isAccountantReview
+    ? `${run.status} — ACCOUNTANT REVIEW COPY — NOT A PAYOUT INSTRUCTION`
+    : isApproved
     ? "APPROVED IN CHRiS — EXTERNAL APPROVAL / PAYOUT HANDOFF"
     : isGMReview
       ? "AUDITOR-APPROVED — GM PRIVATE EXTERNAL REVIEW — NOT YET GM APPROVED"
@@ -2366,7 +2372,9 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Exported At", new Date().toISOString()],
     [],
     ["Purpose"],
-    [isApproved
+    [isAccountantReview
+      ? `Read-only accountant payroll report for ${run.reportScope || "the authorized payroll scope"}. This export does not approve, pay or lock payroll.`
+      : isApproved
       ? "Final CHRiS-approved payroll export for external auditor/management approval evidence and Accounts & Finance payout processing outside CHRiS."
       : "Pre-approval payroll export for external HR Head investigation, verification, exception review and correction feedback before CHRiS approval, including employee bank/account and statutory details for verification."],
     [],
@@ -2374,7 +2382,9 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Payroll Dashboard with native Excel charts and Branch / Department / Cost Centre analysis, consolidated Payroll Register, separate branch payroll sheets, full statutory identifiers and contributions, all configured allowance/deduction components, Payroll Notes & Incidents, Worked Days Exceptions, and workflow-specific review/payout sheets."],
     [],
     ["Governance"],
-    [isApproved
+    [isAccountantReview
+      ? "Payroll preparation, approvals and the Chief Accountant payout export remain under the established workflow. This copy records the current payroll status only."
+      : isApproved
       ? "This export does not create external approval events inside CHRiS. External auditor confirmation, GM approval and payout remain outside CHRiS."
       : "This workbook is not an approved payroll and must not be used for payout. Any findings must be corrected in CHRiS and the payroll recalculated before submission/approval."],
   ]);
@@ -2425,7 +2435,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   statutorySheet["!cols"] = statutoryHeaders.map((header) => ({ wch: /Name|PFA/.test(header) ? 26 : 18 }));
   XLSX.utils.book_append_sheet(workbook, statutorySheet, "Statutory Register");
 
-  if (!isApproved) {
+  if (!isApproved && !isAccountantReview) {
     const reviewRows = [
       ["Draft Payroll External HR Review / Investigation"],
       ["Control", "PRE-APPROVAL — NOT FOR PAYOUT"],
@@ -2447,7 +2457,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     const reviewSheet = XLSX.utils.aoa_to_sheet(reviewRows);
     reviewSheet["!cols"] = [{ wch: 44 }, { wch: 110 }];
     XLSX.utils.book_append_sheet(workbook, reviewSheet, "External HR Review");
-  } else {
+  } else if (isApproved) {
     const paymentRows = [[
       "Employee No", "Employee Name", "Branch", "Bank", "Account Name", "Account Number", "Net Pay", "Payout Status", "Payment Reference"
     ]];
@@ -2522,12 +2532,12 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   }
 }
 
-async function payrollExportContext(organizationId, runId, { includePaymentDetails = false } = {}) {
+async function payrollExportContext(organizationId, runId, { includePaymentDetails = false, locationIds = null } = {}) {
   const runs = await payroll.listRuns({ organizationId });
-  const run = runs.find((item) => item.id === runId);
+  let run = runs.find((item) => item.id === runId);
   if (!run) throw payroll.operationalError("PAYROLL_RUN_NOT_FOUND", "Payroll run not found.", 404);
 
-  const lines = await payroll.listRunLines({ organizationId, runId });
+  let lines = await payroll.listRunLines({ organizationId, runId });
   const employeeSelect = {
     id: true,
     email: true,
@@ -2544,10 +2554,20 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
   };
 
   const employees = await prisma.employee.findMany({
-    where: { organizationId, id: { in: lines.map((line) => line.employeeId) } },
+    where: { organizationId, id: { in: lines.map((line) => line.employeeId) }, ...(locationIds ? { locationId: { in: locationIds } } : {}) },
     select: employeeSelect,
   });
 
+  if (locationIds) {
+    const permitted = new Set(employees.map(e => e.id));
+    lines = lines.filter(l => permitted.has(l.employeeId));
+    if (!lines.length) throw payroll.operationalError("PAYROLL_RUN_NOT_FOUND", "No payroll lines exist in the selected scope.", 404);
+    const sum = key => lines.reduce((total,l) => total + Number(l[key] || 0), 0);
+    run = { ...run, employeeCount: lines.length, grossTotal: sum('grossPay'),
+      deductionTotal: sum('deductions') + sum('advanceRecovery') + sum('loanRecovery'),
+      netPreviewTotal: sum('netPreview'),
+      leaveAllowanceTotal: lines.reduce((total,l) => total + Number(l.details?.leaveAllowance?.amount || 0),0) };
+  }
   const employeeMeta = new Map(employees.map((employee) => {
     const sectionData = employee.onboardings?.[0]?.sectionData || {};
     const payment = includePaymentDetails
@@ -2583,7 +2603,7 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
 
   const incidentSources = await payrollIncidents.loadSources(prisma, organizationId, run, lines);
   if (organization?.slug === "zermatt-liquor-limited") incidentSources.loans = await supplementaryReports.loadLoans(prisma, organizationId, [...employeeMeta.values()].map(m => m.locationId).filter(Boolean));
-  if (organization?.slug === "zermatt-liquor-limited") incidentSources.decisions = await supplementaryReports.loadDecisions(prisma, organizationId, run.id);
+  if (!locationIds && organization?.slug === "zermatt-liquor-limited") incidentSources.decisions = await supplementaryReports.loadDecisions(prisma, organizationId, run.id);
   return { run, lines, employeeMeta, incidentSources, organization: organization || {} };
 }
 
@@ -2603,6 +2623,44 @@ async function auditPayrollExport({ organizationId, actorUserId, run, action, st
     },
   });
 }
+
+router.get('/accountant/access', requirePermission('payroll.view'), (req,res) => {
+  try {
+    const scopes = accountantAccess.options(req);
+    return res.json({ status:'success', data:{ scopes:scopes.map(({id,name})=>({id,name})), defaultScope:accountantAccess.resolve(req).id, canExport:(req.auth.permissions || []).includes('reports.export') } });
+  } catch(error) { return sendError(res,error,'Unable to load accountant payroll access.'); }
+});
+router.get('/accountant/runs', requirePermission('payroll.view'), async (req,res) => {
+  try {
+    const scope=accountantAccess.resolve(req);
+    const runs=await accountantAccess.listRuns(prisma,req.auth.organizationId,scope);
+    return res.json({status:'success',data:runs,scope:{id:scope.id,name:scope.name}});
+  } catch(error) { return sendError(res,error,'Unable to load accountant payrolls.'); }
+});
+router.get('/accountant/runs/:id', requirePermission('payroll.view'), async (req,res) => {
+  try {
+    const scope=accountantAccess.resolve(req);
+    const context=await payrollExportContext(req.auth.organizationId,req.params.id,{locationIds:scope.locationIds});
+    return res.json({status:'success',data:{run:context.run,lines:context.lines,scope:{id:scope.id,name:scope.name}}});
+  } catch(error) { return sendError(res,error,'Unable to view accountant payroll.'); }
+});
+router.get('/accountant/runs/:id/export.xlsx', requirePermission('payroll.view','reports.export'), async (req,res) => {
+  try {
+    const scope=accountantAccess.resolve(req);
+    const context=await payrollExportContext(req.auth.organizationId,req.params.id,{includePaymentDetails:true,locationIds:scope.locationIds});
+    context.run={...context.run,reportScope:scope.name};
+    const buffer=payrollExternalWorkbook({...context,stage:'ACCOUNTANT_REVIEW'});
+    await prisma.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+      entityType:'PayrollRun',entityId:context.run.id,action:'ACCOUNTANT_PAYROLL_EXPORTED',
+      newValue:{exportStage:'ACCOUNTANT_REVIEW',scope:scope.id,scopeName:scope.name,employeeCount:context.lines.length,status:context.run.status},
+      reason:'Read-only accountant payroll copy exported within authorized payroll scope; no approval, recovery or payout transition.'}});
+    res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const period=String(context.run.periodCode || 'Payroll').replace(/[^A-Za-z0-9_-]/g,'_');
+    const label=scope.name.replace(/[^A-Za-z0-9_-]/g,'_');
+    res.setHeader('Content-Disposition',`attachment; filename="CHRiS_${period}_${label}_Accountant_Review.xlsx"`);
+    return res.send(buffer);
+  } catch(error) { return sendError(res,error,'Unable to export accountant payroll.'); }
+});
 
 router.get("/runs/:id/gm-review.xlsx", requirePermission("payroll.view"), async (req, res, next) => {
   if (isZermatt(req) && !isGeneralManager(req)) {

@@ -46,7 +46,7 @@ jobs:
         run: npx prisma generate
 
       - name: Validate payroll employee upload templates
-        run: node --test tests/payrollEmployeeUploadTemplates.test.js tests/workedDaysBulk.test.js tests/payrollReportIncidents.test.js tests/payrollWorkflowReopen.test.js tests/newHirePayrollProration.test.js tests/loanSuretyShortfall.test.js tests/confirmedLoanRecoveries.test.js tests/deactivatedPayrollExclusion.test.js tests/payrollSupplementaryReports.test.js tests/zermattFinalPayrollReview.test.js
+        run: node --test tests/payrollEmployeeUploadTemplates.test.js tests/workedDaysBulk.test.js tests/payrollReportIncidents.test.js tests/payrollWorkflowReopen.test.js tests/newHirePayrollProration.test.js tests/loanSuretyShortfall.test.js tests/confirmedLoanRecoveries.test.js tests/deactivatedPayrollExclusion.test.js tests/payrollSupplementaryReports.test.js tests/zermattFinalPayrollReview.test.js tests/branchAccountantPayrollAccess.test.js
 
       - name: Check critical backend syntax
         run: |
