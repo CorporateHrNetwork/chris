@@ -161,7 +161,7 @@ function LoanProfile({ loanId: loanIdProp = null, onBack = null }) {
             {amortizationSchedule.map((row) => (
               <tr key={`${row.installmentNumber}-${row.dueDate}-${row.status}`}>
                 <Cell>{row.installmentNumber}</Cell>
-                <Cell strong>{row.period}{row.reconciliationNote && <small style={{ display: "block" }}>{row.reconciliationNote}</small>}</Cell>
+                <Cell strong>{row.period}{row.confirmationNote && <small style={{ display: "block" }}>{row.confirmationNote}</small>}{row.reconciliationNote && <small style={{ display: "block" }}>{row.reconciliationNote}</small>}</Cell>
                 <Cell>{row.dueDate}</Cell>
                 <Cell>{money(row.outstandingBalance)}</Cell>
                 <Cell>{money(row.principalAmount)}</Cell>

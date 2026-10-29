@@ -109,6 +109,7 @@ function mapRun(row) {
     grossTotal: numberValue(row.grossTotal) || 0,
     deductionTotal: numberValue(row.deductionTotal) || 0,
     netPreviewTotal: numberValue(row.netPreviewTotal) || 0,
+    leaveAllowanceTotal: numberValue(row.leaveAllowanceTotal) || 0,
   };
 }
 
@@ -187,7 +188,7 @@ async function listPeriods({ organizationId, prismaClient = prisma }) {
     `SELECT DISTINCT ON (date_trunc('month', "periodStart"))
             "id", "code", "name", "periodStart", "periodEnd", "payDate", "status", "createdAt", "updatedAt"
        FROM "payroll_periods"
-      WHERE "organizationId" = $1
+      WHERE "organizationId" = $1 AND "archivedAt" IS NULL
       ORDER BY date_trunc('month', "periodStart") DESC,
                CASE WHEN "code" = to_char("periodStart", 'YYYY-MM') THEN 0 ELSE 1 END,
                "updatedAt" DESC,
@@ -201,7 +202,7 @@ async function getPeriod(prismaClient, organizationId, periodId) {
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT "id", "code", "name", "periodStart", "periodEnd", "payDate", "status", "createdAt", "updatedAt"
        FROM "payroll_periods"
-      WHERE "organizationId" = $1 AND "id" = $2
+      WHERE "organizationId" = $1 AND "id" = $2 AND "archivedAt" IS NULL
       LIMIT 1`,
     organizationId,
     text(periodId)
@@ -644,10 +645,11 @@ async function listRuns({ organizationId, prismaClient = prisma }) {
     `SELECT DISTINCT ON (date_trunc('month', pp."periodStart"))
             pr."id",pr."periodId",pp."code" AS "periodCode",pp."name" AS "periodName",pp."periodStart",pp."periodEnd",pp."payDate",
             pr."status",pr."employeeCount",pr."grossTotal",pr."deductionTotal",pr."netPreviewTotal",pr."statutoryStatus",
-            pr."submittedAt",pr."approvedAt",pr."createdAt",pr."updatedAt"
+            pr."submittedAt",pr."approvedAt",pr."createdAt",pr."updatedAt",
+            (SELECT COALESCE(SUM((l.details#>>'{leaveAllowance,amount}')::numeric),0) FROM payroll_run_lines l WHERE l."organizationId"=pr."organizationId" AND l."runId"=pr.id) AS "leaveAllowanceTotal"
        FROM "payroll_runs" pr
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
-      WHERE pr."organizationId"=$1
+      WHERE pr."organizationId"=$1 AND pr."archivedAt" IS NULL AND pp."archivedAt" IS NULL
       ORDER BY date_trunc('month', pp."periodStart") DESC,
                CASE WHEN pp."code" = to_char(pp."periodStart", 'YYYY-MM') THEN 0 ELSE 1 END,
                pr."updatedAt" DESC,

@@ -83,7 +83,7 @@ async function options({req, prismaClient = prisma}) {
   authorize(req, 'canRead');
   const all = capabilities(req).canReview || capabilities(req).canAudit;
   const employees = await prismaClient.employee.findMany({where:{organizationId:req.auth.organizationId,...(!all ? {locationId:{in:(req.auth.availableLocations || []).filter(l => !req.auth.activeLocationId || l.id === req.auth.activeLocationId).map(l => l.id)}} : {})},select:{id:true,employeeNumber:true,firstName:true,lastName:true,locationId:true},orderBy:{employeeNumber:'asc'}});
-  const periods = await prismaClient.$queryRawUnsafe(`SELECT DISTINCT ON (date_trunc('month',"periodStart")) "id","code","name","periodStart","periodEnd","status" FROM "payroll_periods" WHERE "organizationId"=$1 ORDER BY date_trunc('month',"periodStart") DESC,CASE WHEN "code"=to_char("periodStart",'YYYY-MM') THEN 0 ELSE 1 END,"updatedAt" DESC,"createdAt" DESC`,req.auth.organizationId);
+  const periods = await prismaClient.$queryRawUnsafe(`SELECT DISTINCT ON (date_trunc('month',"periodStart")) "id","code","name","periodStart","periodEnd","status" FROM "payroll_periods" WHERE "organizationId"=$1 AND "archivedAt" IS NULL ORDER BY date_trunc('month',"periodStart") DESC,CASE WHEN "code"=to_char("periodStart",'YYYY-MM') THEN 0 ELSE 1 END,"updatedAt" DESC,"createdAt" DESC`,req.auth.organizationId);
   const components = (capabilities(req).canReview || capabilities(req).canAudit) ? await prismaClient.$queryRawUnsafe('SELECT "id","code","name","kind","calculationType" FROM "payroll_variable_components" WHERE "organizationId"=$1 AND "status"=\'ACTIVE\' ORDER BY "kind","name"',req.auth.organizationId) : [];
   return {employees,periods,components};
 }

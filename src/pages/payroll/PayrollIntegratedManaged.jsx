@@ -356,7 +356,7 @@ function PayrollConnectedDashboard({
         expectedDays: sum(rows, (row) => row.details?.attendance?.standardDays),
         workedDays: sum(rows, (row) => row.details?.attendance?.payableDays),
         employerStatutory: employerPension + nsitf + itf,
-        employerCost: gross + employerPension + nsitf + itf,
+        employerCost: gross + employerPension + nsitf + itf + sum(rows, leaveValue),
       };
     };
 
@@ -374,6 +374,7 @@ function PayrollConnectedDashboard({
         net: values.net,
         paye: values.paye,
         loanRecovery: values.loanRecovery,
+        leaveAllowance: values.leaveAllowance,
       };
     });
 
@@ -413,15 +414,20 @@ function PayrollConnectedDashboard({
 
       <div style={payrollKpiGrid}>
         <DashboardKpi label="Gross Payroll" value={money(dashboard.totals.gross)} />
-        <DashboardKpi label="Net Payroll" value={money(dashboard.totals.net)} hint={`${netRate.toFixed(1)}% of gross`} />
+        <DashboardKpi label="Net Salary" value={money(dashboard.totals.net - dashboard.totals.leaveAllowance)} hint="Excludes separately shown leave allowance" />
+        <DashboardKpi label="Leave Allowance" value={money(dashboard.totals.leaveAllowance)} />
+        <DashboardKpi label="Total Net Payable" value={money(dashboard.totals.net)} />
         <DashboardKpi label="PAYE" value={money(dashboard.totals.paye)} />
         <DashboardKpi label="Employee Pension" value={money(dashboard.totals.employeePension)} />
         <DashboardKpi label="Employer Pension" value={money(dashboard.totals.employerPension)} />
         <DashboardKpi label="Loan Recovery" value={money(dashboard.totals.loanRecovery)} />
         <DashboardKpi label="Salary Advance" value={money(dashboard.totals.salaryAdvance)} />
-        <DashboardKpi label="Employer Cost" value={money(dashboard.totals.employerCost)} hint="Gross + employer statutory" />
+        <DashboardKpi label="Employer Cost" value={money(dashboard.totals.employerCost)} hint="Gross salary + leave allowance + employer statutory" />
       </div>
 
+      <div style={payrollKpiGrid}>
+        {dashboard.branchData.map(branch => <DashboardKpi key={branch.id} label={`${branch.branch} Leave Allowance`} value={money(branch.leaveAllowance)} />)}
+      </div>
       <div style={dashboardChartGridStyle}>
         <DashboardChart title="Branch Gross vs Net" subtitle="Click a branch below the chart to filter the entire payroll view.">
           <ResponsiveContainer width="100%" height={280}>

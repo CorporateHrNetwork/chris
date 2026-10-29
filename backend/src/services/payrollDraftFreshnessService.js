@@ -15,7 +15,7 @@ async function markDraftRunsRecalculationRequired({
         SET "statutoryStatus"='RECALCULATION_REQUIRED',
             "updatedAt"=CURRENT_TIMESTAMP
       WHERE "organizationId"=$1
-        AND "status" IN ('DRAFT','REJECTED')
+        AND "status" IN ('DRAFT','REJECTED') AND "archivedAt" IS NULL
         AND COALESCE("statutoryStatus",'') <> 'RECALCULATION_REQUIRED'
       RETURNING "id","periodId","status","statutoryStatus"`,
     organizationId

@@ -638,6 +638,7 @@ function mapMoneyRow(row) {
     grossTotal: Number(row.grossTotal || 0),
     deductionTotal: Number(row.deductionTotal || 0),
     netPreviewTotal: Number(row.netPreviewTotal || 0),
+    leaveAllowanceTotal: Number(row.leaveAllowanceTotal || 0),
   };
 }
 
@@ -654,12 +655,13 @@ router.get(
                 COUNT(pl."id")::int AS "employeeCount",
                 COALESCE(SUM(pl."grossPay"),0) AS "grossTotal",
                 COALESCE(SUM(pl."deductions" + pl."advanceRecovery" + COALESCE(pl."loanRecovery",0)),0) AS "deductionTotal",
-                COALESCE(SUM(pl."netPreview"),0) AS "netPreviewTotal"
+                COALESCE(SUM(pl."netPreview"),0) AS "netPreviewTotal",
+                COALESCE(SUM((pl.details#>>'{leaveAllowance,amount}')::numeric),0) AS "leaveAllowanceTotal"
            FROM "payroll_runs" pr
            JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
            JOIN "payroll_run_lines" pl ON pl."runId"=pr."id" AND pl."organizationId"=pr."organizationId"
            JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
-          WHERE pr."organizationId"=$1 AND e."locationId"=$2
+          WHERE pr."organizationId"=$1 AND e."locationId"=$2 AND pr."archivedAt" IS NULL AND pp."archivedAt" IS NULL
           GROUP BY pr."id",pr."periodId",pp."code",pp."name",pp."periodStart",pp."periodEnd",pp."payDate",
                    pr."status",pr."statutoryStatus",pr."submittedAt",pr."approvedAt",pr."createdAt",pr."updatedAt"
           ORDER BY pp."periodStart" DESC,pr."createdAt" DESC`,

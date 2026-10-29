@@ -419,6 +419,12 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     legacyPeriodEvents,
     externalSettlement,
   });
+  if (loan.historyConfirmedAt) for (const row of schedule) {
+    if (row.reconciliationNote) {
+      row.confirmationNote = `Opening history and actual recoveries confirmed by HR: ${loan.historyConfirmationReference || dateText(loan.historyConfirmedAt)}. No principal allocated twice.`;
+      row.reconciliationNote = null;
+    }
+  }
   const nextPending = schedule.find((row) => row.status === "PENDING") || null;
 
   return {
