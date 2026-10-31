@@ -17,7 +17,7 @@ test('isolated PostgreSQL/Prisma/HTTP: migrate, notify, assess, extend and recor
     const manager=await employee('SYN-MANAGER','ACTIVE');
     const account=async(name,role,employeeId=null,organizationId=org.id)=>{
       const r=await prisma.role.create({data:{organizationId,name:role}});
-      return prisma.user.create({data:{organizationId,email:`${name}@example.invalid`,passwordHash:'synthetic-not-a-password',employeeId,userRoles:{create:{roleId:r.id}},userLocations:organizationId===org.id?{create:{organizationId,locationId:branch.id}}:undefined}});
+      return prisma.user.create({data:{organizationId,email:`${name}@example.invalid`,passwordHash:'synthetic-not-a-password',employeeId,userRoles:{create:{roleId:r.id}},userLocations:organizationId===org.id?{create:{locationId:branch.id}}:undefined}});
     };
     const head=await account('head','Head of HR & Admin'),mgr=await account('manager','Line Manager',manager.id),hr=await account('branch','HR & Admin Officer - Branch'),foreign=await account('foreign','Foreign Head',null,other.id);
     const token=u=>jwt.sign({userId:u.id,organizationId:u.organizationId},process.env.JWT_SECRET);
