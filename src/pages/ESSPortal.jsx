@@ -5,13 +5,15 @@ import chrisLogo from "../assets/images/chris-logo.png";
 import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "../services/essApi";
 
 import EssLeaveApplications from "../components/ess/EssLeaveApplications";
+import ZermattProbation from "./ZermattProbation";
+import ZermattProbationEssNotice from "../components/ZermattProbationEssNotice";
 import MyRoleProfile from "../components/performance/RoleProfileCards";
 import PerformanceEvaluationWorkspace from "../components/performance/PerformanceEvaluationWorkspace";
 import SessionLoadingScreen from "../components/system/SessionLoadingScreen";
 
 const ORG_SLUG = "zermatt-liquor-limited";
 const normalizePerformance = value => (Array.isArray(value) ? value : []).map(item => ({...item,cycle:item?.cycle||{},assessment:item?.assessment||{},kpis:Array.isArray(item?.kpis)?item.kpis:[]}));
-const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["loans","Running Loans"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["gratuity","Gratuity"],["birthday","Birthday & Anniversaries"],["communications","Internal Communications"],["documents","Documents"]];
+const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["loans","Running Loans"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["probation","Probation Assessments"],["gratuity","Gratuity"],["birthday","Birthday & Anniversaries"],["communications","Internal Communications"],["documents","Documents"]];
 const RATINGS = ["EXCELLENT","SATISFACTORY","ACCEPTABLE","UNSATISFACTORY"];
 const money=(v,c="NGN")=>Number.isFinite(Number(v))?new Intl.NumberFormat("en-NG",{style:"currency",currency:c||"NGN",maximumFractionDigits:2}).format(Number(v)): "—";
 const date=v=>{if(!v)return "—";const d=new Date(v);return Number.isNaN(d.getTime())?"—":new Intl.DateTimeFormat("en-NG",{day:"2-digit",month:"short",year:"numeric"}).format(d)};
@@ -36,6 +38,8 @@ export default function ESSPortal(){
  if(!auth||!data)return <><style>{CSS}</style><Login login={login} setLogin={setLogin} submit={submit} submitting={submitting} error={error}/></>;
  return <><style>{CSS}</style><div className="essshell"><div className="app"><header><div className="headleft"><div className="ess-nav-holder"><button className="ess-menu-toggle" type="button" aria-label="Open page menu" aria-expanded={navOpen} onClick={()=>setNavOpen(v=>!v)}><span className="menu-glyph">☰</span><span>Pages</span><span className="menu-chevron">{navOpen?"▲":"▼"}</span></button>{navOpen&&<><button className="ess-menu-backdrop" aria-label="Close page menu" onClick={()=>setNavOpen(false)}/><nav className="ess-page-dropdown" aria-label="Employee pages">{NAV.map(([k,l])=><button className={tab===k?"ess-dropdown-item selected":"ess-dropdown-item"} key={k} onClick={()=>{setTab(k);setNavOpen(false)}}><i>{icon(k)}</i><span>{l}</span>{k==="onboarding"&&<b>{data.onboarding.completionPercent}%</b>}</button>)}</nav></>}</div><div className="brandrow"><Brand small/><div><strong>CHRiS</strong><small>Employee Self-Service</small></div></div></div><div className="headuser"><div className="avatar">{initials(data.profile)}</div><div><b>{data.profile.name}</b><small>{data.profile.designation?.name||"Employee"} · {data.profile.employeeNumber}</small></div><button className="ghost" onClick={signOut}>Sign out</button></div></header><div className="body"><aside><span className="caption">MY CHRiS</span>{NAV.map(([k,l])=><button className={tab===k?"nav active":"nav"} key={k} onClick={()=>setTab(k)}><i>{icon(k)}</i><span>{l}</span>{k==="onboarding"&&<b>{data.onboarding.completionPercent}%</b>}</button>)}<div className="sidefoot">Private employee access<br/><small>Only your own CHRiS record is available.</small></div></aside><main>
  {error&&<div role="alert" className="card">{error}<button className="ghost" onClick={()=>load()}>Retry</button></div>}
+ <ZermattProbationEssNotice onOpen={()=>setTab("probation")}/>
+ {tab==="probation"&&<ZermattProbation essRequest={essRequest}/>}
  {tab==="overview"&&<Overview data={data} go={setTab}/>}
  {tab==="profile"&&<Profile data={data}/>}
  {tab==="onboarding"&&<Onboarding data={data}/>}
