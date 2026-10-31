@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { PGlite } = require('@electric-sql/pglite');
 const { ESS_STATUTORY_OBLIGATIONS_SQL, ESS_PAYROLL_PREVIEWS_SQL, ESS_CURRENT_SALARY_SQL } = require('../src/services/essStatutoryService');
 
-test('ESS retains provisional payroll, deduplicates run revisions without doubling money, and preserves reversal history', async () => {
+test('ESS statutory viewport shows approved payroll only, while draft previews and the underlying audit ledger remain intact', async () => {
   const db = new PGlite();
   try {
     await db.exec(`
@@ -28,17 +28,17 @@ test('ESS retains provisional payroll, deduplicates run revisions without doubli
       INSERT INTO payroll_runs (id,"organizationId","periodId",status) VALUES
         ('aug-approved','org','aug','APPROVED'),('aug-supplement','org','aug','APPROVED'),
         ('sep-reopened','org','sep','DRAFT'),('oct-draft','org','oct','DRAFT'),
-        ('oct-pending','org','oct-alias','PENDING_APPROVAL'),('other','other','other','APPROVED');
+        ('oct-pending','org','oct-alias','PENDING_APPROVAL'),('oct-approved','org','oct-alias','APPROVED'),('other','other','other','APPROVED');
       INSERT INTO payroll_run_lines (id,"organizationId","employeeId","runId") VALUES
         ('a','org','employee','aug-approved'),('b','org','employee','aug-supplement'),
         ('c','org','employee','sep-reopened'),('d','org','employee','oct-draft'),
-        ('e','org','employee','oct-pending'),('f','org','other-employee','oct-pending'),
+        ('e','org','employee','oct-pending'),('approved-line','org','employee','oct-approved'),('f','org','other-employee','oct-pending'),
         ('g','other','employee','other');
       INSERT INTO statutory_obligations (id,"organizationId","employeeId","payrollRunId","obligationType","periodMonth",status,"employeeAmount","totalLiability","updatedAt") VALUES
         ('a','org','employee','aug-approved','PAYE',8,'CONFIRMED',100,100,'2026-08-31'),
         ('b','org','employee','aug-supplement','PAYE',8,'CONFIRMED',100,100,'2026-08-31'),
         ('old','org','employee','oct-draft','PAYE',10,'DRAFT_CALCULATED',150,150,'2026-10-01'),
-        ('current','org','employee','oct-pending','PAYE',10,'DRAFT_CALCULATED',150,150,'2026-10-02'),
+        ('current','org','employee','oct-pending','PAYE',10,'DRAFT_CALCULATED',150,150,'2026-10-02'),('approved','org','employee','oct-approved','PAYE',10,'CONFIRMED',180,180,'2026-10-03'),
         ('rev1','org','employee','sep-reopened','PAYE',9,'REVERSED',100,100,'2026-09-01'),
         ('rev2','org','employee','sep-reopened','PAYE',9,'REVERSED',200,200,'2026-09-02'),
         ('different-currency','org','employee','oct-pending','PAYE',10,'DRAFT_CALCULATED',10,10,'2026-10-02'),
@@ -54,17 +54,16 @@ test('ESS retains provisional payroll, deduplicates run revisions without doubli
     `);
     const before = (await db.query('SELECT * FROM statutory_obligations ORDER BY id')).rows;
     const rows = (await db.query(ESS_STATUTORY_OBLIGATIONS_SQL,['org','employee'])).rows;
-    assert.equal(rows.length,4);
+    assert.equal(rows.length,2);
     const current = rows.find(r=>r.periodMonth===10&&r.currency==='NGN');
-    assert.equal(Number(current.employeeAmount),150,'parallel draft and pending runs are revisions, not additive payments');
-    assert.equal(current.status,'DRAFT_CALCULATED','draft information remains visible with its actual status');
+    assert.equal(Number(current.employeeAmount),180,'only the approved payroll contributes statutory amounts');
+    assert.equal(current.status,'CONFIRMED');
     assert.equal(Number(rows.find(r=>r.periodMonth===8).employeeAmount),200,'distinct approved supplements remain additive');
-    const history=rows.find(r=>r.recordKind==='HISTORY');
-    assert.equal(Number(history.employeeAmount),200,'latest reversal is shown once without summing old versions');
+    assert.equal(rows.some(r=>r.recordKind==='HISTORY'||r.status==='REVERSED'),false);
     const previews=(await db.query(ESS_PAYROLL_PREVIEWS_SQL,['org','employee'])).rows;
-    assert.equal(previews.length,2);
-    assert.equal(previews[0].runId,'oct-pending');
-    assert.equal(previews[0].runStatus,'PENDING_APPROVAL');
+    assert.equal(previews.length,1);
+    assert.equal(previews[0].runId,'sep-reopened');
+    assert.equal(previews[0].runStatus,'DRAFT');
     assert.equal(Number((await db.query(ESS_CURRENT_SALARY_SQL,['org','employee'])).rows[0].amount),450000,
       'gratuity salary does not depend on an approved payroll run');
     assert.deepEqual((await db.query(ESS_STATUTORY_OBLIGATIONS_SQL,['org','missing'])).rows,[]);
