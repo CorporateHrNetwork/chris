@@ -17,4 +17,13 @@ CREATE TABLE "payroll_stage_email_outbox" (
 );
 CREATE INDEX ON "payroll_stage_email_outbox" ("status","nextAttemptAt");
 ALTER TABLE "payroll_stage_email_outbox" ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON "payroll_stage_email_outbox" FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON "payroll_stage_email_outbox" FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN
+    REVOKE ALL ON "payroll_stage_email_outbox" FROM anon;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+    REVOKE ALL ON "payroll_stage_email_outbox" FROM authenticated;
+  END IF;
+END $$;
