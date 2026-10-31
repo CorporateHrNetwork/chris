@@ -8,6 +8,8 @@ const { requireEssAuth } = require("../middleware/authMiddleware");
 
 const { ESS_STATUTORY_OBLIGATIONS_SQL, ESS_PAYROLL_PREVIEWS_SQL, ESS_CURRENT_SALARY_SQL } = require("../services/essStatutoryService");
 
+const { loadApprovedPayslip, buildPayslipEmail } = require("../services/payrollPayslipEmailService");
+
 const router = express.Router();
 
 const ESS_EMPLOYEE_STATUSES = new Set(["ACTIVE", "PROBATION", "LEAVE"]);
@@ -331,11 +333,17 @@ router.get("/dashboard", requireEssAuth, async (req,res) => {
 
 router.get("/payslips/:id/download",requireEssAuth,async(req,res)=>{
   try{
-    const rows=await prisma.$queryRawUnsafe('SELECT l."employeeNumber",l."employeeName",l."currency",l."baseSalary",l."allowances",l."deductions",l."advanceRecovery",l."loanRecovery",l."grossPay",l."netPreview",l."statutoryStatus",p."name" AS "periodName",p."periodStart",p."periodEnd",p."payDate" FROM payroll_run_lines l JOIN payroll_runs r ON r."id"=l."runId" AND r."organizationId"=l."organizationId" AND r."status"=\'APPROVED\' JOIN payroll_periods p ON p."id"=r."periodId" AND p."organizationId"=r."organizationId" WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND l."id"=$3 LIMIT 1',req.essAuth.organizationId,req.essAuth.employeeId,req.params.id);
-    const row=rows[0];if(!row)return res.status(404).json({status:"error",message:"Payslip not found."});
-    const lines=[["CHRiS Employee Payslip"],["Employee",row.employeeName||row.employeeNumber],["Employee Number",row.employeeNumber],["Pay Period",row.periodName||""],["Period Start",row.periodStart||""],["Period End",row.periodEnd||""],["Pay Date",row.payDate||""],["Currency",row.currency||"NGN"],[],["Earnings / Salary","Amount"],["Basic Salary",row.baseSalary||0],["Allowances",row.allowances||0],["Gross Pay",row.grossPay||0],[],["Deductions / Recoveries","Amount"],["Deductions",row.deductions||0],["Advance Recovery",row.advanceRecovery||0],["Loan Recovery",row.loanRecovery||0],["Gross Pay",row.grossPay||0],["Net Pay",row.netPreview||0],["Statutory Status",row.statutoryStatus||""]];
-    const csv=lines.map(line=>line.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",")).join("\n"),safe=String(row.periodName||"Payslip").replace(/[^A-Za-z0-9_-]+/g,"_");
-    res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition","attachment; filename=\"CHRiS_"+safe+"_Payslip.csv\"");return res.send(csv);
+    // Authorize the employee and tenant before loading the shared approved PDF payload.
+    const rows=await prisma.$queryRawUnsafe('SELECT l."id" FROM payroll_run_lines l JOIN payroll_runs r ON r."id"=l."runId" AND r."organizationId"=l."organizationId" AND r."status"=\'APPROVED\' WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND l."id"=$3 LIMIT 1',req.essAuth.organizationId,req.essAuth.employeeId,req.params.id);
+    if(!rows[0])return res.status(404).json({status:"error",message:"Payslip not found."});
+    const row=await loadApprovedPayslip({organizationId:req.essAuth.organizationId,payrollRunLineId:req.params.id,prismaClient:prisma,requireEmail:false});
+    const {attachment}=await buildPayslipEmail(row);
+    const pdf=Buffer.from(attachment.content,"base64");
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Content-Disposition",`attachment; filename="${attachment.filename}"`);
+    res.setHeader("Content-Length",pdf.length);
+    res.setHeader("Cache-Control","private, no-store");
+    return res.send(pdf);
   }catch(error){return res.status(500).json({status:"error",message:"Unable to download your payslip."});}
 });
 
