@@ -16,9 +16,16 @@ test('outbox migration and delivery handle deduplication, failures, tenant scope
  let sent=0;assert.equal((await deliverNext({prisma,configured:()=>true,send:async message=>{assert.equal(message.to,'auditor@example.test');sent++;}})).status,'SENT');
  assert.equal((await deliverNext({prisma,configured:()=>true,send:async()=>sent++})).status,'EMPTY');assert.equal(sent,1);
  await queueStageEmail(tx,{organizationId:'org',runId:'run',eventId:'event2',stage:'PENDING_AUDIT'});assert.equal((await deliverNext({prisma,configured:()=>true,send:async()=>{throw Error('secret provider error');}})).status,'FAILED');
- const failed=(await db.query("SELECT * FROM payroll_stage_email_outbox WHERE status='FAILED'")).rows[0];assert.equal(failed.attempts,1);assert.equal(failed.lastError,'SMTP_DELIVERY_FAILED');
+ const failed=(await db.query("SELECT * FROM payroll_stage_email_outbox WHERE status='FAILED'")).rows[0];assert.equal(failed.attempts,1);assert.equal(failed.lastError,'EMAIL_DELIVERY_FAILED');
  await queueStageEmail(tx,{organizationId:'org',runId:'run',eventId:'event3',stage:'PENDING_AUDIT'});await db.exec(`UPDATE users SET "isActive"=false`);assert.equal((await deliverNext({prisma,configured:()=>true,send:async()=>sent++})).status,'CANCELLED');assert.equal(sent,1);
  await assert.rejects(()=>queueStageEmail(tx,{organizationId:'other',runId:'run',eventId:'event3',stage:'PENDING_GM'}),/Exactly one active approval owner/);
  assert.equal((await db.query('SELECT stage FROM payroll_approval_workflows')).rows[0].stage,'PENDING_AUDIT');
  }finally{await db.close();}
+});
+
+test('API email delivery requires provider acceptance and supplies an idempotency key',async()=>{
+ const {sendStageMail}=require('../src/services/payrollStageEmailService');let request;
+ await sendStageMail({to:'auditor@example.test',subject:'Audit required',textBody:'Task',htmlBody:'<p>Task</p>',deliveryKey:'stage-test'},{env:{RESEND_API_KEY:'synthetic-test-key',RESEND_FROM:'qa@example.test'},fetchImpl:async(url,input)=>{request=input;return {ok:true,json:async()=>({id:'accepted-test'})};}});
+ assert.equal(request.headers['Idempotency-Key'],'stage-test');assert.deepEqual(JSON.parse(request.body).to,['auditor@example.test']);
+ await assert.rejects(()=>sendStageMail({to:'auditor@example.test'},{env:{RESEND_API_KEY:'synthetic-test-key'},fetchImpl:async()=>({ok:false,json:async()=>({})})}),/NOT_ACCEPTED/);
 });
