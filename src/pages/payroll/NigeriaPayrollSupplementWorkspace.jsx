@@ -348,6 +348,9 @@ function ApprovalsWorkspace() {
       {workflow && (
         <>
           <Panel title="Approval Stage">
+            <p style={controlNote}>Task emails are queued for the assigned Auditor, then GM, then Chief Accountant as each stage becomes actionable. Email does not approve payroll or authorize payment.</p>
+            <p style={{...controlNote,color:workflow.emailConfigured ? controlNote.color : "#ffd180"}}>Stage email delivery: {workflow.emailConfigured ? "configured" : "Email provider not configured — queued emails cannot yet be sent"}. Sent means accepted by the mail server.</p>
+            {(workflow.emailNotifications || []).length > 0 && <div style={controlNote} aria-label="Approval task email delivery">{workflow.emailNotifications.map((notice,index)=><div key={`${notice.responsibility}-${notice.createdAt}-${index}`}><strong>{notice.responsibility.replaceAll("_"," ")}</strong> · {notice.status === "SENT" ? "Email accepted by mail server" : notice.status} · attempts {notice.attempts}{notice.lastError ? ` · ${notice.lastError}` : ""}</div>)}</div>}
             <div style={stageBanner}>
               <span>Current Stage</span>
               <strong>{statusText}</strong>

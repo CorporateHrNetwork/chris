@@ -311,6 +311,7 @@ async function sendSmtp({ to, subject, textBody, htmlBody, attachments }) {
   const pass = text(process.env.CHRIS_SMTP_PASS);
   const from = text(process.env.CHRIS_SMTP_FROM || user);
   const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: process.env.CHRIS_SMTP_REJECT_UNAUTHORIZED !== "false" });
+  socket.setTimeout(20000, () => socket.destroy(new Error("SMTP_TIMEOUT")));
   await new Promise((resolve, reject) => { socket.once("secureConnect", resolve); socket.once("error", reject); });
   await readSmtpResponse(socket);
   await smtpCommand(socket, `EHLO chris`, [250]);
@@ -367,6 +368,7 @@ async function deliverQueued({ notificationIds, prismaClient = prisma }) {
 }
 
 module.exports = {
+  sendSmtp,
   hashToken,
   loadLoanContext,
   resolveRoleRecipients,

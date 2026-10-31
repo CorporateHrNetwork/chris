@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const {PGlite}=require('@electric-sql/pglite');
 function load(name,deps) {const module={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/services',name),'utf8'),{module,exports:module.exports,require:id=>id in deps ? deps[id] : require(id),process,console,Date,Set,Map,Proxy,Reflect,AbortSignal,fetch});return module.exports;}
 const access=load('zermattHrFinancialAccessService.js',{'../config/prisma':{}});
-const approvals=load('payrollApprovalWorkflowService.js',{'../config/prisma':{}});
+const approvals=load('payrollApprovalWorkflowService.js',{'../config/prisma':{},'./payrollStageEmailService':{TASKS:{},queueStageEmail:async()=>{}}});
 const variable=load('zermattVariablePayrollService.js',{'../config/prisma':{}});
 const request=(role='Head of HR & Admin',userId='hr',branch=null)=>({auth:{userId,organizationId:'z',organization:{slug:'zermatt-liquor-limited'},roles:[role],permissions:[],locationScope:branch ? 'ASSIGNED_LOCATIONS' : 'ALL_LOCATIONS',availableLocations:[{id:branch || 'b'}],activeLocationId:branch}});
 async function fixture(t) {

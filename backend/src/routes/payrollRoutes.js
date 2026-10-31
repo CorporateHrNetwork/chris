@@ -91,6 +91,7 @@ router.get("/runs/:id/approval-workflow", requireZermattApprovalRole(
       organizationId: req.auth.organizationId,
       runId: req.params.id,
     });
+    if(data){data.emailConfigured=require("../services/payrollStageEmailService").mailConfigured();data.emailNotifications=await prisma.$queryRawUnsafe('SELECT responsibility,stage,status,attempts,"lastError","sentAt","createdAt" FROM payroll_stage_email_outbox WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "createdAt" DESC LIMIT 30',req.auth.organizationId,req.params.id);}
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to read payroll approval workflow.");

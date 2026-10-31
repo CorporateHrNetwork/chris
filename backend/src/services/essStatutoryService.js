@@ -18,35 +18,18 @@ const ESS_PAYROLL_RUNS_CTE = `
   )
 `;
 
-const ESS_STATUTORY_OBLIGATIONS_SQL = `${ESS_PAYROLL_RUNS_CTE},
-  current_rows AS (
-    SELECT MIN(o."id") AS "id", o."obligationType", o."periodYear", o."periodMonth",
-           o."currency", o."status", SUM(o."assessableBase") AS "assessableBase",
-           SUM(o."employeeAmount") AS "employeeAmount", SUM(o."employerAmount") AS "employerAmount",
-           SUM(o."totalLiability") AS "totalLiability", SUM(o."amountRemitted") AS "amountRemitted",
-           MIN(o."dueDate") AS "dueDate", 'CURRENT'::text AS "recordKind"
-      FROM "statutory_obligations" o
-      JOIN employee_runs r ON r."id"=o."payrollRunId" AND r."organizationId"=o."organizationId"
-     WHERE o."organizationId"=$1 AND o."employeeId"=$2 AND o."status"<>'REVERSED'
-       AND (r."status"='APPROVED' OR r.revision_rank=1)
-     GROUP BY o."periodYear",o."periodMonth",o."obligationType",o."currency",o."status"
-  ), reversal_revisions AS (
-    SELECT o.*, ROW_NUMBER() OVER (
-      PARTITION BY o."periodYear",o."periodMonth",o."obligationType",o."currency"
-      ORDER BY o."updatedAt" DESC,o."createdAt" DESC,o."id" DESC
-    ) AS reversal_rank
+// Approved liabilities only. Reversals remain in the statutory audit ledger.
+const ESS_STATUTORY_OBLIGATIONS_SQL = `${ESS_PAYROLL_RUNS_CTE}
+  SELECT MIN(o."id") AS "id",o."obligationType",o."periodYear",o."periodMonth",
+         o."currency",o."status",'APPROVED'::text AS "runStatus",
+         SUM(o."assessableBase") AS "assessableBase",SUM(o."employeeAmount") AS "employeeAmount",
+         SUM(o."employerAmount") AS "employerAmount",SUM(o."totalLiability") AS "totalLiability",
+         SUM(o."amountRemitted") AS "amountRemitted",MIN(o."dueDate") AS "dueDate",'CURRENT'::text AS "recordKind"
     FROM "statutory_obligations" o
-    WHERE o."organizationId"=$1 AND o."employeeId"=$2 AND o."status"='REVERSED'
-  ), display_rows AS (
-    SELECT * FROM current_rows
-    UNION ALL
-    SELECT "id","obligationType","periodYear","periodMonth","currency","status",
-           "assessableBase","employeeAmount","employerAmount","totalLiability","amountRemitted",
-           "dueDate",'HISTORY'::text AS "recordKind"
-      FROM reversal_revisions WHERE reversal_rank=1
-  )
-  SELECT * FROM display_rows
-  ORDER BY "periodYear" DESC,"periodMonth" DESC,"obligationType","currency","recordKind","status"
+    JOIN employee_runs r ON r."id"=o."payrollRunId" AND r."organizationId"=o."organizationId"
+   WHERE o."organizationId"=$1 AND o."employeeId"=$2 AND o."status"<>'REVERSED' AND r."status"='APPROVED'
+   GROUP BY o."periodYear",o."periodMonth",o."obligationType",o."currency",o."status"
+   ORDER BY o."periodYear" DESC,o."periodMonth" DESC,o."obligationType",o."currency",o."status"
 `;
 
 const ESS_PAYROLL_PREVIEWS_SQL = `${ESS_PAYROLL_RUNS_CTE}

@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { queueStageEmail, TASKS } = require("./payrollStageEmailService");
 
 const RESPONSIBILITY = Object.freeze({
  HEAD_HR:"HEAD_HR", PAYROLL_AUDITOR:"PAYROLL_AUDITOR", GENERAL_MANAGER:"GENERAL_MANAGER", CHIEF_ACCOUNTANT:"CHIEF_ACCOUNTANT"
@@ -28,7 +29,9 @@ async function workflow(tx,organizationId,runId){
  return rows[0]||null;
 }
 async function event(tx,wf,actorUserId,action,toStage,notes){
- await tx.$executeRawUnsafe('INSERT INTO "payroll_approval_events" ("id","organizationId","runId","workflowId","actorUserId","action","fromStage","toStage","notes") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',crypto.randomUUID(),wf.organizationId,wf.runId,wf.id,actorUserId||null,action,wf.stage,toStage,notes||null);
+ const eventId=crypto.randomUUID();
+ await tx.$executeRawUnsafe('INSERT INTO "payroll_approval_events" ("id","organizationId","runId","workflowId","actorUserId","action","fromStage","toStage","notes") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',eventId,wf.organizationId,wf.runId,wf.id,actorUserId||null,action,wf.stage,toStage,notes||null);
+ return eventId;
 }
 async function assignment(tx,organizationId,responsibility){
  const rows=await tx.$queryRawUnsafe('SELECT a.*,u."email",u."firstName",u."lastName" FROM "payroll_approval_assignments" a JOIN "users" u ON u."id"=a."assignedUserId" AND u."organizationId"=a."organizationId" WHERE a."organizationId"=$1 AND a."responsibility"=$2 AND a."isActive"=true LIMIT 1',organizationId,responsibility);
@@ -99,7 +102,10 @@ async function transition({organizationId,runId,actorUserId,action,notes,prismaC
   const rule=rules[action]; if(!rule)fail("INVALID_PAYROLL_APPROVAL_ACTION","Unsupported payroll approval action.",400);
   if(!rule[0].includes(wf.stage))fail("INVALID_PAYROLL_APPROVAL_TRANSITION",action+" is not allowed while payroll is "+wf.stage+".");
   if((action==="AUDIT_APPROVE"||action==="AUDIT_DISAPPROVE")&&!String(notes||"").trim())fail("AUDIT_OBSERVATIONS_REQUIRED","Audit observations are required before the Auditor records a decision.",400);
-  const to=rule[1]; await event(tx,wf,actorUserId,action,to,notes);
+  const to=rule[1];
+  if(TASKS[to])await resolveAssignment({organizationId,responsibility:TASKS[to].responsibility,actorUserId,prismaClient:{$transaction:fn=>fn(tx)}});
+  const eventId=await event(tx,wf,actorUserId,action,to,notes);
+  await queueStageEmail(tx,{organizationId,runId,eventId,stage:to});
   const sets=['"stage"=$4','"updatedAt"=CURRENT_TIMESTAMP']; const values=[organizationId,runId,wf.id,to]; let n=5;
   const add=(sql,val)=>{sets.push(sql.replace("?",'$'+n++));values.push(val)};
   if(action==="AUDIT_OPEN") add('"auditOpenedAt"=?',new Date());

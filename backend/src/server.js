@@ -24,6 +24,8 @@ const celebrationScheduler = createZermattCelebrationScheduler({ prisma });
 const { createZermattProbationScheduler } = require("./services/zermattProbationScheduler");
 const probationScheduler = createZermattProbationScheduler({ prisma });
 
+const { createPayrollStageEmailScheduler } = require("./services/payrollStageEmailService");
+const payrollStageEmailScheduler = createPayrollStageEmailScheduler({ prisma });
 const PORT = process.env.PORT || 5000;
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
 
@@ -37,6 +39,7 @@ const server = app.listen(PORT, async () => {
   performanceEvaluationScheduler.start();
   celebrationScheduler.start();
   probationScheduler.start();
+  payrollStageEmailScheduler.start();
   if (shouldAutoStartSnapshotScheduler()) {
     try {
       await snapshotScheduler.start();
@@ -68,6 +71,7 @@ async function shutdown(signal) {
   celebrationScheduler.stop();
   performanceEvaluationScheduler.stop();
   probationScheduler.stop();
+  payrollStageEmailScheduler.stop();
   annualCarryoverScheduler.stop();
   payrollPeriodAutomationScheduler.stop();
   server.close(async () => {
