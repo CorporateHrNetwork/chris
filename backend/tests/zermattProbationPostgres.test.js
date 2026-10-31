@@ -6,7 +6,7 @@ test('isolated PostgreSQL/Prisma/HTTP: migrate, notify, assess, extend and recor
   const prisma=require('../src/config/prisma'),express=require('express'),jwt=require('jsonwebtoken');
   assert.equal((await prisma.$queryRawUnsafe('SELECT current_database() AS name'))[0].name,'chris_probation_test');
   const s=require('../src/services/zermattProbationService'),p=require('../src/services/zermattProbationPolicy');
-  const app=express();app.use(express.json());app.use('/api/zermatt/probation',require('../src/routes/zermattProbationRoutes'));
+  const app=express();app.use(express.json());app.use('/api/zermatt/probation',require('../src/routes/zermattProbationRoutes'));app.use('/api/ess/probation',require('../src/routes/zermattProbationRoutes').essRouter);
   const server=await new Promise(resolve=>{const srv=app.listen(0,'127.0.0.1',()=>resolve(srv));});
   const base=`http://127.0.0.1:${server.address().port}/api/zermatt/probation`;
   try{
@@ -33,12 +33,18 @@ test('isolated PostgreSQL/Prisma/HTTP: migrate, notify, assess, extend and recor
     assert.equal((await request(head,'/notices')).data.length,3);
     assert.equal((await request(mgr,'/notices')).data.length,3);
     assert.equal((await request(hr,'/notices')).data.length,3);
+    const essToken=jwt.sign({userId:mgr.id,organizationId:org.id,accessType:'ESS'},process.env.JWT_SECRET);
+    const essBase=base.replace('/api/zermatt/probation','/api/ess/probation');
+    const essFetch=(path='',body)=>fetch(essBase+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${essToken}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+    const essList=await essFetch();assert.equal(essList.status,200);assert.equal((await essList.json()).data.length,3);
+    assert.equal((await essFetch('/synchronize',{})).status,403,'ESS cannot acquire Head HR privileges');
     let rows=(await request(head)).data;assert.equal(rows.length,3);
     for(const e of targets){
       const r=rows.find(x=>x.employeeNumber===e.employeeNumber);
       const submission={version:r.version,recommendation:'CONFIRM_EMPLOYMENT',performance:'Agreed targets met',conduct:'Verified',attendance:'Register checked',evidence:'Synthetic reference only',reason:'Synthetic manager assessment'};
       assert.equal((await request(hr,`/${r.id}/submit`,submission)).http,403);
-      assert.equal((await request(mgr,`/${r.id}/submit`,submission)).http,200);
+      assert.equal((await essFetch(`/${r.id}/submit`,submission)).status,200);
+      assert.equal((await essFetch(`/${r.id}/decide`,{version:r.version+1,outcome:'CONFIRM_EMPLOYMENT'})).status,403);
       const outcome=e.employeeNumber.endsWith('CONFIRM')?'CONFIRM_EMPLOYMENT':e.employeeNumber.endsWith('EXTEND')?'EXTEND_PROBATION':'TERMINATE_EMPLOYMENT';
       const input={version:r.version+1,outcome,effectiveDate:p.lagosDate(),reason:'Synthetic Head HR decision',newEndDate:p.addDays(p.lagosDate(),30),improvementGoals:'Synthetic extension targets'};
       assert.equal((await request(mgr,`/${r.id}/decide`,input)).http,403);
