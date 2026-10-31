@@ -21,6 +21,9 @@ const performanceEvaluationScheduler = createScheduler(prisma);
 const { createZermattCelebrationScheduler } = require("./services/zermattCelebrationScheduler");
 const celebrationScheduler = createZermattCelebrationScheduler({ prisma });
 
+const { createZermattProbationScheduler } = require("./services/zermattProbationScheduler");
+const probationScheduler = createZermattProbationScheduler({ prisma });
+
 const PORT = process.env.PORT || 5000;
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
 
@@ -33,6 +36,7 @@ const server = app.listen(PORT, async () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);
   performanceEvaluationScheduler.start();
   celebrationScheduler.start();
+  probationScheduler.start();
   if (shouldAutoStartSnapshotScheduler()) {
     try {
       await snapshotScheduler.start();
@@ -63,6 +67,7 @@ async function shutdown(signal) {
   snapshotScheduler.stop();
   celebrationScheduler.stop();
   performanceEvaluationScheduler.stop();
+  probationScheduler.stop();
   annualCarryoverScheduler.stop();
   payrollPeriodAutomationScheduler.stop();
   server.close(async () => {

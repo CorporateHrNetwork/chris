@@ -67,6 +67,7 @@ const Payroll = lazy(() => import("./pages/Payroll"));
 const Benefits = lazy(() => import("./pages/Benefits"));
 const BenefitChildPage = lazy(() => import("./pages/benefits/BenefitChildPage"));
 const Loans = lazy(() => import("./pages/Loans"));
+const ZermattProbation = lazy(() => import("./pages/ZermattProbation"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Training = lazy(() => import("./pages/Training"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -170,6 +171,7 @@ function App() {
         </Route>
         <Route path="/loans/completed" element={<PermissionLayout permission="loans.view"><Loans key="completed" completedOnly /></PermissionLayout>} />
         <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans key="active" /></PermissionLayout>} />
+        <Route path="/employees/probation-reviews" element={<ProtectedLayout><ZermattProbation /></ProtectedLayout>} />
         <Route path="/performance" element={<PermissionLayout permission="performance.view"><Performance /></PermissionLayout>} />
         <Route path="/chris-automation" element={<ProtectedLayout><CHRiSAutomationCentre /></ProtectedLayout>} />
         <Route path="/payroll/notes" element={<ProtectedLayout><PayrollNotes /></ProtectedLayout>} />
