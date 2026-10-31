@@ -39,6 +39,9 @@ jobs:
       - name: Install backend dependencies
         run: npm ci
 
+      - name: Probation workflow acceptance
+        run: node --test tests/zermattProbationWorkflow.test.js
+
       - name: Validate Prisma schema
         run: npx prisma validate
 
