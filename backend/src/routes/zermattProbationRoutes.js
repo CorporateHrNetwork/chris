@@ -1,10 +1,11 @@
 const express=require('express');
 const prisma=require('../config/prisma');
-const {requireAuth}=require('../middleware/authMiddleware');
+const {requireAuth,requireEssAuth}=require('../middleware/authMiddleware');
 const s=require('../services/zermattProbationService');
 const p=require('../services/zermattProbationPolicy');
+function createRouter(ess=false) {
 const router=express.Router();
-router.use(requireAuth,(req,res,next)=>req.auth.organization?.slug===s.SLUG?next():res.status(404).json({status:'error',message:'Workflow not found.'}));
+router.use(ess?requireEssAuth:requireAuth,(req,res,next)=>{if(ess)req.auth={...req.essAuth,roles:[],availableLocations:[],activeLocationId:null};next();},(req,res,next)=>req.auth.organization?.slug===s.SLUG?next():res.status(404).json({status:'error',message:'Workflow not found.'}));
 function error(res,e) { console.error('Probation workflow:',e.message);return res.status(e.statusCode||400).json({status:'error',message:e.message}); }
 router.get('/',async(req,res)=>{try{return res.json({status:'success',data:await s.list(prisma,req.auth)});}catch(e){return error(res,e);}});
 router.post('/synchronize',async(req,res)=>{try{
@@ -21,4 +22,7 @@ router.post('/notices/:id/read',async(req,res)=>{try{
   return res.json({status:'success'});
 }catch(e){return error(res,e);}});
 router.post('/:id/:action',async(req,res)=>{try{return res.json({status:'success',data:await s.change(prisma,req.auth,req.params.id,req.params.action,req.body||{})});}catch(e){return error(res,e);}});
-module.exports=router;
+return router;
+}
+module.exports=createRouter();
+module.exports.essRouter=createRouter(true);
