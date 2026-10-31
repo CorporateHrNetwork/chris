@@ -41,7 +41,7 @@ function payrollEmailError(code, message, statusCode = 400, details) {
   return error;
 }
 
-async function loadApprovedPayslip({ organizationId, payrollRunLineId, prismaClient = prisma }) {
+async function loadApprovedPayslip({ organizationId, payrollRunLineId, prismaClient = prisma, requireEmail = true }) {
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT
         pl."id",pl."runId",pl."employeeId",pl."employeeNumber",pl."employeeName",pl."currency",
@@ -77,7 +77,7 @@ async function loadApprovedPayslip({ organizationId, payrollRunLineId, prismaCli
       409
     );
   }
-  if (!text(row.employeeEmail)) {
+  if (requireEmail && !text(row.employeeEmail)) {
     throw payrollEmailError(
       "EMPLOYEE_EMAIL_REQUIRED",
       `Employee ${row.employeeNumber} does not have an email address in the employee record.`,
