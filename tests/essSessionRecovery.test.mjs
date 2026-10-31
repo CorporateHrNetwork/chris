@@ -11,8 +11,8 @@ const fixture = {
     previews:[{id:'preview',periodName:'October preview',runStatus:'PENDING_APPROVAL',grossPay:450000,netPreview:399000,currency:'NGN'}],
     latestCalculation:{periodName:'October preview',runStatus:'PENDING_APPROVAL',grossPay:450000,netPreview:399000,currency:'NGN'}},
   statutory:{registered:{taxIdentificationNumber:'SYNTHETIC-TAX'},obligations:[
-    {id:'current',periodYear:2026,periodMonth:10,obligationType:'PAYE',status:'DRAFT_CALCULATED',employeeAmount:100,currency:'NGN',recordKind:'CURRENT'},
-    {id:'history',periodYear:2026,periodMonth:9,obligationType:'PAYE',status:'REVERSED',employeeAmount:100,currency:'NGN',recordKind:'HISTORY'}]},
+    {id:'current',periodYear:2026,periodMonth:10,obligationType:'PAYE',status:'CONFIRMED',runStatus:'APPROVED',employeeAmount:100,currency:'NGN',recordKind:'CURRENT'},
+    {id:'history',periodYear:2026,periodMonth:9,obligationType:'PAYE',status:'REVERSED',runStatus:'DRAFT',employeeAmount:100,currency:'NGN',recordKind:'HISTORY'}]},
   gratuity:{grossMonthly:450000,currency:'NGN',serviceStartDate:'2020-01-01',status:'ACCRUING'},
   payment:{bankName:'Synthetic Bank',accountNumber:'TEST-ACCOUNT'}
 };
@@ -52,8 +52,8 @@ test('ESS restores a saved session without login flashes and retains financial s
     assert.match(document.body.textContent,/450,000/);
     assert.match(document.body.textContent,/Pending Approval/);
     await open('Statutory');
-    assert.match(document.body.textContent,/Current calculation/);
-    assert.match(document.body.textContent,/Reversal history/);
+    assert.match(document.body.textContent,/Approved payroll/);
+    assert.doesNotMatch(document.body.textContent,/Reversal history|2026-09/);
     await open('Gratuity');
     assert.match(document.body.textContent,/450,000/);
     assert.doesNotMatch(document.body.textContent,/Not available in payroll/);
@@ -84,6 +84,7 @@ test('ESS restores a saved session without login flashes and retains financial s
     assert.equal(sessionStorage.getItem('chris_ess_token'),'newer-session','late requests cannot clear a newer session');
   } finally {
     globalThis.fetch=oldFetch;
+    await act(async()=>root.unmount());
     await server.close();
     dom.window.close();
     for(const [key,descriptor] of originals){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}
