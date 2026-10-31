@@ -33,6 +33,16 @@
     --chris-shadow-card: var(--chris-dashboard-shadow);
     --chris-radius-card: var(--chris-dashboard-radius);
     --chris-input-bg: #062219;
+    /* Legacy tenant/component aliases resolve to the same authenticated palette. */
+    --tenant-text: var(--chris-dashboard-text);
+    --tenant-muted: var(--chris-dashboard-muted);
+    --tenant-surface: var(--chris-dashboard-surface);
+    --tenant-border: var(--chris-dashboard-border);
+    --background: var(--chris-ui-canvas);
+    --white: var(--chris-dashboard-surface);
+    --text: var(--chris-dashboard-text);
+    --text-light: var(--chris-dashboard-muted);
+    --border: var(--chris-dashboard-border);
 
     color: var(--chris-dashboard-text);
     font-family: var(--chris-font-family);
@@ -70,7 +80,7 @@
   .essshell :is(button,input,select,textarea) { font-family: inherit !important; }
 
   .chris-shell .chris-main-content .chris-page [style*="--chris-ui-panel-background"],
-  .chris-shell .chris-main-content :is(.chris-panel,.chris-card,.card,.panel,.dashboard-card,.metric-card,.stat-card,.summary-card,.chris-dashboard-card,.chris-analytics-panel,.chris-quick-action-card,.chris-quick-actions-section,.chris-role-card,.leave-request-modal,.chris-operational-panel),
+  .chris-shell .chris-main-content :is(.pn-card,.pn-action,.pn-original,.pn-totals,.chris-employee-lifecycle,.chris-panel,.chris-card,.card,.panel,.dashboard-card,.metric-card,.stat-card,.summary-card,.chris-dashboard-card,.chris-analytics-panel,.chris-quick-action-card,.chris-quick-actions-section,.chris-role-card,.leave-request-modal,.chris-operational-panel),
   .essshell :is(.card,.metric,.sectiontile) {
     background: var(--chris-ui-panel-background) !important;
     border: var(--chris-ui-panel-border) !important;
@@ -102,6 +112,26 @@
   .chris-shell .chris-page thead { background: var(--chris-dashboard-surface-deep); }
   .chris-shell .chris-page th { color: var(--chris-dashboard-muted) !important; }
   .chris-shell .chris-page :is(th,td) { padding: 12px 14px; border-bottom: 1px solid var(--chris-dashboard-rule) !important; }
+
+  .chris-shell .payroll-notes :is(.pn-original,.pn-action,.pn-totals) {
+    color: var(--chris-dashboard-text) !important;
+    line-height: 1.65;
+  }
+  .chris-shell .payroll-notes :is(.pn-original,.pn-action,.pn-totals) :is(p,span,strong,label) {
+    color: inherit;
+  }
+  .chris-shell .payroll-notes :is(button,.pn-secondary) {
+    background: linear-gradient(135deg,#d4af37,#f0d66d);
+    border: 1px solid var(--chris-dashboard-border);
+    color: #082515;
+  }
+  .chris-shell .payroll-notes .pn-secondary {
+    background: var(--chris-dashboard-surface-deep);
+    color: var(--chris-dashboard-text);
+  }
+  .chris-shell .payroll-notes a { color: var(--chris-dashboard-gold); }
+  .chris-shell .payroll-notes .pn-error { background: #401c1c; color: #ffe2dc; border-color: #ce766c; }
+  .chris-shell .payroll-notes .pn-message { background: #153c2c; color: #f7faf8; border-color: var(--chris-dashboard-gold); }
 
   /* Do not move editing surfaces when a pointer crosses a card. */
   .chris-shell .chris-main-content :is([class*="card"],[class*="Card"],[class*="panel"],[class*="Panel"],[class*="summary"],[class*="metric"],[class*="stat-"]):hover {
