@@ -133,6 +133,34 @@
   .chris-shell .payroll-notes .pn-error { background: #401c1c; color: #ffe2dc; border-color: #ce766c; }
   .chris-shell .payroll-notes .pn-message { background: #153c2c; color: #f7faf8; border-color: var(--chris-dashboard-gold); }
 
+  /* React serializes legacy inline hex colours to rgb(). Normalize neutral
+     screen surfaces without changing print documents, charts or status colours. */
+  .chris-shell .chris-page :is(div,section,article):is(
+    [style*="background: rgb(255, 255, 255)"],
+    [style*="background: rgb(248, 250, 252)"],
+    [style*="background: rgb(249, 250, 251)"],
+    [style*="background: rgb(242, 247, 244)"]
+  ):not([class*="print"]):not([class*="print"] *):not(.recharts-wrapper *) {
+    background: var(--chris-ui-panel-background) !important;
+    color: var(--chris-dashboard-text) !important;
+    border-color: var(--chris-dashboard-border) !important;
+  }
+  .chris-shell .chris-page :is(
+    [style*="color: rgb(15, 23, 42)"],
+    [style*="color: rgb(23, 32, 51)"],
+    [style*="color: rgb(31, 41, 55)"],
+    [style*="color: rgb(23, 59, 43)"],
+    [style*="color: rgb(51, 65, 85)"]
+  ):not([class*="print"]):not([class*="print"] *):not(.recharts-wrapper *) {
+    color: var(--chris-dashboard-text) !important;
+  }
+  .chris-shell .chris-page :is(
+    [style*="color: rgb(71, 85, 105)"],
+    [style*="color: rgb(100, 116, 139)"]
+  ):not([class*="print"]):not([class*="print"] *):not(.recharts-wrapper *) {
+    color: var(--chris-dashboard-muted) !important;
+  }
+
   /* Do not move editing surfaces when a pointer crosses a card. */
   .chris-shell .chris-main-content :is([class*="card"],[class*="Card"],[class*="panel"],[class*="Panel"],[class*="summary"],[class*="metric"],[class*="stat-"]):hover {
     transform: none;
