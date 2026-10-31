@@ -6489,6 +6489,7 @@ useEffect(() => {
       )}
       {!editing && (
         <section
+          className="chris-employee-lifecycle"
           style={
             historySectionStyle
           }
@@ -8467,11 +8468,11 @@ const lifecycleDividerStyle = {
 const historySectionStyle = {
   marginTop: "22px",
   padding: "26px",
-  background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
-  borderRadius: "18px",
-  boxShadow:
-    "0 6px 24px rgba(15, 23, 42, 0.05)",
+  background: "var(--chris-ui-panel-background)",
+  color: "var(--chris-text-main)",
+  border: "var(--chris-ui-panel-border)",
+  borderRadius: "var(--chris-ui-panel-radius)",
+  boxShadow: "var(--chris-ui-panel-shadow)",
 };
 
 const historyHeaderStyle = {
