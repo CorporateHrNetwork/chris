@@ -6,7 +6,7 @@ async function audit(tx,org,actor,id,action,before,after,reason) {
   await tx.organizationAudit.create({data:{organizationId:org,actorUserId:actor||null,entityType:'ZermattProbationReview',entityId:id,action,previousValue:before||undefined,newValue:after||undefined,reason}});
 }
 async function managerId(tx,org,employeeId,today) {
-  const a=await tx.employeeLineManagerAssignment.findFirst({where:{organizationId:org,employeeId,effectiveFrom:{lte:new Date(today+'T23:59:59Z')},OR:[{effectiveTo:null},{effectiveTo:{gte:new Date(today+'T00:00:00Z')}}]},orderBy:{effectiveFrom:'desc'}});
+  const a=await tx.employeeLineManagerAssignment.findFirst({where:{organizationId:org,employeeId,manager:{status:{in:['ACTIVE','PROBATION','LEAVE']},exitDate:null},effectiveFrom:{lte:new Date(today+'T23:59:59Z')},OR:[{effectiveTo:null},{effectiveTo:{gte:new Date(today+'T00:00:00Z')}}]},orderBy:{effectiveFrom:'desc'}});
   return a?.managerEmployeeId||null;
 }
 async function users(tx,org) {
