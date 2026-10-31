@@ -90,13 +90,15 @@ function Communications({data}){const rows=data.news||[];const groups=[["NEWS & 
 
 function Documents({data}){return <Page h="Documents" s="Documents attached to your CHRiS employee record."><Card><Table rows={data.onboarding.documents} empty="No employee documents are available." cols={[["Document",r=>r.originalName],["Category",r=>title(r.category)],["Type",r=>r.mimeType||"—"],["Uploaded",r=>date(r.createdAt)],["",r=><Doc id={r.id}/>]]}/></Card></Page>}
 
-async function downloadFile(url,name){
+async function downloadFile(url,name,expectedType){
  const r=await fetch(url,{headers:{Authorization:"Bearer "+getEssAuthToken()}});
  if(!r.ok) throw Error("The requested file could not be downloaded.");
+ if(expectedType && !String(r.headers.get("Content-Type")||"").toLowerCase().startsWith(expectedType))throw Error("The payslip PDF could not be downloaded. Please retry.");
+ const serverName=r.headers.get("Content-Disposition")?.match(/filename="([^"/\\]+)"/i)?.[1];
  const blob=await r.blob(); const objectUrl=URL.createObjectURL(blob); const link=document.createElement("a");
- link.href=objectUrl; link.download=name; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(objectUrl);
+ link.href=objectUrl; link.download=serverName||name; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
 }
-function Download({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/payslips/"+id+"/download","CHRiS_Payslip.xlsx").catch(e=>alert(e.message))}>Download</button>}
+function Download({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/payslips/"+id+"/download","CHRiS_Payslip.pdf","application/pdf").catch(e=>alert(e.message))}>Download</button>}
 function Doc({id}){return <button className="tablebtn" onClick={()=>downloadFile(API_BASE_URL+"/api/ess/documents/"+id+"/download","CHRiS_Document").catch(e=>alert(e.message))}>Download</button>}
 
 function Page({h,s,children}){return <><div className="pagehead"><span className="eyebrow">CHRiS EMPLOYEE PORTAL</span><h2>{h}</h2><p>{s}</p></div>{children}</>}
