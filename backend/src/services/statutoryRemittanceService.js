@@ -31,6 +31,10 @@ async function listObligations({ organizationId, filters = {}, prismaClient = pr
       ...(filters.status ? { status: text(filters.status).toUpperCase() } : {}),
       ...(filters.periodYear ? { periodYear: Number(filters.periodYear) } : {}),
       ...(filters.periodMonth ? { periodMonth: Number(filters.periodMonth) } : {}),
+      AND: [
+        { status: { not: "REVERSED" } },
+        { payrollRunId: { in: (await prismaClient.payrollRun.findMany({ where: { organizationId, status: "APPROVED" }, select: { id: true } })).map(row => row.id) } },
+      ],
     },
     include: { employee: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } } },
     orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }, { obligationType: "asc" }, { createdAt: "asc" }],
