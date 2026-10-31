@@ -62,9 +62,16 @@ async function list(prisma,auth) {
   const today=p.lagosDate();
   const all=await prisma.$queryRawUnsafe(`SELECT * FROM "zermatt_probation_reviews" WHERE "organizationId"=$1 ORDER BY "endDate","createdAt"`,auth.organizationId);
   const records=[];
+  const recipientUsers=p.hasRole(auth.roles,p.HEAD)?await users(prisma,auth.organizationId):[];
   for (const row of all) {
     let ctx;try {ctx=await loadContext(prisma,auth,row,today);}catch(e){if(e.statusCode===403)continue;throw e;}
-    records.push({...row,startDate:p.dateOnly(row.startDate),endDate:p.dateOnly(row.endDate),noticeDate:p.dateOnly(row.noticeDate),overdue:p.dateOnly(row.endDate)<today&&row.status!=='DECIDED',employeeNumber:ctx.employee.employeeNumber,employeeName:[ctx.employee.firstName,ctx.employee.middleName,ctx.employee.lastName].filter(Boolean).join(' '),branch:ctx.employee.location?.name,role:ctx.employee.designation?.name,...ctx.rights});
+    const routingIssues=[];
+    if(ctx.rights.canDecide && row.status!=='DECIDED'){
+      const assigned=await managerId(prisma,auth.organizationId,row.employeeId,today);
+      if(!assigned||!recipientUsers.some(u=>u.employeeId===assigned))routingIssues.push('Assigned Line Manager account unavailable');
+      if(!recipientUsers.some(u=>p.hasRole(userRoles(u),p.BRANCH)&&branchMatches(u,ctx.employee.locationId)))routingIssues.push('Branch HR recipient assignment unavailable');
+    }
+    records.push({...row,routingIssues,startDate:p.dateOnly(row.startDate),endDate:p.dateOnly(row.endDate),noticeDate:p.dateOnly(row.noticeDate),overdue:p.dateOnly(row.endDate)<today&&row.status!=='DECIDED',employeeNumber:ctx.employee.employeeNumber,employeeName:[ctx.employee.firstName,ctx.employee.middleName,ctx.employee.lastName].filter(Boolean).join(' '),branch:ctx.employee.location?.name,role:ctx.employee.designation?.name,...ctx.rights});
   }
   return records;
 }
