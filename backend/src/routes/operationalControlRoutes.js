@@ -87,7 +87,7 @@ async function payrollContext(organizationId) {
             pr."employeeCount",pr."grossTotal",pr."deductionTotal",pr."netPreviewTotal",pr."approvedAt"
        FROM "payroll_runs" pr
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
-      WHERE pr."organizationId"=$1
+      WHERE pr."organizationId"=$1 AND pr."status"='APPROVED'
       ORDER BY pp."periodEnd" DESC,pr."createdAt" DESC LIMIT 12`,
     organizationId
   );
