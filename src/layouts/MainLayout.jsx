@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/layout/Sidebar/Sidebar";
+import ZermattProbationNotice from "../components/ZermattProbationNotice";
 import Topbar from "../components/layout/Topbar/Topbar";
 
 const MODULE_ROOTS = new Set([
@@ -282,6 +283,7 @@ function MainLayout({ children }) {
         }}
       >
         <Topbar />
+        <ZermattProbationNotice />
 
         <main
           className="chris-main-content"
