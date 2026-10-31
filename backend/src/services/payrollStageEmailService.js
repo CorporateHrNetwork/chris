@@ -20,9 +20,19 @@ async function queueStageEmail(tx,{organizationId,runId,eventId,stage}) {
   await tx.$executeRawUnsafe(`UPDATE payroll_stage_email_outbox SET status='CANCELLED',"lastError"='SUPERSEDED_BY_NEW_REQUEST' WHERE "organizationId"=$1 AND "runId"=$2 AND responsibility=$3 AND "eventId"<>$4 AND status IN ('QUEUED','FAILED')`,organizationId,runId,task.responsibility,eventId);
   await tx.$executeRawUnsafe(`INSERT INTO payroll_stage_email_outbox (id,"organizationId","runId","eventId","recipientUserId",responsibility,stage) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT ("eventId",responsibility) DO NOTHING`,randomUUID(),organizationId,runId,eventId,recipients[0].assignedUserId,task.responsibility,stage);
 }
+function mailConfigured(env=process.env) {
+  return smtpConfigured() || Boolean(String(env.RESEND_API_KEY||'').trim());
+}
+async function sendStageMail({to,subject,textBody,htmlBody,deliveryKey},{env=process.env,fetchImpl=fetch}={}) {
+  if(smtpConfigured())return sendSmtp({to,subject,textBody,htmlBody});
+  const key=String(env.RESEND_API_KEY||'').trim();if(!key)throw Error('EMAIL_NOT_CONFIGURED');
+  const response=await fetchImpl('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json','Idempotency-Key':deliveryKey},body:JSON.stringify({from:env.PAYROLL_EMAIL_FROM||env.RESEND_FROM||env.RESEND_FROM_EMAIL||'CHRiS Payroll <noreply@crnetwork.com.ng>',to:[to],subject,text:textBody,html:htmlBody})});
+  const result=await response.json();if(!response.ok||!result?.id)throw Error('EMAIL_PROVIDER_NOT_ACCEPTED');
+  return {providerMessageId:result.id};
+}
 // Row locks serialize deliveries across replicas. A failed attempt remains visible and retries with backoff.
-async function deliverNext({prisma,send=sendSmtp,configured=smtpConfigured}) {
-  if(!configured())return {status:'SMTP_NOT_CONFIGURED'};
+async function deliverNext({prisma,send=sendStageMail,configured=mailConfigured}) {
+  if(!configured())return {status:'EMAIL_NOT_CONFIGURED'};
   return prisma.$transaction(async tx=>{
     const rows=await tx.$queryRawUnsafe(`SELECT n.*,u.email,u."isActive",a."assignedUserId",w.stage AS "currentStage",p.name AS "periodName",o.name AS "organizationName",o.slug
       FROM payroll_stage_email_outbox n JOIN organizations o ON o.id=n."organizationId"
@@ -39,19 +49,19 @@ async function deliverNext({prisma,send=sendSmtp,configured=smtpConfigured}) {
       return {status:'CANCELLED'};
     }
     try {
-      await send({to:row.email,...buildStageEmail({stage:row.stage,periodName:row.periodName,organizationName:row.organizationName,slug:row.slug})});
+      await send({to:row.email,deliveryKey:`payroll-stage-${row.id}`,...buildStageEmail({stage:row.stage,periodName:row.periodName,organizationName:row.organizationName,slug:row.slug})});
       await tx.$executeRawUnsafe(`UPDATE payroll_stage_email_outbox SET status='SENT',attempts=attempts+1,"lastError"=NULL,"sentAt"=now() WHERE id=$1`,row.id);
-      await tx.organizationAudit.create({data:{organizationId:row.organizationId,entityType:'PayrollApprovalEmail',entityId:row.id,action:'PAYROLL_STAGE_EMAIL_ACCEPTED',newValue:{runId:row.runId,eventId:row.eventId,recipientUserId:row.recipientUserId,responsibility:row.responsibility,stage:row.stage},reason:'SMTP accepted stage-owner task notification; inbox delivery is provider-dependent.'}});
+      await tx.organizationAudit.create({data:{organizationId:row.organizationId,entityType:'PayrollApprovalEmail',entityId:row.id,action:'PAYROLL_STAGE_EMAIL_ACCEPTED',newValue:{runId:row.runId,eventId:row.eventId,recipientUserId:row.recipientUserId,responsibility:row.responsibility,stage:row.stage},reason:'Email provider accepted stage-owner task notification; inbox delivery is provider-dependent.'}});
       return {status:'SENT'};
     } catch {
-      await tx.$executeRawUnsafe(`UPDATE payroll_stage_email_outbox SET status='FAILED',attempts=attempts+1,"lastError"='SMTP_DELIVERY_FAILED',"nextAttemptAt"=now()+interval '15 minutes' WHERE id=$1`,row.id);
+      await tx.$executeRawUnsafe(`UPDATE payroll_stage_email_outbox SET status='FAILED',attempts=attempts+1,"lastError"='EMAIL_DELIVERY_FAILED',"nextAttemptAt"=now()+interval '15 minutes' WHERE id=$1`,row.id);
       return {status:'FAILED'};
     }
   },{timeout:60000});
 }
 function createPayrollStageEmailScheduler({prisma,intervalMs=60000}) {
   let timer=null,running=false;
-  async function run(){if(running)return;running=true;try{for(let i=0;i<20;i++){const r=await deliverNext({prisma});if(['EMPTY','SMTP_NOT_CONFIGURED'].includes(r.status))break;}}catch{console.error('Payroll stage email scheduler failed; inspect the notification outbox.');}finally{running=false;}}
+  async function run(){if(running)return;running=true;try{for(let i=0;i<20;i++){const r=await deliverNext({prisma});if(['EMPTY','EMAIL_NOT_CONFIGURED'].includes(r.status))break;}}catch{console.error('Payroll stage email scheduler failed; inspect the notification outbox.');}finally{running=false;}}
   return {start(){if(timer)return;void run();timer=setInterval(run,intervalMs);timer.unref?.();},stop(){clearInterval(timer);timer=null;},run};
 }
-module.exports={TASKS,buildStageEmail,queueStageEmail,deliverNext,createPayrollStageEmailScheduler};
+module.exports={mailConfigured,sendStageMail,TASKS,buildStageEmail,queueStageEmail,deliverNext,createPayrollStageEmailScheduler};
