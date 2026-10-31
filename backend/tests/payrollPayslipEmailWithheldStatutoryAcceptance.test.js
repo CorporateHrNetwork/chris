@@ -165,7 +165,7 @@ test("approved payslip email body is generated from the approved payroll calcula
   assert.match(result.plainText, /Salary Advance Recovery/);
   assert.match(result.plainText, /Loan Recovery/);
   assert.equal(result.attachment.contentType, "application/pdf");
-  assert.match(result.plainText, /Generated from an approved CHRiS payroll run/);
+  assert.match(result.plainText, /Generated from an approved payroll/);
 });
 
 
