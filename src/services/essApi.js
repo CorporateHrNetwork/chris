@@ -1,6 +1,4 @@
-export const API_BASE_URL = String(
-  import.meta.env.VITE_API_BASE_URL || ""
-).replace(/\/+$/, "");
+export const API_BASE_URL = "https://chris-sales-demo-api.onrender.com";
 
 export function getEssAuthToken() {
   return sessionStorage.getItem("chris_ess_token") || null;
