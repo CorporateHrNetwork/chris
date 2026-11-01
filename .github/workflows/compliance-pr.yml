@@ -69,6 +69,9 @@ jobs:
       - name: Run compliance administrative API and UI acceptance
         run: npm run test:compliance:api
 
+      - name: Verify CHRiS three-tier billing and renewal calculations
+        run: node --test tests/subscriptionPricing.test.js
+
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js

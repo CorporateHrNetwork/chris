@@ -51,6 +51,8 @@ const supportDeskCancellationRoutes = require("./routes/supportDeskCancellationR
 const supportDeskClientLifecycleGuardRoutes = require("./routes/supportDeskClientLifecycleGuardRoutes");
 const supportDeskRoutes = require("./routes/supportDeskRoutes");
 const commercialDemoRoutes = require("./routes/commercialDemoRoutes");
+const subscriptionInvoiceRoutes = require("./routes/subscriptionInvoiceRoutes");
+const billingSubscriptionRoutes = require("./routes/billingSubscriptionRoutes");
 const organizationSettingsRoutes = require("./routes/organizationSettingsRoutes");
 const documentRoutes = require("./routes/documentRoutes");
 const operationalControlRoutes = require("./routes/operationalControlRoutes");
@@ -91,6 +93,8 @@ app.use("/api/support-desk", supportDeskCancellationRoutes);
 app.use("/api/support-desk", supportDeskClientLifecycleGuardRoutes);
 app.use("/api/support-desk", supportDeskRoutes);
 app.use("/api/commercial", commercialDemoRoutes);
+app.use("/api/commercial/subscriptions", subscriptionInvoiceRoutes);
+app.use("/api/billing", billingSubscriptionRoutes);
 app.use("/api/settings", organizationSettingsRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/operations", operationalControlRoutes);
