@@ -17,7 +17,7 @@ const { createScheduler } = require("./services/performanceEvaluationService");
 const performanceEvaluationScheduler = createScheduler(prisma);
 
 const PORT = process.env.PORT || 5000;
-const isSalesDemo = String(process.env.CHRIS_SALES_DEMO || "").trim().toLowerCase() === "true";
+const isSalesDemo = true; // This isolated branch serves fictional demo tenants only.
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
 
 console.log(`CHRIS Paystack configured: ${paystackConfigured ? "YES" : "NO"}`);
@@ -29,8 +29,9 @@ const annualCarryoverScheduler = isSalesDemo ? null : createZermattAnnualCarryov
 
 const server = app.listen(PORT, async () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);
-  performanceEvaluationScheduler.start();
-  if (shouldAutoStartSnapshotScheduler()) {
+  // No automated customer actions or data changes run in the sales demo.
+  if (!isSalesDemo) performanceEvaluationScheduler.start();
+  if (!isSalesDemo && shouldAutoStartSnapshotScheduler()) {
     try {
       await snapshotScheduler.start();
       console.log("CHRIS workforce snapshot scheduler started.");
@@ -39,8 +40,8 @@ const server = app.listen(PORT, async () => {
     }
   }
   try {
-    await payrollPeriodAutomationScheduler.start();
-    console.log("CHRIS payroll/performance automation scheduler started.");
+    if (!isSalesDemo) await payrollPeriodAutomationScheduler.start();
+    if (!isSalesDemo) console.log("CHRIS payroll/performance automation scheduler started.");
   } catch (error) {
     console.error("CHRIS payroll/performance automation scheduler startup failed:", error);
   }

@@ -513,6 +513,7 @@ function EmployeeTable() {
       () =>
         employees.filter(
           (employee) =>
+            employee.statusCode !== "INACTIVE" &&
             !EXITED_STATUSES.includes(
               employee.status
             )

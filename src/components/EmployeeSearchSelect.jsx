@@ -17,6 +17,7 @@ export default function EmployeeSearchSelect({
   required = false,
   placeholder = "Search employee number or name",
   endpoint = null,
+  suretyFor = null,
 }) {
   const [options, setOptions] = useState([]);
   const [query, setQuery] = useState("");
@@ -75,9 +76,10 @@ export default function EmployeeSearchSelect({
     const term = normalize(query);
     const selectedLabel = normalize(optionLabel(selected));
     const useAll = !term || (selected && term === selectedLabel);
+    const eligibleOptions = suretyFor ? options.filter((row) => row.employeeNumber !== suretyFor && ["FULL TIME", "EXPATRIATE"].includes(String(row.employmentType || "").toUpperCase().replace(/[_-]+/g, " ").replace(/\s+/g, " "))) : options;
     const rows = useAll
-      ? options
-      : options.filter((option) => {
+      ? eligibleOptions
+      : eligibleOptions.filter((option) => {
           const searchable = [
             option.employeeNumber,
             option.employeeName,
@@ -92,7 +94,7 @@ export default function EmployeeSearchSelect({
           return searchable.includes(term);
         });
     return rows.slice(0, 20);
-  }, [options, query, selected]);
+  }, [options, query, selected, suretyFor]);
 
   const selectEmployee = (option) => {
     committedValueRef.current = option.employeeNumber;
