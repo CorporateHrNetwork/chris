@@ -100,7 +100,7 @@ test("ZERMATT R1 enforces auditable disciplinary due-process progression", async
 
   assert.match(route, /disciplinaryTransitions:\s*DISCIPLINARY_TRANSITIONS/);
   assert.match(route, /transitionDisciplinaryCase/);
-  assert.match(page, /DisciplinaryProcessControls/);
+  assert.match(page, /SimpleDisciplinaryWorkspace/);
   assert.match(controls, /PIP_STARTED/);
   assert.match(controls, /EMPLOYEE_RESPONSE/);
   assert.match(controls, /\/evidence`/);
