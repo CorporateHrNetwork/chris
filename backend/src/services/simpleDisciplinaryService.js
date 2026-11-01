@@ -5,11 +5,12 @@ const stateOf=row=>(row.processEvents||[]).filter(e=>e.eventType==='SIMPLE_WORKF
 const eventsInclude={processEvents:{where:{eventType:'SIMPLE_WORKFLOW'},orderBy:{createdAt:'desc'}}};
 async function roster(db,org){return db.user.findMany({where:{organizationId:org,isActive:true},include:{userRoles:{include:{role:true}},userLocations:true}});}
 function branch(u,employee,auth){return (!auth.activeLocationId||auth.activeLocationId===employee.locationId)&&(u.locationScope!=='ASSIGNED_LOCATIONS'||u.userLocations?.some(x=>x.locationId===employee.locationId));}
+function hrScope(u,employee,auth){return p.hr(roles(u))&&branch(u,employee,auth)&&(p.head(roles(u))||u.userLocations?.some(l=>l.locationId===employee.locationId));}
 async function context(db,auth,row){
  const [u,employee]=await Promise.all([db.user.findFirst({where:{id:auth.userId,organizationId:auth.organizationId,isActive:true},include:{userRoles:{include:{role:true}},userLocations:true}}),db.employee.findFirst({where:{id:row.employeeId,organizationId:auth.organizationId}})]);
  if(!u||!employee)throw p.fail('Case is unavailable.',404);
  const s=stateOf(row),subject=u.employeeId===employee.id;
- const hr=p.hr(roles(u))&&branch(u,employee,auth)&&!subject;
+ const hr=hrScope(u,employee,auth)&&!subject;
  const head=p.head(roles(u))&&branch(u,employee,auth)&&!subject;
  const rights={userId:u.id,employee:subject,head,hr:hr&&(!s||s.hrOwnerId===u.id||head),reporter:row.createdByUserId===u.id,reviewer:s?.reviewerUserId===u.id&&!subject,decider:s?.decisionOwnerId===u.id&&!subject,appeal:s?.appealOwnerId===u.id&&!subject};
  rights.canRead=hr||rights.reporter||rights.reviewer||rights.decider||rights.appeal;
@@ -32,7 +33,7 @@ async function assignments(db,auth,employee,input,reporter){
  const all=await roster(db,auth.organizationId);const byId=new Map(all.map(u=>[u.id,u]));
  const pick=(key)=>{const u=byId.get(input[key]);if(!u||u.employeeId===employee.id||!branch(u,employee,{...auth,activeLocationId:null}))throw p.fail('Select an active, authorized owner in this organization and branch.',400);return u;};
  const coordinator=pick('hrOwnerId'),reviewer=pick('reviewerUserId'),decider=pick('decisionOwnerId'),appeal=pick('appealOwnerId');
- if(!p.hr(roles(coordinator)))throw p.fail('The coordinator must be an HR officer.');
+ if(!hrScope(coordinator,employee,{...auth,activeLocationId:null}))throw p.fail('The coordinator must be an HR officer.');
  if(!p.head(roles(decider))&&!roles(decider).some(r=>/^(GENERAL MANAGER|MANAGING DIRECTOR|CHIEF EXECUTIVE OFFICER|CEO)$/i.test(r)))throw p.fail('The decision owner must be Head HR or the organization management approval authority.');
  if(new Set([reporter,reviewer.id,decider.id]).size!==3)throw p.fail('Reporter, investigator and decision owner must be different people.');
  if([reporter,reviewer.id,decider.id].includes(appeal.id))throw p.fail('Select an appeal reviewer independent of the report, investigation and original decision.');
@@ -52,7 +53,7 @@ async function create(db,auth,input){
  const actor=await db.user.findFirst({where:{id:auth.userId,organizationId:auth.organizationId,isActive:true},include:{userRoles:{include:{role:true}},userLocations:true}});
  if(!actor||actor.employeeId===employee.id||!branch(actor,employee,auth))throw p.fail('You cannot report this employee.',403);
  const manager=actor.employeeId?await db.employeeLineManagerAssignment.findFirst({where:{organizationId:auth.organizationId,employeeId:employee.id,managerEmployeeId:actor.employeeId,effectiveFrom:{lte:new Date()},OR:[{effectiveTo:null},{effectiveTo:{gte:new Date()}}]}}):null;
- if(!p.hr(roles(actor))&&!manager)throw p.fail('Only the line manager or authorized HR may report an issue.',403);
+ if(!hrScope(actor,employee,auth)&&!manager)throw p.fail('Only the line manager or authorized HR may report an issue.',403);
  const escalationOwnerIds=(await roster(db,auth.organizationId)).filter(u=>p.head(roles(u))&&u.employeeId!==employee.id).map(u=>u.id);
  const owners=await assignments(db,auth,employee,input,auth.userId),t=p.targets(await policy(db,auth)),day=p.today(),incidentDate=p.dateOnly(input.incidentDate);
  if(incidentDate>day)throw p.fail('The incident date cannot be in the future.',400);
