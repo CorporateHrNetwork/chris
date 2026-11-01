@@ -25,7 +25,7 @@ test('no response never becomes guilt, deadlines can be extended and decision ca
  assert.throws(()=>p.targets({response:0}),/1 and 60/);
 });
 function fixture(){
- const users=[['reporter','Branch HR Officer',null],['hr','Head HR',null],['reviewer','Line Manager','manager-e'],['gm','General Manager',null],['ceo','CEO',null],['employee-user','Employee','e']].map(([id,role,employeeId])=>({id,employeeId,organizationId:'org',isActive:true,email:id+'@example.invalid',locationScope:'ALL_LOCATIONS',userLocations:[],userRoles:[{role:{name:role}}]}));
+ const users=[['reporter','Branch HR Officer',null],['hr','Head HR',null],['reviewer','Line Manager','manager-e'],['gm','General Manager',null],['ceo','CEO',null],['employee-user','Employee','e']].map(([id,role,employeeId])=>({id,employeeId,organizationId:'org',isActive:true,email:id+'@example.invalid',locationScope:'ALL_LOCATIONS',userLocations:[{locationId:'loc'}],userRoles:[{role:{name:role}}]}));
  const cases=[],events=[],audits=[],evidence=[],sql=[];let n=0;
  const matches=(r,w)=>Object.entries(w||{}).every(([k,v])=>typeof v==='object'||r[k]===v);
  const row=r=>r&&({...r,processEvents:events.filter(e=>e.disciplinaryCaseId===r.id)});
@@ -40,6 +40,7 @@ test('service verifies assignments, tenant ownership, stale versions and keeps E
  await assert.rejects(service.create(f.db,f.auth,{...f.report,appealOwnerId:'gm'}),/independent/);
  await assert.rejects(service.create(f.db,f.auth,{...f.report,reviewerUserId:'employee-user'}),/authorized owner/);
  await assert.rejects(service.create(f.db,f.auth,{...f.report,hrOwnerId:'foreign-user'}),/authorized owner/);
+ const savedLocations=f.users[0].userLocations;f.users[0].userLocations=[];await assert.rejects(service.create(f.db,f.auth,f.report),/Only the line manager/);f.users[0].userLocations=savedLocations;
  const r=await service.create(f.db,f.auth,f.report);assert.equal(r.workflow.stage,'SCREENING');assert.equal(f.cases.length,1);assert.ok(f.audits.length);
  await assert.rejects(service.get(f.db,{...f.auth,organizationId:'other'},r.id),/not found/);
  const hr={organizationId:'org',userId:'hr',roles:['Head HR']};
