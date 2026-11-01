@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import useAuthorization from "../../hooks/useAuthorization";
@@ -101,7 +102,7 @@ export default function EmployeeLeaveProfilePanel({
 
   const employee = data?.employee;
 
-  return (
+  const panel = (
     <div
       style={overlay}
       role="presentation"
@@ -410,6 +411,8 @@ export default function EmployeeLeaveProfilePanel({
       </section>
     </div>
   );
+
+  return createPortal(panel, document.body);
 }
 
 function ProfileSection({ title, children }) {
@@ -464,20 +467,24 @@ function LeaveSummary({ request, active = false }) {
 const overlay = {
   position: "fixed",
   inset: 0,
-  zIndex: 1400,
-  display: "grid",
-  placeItems: "center",
-  padding: "24px 16px",
+  zIndex: 2147483000,
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "center",
+  padding: "clamp(12px, 3vh, 24px) 16px",
+  overflowX: "hidden",
   overflowY: "auto",
-  background: "rgba(0,0,0,.78)",
+  background: "rgba(0,0,0,.82)",
+  isolation: "isolate",
 };
 
 const modal = {
   width: "min(1180px, calc(100vw - 32px))",
-  maxHeight: "calc(100dvh - 48px)",
+  maxHeight: "calc(100dvh - clamp(24px, 6vh, 48px))",
+  overflowX: "hidden",
   overflowY: "auto",
   boxSizing: "border-box",
-  margin: "auto",
+  margin: "0 auto",
   padding: "22px clamp(16px, 2.5vw, 28px)",
   borderRadius: 18,
   border: "1px solid var(--chris-border-gold)",
@@ -492,7 +499,7 @@ const header = {
   gap: 16,
   position: "sticky",
   top: 0,
-  padding: "16px 0",
+  padding: "12px 0",
   zIndex: 2,
   background: "#07150E",
 };
