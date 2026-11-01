@@ -97,6 +97,8 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "success", message: "CHRIS API is running", service: "CHRIS Backend" });
 });
 
+app.use(require("./middleware/salesDemoBoundary").salesDemoBoundary);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/ess", essRoutes);
 app.use("/api/performance-evaluation", performanceEvaluationRoutes);
@@ -110,10 +112,8 @@ app.use("/api/documents", documentRoutes);
 app.use("/api/operations", operationalControlRoutes);
 app.use("/api/eosb", eosbRoutes);
 app.use("/api/chris-automation", chrisAutomationRoutes);
-app.use("/api/ess", employeeSelfServiceRoutes);
 app.use("/api/news", employeeNewsRoutes);
 
-app.use("/api", zermattHrLoanOptionRoutes);
 app.use("/api", activeBranchScopeRoutes);
 app.use("/api", activeBranchSupplementRoutes);
 
@@ -138,15 +138,8 @@ app.use("/api/recruitment", recruitmentTalentRoutes);
 app.use("/api/employee-integrity", employeeIntegrityRoutes);
 app.use("/api/leave", leaveRoutes);
 app.use("/api/attendance", attendanceRoutes);
-app.use("/api/zermatt", zermattOperationsRoutes);
 
 app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
-app.use("/api/payroll/full-salary-preparation", zermattSalarySplitRoutes);
-app.use("/api/payroll/transport-support", zermattMidmonthRoutes);
-app.use("/api", zermattFinancialSupportRoutes);
-app.use("/api", zermattHrPayrollInputRoutes);
-app.use("/api", zermattLeaveAllowanceRoutes);
-app.use("/api", zermattSalaryReviewRoutes);
 app.use("/api/loans", loanOriginationWorkflowRoutes);
 app.use("/api", payrollLiabilityEditRoutes);
 app.use("/api/payroll", payrollReopenRoutes);
