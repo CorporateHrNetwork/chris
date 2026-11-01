@@ -13,6 +13,6 @@ assert.match(employees, /Employment Governance/);
 assert.match(backendApp, /\/api\/employment-governance/);
 assert.match(page, /external police, court or regulator outcomes/i);
 assert.match(page, /SERVICE_UNAVAILABLE/);
-assert.match(page, /Evidence Pack/);
+assert.match(page, /SimpleDisciplinaryWorkspace/);
 assert.match(page, /contractStates/);
 console.log("PASS: employment governance frontend integration contracts.");

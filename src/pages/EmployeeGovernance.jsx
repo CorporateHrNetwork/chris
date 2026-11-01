@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
-import DisciplinaryProcessControls from "../components/employees/DisciplinaryProcessControls";
+import SimpleDisciplinaryWorkspace from "../components/employees/SimpleDisciplinaryWorkspace";
 
 const tabs = [
   ["CONTRACTS", "Employment Contract Lifecycle"],
@@ -19,7 +19,6 @@ function EmployeeGovernance() {
   }, [requestedTab]);
   const [catalog, setCatalog] = useState(null);
   const [contracts, setContracts] = useState([]);
-  const [cases, setCases] = useState([]);
   const [verifications, setVerifications] = useState([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -28,15 +27,13 @@ function EmployeeGovernance() {
   const load = useCallback(async () => {
     try {
       setError("");
-      const [catalogResult, contractResult, caseResult, verificationResult] = await Promise.all([
+      const [catalogResult, contractResult, verificationResult] = await Promise.all([
         apiRequest("/api/employment-governance/catalog"),
         apiRequest("/api/employment-governance/contracts"),
-        apiRequest("/api/employment-governance/disciplinary-cases"),
         apiRequest("/api/employment-governance/verifications"),
       ]);
       setCatalog(catalogResult.data || null);
       setContracts(contractResult.data || []);
-      setCases(caseResult.data || []);
       setVerifications(verificationResult.data || []);
     } catch (err) {
       setError(err.message || "Unable to load employment governance records.");
@@ -98,15 +95,7 @@ function EmployeeGovernance() {
       )}
 
       {tab === "DISCIPLINE" && (
-        <DisciplinePanel
-          records={cases}
-          catalog={catalog}
-          busy={busy}
-          setBusy={setBusy}
-          reload={load}
-          announce={announce}
-          setError={setError}
-        />
+        <SimpleDisciplinaryWorkspace />
       )}
 
       {tab === "VERIFY" && (
@@ -193,69 +182,6 @@ function ContractPanel({ records, catalog, busy, setBusy, reload, announce, setE
   );
 }
 
-function DisciplinePanel({ records, catalog, busy, setBusy, reload, announce, setError }) {
-  const [form, setForm] = useState({ employeeNumber: "", incidentSummary: "", allegation: "", policyReference: "", policyVersion: "" });
-  const [external, setExternal] = useState({ caseId: "", proceedingType: "CRIMINAL", authority: "", referenceNumber: "", status: "OPEN", outcome: "" });
-
-  const create = async (event) => {
-    event.preventDefault();
-    try { setBusy(true); setError(""); await apiRequest("/api/employment-governance/disciplinary-cases", { method: "POST", body: form }); setForm({ employeeNumber: "", incidentSummary: "", allegation: "", policyReference: "", policyVersion: "" }); announce("Internal disciplinary case created independently of any external proceeding."); await reload(); } catch (err) { setError(err.message || "Unable to create case."); } finally { setBusy(false); }
-  };
-
-  const linkExternal = async (event) => {
-    event.preventDefault();
-    try { setBusy(true); setError(""); const result = await apiRequest(`/api/employment-governance/disciplinary-cases/${external.caseId}/external-proceedings`, { method: "POST", body: external }); announce(result.message || "External proceeding linked without changing the internal HR case."); setExternal({ caseId: "", proceedingType: "CRIMINAL", authority: "", referenceNumber: "", status: "OPEN", outcome: "" }); await reload(); } catch (err) { setError(err.message || "Unable to link proceeding."); } finally { setBusy(false); }
-  };
-
-  const downloadPack = async (caseId, caseNumber) => {
-    try {
-      const result = await apiRequest(`/api/employment-governance/disciplinary-cases/${caseId}/evidence-pack`);
-      const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a"); link.href = url; link.download = `${caseNumber}_Employment_Decision_Evidence_Pack.json`; link.click(); URL.revokeObjectURL(url);
-    } catch (err) { setError(err.message || "Unable to generate evidence pack."); }
-  };
-
-  return (
-    <section style={panelStyle}>
-      <h2 style={sectionTitle}>Employee Relations / Disciplinary Cases</h2>
-      <p style={helperStyle}>Incident, internal disciplinary case and external criminal/regulatory matter remain separate but linkable records. External ACQUITTED does not auto-clear an internal case.</p>
-      <form onSubmit={create} style={formGridStyle}>
-        <Field label="Employee No"><input required value={form.employeeNumber} onChange={(e) => setForm({ ...form, employeeNumber: e.target.value })} style={inputStyle} /></Field>
-        <Field label="Incident Summary"><input required value={form.incidentSummary} onChange={(e) => setForm({ ...form, incidentSummary: e.target.value })} style={inputStyle} /></Field>
-        <Field label="Allegation"><input required value={form.allegation} onChange={(e) => setForm({ ...form, allegation: e.target.value })} style={inputStyle} /></Field>
-        <Field label="Policy Reference"><input value={form.policyReference} onChange={(e) => setForm({ ...form, policyReference: e.target.value })} style={inputStyle} /></Field>
-        <Field label="Policy Version"><input value={form.policyVersion} onChange={(e) => setForm({ ...form, policyVersion: e.target.value })} style={inputStyle} /></Field>
-        <div><button disabled={busy} style={primaryButton}>Open Internal Case</button></div>
-      </form>
-
-      <DisciplinaryProcessControls
-        records={records}
-        catalog={catalog}
-        busy={busy}
-        setBusy={setBusy}
-        reload={reload}
-        announce={announce}
-        setError={setError}
-      />
-
-      <div style={dividerStyle} />
-      <form onSubmit={linkExternal} style={formGridStyle}>
-        <Field label="Internal Case"><select required value={external.caseId} onChange={(e) => setExternal({ ...external, caseId: e.target.value })} style={inputStyle}><option value="">Select case</option>{records.map((row) => <option key={row.id} value={row.id}>{row.caseNumber} — {row.employeeNumber}</option>)}</select></Field>
-        <Field label="External Matter Type"><select value={external.proceedingType} onChange={(e) => setExternal({ ...external, proceedingType: e.target.value })} style={inputStyle}><option>CRIMINAL</option><option>POLICE</option><option>REGULATORY</option><option>CIVIL</option></select></Field>
-        <Field label="Authority"><input required value={external.authority} onChange={(e) => setExternal({ ...external, authority: e.target.value })} style={inputStyle} /></Field>
-        <Field label="Reference"><input value={external.referenceNumber} onChange={(e) => setExternal({ ...external, referenceNumber: e.target.value })} style={inputStyle} /></Field>
-        <Field label="External Status"><input value={external.status} onChange={(e) => setExternal({ ...external, status: e.target.value })} style={inputStyle} /></Field>
-        <Field label="Outcome (e.g. ACQUITTED)"><input value={external.outcome} onChange={(e) => setExternal({ ...external, outcome: e.target.value })} style={inputStyle} /></Field>
-        <div><button disabled={busy} style={primaryButton}>Link External Matter</button></div>
-      </form>
-
-      <div style={{ ...tableWrapStyle, marginTop: 20 }}><table style={tableStyle}><thead><tr>{["Case", "Employee", "Status", "Policy", "Evidence Pack"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr></thead><tbody>{records.length ? records.map((row) => <tr key={row.id}><td style={tdStyle}>{row.caseNumber}</td><td style={tdStyle}>{row.employeeNumber}</td><td style={tdStyle}>{row.status}</td><td style={tdStyle}>{row.policyReference || "—"}{row.policyVersion ? ` / ${row.policyVersion}` : ""}</td><td style={tdStyle}><button type="button" style={smallButton} onClick={() => downloadPack(row.id, row.caseNumber)}>Download Pack</button></td></tr>) : <tr><td style={tdStyle} colSpan="5">No disciplinary cases recorded.</td></tr>}</tbody></table></div>
-      <p style={helperStyle}>Evidence/process APIs are append-only: query, employee response, investigation, hearing, findings, approvals, decision letter and proof of delivery can be recorded as versioned evidence and process events without overwriting historical versions.</p>
-    </section>
-  );
-}
-
 function VerificationPanel({ records, catalog, busy, setBusy, reload, announce, setError }) {
   const [form, setForm] = useState({ employeeNumber: "", identifierType: "NIN", identifierValue: "", provider: "Nigeria Tax ID / Identity Service", status: "VERIFICATION_PENDING", errorCode: "", errorMessage: "" });
   const submit = async (event) => {
@@ -301,7 +227,6 @@ const labelStyle = { color: "#D6B437", fontSize: 11, fontWeight: 900, textTransf
 const inputStyle = { width: "100%", boxSizing: "border-box", border: "1px solid #315443", borderRadius: 8, background: "#0B291D", color: "#ECF4EF", padding: "10px 11px", minHeight: 42 };
 const primaryButton = { border: 0, borderRadius: 9, padding: "11px 15px", minHeight: 42, background: "#D6B437", color: "#111A15", fontWeight: 900, cursor: "pointer" };
 const secondaryButton = { ...primaryButton, background: "transparent", color: "#F2D75E", border: "1px solid #D6B437" };
-const smallButton = { ...secondaryButton, minHeight: 32, padding: "6px 9px", fontSize: 12 };
 const dividerStyle = { height: 1, background: "#244637", margin: "20px 0 4px" };
 const tableWrapStyle = { overflowX: "auto", border: "1px solid #315443", borderRadius: 11, marginTop: 18 };
 const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: 720 };

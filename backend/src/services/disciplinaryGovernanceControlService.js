@@ -43,6 +43,7 @@ async function transitionDisciplinaryCase(prisma, input) {
         id: caseId,
         organizationId,
       },
+      include: { processEvents: { where: { eventType: "SIMPLE_WORKFLOW" }, take: 1 } },
     });
 
     if (!existing) {
@@ -52,6 +53,8 @@ async function transitionDisciplinaryCase(prisma, input) {
         "DISCIPLINARY_CASE_NOT_FOUND"
       );
     }
+
+    if (existing.processEvents?.length) throw governanceError("Use the simplified case workspace to advance this case.",409,"SIMPLIFIED_WORKFLOW_REQUIRED");
 
     if (existing.status === toStatus) {
       throw governanceError(

@@ -38,6 +38,7 @@ const BulkEmployeeImport = lazy(() => import("./pages/BulkEmployeeImport"));
 const EmployeeInvitations = lazy(() => import("./pages/EmployeeInvitations"));
 const EmployeeExportQueue = lazy(() => import("./pages/EmployeeExportQueue"));
 const EmployeeSelfOnboardingPublic = lazy(() => import("./pages/EmployeeSelfOnboardingPublic"));
+const DisciplinaryWorkspace = lazy(() => import("./components/employees/SimpleDisciplinaryWorkspace"));
 const EmployeeGovernance = lazy(() => import("./pages/EmployeeGovernance"));
 const InternalNewsManagement = lazy(() => import("./pages/InternalNewsManagement"));
 const EmployeeExits = lazy(() => import("./pages/EmployeeExits"));
@@ -119,6 +120,7 @@ function App() {
         <Route path="/employees/bulk-upload" element={<PermissionLayout permission="employees.create"><BulkEmployeeImport /></PermissionLayout>} />
         <Route path="/employees/invitations" element={<PermissionLayout permission="employees.create"><EmployeeInvitations /></PermissionLayout>} />
         <Route path="/employees/export-queue" element={<PermissionLayout permission="employees.update"><EmployeeExportQueue /></PermissionLayout>} />
+        <Route path="/disciplinary-procedures" element={<ProtectedLayout><DisciplinaryWorkspace /></ProtectedLayout>} />
         <Route path="/employees/governance" element={<PermissionLayout permission="employees.update"><EmployeeGovernance /></PermissionLayout>} />
         <Route path="/employees/news" element={<PermissionLayout permission="employees.update"><InternalNewsManagement /></PermissionLayout>} />
         <Route path="/employees/deactivated" element={<PermissionLayout permission="employees.view"><DeactivatedEmployees /></PermissionLayout>} />

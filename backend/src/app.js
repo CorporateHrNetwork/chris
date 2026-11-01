@@ -75,6 +75,7 @@ app.use(applySecurityHeaders);
 // Invoice PDFs can exceed Express's default 100 KB JSON limit.
 // Scope the larger parser only to the authenticated invoice-email endpoint.
 app.use("/api/billing/invoice/email", express.json({ limit: "12mb" }));
+app.use(["/api/disciplinary-workflow", "/api/ess/disciplinary-workflow"], express.json({ limit: "8mb" }));
 app.use(express.json({
   verify: (req, res, buffer) => {
     if (req.path.includes("/support-desk/whatsapp/webhook")) req.rawBody = Buffer.from(buffer);
@@ -98,6 +99,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/ess/disciplinary-workflow", require("./routes/simpleDisciplinaryRoutes").essRouter);
 app.use("/api/ess", essRoutes);
 app.use("/api/performance-evaluation", performanceEvaluationRoutes);
 app.use("/api/support-desk", supportDeskCancellationRoutes);
@@ -128,6 +130,7 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/employee-data", employeeDataOperationsRoutes);
 app.use("/api/employee-assignments", employeeEmploymentAssignmentRoutes);
 app.use("/api/public/employee-invitations", employeeInvitationPublicRoutes);
+app.use("/api/disciplinary-workflow", require("./routes/simpleDisciplinaryRoutes").adminRouter);
 app.use("/api/employment-governance", employmentGovernanceRoutes);
 app.use("/api/employment-service", employmentServiceRoutes);
 app.use("/api/employment-eligibility", employmentEligibilityRoutes);

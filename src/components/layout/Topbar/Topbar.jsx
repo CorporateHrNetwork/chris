@@ -157,10 +157,11 @@ function Topbar() {
 
   const loadNotifications = async () => {
     setNotificationsLoading(true);
-    const [payrollResult, newsResult, leaveResult] = await Promise.allSettled([
+    const [payrollResult, newsResult, leaveResult, disciplinaryResult] = await Promise.allSettled([
       apiRequest("/api/payroll/approvals"),
       apiRequest("/api/news"),
       apiRequest("/api/leave/overview"),
+      apiRequest("/api/disciplinary-workflow/tasks"),
     ]);
     const items = [];
 
@@ -182,6 +183,10 @@ function Topbar() {
       if (Number.isFinite(pending) && pending > 0) items.push({ label: "Leave requests", description: `${pending} leave request${pending === 1 ? "" : "s"} require attention.`, path: "/leave/requests", icon: <FaCalendarAlt />, count: pending });
     }
 
+    if (disciplinaryResult.status === "fulfilled") {
+      const count = Number(disciplinaryResult.value?.data?.count || 0);
+      if (count > 0) items.push({label:"Disciplinary case tasks",description:`${count} assigned case task${count===1?"":"s"} require attention.`,path:"/disciplinary-procedures",icon:<FaBullhorn />,count});
+    }
     setNotificationItems(items);
     setNotificationsLoading(false);
   };
