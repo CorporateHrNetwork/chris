@@ -29,4 +29,9 @@ try{
    const posted=calls.filter(c=>c.method==='POST');assert.equal(posted.length,1);assert.equal(posted[0].body.expectedVersion,2);assert.equal(posted[0].body.action,ess?'RESPOND':'ISSUE_QUERY');
   }finally{await act(async()=>root.unmount());dom.window.close();}
  });
+ await test('ESS case notice opens the employee workspace without exposing allegations',async()=>{
+  const {default:Notice}=await server.ssrLoadModule('/src/components/ess/DisciplinaryEssNotice.jsx');
+  const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/ess'});Object.assign(globalThis,{window:dom.window,document:dom.window.document,IS_REACT_ACT_ENVIRONMENT:true});const root=createRoot(document.getElementById('root'));let opened=false;
+  try{await act(async()=>root.render(React.createElement(Notice,{essRequest:async()=>({data:[{workflow:{stage:'EMPLOYEE_RESPONSE'},incidentSummary:'Private allegation'}]}),onOpen:()=>{opened=true;}})));assert.match(document.body.textContent,/1 disciplinary case update/);assert.equal(document.body.textContent.includes('Private allegation'),false);await act(async()=>document.querySelector('button').click());assert.equal(opened,true);}finally{await act(async()=>root.unmount());dom.window.close();}
+ });
 }finally{await server.close();}
