@@ -20,10 +20,10 @@ export default function BranchContextSelector({ compact = false }) {
 
     async function loadContext({ allowRecovery = true } = {}) {
       try {
-        const result = await apiRequest("/api/zermatt/branch-context");
+        const result = await apiRequest("/api/locations");
         if (cancelled) return;
 
-        const nextContext = result?.data || null;
+        const nextContext = { availableLocations: Array.isArray(result?.data) ? result.data : [] };
         setContext(nextContext);
 
         const selectableBranchIds = new Set(
