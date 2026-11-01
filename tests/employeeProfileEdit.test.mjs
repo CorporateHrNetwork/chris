@@ -21,7 +21,7 @@ const { default: Boundary } = await server.ssrLoadModule('/src/components/employ
 try {
   for (const explicitDepartments of [true, false]) {
     await test(`Edit remains open after delayed catalogues (explicit departments: ${explicitDepartments})`, async () => {
-      const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/employees/ZLL000107', pretendToBeVisual: true });
+      const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/employees/NS-DEMO-001', pretendToBeVisual: true });
       Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
       const department = { id: 'dep-1', name: 'Operations', code: 'OPS' };
       const targetDepartment = { id: 'dep-2', name: 'Finance', code: 'FIN' };
@@ -29,7 +29,7 @@ try {
       const alternateLevel = { levelNumber: 3, code: 'L3', name: 'Supervisor' };
       const currentDesignation = { id: 'des-1', name: 'Officer', code: 'OFF', department, departmentEligibility: [{ department: targetDepartment }], employmentLevel: level, careerLevel: 2 };
       const targetDesignation = { id: 'des-2', name: 'Senior Supervisor', code: 'SEN', department: targetDepartment, departmentEligibility: [{ department }], employmentLevel: alternateLevel, careerLevel: 3 };
-      const employee = { id: 'emp-1', employeeNumber: 'ZLL000107', firstName: 'Jonah', middleName: 'Mary', lastName: 'Eneh', name: 'Jonah Mary Eneh', email: 'jonah@example.com', phone: '08000000000', departmentId: department.id, department, designationId: currentDesignation.id, designation: currentDesignation, employmentType: 'Full-Time', status: 'ACTIVE', gender: 'MALE', hireDate: '2020-01-01', locationId: explicitDepartments ? 'loc-1' : '', location: { id: 'loc-1', name: 'Test Office', code: 'TEST' } };
+      const employee = { id: 'emp-1', employeeNumber: 'NS-DEMO-001', firstName: 'Alex', middleName: 'Taylor', lastName: 'Morgan', name: 'Alex Taylor Morgan', email: 'alex@example.com', phone: '08000000000', departmentId: department.id, department, designationId: currentDesignation.id, designation: currentDesignation, employmentType: 'Full-Time', status: 'ACTIVE', gender: 'MALE', hireDate: '2020-01-01', locationId: explicitDepartments ? 'loc-1' : '', location: { id: 'loc-1', name: 'Test Office', code: 'TEST' } };
       const levelState = { employee, effective: level, designationDefault: level };
       let releaseCareer;
       const delayedCareer = new Promise(resolve => { releaseCareer = resolve; });
@@ -40,7 +40,7 @@ try {
         if (url === '/api/employees/career/catalog') return delayedCareer;
         if (url === '/api/location-catalog') return { data: [{ id: 'loc-1', name: 'Test Office', code: 'TEST', city: 'Abuja' }] };
         if (url === '/api/auth/me') return { data: { permissions: ['employees.update'] } };
-        if (url === '/api/employees/ZLL000107') return { data: employee };
+        if (url === '/api/employees/NS-DEMO-001') return { data: employee };
         if (url.includes('employment-level') && !url.endsWith('employment-levels')) return { data: levelState };
         if (url.endsWith('employment-levels')) return { data: [level, alternateLevel] };
         if (url.endsWith('/career/designations')) return { data: [currentDesignation, targetDesignation] };
@@ -71,7 +71,7 @@ try {
       console.error = (...args) => { errors.push(args); originalError(...args); };
       const root = createRoot(document.getElementById('root'));
       try {
-        await act(async () => root.render(React.createElement(MemoryRouter, { initialEntries: ['/employees/ZLL000107'] }, React.createElement(Routes, null, React.createElement(Route, { path: '/employees/:employeeNumber', element: React.createElement(Boundary, null, React.createElement(EmployeeProfile)) })))));
+        await act(async () => root.render(React.createElement(MemoryRouter, { initialEntries: ['/employees/NS-DEMO-001'] }, React.createElement(Routes, null, React.createElement(Route, { path: '/employees/:employeeNumber', element: React.createElement(Boundary, null, React.createElement(EmployeeProfile)) })))));
         const edit = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Edit Employee');
         assert.ok(edit, 'actual profile edit button is available');
         await act(async () => edit.click());
@@ -82,7 +82,7 @@ try {
         assert.ok(select, 'edit form remains mounted after catalogue updates');
         assert.equal(select.value, department.id);
         assert.equal([...select.options].find(option => option.value === department.id).textContent, 'Operations (OPS)');
-        assert.ok(document.body.textContent.includes('Jonah Mary Eneh'), 'regression employee Jonah Mary Eneh is loaded');
+        assert.ok(document.body.textContent.includes('Alex Taylor Morgan'), 'regression employee Alex Taylor Morgan is loaded');
         assert.equal(document.querySelector('select[name="designationId"]').value, currentDesignation.id);
         assert.equal(document.querySelector('select[name="employmentLevel"]').value, '2');
         assert.equal(document.querySelector('#employmentLevelEffectiveDate'), null, 'unchanged Employment Level fields are hidden and do not constrain saves');
@@ -160,7 +160,7 @@ try {
         assert.equal(submissions.at(-1).jobChange.designationId, currentDesignation.id);
         assert.equal(employee.gender, 'FEMALE');
         assert.equal(employee.employmentType, 'Full-Time');
-        assert.equal(levelState.effective.levelNumber, 2, 'Department-only save leaves Jonah Mary Eneh at L2');
+        assert.equal(levelState.effective.levelNumber, 2, 'Department-only save leaves Alex Taylor Morgan at L2');
 
         await openEdit();
         await selectValue('select[name="designationId"]', targetDesignation.id);
