@@ -22,6 +22,7 @@ const {
   transitionDisciplinaryCase,
 } = require("../services/disciplinaryGovernanceControlService");
 
+const simpleDiscipline = require("../services/simpleDisciplinaryService");
 const router = express.Router();
 router.use(requireAuth);
 
@@ -144,21 +145,13 @@ router.post("/documents/:id/events", requirePermission("employees.update"), asyn
 });
 
 router.get("/disciplinary-cases", requirePermission("employees.view"), async (req, res) => {
-  const records = await prisma.disciplinaryCase.findMany({
-    where: { organizationId: req.auth.organizationId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
+  const records = await simpleDiscipline.list(prisma, req.auth);
   return res.json({ status: "success", data: records });
 });
 
 router.post("/disciplinary-cases", requirePermission("employees.update"), async (req, res) => {
   try {
-    const data = await createDisciplinaryCase(prisma, {
-      organizationId: req.auth.organizationId,
-      actorUserId: req.auth.userId,
-      ...req.body,
-    });
+    const data = await simpleDiscipline.create(prisma, req.auth, req.body || {});
     return res.status(201).json({ status: "success", data });
   } catch (error) {
     return safeError(res, error, "Unable to create disciplinary case.");
@@ -167,6 +160,7 @@ router.post("/disciplinary-cases", requirePermission("employees.update"), async 
 
 router.patch("/disciplinary-cases/:id", requirePermission("employees.update"), async (req, res) => {
   try {
+    await simpleDiscipline.get(prisma, req.auth, req.params.id);
     const data = await transitionDisciplinaryCase(prisma, {
       organizationId: req.auth.organizationId,
       caseId: req.params.id,
@@ -183,11 +177,12 @@ router.patch("/disciplinary-cases/:id", requirePermission("employees.update"), a
 
 router.post("/disciplinary-cases/:id/evidence", requirePermission("employees.update"), async (req, res) => {
   try {
+    await simpleDiscipline.get(prisma, req.auth, req.params.id);
     const data = await appendDisciplinaryEvidence(prisma, {
+      ...req.body,
       organizationId: req.auth.organizationId,
       caseId: req.params.id,
       actorUserId: req.auth.userId,
-      ...req.body,
     });
     return res.status(201).json({ status: "success", data });
   } catch (error) {
@@ -197,11 +192,13 @@ router.post("/disciplinary-cases/:id/evidence", requirePermission("employees.upd
 
 router.post("/disciplinary-cases/:id/process-events", requirePermission("employees.update"), async (req, res) => {
   try {
+    await simpleDiscipline.get(prisma, req.auth, req.params.id);
+    if (!['COACHING','WARNING','PIP_STARTED','PIP_REVIEW','QUERY_ISSUED','EMPLOYEE_RESPONSE','INVESTIGATION','HEARING','FINDINGS','MANAGEMENT_REVIEW','DECISION','DECISION_DELIVERED'].includes(req.body?.eventType)) return res.status(400).json({status:'error',message:'Use the case workspace for workflow actions.'});
     const data = await addDisciplinaryProcessEvent(prisma, {
+      ...req.body,
       organizationId: req.auth.organizationId,
       caseId: req.params.id,
       actorUserId: req.auth.userId,
-      ...req.body,
     });
     return res.status(201).json({ status: "success", data });
   } catch (error) {
@@ -211,10 +208,11 @@ router.post("/disciplinary-cases/:id/process-events", requirePermission("employe
 
 router.post("/disciplinary-cases/:id/external-proceedings", requirePermission("employees.update"), async (req, res) => {
   try {
+    await simpleDiscipline.get(prisma, req.auth, req.params.id);
     const data = await addExternalProceeding(prisma, {
+      ...req.body,
       organizationId: req.auth.organizationId,
       caseId: req.params.id,
-      ...req.body,
     });
     return res.status(201).json({
       status: "success",
@@ -228,6 +226,7 @@ router.post("/disciplinary-cases/:id/external-proceedings", requirePermission("e
 
 router.get("/disciplinary-cases/:id/evidence-pack", requirePermission("employees.view"), async (req, res) => {
   try {
+    await simpleDiscipline.get(prisma, req.auth, req.params.id);
     const data = await buildEmploymentDecisionEvidencePack(
       prisma,
       req.auth.organizationId,
