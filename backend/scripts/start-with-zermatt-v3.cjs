@@ -1,8 +1,6 @@
 const { spawnSync } = require("node:child_process");
 
-const mode = String(process.env.ZERMATT_EMPLOYMENT_LEVEL_V3_MODE || "OFF")
-  .trim()
-  .toUpperCase();
+const mode = "OFF"; // Customer-specific activations never run on the demo branch.
 
 function runNode(args, label) {
   console.log(`\n[CHRiS startup] ${label}`);
