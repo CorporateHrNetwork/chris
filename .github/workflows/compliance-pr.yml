@@ -42,6 +42,9 @@ jobs:
       - name: Probation workflow acceptance
         run: node --test tests/zermattProbationWorkflow.test.js
 
+      - name: Simplified disciplinary workflow acceptance
+        run: node --test tests/simpleDisciplinary.test.js
+
       - name: Validate Prisma schema
         run: npx prisma validate
 
@@ -185,7 +188,7 @@ jobs:
         run: npm ci
 
       - name: Test news feedback and ESS session/data recovery
-        run: node --test --test-concurrency=1 tests/internalNewsNotice.test.mjs tests/essSessionRecovery.test.mjs
+        run: node --test --test-concurrency=1 tests/internalNewsNotice.test.mjs tests/essSessionRecovery.test.mjs tests/simpleDisciplinary.test.mjs
 
       - name: Build frontend
         run: npm run build
