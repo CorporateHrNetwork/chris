@@ -1,18 +1,15 @@
-# Northstar shared architecture upgrade candidate
+# Northstar shared architecture and isolation
 
-Target: Northstar Demo Industries, tenant `chris-demo-company`, 48 existing fictional employees, on the sales-demo deployment. CHRiS DEMO LTD (`chris-client-demo-10`) is a separate tenant on the same deployment.
+Target: Northstar Demo Industries (`chris-demo-company`, 48 fictional employees). CHRiS DEMO LTD (`chris-client-demo-10`, 10 fictional employees) is a separate preserved tenant on the same sales-demo deployment.
 
-This candidate is based on the current sales-demo branch, not a replacement with the production tree. It ports shared employee-edit change sets, safe catalogue rendering, selection/navigation fixes, employee lifecycle styling, approved-only statutory query presentation and the shared authenticated screen palette.
+This change selectively ports shared employee edit change sets, catalogue rendering and navigation fixes, lifecycle styling, approved-only statutory views and ESS PDF payslips. It does not merge production into the demo.
 
-No customer database, rows, documents, credentials, branding assets, tenant configuration, policy configuration, financial calculation changes, data repair scripts or production migrations are copied. Production services and branches are unchanged.
+Customer-specific benefit, leave, performance, employment resource and payroll supplement modules are replaced in the deployed bundle by clearly labelled independent read-only workspaces. This release provides shared structural improvements, not full business-feature parity for excluded modules. Branch context uses the tenant-scoped locations endpoint.
 
-Validation performed: two delayed-catalogue employee-edit regression cases; approved-only ESS statutory query with tenant/employee isolation and audit-history preservation; production frontend build; whitespace checks.
+The demo API permits sign-in only for its two fictional tenants, cryptographically verifies their tokens before reads and rejects record mutations, email/payment requests and customer-specific/internal endpoints. Background payroll, performance, snapshot and customer activation jobs are disabled. ESS uses the demo API and PDF renderer excludes production branding. No database migrations, tenant policies, production credentials, documents or employee records are copied.
 
-## Release gates still open
+A build-time boundary excludes legacy customer modules, removes the customer logo and fails the release if customer markers or production URLs remain in built JavaScript, CSS, HTML or JSON. Babel is explicitly pinned.
 
-- Authenticate to Northstar using the demo account and verify the existing baseline before a live upgrade. The attempted secure sign-in returned Invalid login credentials.
-- Finish a separate review of remaining legacy customer-specific modules/content in the existing demo branch. This candidate must not be described as full feature parity or as proof that the entire existing demo contains no customer-specific wording/rules.
-- Verify own-tenant API isolation, download samples, displayed text, permissions/read-only fields, and no outbound live email/payment automations in the candidate.
-- Record the current sales-demo deployment IDs and source commit for rollback; confirm existing fictional tenant data remains unchanged after deployment.
+Validation: authenticated Northstar baseline verified; isolation tests cover tenant restrictions and prohibited writes; shared employee regression and ESS approval/isolation tests; PDF download/renderer tests; production build and bundle audit. Pre/post deployment fictional employee and payroll digests are compared independently.
 
-Keep this PR in draft and do not merge into the auto-deployed sales-demo branch until these gates pass. This is an engineering release condition, not a request for further approval of already-authorized work.
+Rollback: restore sales-demo branch commit `5ebdcbec7740eeb450cfb03aa9e487197a38a00a` on demo API `srv-dbd4ckui0phs73emtrdg` and web `srv-dbd3svbl550s73aht530`. Production branch and services are outside this release.
