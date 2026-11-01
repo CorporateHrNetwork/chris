@@ -15,10 +15,11 @@ async function tick(prisma,{send=sendStageMail,configured=mailConfigured}={}){
    for(const recipientUserId of new Set([state.ownerUserId,state.hrOwnerId,...(state.escalationOwnerIds||[])]))if(recipientUserId)await tx.disciplinaryProcessEvent.create({data:{organizationId:row.organizationId,disciplinaryCaseId:row.id,eventType:'DISCIPLINARY_TASK_NOTICE',occurredAt:new Date(),metadata:{recipientUserId,stage:state.stage,version:state.version,status:'QUEUED',attempts:0,overdue:true}}});
   }
   if(!configured())return;
-  const notices=await tx.disciplinaryProcessEvent.findMany({where:{eventType:'DISCIPLINARY_TASK_NOTICE',metadata:{path:['status'],equals:'QUEUED'}},orderBy:{createdAt:'asc'},take:10});
+  const notices=await tx.disciplinaryProcessEvent.findMany({where:{eventType:'DISCIPLINARY_TASK_NOTICE',metadata:{path:['status'],equals:'QUEUED'}},orderBy:{createdAt:'asc'},take:1});
   for(const n of notices){const m=n.metadata||{};if((m.attempts||0)>=5)continue;
    const [user,row,org]=await Promise.all([tx.user.findFirst({where:{id:m.recipientUserId,organizationId:n.organizationId,isActive:true}}),tx.disciplinaryCase.findFirst({where:{id:n.disciplinaryCaseId,organizationId:n.organizationId},include:s.eventsInclude}),tx.organization.findFirst({where:{id:n.organizationId}})]);
    const state=row&&s.stateOf(row);if(!user?.email||!state||!org||String(org.slug).includes('demo'))continue;
+   if(m.stage!==state.stage){await tx.disciplinaryProcessEvent.update({where:{id:n.id},data:{metadata:{...m,status:'CANCELLED',lastError:'STAGE_SUPERSEDED'}}});continue;}
    // Verify the recipient still has case access; never email allegations or evidence.
    try{await s.context(tx,{userId:user.id,organizationId:n.organizationId,ess:user.employeeId===row.employeeId},row);}catch{continue;}
    const employee=user.employeeId===row.employeeId;
