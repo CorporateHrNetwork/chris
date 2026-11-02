@@ -377,6 +377,7 @@ router.post(
 
   async (req, res) => {
     try {
+      if (req.body.manualDaysTaken !== undefined && req.body.manualDaysTaken !== "" && req.body.manualDaysTaken !== null && !(req.auth.permissions || []).includes("leave.manage")) return res.status(403).json({status:"error",message:"Only authorized leave managers can record historical days taken."});
       const request =
         await submitLeaveRequest({
           organizationId:
@@ -400,6 +401,8 @@ router.post(
           reason:
             req.body
               .reason,
+          manualDaysTaken: req.body.manualDaysTaken,
+          manualLeaveYear: req.body.leaveYear,
           attachmentUrl:
             req.body
               .attachmentUrl,
