@@ -929,15 +929,17 @@ export default function LeaveRequests() {
                     ? "Select employee and leave policy"
                     : balanceLoading
                       ? "Loading leave balance..."
-                      : balanceError
+                      : balanceError && !usageInputInvalid
                         ? "Unable to load leave balance."
-                        : !balance
+                        : !activeBalance
                           ? "-"
-                          : !balance.hasEntitlement
+                          : !activeBalance.hasEntitlement
                             ? "No applicable entitlement"
-                            : `${balance.available} ${readableUnit(
-                                balance.unit
-                              )}`}
+                            : usageInputInvalid
+                              ? "Enter valid used days"
+                              : `${activeBalance.available} ${readableUnit(
+                                  activeBalance.unit
+                                )}`}
                 </div>
               </div>
 
