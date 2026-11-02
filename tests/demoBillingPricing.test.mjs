@@ -18,7 +18,7 @@ assert.match(view, /Employee seats No\./);
 assert.match(view, /Complete module entitlement matrix/);
 assert.match(view, /Print pricing proposal/);
 assert.doesNotMatch(view, /Zenith Bank|zermatt|chris\\.crnetwork\\.com\\.ng/i);
-assert.match(view, /Renewal employee seats No\\./);
+assert.match(view, /Renewal employee seats No\./);
 assert.match(view, /renewalEmployeeCount:renewalCount/);
 assert.match(view, /approved prices effective in that year/);
 console.log("PASS: Demo billing is read-only, tenant-isolated and shows three draft plans.");
