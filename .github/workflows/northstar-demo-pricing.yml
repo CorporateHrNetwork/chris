@@ -1,0 +1,39 @@
+name: Northstar demo pricing safety
+on:
+  pull_request:
+    branches:
+      - feature/chris-sales-demo-environment
+  push:
+    branches:
+      - fix/northstar-demo-pricing-three-plans
+jobs:
+  demo-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify demo billing source isolation
+        run: node --test tests/demoBillingPricing.test.mjs
+      - name: Build and audit isolated demo bundle
+        run: npm run build
+  demo-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Verify demo tenant boundary and quote engine
+        run: node --test tests/salesDemoBoundary.test.js tests/subscriptionPricing.test.js

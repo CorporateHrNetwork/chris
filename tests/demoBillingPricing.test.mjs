@@ -1,0 +1,17 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const read = (path) => fs.readFileSync(new URL("../" + path, import.meta.url), "utf8");
+const view = read("src/demo/DemoBillingSubscriptions.jsx");
+const boundary = read("backend/src/middleware/salesDemoBoundary.js");
+const isolation = read("scripts/demo-build-isolation.mjs");
+const app = read("src/App.jsx");
+assert.match(view, /\["basic", "standard", "premium"\]/);
+assert.match(view, /\/api\/billing\/catalogue/);
+assert.match(view, /\/api\/billing\/quotes/);
+assert.match(view, /Indicative draft catalogue/);
+assert.doesNotMatch(view, /invoice\/email|\/payments|zermatt|Zenith Bank/i);
+assert.match(isolation, /DemoBillingSubscriptions\.jsx/);
+assert.match(app, /path="\/billing\/:demoSection"/);
+assert.match(boundary, /pricingQuote=req\.path==='\/api\/billing\/quotes'&&req\.method==='POST'/);
+assert.match(boundary, /!pricingCatalogue&&!pricingQuote/);
+console.log("PASS: Demo billing is read-only, tenant-isolated and shows three draft plans.");

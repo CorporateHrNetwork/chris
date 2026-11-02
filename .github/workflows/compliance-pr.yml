@@ -181,6 +181,9 @@ jobs:
       - name: Test news feedback and ESS session/data recovery
         run: node --test --test-concurrency=1 tests/internalNewsNotice.test.mjs tests/essSessionRecovery.test.mjs
 
+      - name: Validate isolated demo pricing
+        run: node --test tests/demoBillingPricing.test.mjs
+
       - name: Build frontend
         run: npm run build
 
