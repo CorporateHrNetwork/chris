@@ -34,3 +34,20 @@ test('rejects invalid seats and plan',()=>{
  assert.throws(()=>calculateQuote({planId:'basic',employeeCount:0}),RangeError);
  assert.throws(()=>calculateQuote({planId:'unknown',employeeCount:48}),RangeError);
 });
+
+test('renewal uses independently specified renewal seats and then-current plan prices, with no onboarding',()=>{
+ const q=calculateQuote({planId:'basic',employeeCount:48,renewalEmployeeCount:65,includeEss:true});
+ assert.equal(q.quote.employeeCount,48);
+ assert.equal(q.renewal.employeeCount,65);
+ assert.equal(q.renewal.lineItems.licence,1500*65*12);
+ assert.equal(q.renewal.lineItems.ess,1000*65*12);
+ assert.equal(q.renewal.lineItems.support,800*65*12);
+ assert.equal(q.renewal.lineItems.onboarding,0);
+ assert.equal(q.renewal.total,2767050);
+ assert.equal(q.renewal.pricingBasis,'CURRENT_APPROVED_RATES_AT_ACTUAL_RENEWAL_DATE');
+ assert.match(q.renewal.pricingNote,/currently published demo rates only/);
+ const noEss=calculateQuote({planId:'premium',employeeCount:48,renewalEmployeeCount:65,includeEss:false});
+ assert.equal(noEss.renewal.lineItems.ess,0);
+ assert.throws(()=>calculateQuote({planId:'basic',employeeCount:48,renewalEmployeeCount:0}),RangeError);
+ assert.throws(()=>calculateQuote({planId:'basic',employeeCount:48,renewalEmployeeCount:100001}),RangeError);
+});
