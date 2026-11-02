@@ -52,4 +52,5 @@ test("live policy updater is ZERMATT-scoped, preview-first, and audited", () => 
   assert.match(script, /organizationAudit\.create/);
   assert.match(script, /isolationLevel: "Serializable"/);
   assert.match(script, /ZERMATT_LEAVE_RULES_ACTOR_EMAIL_REQUIRED/);
+  assert.match(script, /previousRules\.countWeekends === true/);
 });
