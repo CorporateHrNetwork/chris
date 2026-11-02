@@ -4,20 +4,27 @@
   z-index: 1200;
 
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
 
-  padding: 12px 16px 24px;
+  box-sizing: border-box;
+  padding: 16px;
 
   background: rgba(2, 12, 8, 0.74);
   backdrop-filter: blur(2px);
 
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .leave-request-modal {
   width: min(900px, calc(100vw - 32px));
-  max-height: calc(100dvh - 44px);
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  box-sizing: border-box;
 
   display: flex;
   flex-direction: column;
@@ -65,6 +72,8 @@
 
 .leave-request-form {
   flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
 
   display: grid;
   grid-template-columns:
@@ -77,8 +86,8 @@
 
   overflow-y: auto;
   overflow-x: hidden;
-
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .leave-field {
@@ -162,13 +171,12 @@
 /* Medium-height laptop screens */
 @media (max-height: 820px) {
   .leave-request-overlay {
-    padding:
-      8px 12px 16px;
+    padding: 8px 12px;
   }
 
   .leave-request-modal {
-    max-height:
-      calc(100dvh - 24px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
   }
 
   .leave-request-modal__header {
@@ -196,13 +204,12 @@
 /* Very short screens */
 @media (max-height: 700px) {
   .leave-request-overlay {
-    padding:
-      6px 10px 10px;
+    padding: 8px 10px;
   }
 
   .leave-request-modal {
-    max-height:
-      calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
   }
 
   .leave-request-modal__header {
@@ -248,17 +255,14 @@
 /* Tablet and narrow screens */
 @media (max-width: 680px) {
   .leave-request-overlay {
-    align-items: flex-end;
-
-    padding:
-      8px;
+    align-items: center;
+    padding: 8px;
   }
 
   .leave-request-modal {
     width: 100%;
-
-    max-height:
-      calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
 
     border-radius: 12px;
   }
@@ -292,8 +296,8 @@
   }
 
   .leave-request-modal {
-    max-height:
-      calc(100dvh - 12px);
+    max-height: calc(100vh - 12px);
+    max-height: calc(100dvh - 12px);
   }
 
   .leave-request-modal__header {
