@@ -91,6 +91,12 @@ async function main() {
 
     for (const policy of current) {
       const previousRules = policy.calendarRules || {};
+      if (
+        previousRules.countWeekends === true &&
+        previousRules.countPublicHolidays === false
+      ) {
+        continue;
+      }
       const nextRules = {
         ...previousRules,
         ...ZERMATT_LEAVE_CALENDAR_RULES,
