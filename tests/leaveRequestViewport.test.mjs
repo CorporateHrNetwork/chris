@@ -8,7 +8,8 @@ const component = read("src/pages/LeaveRequests.jsx");
 const styles = read("src/pages/LeaveRequests.css");
 
 assert.match(component, /import \{ createPortal \} from "react-dom"/);
-assert.match(component, /open && createPortal\([\s\S]*document\.body/);
+assert.match(component, /open && createPortal\([\s\S]*document\.querySelector\("\.chris-shell"\) \?\? document\.body/);
+assert.match(component, /className="chris-page leave-request-overlay"/);
 assert.match(component, /document\.body\.style\.overflow = "hidden"/);
 assert.match(
   component,
@@ -21,4 +22,4 @@ assert.match(styles, /\.leave-request-modal\s*\{[^}]*max-height:\s*calc\(100dvh 
 assert.match(styles, /\.leave-request-form\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s);
 assert.match(styles, /overscroll-behavior:\s*contain;/);
 
-console.log("PASS: Leave request dialog stays within the viewport and scrolls internally.");
+console.log("PASS: Leave request dialog preserves CHRiS visual language, viewport bounds and internal scrolling.");
