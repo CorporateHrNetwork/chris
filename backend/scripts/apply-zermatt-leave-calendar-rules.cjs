@@ -99,6 +99,17 @@ async function main() {
         where: { id: policy.id },
         data: { calendarRules: nextRules },
       });
+      await tx.leavePolicyAudit.create({
+        data: {
+          organizationId: organization.id,
+          leavePolicyId: policy.id,
+          actorUserId: actor.id,
+          action: "CHANGED",
+          previousValue: { calendarRules: previousRules },
+          newValue: { calendarRules: nextRules },
+          reason: "ZERMATT policy correction: count weekends and rostered off-days; exclude public holidays.",
+        },
+      });
       await tx.organizationAudit.create({
         data: {
           organizationId: organization.id,
