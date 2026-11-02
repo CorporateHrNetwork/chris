@@ -8,9 +8,12 @@ function salesDemoBoundary(req,res,next){
   const slug=String(req.body?.organizationSlug||req.body?.organization||'').trim();
   return DEMO_SLUGS.has(slug)?next():deny();
  }
- if(!['GET','HEAD','OPTIONS'].includes(req.method))return deny();
+ // Only catalogue reads and non-mutating quote calculations are available in demos.
+ const pricingCatalogue=req.path==='/api/billing/catalogue'&&req.method==='GET';
+ const pricingQuote=req.path==='/api/billing/quotes'&&req.method==='POST';
+ if(!['GET','HEAD','OPTIONS'].includes(req.method)&&!pricingQuote)return deny();
  if(req.method==='OPTIONS')return next();
- if(/^\/api\/(?:internal|platform|commercial|billing|chris-automation)(?:\/|$)/i.test(req.path))return deny();
+ if(/^\/api\/(?:internal|platform|commercial|billing|chris-automation)(?:\/|$)/i.test(req.path)&&!pricingCatalogue&&!pricingQuote)return deny();
  if(/\/zermatt(?:\/|$)|\/transport-support(?:\/|$)|\/full-salary-preparation(?:\/|$)|\/performance-evaluation(?:\/|$)|\/employment-resources(?:\/|$)|\/leave-allowance(?:\/|$)/i.test(req.path))return deny();
  try{const match=String(req.headers.authorization||'').match(/^Bearer (.+)$/);if(!match)return deny();const claims=jwt.verify(match[1],process.env.JWT_SECRET,{algorithms:['HS256']});if(!DEMO_IDS.has(claims.organizationId))return deny();for(const key of ['organizationId','organization_id','tenantId']){if(req.query?.[key]&&req.query[key]!==claims.organizationId)return deny();}return next();}catch{return deny();}
 }
