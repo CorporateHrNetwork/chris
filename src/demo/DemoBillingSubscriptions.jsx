@@ -1,142 +1,112 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiRequest, getStoredOrganization } from "../services/api";
-
-const PLAN_IDS = ["basic", "standard", "premium"];
-const money = (amount) => "₦" + Number(amount || 0).toLocaleString("en-NG");
-const surface = {
-  background: "linear-gradient(145deg,rgba(12,38,26,.94),rgba(5,23,15,.98))",
-  border: "1px solid rgba(212,175,55,.38)",
-  borderRadius: 16,
-  padding: 18,
-  color: "#F7FAF8",
-};
-const moduleLabels = {
-  dashboard: "Dashboard", support_requests: "Support", employees: "Employees",
-  recruitment: "Recruitment", time_attendance: "Time & Attendance",
-  leave: "Leave", payroll: "Payroll", compensation_rewards: "Compensation & Rewards",
-  benefits: "Benefits", statutories: "Statutories", performance: "Performance",
-  training_development: "Training & Development", assets: "Assets",
-  documents: "Documents", reports_analytics: "Reports & Analytics",
-  organization: "Organization", workflows_approvals: "Workflows & Approvals",
-  employment_types: "Employment Types", settings: "Settings",
-  billing_subscription: "Billing & Subscription",
-};
-const essLabels = {
-  overview: "Overview", my_profile: "My Profile", onboarding: "Onboarding",
-  statutory: "Statutory", payment_payroll: "Payment & Payroll",
-  payslips: "Payslips", leave_attendance: "Leave & Attendance",
-  performance_evaluation: "Performance Evaluation", gratuity: "Gratuity",
-  birthdays_anniversaries: "Birthdays & Anniversaries",
-  internal_communications: "Internal Communications", documents: "Documents",
-};
-
-export default function DemoBillingSubscriptions() {
-  const slug = getStoredOrganization()?.slug;
-  const [employees, setEmployees] = useState(slug === "chris-demo-company" ? "48" : "10");
-  const [includeEss, setIncludeEss] = useState(true);
-  const [catalogue, setCatalogue] = useState(null);
-  const [quotes, setQuotes] = useState({});
-  const [selected, setSelected] = useState("standard");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    apiRequest("/api/billing/catalogue")
-      .then((response) => { if (active) setCatalogue(response.data); })
-      .catch((err) => { if (active) setError(err.message || "Pricing catalogue is unavailable."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    const count = Number(employees);
-    if (!catalogue || !Number.isSafeInteger(count) || count < 1 || count > 100000) {
-      setQuotes({});
-      return undefined;
-    }
-    let active = true;
-    setLoading(true);
-    setError("");
-    Promise.all(PLAN_IDS.map((planId) =>
-      apiRequest("/api/billing/quotes", {
-        method: "POST",
-        body: { planId, employeeCount: count, includeEss },
-      }).then((result) => [planId, result.data])
-    ))
-      .then((entries) => { if (active) setQuotes(Object.fromEntries(entries)); })
-      .catch((err) => { if (active) { setQuotes({}); setError(err.message || "Unable to calculate pricing."); } })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [catalogue, employees, includeEss]);
-
-  const selectedQuote = quotes[selected]?.quote;
-  const selectedPlan = catalogue?.plans?.[selected];
-  const hrisModules = useMemo(() => (selectedQuote?.entitlements?.hris || []).map((key) => moduleLabels[key] || key), [selectedQuote]);
-  const essModules = useMemo(() => (selectedQuote?.entitlements?.ess || []).map((key) => essLabels[key] || key), [selectedQuote]);
-
-  return (
-    <div className="chris-page" style={{ color: "#F7FAF8", maxWidth: 1400, margin: "0 auto", paddingBottom: 30 }}>
-      <header style={{ ...surface, marginBottom: 18, background: "linear-gradient(135deg,#0b5030,#061a11)" }}>
-        <div style={{ color: "#F2CF57", fontWeight: 900, fontSize: 11, letterSpacing: ".12em" }}>CHRiS · DEMONSTRATION PRICING</div>
-        <h1 style={{ margin: "8px 0" }}>Billing & Subscription</h1>
-        <p style={{ color: "#DCE8DF", marginBottom: 8 }}>Compare Basic, Standard and Premium for {catalogue?.organizationName || "the fictional demo organisation"}.</p>
-        <p style={{ color: "#F2CF57", fontSize: 12 }}>Indicative draft catalogue — subject to commercial approval. Pricing previews only: no payment, invoice delivery, subscription activation or tenant entitlement changes.</p>
-      </header>
-
-      <section style={{ ...surface, marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Pricing calculator</h2>
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "end" }}>
-          <label style={{ display: "grid", gap: 6, color: "#E5EEE8", fontWeight: 700 }}>
-            Number of employees
-            <input type="number" min="1" max="100000" step="1" value={employees} onChange={(event) => setEmployees(event.target.value)}
-              style={{ padding: "10px 12px", minHeight: 42, width: 180, color: "#F7FAF8", background: "#092719", border: "1px solid #D4AF37", borderRadius: 9 }} />
-          </label>
-          <label style={{ display: "flex", gap: 9, alignItems: "center", minHeight: 42, color: "#E5EEE8", fontWeight: 700 }}>
-            <input type="checkbox" checked={includeEss} onChange={(event) => setIncludeEss(event.target.checked)} />
-            Include Employee Self-Service (ESS)
-          </label>
-        </div>
-        <p style={{ color: "#B8C9C0", marginTop: 10, fontSize: 12 }}>12-month licence and optional ESS; onboarding once per employee; annual support; indicative 7.5% VAT.</p>
-      </section>
-
-      {loading && <p role="status">Calculating demo prices…</p>}
-      {error && <p role="alert" style={{ color: "#FFC1B7" }}>{error}</p>}
-      {catalogue && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14, marginBottom: 16 }}>
-        {PLAN_IDS.map((id) => {
-          const plan = catalogue.plans[id];
-          const quote = quotes[id]?.quote;
-          const renewal = quotes[id]?.renewal;
-          return <section key={id} style={{ ...surface, border: selected === id ? "2px solid #F2CF57" : surface.border }}>
-            <h2 style={{ fontSize: 22, color: "#F2CF57", marginBottom: 8 }}>{plan?.label || id}</h2>
-            <p style={{ color: "#DCE8DF", fontSize: 13 }}>{money(plan?.licenceMonthly)} / employee / month</p>
-            <p style={{ color: "#C5D7CB", fontSize: 12 }}>ESS: {money(plan?.essMonthly)} / employee / month (optional)</p>
-            <div style={{ fontSize: 26, fontWeight: 900, margin: "16px 0 4px", color: "#F7FAF8" }}>{quote ? money(quote.total) : "—"}</div>
-            <p style={{ fontSize: 12, color: "#B8C9C0" }}>Estimated first year, VAT included</p>
-            <div style={{ borderTop: "1px solid rgba(212,175,55,.25)", marginTop: 13, paddingTop: 12, fontSize: 12, lineHeight: 1.9 }}>
-              <div>Licence (12 months): {quote ? money(quote.lineItems.licence) : "—"}</div>
-              <div>ESS (12 months): {quote ? money(quote.lineItems.ess) : "—"}</div>
-              <div>Onboarding: {quote ? money(quote.lineItems.onboarding) : "—"}</div>
-              <div>Annual support: {quote ? money(quote.lineItems.support) : "—"}</div>
-              <div>Indicative VAT: {quote ? money(quote.vat) : "—"}</div>
-              <strong>Annual renewal estimate: {renewal ? money(renewal.total) : "—"}</strong>
-            </div>
-            <button type="button" onClick={() => setSelected(id)} aria-pressed={selected === id}
-              style={{ marginTop: 15, width: "100%", padding: 11, borderRadius: 9, border: "1px solid #D4AF37", background: selected === id ? "#D4AF37" : "#153C2A", color: selected === id ? "#071911" : "#F7FAF8", fontWeight: 800 }}>
-              {selected === id ? "Showing included modules" : "View included modules"}
-            </button>
-          </section>;
-        })}
-      </div>}
-
-      {selectedQuote && <section style={surface}>
-        <h2 style={{ color: "#F2CF57", marginBottom: 8 }}>{selectedPlan?.label} — included modules</h2>
-        <p style={{ fontSize: 12, color: "#C5D7CB", marginBottom: 12 }}>These are plan comparison entitlements, not changes to the active demo tenant.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16 }}>
-          <div><h3 style={{ marginBottom: 8 }}>CHRiS modules</h3><ul style={{ paddingLeft: 20, lineHeight: 1.8 }}>{hrisModules.map((label) => <li key={label}>{label}</li>)}</ul></div>
-          <div><h3 style={{ marginBottom: 8 }}>ESS modules</h3>{includeEss ? <ul style={{ paddingLeft: 20, lineHeight: 1.8 }}>{essModules.map((label) => <li key={label}>{label}</li>)}</ul> : <p>ESS not selected.</p>}</div>
-        </div>
-      </section>}
+const IDS = ["basic", "standard", "premium"];
+const money = n => "₦" + Number(n || 0).toLocaleString("en-NG");
+const panel = { background:"linear-gradient(145deg,#0b3020,#061b12)",color:"#F7FAF8",border:"1px solid rgba(212,175,55,.38)",borderRadius:14,padding:18 };
+const muted = {color:"#C9D9CE",fontSize:13};
+const th = {textAlign:"left",padding:"10px 12px",color:"#F2CF57",borderBottom:"1px solid #55735F"};
+const td = {padding:"9px 12px",borderBottom:"1px solid #315341",fontSize:13};
+const currencyRates = [
+ ["CHRiS licence / employee / month","licenceMonthly"],
+ ["ESS / employee / month (optional)","essMonthly"],
+ ["Onboarding / employee / month (first 12 months)","onboardingMonthly"],
+ ["Annual support / employee / month","supportMonthly"]
+];
+export default function DemoBillingSubscriptions(){
+ const slug=getStoredOrganization()?.slug;
+ const [employees,setEmployees]=useState(slug==="chris-demo-company"?"48":"10");
+ const [includeEss,setIncludeEss]=useState(true);
+ const [catalogue,setCatalogue]=useState(null);
+ const [quotes,setQuotes]=useState({});
+ const [error,setError]=useState("");
+ const [loading,setLoading]=useState(true);
+ useEffect(()=>{
+  let active=true;
+  apiRequest("/api/billing/catalogue").then(r=>{if(active)setCatalogue(r.data);})
+   .catch(e=>{if(active)setError(e.message||"Pricing catalogue unavailable");})
+   .finally(()=>{if(active)setLoading(false);});
+  return ()=>{active=false;};
+ },[]);
+ useEffect(()=>{
+  const count=Number(employees);
+  if(!catalogue||!Number.isSafeInteger(count)||count<1||count>100000){setQuotes({});return;}
+  let active=true;setLoading(true);setError("");
+  Promise.all(IDS.map(planId=>apiRequest("/api/billing/quotes",{method:"POST",body:{planId,employeeCount:count,includeEss}}).then(r=>[planId,r.data])))
+   .then(entries=>{if(active)setQuotes(Object.fromEntries(entries));})
+   .catch(e=>{if(active){setQuotes({});setError(e.message||"Quote calculation failed");}})
+   .finally(()=>{if(active)setLoading(false);});
+  return ()=>{active=false;};
+ },[catalogue,employees,includeEss]);
+ const moduleGroups=[["CHRiS main menu","hris"],["MY CHRiS employee self-service","ess"]];
+ const tierIndex={basic:0,standard:1,premium:2};
+ return <main className="chris-page" style={{color:"#F7FAF8",maxWidth:1440,margin:"0 auto",paddingBottom:36}}>
+  <header style={{...panel,background:"linear-gradient(125deg,#0b5634,#051c13)",marginBottom:16}}>
+   <div style={{color:"#F2CF57",fontWeight:900,letterSpacing:".12em",fontSize:12}}>CORPORATEHR NETWORK INFORMATION SYSTEM · CHRiS</div>
+   <h1 style={{margin:"8px 0",color:"#FFFFFF"}}>Billing & Subscription — Pricing Proposal</h1>
+   <p style={muted}>Three-plan commercial profile and module comparison for {catalogue?.organizationName||"the fictional Northstar demo"}.</p>
+   <p style={{color:"#F2CF57",fontSize:12}}>Draft, non-binding demo proposal. No payment, invoice delivery, subscription activation or customer entitlement changes.</p>
+  </header>
+  <section style={{...panel,marginBottom:16}}>
+   <h2 style={{fontSize:18,margin:"0 0 12px"}}>Employee seats & quotation</h2>
+   <div style={{display:"flex",gap:22,alignItems:"end",flexWrap:"wrap"}}>
+    <label style={{display:"grid",gap:6,fontWeight:700}}>Employee seats No.
+     <input aria-label="Employee seats No." type="number" min="1" max="100000" step="1" value={employees} onChange={e=>setEmployees(e.target.value)} style={{background:"#0b291c",color:"#FFFFFF",border:"1px solid #D4AF37",borderRadius:8,padding:10,width:190}}/>
+    </label>
+    <label style={{display:"flex",alignItems:"center",gap:9,fontWeight:700,minHeight:40}}>
+     <input type="checkbox" checked={includeEss} onChange={e=>setIncludeEss(e.target.checked)}/> Include MY CHRiS (ESS)
+    </label>
+    <button type="button" onClick={()=>window.print()} style={{background:"#D4AF37",color:"#082016",border:0,borderRadius:8,padding:"11px 18px",fontWeight:800,cursor:"pointer"}}>Print pricing proposal</button>
+   </div>
+   <p style={muted}>Onboarding is quoted monthly for the first 12 months only. Annual support is priced per employee per month. Renewal excludes onboarding. VAT is illustrative at 7.5%.</p>
+  </section>
+  {loading&&<p role="status">Calculating plan proposals…</p>}
+  {error&&<p role="alert" style={{color:"#FFC1B7"}}>{error}</p>}
+  {catalogue&&<section style={{...panel,marginBottom:16,overflowX:"auto"}}>
+   <h2 style={{fontSize:18,marginTop:0}}>Plan profiles & unit rates</h2>
+   <table style={{borderCollapse:"collapse",width:"100%",minWidth:650}}>
+    <thead><tr><th style={th}>Pricing component</th>{IDS.map(id=><th key={id} style={th}>{catalogue.plans[id]?.label}</th>)}</tr></thead>
+    <tbody>
+     <tr><td style={td}>Plan profile</td>{IDS.map(id=><td key={id} style={{...td,maxWidth:210}}>{catalogue.plans[id]?.profile}</td>)}</tr>
+     {currencyRates.map(([label,key])=><tr key={key}><td style={td}>{label}</td>{IDS.map(id=><td key={id} style={td}>{money(catalogue.plans[id]?.[key])}</td>)}</tr>)}
+     <tr><td style={td}><strong>Monthly equivalent per seat {includeEss?"with ESS":"without ESS"}</strong></td>{IDS.map(id=>{const p=catalogue.plans[id];return <td key={id} style={td}><strong>{money(p.licenceMonthly+p.onboardingMonthly+p.supportMonthly+(includeEss?p.essMonthly:0))}</strong></td>})}</tr>
+    </tbody>
+   </table>
+  </section>}
+  {catalogue&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(255px,1fr))",gap:14,marginBottom:16}}>
+   {IDS.map(id=>{const p=catalogue.plans[id],q=quotes[id]?.quote,r=quotes[id]?.renewal;return <section key={id} style={panel}>
+    <h2 style={{color:"#F2CF57",margin:"0 0 8px"}}>{p.label}</h2><p style={muted}>{p.profile}</p>
+    <div style={{fontSize:26,fontWeight:900,margin:"16px 0 4px"}}>{q?money(q.total):"—"}</div>
+    <p style={muted}>First-year proposal including indicative VAT</p>
+    <div style={{borderTop:"1px solid #45674D",paddingTop:12,fontSize:13,lineHeight:1.9}}>
+     <div>Licence (12 months): {q?money(q.lineItems.licence):"—"}</div>
+     <div>ESS (12 months): {q?money(q.lineItems.ess):"—"}</div>
+     <div>Onboarding (12 months): {q?money(q.lineItems.onboarding):"—"}</div>
+     <div>Annual support (12 months): {q?money(q.lineItems.support):"—"}</div>
+     <div>VAT (illustrative): {q?money(q.vat):"—"}</div>
+     <strong>Annual renewal estimate: {r?money(r.total):"—"}</strong>
     </div>
-  );
+   </section>})}
+  </div>}
+  {catalogue&&<section style={{...panel,overflowX:"auto"}}>
+   <h2 style={{fontSize:18,marginTop:0}}>Complete module entitlement matrix</h2>
+   <p style={muted}>A checkmark means included in the plan comparison. MY CHRiS features require the optional ESS subscription. Reporting scope increases by plan.</p>
+   {moduleGroups.map(([heading,key])=><div key={key}>
+    <h3 style={{color:"#F2CF57",fontSize:16,margin:"20px 0 8px"}}>{heading}</h3>
+    <table style={{width:"100%",borderCollapse:"collapse",minWidth:620}}>
+     <thead><tr><th style={th}>Module</th>{IDS.map(id=><th key={id} style={th}>{catalogue.plans[id]?.label}</th>)}</tr></thead>
+     <tbody>{Object.entries(catalogue.modules?.[key]||{}).map(([module,label])=><tr key={module}>
+      <td style={td}>{label}</td>{IDS.map(id=>{
+       const enabled=quotes[id]?.quote?.entitlements?.[key]?.includes(module);
+       return <td key={id} style={{...td,color:enabled?"#A9E7B8":"#A8B7AC",fontWeight:enabled?800:400}}>{key==="ess"&&!includeEss?"Optional ESS":enabled?"✓ Included":"—"}</td>;
+      })}
+     </tr>)}</tbody>
+    </table>
+   </div>)}
+   <h3 style={{color:"#F2CF57",margin:"20px 0 8px"}}>Reports & Analytics depth</h3>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+    {IDS.map(id=><p key={id} style={muted}><strong style={{color:"#F2CF57"}}>{catalogue.plans[id]?.label}:</strong> {catalogue.modules?.reportingScope?.[id]}</p>)}
+   </div>
+   <p style={{...muted,borderTop:"1px solid #45674D",paddingTop:12}}>All prices are indicative and subject to approved commercial terms. The demo comparison does not grant or revoke module permissions. Support Requests, Settings and Billing & Subscription remain available for account administration.</p>
+  </section>}
+ </main>;
 }
