@@ -205,6 +205,7 @@ function App() {
         <Route path="/employment-types" element={<ProtectedLayout><ModuleDashboard moduleKey="employmentTypes" /></ProtectedLayout>} />
         <Route path="/billing" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
         <Route path="/billing/current-plan" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
+        <Route path="/billing/:demoSection" element={<PermissionLayout permission="settings.view"><BillingSubscriptions /></PermissionLayout>} />
 
         <Route path="/recruitment/job-requisitions" element={<Navigate to="/recruitment?workspace=requisitions" replace />} />
         <Route path="/payroll/execute" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
