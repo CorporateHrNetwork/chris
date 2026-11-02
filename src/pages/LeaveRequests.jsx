@@ -964,14 +964,16 @@ export default function LeaveRequests() {
                     ? "Select employee and leave policy"
                     : balanceLoading
                       ? "Loading..."
-                      : !activeBalance ||
-                          !activeBalance.hasEntitlement
-                        ? "-"
-                        : usageInputInvalid
-                          ? "Enter valid used days"
-                          : `${activeBalance.maximumRequestable} ${readableUnit(
-                              activeBalance.unit
-                            )}`}
+                      : balanceError && !usageInputInvalid
+                        ? "Unable to calculate adjusted balance."
+                        : !activeBalance ||
+                            !activeBalance.hasEntitlement
+                          ? "-"
+                          : usageInputInvalid
+                            ? "Enter valid used days"
+                            : `${activeBalance.maximumRequestable} ${readableUnit(
+                                activeBalance.unit
+                              )}`}
                 </div>
               </div>
 
