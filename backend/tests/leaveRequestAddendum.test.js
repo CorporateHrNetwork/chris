@@ -24,5 +24,5 @@ const manualUsageRoute = routes.slice(
   routes.indexOf('"/employees/:employeeNumber/used-days"'),
   routes.indexOf('"/employees/:employeeNumber/used-days"') + 500
 );
-assert.match(manualUsageRoute, /requirePermission\("leave\\.manage"\)/);
+assert.match(manualUsageRoute, /requirePermission\("leave\.manage"\)/);
 console.log("PASS: leave request addendum backend tests passed.");
