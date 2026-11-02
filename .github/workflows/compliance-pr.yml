@@ -87,6 +87,7 @@ jobs:
           DATABASE_URL: postgresql://test:test@127.0.0.1:5432/chris_test
         run: |
           node --test \
+            tests/leaveRequestAddendum.test.js \
             tests/zermattBranchHrAccessAcceptance.test.js \
             tests/zermattBranchHrFinancialInputAndTopUpSafetyAcceptance.test.js \
             tests/zermattEmploymentResourcesAcceptance.test.js \
