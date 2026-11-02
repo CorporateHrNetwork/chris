@@ -800,7 +800,7 @@ export default function LeaveRequests() {
 
       {open && createPortal(
         <div
-          className="leave-request-overlay"
+          className="chris-page leave-request-overlay"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
@@ -1202,7 +1202,7 @@ export default function LeaveRequests() {
             </form>
           </section>
         </div>,
-        document.body
+        document.querySelector(".chris-shell") ?? document.body
       )}
     </LeavePage>
   );
