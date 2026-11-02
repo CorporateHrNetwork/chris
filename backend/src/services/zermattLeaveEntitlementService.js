@@ -20,6 +20,11 @@ const EFFECTIVE_FROM = new Date("2026-01-01T00:00:00.000Z");
 const V2_SENTINEL_LEVEL_NUMBER = 101;
 const V3_SENTINEL_LEVEL_NUMBER = 201;
 
+const ZERMATT_LEAVE_CALENDAR_RULES = Object.freeze({
+  countWeekends: true,
+  countPublicHolidays: false,
+});
+
 const POLICY_DEFINITIONS = [
   {
     key: "ANNUAL",
@@ -286,6 +291,7 @@ async function ensurePolicyDefinition({
       allocationBasis: "EMPLOYMENT_LEVEL",
       hierarchyVersion: hierarchy.version,
     },
+    calendarRules: { ...ZERMATT_LEAVE_CALENDAR_RULES },
     balanceRules: {
       allowNegativeBalance: false,
       ...(annualCarryover
@@ -703,6 +709,7 @@ async function provisionAllCurrentFullTimeEmployees({
 module.exports = {
   ZERMATT_SLUG,
   POLICY_DEFINITIONS,
+  ZERMATT_LEAVE_CALENDAR_RULES,
   isFullTime,
   isExpatriate,
   isAnnualEligibleEmploymentType,
