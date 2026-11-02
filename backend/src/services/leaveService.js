@@ -177,6 +177,8 @@ async function submitLeaveRequestInTransaction({
   endDate,
   reason,
   attachmentUrl,
+  manualDaysTaken,
+  manualLeaveYear,
   strictAvailableBalance = false,
   tx,
 }) {
@@ -324,6 +326,22 @@ async function submitLeaveRequestInTransaction({
   const balance = strictAvailableBalance
     ? await tx.leaveBalance.findUnique({ where: { organizationId_employeeId_leaveTypeId_leaveYear: { organizationId, employeeId: employee.id, leaveTypeId, leaveYear } } })
     : await findOrCreateBalance({ tx, organizationId, employeeId: employee.id, leaveTypeId, leaveYear, entitlementDays: policyEntitlementForService(policy, eligibilityResult) });
+  let manualUsage = null;
+  if (manualDaysTaken !== '' && manualDaysTaken != null) {
+    const { manualUsageDelta } = await import('../domain/leaveDaysTaken.mjs');
+    manualUsage = manualUsageDelta(manualDaysTaken, balance?.used);
+  }
+  if (manualUsage) {
+    if (strictAvailableBalance) throw new Error("Manual historical usage cannot be set through ESS.");
+    if (!balance || ["HOURS","WEEKS"].includes(policy.entitlementRules?.unit || leaveType.unit)) throw new Error("Manual days require a day-based allocated leave balance.");
+    if (Number(manualLeaveYear) !== leaveYear) throw new Error("Manual usage year must match the leave start date year.");
+    if (manualUsage.additional > 0) {
+      const previousUsed = decimalToNumber(balance.used);
+      await tx.leaveBalance.update({where:{id:balance.id},data:{used:manualUsage.total}});
+      await tx.organizationAudit.create({data:{organizationId,actorUserId:actorUserId||null,entityType:"LeaveBalance",entityId:balance.id,action:"HISTORICAL_LEAVE_USAGE_RECORDED",previousValue:{used:previousUsed},newValue:{used:manualUsage.total,leaveYear,leaveTypeId,leavePolicyId:policy.id},reason:"Total days already taken recorded manually when submitting a new leave request; existing usage is included, not deducted twice."}});
+      balance.used = manualUsage.total;
+    }
+  }
   // The balance is shared by leave type/year, including requests under older policy versions.
   const pending = await tx.leaveRequest.aggregate({ where: { organizationId, employeeId: employee.id, leaveTypeId, status: "PENDING", startDate: { gte: new Date(Date.UTC(leaveYear,0,1)), lt: new Date(Date.UTC(leaveYear+1,0,1)) } }, _sum: { requestedUnits: true } });
   const available = balanceAvailable(balance) - decimalToNumber(pending._sum.requestedUnits);
