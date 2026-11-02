@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { apiRequest } from "../services/api";
@@ -16,6 +16,7 @@ import {
 } from "../components/leave/LeaveUi";
 
 import "./LeaveRequests.css";
+import { previewManualUsage } from "../../backend/src/domain/leaveDaysTaken.mjs";
 
 const emptyForm = {
   leaveYear: new Date().getFullYear(),
@@ -25,6 +26,7 @@ const emptyForm = {
   startDate: "",
   endDate: "",
   reason: "",
+  manualDaysTaken: "",
 };
 
 function readableUnit(unit) {
@@ -59,7 +61,7 @@ export default function LeaveRequests() {
   const [form, setForm] = useState(emptyForm);
   const [calculation, setCalculation] = useState(null);
 
-  const [balance, setBalance] = useState(null);
+  const [ledgerBalance, setBalance] = useState(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState("");
 
@@ -235,6 +237,12 @@ export default function LeaveRequests() {
     form.endDate,
   ]);
 
+  const selectedPolicy = policies.find(policy => policy.id === form.leavePolicyId) || null;
+  let balance = ledgerBalance;
+  let manualUsageError = "";
+  try { balance = previewManualUsage(ledgerBalance, selectedPolicy, form.manualDaysTaken); }
+  catch (error) { manualUsageError = error.message; }
+
   const requestedUnits = Number(
     calculation?.requestedUnits || 0
   );
@@ -248,13 +256,6 @@ export default function LeaveRequests() {
     Boolean(balance?.hasEntitlement) &&
     requestedUnits > maximumRequestable;
 
-  const selectedPolicy = useMemo(
-    () =>
-      policies.find(
-        (policy) => policy.id === form.leavePolicyId
-      ) || null,
-    [policies, form.leavePolicyId]
-  );
 
   async function action(request, path, body, label) {
     setBusy(request.id);
@@ -285,6 +286,8 @@ export default function LeaveRequests() {
     setError("");
     setMessage("");
 
+    if (manualUsageError) { setError(manualUsageError); return; }
+    if (form.manualDaysTaken !== "" && Number(form.leaveYear) !== Number(form.startDate.slice(0,4))) { setError("Leave start date must match the selected leave year for manual usage."); return; }
     if (!form.employeeNumber) {
       setError("Select an employee.");
       return;
@@ -646,6 +649,7 @@ export default function LeaveRequests() {
 
                   updateForm({
                     employeeNumber,
+                    manualDaysTaken: "",
                   });
                 }}
               />
@@ -676,6 +680,7 @@ export default function LeaveRequests() {
                     setCalculation(null);
 
                     updateForm({
+                      manualDaysTaken: "",
                       leavePolicyId: event.target.value,
                       leaveTypeId:
                         policy?.leaveTypeId || "",
@@ -702,7 +707,7 @@ export default function LeaveRequests() {
 
               <label className="leave-field">
                 <span>Leave Year *</span>
-                <select style={styles.input} value={form.leaveYear} onChange={(event) => { setBalance(null); setCalculation(null); updateForm({ leaveYear: Number(event.target.value) }); }} required>
+                <select style={styles.input} value={form.leaveYear} onChange={(event) => { setBalance(null); setCalculation(null); updateForm({ leaveYear: Number(event.target.value), manualDaysTaken: "" }); }} required>
                   {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => <option key={year} value={year}>{year}</option>)}
                 </select>
               </label>
@@ -739,6 +744,13 @@ export default function LeaveRequests() {
                               )}`}
                 </div>
               </div>
+
+              {hasPermission("leave.manage") && ledgerBalance?.hasEntitlement && !["HOURS", "WEEKS"].includes(ledgerBalance.unit) && <label className="leave-field">
+                <span>Total days taken so far</span>
+                <input name="manualDaysTaken" type="number" min={Number(ledgerBalance.used || 0)} step="0.01" style={styles.input} value={form.manualDaysTaken} onChange={event => updateForm({manualDaysTaken:event.target.value})} placeholder={String(ledgerBalance.used || 0)} />
+                <small>For this employee, leave type and year. Include days already recorded; exclude pending requests. Leave blank to use the recorded total. Saved with an audit entry on submission.</small>
+              </label>}
+              {manualUsageError && <div className="leave-field--wide"><Notice error>{manualUsageError}</Notice></div>}
 
               <div className="leave-field">
                 <span>Maximum Requestable</span>
@@ -912,6 +924,7 @@ export default function LeaveRequests() {
                 <button
                   type="submit"
                   disabled={
+                    Boolean(manualUsageError) ||
                     !calculation ||
                     requestedUnits <= 0 ||
                     balanceLoading ||
@@ -921,7 +934,8 @@ export default function LeaveRequests() {
                   style={{
                     ...styles.primary,
                     opacity:
-                      !calculation ||
+                      Boolean(manualUsageError) ||
+                    !calculation ||
                       requestedUnits <= 0 ||
                       balanceLoading ||
                       !balance?.hasEntitlement ||
