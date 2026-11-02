@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { ZERMATT_EMPLOYMENT_LEVELS } = require("../config/zermattEmploymentLevels");
+const ZERMATT_LEAVE_CALENDAR_RULES = require("../config/zermattLeaveCalendarRules");
 const {
   ZERMATT_EMPLOYMENT_LEVELS_V2,
   resolveZermattV2Level,
@@ -20,10 +21,6 @@ const EFFECTIVE_FROM = new Date("2026-01-01T00:00:00.000Z");
 const V2_SENTINEL_LEVEL_NUMBER = 101;
 const V3_SENTINEL_LEVEL_NUMBER = 201;
 
-const ZERMATT_LEAVE_CALENDAR_RULES = Object.freeze({
-  countWeekends: true,
-  countPublicHolidays: false,
-});
 
 const POLICY_DEFINITIONS = [
   {
