@@ -15,6 +15,7 @@ const currencyRates = [
 export default function DemoBillingSubscriptions(){
  const slug=getStoredOrganization()?.slug;
  const [employees,setEmployees]=useState(slug==="chris-demo-company"?"48":"10");
+ const [renewalSeats,setRenewalSeats]=useState(null);
  const [includeEss,setIncludeEss]=useState(true);
  const [catalogue,setCatalogue]=useState(null);
  const [quotes,setQuotes]=useState({});
@@ -29,14 +30,15 @@ export default function DemoBillingSubscriptions(){
  },[]);
  useEffect(()=>{
   const count=Number(employees);
-  if(!catalogue||!Number.isSafeInteger(count)||count<1||count>100000){setQuotes({});return;}
+  const renewalCount=Number(renewalSeats===null?employees:renewalSeats);
+  if(!catalogue||!Number.isSafeInteger(count)||count<1||count>100000||!Number.isSafeInteger(renewalCount)||renewalCount<1||renewalCount>100000){setQuotes({});return;}
   let active=true;setLoading(true);setError("");
-  Promise.all(IDS.map(planId=>apiRequest("/api/billing/quotes",{method:"POST",body:{planId,employeeCount:count,includeEss}}).then(r=>[planId,r.data])))
+  Promise.all(IDS.map(planId=>apiRequest("/api/billing/quotes",{method:"POST",body:{planId,employeeCount:count,renewalEmployeeCount:renewalCount,includeEss}}).then(r=>[planId,r.data])))
    .then(entries=>{if(active)setQuotes(Object.fromEntries(entries));})
    .catch(e=>{if(active){setQuotes({});setError(e.message||"Quote calculation failed");}})
    .finally(()=>{if(active)setLoading(false);});
   return ()=>{active=false;};
- },[catalogue,employees,includeEss]);
+ },[catalogue,employees,renewalSeats,includeEss]);
  const moduleGroups=[["CHRiS main menu","hris"],["MY CHRiS employee self-service","ess"]];
  const tierIndex={basic:0,standard:1,premium:2};
  return <main className="chris-page" style={{color:"#F7FAF8",maxWidth:1440,margin:"0 auto",paddingBottom:36}}>
@@ -52,12 +54,15 @@ export default function DemoBillingSubscriptions(){
     <label style={{display:"grid",gap:6,fontWeight:700}}>Employee seats No.
      <input aria-label="Employee seats No." type="number" min="1" max="100000" step="1" value={employees} onChange={e=>setEmployees(e.target.value)} style={{background:"#0b291c",color:"#FFFFFF",border:"1px solid #D4AF37",borderRadius:8,padding:10,width:190}}/>
     </label>
+    <label style={{display:"grid",gap:6,fontWeight:700}}>Renewal employee seats No.
+     <input aria-label="Renewal employee seats No." type="number" min="1" max="100000" step="1" value={renewalSeats===null?employees:renewalSeats} onChange={e=>setRenewalSeats(e.target.value)} style={{background:"#0b291c",color:"#FFFFFF",border:"1px solid #D4AF37",borderRadius:8,padding:10,width:190}}/>
+    </label>
     <label style={{display:"flex",alignItems:"center",gap:9,fontWeight:700,minHeight:40}}>
      <input type="checkbox" checked={includeEss} onChange={e=>setIncludeEss(e.target.checked)}/> Include MY CHRiS (ESS)
     </label>
     <button type="button" onClick={()=>window.print()} style={{background:"#D4AF37",color:"#082016",border:0,borderRadius:8,padding:"11px 18px",fontWeight:800,cursor:"pointer"}}>Print pricing proposal</button>
    </div>
-   <p style={muted}>Onboarding is quoted monthly for the first 12 months only. Annual support is priced per employee per month. Renewal excludes onboarding. VAT is illustrative at 7.5%.</p>
+   <p style={muted}>Onboarding is charged during the first 12 months only. Renewal excludes onboarding and uses the actual renewal-year seat count and approved prices effective in that year. Estimates shown now use today\u0027s demo catalogue rates; future rates are not guaranteed. Annual support is priced per employee per month. VAT is illustrative at 7.5%.</p>
   </section>
   {loading&&<p role="status">Calculating plan proposals…</p>}
   {error&&<p role="alert" style={{color:"#FFC1B7"}}>{error}</p>}
@@ -83,7 +88,8 @@ export default function DemoBillingSubscriptions(){
      <div>Onboarding (12 months): {q?money(q.lineItems.onboarding):"—"}</div>
      <div>Annual support (12 months): {q?money(q.lineItems.support):"—"}</div>
      <div>VAT (illustrative): {q?money(q.vat):"—"}</div>
-     <strong>Annual renewal estimate: {r?money(r.total):"—"}</strong>
+     <strong>Renewal estimate at current rates ({r?.employeeCount??"—"} seats): {r?money(r.total):"—"}</strong>
+     <div style={{...muted,fontSize:11}}>Future renewal is repriced using the approved rates effective in the renewal year; this is not a locked renewal price.</div>
     </div>
    </section>})}
   </div>}

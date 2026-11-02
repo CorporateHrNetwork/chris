@@ -39,16 +39,22 @@ function getEntitlements(planId,includeEss=true){
  const allowed=map=>Object.keys(map).filter(k=>map[k]<=plan.tier);
  return {hris:allowed(HRIS),ess:includeEss?allowed(ESS):[]};
 }
-function calculateQuote({planId,employeeCount,includeEss=true,vatBasisPoints=750}){
+function calculateQuote({planId,employeeCount,renewalEmployeeCount=employeeCount,includeEss=true,vatBasisPoints=750}){
  const p=PLANS[planId]; if(!p)throw new RangeError('Unknown plan');
  if(!Number.isSafeInteger(employeeCount)||employeeCount<1||employeeCount>100000)throw new RangeError('Invalid employee seats');
+ if(!Number.isSafeInteger(renewalEmployeeCount)||renewalEmployeeCount<1||renewalEmployeeCount>100000)throw new RangeError('Invalid renewal employee seats');
  if(!Number.isSafeInteger(vatBasisPoints)||vatBasisPoints<0||vatBasisPoints>10000)throw new RangeError('Invalid VAT rate');
  const annual=(rate)=>rate*employeeCount*12;
  const lineItems={licence:annual(p.licenceMonthly),ess:includeEss?annual(p.essMonthly):0,
   onboarding:annual(p.onboardingMonthly),support:annual(p.supportMonthly)};
  const subtotal=Object.values(lineItems).reduce((a,b)=>a+b,0);
  const vat=Math.round(subtotal*vatBasisPoints/10000);
- const renewalSubtotal=lineItems.licence+lineItems.ess+lineItems.support;
+ // Recalculate at the then-current catalogue rates and actual renewal-year seat count.
+ // This preview uses the catalogue active NOW; future rates are not forecast or guaranteed.
+ const renewalLineItems={licence:p.licenceMonthly*renewalEmployeeCount*12,
+  ess:includeEss?p.essMonthly*renewalEmployeeCount*12:0,onboarding:0,
+  support:p.supportMonthly*renewalEmployeeCount*12};
+ const renewalSubtotal=Object.values(renewalLineItems).reduce((a,b)=>a+b,0);
  const renewalVat=Math.round(renewalSubtotal*vatBasisPoints/10000);
  if(![subtotal,vat,renewalSubtotal,renewalVat,subtotal+vat].every(Number.isSafeInteger))throw new RangeError('Amount exceeds safe range');
  return {
@@ -59,9 +65,10 @@ function calculateQuote({planId,employeeCount,includeEss=true,vatBasisPoints=750
    vat:'7.5% illustrative, subject to invoice review',
    status:'NON_BINDING_DEMO_PROPOSAL'
   },lineItems,subtotal,vatBasisPoints,vat,total:subtotal+vat,entitlements:getEntitlements(planId,includeEss)},
-  renewal:{currency:'NGN',planId,employeeCount,includeEss,quoteType:'RENEWAL_ESTIMATE_ONLY',
-   lineItems:{licence:lineItems.licence,ess:lineItems.ess,onboarding:0,support:lineItems.support},
-   subtotal:renewalSubtotal,vat:renewalVat,total:renewalSubtotal+renewalVat}
+  renewal:{currency:'NGN',planId,employeeCount:renewalEmployeeCount,includeEss,
+   quoteType:'RENEWAL_ESTIMATE_AT_CURRENT_CATALOGUE_RATES',pricingBasis:'CURRENT_APPROVED_RATES_AT_ACTUAL_RENEWAL_DATE',
+   pricingNote:'Illustration at currently published demo rates only. Actual renewal is recalculated using the approved catalogue effective on the renewal date and billable seats at that date; no onboarding charge.',
+   lineItems:renewalLineItems,subtotal:renewalSubtotal,vat:renewalVat,total:renewalSubtotal+renewalVat}
  };
 }
 module.exports={PLANS,PLAN_IDS,HRIS,ESS,MODULE_CATALOGUE,getEntitlements,calculateQuote};

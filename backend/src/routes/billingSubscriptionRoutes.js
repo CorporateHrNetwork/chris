@@ -45,7 +45,7 @@ router.get('/catalogue', (req, res) => {
   const isZermatt = req.auth.organization?.slug === ZERMATT;
   if (DEMO_SLUGS.has(req.auth.organization?.slug)) return res.json({data:{
     version:'CHRIS-DEMO-PRICING-2026-11',plans:demoPricing.PLANS,modules:demoPricing.MODULE_CATALOGUE,
-    terms:{billingBasis:'All four components priced per employee per month. Onboarding amortised over the first 12 months only; renewal excludes onboarding.',vatTreatment:'Illustrative 7.5% VAT, subject to final invoice review.',quoteType:'NON_BINDING_DEMO_PROPOSAL'},
+    terms:{billingBasis:'All four components priced per employee per month. Onboarding amortised over the first 12 months only; renewal excludes onboarding.',renewalPolicy:'At each renewal, recalculate using approved prices effective in the renewal year and the billable seat count at renewal; current-rate renewal figures are estimates only.',vatTreatment:'Illustrative 7.5% VAT, subject to final invoice review.',quoteType:'NON_BINDING_DEMO_PROPOSAL'},
     organizationName:req.auth.organization?.name || 'Fictional demo organisation',accountConnection:'DEMO_PREVIEW_ONLY',negotiatedOffer:null
   }});
   return res.json({
@@ -116,7 +116,8 @@ router.post('/quotes', (req, res) => {
       return res.status(400).json({ error: 'employeeCount must be an integer between 1 and 100000' });
     }
     if (DEMO_SLUGS.has(req.auth.organization?.slug)) {
-      const demo = demoPricing.calculateQuote({planId,employeeCount,includeEss});
+      const renewalEmployeeCount = req.body?.renewalEmployeeCount === undefined ? employeeCount : req.body.renewalEmployeeCount;
+      const demo = demoPricing.calculateQuote({planId,employeeCount,renewalEmployeeCount,includeEss});
       return res.json({data:{version:'CHRIS-DEMO-PRICING-2026-11',...demo,negotiatedRenewal:null,negotiatedFirstYear:null,quoteType:'NON_BINDING_DEMO_PROPOSAL'}});
     }
     const quote = calculateQuote({ planId, employeeCount, includeEss });
