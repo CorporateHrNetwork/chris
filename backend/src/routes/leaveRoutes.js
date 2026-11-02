@@ -11,6 +11,7 @@ const {
 
 const {
   submitLeaveRequest,
+  recordManualLeaveUsage,
   reviewLeaveRequest,
   cancelLeaveRequest,
   commenceLeave,
@@ -84,10 +85,35 @@ router.get(
           leavePolicyId:
             req.query.leavePolicyId,
           leaveYear: req.query.leaveYear,
+          usedDaysOverride: req.query.usedDaysToDate,
         });
 
       return res.json({
         status: "success",
+        data: result,
+      });
+    } catch (error) {
+      return handleError(error, res);
+    }
+  }
+);
+
+router.put(
+  "/employees/:employeeNumber/used-days",
+  requirePermission("leave.manage"),
+  async (req, res) => {
+    try {
+      const result = await recordManualLeaveUsage({
+        organizationId: req.auth.organizationId,
+        actorUserId: req.auth.userId,
+        employeeNumber: req.params.employeeNumber,
+        leavePolicyId: req.body.leavePolicyId,
+        leaveYear: req.body.leaveYear,
+        totalDaysTaken: req.body.totalDaysTaken,
+      });
+      return res.json({
+        status: "success",
+        message: "Historical used days saved.",
         data: result,
       });
     } catch (error) {
