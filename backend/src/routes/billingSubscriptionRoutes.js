@@ -6,6 +6,8 @@ const express = require('express');
 const { requireAuth, requirePermission } = require('../middleware/authMiddleware');
 const { PLANS, MODULE_CATALOGUE, calculateQuote, calculateRenewalQuote } = require('../services/subscriptionPricing');
 
+const demoPricing = require('../services/demoSubscriptionPricing');
+const DEMO_SLUGS = new Set(['chris-demo-company', 'chris-client-demo-10']);
 const router = express.Router();
 const ZERMATT = 'zermatt-liquor-limited';
 const VERSION = 'CHRIS-PRICING-V4-2026-10';
@@ -41,6 +43,11 @@ router.use(requireAuth, requirePermission('settings.view'));
 router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 router.get('/catalogue', (req, res) => {
   const isZermatt = req.auth.organization?.slug === ZERMATT;
+  if (DEMO_SLUGS.has(req.auth.organization?.slug)) return res.json({data:{
+    version:'CHRIS-DEMO-PRICING-2026-11',plans:demoPricing.PLANS,modules:demoPricing.MODULE_CATALOGUE,
+    terms:{billingBasis:'All four components priced per employee per month. Onboarding amortised over the first 12 months only; renewal excludes onboarding.',vatTreatment:'Illustrative 7.5% VAT, subject to final invoice review.',quoteType:'NON_BINDING_DEMO_PROPOSAL'},
+    organizationName:req.auth.organization?.name || 'Fictional demo organisation',accountConnection:'DEMO_PREVIEW_ONLY',negotiatedOffer:null
+  }});
   return res.json({
     data: {
       version: VERSION,
@@ -107,6 +114,10 @@ router.post('/quotes', (req, res) => {
     if (typeof includeEss !== 'boolean') return res.status(400).json({ error: 'includeEss must be true or false' });
     if (!Number.isSafeInteger(employeeCount) || employeeCount < 1 || employeeCount > 100000) {
       return res.status(400).json({ error: 'employeeCount must be an integer between 1 and 100000' });
+    }
+    if (DEMO_SLUGS.has(req.auth.organization?.slug)) {
+      const demo = demoPricing.calculateQuote({planId,employeeCount,includeEss});
+      return res.json({data:{version:'CHRIS-DEMO-PRICING-2026-11',...demo,negotiatedRenewal:null,negotiatedFirstYear:null,quoteType:'NON_BINDING_DEMO_PROPOSAL'}});
     }
     const quote = calculateQuote({ planId, employeeCount, includeEss });
     const renewal = calculateRenewalQuote({ planId, employeeCount, includeEss });

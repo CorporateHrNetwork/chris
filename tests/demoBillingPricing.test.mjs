@@ -14,4 +14,8 @@ assert.match(isolation, /DemoBillingSubscriptions\.jsx/);
 assert.match(app, /path="\/billing\/:demoSection"/);
 assert.match(boundary, /pricingQuote=req\.path==='\/api\/billing\/quotes'&&req\.method==='POST'/);
 assert.match(boundary, /!pricingCatalogue&&!pricingQuote/);
+assert.match(view, /Employee seats No\\./);
+assert.match(view, /Complete module entitlement matrix/);
+assert.match(view, /Print pricing proposal/);
+assert.doesNotMatch(view, /Zenith Bank|zermatt|chris\\.crnetwork\\.com\\.ng/i);
 console.log("PASS: Demo billing is read-only, tenant-isolated and shows three draft plans.");
