@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { calculateLeaveDays, utcDay } = require("./leaveDayCalculator");
+const { getEmployeePolicyBalance, supportsManualUsedDays } = require("./leaveBalanceService");
 
 const {
   evaluateEmployeeEligibility,
@@ -156,6 +157,118 @@ function policyEntitlementForService(policy, eligibilityResult) {
 
 async function lockLeaveEmployee(tx, organizationId, employeeNumber) {
   await tx.$queryRawUnsafe('SELECT id FROM public.employees WHERE "organizationId"=$1 AND "employeeNumber"=$2 FOR UPDATE', organizationId, employeeNumber);
+}
+
+async function recordManualLeaveUsage({
+  organizationId,
+  actorUserId,
+  employeeNumber,
+  leavePolicyId,
+  leaveYear,
+  totalDaysTaken,
+}) {
+  const usedDays = Number(totalDaysTaken);
+  const year = Number(leaveYear || new Date().getFullYear());
+
+  if (!organizationId) throw new Error("ORGANIZATION_REQUIRED");
+  if (!employeeNumber) throw new Error("EMPLOYEE_REQUIRED");
+  if (!leavePolicyId) throw new Error("LEAVE_POLICY_REQUIRED");
+  if (!Number.isFinite(usedDays) || usedDays < 0 ||
+      Math.round(usedDays * 100) / 100 !== usedDays) {
+    throw new Error("INVALID_USED_DAYS");
+  }
+  if (!Number.isInteger(year) || year < 2000 || year > 2200) {
+    throw new Error("INVALID_LEAVE_YEAR");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await lockLeaveEmployee(tx, organizationId, employeeNumber);
+
+    const [organization, employee, policy] = await Promise.all([
+      tx.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true, legalName: true, slug: true },
+      }),
+      tx.employee.findFirst({
+        where: { organizationId, employeeNumber },
+        select: { id: true, employeeNumber: true },
+      }),
+      tx.leavePolicy.findFirst({
+        where: {
+          id: leavePolicyId,
+          organizationId,
+          status: "ACTIVE",
+          isActive: true,
+        },
+        select: { id: true, leaveTypeId: true },
+      }),
+    ]);
+
+    if (!supportsManualUsedDays(organization)) {
+      throw new Error("MANUAL_USED_DAYS_NOT_SUPPORTED");
+    }
+    if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
+    if (!policy) throw new Error("TENANT_ACTIVE_LEAVE_POLICY_NOT_FOUND");
+
+    const balance = await tx.leaveBalance.findUnique({
+      where: {
+        organizationId_employeeId_leaveTypeId_leaveYear: {
+          organizationId,
+          employeeId: employee.id,
+          leaveTypeId: policy.leaveTypeId,
+          leaveYear: year,
+        },
+      },
+    });
+    if (!balance) throw new Error("LEAVE_BALANCE_NOT_PROVISIONED");
+
+    const previouslyRecorded = decimalToNumber(balance.used);
+    if (usedDays < previouslyRecorded) {
+      throw new Error("USED_DAYS_CANNOT_BE_REDUCED");
+    }
+
+    let auditEventId = null;
+    if (usedDays > previouslyRecorded) {
+      await tx.leaveBalance.update({
+        where: { id: balance.id },
+        data: { used: usedDays },
+      });
+
+      const audit = await tx.organizationAudit.create({
+        data: {
+          organizationId,
+          actorUserId: actorUserId || null,
+          entityType: "LEAVE_BALANCE",
+          entityId: balance.id,
+          action: "MANUAL_HISTORICAL_USED_DAYS_RECORDED",
+          reason: "Manual historical leave usage recorded from the New Leave Request page.",
+          previousValue: {
+            employeeNumber,
+            leavePolicyId,
+            leaveYear: year,
+            usedDays: previouslyRecorded,
+          },
+          newValue: {
+            employeeNumber,
+            leavePolicyId,
+            leaveYear: year,
+            usedDays,
+          },
+        },
+      });
+      auditEventId = audit.id;
+    }
+
+    const projection = await getEmployeePolicyBalance({
+      organizationId,
+      employeeNumber,
+      leavePolicyId,
+      leaveYear: year,
+      tx,
+    });
+
+    return { projection, auditEventId };
+  }, { timeout: 30000 });
 }
 async function lockRequestEmployee(tx, organizationId, requestId) {
   await tx.$queryRawUnsafe('SELECT e.id FROM public.employees e JOIN public.leave_requests r ON r."employeeId"=e.id AND r."organizationId"=e."organizationId" WHERE r."organizationId"=$1 AND r.id=$2 FOR UPDATE OF e', organizationId, requestId);
@@ -1072,6 +1185,7 @@ module.exports = {
   getActivePolicy,
   calculateLeaveRequestDays,
   findOrCreateBalance,
+  recordManualLeaveUsage,
   submitLeaveRequest,
   reviewLeaveRequest,
   cancelLeaveRequest,
