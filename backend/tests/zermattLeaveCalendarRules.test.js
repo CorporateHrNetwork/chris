@@ -1,9 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const {
-  ZERMATT_LEAVE_CALENDAR_RULES,
-} = require("../src/services/zermattLeaveEntitlementService");
+const ZERMATT_LEAVE_CALENDAR_RULES = require("../src/config/zermattLeaveCalendarRules");
 const { calculateLeaveDays } = require("../src/services/leaveDayCalculator");
 
 test("ZERMATT leave policies count weekends and off-days but exclude public holidays", () => {
