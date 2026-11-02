@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import { apiRequest } from "../services/api";
@@ -124,6 +125,17 @@ export default function LeaveRequests() {
     loadRequests();
     loadReferenceData();
   }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   function updateForm(patch) {
     setForm((current) => ({
@@ -786,7 +798,7 @@ export default function LeaveRequests() {
         />
       </Panel>
 
-      {open && (
+      {open && createPortal(
         <div
           className="leave-request-overlay"
           role="presentation"
@@ -1189,7 +1201,8 @@ export default function LeaveRequests() {
               </footer>
             </form>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </LeavePage>
   );
