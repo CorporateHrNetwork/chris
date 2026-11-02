@@ -5,6 +5,7 @@ export function demoIsolation(){return {
  buildStart(){fs.rmSync(path.resolve('dist'),{recursive:true,force:true});},
  transform(code,id){
   if(!id.includes('/src/'))return null;
+  if(path.basename(id)==='BillingSubscriptions.jsx')return {code:`export {default} from ${JSON.stringify(path.resolve('src/demo/DemoBillingSubscriptions.jsx'))};`,map:null};
   if(excluded.has(path.basename(id)))return {code:`export {default} from ${JSON.stringify(path.resolve('src/demo/DemoPolicyWorkspace.jsx'))};`,map:null};
   if(id.endsWith('.css'))return {code:code.replace(/zermatt/gi,'demo'),map:null};
   if(/\.[jt]sx?(?:\?|$)/.test(id))return transformSync(code,{filename:id.split('?')[0],babelrc:false,configFile:false,parserOpts:{plugins:['jsx']},plugins:[demoTextBoundary],sourceMaps:false});
