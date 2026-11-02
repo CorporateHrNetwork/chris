@@ -18,6 +18,8 @@
     "zermatt:employment-level:v3:verify": "node scripts/verify-zermatt-employment-level-v3.cjs",
     "zermatt:role-grades:preview": "node scripts/reconcile-zermatt-v3-role-grades.cjs",
     "zermatt:role-grades:apply": "node scripts/reconcile-zermatt-v3-role-grades.cjs --apply",
+    "zermatt:leave-calendar:preview": "node scripts/apply-zermatt-leave-calendar-rules.cjs",
+    "zermatt:leave-calendar:apply": "node scripts/apply-zermatt-leave-calendar-rules.cjs --apply",
     "test:performance-evaluation": "node --test tests/performanceEvaluation.test.js"
   },
   "keywords": [],
