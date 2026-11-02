@@ -51,6 +51,7 @@ export default function LeaveRequests() {
 
   const canApprove =
     hasPermission("leave.approve") || hasPermission("leave.manage");
+  const canManageUsedDays = hasPermission("leave.manage");
 
   const [policies, setPolicies] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -60,6 +61,10 @@ export default function LeaveRequests() {
   const [calculation, setCalculation] = useState(null);
 
   const [balance, setBalance] = useState(null);
+  const [projectedBalance, setProjectedBalance] = useState(null);
+  const [recordedUsedDays, setRecordedUsedDays] = useState(null);
+  const [usedDaysToDate, setUsedDaysToDate] = useState("");
+  const [usageSaving, setUsageSaving] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [balanceError, setBalanceError] = useState("");
 
@@ -131,6 +136,10 @@ export default function LeaveRequests() {
     setForm(emptyForm);
     setCalculation(null);
     setBalance(null);
+    setProjectedBalance(null);
+    setRecordedUsedDays(null);
+    setUsedDaysToDate("");
+    setUsageSaving(false);
     setBalanceError("");
     setBalanceLoading(false);
   }
@@ -143,6 +152,9 @@ export default function LeaveRequests() {
   useEffect(() => {
     if (!form.employeeNumber || !form.leavePolicyId) {
       setBalance(null);
+      setProjectedBalance(null);
+      setRecordedUsedDays(null);
+      setUsedDaysToDate("");
       setBalanceError("");
       setBalanceLoading(false);
       return;
@@ -151,6 +163,9 @@ export default function LeaveRequests() {
     let live = true;
 
     setBalance(null);
+    setProjectedBalance(null);
+    setRecordedUsedDays(null);
+    setUsedDaysToDate("");
     setBalanceError("");
     setBalanceLoading(true);
 
@@ -167,13 +182,18 @@ export default function LeaveRequests() {
       .then((response) => {
         if (!live) return;
 
-        setBalance(response.data);
+        const loadedBalance = response.data;
+        setBalance(loadedBalance);
+        setProjectedBalance(loadedBalance);
+        setRecordedUsedDays(Number(loadedBalance.used || 0));
+        setUsedDaysToDate(String(loadedBalance.used || 0));
         setBalanceError("");
       })
       .catch((balanceLoadError) => {
         if (!live) return;
 
         setBalance(null);
+        setProjectedBalance(null);
         setBalanceError(
           balanceLoadError.message ||
             "Unable to load leave balance."
@@ -189,6 +209,91 @@ export default function LeaveRequests() {
       live = false;
     };
   }, [form.employeeNumber, form.leavePolicyId, form.leaveYear]);
+
+  useEffect(() => {
+    if (
+      !balance ||
+      !balance.supportsManualUsedDays ||
+      !canManageUsedDays ||
+      recordedUsedDays === null
+    ) {
+      setProjectedBalance(balance);
+      return;
+    }
+
+    const rawUsedDays = String(usedDaysToDate).trim();
+    if (!rawUsedDays) {
+      setProjectedBalance(null);
+      setBalanceError("Enter the employee's total used days to calculate the correct balance.");
+      setBalanceLoading(false);
+      return;
+    }
+
+    const parsedUsedDays = Number(rawUsedDays);
+    if (
+      !Number.isFinite(parsedUsedDays) ||
+      parsedUsedDays < recordedUsedDays ||
+      Math.round(parsedUsedDays * 100) / 100 !== parsedUsedDays
+    ) {
+      setProjectedBalance(null);
+      setBalanceError(
+        parsedUsedDays < recordedUsedDays
+          ? `Total used days cannot be lower than the ${recordedUsedDays} days already recorded by CHRiS.`
+          : "Enter a valid used-days figure with no more than two decimal places."
+      );
+      setBalanceLoading(false);
+      return;
+    }
+
+    if (parsedUsedDays === recordedUsedDays) {
+      setProjectedBalance(balance);
+      setBalanceError("");
+      setBalanceLoading(false);
+      return;
+    }
+
+    let live = true;
+    setBalanceLoading(true);
+    const query = new URLSearchParams({
+      leavePolicyId: form.leavePolicyId,
+      leaveYear: String(form.leaveYear),
+      usedDaysToDate: String(parsedUsedDays),
+    }).toString();
+
+    apiRequest(
+      `/api/leave/employees/${encodeURIComponent(
+        form.employeeNumber
+      )}/policy-balance?${query}`
+    )
+      .then((response) => {
+        if (!live) return;
+        setProjectedBalance(response.data);
+        setBalanceError("");
+      })
+      .catch((projectionError) => {
+        if (!live) return;
+        setProjectedBalance(null);
+        setBalanceError(
+          projectionError.message ||
+            "Unable to calculate the adjusted leave balance."
+        );
+      })
+      .finally(() => {
+        if (live) setBalanceLoading(false);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [
+    balance,
+    canManageUsedDays,
+    form.employeeNumber,
+    form.leavePolicyId,
+    form.leaveYear,
+    recordedUsedDays,
+    usedDaysToDate,
+  ]);
 
   useEffect(() => {
     if (
@@ -235,17 +340,28 @@ export default function LeaveRequests() {
     form.endDate,
   ]);
 
+  const activeBalance = projectedBalance || balance;
+  const canEditUsedDays =
+    canManageUsedDays && Boolean(balance?.supportsManualUsedDays);
   const requestedUnits = Number(
     calculation?.requestedUnits || 0
   );
+  const parsedUsedDays = Number(usedDaysToDate);
+  const usageInputInvalid =
+    canEditUsedDays &&
+    Boolean(balance?.hasEntitlement) &&
+    (!String(usedDaysToDate).trim() ||
+      !Number.isFinite(parsedUsedDays) ||
+      parsedUsedDays < Number(recordedUsedDays ?? 0) ||
+      Math.round(parsedUsedDays * 100) / 100 !== parsedUsedDays);
 
   const maximumRequestable = Number(
-    balance?.maximumRequestable || 0
+    activeBalance?.maximumRequestable || 0
   );
 
   const exceedsMaximum =
     Boolean(calculation) &&
-    Boolean(balance?.hasEntitlement) &&
+    Boolean(activeBalance?.hasEntitlement) &&
     requestedUnits > maximumRequestable;
 
   const selectedPolicy = useMemo(
@@ -255,6 +371,62 @@ export default function LeaveRequests() {
       ) || null,
     [policies, form.leavePolicyId]
   );
+
+  async function persistManualUsedDays() {
+    if (!canEditUsedDays || !balance) return activeBalance;
+
+    const totalDaysTaken = Number(usedDaysToDate);
+    if (
+      !Number.isFinite(totalDaysTaken) ||
+      totalDaysTaken < Number(recordedUsedDays ?? 0) ||
+      Math.round(totalDaysTaken * 100) / 100 !== totalDaysTaken
+    ) {
+      throw new Error("Enter a valid total used-days figure. It cannot be lower than days already recorded by CHRiS.");
+    }
+
+    if (totalDaysTaken === Number(recordedUsedDays)) {
+      return activeBalance;
+    }
+
+    setUsageSaving(true);
+    try {
+      const response = await apiRequest(
+        `/api/leave/employees/${encodeURIComponent(
+          form.employeeNumber
+        )}/used-days`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            leavePolicyId: form.leavePolicyId,
+            leaveYear: form.leaveYear,
+            totalDaysTaken,
+          }),
+        }
+      );
+
+      const savedProjection = response.data.projection;
+      setBalance(savedProjection);
+      setProjectedBalance(savedProjection);
+      setRecordedUsedDays(Number(savedProjection.used || 0));
+      setUsedDaysToDate(String(savedProjection.used || 0));
+      setBalanceError("");
+      return savedProjection;
+    } finally {
+      setUsageSaving(false);
+    }
+  }
+
+  async function saveManualUsedDays() {
+    setError("");
+    setMessage("");
+    try {
+      await persistManualUsedDays();
+      setMessage("Historical used days saved to the employee's leave ledger.");
+    } catch (usageError) {
+      setBalanceError(usageError.message);
+      setError(usageError.message);
+    }
+  }
 
   async function action(request, path, body, label) {
     setBusy(request.id);
@@ -303,11 +475,10 @@ export default function LeaveRequests() {
       return;
     }
 
-    if (!balance.hasEntitlement) {
+    if (usageInputInvalid) {
       setError(
-        `No entitlement is currently configured for this employee under ${
-          selectedPolicy?.name || "the selected leave policy"
-        }.`
+        balanceError ||
+          "Enter a valid cumulative total of days already taken before submitting this request."
       );
       return;
     }
@@ -319,11 +490,35 @@ export default function LeaveRequests() {
       return;
     }
 
-    if (requestedUnits > maximumRequestable) {
+    let requestBalance = activeBalance;
+    if (
+      canEditUsedDays &&
+      Number(usedDaysToDate) > Number(recordedUsedDays)
+    ) {
+      try {
+        requestBalance = await persistManualUsedDays();
+      } catch (usageError) {
+        setBalanceError(usageError.message);
+        setError(usageError.message);
+        return;
+      }
+    }
+
+    if (!requestBalance?.hasEntitlement) {
       setError(
-        `Request exceeds the maximum available entitlement of ${maximumRequestable} ${readableUnit(
-          balance.unit
-        )}.`
+        `No entitlement is currently configured for this employee under ${
+          selectedPolicy?.name || "the selected leave policy"
+        }.`
+      );
+      return;
+    }
+
+    const requestMaximum = Number(requestBalance.maximumRequestable || 0);
+    if (requestedUnits > requestMaximum) {
+      setError(
+        `Request exceeds the maximum available entitlement of ${requestMaximum} ${readableUnit(
+          requestBalance.unit
+        )}. The used-days figure has been saved to the employee's leave ledger.`
       );
       return;
     }
@@ -641,6 +836,9 @@ export default function LeaveRequests() {
                 value={form.employeeNumber}
                 onChange={(employeeNumber) => {
                   setBalance(null);
+                  setProjectedBalance(null);
+                  setRecordedUsedDays(null);
+                  setUsedDaysToDate("");
                   setBalanceError("");
                   setCalculation(null);
 
@@ -672,6 +870,9 @@ export default function LeaveRequests() {
                     );
 
                     setBalance(null);
+                    setProjectedBalance(null);
+                    setRecordedUsedDays(null);
+                    setUsedDaysToDate("");
                     setBalanceError("");
                     setCalculation(null);
 
@@ -702,7 +903,7 @@ export default function LeaveRequests() {
 
               <label className="leave-field">
                 <span>Leave Year *</span>
-                <select style={styles.input} value={form.leaveYear} onChange={(event) => { setBalance(null); setCalculation(null); updateForm({ leaveYear: Number(event.target.value) }); }} required>
+                <select style={styles.input} value={form.leaveYear} onChange={(event) => { setBalance(null); setProjectedBalance(null); setRecordedUsedDays(null); setUsedDaysToDate(""); setCalculation(null); updateForm({ leaveYear: Number(event.target.value) }); }} required>
                   {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map((year) => <option key={year} value={year}>{year}</option>)}
                 </select>
               </label>
@@ -728,15 +929,17 @@ export default function LeaveRequests() {
                     ? "Select employee and leave policy"
                     : balanceLoading
                       ? "Loading leave balance..."
-                      : balanceError
+                      : balanceError && !usageInputInvalid
                         ? "Unable to load leave balance."
-                        : !balance
+                        : !activeBalance
                           ? "-"
-                          : !balance.hasEntitlement
+                          : !activeBalance.hasEntitlement
                             ? "No applicable entitlement"
-                            : `${balance.available} ${readableUnit(
-                                balance.unit
-                              )}`}
+                            : usageInputInvalid
+                              ? "Enter valid used days"
+                              : `${activeBalance.available} ${readableUnit(
+                                  activeBalance.unit
+                                )}`}
                 </div>
               </div>
 
@@ -761,16 +964,20 @@ export default function LeaveRequests() {
                     ? "Select employee and leave policy"
                     : balanceLoading
                       ? "Loading..."
-                      : !balance ||
-                          !balance.hasEntitlement
-                        ? "-"
-                        : `${balance.maximumRequestable} ${readableUnit(
-                            balance.unit
-                          )}`}
+                      : balanceError && !usageInputInvalid
+                        ? "Unable to calculate adjusted balance."
+                        : !activeBalance ||
+                            !activeBalance.hasEntitlement
+                          ? "-"
+                          : usageInputInvalid
+                            ? "Enter valid used days"
+                            : `${activeBalance.maximumRequestable} ${readableUnit(
+                                activeBalance.unit
+                              )}`}
                 </div>
               </div>
 
-              {balance?.hasEntitlement && (
+              {activeBalance?.hasEntitlement && (
                 <div
                   className="leave-field--wide"
                   style={{
@@ -782,16 +989,59 @@ export default function LeaveRequests() {
                     fontSize: 13,
                   }}
                 >
-                  Entitlement: {balance.entitlement}
-                  {balance.allocation?.method ? ` (${balance.allocation.method.replaceAll("_", " ").toLowerCase()})` : ""}
+                  Entitlement: {activeBalance.entitlement}
+                  {activeBalance.allocation?.method ? ` (${activeBalance.allocation.method.replaceAll("_", " ").toLowerCase()})` : ""}
                   {" | "}
-                  Carryover: {balance.carryover}
+                  Carryover: {activeBalance.carryover}
                   {" | "}
-                  Adjustments: {balance.adjustments}
+                  Adjustments: {activeBalance.adjustments}
                   {" | "}
-                  Used: {balance.used}
+                  Used: {activeBalance.used}
                   {" | "}
-                  Pending / Committed: {balance.committed}
+                  Pending / Committed: {activeBalance.committed}
+                </div>
+              )}
+
+              {canEditUsedDays && activeBalance?.hasEntitlement && (
+                <div className="leave-field--wide" style={{ display: "grid", gap: 8 }}>
+                  <label className="leave-field">
+                    <span>Total Days Taken So Far (Manual)</span>
+                    <input
+                      style={styles.input}
+                      type="number"
+                      min={recordedUsedDays ?? 0}
+                      step="0.01"
+                      value={usedDaysToDate}
+                      onChange={(event) => {
+                        setUsedDaysToDate(event.target.value);
+                        setError("");
+                      }}
+                      aria-describedby="leave-used-days-help"
+                    />
+                    <small id="leave-used-days-help" style={styles.muted}>
+                      Enter the cumulative days already used for this leave type and year. Include days already recorded by CHRiS; pending requests remain deducted separately, and future approved requests will be added automatically.
+                    </small>
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <span style={styles.muted}>
+                      {Number(usedDaysToDate) > Number(recordedUsedDays)
+                        ? "Unsaved historical usage — save to update the employee ledger."
+                        : "No additional historical usage to save."}
+                    </span>
+                    <button
+                      type="button"
+                      style={styles.button}
+                      disabled={
+                        usageSaving ||
+                        balanceLoading ||
+                        usageInputInvalid ||
+                        Number(usedDaysToDate) === Number(recordedUsedDays)
+                      }
+                      onClick={saveManualUsedDays}
+                    >
+                      {usageSaving ? "Saving..." : "Save Used Days"}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -915,7 +1165,9 @@ export default function LeaveRequests() {
                     !calculation ||
                     requestedUnits <= 0 ||
                     balanceLoading ||
-                    !balance?.hasEntitlement ||
+                    !activeBalance?.hasEntitlement ||
+                    usageInputInvalid ||
+                    usageSaving ||
                     exceedsMaximum
                   }
                   style={{
@@ -924,7 +1176,9 @@ export default function LeaveRequests() {
                       !calculation ||
                       requestedUnits <= 0 ||
                       balanceLoading ||
-                      !balance?.hasEntitlement ||
+                      !activeBalance?.hasEntitlement ||
+                      usageInputInvalid ||
+                      usageSaving ||
                       exceedsMaximum
                         ? 0.55
                         : 1,

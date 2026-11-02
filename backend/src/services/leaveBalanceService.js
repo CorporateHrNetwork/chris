@@ -61,6 +61,7 @@ function projectBalance({
   policy,
   committed = 0,
   entitlement,
+  usedDaysOverride,
 }) {
   const opening = number(balance?.openingBalance);
   const accrued = number(balance?.accrued);
@@ -68,7 +69,7 @@ function projectBalance({
     balance?.carriedForward
   );
   const adjustments = number(balance?.adjusted);
-  const used = number(balance?.used);
+  const used = number(usedDaysOverride ?? balance?.used);
   const committedUnits = number(committed);
 
   const baseEntitlement = number(
@@ -112,11 +113,26 @@ async function getEmployeePolicyBalance({
   leavePolicyId,
   leaveYear,
   entitlement,
+  usedDaysOverride,
   tx = prisma,
 }) {
   const year = Number(
     leaveYear || new Date().getFullYear()
   );
+  const hasUsedDaysOverride =
+    usedDaysOverride !== undefined &&
+    usedDaysOverride !== null &&
+    usedDaysOverride !== "";
+  const normalizedUsedDaysOverride = hasUsedDaysOverride
+    ? Number(usedDaysOverride)
+    : undefined;
+
+  if (hasUsedDaysOverride &&
+      (!Number.isFinite(normalizedUsedDaysOverride) ||
+       normalizedUsedDaysOverride < 0 ||
+       Math.round(normalizedUsedDaysOverride * 100) / 100 !== normalizedUsedDaysOverride)) {
+    throw new Error("INVALID_USED_DAYS");
+  }
 
   if (!organizationId) {
     throw new Error("ORGANIZATION_REQUIRED");
@@ -130,7 +146,8 @@ async function getEmployeePolicyBalance({
     throw new Error("LEAVE_POLICY_REQUIRED");
   }
 
-  const employee = await tx.employee.findFirst({
+  const [employee, organization] = await Promise.all([
+    tx.employee.findFirst({
     where: {
       organizationId,
       employeeNumber,
@@ -142,7 +159,12 @@ async function getEmployeePolicyBalance({
       middleName: true,
       lastName: true,
     },
-  });
+    }),
+    tx.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true, legalName: true, slug: true },
+    }),
+  ]);
 
   if (!employee) {
     throw new Error("EMPLOYEE_NOT_FOUND");
@@ -222,6 +244,7 @@ async function getEmployeePolicyBalance({
     balance,
     policy,
     committed: pending._sum.requestedUnits,
+    usedDaysOverride: normalizedUsedDaysOverride,
     entitlement:
       entitlement ??
       latestAllocation?.allocatedEntitlement ??
@@ -240,11 +263,22 @@ async function getEmployeePolicyBalance({
     },
     leaveYear: year,
     allocation: latestAllocation,
+    supportsManualUsedDays: supportsManualUsedDays(organization),
     ...projected,
   };
 }
 
+function supportsManualUsedDays(organization) {
+  const identity = [
+    organization?.name,
+    organization?.legalName,
+    organization?.slug,
+  ].filter(Boolean).join(" ").toLowerCase();
+  return identity.includes("zermatt") && identity.includes("liquor");
+}
+
 module.exports = {
+  supportsManualUsedDays,
   entitlementUnit,
   maximumRequestable,
   projectBalance,
