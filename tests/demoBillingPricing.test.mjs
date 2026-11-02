@@ -8,7 +8,7 @@ const app = read("src/App.jsx");
 assert.match(view, /\["basic", "standard", "premium"\]/);
 assert.match(view, /\/api\/billing\/catalogue/);
 assert.match(view, /\/api\/billing\/quotes/);
-assert.match(view, /Indicative draft catalogue/);
+assert.match(view, /Draft, non-binding demo proposal/);
 assert.doesNotMatch(view, /invoice\/email|\/payments|zermatt|Zenith Bank/i);
 assert.match(isolation, /DemoBillingSubscriptions\.jsx/);
 assert.match(app, /path="\/billing\/:demoSection"/);
