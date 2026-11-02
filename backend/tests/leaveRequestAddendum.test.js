@@ -25,4 +25,8 @@ const manualUsageRoute = routes.slice(
   routes.indexOf('"/employees/:employeeNumber/used-days"') + 500
 );
 assert.match(manualUsageRoute, /requirePermission\("leave\.manage"\)/);
+const errorMapping = routes.slice(routes.indexOf("const validationErrors"), routes.indexOf("if (validationErrors.has"));
+for (const code of ["INVALID_USED_DAYS", "MANUAL_USED_DAYS_NOT_SUPPORTED", "LEAVE_BALANCE_NOT_PROVISIONED", "USED_DAYS_CANNOT_BE_REDUCED"]) {
+  assert.ok(errorMapping.includes(`"${code}"`), `Expected ${code} to map to a client validation response`);
+}
 console.log("PASS: leave request addendum backend tests passed.");
