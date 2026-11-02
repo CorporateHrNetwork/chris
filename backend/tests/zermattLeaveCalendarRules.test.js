@@ -38,3 +38,20 @@ test("ZERMATT leave policy configuration retains WORKING_DAYS and explicitly set
   assert.match(source, /unit: "WORKING_DAYS"/);
   assert.match(source, /calendarRules: \{ \.\.\.ZERMATT_LEAVE_CALENDAR_RULES \}/);
 });
+
+
+test("live policy updater is ZERMATT-scoped, preview-first, and audited", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(
+    path.resolve(__dirname, "../scripts/apply-zermatt-leave-calendar-rules.cjs"),
+    "utf8"
+  );
+
+  assert.match(script, /process\.argv\.includes\("--apply"\)/);
+  assert.match(script, /where: \{ slug: ZERMATT_SLUG \}/);
+  assert.match(script, /Database Writes Issued: 0/);
+  assert.match(script, /organizationAudit\.create/);
+  assert.match(script, /isolationLevel: "Serializable"/);
+  assert.match(script, /ZERMATT_LEAVE_RULES_ACTOR_EMAIL_REQUIRED/);
+});
