@@ -51,7 +51,7 @@ test('loan lookup scopes both organization and employee, fails closed on changed
 
 test('ESS loan endpoint ignores injected employee and organization selectors', async () => {
   const routes = [];
-  const router = { get: (...args) => routes.push(args), post: () => {} };
+  const router = { get: (...args) => routes.push(args), post: () => {}, patch: (...args) => routes.push(args) };
   const auth = (req, res, next) => req.essAuth ? next() : res.status(401).json({});
   const calls = [];
   const sandbox = { module: { exports: {} }, console, process, Buffer, require: id => {
@@ -63,6 +63,8 @@ test('ESS loan endpoint ignores injected employee and organization selectors', a
     return require(id);
   }};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes/essRoutes.js'), 'utf8'), sandbox);
+  const correctionRoute = routes.find(row => row[0] === '/loans/:id/application');
+  assert.equal(correctionRoute[1], auth);
   const route = routes.find(row => row[0] === '/loans');
   assert.equal(route[1], auth);
   const res = { status() { return this; }, json(value) { this.value = value; return this; } };
@@ -105,4 +107,5 @@ test('document-portal policy includes the agreed support-pay rules', () => {
   const content = policy.sections.map(row => row.join(' ')).join(' ');
   for (const expected of ['100,000', '25%', '75%', '16%', '84%', '15th', '26-day', '57%', '11%', '10%', '9%', '8%', '5%', 'Previous Unpaid', 'Previous Overpaid', 'Loan recovery must never', 'before any new-hire proration', 'annual-leave calculation remains unchanged']) assert.ok(content.includes(expected), expected);
 });
+
 
