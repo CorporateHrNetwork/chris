@@ -10,12 +10,14 @@
 - Employee-owned loan drafts and application-form upload are available only when gated on; no automatic loan submission, disbursement or payroll recovery is introduced.
 - Read-only approval timeline routes check active tenant identity, employee ownership or explicit assigned participation.
 - Notification plans use idempotency keys and privacy-minimal messages, but are not yet delivered.
-- Final leave confirmation deliberately fails closed until it can post the leave balance in the same transaction as the approval transition. Loan completion requires evidence of a disbursement recorded by the existing loan service.
+- Final leave confirmation now calls the existing leave posting service inside the same transaction as the versioned approval transition and audit event. The employee lock precedes the workflow lock to match cancellation/review ordering. Loan completion still requires evidence of a disbursement recorded by the existing loan service.
+- Authenticated management leave decision route binds identity to the session and enforces current stage owner and expected version. Rejection releases pending reservations. Leave RETURN remains explicitly blocked until correction/resubmission semantics are implemented.
+- Loan branch approvers now come from the effective-dated reporting chain rather than an arbitrary branch-role match. Both routes reject duplicate manager logins, inactive managers, cross-branch links, missing location authority and branch-manager designation without the assigned role.
 
 ## Blockers before activation
 1. Implement branch-manager loan submission and decision using the **existing** loan ledger; make the existing Head HR, GM and disbursement endpoints enforce the added branch approval without bypass. Avoid a second source of truth for financial state.
-2. Implement atomic final leave confirmation: lock the request and balance, verify all stage approvals, post the existing leave ledger, mark approval completed and emit one audit event in one transaction. Retain the current leave eligibility and cancellation semantics.
-3. Add server-authorised stage decision routes with expected-version checks and delegated approver handling; ensure Audit cannot mutate even if they hold other permissions.
+2. Validate atomic final leave confirmation against an isolated staging database. Service tests exercise posting once, rollback on audit failure, insufficient balance, cancelled requests, stale versions and legacy bypass prevention. Real database concurrency, cancellation ledger synchronization and return/correction/resubmission remain blockers.
+3. Complete loan stage decision routes, delegated approver handling and manager UI. The leave decision route is implemented; validate active role reassignment/revocation after snapshot creation. Audit remains read-only.
 4. Integrate the notification plan with the durable email outbox and retry logic; test email to next owner and visibility-only participants.
 5. Add employee loan application form, request history and manager approval inbox in ESS and management UI. Show current owner and completed/pending stages.
 6. Verify real Zermatt role mapping, branch location scopes and dated reporting-line assignments in staging; unresolved or duplicate approvers must halt safely.
@@ -27,3 +29,7 @@
 - No change to leave allowance calculation or payment rules.
 - No Zermatt customer data in the Northstar public demo.
 - Existing Zermatt leave application backdating and zero-notice exception remains unchanged.
+
+
+## Validation of this increment
+26 focused service tests pass locally. Transaction rollback tests use an in-memory infrastructure fixture and the real leave/approval services; they do not substitute for PostgreSQL migration, concurrency or authenticated browser acceptance. Full repository CI must pass on the new head. No merge, activation, production migration or deployment performed.
