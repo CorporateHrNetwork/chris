@@ -540,13 +540,14 @@ async function calculateLeaveRequestDays({ organizationId, employeeNumber, leave
     scheduleNote: employee.shiftAssignments.length ? "Assigned shifts define hours only; Monday-Friday is used because no per-day schedule is modeled." : "No dated shift assignment; Monday-Friday is used." };
 }
 
-async function reviewLeaveRequest({
+async function reviewLeaveRequestInTransaction({
   organizationId,
   leaveRequestId,
   reviewerUserId,
   decision,
   reviewNotes,
-}) {
+  workflowExpectedVersion,
+}, tx) {
   const normalizedDecision =
     String(
       decision || ""
@@ -567,8 +568,7 @@ async function reviewLeaveRequest({
     );
   }
 
-  return prisma.$transaction(
-    async (tx) => {
+
       await lockRequestEmployee(tx, organizationId, leaveRequestId);
       const request =
         await tx.leaveRequest.findFirst({
@@ -590,11 +590,17 @@ async function reviewLeaveRequest({
 
       // A routed ESS request cannot be approved through the legacy single-step
       // HR review endpoint. Only the integrated final confirmation may do so.
-      if (process.env.ZERMATT_ESS_APPROVALS_ENABLED === "true") {
+      {
         const org = await tx.organization.findUnique({where:{id:organizationId},select:{slug:true}});
         if (org?.slug === "zermatt-liquor-limited") {
           const routed = await require("./zermattEssApprovalPersistence").lookup(tx,{organizationId,requestType:"LEAVE",requestId:leaveRequestId});
-          if (routed) throw new Error("ESS_LEAVE_ROUTED_APPROVAL_REQUIRED");
+          if (routed) {
+            const plan = require("./zermattEssApprovalPersistence").hydrate(routed);
+            const stage = plan.stages[plan.currentIndex];
+            if (normalizedDecision !== "APPROVE" || plan.status !== "PENDING" ||
+                plan.version !== workflowExpectedVersion || stage?.type !== "LEAVE_HR_CONFIRMATION" ||
+                stage.userId !== reviewerUserId) throw new Error("ESS_LEAVE_ROUTED_APPROVAL_REQUIRED");
+          }
         }
       }
 
@@ -726,8 +732,10 @@ async function reviewLeaveRequest({
         balance:
           updatedBalance,
       };
-    }
-  );
+}
+
+async function reviewLeaveRequest(args) {
+  return prisma.$transaction(tx => reviewLeaveRequestInTransaction({...args, workflowExpectedVersion: undefined}, tx));
 }
 
 async function cancelLeaveRequest({
@@ -1201,6 +1209,7 @@ module.exports = {
   recordManualLeaveUsage,
   submitLeaveRequest,
   reviewLeaveRequest,
+  reviewLeaveRequestInTransaction,
   cancelLeaveRequest,
   commenceLeave,
   returnFromLeave,
@@ -1208,4 +1217,5 @@ module.exports = {
   getLeaveConsistency,
   getEmployeeBalances,
 };
+
 
