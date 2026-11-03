@@ -375,10 +375,7 @@ async function submitLeaveRequestInTransaction({
   // Resolve from the persisted tenant identity, never an employee-provided selector.
   const timingRules = await require("./zermattLeaveRequestTimingService").resolveTimingRulesForTenant(tx, organizationId, policy);
   const calendarDaysNotice = Math.ceil((startOfUtcDay(start) - startOfUtcDay(new Date())) / 86400000);
-  if (calendarDaysNotice < 0 && !timingRules.backdatedRequestsAllowed) throw new Error("BACKDATED_LEAVE_NOT_ALLOWED");
-  if (calendarDaysNotice < timingRules.minimumNotice && !timingRules.emergencyRequestsAllowed) {
-    throw new Error("MINIMUM_NOTICE_NOT_MET");
-  }
+  require("./zermattLeaveRequestTimingService").assertTimingAllowed(timingRules, calendarDaysNotice);
   if (requestRules.minimumDuration != null && units < Number(requestRules.minimumDuration)) throw new Error("MINIMUM_LEAVE_DURATION_NOT_MET");
   if (requestRules.maximumDuration != null && units > Number(requestRules.maximumDuration)) throw new Error("MAXIMUM_LEAVE_DURATION_EXCEEDED");
   if (requestRules.reasonRequired && !String(reason || "").trim()) throw new Error("LEAVE_REASON_REQUIRED");
