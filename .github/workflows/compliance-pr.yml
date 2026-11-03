@@ -52,6 +52,12 @@ jobs:
           node --check scripts/apply-zermatt-leave-request-timing.cjs
           node --test tests/zermattLeaveRequestTiming.test.js
 
+      - name: Validate Zermatt ESS approval routing
+        run: |
+          node --check src/services/zermattEssApprovalPlan.js
+          node --check src/services/zermattEssApproverResolver.js
+          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js
+
       - name: Validate Prisma schema
         run: npx prisma validate
 
