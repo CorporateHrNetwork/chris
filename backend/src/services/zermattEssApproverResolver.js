@@ -29,23 +29,30 @@ async function loadScope(db,organizationId,employeeId){
  if(!employee||!["ACTIVE","PROBATION","LEAVE"].includes(employee.status))error("EMPLOYEE_NOT_ELIGIBLE");
  return {org,employee,users};
 }
-async function reportingChain(db,{organizationId,employeeId,users,asOf=new Date(),maxDepth=20}){
+async function reportingChain(db,{organizationId,employeeId,users,locationId,asOf=new Date(),maxDepth=20}){
+ if(!Number.isFinite(new Date(asOf).getTime()))error("INVALID_REPORTING_AS_OF_DATE");
  const chain=[],visited=new Set([employeeId]);
  let current=employeeId;
  for(let depth=0;depth<maxDepth;depth++){
   const links=await db.employeeLineManagerAssignment.findMany({
    where:{organizationId,employeeId:current,effectiveFrom:{lte:asOf},OR:[{effectiveTo:null},{effectiveTo:{gte:asOf}}]},
-   select:{managerEmployeeId:true,manager:{select:{id:true,locationId:true,designation:{select:{name:true}}}}},
+   select:{managerEmployeeId:true,manager:{select:{id:true,locationId:true,status:true,designation:{select:{name:true}}}}},
    take:2,
   });
   if(links.length!==1)error(links.length?"AMBIGUOUS_REPORTING_LINE":"REPORTING_LINE_MISSING");
   const next=links[0].manager;
   if(!next||visited.has(next.id))error("REPORTING_LINE_CYCLE");
   visited.add(next.id);
-  const user=users.find(u=>u.employeeId===next.id&&u.isActive);
-  if(!user)error("LINE_MANAGER_LOGIN_MISSING");
+  if(!["ACTIVE","PROBATION","LEAVE"].includes(next.status))error("LINE_MANAGER_NOT_ACTIVE");
+  if(locationId&&next.locationId!==locationId)error("REPORTING_LINE_BRANCH_MISMATCH");
+  const logins=users.filter(u=>u.employeeId===next.id&&u.isActive);
+  if(logins.length!==1)error(logins.length?"LINE_MANAGER_LOGIN_AMBIGUOUS":"LINE_MANAGER_LOGIN_MISSING");
+  const user=logins[0];
+  if(!assignedToLocation(user,locationId||next.locationId))error("LINE_MANAGER_LOCATION_ACCESS_DENIED");
   const designation=norm(next.designation?.name);
-  const isFinalBranchManager=BRANCH_MANAGER.includes(designation)||matches(user,BRANCH_MANAGER);
+  // A designation identifies the job; an assigned role grants action authority.
+  const isFinalBranchManager=matches(user,BRANCH_MANAGER);
+  if(BRANCH_MANAGER.includes(designation)&&!isFinalBranchManager)error("BRANCH_MANAGER_AUTHORITY_MISSING");
   chain.push({userId:user.id,designation:next.designation?.name||"Line manager",isFinalBranchManager});
   if(isFinalBranchManager)return chain;
   current=next.id;
@@ -54,15 +61,18 @@ async function reportingChain(db,{organizationId,employeeId,users,asOf=new Date(
 }
 async function resolveLeaveApprovers(db,{organizationId,employeeId,requesterUserId,asOf}){
  const {employee,users}=await loadScope(db,organizationId,employeeId);
- const chain=await reportingChain(db,{organizationId,employeeId,users,asOf});
+ if(!employee.locationId)error("EMPLOYEE_BRANCH_MISSING");
+ const chain=await reportingChain(db,{organizationId,employeeId,users,locationId:employee.locationId,asOf});
  const branchHr=users.filter(u=>u.isActive&&matches(u,BRANCH_HR)&&assignedToLocation(u,employee.locationId));
  if(branchHr.length>1)error("BRANCH_HR_AMBIGUOUS");
  const hr=branchHr.length===1?branchHr[0]:uniqueUser(users,HEAD_HR,null,"HEAD_HR");
  return buildLeaveStages({organizationSlug:ZERMATT,requesterUserId,hrUserId:hr.id,managerChain:chain,finalHrUserId:hr.id});
 }
-async function resolveLoanApprovers(db,{organizationId,employeeId,requesterUserId}){
+async function resolveLoanApprovers(db,{organizationId,employeeId,requesterUserId,asOf}){
  const {employee,users}=await loadScope(db,organizationId,employeeId);
- const branch=uniqueUser(users,BRANCH_MANAGER,employee.locationId,"BRANCH_MANAGER");
+ if(!employee.locationId)error("EMPLOYEE_BRANCH_MISSING");
+ const chain=await reportingChain(db,{organizationId,employeeId,users,locationId:employee.locationId,asOf});
+ const branch=users.find(u=>u.id===chain.at(-1).userId);
  const hr=uniqueUser(users,HEAD_HR,null,"HEAD_HR");
  const gm=uniqueUser(users,GM,null,"GENERAL_MANAGER");
  const chief=uniqueUser(users,CHIEF,null,"CHIEF_ACCOUNTANT");
@@ -73,3 +83,4 @@ async function resolveAuditObservers(db,organizationId){
  return users.filter(u=>matches(u,AUDIT)).map(u=>u.id);
 }
 module.exports={resolveLeaveApprovers,resolveLoanApprovers,resolveAuditObservers,reportingChain,uniqueUser,roleNames,assignedToLocation};
+
