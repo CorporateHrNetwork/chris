@@ -54,7 +54,19 @@ async function submit(db, scope, input) {
   dateOnly(input.endDate);
   const policy=await policyFor(db,scope,input.leavePolicyId,start);
   // The caller cannot choose an employee, override units or request negative leave.
-  const result=await submitLeaveRequest({organizationId:scope.organizationId,actorUserId:scope.userId,employeeNumber:employee.employeeNumber,leaveTypeId:policy.leaveTypeId,leavePolicyId:policy.id,startDate:input.startDate,endDate:input.endDate,reason:String(input.reason||'').trim().slice(0,4000),attachmentUrl:String(input.attachmentUrl||'').trim().slice(0,2000)||null,strictAvailableBalance:true});
-  return {id:result.id,status:result.status,requestedUnits:Number(result.requestedUnits),startDate:result.startDate,endDate:result.endDate};
+  // A Zermatt-only, disabled-by-default gate keeps existing ESS behaviour
+  // unchanged until the complete approval UI, notifications and tests are ready.
+  const org=process.env.ZERMATT_ESS_APPROVALS_ENABLED==="true"
+    ?await db.organization.findUnique({where:{id:scope.organizationId},select:{slug:true}}):null;
+  const routed=org?.slug==="zermatt-liquor-limited";
+  const onCreated=routed?async(tx,created)=>{
+    const {resolveLeaveApprovers,resolveAuditObservers}=require("./zermattEssApproverResolver");
+    const {create}=require("./zermattEssApprovalPersistence");
+    const stages=await resolveLeaveApprovers(tx,{organizationId:scope.organizationId,employeeId:employee.id,requesterUserId:scope.userId,asOf:new Date()});
+    const observers=await resolveAuditObservers(tx,scope.organizationId);
+    await create(tx,{organizationId:scope.organizationId,requestType:"LEAVE",requestId:created.id,employeeId:employee.id,requesterUserId:scope.userId,stages,observerUserIds:observers});
+  }:undefined;
+  const result=await submitLeaveRequest({organizationId:scope.organizationId,actorUserId:scope.userId,employeeNumber:employee.employeeNumber,leaveTypeId:policy.leaveTypeId,leavePolicyId:policy.id,startDate:input.startDate,endDate:input.endDate,reason:String(input.reason||'').trim().slice(0,4000),attachmentUrl:String(input.attachmentUrl||'').trim().slice(0,2000)||null,strictAvailableBalance:true,onCreated});
+  return {id:result.id,status:result.status,requestedUnits:Number(result.requestedUnits),startDate:result.startDate,endDate:result.endDate,approvalWorkflow:routed?"PENDING_HR_VERIFICATION":null};
 }
 module.exports={options,preview,submit,dateOnly,eligible};
