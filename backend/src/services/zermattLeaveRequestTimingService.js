@@ -9,7 +9,7 @@ function resolveTimingRules(policy, organizationSlug) {
   const requestRules = policy?.requestRules && typeof policy.requestRules === "object" && !Array.isArray(policy.requestRules)
     ? policy.requestRules : {};
   if (organizationSlug === ZERMATT_SLUG) {
-    return { backdatedRequestsAllowed: true, minimumNotice: 0 };
+    return { backdatedRequestsAllowed: true, minimumNotice: 0, waiveNoticeForBackdated: true };
   }
   return {
     backdatedRequestsAllowed: requestRules.backdatedRequestsAllowed === true,
@@ -33,7 +33,7 @@ function assertTimingAllowed(rules, calendarDaysNotice) {
   }
   // A zero-day notice rule combined with permitted backdating must not
   // accidentally reject past dates merely because their notice value is negative.
-  const allowedBackdate = calendarDaysNotice < 0 && rules.backdatedRequestsAllowed && rules.minimumNotice === 0;
+  const allowedBackdate = rules.waiveNoticeForBackdated === true && calendarDaysNotice < 0 && rules.backdatedRequestsAllowed && rules.minimumNotice === 0;
   if (calendarDaysNotice < rules.minimumNotice && !allowedBackdate && !rules.emergencyRequestsAllowed) {
     throw new Error("MINIMUM_NOTICE_NOT_MET");
   }
