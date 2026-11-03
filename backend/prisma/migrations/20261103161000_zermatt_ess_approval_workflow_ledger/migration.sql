@@ -18,3 +18,6 @@ UNIQUE ("organizationId","requestType","requestId")
 );
 CREATE INDEX IF NOT EXISTS "ess_approval_workflows_employee_lookup" ON "ess_approval_workflows" ("organizationId","employeeId","createdAt" DESC);
 CREATE INDEX IF NOT EXISTS "ess_approval_workflows_status_lookup" ON "ess_approval_workflows" ("organizationId","status","updatedAt" DESC);
+
+-- This table is internal to CHRiS. No anonymous/authenticated PostgREST access.
+ALTER TABLE "ess_approval_workflows" ENABLE ROW LEVEL SECURITY;
