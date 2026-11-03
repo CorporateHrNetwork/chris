@@ -45,6 +45,13 @@ jobs:
       - name: Simplified disciplinary workflow acceptance
         run: node --test tests/simpleDisciplinary.test.js
 
+      - name: Validate Zermatt-only retrospective leave timing
+        run: |
+          node --check src/services/zermattLeaveRequestTimingService.js
+          node --check src/services/leaveService.js
+          node --check scripts/apply-zermatt-leave-request-timing.cjs
+          node --test tests/zermattLeaveRequestTiming.test.js
+
       - name: Validate Prisma schema
         run: npx prisma validate
 
