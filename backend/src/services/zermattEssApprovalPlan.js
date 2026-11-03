@@ -68,7 +68,7 @@ function createPlan({type,requesterUserId,stages,observerUserIds=[]}){
  };
 }
 function assertViewOnly(plan,userId){return plan.observers.some(x=>x.userId===userId);}
-function transition(plan,{actorUserId,decision,expectedVersion,reason,at=new Date().toISOString()}){
+function transition(plan,{actorUserId,decision,expectedVersion,reason,paymentEvidence,at=new Date().toISOString()}){
  if(!plan||plan.status!=="PENDING")fail("WORKFLOW_NOT_PENDING");
  if(!Number.isInteger(expectedVersion)||plan.version!==expectedVersion)fail("WORKFLOW_VERSION_CONFLICT");
  if(assertViewOnly(plan,actorUserId))fail("AUDIT_OBSERVER_READ_ONLY",403);
@@ -76,15 +76,24 @@ function transition(plan,{actorUserId,decision,expectedVersion,reason,at=new Dat
  const current=plan.stages[plan.currentIndex];
  if(!current||current.userId!==actorUserId)fail("NOT_CURRENT_APPROVER",403);
  const command=String(decision||"").trim().toUpperCase();
- if(!["APPROVE","REJECT","RETURN"].includes(command))fail("INVALID_WORKFLOW_DECISION",400);
- if(command!=="APPROVE"&&!String(reason||"").trim())fail("DECISION_REASON_REQUIRED",400);
+ const finalLoanPayment=plan.type===LOAN&&current.type===STAGES.LOAN_PAYMENT;
+ const finalLeaveConfirmation=plan.type===LEAVE&&current.type===STAGES.LEAVE_FINAL;
+ const successCommand=finalLoanPayment?"DISBURSE":finalLeaveConfirmation?"CONFIRM":"APPROVE";
+ if(![successCommand,"REJECT","RETURN"].includes(command))fail("INVALID_WORKFLOW_DECISION",400);
+ if(command==="DISBURSE"){
+  const amount=Number(paymentEvidence?.amount);
+  const reference=String(paymentEvidence?.reference||"").trim();
+  const paymentDate=String(paymentEvidence?.paymentDate||"").trim();
+  if(!Number.isFinite(amount)||amount<=0||!reference||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(paymentDate)||Number.isNaN(new Date(paymentDate+"T00:00:00Z").getTime())||new Date(paymentDate+"T00:00:00Z").toISOString().slice(0,10)!==paymentDate)fail("DISBURSEMENT_EVIDENCE_REQUIRED",400);
+ }
+ if(![successCommand].includes(command)&&!String(reason||"").trim())fail("DECISION_REASON_REQUIRED",400);
  const next=structuredClone(plan);
  const row=next.stages[next.currentIndex];
- row.status=command==="APPROVE"?"APPROVED":command==="REJECT"?"REJECTED":"RETURNED";
+ row.status=command===successCommand?(command==="DISBURSE"?"DISBURSED":command==="CONFIRM"?"CONFIRMED":"APPROVED"):command==="REJECT"?"REJECTED":"RETURNED";
  row.decision=command;row.actedAt=at;
- next.history.push({stage:row.type,actorUserId,decision:command,reason:String(reason||"").trim(),at,version:plan.version});
+ next.history.push({stage:row.type,actorUserId,decision:command,reason:String(reason||"").trim(),paymentEvidence:command==="DISBURSE"?{amount:Number(paymentEvidence.amount),reference:String(paymentEvidence.reference).trim(),paymentDate:String(paymentEvidence.paymentDate)}:null,at,version:plan.version});
  next.version+=1;
- if(command==="APPROVE"){
+ if(command===successCommand){
   if(next.currentIndex===next.stages.length-1){next.status="COMPLETED";next.currentIndex=null;}
   else next.currentIndex+=1;
  }else{next.status=command==="REJECT"?"REJECTED":"RETURNED";next.currentIndex=null;}
