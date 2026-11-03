@@ -448,6 +448,18 @@ router.post(
   }
 );
 
+router.post("/requests/:id/ess-approval-workflow/decisions",async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
+ try{
+  const data=await require("../services/zermattEssApprovalPersistence").decide(prisma,{
+   organizationId:req.auth.organizationId,requestType:"LEAVE",requestId:req.params.id,
+   actorUserId:req.auth.userId,decision:req.body?.decision,
+   expectedVersion:req.body?.expectedVersion,reason:req.body?.reason
+  });
+  return res.json({status:"success",data});
+ }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_DECISION_FAILED",message:"Unable to record the decision. Refresh the approval timeline before retrying."});}
+});
+
 router.get("/requests/:id/ess-approval-workflow",async(req,res)=>{
  if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
  try{
@@ -676,3 +688,4 @@ function handleError(
 
 module.exports =
   router;
+
