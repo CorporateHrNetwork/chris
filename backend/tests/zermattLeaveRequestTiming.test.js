@@ -25,3 +25,16 @@ test("tenant lookup fails closed and cannot be supplied by an ESS employee",asyn
  assert.equal((await resolveTimingRulesForTenant(tx,"zermatt-id",{noticeDays:7})).minimumNotice,0);
  await assert.rejects(()=>resolveTimingRulesForTenant(tx,"missing",{}),/ORGANIZATION_NOT_FOUND/);
 });
+
+test("actual timing validator accepts retrospective, same-day and short-notice Zermatt leave",()=>{
+ const {assertTimingAllowed}=require("../src/services/zermattLeaveRequestTimingService");
+ const rules=resolveTimingRules({requestRules:{minimumNotice:7,backdatedRequestsAllowed:false},noticeDays:7},"zermatt-liquor-limited");
+ for(const notice of [-365,-30,-1,0,1,3,6,7])assert.doesNotThrow(()=>assertTimingAllowed(rules,notice));
+});
+test("other tenants still reject retrospective or insufficient-notice requests",()=>{
+ const {assertTimingAllowed}=require("../src/services/zermattLeaveRequestTimingService");
+ const rules=resolveTimingRules({requestRules:{minimumNotice:7,backdatedRequestsAllowed:false},noticeDays:7},"other-tenant");
+ assert.throws(()=>assertTimingAllowed(rules,-1),/BACKDATED_LEAVE_NOT_ALLOWED/);
+ assert.throws(()=>assertTimingAllowed(rules,3),/MINIMUM_NOTICE_NOT_MET/);
+ assert.doesNotThrow(()=>assertTimingAllowed(rules,7));
+});
