@@ -6,7 +6,7 @@ const {resolveTimingRules, resolveTimingRulesForTenant}=require("../src/services
 test("Zermatt permits past dates and zero-day notice even when a stored policy still says seven days",()=>{
  const policy={requestRules:{backdatedRequestsAllowed:false,minimumNotice:7,minimumDuration:2},noticeDays:7};
  const before=JSON.stringify(policy);
- assert.deepEqual(resolveTimingRules(policy,"zermatt-liquor-limited"),{backdatedRequestsAllowed:true,minimumNotice:0});
+ assert.deepEqual(resolveTimingRules(policy,"zermatt-liquor-limited"),{backdatedRequestsAllowed:true,minimumNotice:0,waiveNoticeForBackdated:true});
  assert.equal(JSON.stringify(policy),before,"Do not mutate published policy snapshots");
 });
 
@@ -37,4 +37,10 @@ test("other tenants still reject retrospective or insufficient-notice requests",
  assert.throws(()=>assertTimingAllowed(rules,-1),/BACKDATED_LEAVE_NOT_ALLOWED/);
  assert.throws(()=>assertTimingAllowed(rules,3),/MINIMUM_NOTICE_NOT_MET/);
  assert.doesNotThrow(()=>assertTimingAllowed(rules,7));
+});
+
+test("a non-Zermatt tenant with a custom backdating policy retains its existing notice check",()=>{
+ const {assertTimingAllowed}=require("../src/services/zermattLeaveRequestTimingService");
+ const rules=resolveTimingRules({requestRules:{minimumNotice:0,backdatedRequestsAllowed:true}},"other-tenant");
+ assert.throws(()=>assertTimingAllowed(rules,-1),/MINIMUM_NOTICE_NOT_MET/);
 });
