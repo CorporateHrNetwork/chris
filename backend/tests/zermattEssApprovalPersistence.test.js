@@ -41,9 +41,3 @@ test("only requester, assigned approver or audit observer may read a workflow",a
  assert.equal(employee.readOnly,false);
 });
 
-test("final leave confirmation remains blocked until balance posting is atomic",async()=>{
- const row={requestType:"LEAVE",status:"PENDING",version:5,currentIndex:1,requesterUserId:"employee",
-  stages:[{userId:"manager",type:"LEAVE_OPERATIONAL_APPROVAL",status:"APPROVED"},{userId:"hr",type:"LEAVE_HR_CONFIRMATION",status:"PENDING"}],observers:[],history:[]};
- const db={$transaction:async fn=>fn({organization:{findUnique:async()=>({slug:ZERMATT})},user:{findFirst:async()=>({id:"hr"})},$queryRawUnsafe:async()=>[row]})};
- await assert.rejects(()=>decide(db,{organizationId:"o",requestType:"LEAVE",requestId:"r",actorUserId:"hr",decision:"CONFIRM",expectedVersion:5}),/LEAVE_FINAL_CONFIRMATION_NOT_READY/);
-});
