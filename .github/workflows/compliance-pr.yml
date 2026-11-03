@@ -64,7 +64,7 @@ jobs:
           node --check src/routes/essRoutes.js
           node --check src/routes/leaveRoutes.js
           node --check src/routes/loanOriginationWorkflowRoutes.js
-          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js tests/zermattEssWorkflowNotifications.test.js tests/zermattEssApprovalPersistence.test.js tests/zermattEssLoanDraftService.test.js
+          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js tests/zermattEssWorkflowNotifications.test.js tests/zermattEssApprovalPersistence.test.js tests/zermattEssLoanDraftService.test.js tests/zermattEssLeaveIntegration.test.js
 
       - name: Validate Prisma schema
         run: npx prisma validate
@@ -232,3 +232,4 @@ jobs:
             throw new Error(`Initial CHRiS bundle exceeded 500 KB budget: ${(bytes / 1024).toFixed(2)} KB`);
           }
           NODE
+
