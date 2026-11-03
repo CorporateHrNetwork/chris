@@ -4,7 +4,7 @@ const {resolveLeaveApprovers,resolveLoanApprovers,resolveAuditObservers,reportin
 const user=(id,role,employeeId,locationScope="ALL_LOCATIONS")=>({id,employeeId,isActive:true,locationScope,userRoles:[{role:{name:role}}],userLocations:[{locationId:"branch-a"}]});
 const users=[user("employee-login","Employee","employee"),user("leader-login","Team Leader","leader"),user("branch-login","Branch Operations Manager","manager"),user("hr-login","Head of HR & Admin",null),user("gm-login","General Manager",null),user("chief-login","Chief Accountant",null),user("audit-login","Head of Audit & Internal Controls",null)];
 function db({slug="zermatt-liquor-limited",links={employee:"leader",leader:"manager"},staff=users}={}){
- return {organization:{findUnique:async()=>({slug})},employee:{findFirst:async()=>({id:"employee",locationId:"branch-a",status:"ACTIVE"})},user:{findMany:async()=>staff},employeeLineManagerAssignment:{findMany:async({where})=>links[where.employeeId]?[{managerEmployeeId:links[where.employeeId],manager:{id:links[where.employeeId],locationId:"branch-a",designation:{name:links[where.employeeId]==="manager"?"Branch Operations Manager":"Team Leader"}}}]:[]}};
+ return {organization:{findUnique:async()=>({slug})},employee:{findFirst:async()=>({id:"employee",locationId:"branch-a",status:"ACTIVE"})},user:{findMany:async()=>staff},employeeLineManagerAssignment:{findMany:async({where})=>links[where.employeeId]?[{managerEmployeeId:links[where.employeeId],manager:{id:links[where.employeeId],locationId:"branch-a",status:"ACTIVE",designation:{name:links[where.employeeId]==="manager"?"Branch Operations Manager":"Team Leader"}}}]:[]}};
 }
 test("effective dated reporting chain and branch final approver are resolved",async()=>{
  const stages=await resolveLeaveApprovers(db(),{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"});
@@ -19,5 +19,31 @@ test("tenant boundary, reporting line cycle, missing manager login and ambiguity
  await assert.rejects(()=>resolveLeaveApprovers(db({slug:"other"}),{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"}),/ZERMATT_WORKFLOW_ONLY/);
  await assert.rejects(()=>resolveLeaveApprovers(db({links:{employee:"leader",leader:"employee"}}),{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"}),/REPORTING_LINE_CYCLE/);
  await assert.rejects(()=>resolveLeaveApprovers(db({staff:users.filter(x=>x.id!=="leader-login")}),{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"}),/LINE_MANAGER_LOGIN_MISSING/);
- await assert.rejects(()=>resolveLoanApprovers(db({staff:[...users,user("branch-login2","Branch Operations Manager","another")]}),{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"}),/BRANCH_MANAGER_AMBIGUOUS/);
+ const routed=await resolveLoanApprovers(db({staff:[...users,user("branch-login2","Branch Operations Manager","another")]}),{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"});
+ assert.equal(routed[0].userId,"branch-login");
 });
+
+test("duplicate manager logins and revoked branch authority fail closed",async()=>{
+ const scope={organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"};
+ await assert.rejects(()=>resolveLeaveApprovers(db({staff:[...users,user("leader-duplicate","Team Leader","leader")]}),scope),/LINE_MANAGER_LOGIN_AMBIGUOUS/);
+ await assert.rejects(()=>resolveLoanApprovers(db({staff:users.map(u=>u.id==="branch-login"?user(u.id,"Employee","manager"):u)}),scope),/BRANCH_MANAGER_AUTHORITY_MISSING/);
+});
+test("inactive or cross-branch managers cannot act even with a matching role",async()=>{
+ const scope={organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"};
+ for(const [patch,code] of [[{status:"EXITED"},/LINE_MANAGER_NOT_ACTIVE/],[{locationId:"branch-b"},/REPORTING_LINE_BRANCH_MISMATCH/]]){
+  const client=db(),find=client.employeeLineManagerAssignment.findMany;
+  client.employeeLineManagerAssignment.findMany=async args=>(await find(args)).map(link=>({...link,manager:{...link.manager,...patch}}));
+  await assert.rejects(()=>resolveLoanApprovers(client,scope),code);
+ }
+ const scoped=users.map(u=>u.id==="leader-login"?{...u,locationScope:"ASSIGNED_LOCATIONS",userLocations:[{locationId:"branch-b"}]}:u);
+ await assert.rejects(()=>resolveLeaveApprovers(db({staff:scoped}),scope),/LINE_MANAGER_LOCATION_ACCESS_DENIED/);
+});
+test("reporting assignment lookup uses the requested effective date and rejects overlap",async()=>{
+ const client=db(),find=client.employeeLineManagerAssignment.findMany,asOf=new Date("2026-11-03T12:00:00Z"),calls=[];
+ client.employeeLineManagerAssignment.findMany=async args=>{calls.push(args.where);return find(args);};
+ await resolveLoanApprovers(client,{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login",asOf});
+ assert.equal(calls[0].effectiveFrom.lte,asOf);assert.equal(calls[0].OR[1].effectiveTo.gte,asOf);
+ client.employeeLineManagerAssignment.findMany=async args=>{const rows=await find(args);return [...rows,...rows];};
+ await assert.rejects(()=>resolveLoanApprovers(client,{organizationId:"org",employeeId:"employee",requesterUserId:"employee-login"}),/AMBIGUOUS_REPORTING_LINE/);
+});
+
