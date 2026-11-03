@@ -745,6 +745,14 @@ function Login() {
               </button>
             </form>
 
+            {isSalesDemoHost && (
+              <div style={{marginTop:20,padding:"16px",border:"1px solid rgba(212,175,55,.52)",borderRadius:12,background:"rgba(3,40,25,.86)",textAlign:"center"}}>
+                <div style={{color:"#F2CF57",fontWeight:800,fontSize:15}}>Northstar MY CHRiS ESS Demo</div>
+                <p style={{color:"#E2EFE6",fontSize:12,lineHeight:1.5,margin:"7px 0 12px"}}>Explore the separate employee self-service portal using a fictional demo employee account. Administration login details are not ESS credentials.</p>
+                <a href="/ess" style={{display:"block",padding:"11px 14px",background:"#D4AF37",color:"#082016",borderRadius:9,fontWeight:800,textDecoration:"none"}}>Open Employee Self-Service Demo</a>
+              </div>
+            )}
+
             <Footer />
           </>
         ) : (
