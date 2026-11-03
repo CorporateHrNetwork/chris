@@ -50,7 +50,7 @@ jobs:
           node --check src/services/zermattLeaveRequestTimingService.js
           node --check src/services/leaveService.js
           node --check scripts/apply-zermatt-leave-request-timing.cjs
-          node --test tests/zermattLeaveRequestTiming.test.js
+          node --test tests/zermattLeaveRequestTiming.test.js tests/essReadOnlyApplications.test.js
 
       - name: Validate Prisma schema
         run: npx prisma validate
