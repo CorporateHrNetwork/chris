@@ -33,7 +33,9 @@ test("loan cannot skip branch manager, cannot replay a decision, and cannot rele
  p=transition(p,{actorUserId:"hr",decision:"APPROVE",expectedVersion:2});
  p=transition(p,{actorUserId:"gm",decision:"APPROVE",expectedVersion:3});
  assert.equal(p.status,"PENDING");assert.equal(p.stages[3].status,"PENDING");
- p=transition(p,{actorUserId:"chief",decision:"APPROVE",expectedVersion:4});
+ assert.throws(()=>transition(p,{actorUserId:"chief",decision:"APPROVE",expectedVersion:4}),/INVALID_WORKFLOW_DECISION/);
+ assert.throws(()=>transition(p,{actorUserId:"chief",decision:"DISBURSE",expectedVersion:4}),/DISBURSEMENT_EVIDENCE_REQUIRED/);
+ p=transition(p,{actorUserId:"chief",decision:"DISBURSE",expectedVersion:4,paymentEvidence:{amount:150000,reference:"SAMPLE-TRANSFER-123",paymentDate:"2026-11-03"}});
  assert.equal(p.status,"COMPLETED");assert.equal(p.history.length,4);
 });
 test("rejection and return require reasons, never auto-advance",()=>{
@@ -42,4 +44,13 @@ test("rejection and return require reasons, never auto-advance",()=>{
  const returned=transition(plan,{actorUserId:"hr",decision:"RETURN",expectedVersion:1,reason:"Missing handover"});
  assert.equal(returned.status,"RETURNED");assert.equal(returned.currentIndex,null);
  assert.equal(plan.status,"PENDING");
+});
+
+test("final leave HR action requires confirmation, not an extra operational approval",()=>{
+ let p=createPlan({type:"LEAVE",requesterUserId:"employee",stages:leave()});
+ for(const id of ["hr","leader","supervisor","manager"])p=transition(p,{actorUserId:id,decision:"APPROVE",expectedVersion:p.version});
+ assert.throws(()=>transition(p,{actorUserId:"hr",decision:"APPROVE",expectedVersion:p.version}),/INVALID_WORKFLOW_DECISION/);
+ p=transition(p,{actorUserId:"hr",decision:"CONFIRM",expectedVersion:p.version});
+ assert.equal(p.status,"COMPLETED");
+ assert.equal(p.stages.at(-1).status,"CONFIRMED");
 });
