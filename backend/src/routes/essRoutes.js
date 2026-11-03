@@ -271,8 +271,15 @@ function essLeaveEndpoint(action){return async(req,res)=>{
   }
 };}
 router.get("/leave/applications",requireEssAuth,essLeaveEndpoint("options"));
-router.post("/leave/preview",requireEssAuth,essLeaveEndpoint("preview"));
-router.post("/leave/applications",requireEssAuth,essLeaveEndpoint("submit"));
+// ESS is read-only for leave and loan records. Applications and approvals are
+// completed outside CHRiS; authorized HR records approved transactions in CHRiS.
+// Explicit denial preserves a stable API response for older ESS clients.
+function essApplicationDisabled(req,res){
+  return res.status(403).json({status:"error",code:"ESS_APPLICATIONS_DISABLED",message:"Leave and loan applications are handled outside CHRiS. Contact HR; approved records appear in ESS."});
+}
+router.post("/leave/preview",requireEssAuth,essApplicationDisabled);
+router.post("/leave/applications",requireEssAuth,essApplicationDisabled);
+router.post("/loans/applications",requireEssAuth,essApplicationDisabled);
 
 router.get("/loans", requireEssAuth, async (req, res) => {
   try {
