@@ -7,6 +7,8 @@
  body > #chris-demo-billing-print-root{display:block!important;position:static!important;width:100%!important;max-width:none!important}
  #chris-demo-billing-print-root *{box-sizing:border-box!important;box-shadow:none!important;text-shadow:none!important;filter:none!important}
  .chris-demo-print-document{display:block!important;max-width:none!important;margin:0!important;padding:0!important;background:#fff!important;color:#17251d!important;font:9.2pt/1.36 Arial,Helvetica,sans-serif!important;overflow:visible!important}
+ .chris-demo-print-document .chris-demo-print-logo{display:block!important;width:62mm!important;height:auto!important;max-height:21mm!important;object-fit:contain!important;object-position:left center!important;margin:0 0 5mm!important;break-inside:avoid!important}
+ .chris-demo-print-document .chris-demo-print-header{break-inside:avoid!important;page-break-inside:avoid!important}
  .chris-demo-print-document h1{font:700 19pt/1.2 Arial,sans-serif!important;color:#064e32!important;margin:6px 0 9px!important}
  .chris-demo-print-document h2{font:700 12pt/1.25 Arial,sans-serif!important;color:#064e32!important;margin:14px 0 7px!important}
  .chris-demo-print-document h3{font:700 10.5pt Arial,sans-serif!important;color:#064e32!important;margin:12px 0 5px!important}
