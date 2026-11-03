@@ -27,4 +27,16 @@ async function resolveTimingRulesForTenant(tx, organizationId, policy) {
   return resolveTimingRules(policy, organization.slug);
 }
 
-module.exports = { resolveTimingRules, resolveTimingRulesForTenant };
+function assertTimingAllowed(rules, calendarDaysNotice) {
+  if (calendarDaysNotice < 0 && !rules.backdatedRequestsAllowed) {
+    throw new Error("BACKDATED_LEAVE_NOT_ALLOWED");
+  }
+  // A zero-day notice rule combined with permitted backdating must not
+  // accidentally reject past dates merely because their notice value is negative.
+  const allowedBackdate = calendarDaysNotice < 0 && rules.backdatedRequestsAllowed && rules.minimumNotice === 0;
+  if (calendarDaysNotice < rules.minimumNotice && !allowedBackdate && !rules.emergencyRequestsAllowed) {
+    throw new Error("MINIMUM_NOTICE_NOT_MET");
+  }
+}
+
+module.exports = { resolveTimingRules, resolveTimingRulesForTenant, assertTimingAllowed };
