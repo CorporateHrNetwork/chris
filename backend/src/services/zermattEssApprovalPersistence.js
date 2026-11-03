@@ -54,4 +54,22 @@ async function decide(db,{organizationId,requestType,requestId,actorUserId,decis
   return next;
  });
 }
-module.exports={tenant,hydrate,lookup,create,decide};
+async function readForParticipant(tx,{organizationId,requestType,requestId,userId,employeeId=null}){
+ await tenant(tx,organizationId);
+ const user=await tx.user.findFirst({where:{id:userId,organizationId,isActive:true},select:{id:true,employeeId:true}});
+ if(!user)fail("WORKFLOW_USER_NOT_ACTIVE",403);
+ const row=await lookup(tx,{organizationId,requestType,requestId});
+ if(!row)fail("WORKFLOW_NOT_FOUND",404);
+ const plan=hydrate(row);
+ if(employeeId&&row.employeeId!==employeeId)fail("WORKFLOW_NOT_FOUND",404);
+ const participant=plan.requesterUserId===userId||plan.stages.some(x=>x.userId===userId)||plan.observers.some(x=>x.userId===userId);
+ if(!participant)fail("WORKFLOW_ACCESS_DENIED",403);
+ // Do not disclose confidential supporting documents or payment evidence in
+ // an observer's stage history; detailed financial evidence stays in finance.
+ const observer=plan.observers.some(x=>x.userId===userId);
+ const history=observer?plan.history.map(({paymentEvidence,...event})=>event):plan.history;
+ return {requestType,requestId,status:plan.status,version:plan.version,currentIndex:plan.currentIndex,
+  stages:plan.stages.map(x=>({type:x.type,index:x.index,status:x.status,role:x.role,userId:x.userId,actedAt:x.actedAt})),
+  history,readOnly:observer,currentActionOwnerId:plan.status==="PENDING"?plan.stages[plan.currentIndex]?.userId:null};
+}
+module.exports={tenant,hydrate,lookup,create,decide,readForParticipant};
