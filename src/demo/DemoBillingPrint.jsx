@@ -1,4 +1,5 @@
 import React from "react";
+import { CHRIS_DEMO_LOGO } from "./chrisDemoLogo";
 const IDS=["basic","standard","premium"];
 const format=n=>"₦"+Number(n||0).toLocaleString("en-NG");
 const rateFields=[["CHRiS licence / employee / month","licenceMonthly"],["ESS / employee / month (optional)","essMonthly"],["Onboarding / employee / month (first 12 months)","onboardingMonthly"],["Annual support / employee / month","supportMonthly"]];
@@ -6,6 +7,7 @@ export default function DemoBillingPrint({catalogue,quotes,employees,renewalSeat
  const groups=[["CHRiS main menu","hris"],["MY CHRiS employee self-service","ess"]];
  return <article className="chris-demo-print-document">
   <header className="chris-demo-print-header">
+   <img className="chris-demo-print-logo" src={CHRIS_DEMO_LOGO} alt="CHRiS green and gold logo"/>
    <div className="chris-demo-print-brand">CORPORATE RESOURCES NETWORK <span>CHRiS</span></div>
    <h1>Billing & Subscription — Pricing Proposal</h1>
    <p>Prepared for: {catalogue.organizationName||"Fictional demo organisation"}</p>

@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { CHRIS_DEMO_LOGO } from "./chrisDemoLogo";
 const IDS=["basic","standard","premium"];
 const fmt=n=>"NGN "+Number(n||0).toLocaleString("en-NG");
 const rowsForRates=[
@@ -42,6 +43,9 @@ export async function downloadDemoBillingProposalPdf({catalogue,quotes,employees
   y+=4;
  };
  doc.setFillColor(6,78,50);doc.rect(0,0,pageW,7,"F");
+ // Preserve the supplied logo aspect ratio (200:67) and its transparent background.
+ doc.addImage(CHRIS_DEMO_LOGO,"PNG",left,y,62,20.77,undefined,"FAST");
+ y+=25;
  line("CORPORATE RESOURCES NETWORK  |  CHRiS",{bold:true,size:10,color:[6,78,50],gap:8});
  line("Billing & Subscription - Pricing Proposal",{bold:true,size:17,color:[6,78,50],gap:10});
  line("Prepared for: "+(catalogue.organizationName||"Fictional demo organisation"),{size:9});
