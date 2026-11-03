@@ -448,6 +448,16 @@ router.post(
   }
 );
 
+router.get("/requests/:id/ess-approval-workflow",async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
+ try{
+  const data=await require("../services/zermattEssApprovalPersistence").readForParticipant(prisma,{
+   organizationId:req.auth.organizationId,requestType:"LEAVE",requestId:req.params.id,userId:req.auth.userId
+  });
+  return res.json({status:"success",data});
+ }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_READ_FAILED"});}
+});
+
 router.post(
   "/requests/:id/review",
 
