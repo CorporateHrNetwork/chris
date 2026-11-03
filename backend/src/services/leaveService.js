@@ -372,9 +372,11 @@ async function submitLeaveRequestInTransaction({
   if (units <= 0) throw new Error("LEAVE_PERIOD_HAS_NO_APPLICABLE_DAYS");
 
   const requestRules = policy.requestRules && typeof policy.requestRules === "object" ? policy.requestRules : {};
+  // Resolve from the persisted tenant identity, never an employee-provided selector.
+  const timingRules = await require("./zermattLeaveRequestTimingService").resolveTimingRulesForTenant(tx, organizationId, policy);
   const calendarDaysNotice = Math.ceil((startOfUtcDay(start) - startOfUtcDay(new Date())) / 86400000);
-  if (calendarDaysNotice < 0 && !requestRules.backdatedRequestsAllowed) throw new Error("BACKDATED_LEAVE_NOT_ALLOWED");
-  if (calendarDaysNotice < Number(requestRules.minimumNotice || policy.noticeDays || 0) && !requestRules.emergencyRequestsAllowed) {
+  if (calendarDaysNotice < 0 && !timingRules.backdatedRequestsAllowed) throw new Error("BACKDATED_LEAVE_NOT_ALLOWED");
+  if (calendarDaysNotice < timingRules.minimumNotice && !timingRules.emergencyRequestsAllowed) {
     throw new Error("MINIMUM_NOTICE_NOT_MET");
   }
   if (requestRules.minimumDuration != null && units < Number(requestRules.minimumDuration)) throw new Error("MINIMUM_LEAVE_DURATION_NOT_MET");
