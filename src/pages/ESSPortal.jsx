@@ -31,7 +31,7 @@ export default function ESSPortal(){
    if(getEssAuthToken()) Promise.resolve().then(()=>{if(active)load(()=>active);});
    return()=>{active=false;};
  },[load]);
-  const submit=async e=>{e.preventDefault();setSubmitting(true);setError("");try{const r=await essRequest("/api/ess/login",{method:"POST",body:{...login,organizationSlug:ORG_SLUG}});sessionStorage.setItem("chris_ess_token",r.data.token);sessionStorage.setItem("chris_ess_employee",JSON.stringify(r.data.employee||{}));sessionStorage.setItem("chris_ess_organization",JSON.stringify(r.data.organization||{}));setTab("birthday");await load()}catch(e){setError(e.message||"Invalid employee login credentials.")}finally{setSubmitting(false)}};
+  const submit=async e=>{e.preventDefault();setSubmitting(true);setError("");try{const r=await essRequest("/api/ess/login",{method:"POST",body:{...login,organizationSlug:ORG_SLUG}});sessionStorage.setItem("chris_ess_token",r.data.token);sessionStorage.setItem("chris_ess_employee",JSON.stringify(r.data.employee||{}));sessionStorage.setItem("chris_ess_organization",JSON.stringify(r.data.organization||{}));setTab(IS_SALES_DEMO?"overview":"birthday");await load()}catch(e){setError(e.message||"Invalid employee login credentials.")}finally{setSubmitting(false)}};
  const signOut=()=>{clearEssAuthSession();setAuth(false);setData(null);setLoading(false);setTab("overview");setError("");setLogin({email:"",password:""});window.history.replaceState({},document.title,"/ess")};
  if(loading&&!data)return <SessionLoadingScreen/>;
  if(!auth&&getEssAuthToken()&&error)return <><style>{CSS}</style><div className="essshell"><div className="loading" role="alert"><Brand/><h2>Unable to load your portal</h2><p>{error}</p><button className="ghost" onClick={()=>load()}>Retry</button><button className="ghost" onClick={signOut}>Sign out</button></div></div></>;
@@ -44,8 +44,8 @@ export default function ESSPortal(){
  {tab==="statutory"&&<Statutory data={data}/>}
  {tab==="payroll"&&<Payroll data={data}/>}{tab==="loans"&&<RunningLoans/>}
  {tab==="payslips"&&<Payslips data={data}/>}
- {tab==="leave"&&<LeaveAttendance data={data}/>}
- {tab==="performance"&&<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>}
+ {tab==="leave"&&(IS_SALES_DEMO?<Page h="Leave & Attendance" s="Read-only fictional demo leave and attendance information."><Card t="Leave balance"><Info items={data.leaveBalances.map(b=>[b.leaveType,String(Number(b.openingBalance||0)+Number(b.accrued||0)+Number(b.adjusted||0)+Number(b.carriedForward||0)-Number(b.used||0))+" days available"])}/></Card><Card t="Recent attendance"><Table rows={data.attendance} empty="No demo attendance records" cols={[["Date",r=>date(r.attendanceDate)],["Status",r=>title(r.status)]]}/></Card></Page>:<LeaveAttendance data={data}/>)}
+ {tab==="performance"&&(IS_SALES_DEMO?<Performance data={data} onSaved={()=>{}}/>:<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>)}
  {tab==="communications"&&<Communications data={data}/>}
  {tab==="gratuity"&&<Gratuity data={data}/>}
  {tab==="birthday"&&<BirthdayCard data={data}/>}
