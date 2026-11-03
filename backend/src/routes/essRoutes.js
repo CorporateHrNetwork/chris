@@ -302,6 +302,27 @@ router.get("/loans", requireEssAuth, async (req, res) => {
   }
 });
 
+const essLoanUpload=require("multer")({storage:require("multer").memoryStorage(),limits:{fileSize:10*1024*1024}});
+function loanEssError(res,error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"ESS_LOAN_REQUEST_FAILED",message:error.statusCode?error.message:"Unable to process your loan application."});}
+router.post("/loans/applications",requireEssAuth,async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
+ try{
+  const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
+  const data=await require("../services/zermattEssLoanDraftService").createDraft(prisma,scope,req.body||{});
+  return res.status(201).json({status:"success",data});
+ }catch(error){return loanEssError(res,error);}
+});
+router.post("/loans/:id/application-form",requireEssAuth,(req,res,next)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
+ essLoanUpload.single("file")(req,res,error=>error?loanEssError(res,Object.assign(error,{statusCode:400})):next());
+},async(req,res)=>{
+ try{
+  const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
+  const data=await require("../services/zermattEssLoanDraftService").attachForm(prisma,scope,req.params.id,req.file);
+  return res.status(201).json({status:"success",data});
+ }catch(error){return loanEssError(res,error);}
+});
+
 router.get("/dashboard", requireEssAuth, async (req,res) => {
   try {
     const orgId=req.essAuth.organizationId,eid=req.essAuth.employeeId;
