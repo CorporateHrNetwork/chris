@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
+import { jsPDF } from "jspdf";
+import { CHRIS_DEMO_LOGO } from "../src/demo/chrisDemoLogo.js";
 const read = (path) => fs.readFileSync(new URL("../" + path, import.meta.url), "utf8");
 const view = read("src/demo/DemoBillingSubscriptions.jsx");
 const boundary = read("backend/src/middleware/salesDemoBoundary.js");
@@ -43,4 +45,7 @@ assert.match(pdf, /jsPDF/);
 assert.match(pdf, /doc\.save/);
 assert.match(pdf, /Renewal subtotal \(no onboarding\)/);
 assert.doesNotMatch(pdf, /zermatt|Zenith Bank/i);
+const pdfSmoke = new jsPDF({unit:"mm",format:"a4"});
+assert.doesNotThrow(()=>pdfSmoke.addImage(CHRIS_DEMO_LOGO,"PNG",14,16,62,20.77));
+assert.ok(pdfSmoke.output("arraybuffer").byteLength>1000);
 console.log("PASS: Demo billing is read-only, tenant-isolated and shows three draft plans.");
