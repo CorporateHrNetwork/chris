@@ -40,3 +40,21 @@ test("fixture is wholly invented and excludes customer-specific records and poli
  assert.equal(loans()[0].demoOnly,true);
  assert.doesNotMatch(JSON.stringify(sample),/zermatt|beer barn|zenith bank|zll-|crnetwork\.com\.ng/i);
 });
+
+test("Northstar evaluation of duty mirrors role scorecard stages with fictional-only evidence",()=>{
+ const {evaluationOfDuty}=require("../src/services/northstarPerformanceFixture");
+ const demo=evaluationOfDuty();
+ assert.equal(demo.demoOnly,true);
+ assert.equal(demo.reviews.length,2);
+ assert.equal(demo.reviews[0].status,"GOALS_PUBLISHED");
+ assert.equal(demo.reviews[0].finalScore,null);
+ assert.equal(demo.reviews[1].status,"ACKNOWLEDGED");
+ assert.equal(demo.roleStandard.status,"PUBLISHED");
+ const weights=demo.roleStandard.goals.reduce((sum,g)=>{sum[g.category]=(sum[g.category]||0)+g.weight;return sum},{});
+ assert.deepEqual(weights,{results:60,quality:20,teamwork:20});
+ assert.ok(demo.roleStandard.goals.every(g=>g.anchors.length===5&&g.evidence&&g.target&&g.measurement));
+ const past=demo.reviews[1];
+ const score=past.managerAssessment.ratings.reduce((sum,r)=>sum+past.goals.find(g=>g.id===r.goalId).weight*r.rating/100,0);
+ assert.ok(Math.abs(score-past.finalScore.score)<1e-9);
+ assert.doesNotMatch(JSON.stringify(demo),/zermatt|beer barn|zll-|crnetwork\.com\.ng/i);
+});
