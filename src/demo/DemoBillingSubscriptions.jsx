@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import DemoBillingPrint from "./DemoBillingPrint";
+import "./demoBillingPrint.css";
 import { apiRequest, getStoredOrganization } from "../services/api";
 const IDS = ["basic", "standard", "premium"];
 const money = n => "₦" + Number(n || 0).toLocaleString("en-NG");
@@ -21,6 +24,8 @@ export default function DemoBillingSubscriptions(){
  const [quotes,setQuotes]=useState({});
  const [error,setError]=useState("");
  const [loading,setLoading]=useState(true);
+ const [pdfSaving,setPdfSaving]=useState(false);
+ const [exportError,setExportError]=useState("");
  useEffect(()=>{
   let active=true;
   apiRequest("/api/billing/catalogue").then(r=>{if(active)setCatalogue(r.data);})
@@ -40,8 +45,17 @@ export default function DemoBillingSubscriptions(){
   return ()=>{active=false;};
  },[catalogue,employees,renewalSeats,includeEss]);
  const moduleGroups=[["CHRiS main menu","hris"],["MY CHRiS employee self-service","ess"]];
- const tierIndex={basic:0,standard:1,premium:2};
- return <main className="chris-page" style={{color:"#F7FAF8",maxWidth:1440,margin:"0 auto",paddingBottom:36}}>
+ const ready=!!catalogue&&!loading&&IDS.every(id=>quotes[id]?.quote&&quotes[id]?.renewal);
+ const proposal={catalogue,quotes,employees:Number(employees),renewalSeats:Number(renewalSeats===null?employees:renewalSeats),includeEss};
+ const printProposal=()=>{if(ready)window.print();};
+ const downloadPdf=async()=>{
+  if(!ready||pdfSaving)return;
+  setPdfSaving(true);setExportError("");
+  try {const {downloadDemoBillingProposalPdf}=await import("./demoBillingProposalPdf");await downloadDemoBillingProposalPdf(proposal);}
+  catch(e){setExportError("Unable to generate the PDF proposal. Please retry or use Print pricing proposal.");console.error("[demo-billing-pdf]",e);}
+  finally{setPdfSaving(false);}
+ };
+ return <><main className="chris-page" style={{color:"#F7FAF8",maxWidth:1440,margin:"0 auto",paddingBottom:36}}>
   <header style={{...panel,background:"linear-gradient(125deg,#0b5634,#051c13)",marginBottom:16}}>
    <div style={{color:"#F2CF57",fontWeight:900,letterSpacing:".12em",fontSize:12}}>CORPORATEHR NETWORK INFORMATION SYSTEM · CHRiS</div>
    <h1 style={{margin:"8px 0",color:"#FFFFFF"}}>Billing & Subscription — Pricing Proposal</h1>
@@ -60,12 +74,14 @@ export default function DemoBillingSubscriptions(){
     <label style={{display:"flex",alignItems:"center",gap:9,fontWeight:700,minHeight:40}}>
      <input type="checkbox" checked={includeEss} onChange={e=>setIncludeEss(e.target.checked)}/> Include MY CHRiS (ESS)
     </label>
-    <button type="button" onClick={()=>window.print()} style={{background:"#D4AF37",color:"#082016",border:0,borderRadius:8,padding:"11px 18px",fontWeight:800,cursor:"pointer"}}>Print pricing proposal</button>
+    <button type="button" onClick={printProposal} disabled={!ready} style={{background:"#D4AF37",color:"#082016",border:0,borderRadius:8,padding:"11px 18px",fontWeight:800,cursor:ready?"pointer":"not-allowed",opacity:ready?1:.6}}>Print pricing proposal</button>
+    <button type="button" onClick={downloadPdf} disabled={!ready||pdfSaving} style={{background:"#E6F4E9",color:"#082016",border:"1px solid #D4AF37",borderRadius:8,padding:"11px 18px",fontWeight:800,cursor:ready?"pointer":"not-allowed",opacity:ready?1:.6}}>{pdfSaving?"Preparing PDF…":"Download PDF"}</button>
    </div>
    <p style={muted}>Onboarding is charged during the first 12 months only. Renewal excludes onboarding and uses the actual renewal-year seat count and approved prices effective in that year. Estimates shown now use today\u0027s demo catalogue rates; future rates are not guaranteed. Annual support is priced per employee per month. VAT is illustrative at 7.5%.</p>
   </section>
   {loading&&<p role="status">Calculating plan proposals…</p>}
   {error&&<p role="alert" style={{color:"#FFC1B7"}}>{error}</p>}
+  {exportError&&<p role="alert" style={{color:"#FFC1B7"}}>{exportError}</p>}
   {catalogue&&<section style={{...panel,marginBottom:16,overflowX:"auto"}}>
    <h2 style={{fontSize:18,marginTop:0}}>Plan profiles & unit rates</h2>
    <table style={{borderCollapse:"collapse",width:"100%",minWidth:650}}>
@@ -114,5 +130,5 @@ export default function DemoBillingSubscriptions(){
    </div>
    <p style={{...muted,borderTop:"1px solid #45674D",paddingTop:12}}>All prices are indicative and subject to approved commercial terms. The demo comparison does not grant or revoke module permissions. Support Requests, Settings and Billing & Subscription remain available for account administration.</p>
   </section>}
- </main>;
+ </main>{ready&&createPortal(<div id="chris-demo-billing-print-root"><DemoBillingPrint {...proposal}/></div>,document.body)}</>;
 }

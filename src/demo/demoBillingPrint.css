@@ -1,0 +1,27 @@
+/* Print an isolated, white A4 proposal instead of the dark application shell. */
+#chris-demo-billing-print-root{display:none}
+@media print{
+ @page{size:A4 portrait;margin:13mm 12mm}
+ html,body{background:#fff!important;color:#17251d!important;overflow:visible!important;height:auto!important;width:auto!important}
+ body > :not(#chris-demo-billing-print-root){display:none!important}
+ body > #chris-demo-billing-print-root{display:block!important;position:static!important;width:100%!important;max-width:none!important}
+ #chris-demo-billing-print-root *{box-sizing:border-box!important;box-shadow:none!important;text-shadow:none!important;filter:none!important}
+ .chris-demo-print-document{display:block!important;max-width:none!important;margin:0!important;padding:0!important;background:#fff!important;color:#17251d!important;font:9.2pt/1.36 Arial,Helvetica,sans-serif!important;overflow:visible!important}
+ .chris-demo-print-document h1{font:700 19pt/1.2 Arial,sans-serif!important;color:#064e32!important;margin:6px 0 9px!important}
+ .chris-demo-print-document h2{font:700 12pt/1.25 Arial,sans-serif!important;color:#064e32!important;margin:14px 0 7px!important}
+ .chris-demo-print-document h3{font:700 10.5pt Arial,sans-serif!important;color:#064e32!important;margin:12px 0 5px!important}
+ .chris-demo-print-document p{margin:5px 0!important;color:#17251d!important}
+ .chris-demo-print-document .chris-demo-print-brand{font-weight:700!important;color:#064e32!important;letter-spacing:.04em!important}
+ .chris-demo-print-document .chris-demo-print-brand span{color:#98701e!important;margin-left:8px!important}
+ .chris-demo-print-document .chris-demo-print-warning{font-weight:700!important;color:#815d12!important}
+ .chris-demo-print-document table{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;margin:6px 0 10px!important;min-width:0!important;background:#fff!important}
+ .chris-demo-print-document th,.chris-demo-print-document td{border:1px solid #becdc2!important;padding:4px 6px!important;vertical-align:top!important;color:#17251d!important;white-space:normal!important;overflow-wrap:anywhere!important;font:8.5pt/1.25 Arial,sans-serif!important}
+ .chris-demo-print-document th{background:#e8f1ea!important;color:#064e32!important;font-weight:700!important}
+ .chris-demo-print-document td:first-child,.chris-demo-print-document th:first-child{width:39%!important}
+ .chris-demo-print-document thead{display:table-header-group!important}
+ .chris-demo-print-document tr{break-inside:avoid!important;page-break-inside:avoid!important}
+ .chris-demo-print-document section{display:block!important;break-before:auto!important;overflow:visible!important}
+ .chris-demo-print-document .chris-demo-print-total td{font-weight:700!important;background:#f2f6ef!important}
+ .chris-demo-print-document .chris-demo-print-note{font-size:8pt!important}
+ .chris-demo-print-document footer{border-top:1px solid #a7bca9!important;margin-top:12px!important;padding-top:7px!important;color:#45634d!important;font-size:8pt!important}
+}
