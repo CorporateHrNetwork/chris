@@ -301,7 +301,7 @@ async function ensurePolicyDefinition({
           }
         : {}),
     },
-    requestRules: { maximumRequestable: "AVAILABLE_BALANCE" },
+    requestRules: { maximumRequestable: "AVAILABLE_BALANCE", backdatedRequestsAllowed: true, minimumNotice: 0 },
     payrollRules: { paidLeave: definition.isPaid },
     attendanceRules: { suppressAttendanceWhenCommenced: true },
     entitlementDays: definition.entitlementDays,
