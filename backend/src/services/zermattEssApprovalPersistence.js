@@ -32,13 +32,20 @@ async function create(tx,{organizationId,requestType,requestId,employeeId,reques
 async function decide(db,{organizationId,requestType,requestId,actorUserId,decision,expectedVersion,reason}){
  return db.$transaction(async tx=>{
   await tenant(tx,organizationId);
+  // Match the existing leave lifecycle lock order: employee before workflow.
+  // This serializes final posting against cancellation and other leave reviews.
+  if(requestType==="LEAVE"){
+   await tx.$queryRawUnsafe('SELECT e."id" FROM "employees" e JOIN "leave_requests" r ON r."employeeId"=e."id" AND r."organizationId"=e."organizationId" WHERE r."organizationId"=$1 AND r."id"=$2 FOR UPDATE OF e',organizationId,requestId);
+  }
   const actor=await tx.user.findFirst({where:{id:actorUserId,organizationId,isActive:true},select:{id:true}});
   if(!actor)fail("WORKFLOW_ACTOR_NOT_ACTIVE",403);
   const row=await lookup(tx,{organizationId,requestType,requestId,lock:true});
   if(!row)fail("WORKFLOW_NOT_FOUND",404);
   const current=hydrate(row);
   const action=String(decision||"").trim().toUpperCase();
-  if(requestType==="LEAVE"&&action==="CONFIRM")fail("LEAVE_FINAL_CONFIRMATION_NOT_READY");
+  // The existing leave record has no returned-for-correction state. Do not
+  // mislabel a return as rejection or release reservations with a live workflow.
+  if(requestType==="LEAVE"&&action==="RETURN")fail("LEAVE_RETURN_NOT_READY");
   let paymentEvidence;
   if(requestType==="LOAN"&&action==="DISBURSE"){
    const loans=await tx.$queryRawUnsafe('SELECT "status","disbursedDate","disbursementReference","principalAmount" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE',organizationId,requestId);
@@ -47,6 +54,16 @@ async function decide(db,{organizationId,requestType,requestId,actorUserId,decis
    paymentEvidence={amount:Number(loan.principalAmount),reference:loan.disbursementReference,paymentDate:new Date(loan.disbursedDate).toISOString().slice(0,10)};
   }
   const next=transition(current,{actorUserId,decision:action,expectedVersion,reason,paymentEvidence});
+  if(requestType==="LEAVE"){
+   const request=await tx.leaveRequest.findFirst({where:{id:requestId,organizationId},select:{id:true,status:true,employeeId:true}});
+   if(!request||request.employeeId!==row.employeeId||request.status!=="PENDING")fail("LEAVE_REQUEST_NOT_PENDING");
+   if(action==="CONFIRM"){
+    await require("./leaveService").reviewLeaveRequestInTransaction({organizationId,leaveRequestId:requestId,reviewerUserId:actorUserId,decision:"APPROVE",reviewNotes:reason,workflowExpectedVersion:current.version},tx);
+   }else if(action==="REJECT"){
+    // Rejection releases the existing pending reservation without posting usage.
+    await tx.leaveRequest.update({where:{id:requestId},data:{status:"REJECTED",reviewedByUserId:actorUserId,reviewedAt:new Date(),reviewNotes:reason}});
+   }
+  }
   const updated=await tx.$queryRawUnsafe(
    'UPDATE "ess_approval_workflows" SET "status"=$4,"version"=$5,"currentIndex"=$6,"stages"=$7::jsonb,"observers"=$8::jsonb,"history"=$9::jsonb,"updatedAt"=now() WHERE "organizationId"=$1 AND "requestType"=$2 AND "requestId"=$3 AND "version"=$10 RETURNING "id"',
    organizationId,requestType,requestId,next.status,next.version,next.currentIndex,JSON.stringify(next.stages),JSON.stringify(next.observers),JSON.stringify(next.history),current.version);
@@ -74,3 +91,4 @@ async function readForParticipant(tx,{organizationId,requestType,requestId,userI
   history,readOnly:observer,currentActionOwnerId:plan.status==="PENDING"?plan.stages[plan.currentIndex]?.userId:null};
 }
 module.exports={tenant,hydrate,lookup,create,decide,readForParticipant};
+
