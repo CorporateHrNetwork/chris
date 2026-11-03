@@ -11,7 +11,7 @@ import SessionLoadingScreen from "../components/system/SessionLoadingScreen";
 const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
 const IS_SALES_DEMO = typeof window !== "undefined" && window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
 const ORG_SLUG = IS_SALES_DEMO ? "chris-demo-company" : "zermatt-liquor-limited";
-const ORG_NAME = IS_SALES_DEMO ? "Demo Company" : "Zermatt Liquor Limited";
+const ORG_NAME = IS_SALES_DEMO ? "Northstar CHRiS Demo" : "Zermatt Liquor Limited";
 const normalizePerformance = value => (Array.isArray(value) ? value : []).map(item => ({...item,cycle:item?.cycle||{},assessment:item?.assessment||{},kpis:Array.isArray(item?.kpis)?item.kpis:[]}));
 const NAV = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["loans","Running Loans"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["gratuity","Gratuity"],["birthday","Birthday & Anniversaries"],["communications","Internal Communications"],["documents","Documents"]];
 const RATINGS = ["EXCELLENT","SATISFACTORY","ACCEPTABLE","UNSATISFACTORY"];
@@ -145,6 +145,7 @@ function Login({login,setLogin,submit,submitting,error}){
        <img src={chrisLogo} alt="CHRIS" className="ess-admin-logo"/>
        <div className="ess-corporate">{ORG_NAME}</div>
        <div className="ess-portal-title">Employee Self-Service</div>
+       {IS_SALES_DEMO&&<p style={{color:"#E2EFE6",fontSize:12,margin:"8px 0 0"}}>Fictional employee demo · separate from CHRiS administration</p>}
        <div className="ess-divider" aria-hidden="true"/>
      </div>
      {mode==="login"?<>
@@ -156,7 +157,7 @@ function Login({login,setLogin,submit,submitting,error}){
          <label className="ess-field-label">Password<div className="ess-input-wrap ess-password-wrap"><FiLock className="ess-input-icon" size={18}/><input required type={showPassword?"text":"password"} name="chris_secure_access" autoComplete="new-password" value={login.password} onChange={e=>setLogin({...login,password:e.target.value})} placeholder="Enter your password"/><button type="button" className="password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} title={showPassword?"Hide password":"Show password"}>{showPassword?<FiEyeOff size={19}/>:<FiEye size={19}/>}</button></div></label>
          <button className="ess-signin" disabled={submitting}>{submitting?"Signing in...":"Sign In"}</button>
        </form>
-       <div className="ess-account-links"><button type="button" onClick={()=>{setMode("forgot");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Forgot Password?</button><span>·</span><button type="button" onClick={()=>{setMode("activate");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Activate Account</button></div>
+       {IS_SALES_DEMO ? <div className="ess-account-links"><a href="/login" style={{color:"#D4AF37",fontWeight:800,textDecoration:"underline"}}>Back to Northstar CHRiS Administration Demo</a></div> : <div className="ess-account-links"><button type="button" onClick={()=>{setMode("forgot");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Forgot Password?</button><span>·</span><button type="button" onClick={()=>{setMode("activate");setSupportEmail(login.email);setSupportMessage("");setSupportError("");}}>Activate Account</button></div>}
      </>:<>
        <h2 className="ess-support-title">{mode==="activate"?"Activate your account":"Reset your password"}</h2>
        <p className="ess-support-copy">{mode==="activate"?"Enter your employee number and the email address registered in CHRiS.":"Enter your registered email address to receive a secure password-reset link."}</p>
