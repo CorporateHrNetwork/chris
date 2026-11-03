@@ -57,7 +57,14 @@ jobs:
           node --check src/services/zermattEssApprovalPlan.js
           node --check src/services/zermattEssApproverResolver.js
           node --check src/services/zermattEssWorkflowNotifications.js
-          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js tests/zermattEssWorkflowNotifications.test.js
+          node --check src/services/zermattEssApprovalPersistence.js
+          node --check src/services/zermattEssLoanDraftService.js
+          node --check src/services/essLeaveService.js
+          node --check src/services/leaveService.js
+          node --check src/routes/essRoutes.js
+          node --check src/routes/leaveRoutes.js
+          node --check src/routes/loanOriginationWorkflowRoutes.js
+          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js tests/zermattEssWorkflowNotifications.test.js tests/zermattEssApprovalPersistence.test.js tests/zermattEssLoanDraftService.test.js
 
       - name: Validate Prisma schema
         run: npx prisma validate
