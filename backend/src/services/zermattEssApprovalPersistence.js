@@ -38,6 +38,7 @@ async function decide(db,{organizationId,requestType,requestId,actorUserId,decis
   if(!row)fail("WORKFLOW_NOT_FOUND",404);
   const current=hydrate(row);
   const action=String(decision||"").trim().toUpperCase();
+  if(requestType==="LEAVE"&&action==="CONFIRM")fail("LEAVE_FINAL_CONFIRMATION_NOT_READY");
   let paymentEvidence;
   if(requestType==="LOAN"&&action==="DISBURSE"){
    const loans=await tx.$queryRawUnsafe('SELECT "status","disbursedDate","disbursementReference","principalAmount" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE',organizationId,requestId);
