@@ -66,7 +66,7 @@ assert.match(northstarDemo, /ESS_NORTHSTAR_FICTIONAL/);
 assert.match(northstarDemo, /Fictional/);
 assert.match(essRoutes, /router.post\("\/login", demoLogin/);
 assert.match(essRoutes, /router.get\("\/dashboard", demoDashboard/);
-assert.match(essPortal, /IS_SALES_DEMO\\?<DemoLeave/);
+assert.match(essPortal, /IS_SALES_DEMO\?<DemoLeave/);
 assert.doesNotMatch(northstarDemo, /zermatt|customerPassword/i);
 console.log("PASS: Demo billing is read-only, tenant-isolated and shows three draft plans.");
 
