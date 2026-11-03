@@ -56,7 +56,8 @@ jobs:
         run: |
           node --check src/services/zermattEssApprovalPlan.js
           node --check src/services/zermattEssApproverResolver.js
-          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js
+          node --check src/services/zermattEssWorkflowNotifications.js
+          node --test tests/zermattEssApprovalPlan.test.js tests/zermattEssApproverResolver.test.js tests/zermattEssWorkflowNotifications.test.js
 
       - name: Validate Prisma schema
         run: npx prisma validate
