@@ -10,8 +10,8 @@ import SessionLoadingScreen from "../components/system/SessionLoadingScreen";
 
 const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
 const IS_SALES_DEMO = typeof window !== "undefined" && window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
-const ORG_SLUG = IS_SALES_DEMO ? "chris-demo-company" : "zermatt-liquor-limited";
-const ORG_NAME = IS_SALES_DEMO ? "Northstar CHRiS Demo" : "Zermatt Liquor Limited";
+const ORG_SLUG = IS_SALES_DEMO ? "chris-demo-company" : "demo-policy-disabled";
+const ORG_NAME = IS_SALES_DEMO ? "Northstar CHRiS Demo" : "Demo organization";
 const normalizePerformance = value => (Array.isArray(value) ? value : []).map(item => ({...item,cycle:item?.cycle||{},assessment:item?.assessment||{},kpis:Array.isArray(item?.kpis)?item.kpis:[]}));
 const NAV_BASE = [["overview","Overview"],["profile","My Profile"],["onboarding","Onboarding"],["statutory","Statutory"],["payroll","Payment & Payroll"],["loans","Running Loans"],["payslips","Payslips"],["leave","Leave & Attendance"],["performance","Performance Evaluation"],["gratuity","Gratuity"],["birthday","Birthday & Anniversaries"],["communications","Internal Communications"],["documents","Documents"]];
 const NAV = IS_SALES_DEMO ? [...NAV_BASE,["probation","Probation Assessment"],["disciplinary","My Disciplinary Cases"]] : NAV_BASE;
