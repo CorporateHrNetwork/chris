@@ -15,13 +15,16 @@ async function employeeFor(db,scope){
 async function createDraft(db,scope,input){
  const employee=await employeeFor(db,scope);
  const created=await db.$transaction(async tx=>{
+  await tx.$queryRawUnsafe('SELECT "id" FROM "employees" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE',scope.organizationId,employee.id);
   const purpose=await validateLoanPurpose({organizationId:scope.organizationId,purpose:input?.purpose,prismaClient:tx});
   // Ignore all client-supplied employee, branch, loan status or actor fields.
-  return require("./loanOriginationWorkflowService").createDraftApplication({organizationId:scope.organizationId,actorUserId:scope.userId,
-   input:{employeeNumber:employee.employeeNumber,principalAmount:input?.principalAmount,installmentAmount:input?.installmentAmount,purpose,notes:String(input?.notes||"").slice(0,1500)},
+  const loan=await require("./loanCollateralWorkflowService").createDraftApplication({organizationId:scope.organizationId,actorUserId:scope.userId,
+   input:{employeeNumber:employee.employeeNumber,principalAmount:input?.principalAmount,installmentAmount:input?.installmentAmount,purpose,suretyEmployeeNumber:input?.suretyEmployeeNumber,notes:String(input?.notes||"").slice(0,1500)},
    purpose,prismaClient:tx});
+  await tx.$executeRawUnsafe('UPDATE "payroll_loans" SET "essApprovalRequired"=true WHERE "organizationId"=$1 AND "id"=$2',scope.organizationId,loan.id);
+  return loan;
  });
- return {id:created.id,loanNumber:created.loanNumber,status:"DRAFT",principalAmount:created.principalAmount,installmentAmount:created.installmentAmount,message:"Attach the required application form. Branch manager approval is not yet enabled."};
+ return {id:created.id,loanNumber:created.loanNumber,status:"DRAFT",principalAmount:created.principalAmount,installmentAmount:created.installmentAmount,message:"Attach the required application form. Submit the completed application for branch manager approval."};
 }
 async function attachForm(db,scope,loanId,file){
  await employeeFor(db,scope);
@@ -33,3 +36,4 @@ async function attachForm(db,scope,loanId,file){
  });
 }
 module.exports={employeeFor,createDraft,attachForm};
+

@@ -274,7 +274,23 @@ router.get("/leave/applications",requireEssAuth,essLeaveEndpoint("options"));
 router.post("/leave/preview",requireEssAuth,essLeaveEndpoint("preview"));
 router.post("/leave/applications",requireEssAuth,essLeaveEndpoint("submit"));
 
-// Read-only approval timeline; no ESS employee can approve or advance a stage.
+// Manager actions are separate from employee-owned timelines. Identity always
+// comes from the authenticated session; the assigned current stage grants action.
+router.get("/approvals",requireEssAuth,async(req,res)=>{
+ try{
+  const data=await require("../services/zermattEssApprovalInboxService").inbox(prisma,{organizationId:req.essAuth.organizationId,userId:req.essAuth.userId});
+  return res.json({status:"success",data});
+ }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_INBOX_FAILED"});}
+});
+router.post("/approvals/:type/:id/decisions",requireEssAuth,async(req,res)=>{
+ try{
+  const data=await require("../services/zermattEssApprovalInboxService").act(prisma,{organizationId:req.essAuth.organizationId,userId:req.essAuth.userId},req.params.type,req.params.id,req.body||{});
+  if(String(req.params.type).toUpperCase()==="LOAN")require("../services/zermattEssLoanNotificationDispatch").kick(prisma,req.essAuth.organizationId);
+  return res.json({status:"success",data});
+ }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_DECISION_FAILED",message:"Unable to record the decision. Refresh the approval inbox and verify your assigned role."});}
+});
+
+// Employee-owned approval timeline.
 router.get("/workflows/:type/:id",requireEssAuth,async(req,res)=>{
  if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
  try{
@@ -304,6 +320,25 @@ router.get("/loans", requireEssAuth, async (req, res) => {
 
 const essLoanUpload=require("multer")({storage:require("multer").memoryStorage(),limits:{fileSize:10*1024*1024}});
 function loanEssError(res,error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"ESS_LOAN_REQUEST_FAILED",message:error.statusCode?error.message:"Unable to process your loan application."});}
+router.get("/loans/applications",requireEssAuth,async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
+ try{
+  const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
+  await require("../services/zermattEssLoanDraftService").employeeFor(prisma,scope);
+  const applications=await prisma.$queryRawUnsafe('SELECT l."id",l."loanNumber",l."status",l."principalAmount",l."installmentAmount",l."purpose",w."version",w."currentIndex",w."stages",w."status" AS "approvalStatus" FROM "payroll_loans" l LEFT JOIN "ess_approval_workflows" w ON w."organizationId"=l."organizationId" AND w."requestType"=\'LOAN\' AND w."requestId"=l."id" WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND l."essApprovalRequired"=true ORDER BY l."createdAt" DESC LIMIT 100',scope.organizationId,scope.employeeId);
+  const policies=await require("../services/loanPolicyService").getLoanPolicies({organizationId:scope.organizationId,prismaClient:prisma});
+  return res.json({status:"success",data:{applications,policies:policies.policies}});
+ }catch(error){return loanEssError(res,error);}
+});
+router.post("/loans/:id/submit",requireEssAuth,async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
+ try{
+  const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
+  const data=await require("../services/zermattEssLoanIntegration").submit(prisma,scope,req.params.id);
+  require("../services/zermattEssLoanNotificationDispatch").kick(prisma,scope.organizationId);
+  return res.json({status:"success",data});
+ }catch(error){return loanEssError(res,error);}
+});
 router.post("/loans/applications",requireEssAuth,async(req,res)=>{
  if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
  try{
@@ -404,5 +439,6 @@ router.post("/performance/self-assessment",requireEssAuth,async(req,res)=>{
 });
 
 module.exports = router;
+
 
 

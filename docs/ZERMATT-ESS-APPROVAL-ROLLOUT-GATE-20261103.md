@@ -33,3 +33,13 @@
 
 ## Validation of this increment
 26 focused service tests pass locally. Transaction rollback tests use an in-memory infrastructure fixture and the real leave/approval services; they do not substitute for PostgreSQL migration, concurrency or authenticated browser acceptance. Full repository CI must pass on the new head. No merge, activation, production migration or deployment performed.
+
+## Loan integration increment
+- New ESS loans are explicitly marked `essApprovalRequired`; historical and manually recorded loans keep their existing behavior. Migration adds only a default-false marker and the pending-branch status.
+- Employee-owned submission now atomically validates collateral and the form, resolves the actual branch manager, creates the approval snapshot and moves the existing loan to PENDING_BRANCH_MANAGER_APPROVAL.
+- Existing HR verification, GM decision and disbursement services enforce assigned stages and expected versions for marked loans. Existing financial activation and draft-payroll freshness logic is reused. Direct ledger-only loan advancement is prohibited.
+- Payment confirmation requires a payment reference/date; repeated activation is rejected. Stage and outbox writes roll back with the financial transaction.
+- Notification rows are queued in the existing loan outbox with deterministic organization/request/version/recipient keys and privacy-minimal content. No production emails were sent during implementation. Delivery worker/retry acceptance remains outstanding.
+- Added ESS loan drafts/form upload/submission and a shared participant-scoped approvals inbox in ESS and management Loans. Screen behavior still requires staging browser acceptance.
+- 36 focused local tests pass, including seven financial integration tests using real services and synthetic infrastructure. Full CI is required on the new head.
+- Still blocked: real PostgreSQL concurrency/migration acceptance, leave correction/cancellation synchronization, loan correction/resubmission, notification dispatch/retry acceptance and authenticated role/browser acceptance. The feature stays OFF and PR remains unmerged.

@@ -229,6 +229,7 @@ async function decideLoan({ organizationId, actorUserId, loanId, decision, notes
   );
   const existing = existingRows[0];
   if (!existing) throw loanError("LOAN_NOT_FOUND", "Loan not found.", 404);
+  if (existing.essApprovalRequired) throw loanError("ESS_LOAN_ROUTED_APPROVAL_REQUIRED", "Use the assigned ESS approval stage.", 409);
   if (existing.status !== "PENDING_APPROVAL") {
     throw loanError("INVALID_LOAN_STATE", "Only a pending loan application can be approved or rejected.", 409);
   }
@@ -274,6 +275,7 @@ async function disburseLoan({ organizationId, actorUserId, loanId, input, prisma
   );
   const existing = existingRows[0];
   if (!existing) throw loanError("LOAN_NOT_FOUND", "Loan not found.", 404);
+  if (existing.essApprovalRequired) throw loanError("ESS_LOAN_ROUTED_APPROVAL_REQUIRED", "Use the assigned ESS approval stage.", 409);
   if (existing.status !== "APPROVED") {
     throw loanError("LOAN_NOT_APPROVED", "Only an approved loan can be marked as disbursed.", 409);
   }

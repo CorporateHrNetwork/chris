@@ -41,6 +41,7 @@ async function decide(db,{organizationId,requestType,requestId,actorUserId,decis
   if(!actor)fail("WORKFLOW_ACTOR_NOT_ACTIVE",403);
   const row=await lookup(tx,{organizationId,requestType,requestId,lock:true});
   if(!row)fail("WORKFLOW_NOT_FOUND",404);
+  if(requestType==="LOAN")fail("ESS_LOAN_USE_FINANCIAL_WORKFLOW");
   const current=hydrate(row);
   const action=String(decision||"").trim().toUpperCase();
   // The existing leave record has no returned-for-correction state. Do not

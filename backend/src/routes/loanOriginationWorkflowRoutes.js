@@ -52,6 +52,15 @@ const mayApprove = requireAnyPermission("loans.approve", "payroll.manage");
 const mayDisburse = requireAnyPermission("loans.disburse", "payroll.manage");
 const mayView = requireAnyPermission("loans.view", "payroll.view", "loans.apply", "loans.verify", "loans.approve", "loans.disburse", "payroll.manage");
 
+router.get("/ess-approvals/inbox",async(req,res)=>{
+ try{return res.json({status:"success",data:await require("../services/zermattEssApprovalInboxService").inbox(prisma,{organizationId:req.auth.organizationId,userId:req.auth.userId})});}
+ catch(error){return sendError(res,error);}
+});
+router.post("/ess-approvals/:type/:id/decisions",async(req,res)=>{
+ try{const data=await require("../services/zermattEssApprovalInboxService").act(prisma,{organizationId:req.auth.organizationId,userId:req.auth.userId},req.params.type,req.params.id,req.body||{});if(String(req.params.type).toUpperCase()==="LOAN")require("../services/zermattEssLoanNotificationDispatch").kick(prisma,req.auth.organizationId);return res.json({status:"success",data});}
+ catch(error){return sendError(res,error);}
+});
+
 router.get("/employee-options", mayApply, async (req, res) => {
   try {
     return res.json({ status: "success", data: await listLoanEmployeeOptions({ organizationId: req.auth.organizationId, userId: req.auth.userId }) });
@@ -259,6 +268,26 @@ router.post("/:id/disbursement", mayDisburse, async (req, res) => {
   }
 });
 
+// Assigned-stage authority is enforced in the financial service, independent
+// of broad payroll.manage permissions. Retired historical routes stay retired.
+router.post("/:id/ess-approval-workflow/:action",async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
+ try{
+  const args={organizationId:req.auth.organizationId,loanId:req.params.id,actorUserId:req.auth.userId,decision:req.body?.decision,comments:req.body?.reason,reason:req.body?.reason,expectedVersion:req.body?.expectedVersion};
+  const rows=await prisma.$queryRawUnsafe('SELECT "essApprovalRequired" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2',args.organizationId,args.loanId);
+  if(!rows[0]?.essApprovalRequired)return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_FOUND"});
+  let data;
+  const financial=require("../services/loanOriginationWorkflowService");
+  if(req.params.action==="branch-decision")data=await require("../services/zermattEssLoanIntegration").branchDecision(prisma,args);
+  else if(req.params.action==="hr-verification")data=await financial.hrVerificationDecision(args);
+  else if(req.params.action==="gm-decision")data=await financial.gmDecision(args);
+  else if(req.params.action==="disbursement")data=await financial.disburseApprovedLoan({...args,input:req.body||{}});
+  else return res.status(404).json({status:"error",code:"WORKFLOW_ACTION_NOT_FOUND"});
+  require("../services/zermattEssLoanNotificationDispatch").kick(prisma,args.organizationId);
+  return res.json({status:"success",data});
+ }catch(error){return sendError(res,error);}
+});
+
 router.get("/:id/ess-approval-workflow",async(req,res)=>{
  if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
  try{
@@ -281,7 +310,15 @@ router.get("/:id/workflow", mayView, async (req, res) => {
 
 router.post("/notifications/:id/retry", requireAnyPermission("payroll.manage", "loans.verify"), async (req, res) => {
   try {
-    const data = await deliverNotification({ notificationId: req.params.id });
+    const rows = await prisma.$queryRawUnsafe('SELECT n."id",n."loanId",l."essApprovalRequired" FROM "payroll_loan_notification_outbox" n JOIN "payroll_loans" l ON l."organizationId"=n."organizationId" AND l."id"=n."loanId" WHERE n."organizationId"=$1 AND n."id"=$2',req.auth.organizationId,req.params.id);
+    if (!rows[0]) return res.status(404).json({status:"error",code:"NOTIFICATION_NOT_FOUND"});
+    if (rows[0].essApprovalRequired) {
+      const participant=await require("../services/zermattEssApprovalPersistence").readForParticipant(prisma,{organizationId:req.auth.organizationId,requestType:"LOAN",requestId:rows[0].loanId,userId:req.auth.userId});
+      if(participant.readOnly)return res.status(403).json({status:"error",code:"AUDIT_OBSERVER_READ_ONLY"});
+    }
+    const data = rows[0].essApprovalRequired
+      ? await require("../services/zermattEssLoanNotificationDispatch").dispatch(prisma,{organizationId:req.auth.organizationId,notificationIds:[req.params.id],limit:1})
+      : await deliverNotification({ notificationId: req.params.id });
     return res.json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to retry loan workflow notification.");
@@ -289,3 +326,4 @@ router.post("/notifications/:id/retry", requireAnyPermission("payroll.manage", "
 });
 
 module.exports = router;
+

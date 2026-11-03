@@ -242,6 +242,7 @@ async function submitForHrVerification({ organizationId, actorUserId, loanId, co
   let version = 1;
   await prismaClient.$transaction(async (tx) => {
     const loan = await getLoanForUpdate(tx, organizationId, loanId);
+    if (loan.essApprovalRequired) throw workflowError("ESS_LOAN_SUBMISSION_REQUIRED", "Submit this employee-owned application through ESS.", 409);
     priorStatus = loan.status;
     if (!["DRAFT", "RETURNED_FOR_CORRECTION"].includes(loan.status)) {
       throw workflowError("INVALID_LOAN_WORKFLOW_STATE", `Loan application cannot be submitted for HR verification from ${loan.status}.`, 409);
@@ -276,14 +277,20 @@ async function submitForHrVerification({ organizationId, actorUserId, loanId, co
   return { loanId, previousStatus: priorStatus, status: "PENDING_HR_VERIFICATION", applicationVersion: version, notifications: delivery };
 }
 
-async function hrVerificationDecision({ organizationId, actorUserId, loanId, decision, comments, prismaClient = prisma }) {
+async function hrVerificationDecision({ organizationId, actorUserId, loanId, decision, comments, expectedVersion, prismaClient = prisma }) {
   const command = text(decision).toUpperCase();
   if (!["VERIFY", "RETURN", "REJECT"].includes(command)) throw workflowError("INVALID_HR_VERIFICATION_DECISION", "HR decision must be VERIFY, RETURN or REJECT.");
   let nextStatus = null;
   let workflowRoles = [];
   let stage = null;
+  let essQueued = null;
   await prismaClient.$transaction(async (tx) => {
     const loan = await getLoanForUpdate(tx, organizationId, loanId);
+    const essChange = await require("./zermattEssLoanIntegration").prepare(tx, {
+      organizationId, loan, actorUserId, stage: require("./zermattEssApprovalPlan").STAGES.LOAN_HR,
+      decision: command === "VERIFY" ? "APPROVE" : command, expectedVersion, reason: comments, 
+    });
+
     if (loan.status !== "PENDING_HR_VERIFICATION") throw workflowError("INVALID_LOAN_WORKFLOW_STATE", "Only a loan pending HR verification can be decided by Head HR.", 409);
     if (command === "VERIFY") nextStatus = "PENDING_GM_APPROVAL";
     if (command === "RETURN") nextStatus = "RETURNED_FOR_CORRECTION";
@@ -301,7 +308,10 @@ async function hrVerificationDecision({ organizationId, actorUserId, loanId, dec
     );
     await event(tx, { organizationId, loanId, actorUserId, action: command === "VERIFY" ? "HR_VERIFIED_AND_FORWARDED_TO_GM" : command === "RETURN" ? "HR_RETURNED_FOR_CORRECTION" : "HR_REJECTED", fromStatus: loan.status, toStatus: nextStatus, comments });
     await audit(tx, { organizationId, actorUserId, loanId, action: command === "VERIFY" ? "HR_VERIFIED_AND_FORWARDED_TO_GM" : command === "RETURN" ? "HR_RETURNED_FOR_CORRECTION" : "HR_REJECTED", previousValue: { status: loan.status }, newValue: { status: nextStatus }, reason: comments });
+    if (essChange && command === "VERIFY") await require("./loanCollateralWorkflowService").revalidateExistingLoan({organizationId,actorUserId,loanId,prismaClient:tx});
+    if (essChange) essQueued = await require("./zermattEssLoanIntegration").save(tx, essChange);
   });
+  if (essQueued !== null) return { loanId, status: nextStatus, notifications: {queued:essQueued}, version: expectedVersion + 1 };
 
   let gmTokens = null;
   if (command === "VERIFY") {
@@ -365,15 +375,21 @@ async function resolveEmailApprovalToken({ organizationId, token, actorUserId, p
   };
 }
 
-async function gmDecision({ organizationId, actorUserId, loanId, decision, comments, token = null, prismaClient = prisma }) {
+async function gmDecision({ organizationId, actorUserId, loanId, decision, comments, token = null, expectedVersion, prismaClient = prisma }) {
   const command = text(decision).toUpperCase();
   if (!["APPROVE", "REJECT", "RETURN"].includes(command)) throw workflowError("INVALID_GM_DECISION", "GM decision must be APPROVE, REJECT or RETURN.");
   let tokenRecord = null;
   if (token) tokenRecord = await resolveEmailApprovalToken({ organizationId, token, actorUserId, prismaClient });
   if (tokenRecord && tokenRecord.loanId !== loanId) throw workflowError("LOAN_APPROVAL_LINK_MISMATCH", "Approval link does not match this loan application.", 409);
   let nextStatus = null;
+  let essQueued = null;
   await prismaClient.$transaction(async (tx) => {
     const loan = await getLoanForUpdate(tx, organizationId, loanId);
+    const essChange = await require("./zermattEssLoanIntegration").prepare(tx, {
+      organizationId, loan, actorUserId, stage: require("./zermattEssApprovalPlan").STAGES.LOAN_GM,
+      decision: command, expectedVersion, reason: comments, 
+    });
+
     if (loan.status !== "PENDING_GM_APPROVAL") throw workflowError("INVALID_LOAN_WORKFLOW_STATE", "Only a loan pending GM approval can be decided.", 409);
     nextStatus = command === "APPROVE" ? "AWAITING_DISBURSEMENT" : command === "RETURN" ? "RETURNED_FOR_CORRECTION" : "REJECTED";
     await tx.$executeRawUnsafe(
@@ -402,7 +418,9 @@ async function gmDecision({ organizationId, actorUserId, loanId, decision, comme
     );
     await event(tx, { organizationId, loanId, actorUserId, action: command === "APPROVE" ? "GM_APPROVED" : command === "RETURN" ? "GM_RETURNED_FOR_CORRECTION" : "GM_REJECTED", fromStatus: loan.status, toStatus: nextStatus, comments });
     await audit(tx, { organizationId, actorUserId, loanId, action: command === "APPROVE" ? "GM_APPROVED" : command === "RETURN" ? "GM_RETURNED_FOR_CORRECTION" : "GM_REJECTED", previousValue: { status: loan.status }, newValue: { status: nextStatus }, reason: comments });
+    if (essChange) essQueued = await require("./zermattEssLoanIntegration").save(tx, essChange);
   });
+  if (essQueued !== null) return { loanId, status: nextStatus, notifications: {queued:essQueued}, version: expectedVersion + 1 };
 
   const workflowRoles = [
     "GM_APPROVER",
@@ -419,7 +437,7 @@ async function gmDecision({ organizationId, actorUserId, loanId, decision, comme
   return { loanId, status: nextStatus, notifications: delivery };
 }
 
-async function disburseApprovedLoan({ organizationId, actorUserId, loanId, input, prismaClient = prisma }) {
+async function disburseApprovedLoan({ organizationId, actorUserId, loanId, input, expectedVersion, prismaClient = prisma }) {
   const disbursedDate = dateOnly(input?.disbursedDate, "Disbursed Date");
   const requestedRecoveryDate = input?.recoveryStartDate || input?.recoveryStartMonth;
   const recoveryStartDate = monthStart(requestedRecoveryDate, "Recovery Start Date");
@@ -427,8 +445,14 @@ async function disburseApprovedLoan({ organizationId, actorUserId, loanId, input
     throw workflowError("INVALID_RECOVERY_START", "Recovery month cannot be earlier than the disbursement month.");
   }
   let previous = null;
+  let essQueued = null;
   await prismaClient.$transaction(async (tx) => {
     const loan = await getLoanForUpdate(tx, organizationId, loanId);
+    const essChange = await require("./zermattEssLoanIntegration").prepare(tx, {
+      organizationId, loan, actorUserId, stage: require("./zermattEssApprovalPlan").STAGES.LOAN_PAYMENT,
+      decision: "DISBURSE", expectedVersion, reason: input?.notes, paymentEvidence: {amount:Number(loan.principalAmount),reference:input?.disbursementReference,paymentDate:disbursedDate}
+    });
+
     previous = loan;
     if (!["AWAITING_DISBURSEMENT", "GM_APPROVED", "APPROVED"].includes(loan.status)) {
       throw workflowError("LOAN_NOT_READY_FOR_DISBURSEMENT", "Only a GM-approved loan awaiting disbursement can be processed.", 409);
@@ -447,7 +471,9 @@ async function disburseApprovedLoan({ organizationId, actorUserId, loanId, input
     await event(tx, { organizationId, loanId, actorUserId, action: "CHIEF_ACCOUNTANT_DISBURSED", fromStatus: loan.status, toStatus: "ACTIVE", comments: input?.notes, metadata: { disbursedDate, recoveryStartDate, disbursementReference: text(input?.disbursementReference) || null } });
     await audit(tx, { organizationId, actorUserId, loanId, action: "LOAN_DISBURSED", previousValue: { status: loan.status, disbursedDate: loan.disbursedDate, recoveryStartDate: loan.recoveryStartDate }, newValue: { status: "ACTIVE", disbursedDate, recoveryStartDate, disbursementReference: text(input?.disbursementReference) || null }, reason: input?.notes || "Chief Accountant confirmed loan disbursement" });
     await markDraftRunsRecalculationRequired({ organizationId, actorUserId, reason: `Loan ${loan.loanNumber} was disbursed/activated for payroll recovery from ${recoveryStartDate}.`, prismaClient: tx });
+    if (essChange) essQueued = await require("./zermattEssLoanIntegration").save(tx, essChange);
   });
+  if (essQueued !== null) return { ...(await getLoan(prismaClient, organizationId, loanId)), notifications: {queued:essQueued}, previousStatus: previous?.status, version: expectedVersion + 1 };
 
   const workflowRoles = [
     "GM_APPROVER",
@@ -497,3 +523,4 @@ module.exports = {
   disburseApprovedLoan,
   getWorkflow,
 };
+
