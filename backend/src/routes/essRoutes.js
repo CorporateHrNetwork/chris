@@ -274,6 +274,20 @@ router.get("/leave/applications",requireEssAuth,essLeaveEndpoint("options"));
 router.post("/leave/preview",requireEssAuth,essLeaveEndpoint("preview"));
 router.post("/leave/applications",requireEssAuth,essLeaveEndpoint("submit"));
 
+// Read-only approval timeline; no ESS employee can approve or advance a stage.
+router.get("/workflows/:type/:id",requireEssAuth,async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"WORKFLOW_NOT_AVAILABLE"});
+ try{
+  const type=String(req.params.type||"").toUpperCase();
+  if(!["LEAVE","LOAN"].includes(type))return res.status(404).json({status:"error",code:"WORKFLOW_NOT_FOUND"});
+  const data=await require("../services/zermattEssApprovalPersistence").readForParticipant(prisma,{
+   organizationId:req.essAuth.organizationId,requestType:type,requestId:req.params.id,
+   userId:req.essAuth.userId,employeeId:req.essAuth.employeeId
+  });
+  return res.json({status:"success",data});
+ }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_READ_FAILED",message:"Unable to load your request approval history."});}
+});
+
 router.get("/loans", requireEssAuth, async (req, res) => {
   try {
     const { getEmployeeLoanSummary } = require("../services/essLoanSummaryService");
