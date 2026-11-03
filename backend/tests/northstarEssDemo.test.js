@@ -56,5 +56,5 @@ test("Northstar evaluation of duty mirrors role scorecard stages with fictional-
  const past=demo.reviews[1];
  const score=past.managerAssessment.ratings.reduce((sum,r)=>sum+past.goals.find(g=>g.id===r.goalId).weight*r.rating/100,0);
  assert.ok(Math.abs(score-past.finalScore.score)<1e-9);
- assert.doesNotMatch(JSON.stringify(demo),/zermatt|beer barn|zll-|crnetwork\\.com\\.ng/i);
+ assert.doesNotMatch(JSON.stringify(demo),/zermatt|beer barn|zll-|crnetwork\.com\.ng/i);
 });
