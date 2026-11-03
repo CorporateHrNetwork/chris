@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaBalanceScale,
@@ -19,7 +19,7 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
-import WorkflowApprovalInbox from "../components/ess/WorkflowApprovalInbox";
+const WorkflowApprovalInbox=lazy(()=>import("../components/ess/WorkflowApprovalInbox"));
 import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
 import LoanProfile from "./LoanProfile";
 import LoanBulkUpload from "./LoanBulkUpload";
@@ -517,7 +517,7 @@ function Loans({ completedOnly = false }) {
         ]}
       />
 
-      <section style={{maxWidth:1240,margin:"0 auto 24px",padding:"0 20px"}}><WorkflowApprovalInbox request={apiRequest} base="/api/loans/ess-approvals/inbox"/></section>
+      <section style={{maxWidth:1240,margin:"0 auto 24px",padding:"0 20px"}}><Suspense fallback={<p>Loading approvals…</p>}><WorkflowApprovalInbox request={apiRequest} base="/api/loans/ess-approvals/inbox"/></Suspense></section>
       {!completedOnly && <section ref={formRef} style={{ maxWidth: 1240, margin: "0 auto 24px", padding: "0 20px" }}>
         {error && <div role="alert" style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid #b91c1c", color: "#b91c1c" }}>{error}</div>}
         {message && <div style={{ padding: 12, marginBottom: 12, borderRadius: 10, border: "1px solid var(--chris-dashboard-border)", color: "var(--chris-dashboard-text)" }}>{message}</div>}

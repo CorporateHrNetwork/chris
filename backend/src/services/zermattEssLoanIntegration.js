@@ -1,7 +1,7 @@
 "use strict";
 const crypto=require("node:crypto");
 const ledger=require("./zermattEssApprovalPersistence");
-const {STAGES,transition}=require("./zermattEssApprovalPlan");
+const {STAGES,transition,createPlan}=require("./zermattEssApprovalPlan");
 const resolver=require("./zermattEssApproverResolver");
 const {notificationPlan}=require("./zermattEssWorkflowNotifications");
 function fail(code,statusCode=409){throw Object.assign(new Error(code),{code,statusCode});}
@@ -34,6 +34,7 @@ async function prepare(tx,{organizationId,loan,actorUserId,stage,decision,expect
  if(!user)fail("WORKFLOW_ACTOR_NOT_ACTIVE",403);
  // Revalidate present authority; a saved snapshot does not preserve a revoked role.
  const assigned=await resolver.resolveLoanApprovers(tx,{organizationId,employeeId:loan.employeeId,requesterUserId:current.requesterUserId,asOf:new Date()});
+ if(assigned.length!==current.stages.length||assigned.some((s,i)=>s.type!==current.stages[i].type||s.userId!==current.stages[i].userId))fail("WORKFLOW_AUTHORITY_CHANGED",403);
  if(assigned.find(s=>s.type===stage)?.userId!==actorUserId)fail("WORKFLOW_AUTHORITY_CHANGED",403);
  const next=transition(current,{actorUserId,decision,expectedVersion,paymentEvidence,reason});
  return {current,next,organizationId,loanId:loan.id,actorUserId,decision};
@@ -46,7 +47,7 @@ async function save(tx,change){
  await tx.organizationAudit.create({data:{organizationId,actorUserId,entityType:"LOAN_ESS_APPROVAL",entityId:loanId,action:"ESS_WORKFLOW_"+decision,previousValue:{status:current.status,version:current.version},newValue:{status:next.status,version:next.version}}});
  return queue(tx,organizationId,loanId,next);
 }
-async function submit(db,scope,loanId){
+async function submit(db,scope,loanId,{expectedVersion}={}){
  enabled();
  return db.$transaction(async tx=>{
   await ledger.tenant(tx,scope.organizationId);
@@ -55,17 +56,32 @@ async function submit(db,scope,loanId){
   const rows=await tx.$queryRawUnsafe('SELECT * FROM "payroll_loans" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "id"=$3 FOR UPDATE',scope.organizationId,scope.employeeId,loanId);
   const loan=rows[0];
   if(!loan||loan.createdByUserId!==scope.userId||!loan.essApprovalRequired)fail("ESS_LOAN_NOT_FOUND",404);
-  // A fresh request is required after return until a revision UI is available.
-  if(loan.status!=="DRAFT")fail("ESS_LOAN_NOT_DRAFT");
+  const returned=loan.status==="RETURNED_FOR_CORRECTION";
+  if(loan.status!=="DRAFT"&&!returned)fail("ESS_LOAN_NOT_DRAFT");
+  let previous;
+  if(returned){
+   const row=await ledger.lookup(tx,{organizationId:scope.organizationId,requestType:"LOAN",requestId:loanId,lock:true});
+   previous=ledger.hydrate(row);
+   if(!previous||previous.status!=="RETURNED"||previous.requesterUserId!==scope.userId)fail("ESS_LOAN_NOT_RETURNED");
+   if(previous.version!==expectedVersion)fail("WORKFLOW_VERSION_CONFLICT");
+  }
   const forms=await tx.$queryRawUnsafe('SELECT COUNT(*)::int AS "count" FROM "payroll_loan_attachments" WHERE "organizationId"=$1 AND "loanId"=$2 AND "category"=\'LOAN_APPLICATION_FORM\'',scope.organizationId,loanId);
   if(!Number(forms[0]?.count))fail("LOAN_APPLICATION_FORM_REQUIRED");
   await require("./loanCollateralWorkflowService").revalidateExistingLoan({organizationId:scope.organizationId,actorUserId:scope.userId,loanId,prismaClient:tx});
   const stages=await resolver.resolveLoanApprovers(tx,{organizationId:scope.organizationId,employeeId:scope.employeeId,requesterUserId:scope.userId,asOf:new Date()});
   const observerUserIds=await resolver.resolveAuditObservers(tx,scope.organizationId);
-  const plan=await ledger.create(tx,{organizationId:scope.organizationId,requestType:"LOAN",requestId:loanId,employeeId:scope.employeeId,requesterUserId:scope.userId,stages,observerUserIds});
-  await tx.$executeRawUnsafe('UPDATE "payroll_loans" SET "status"=\'PENDING_BRANCH_MANAGER_APPROVAL\',"submittedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "id"=$2',scope.organizationId,loanId);
+  let plan;
+  if(returned){
+   plan=createPlan({type:"LOAN",requesterUserId:scope.userId,stages,observerUserIds});
+   plan.version=previous.version+1;
+   plan.history=[...previous.history,{decision:"RESUBMIT",actorUserId:scope.userId,version:previous.version,at:new Date().toISOString(),reason:"Employee corrected and resubmitted the application"}];
+   await save(tx,{organizationId:scope.organizationId,loanId,actorUserId:scope.userId,decision:"RESUBMIT",current:previous,next:plan});
+  }else{
+   plan=await ledger.create(tx,{organizationId:scope.organizationId,requestType:"LOAN",requestId:loanId,employeeId:scope.employeeId,requesterUserId:scope.userId,stages,observerUserIds});
+  }
+  await tx.$executeRawUnsafe('UPDATE "payroll_loans" SET "status"=\'PENDING_BRANCH_MANAGER_APPROVAL\',"submittedAt"=CURRENT_TIMESTAMP,"hrVerifiedAt"=NULL,"hrVerifiedByUserId"=NULL,"gmDecisionAt"=NULL,"gmDecisionByUserId"=NULL,"approvedDate"=NULL,"approvedByUserId"=NULL,"applicationVersion"="applicationVersion"+1,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "id"=$2',scope.organizationId,loanId);
   await tx.organizationAudit.create({data:{organizationId:scope.organizationId,actorUserId:scope.userId,entityType:"LOAN_ESS_APPROVAL",entityId:loanId,action:"ESS_LOAN_SUBMITTED",newValue:{status:"PENDING_BRANCH_MANAGER_APPROVAL",version:plan.version}}});
-  await queue(tx,scope.organizationId,loanId,plan);
+  if(!returned)await queue(tx,scope.organizationId,loanId,plan);
   return {id:loanId,status:"PENDING_BRANCH_MANAGER_APPROVAL",version:plan.version};
  });
 }

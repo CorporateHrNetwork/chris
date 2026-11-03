@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiMail } from "react-icons/fi";
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
@@ -6,8 +6,8 @@ import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "
 
 import DisciplinaryEssNotice from "../components/ess/DisciplinaryEssNotice";
 import SimpleDisciplinaryWorkspace from "../components/employees/SimpleDisciplinaryWorkspace";
-import EssLoanApplications from "../components/ess/EssLoanApplications";
-import WorkflowApprovalInbox from "../components/ess/WorkflowApprovalInbox";
+const EssLoanApplications=lazy(()=>import("../components/ess/EssLoanApplications"));
+const WorkflowApprovalInbox=lazy(()=>import("../components/ess/WorkflowApprovalInbox"));
 import EssLeaveApplications from "../components/ess/EssLeaveApplications";
 import ZermattProbation from "./ZermattProbation";
 import ZermattProbationEssNotice from "../components/ZermattProbationEssNotice";
@@ -50,7 +50,7 @@ export default function ESSPortal(){
  {tab==="profile"&&<Profile data={data}/>}
  {tab==="onboarding"&&<Onboarding data={data}/>}
  {tab==="statutory"&&<Statutory data={data}/>}
- {tab==="payroll"&&<Payroll data={data}/>}{tab==="loans"&&<RunningLoans/>}{tab==="approvals"&&<Page h="Applications & Approvals"><WorkflowApprovalInbox request={essRequest} base="/api/ess/approvals"/></Page>}
+ {tab==="payroll"&&<Payroll data={data}/>}{tab==="loans"&&<RunningLoans/>}{tab==="approvals"&&<Page h="Applications & Approvals"><Suspense fallback={<p>Loading approvals…</p>}><WorkflowApprovalInbox request={essRequest} base="/api/ess/approvals"/></Suspense></Page>}
  {tab==="payslips"&&<Payslips data={data}/>}
  {tab==="leave"&&<LeaveAttendance data={data}/>}
  {tab==="performance"&&<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>}
@@ -75,7 +75,7 @@ function RunningLoans(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[revision,setRevision]=useState(0);
  useEffect(()=>{let active=true;setLoading(true);setError("");setRows([]);essRequest("/api/ess/loans").then(r=>{if(active)setRows(r.data||[])}).catch(e=>{if(active)setError(e.message||"Unable to load your loan summary.")}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[revision]);
  const monthLabel=value=>value?new Date(value+"-01T00:00:00Z").toLocaleDateString("en-NG",{month:"long",year:"numeric",timeZone:"UTC"}):"—";
- return <Page h="Running Loan Summary" s="Your own loan balances and repayment schedule."><EssLoanApplications/><Card t="My loans" a="Refresh" click={()=>setRevision(v=>v+1)}>
+ return <Page h="Running Loan Summary" s="Your own loan balances and repayment schedule."><Suspense fallback={<p>Loading loan applications…</p>}><EssLoanApplications/></Suspense><Card t="My loans" a="Refresh" click={()=>setRevision(v=>v+1)}>
  <p className="muted">Total paid includes recorded opening repayments, posted payroll recoveries and recorded external settlements. Reversed recoveries are excluded. Expected final deduction months follow the current schedule and may change after pauses or corrections. Loan recovery is through end-of-month payroll; no loan deduction is made from Mid-month Transport Support Pay.</p>
  {loading?<p role="status">Loading your loan summary…</p>:error?<p role="alert">{error}</p>:<Table rows={rows} empty="You have no running or completed loan records." cols={[["Loan",r=>r.loanNumber],["Loan Amount",r=>money(r.loanAmount,r.currency)],["Monthly Installment",r=>money(r.monthlyInstallment,r.currency)],["Total Paid So Far",r=>money(r.totalPaid,r.currency)],["Balance",r=>money(r.balance,r.currency)],["Expected Final Deduction Month",r=>monthLabel(r.expectedFinalDeductionMonth)],["Last Recorded Deduction",r=>monthLabel(r.lastRecordedDeductionMonth)],["Status",r=>title(r.status)]]}/>}
  </Card></Page>

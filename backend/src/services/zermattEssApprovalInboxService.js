@@ -32,4 +32,12 @@ async function act(db,scope,type,id,input){
  }
  fail("WORKFLOW_NOT_PENDING");
 }
-module.exports={inbox,act};
+async function applicationForm(db,scope,id){
+ enabled();
+ const view=await ledger.readForParticipant(db,{organizationId:scope.organizationId,requestType:"LOAN",requestId:id,userId:scope.userId});
+ if(view.readOnly)fail("AUDIT_OBSERVER_READ_ONLY",403);
+ const rows=await db.$queryRawUnsafe('SELECT "fileName","mimeType","content" FROM "payroll_loan_attachments" WHERE "organizationId"=$1 AND "loanId"=$2 AND "category"=\'LOAN_APPLICATION_FORM\' ORDER BY "createdAt" DESC LIMIT 1',scope.organizationId,id);
+ if(!rows[0])fail("LOAN_ATTACHMENT_NOT_FOUND",404);
+ return {fileName:rows[0].fileName,mimeType:rows[0].mimeType,contentBase64:Buffer.from(rows[0].content).toString("base64")};
+}
+module.exports={inbox,act,applicationForm};

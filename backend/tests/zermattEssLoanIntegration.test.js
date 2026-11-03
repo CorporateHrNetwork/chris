@@ -103,3 +103,16 @@ test("gate off blocks ESS decisions, without imposing ESS stages on historical l
   assert.equal(await integration.prepare({}, {loan:{essApprovalRequired:false}}),null);
  }finally{process.env.ZERMATT_ESS_APPROVALS_ENABLED="true";}
 });
+test("returned applications retain history and restart every approval on resubmission",async()=>{
+ const f=fixture();await integration.submit(f.db,scope,"loan");
+ await integration.branchDecision(f.db,{...args,actorUserId:"branch",decision:"RETURN",expectedVersion:1,reason:"Correct the installment"});
+ assert.equal(f.state().loan.status,"RETURNED_FOR_CORRECTION");
+ await assert.rejects(()=>integration.submit(f.db,scope,"loan",{expectedVersion:1}),/WORKFLOW_VERSION_CONFLICT/);
+ await integration.submit(f.db,scope,"loan",{expectedVersion:2});
+ assert.equal(f.state().loan.status,"PENDING_BRANCH_MANAGER_APPROVAL");assert.equal(f.state().workflow.version,3);
+ assert.deepEqual(f.state().workflow.history.map(e=>e.decision),["RETURN","RESUBMIT"]);
+ assert.ok(f.state().workflow.stages.every(s=>s.status==="PENDING"));
+ await assert.rejects(()=>financial.hrVerificationDecision({...args,actorUserId:"hr",decision:"VERIFY",expectedVersion:3,prismaClient:f.db}),/ESS_LOAN_STAGE_MISMATCH/);
+ await integration.branchDecision(f.db,{...args,actorUserId:"branch",decision:"APPROVE",expectedVersion:3});
+ assert.equal(f.state().workflow.currentIndex,1);assert.equal(f.state().workflow.version,4);
+});

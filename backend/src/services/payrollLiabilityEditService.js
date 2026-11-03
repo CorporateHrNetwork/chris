@@ -196,7 +196,7 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
 
     if (existing.essApprovalRequired) {
       if (input?.employeeNumber !== undefined && text(input.employeeNumber).toUpperCase() !== text(existing.employeeNumber).toUpperCase()) throw error("ESS_LOAN_EMPLOYEE_LOCKED", "An ESS loan cannot be moved to another employee.", 409);
-      if (existing.status !== "DRAFT") throw error("ESS_LOAN_APPLICATION_FROZEN", "Submitted ESS applications preserve their approved terms.", 409);
+      if (!["DRAFT", "RETURNED_FOR_CORRECTION"].includes(existing.status)) throw error("ESS_LOAN_APPLICATION_FROZEN", "Submitted ESS applications preserve their approved terms.", 409);
     }
 
     const recoveryRows = await tx.$queryRawUnsafe(

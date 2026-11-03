@@ -56,6 +56,12 @@ router.get("/ess-approvals/inbox",async(req,res)=>{
  try{return res.json({status:"success",data:await require("../services/zermattEssApprovalInboxService").inbox(prisma,{organizationId:req.auth.organizationId,userId:req.auth.userId})});}
  catch(error){return sendError(res,error);}
 });
+router.get("/ess-approvals/loan/:id/application-form",async(req,res)=>{
+ try{
+  const data=await require("../services/zermattEssApprovalInboxService").applicationForm(prisma,{organizationId:req.auth.organizationId,userId:req.auth.userId},req.params.id);
+  res.setHeader("Cache-Control","no-store");return res.json({status:"success",data});
+ }catch(error){return sendError(res,error);}
+});
 router.post("/ess-approvals/:type/:id/decisions",async(req,res)=>{
  try{const data=await require("../services/zermattEssApprovalInboxService").act(prisma,{organizationId:req.auth.organizationId,userId:req.auth.userId},req.params.type,req.params.id,req.body||{});if(String(req.params.type).toUpperCase()==="LOAN")require("../services/zermattEssLoanNotificationDispatch").kick(prisma,req.auth.organizationId);return res.json({status:"success",data});}
  catch(error){return sendError(res,error);}

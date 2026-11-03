@@ -282,6 +282,12 @@ router.get("/approvals",requireEssAuth,async(req,res)=>{
   return res.json({status:"success",data});
  }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_INBOX_FAILED"});}
 });
+router.get("/approvals/loan/:id/application-form",requireEssAuth,async(req,res)=>{
+ try{
+  const data=await require("../services/zermattEssApprovalInboxService").applicationForm(prisma,{organizationId:req.essAuth.organizationId,userId:req.essAuth.userId},req.params.id);
+  res.setHeader("Cache-Control","no-store");return res.json({status:"success",data});
+ }catch(error){return res.status(error.statusCode||500).json({status:"error",code:error.code||"WORKFLOW_DOCUMENT_FAILED",message:"Unable to download the application form."});}
+});
 router.post("/approvals/:type/:id/decisions",requireEssAuth,async(req,res)=>{
  try{
   const data=await require("../services/zermattEssApprovalInboxService").act(prisma,{organizationId:req.essAuth.organizationId,userId:req.essAuth.userId},req.params.type,req.params.id,req.body||{});
@@ -325,16 +331,31 @@ router.get("/loans/applications",requireEssAuth,async(req,res)=>{
  try{
   const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
   await require("../services/zermattEssLoanDraftService").employeeFor(prisma,scope);
-  const applications=await prisma.$queryRawUnsafe('SELECT l."id",l."loanNumber",l."status",l."principalAmount",l."installmentAmount",l."purpose",w."version",w."currentIndex",w."stages",w."status" AS "approvalStatus" FROM "payroll_loans" l LEFT JOIN "ess_approval_workflows" w ON w."organizationId"=l."organizationId" AND w."requestType"=\'LOAN\' AND w."requestId"=l."id" WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND l."essApprovalRequired"=true ORDER BY l."createdAt" DESC LIMIT 100',scope.organizationId,scope.employeeId);
+  const applications=await prisma.$queryRawUnsafe('SELECT l."id",l."loanNumber",l."status",l."principalAmount",l."installmentAmount",l."purpose",l."notes",w."version",w."currentIndex",w."stages",w."status" AS "approvalStatus" FROM "payroll_loans" l LEFT JOIN "ess_approval_workflows" w ON w."organizationId"=l."organizationId" AND w."requestType"=\'LOAN\' AND w."requestId"=l."id" WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND l."essApprovalRequired"=true ORDER BY l."createdAt" DESC LIMIT 100',scope.organizationId,scope.employeeId);
   const policies=await require("../services/loanPolicyService").getLoanPolicies({organizationId:scope.organizationId,prismaClient:prisma});
   return res.json({status:"success",data:{applications,policies:policies.policies}});
+ }catch(error){return loanEssError(res,error);}
+});
+router.patch("/loans/:id/application",requireEssAuth,async(req,res)=>{
+ if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
+ try{
+  const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
+  await require("../services/zermattEssLoanDraftService").employeeFor(prisma,scope);
+  const data=await prisma.$transaction(async tx=>{
+   const rows=await tx.$queryRawUnsafe('SELECT "id","status" FROM "payroll_loans" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "createdByUserId"=$3 AND "id"=$4 AND "essApprovalRequired"=true FOR UPDATE',scope.organizationId,scope.employeeId,scope.userId,req.params.id);
+   if(!rows[0]||!["DRAFT","RETURNED_FOR_CORRECTION"].includes(rows[0].status))throw Object.assign(new Error("Application is not editable."),{code:"ESS_LOAN_APPLICATION_FROZEN",statusCode:409});
+   const body=req.body||{};
+   const purpose=await require("../services/loanPolicyService").validateLoanPurpose({organizationId:scope.organizationId,purpose:body.purpose,prismaClient:tx});
+   return require("../services/payrollLiabilityEditService").updateLoan({organizationId:scope.organizationId,actorUserId:scope.userId,loanId:req.params.id,input:{principalAmount:body.principalAmount,installmentAmount:body.installmentAmount,purpose,notes:body.notes},prismaClient:{$transaction:fn=>fn(tx)}});
+  });
+  return res.json({status:"success",data});
  }catch(error){return loanEssError(res,error);}
 });
 router.post("/loans/:id/submit",requireEssAuth,async(req,res)=>{
  if(process.env.ZERMATT_ESS_APPROVALS_ENABLED!=="true")return res.status(404).json({status:"error",code:"ESS_LOAN_NOT_AVAILABLE"});
  try{
   const scope={organizationId:req.essAuth.organizationId,employeeId:req.essAuth.employeeId,userId:req.essAuth.userId};
-  const data=await require("../services/zermattEssLoanIntegration").submit(prisma,scope,req.params.id);
+  const data=await require("../services/zermattEssLoanIntegration").submit(prisma,scope,req.params.id,{expectedVersion:req.body?.expectedVersion});
   require("../services/zermattEssLoanNotificationDispatch").kick(prisma,scope.organizationId);
   return res.json({status:"success",data});
  }catch(error){return loanEssError(res,error);}
