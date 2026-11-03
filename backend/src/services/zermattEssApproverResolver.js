@@ -56,6 +56,7 @@ async function resolveLeaveApprovers(db,{organizationId,employeeId,requesterUser
  const {employee,users}=await loadScope(db,organizationId,employeeId);
  const chain=await reportingChain(db,{organizationId,employeeId,users,asOf});
  const branchHr=users.filter(u=>u.isActive&&matches(u,BRANCH_HR)&&assignedToLocation(u,employee.locationId));
+ if(branchHr.length>1)error("BRANCH_HR_AMBIGUOUS");
  const hr=branchHr.length===1?branchHr[0]:uniqueUser(users,HEAD_HR,null,"HEAD_HR");
  return buildLeaveStages({organizationSlug:ZERMATT,requesterUserId,hrUserId:hr.id,managerChain:chain,finalHrUserId:hr.id});
 }
