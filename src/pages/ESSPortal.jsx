@@ -44,8 +44,8 @@ export default function ESSPortal(){
  {tab==="statutory"&&<Statutory data={data}/>}
  {tab==="payroll"&&<Payroll data={data}/>}{tab==="loans"&&<RunningLoans/>}
  {tab==="payslips"&&<Payslips data={data}/>}
- {tab==="leave"&&<LeaveAttendance data={data}/>}
- {tab==="performance"&&<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>}
+ {tab==="leave"&&(IS_SALES_DEMO?<Page h="Leave & Attendance" s="Read-only fictional demo leave and attendance information."><Card t="Leave balance"><Info items={data.leaveBalances.map(b=>[b.leaveType,String(Number(b.openingBalance||0)+Number(b.accrued||0)+Number(b.adjusted||0)+Number(b.carriedForward||0)-Number(b.used||0))+" days available"])}/></Card><Card t="Recent attendance"><Table rows={data.attendance} empty="No demo attendance records" cols={[["Date",r=>date(r.attendanceDate)],["Status",r=>title(r.status)]]}/></Card></Page>:<LeaveAttendance data={data}/>)}
+ {tab==="performance"&&(IS_SALES_DEMO?<Performance data={data} onSaved={()=>{}}/>:<PerformanceEvaluationWorkspace essRequest={essRequest}><Performance data={data} onSaved={()=>load()}/></PerformanceEvaluationWorkspace>)}
  {tab==="communications"&&<Communications data={data}/>}
  {tab==="gratuity"&&<Gratuity data={data}/>}
  {tab==="birthday"&&<BirthdayCard data={data}/>}

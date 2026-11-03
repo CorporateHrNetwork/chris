@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 
 const prisma = require("../config/prisma");
 const { requireEssAuth } = require("../middleware/authMiddleware");
+const {demoLogin,demoDashboard,demoLoans} = require("../services/northstarEssDemo");
 
 const { ESS_STATUTORY_OBLIGATIONS_SQL, ESS_PAYROLL_PREVIEWS_SQL, ESS_CURRENT_SALARY_SQL } = require("../services/essStatutoryService");
 
@@ -29,7 +30,7 @@ This is intentionally separate from the CHRiS administration login.
 Only an active CHRiS user account that is linked to an employee record
 may receive an ESS token.
 */
-router.post("/login", async (req, res) => {
+router.post("/login", demoLogin, async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const password = req.body?.password;
@@ -274,7 +275,7 @@ router.get("/leave/applications",requireEssAuth,essLeaveEndpoint("options"));
 router.post("/leave/preview",requireEssAuth,essLeaveEndpoint("preview"));
 router.post("/leave/applications",requireEssAuth,essLeaveEndpoint("submit"));
 
-router.get("/loans", requireEssAuth, async (req, res) => {
+router.get("/loans", demoLoans, requireEssAuth, async (req, res) => {
   try {
     const { getEmployeeLoanSummary } = require("../services/essLoanSummaryService");
     const data = await getEmployeeLoanSummary(prisma, {
@@ -288,7 +289,7 @@ router.get("/loans", requireEssAuth, async (req, res) => {
   }
 });
 
-router.get("/dashboard", requireEssAuth, async (req,res) => {
+router.get("/dashboard", demoDashboard, requireEssAuth, async (req,res) => {
   try {
     const orgId=req.essAuth.organizationId,eid=req.essAuth.employeeId;
     const employee=await prisma.employee.findFirst({where:{id:eid,organizationId:orgId},select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,email:true,phone:true,gender:true,status:true,employmentType:true,hireDate:true,confirmationDate:true,exitDate:true,nationalIdentificationNumber:true,department:{select:{id:true,name:true,code:true}},designation:{select:{id:true,name:true,code:true,employmentLevel:{select:{levelNumber:true,code:true,name:true}}}},location:{select:{id:true,name:true,code:true,city:true,state:true}},costCentre:{select:{id:true,name:true,code:true}},employmentEpisodes:{where:{endDate:null},orderBy:{sequenceNumber:"desc"},take:1,select:{startDate:true,sequenceNumber:true}},lineManagerAssignments:{where:{effectiveTo:null},take:1,select:{manager:{select:{employeeNumber:true,firstName:true,middleName:true,lastName:true,designation:{select:{name:true}}}}}}}});
