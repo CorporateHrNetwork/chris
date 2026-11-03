@@ -276,7 +276,11 @@ async function lockRequestEmployee(tx, organizationId, requestId) {
 async function submitLeaveRequest(input) {
   return prisma.$transaction(async tx => {
     await lockLeaveEmployee(tx, input.organizationId, input.employeeNumber);
-    return submitLeaveRequestInTransaction({ ...input, tx });
+    const created = await submitLeaveRequestInTransaction({ ...input, tx });
+    // Optional atomic ESS workflow creation; failures roll back the leave request
+    // and preserve pending-balance integrity.
+    if (typeof input.onCreated === "function") await input.onCreated(tx, created);
+    return created;
   }, { timeout: 30000 });
 }
 
@@ -582,6 +586,16 @@ async function reviewLeaveRequest({
         throw new Error(
           "LEAVE_REQUEST_NOT_FOUND"
         );
+      }
+
+      // A routed ESS request cannot be approved through the legacy single-step
+      // HR review endpoint. Only the integrated final confirmation may do so.
+      if (process.env.ZERMATT_ESS_APPROVALS_ENABLED === "true") {
+        const org = await tx.organization.findUnique({where:{id:organizationId},select:{slug:true}});
+        if (org?.slug === "zermatt-liquor-limited") {
+          const routed = await require("./zermattEssApprovalPersistence").lookup(tx,{organizationId,requestType:"LEAVE",requestId:leaveRequestId});
+          if (routed) throw new Error("ESS_LEAVE_ROUTED_APPROVAL_REQUIRED");
+        }
       }
 
       if (
