@@ -84,12 +84,12 @@ assert.doesNotMatch(northstarFixture,/zermatt|beer barn|zenith bank|zll-/i);
 
 const dutyUi=read("src/demo/DemoPerformanceEvaluation.jsx");
 const dutyFixture=read("backend/src/services/northstarPerformanceFixture.js");
-assert.match(essPortal,/DemoPerformanceEvaluation data=\\{data\\}/);
-assert.match(essPortal,/evaluationOfDuty:d\\.evaluationOfDuty/);
+assert.match(essPortal,/DemoPerformanceEvaluation data=\{data\}/);
+assert.match(essPortal,/evaluationOfDuty:d\.evaluationOfDuty/);
 assert.match(dutyUi,/Performance Evaluation of Duty/);
 assert.match(dutyUi,/Published role duties, targets and scoring evidence/);
 assert.match(dutyUi,/Employee self-assessment/);
 assert.match(dutyUi,/Validated evaluation outcome/);
 assert.match(dutyFixture,/GOALS_PUBLISHED/);
 assert.match(dutyFixture,/ACKNOWLEDGED/);
-assert.doesNotMatch(dutyUi+dutyFixture,/zermatt|beer barn|zll-|crnetwork\\.com\\.ng/i);
+assert.doesNotMatch(dutyUi+dutyFixture,/zermatt|beer barn|zll-|crnetwork\.com\.ng/i);
