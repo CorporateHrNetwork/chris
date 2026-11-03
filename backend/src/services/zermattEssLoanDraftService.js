@@ -1,6 +1,6 @@
 "use strict";
 const {validateLoanPurpose}=require("./loanPolicyService");
-const loan=require("./loanOriginationWorkflowService");
+// Load the existing financial workflow only when a real ESS request is made.
 function fail(code,statusCode=403){throw Object.assign(new Error(code),{code,statusCode});}
 async function employeeFor(db,scope){
  if(!scope?.employeeId||!scope?.userId||!scope?.organizationId)fail("ESS_EMPLOYEE_SESSION_REQUIRED");
@@ -17,7 +17,7 @@ async function createDraft(db,scope,input){
  const created=await db.$transaction(async tx=>{
   const purpose=await validateLoanPurpose({organizationId:scope.organizationId,purpose:input?.purpose,prismaClient:tx});
   // Ignore all client-supplied employee, branch, loan status or actor fields.
-  return loan.createDraftApplication({organizationId:scope.organizationId,actorUserId:scope.userId,
+  return require("./loanOriginationWorkflowService").createDraftApplication({organizationId:scope.organizationId,actorUserId:scope.userId,
    input:{employeeNumber:employee.employeeNumber,principalAmount:input?.principalAmount,installmentAmount:input?.installmentAmount,purpose,notes:String(input?.notes||"").slice(0,1500)},
    purpose,prismaClient:tx});
  });
@@ -29,7 +29,7 @@ async function attachForm(db,scope,loanId,file){
   const rows=await tx.$queryRawUnsafe('SELECT "id","status" FROM "payroll_loans" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "id"=$3 FOR UPDATE',scope.organizationId,scope.employeeId,loanId);
   if(!rows[0])fail("ESS_LOAN_NOT_FOUND",404);
   if(!["DRAFT","RETURNED_FOR_CORRECTION"].includes(rows[0].status))fail("ESS_LOAN_APPLICATION_FROZEN",409);
-  return loan.addApplicationForm({organizationId:scope.organizationId,actorUserId:scope.userId,loanId,file,prismaClient:tx});
+  return require("./loanOriginationWorkflowService").addApplicationForm({organizationId:scope.organizationId,actorUserId:scope.userId,loanId,file,prismaClient:tx});
  });
 }
 module.exports={employeeFor,createDraft,attachForm};
