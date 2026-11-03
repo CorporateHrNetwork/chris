@@ -23,7 +23,7 @@ async function loadScope(db,organizationId,employeeId){
  const [org,employee,users]=await Promise.all([
   db.organization.findUnique({where:{id:organizationId},select:{slug:true}}),
   db.employee.findFirst({where:{id:employeeId,organizationId},select:{id:true,locationId:true,status:true}}),
-  db.user.findMany({where:{organizationId,isActive:true},select:{id:true,isActive:true,employeeId:true,locationScope:true,userRoles:{select:{role:{select:{name:true}}}},userLocations:{select:{locationId:true}}}}}),
+  db.user.findMany({where:{organizationId,isActive:true},select:{id:true,isActive:true,employeeId:true,locationScope:true,userRoles:{select:{role:{select:{name:true}}}},userLocations:{select:{locationId:true}}}}),
  ]);
  if(org?.slug!==ZERMATT)error("ZERMATT_WORKFLOW_ONLY");
  if(!employee||!["ACTIVE","PROBATION","LEAVE"].includes(employee.status))error("EMPLOYEE_NOT_ELIGIBLE");
