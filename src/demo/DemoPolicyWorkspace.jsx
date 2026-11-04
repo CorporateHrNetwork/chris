@@ -10,6 +10,7 @@ const heading={color:"#f0ce60",margin:"0 0 8px"};
 export default function DemoPolicyWorkspace(){
  const {pathname}=useLocation();
  const organization=getStoredOrganization()||{};
+ const isNorthstar=organization.slug==="chris-demo-company";
  const preview=getNorthstarPreview(pathname);
  const loans=preview.key==="loan";
  const cohortOverview=northstarCohortOverview();
@@ -35,6 +36,18 @@ export default function DemoPolicyWorkspace(){
   });
   return()=>{active=false};
  },[loans]);
+
+ if(!isNorthstar) return <section className="chris-panel" aria-label="Independent demo configuration" style={{color:"#f7faf8",padding:24,maxWidth:1100,margin:"0 auto"}}>
+  <p style={{fontSize:12,color:"#f0ce60",fontWeight:800}}>CHRiS · INDEPENDENT DEMO WORKSPACE</p>
+  <h1>{preview.title}</h1>
+  <p>{organization.name||"Demo organization"} has its own independent demonstration configuration. Customer-specific policies, the Northstar synthetic employee cohort, and production records are excluded.</p>
+  {loans&&<section style={panel}>
+   <h2 style={{...heading,fontSize:18}}>Tenant-scoped fictional loan register</h2>
+   {loanError&&<p role="status">{loanError}</p>}
+   {!loanError&&<p>{loanRows.length} fictional loan record(s) returned for this tenant. Loan origination and payments are disabled.</p>}
+  </section>}
+  <p style={{fontSize:12,color:"#c5d2ca"}}>Read-only illustrative configuration · independent tenant · no writes or external transactions.</p>
+ </section>;
 
  return <section className="chris-panel" aria-label="Northstar independent demonstration workspace" style={{color:"#f7faf8",padding:24,maxWidth:1200,margin:"0 auto"}}>
   <p style={{color:"#f0ce60",fontSize:12,fontWeight:800,letterSpacing:1}}>CHRiS · NORTHSTAR DEMO INDUSTRIES</p>
