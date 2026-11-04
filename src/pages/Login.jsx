@@ -174,6 +174,11 @@ function Login() {
   ) => {
     event.preventDefault();
 
+    // Limit the complete login round trip, including JSON response parsing.
+    // The timer must be cleared for success and failure alike.
+    const loginController = new AbortController();
+    const loginTimeout = window.setTimeout(() => loginController.abort(), 20000);
+
     try {
       setLoading(true);
       setError("");
@@ -183,6 +188,7 @@ function Login() {
         `${API_BASE_URL}/api/auth/login`,
         {
           method: "POST",
+          signal: loginController.signal,
 
           headers: {
             "Content-Type":
@@ -268,10 +274,12 @@ function Login() {
       );
 
       setError(
-        err.message ||
-          "CHRIS could not complete sign in."
+        err.name === "AbortError"
+          ? "Sign-in did not respond within 20 seconds. The demo server may be slow or unavailable. Please retry. If this continues, contact CHRiS support."
+          : err.message || "CHRiS could not complete sign in. Please check your connection and retry."
       );
     } finally {
+      window.clearTimeout(loginTimeout);
       setLoading(false);
     }
   };
