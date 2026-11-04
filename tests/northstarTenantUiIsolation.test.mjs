@@ -35,7 +35,7 @@ test("Northstar displays synthetic module preview while other demo tenant stays 
    assert.match(northstar,/Northstar Demo Industries/i);
    assert.match(northstar,/48/);
    const other=await render("chris-client-demo-10");
-   assert.match(other,/Independent demo configuration/);
+   assert.match(other,/independent demonstration configuration/i);
    assert.match(other,/CHRiS DEMO LTD/);
    assert.doesNotMatch(other,/Consistent fictional workforce dataset|NS-FICTION-|NORTHSTAR DEMO INDUSTRIES/);
  }finally{
