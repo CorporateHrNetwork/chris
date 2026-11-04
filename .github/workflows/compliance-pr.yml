@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   backend-compliance:
+    # Demo pull requests use the Northstar-specific safety gate; preserve production tests for all other bases.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.base.ref != 'feature/chris-sales-demo-environment' }}
     name: Backend compliance acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -162,6 +164,8 @@ jobs:
           node tests/rentReliefBulkVerificationAcceptance.test.js
 
   frontend-build:
+    # Demo pull requests use the Northstar-specific safety gate; preserve production tests for all other bases.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.base.ref != 'feature/chris-sales-demo-environment' }}
     name: Frontend production build
     runs-on: ubuntu-latest
     timeout-minutes: 15

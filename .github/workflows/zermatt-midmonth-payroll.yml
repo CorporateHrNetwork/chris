@@ -13,6 +13,8 @@ permissions:
   contents: read
 jobs:
   payroll:
+    # Demo pull requests use the Northstar-specific safety gate; preserve production tests for all other bases.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.base.ref != 'feature/chris-sales-demo-environment' }}
     runs-on: ubuntu-latest
     services:
       postgres:

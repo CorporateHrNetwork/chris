@@ -21,6 +21,10 @@ test("fictional Northstar ESS login issues isolated short-lived token and dashbo
  const loans=res();demoLoans({headers:{authorization:"Bearer "+response.data.data.token}},loans,()=>assert.fail("must not access DB"));
  assert.equal(loans.data.data.length,1);
  assert.equal(loans.data.data[0].balance,60000);
+ assert.equal(loans.data.data[0].repaymentSchedule.length,6);
+ assert.equal(loans.data.data[0].repaymentSchedule.filter(row=>row.status==='PAID').reduce((total,row)=>total+row.amountPaid,0),60000);
+ assert.equal(loans.data.data[0].repaymentSchedule.filter(row=>row.status==='SCHEDULED').reduce((total,row)=>total+row.amountPaid,0),0);
+ assert.equal(loans.data.data[0].repaymentSchedule.at(-1).dueDate,'2027-01-31');
 });
 test("incorrect password rejected and unrelated tokens not accepted",()=>{
  const wrong=res();demoLogin(req("incorrect"),wrong,()=>assert.fail("must not fall through"));

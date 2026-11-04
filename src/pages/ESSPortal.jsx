@@ -84,7 +84,15 @@ function RunningLoans(){
  return <Page h="Running Loan Summary" s="Your own loan balances and repayment schedule."><Card t="My loans" a="Refresh" click={()=>setRevision(v=>v+1)}>
  {IS_SALES_DEMO?<p className="muted">Sample loan ledger only. All balances and repayments are fictional; no transactions can be made.</p>:<p className="muted">Total paid includes recorded opening repayments, posted payroll recoveries and recorded external settlements. Reversed recoveries are excluded. Expected final deduction months follow the current schedule and may change after pauses or corrections. Loan recovery follows the organization-specific approved payroll policy.</p>}
  {loading?<p role="status">Loading your loan summary…</p>:error?<p role="alert">{error}</p>:<Table rows={rows} empty="You have no running or completed loan records." cols={[["Loan",r=>r.loanNumber],["Loan Amount",r=>money(r.loanAmount,r.currency)],["Monthly Installment",r=>money(r.monthlyInstallment,r.currency)],["Total Paid So Far",r=>money(r.totalPaid,r.currency)],["Balance",r=>money(r.balance,r.currency)],["Expected Final Deduction Month",r=>monthLabel(r.expectedFinalDeductionMonth)],["Last Recorded Deduction",r=>monthLabel(r.lastRecordedDeductionMonth)],["Status",r=>title(r.status)]]}/>}
- </Card></Page>
+ </Card>
+ {IS_SALES_DEMO&&rows.some(r=>Array.isArray(r.repaymentSchedule))&&<Card t="Fictional installment history">
+  <p className="muted">Payments marked paid are illustrative. Future balances are projections, not posted recoveries or actual obligations.</p>
+  {rows.map(loan=><details key={loan.id||loan.loanNumber} style={{marginBottom:12}}>
+   <summary style={{cursor:"pointer"}}>{loan.loanNumber} · {money(loan.balance,loan.currency)} sample outstanding</summary>
+   <Table rows={loan.repaymentSchedule||[]} empty="No sample installments." cols={[[ "Period",r=>date(r.dueDate)],["Installment",r=>r.installmentNumber],["Scheduled",r=>money(r.scheduledAmount,loan.currency)],["Paid",r=>money(r.amountPaid,loan.currency)],["Projected balance",r=>money(r.outstandingAfter,loan.currency)],["Status",r=>title(r.status)]]}/>
+  </details>)}
+ </Card>}
+ </Page>
 }
 
 function Payslips({data}){return <Page h="Payslips & Payroll Previews" s="Approved payslips and provisional payroll calculations are shown separately."><Card t="Approved payslips"><Table rows={data.payroll.payslips} empty="No approved payslips are available yet." cols={[["Period",r=>r.periodName||r.periodCode],["Period End",r=>date(r.periodEnd)],["Pay Date",r=>date(r.payDate)],["Gross",r=>money(r.grossPay,r.currency)],["Deductions",r=>money(r.deductions,r.currency)],["Net Pay",r=>money(r.netPreview,r.currency)],["",r=><Download id={r.id}/>]]}/></Card><Card t="Payroll previews — awaiting approval"><p className="muted">These are provisional calculations, not approved payslips or confirmation of payment.</p><Table rows={data.payroll.previews||[]} empty="No provisional payroll calculations are available." cols={[["Period",r=>r.periodName||r.periodCode],["Gross",r=>money(r.grossPay,r.currency)],["Deductions",r=>money(r.deductions,r.currency)],["Net Pay",r=>money(r.netPreview,r.currency)],["Status",r=>title(r.runStatus)]]}/></Card></Page>}
