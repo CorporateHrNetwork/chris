@@ -2,6 +2,7 @@ import {useEffect,useState} from "react";
 import {Link,useLocation} from "react-router-dom";
 import {apiRequest,getStoredOrganization} from "../services/api";
 import {getNorthstarPreview,northstarArchitecture} from "./northstarModuleArchitecture";
+import {northstarCohort,northstarCohortOverview} from "./northstarSyntheticCohort";
 
 const panel={background:"rgba(9,35,24,.92)",border:"1px solid rgba(212,175,55,.27)",borderRadius:12,padding:18};
 const td={padding:"10px 12px",textAlign:"left",borderBottom:"1px solid rgba(212,175,55,.18)",fontSize:13};
@@ -11,6 +12,15 @@ export default function DemoPolicyWorkspace(){
  const organization=getStoredOrganization()||{};
  const preview=getNorthstarPreview(pathname);
  const loans=preview.key==="loan";
+ const cohortOverview=northstarCohortOverview();
+ const sampleRows=preview.key==="loan"?northstarCohort.loans:
+  preview.key==="leave"?northstarCohort.leave:
+  preview.key==="performance"?northstarCohort.performance:
+  preview.key==="payroll"?northstarCohort.payroll:
+  preview.key==="benefit"?northstarCohort.benefits:
+  northstarCohort.employees;
+ const employeeLabel=id=>northstarCohort.employees.find(e=>e.id===id)?.displayName||"Fictional record";
+
  const [loanRows,setLoanRows]=useState([]);
  const [loanError,setLoanError]=useState("");
  useEffect(()=>{
@@ -55,6 +65,20 @@ export default function DemoPolicyWorkspace(){
     <tbody>{loanRows.map((row,i)=><tr key={row.id||i}><td style={td}>{row.loanNumber||row.reference||"Fictional loan"}</td><td style={td}>{row.status||"—"}</td><td style={td}>{Number(row.principalAmount||row.loanAmount||0).toLocaleString("en-NG")}</td><td style={td}>{Number(row.outstandingAmount??row.balance??0).toLocaleString("en-NG")}</td></tr>)}</tbody>
    </table></div>)}
   </section>}
+  <section style={{...panel,marginTop:16}} aria-label="Linked fictional organization records">
+   <h2 style={{...heading,fontSize:18}}>Consistent fictional workforce dataset</h2>
+   <p style={{color:"#c5d2ca",fontSize:13,lineHeight:1.65}}>This separate sample dataset demonstrates cross-module relationships without querying or changing Northstar's existing staging employees or any other customer's records. Its 48 imaginary colleagues are not asserted to match the 48 saved demo employee profiles.</p>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:9}}>
+    {Object.entries(cohortOverview).map(([key,value])=><div key={key} style={{padding:10,borderRadius:9,border:"1px solid rgba(212,175,55,.2)"}}><small style={{color:"#c5d2ca"}}>{key.replace(/([A-Z])/g," $1")}</small><div style={{fontWeight:800,fontSize:18}}>{value}</div></div>)}
+   </div>
+   <details style={{marginTop:16}}>
+    <summary style={{cursor:"pointer",color:"#f0ce60",fontWeight:700}}>Inspect linked sample records for this module ({sampleRows.length})</summary>
+    <div style={{maxHeight:300,overflow:"auto",marginTop:10}}><table style={{width:"100%",borderCollapse:"collapse"}}>
+     <thead><tr>{["Reference","Fictional employee / candidate","Sample state"].map(h=><th key={h} scope="col" style={{...td,color:"#f0ce60"}}>{h}</th>)}</tr></thead>
+     <tbody>{sampleRows.slice(0,48).map(row=><tr key={row.id}><td style={td}>{row.id}</td><td style={td}>{row.employeeId?employeeLabel(row.employeeId):row.displayName||row.candidate||"Fictional"}</td><td style={td}>{row.status||row.latestStatus||row.stage||row.period||row.program||"Illustrative"}</td></tr>)}</tbody>
+    </table></div>
+   </details>
+  </section>
   <section style={{...panel,marginTop:16}} aria-label="Northstar module architecture">
    <h2 style={{...heading,fontSize:18}}>CHRiS module architecture</h2>
    <p style={{color:"#c5d2ca",fontSize:13}}>Shared navigation mirrors the commercial system structure. Only expressly enabled demonstration modules contain fictional records; unavailable workflows remain illustrative and cannot change records.</p>
