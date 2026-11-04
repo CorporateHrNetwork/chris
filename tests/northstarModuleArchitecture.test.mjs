@@ -26,6 +26,11 @@ test("policy-sensitive modules have independent, fictional, read-only previews",
  assert.match(ui,/apiRequest\("\/api\/loans"\)/);
  assert.doesNotMatch(ui,/method:\s*["'](?:POST|PATCH|DELETE|PUT)["']/);
  assert.match(ui,/Read-only fictional demonstration/);
+ assert.match(ui,/organization\.slug==="chris-demo-company"/);
+ assert.match(ui,/if\(!isNorthstar\) return/);
+ assert.match(ui,/Northstar synthetic employee cohort/);
+ assert.match(ui,/Independent demo configuration/);
+
 });
 
 test("existing sales-demo isolation boundary and demo build exclusion remain intact",()=>{
