@@ -32,5 +32,18 @@ function fixture(){
  news:[["ANNOUNCEMENT","Welcome to Northstar MY CHRiS","Fictional employee records only."],["MEMO","Sample learning calendar","Illustrative staff development memo."],["POLICY_HR_UPDATE","Sample handbook update","No customer policies included."],["INTERNAL_CAREER","Sample internal vacancy","Fictional People Operations role."],["PROMOTION","Sample colleague recognition","Illustrative promotion notice."],["TRANSFER","Sample transfer notice","Fictional employee movement."]].map(([category,title,body],i)=>({id:"sample-news-"+i,category,title,summary:body,body,isPinned:i===0,publishAt:"2026-10-20"}))
  };
 }
-function loans(){return [{id:"sample-loan",loanNumber:"NSTAR-SAMPLE-LOAN-01",loanAmount:120000,monthlyInstallment:20000,totalPaid:60000,balance:60000,expectedFinalDeductionMonth:"2027-01",lastRecordedDeductionMonth:"2026-10",status:"ACTIVE",currency:"NGN",demoOnly:true}]}
+function loans(){return [{
+ id:"sample-loan",loanNumber:"NSTAR-SAMPLE-LOAN-01",loanAmount:120000,
+ monthlyInstallment:20000,totalPaid:60000,balance:60000,
+ expectedFinalDeductionMonth:"2027-01",lastRecordedDeductionMonth:"2026-10",
+ status:"ACTIVE",currency:"NGN",demoOnly:true,
+ repaymentSchedule:[
+  {installmentNumber:1,dueDate:"2026-08-31",scheduledAmount:20000,amountPaid:20000,outstandingAfter:100000,status:"PAID"},
+  {installmentNumber:2,dueDate:"2026-09-30",scheduledAmount:20000,amountPaid:20000,outstandingAfter:80000,status:"PAID"},
+  {installmentNumber:3,dueDate:"2026-10-31",scheduledAmount:20000,amountPaid:20000,outstandingAfter:60000,status:"PAID"},
+  {installmentNumber:4,dueDate:"2026-11-30",scheduledAmount:20000,amountPaid:0,outstandingAfter:40000,status:"SCHEDULED"},
+  {installmentNumber:5,dueDate:"2026-12-31",scheduledAmount:20000,amountPaid:0,outstandingAfter:20000,status:"SCHEDULED"},
+  {installmentNumber:6,dueDate:"2027-01-31",scheduledAmount:20000,amountPaid:0,outstandingAfter:0,status:"SCHEDULED"}
+ ]
+}]}
 module.exports={fixture,loans};
