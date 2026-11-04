@@ -16,6 +16,16 @@ function summarizeLoanProfile(profile) {
     balance: loan.outstandingAmount,
     expectedFinalDeductionMonth: month(loan.expectedFinalInstallmentDate),
     lastRecordedDeductionMonth: deductions.length ? month(deductions[deductions.length - 1].dueDate) : null,
+    // Only employee-safe repayment details. Never expose collateral, approvals,
+    // private HR notes, internal references or unrelated employee information.
+    repaymentSchedule: profile.amortizationSchedule.map(row => ({
+      dueDate: row.dueDate || null,
+      installmentNumber: row.installmentNumber ?? null,
+      scheduledAmount: row.totalDeduction ?? null,
+      amountPaid: row.amountPaid ?? 0,
+      outstandingAfter: row.outstandingAfter ?? null,
+      status: row.status,
+    })),
   };
 }
 

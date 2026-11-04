@@ -24,6 +24,10 @@ test('summary uses authoritative balances and distinguishes expected and recorde
   assert.equal(summary.balance, 150000);
   assert.equal(summary.expectedFinalDeductionMonth, '2027-01');
   assert.equal(summary.lastRecordedDeductionMonth, '2026-10');
+  assert.deepEqual(summary.repaymentSchedule.map(row=>row.status), ['PAID','PAUSED','EXCEPTION','PENDING','REVERSED']);
+  assert.equal(summary.repaymentSchedule[0].amountPaid,50000);
+  assert.equal(summary.repaymentSchedule[1].amountPaid,0);
+  assert.equal(summary.repaymentSchedule.some(row=>'paymentSource' in row || 'settlementReference' in row),false);
   assert.equal('notes' in summary, false);
   assert.equal('externalSettlementReference' in summary, false);
   const settled = fixture();

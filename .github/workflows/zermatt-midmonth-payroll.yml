@@ -49,7 +49,7 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/chris_ess_leave_test
-      - name: Test ESS leave API with concurrent applications
+      - name: Test read-only ESS leave API and employee isolation
         run: node --test tests/essLeaveIntegration.test.js
         working-directory: backend
         env:
