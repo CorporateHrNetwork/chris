@@ -60,8 +60,26 @@ function ProtectedRoute({ children }) {
         // A valid cached session can render immediately. Authentication is still
         // revalidated in the background so reloads never block the HR workspace
         // on the /api/auth/me round-trip.
-        await verifyAuthSession();
-        if (active) setConnectionError("");
+        const verified = await verifyAuthSession();
+        if (!active) return;
+        if (!hasCachedSession) {
+          // A server-verified token can restore missing browser cache safely.
+          const profile = verified?.data;
+          const organization = profile?.organization;
+          if (!profile?.userId || !organization?.id || !organization?.slug) {
+            clearAuthSession();
+            setAuthState("unauthenticated");
+            return;
+          }
+          const storage = localStorage.getItem("chris_token") ? localStorage : sessionStorage;
+          storage.setItem("chris_user", JSON.stringify({
+            id: profile.userId, email: profile.email, firstName: profile.firstName,
+            lastName: profile.lastName, roles: profile.roles || []
+          }));
+          storage.setItem("chris_organization", JSON.stringify(organization));
+          setAuthState("authenticated");
+        }
+        setConnectionError("");
       } catch (error) {
         if (!active) return;
         if (error.code === "AUTH_INVALID" || error.code === "ACCESS_FORBIDDEN") {
