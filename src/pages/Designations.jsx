@@ -138,6 +138,9 @@ function Designations() {
     setSuccess,
   ] = useState("");
 
+  const [editingDepartmentId, setEditingDepartmentId] = useState(null);
+  const [savingDepartment, setSavingDepartment] = useState(false);
+
   const [
     showDepartmentForm,
     setShowDepartmentForm,
@@ -1071,15 +1074,18 @@ Existing compatible designations will be reused and the recommended career level
       }
 
       try {
+        setSavingDepartment(true);
         setError("");
         setSuccess("");
 
         const result =
           await apiRequest(
-            "/api/employees/career/departments",
+            editingDepartmentId
+              ? `/api/employees/career/departments/${encodeURIComponent(editingDepartmentId)}`
+              : "/api/employees/career/departments",
             {
               method:
-                "POST",
+                editingDepartmentId ? "PATCH" : "POST",
 
               body:
                 JSON.stringify({
@@ -1098,6 +1104,7 @@ Existing compatible designations will be reused and the recommended career level
             }
           );
 
+        setEditingDepartmentId(null);
         setDepartmentForm({
           name: "",
           code: "",
@@ -1111,7 +1118,7 @@ Existing compatible designations will be reused and the recommended career level
 
         setSuccess(
           result.message ||
-            "Department created successfully."
+            (editingDepartmentId ? "Department updated successfully." : "Department created successfully.")
         );
 
         await loadData();
@@ -1126,8 +1133,10 @@ Existing compatible designations will be reused and the recommended career level
       } catch (err) {
         setError(
           err.message ||
-            "Unable to create department."
+            "Unable to save department."
         );
+      } finally {
+        setSavingDepartment(false);
       }
     };
 
@@ -1915,11 +1924,11 @@ Unmapping will be blocked if current employees or reporting positions still depe
 
         <button
           type="button"
-          onClick={() =>
-            setShowDepartmentForm(
-              true
-            )
-          }
+          onClick={() => {
+            setEditingDepartmentId(null);
+            setDepartmentForm({ name: "", code: "", description: "", status: "ACTIVE" });
+            setShowDepartmentForm(true);
+          }}
           style={
             primaryButtonStyle
           }
@@ -1991,7 +2000,7 @@ Unmapping will be blocked if current employees or reporting positions still depe
               sectionTitleStyle
             }
           >
-            Add Department
+            {editingDepartmentId ? "Edit Department" : "Add Department"}
           </h2>
 
           <form
@@ -2085,11 +2094,12 @@ Unmapping will be blocked if current employees or reporting positions still depe
               <Field label="Status"><select style={inputStyle} value={departmentForm.status} onChange={(event)=>setDepartmentForm((current)=>({...current,status:event.target.value}))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Field>
               <button
                 type="submit"
+                disabled={savingDepartment}
                 style={
                   primaryButtonStyle
                 }
               >
-                Save Department
+                {savingDepartment ? "Saving..." : "Save Department"}
               </button>
 
               <button
@@ -2161,11 +2171,6 @@ Unmapping will be blocked if current employees or reporting positions still depe
                 label="My Organization"
               >
                 {departments
-                  .filter(
-                    (department) =>
-                      department.isActive !==
-                      false
-                  )
                   .map(
                     (
                       department
@@ -2184,6 +2189,7 @@ Unmapping will be blocked if current employees or reporting positions still depe
                         {department.code
                           ? ` (${department.code})`
                           : ""}
+                        {department.isActive === false ? " · Inactive" : ""}
                       </option>
                     )
                   )}
@@ -2253,6 +2259,13 @@ Unmapping will be blocked if current employees or reporting positions still depe
                 }{" "}
                 designation(s)
               </span>
+              <button type="button" style={secondaryButtonStyle} disabled={savingDepartment} onClick={() => {
+                setEditingDepartmentId(selectedDepartment.id);
+                setDepartmentForm({ name: selectedDepartment.name || "", code: selectedDepartment.code || "", description: selectedDepartment.description || "", status: selectedDepartment.isActive === false ? "INACTIVE" : "ACTIVE" });
+                setError("");
+                setSuccess("");
+                setShowDepartmentForm(true);
+              }}>Edit Department</button>
             </div>
           )}
         </div>
@@ -5320,3 +5333,4 @@ const recommendedDepartmentCreatingStyle = {
 };
 
 export default Designations;
+
