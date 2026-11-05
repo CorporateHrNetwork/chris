@@ -24,6 +24,9 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci
+      - name: Generate Prisma client for isolated tests
+        working-directory: backend
+        run: npx prisma generate
       - name: Run safe Zermatt loan edit regression
         working-directory: backend
         run: node --test tests/zermattLoanCompleteEdit.test.js
