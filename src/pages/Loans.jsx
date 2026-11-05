@@ -23,6 +23,7 @@ import EmployeeSearchSelect from "../components/EmployeeSearchSelect";
 import LoanProfile from "./LoanProfile";
 import LoanBulkUpload from "./LoanBulkUpload";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
+import { deriveLoanRepaymentTerms } from "../utils/loanRepaymentTerm";
 
 const MAX_REPAYMENT_MONTHS = 600;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -51,6 +52,8 @@ const emptyForm = () => ({
   employeeNumber: "",
   approvedAmount: "",
   installmentAmount: "",
+  repaymentMode: "AMOUNT",
+  repaymentMonths: "",
   gmApprovalDate: today(),
   disbursedDate: today(),
   recoveryStartMonth: currentMonth(),
@@ -238,6 +241,8 @@ function Loans({ completedOnly = false }) {
       employeeNumber: loan.employeeNumber,
       approvedAmount: "",
       installmentAmount: String(loan.installmentAmount || ""),
+      repaymentMode: "AMOUNT",
+      repaymentMonths: "",
       gmApprovalDate: today(),
       disbursedDate: today(),
       recoveryStartMonth: currentMonth(),
@@ -258,6 +263,8 @@ function Loans({ completedOnly = false }) {
       employeeNumber: loan.employeeNumber,
       approvedAmount: String(loan.principalAmount ?? ""),
       installmentAmount: String(loan.installmentAmount ?? ""),
+      repaymentMode: "AMOUNT",
+      repaymentMonths: "",
       gmApprovalDate: String(loan.approvedDate || loan.applicationDate || today()).slice(0, 10),
       disbursedDate: String(loan.disbursedDate || today()).slice(0, 10),
       recoveryStartMonth: String(loan.recoveryStartDate || today()).slice(0, 7),
@@ -284,8 +291,20 @@ function Loans({ completedOnly = false }) {
   const proposedPrincipal = topUpParent
     ? Math.max(0, Number(topUpParent.principalAmount || 0)) + Math.max(0, Number(form.approvedAmount || 0))
     : Math.max(0, Number(form.approvedAmount || 0));
-  const plan = repaymentPlan(proposedBalance, form.installmentAmount, form.recoveryStartMonth);
-  const validPlan = Boolean(plan && !plan.invalidReason);
+  const repaymentTerms = deriveLoanRepaymentTerms(
+    proposedBalance,
+    form.repaymentMode,
+    form.installmentAmount,
+    form.repaymentMonths,
+  );
+  const effectiveInstallment = repaymentTerms?.installmentAmount || "";
+  const plan = repaymentTerms?.invalidReason
+    ? { invalidReason: repaymentTerms.invalidReason }
+    : repaymentTerms
+      ? repaymentPlan(proposedBalance, effectiveInstallment, form.recoveryStartMonth)
+      : null;
+  const validPlan = Boolean(plan && !plan.invalidReason
+    && plan.installmentCount === repaymentTerms?.installmentCount);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -294,7 +313,7 @@ function Loans({ completedOnly = false }) {
       return;
     }
     if (!validPlan) {
-      setError(plan?.invalidReason || "Enter a valid amount, installment and recovery start month.");
+      setError(plan?.invalidReason || "Enter the loan balance, a valid repayment term and recovery start month.");
       return;
     }
     try {
@@ -308,7 +327,7 @@ function Loans({ completedOnly = false }) {
           body: JSON.stringify({
             employeeNumber: editingLoan.employeeNumber,
             principalAmount: form.approvedAmount,
-            installmentAmount: form.installmentAmount,
+            installmentAmount: effectiveInstallment,
             recoveryStartDate: `${form.recoveryStartMonth}-01`,
             purpose: form.purpose,
             notes: form.notes,
@@ -324,7 +343,7 @@ function Loans({ completedOnly = false }) {
         employeeNumber: topUpParent?.employeeNumber || form.employeeNumber,
         approvedAmount: form.approvedAmount,
         topUpAmount: form.approvedAmount,
-        installmentAmount: form.installmentAmount,
+        installmentAmount: effectiveInstallment,
         gmApprovalDate: form.gmApprovalDate,
         disbursedDate: form.disbursedDate,
         recoveryStartDate: `${form.recoveryStartMonth}-01`,
@@ -525,14 +544,43 @@ function Loans({ completedOnly = false }) {
           subtitle={editingLoan
             ? "Correct the permitted payroll-recovery terms. An increase in principal must be recorded as a Top-Up so collateral is revalidated; posted payroll history remains immutable."
             : topUpParent
-              ? "The approved top-up is merged into this same loan account. Existing recoveries remain unchanged and the revised outstanding balance is redistributed using the monthly installment below."
+              ? "The approved top-up is merged into this same loan account. Existing recoveries remain unchanged, and the revised outstanding balance is redistributed using the selected repayment term below."
               : "Use only after the GM has manually approved the loan and Accounts has completed payment outside CHRiS. Authorized HR records the financial liability for payroll recovery."}
           icon={<FaPlusCircle />}
         >
           <form onSubmit={submit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(205px,1fr))", gap: 12 }}>
             <EmployeeSearchSelect label="Employee" value={topUpParent?.employeeNumber || editingLoan?.employeeNumber || form.employeeNumber} onChange={setEmployee} disabled={Boolean(topUpParent || editingLoan)} required placeholder="Search employee number or name" />
             <label><small>{editingLoan ? "Cumulative Principal" : topUpParent ? "Top-Up Amount Approved by GM" : "Loan Amount Approved by GM"}</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.approvedAmount} onChange={setField("approvedAmount")} disabled={editingHistoryLocked} required /></label>
-            <label><small>Monthly Installment</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>
+            <label>
+              <small>Repayment Term — Enter Either</small>
+              <select
+                style={inputStyle}
+                value={form.repaymentMode}
+                onChange={(event) => {
+                  const repaymentMode = event.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    repaymentMode,
+                    repaymentMonths: repaymentMode === "MONTHS" ? "" : current.repaymentMonths,
+                    installmentAmount: repaymentMode === "AMOUNT" ? "" : current.installmentAmount,
+                  }));
+                  setError("");
+                  setMessage("");
+                }}
+              >
+                <option value="AMOUNT">Monthly Instalment Amount</option>
+                <option value="MONTHS">Number of Repayment Months</option>
+              </select>
+            </label>
+            {form.repaymentMode === "MONTHS"
+              ? <label><small>Number of Months</small><input style={inputStyle} type="number" min="1" max={MAX_REPAYMENT_MONTHS} step="1" value={form.repaymentMonths} onChange={setField("repaymentMonths")} required /></label>
+              : <label><small>Monthly Instalment (₦)</small><input style={inputStyle} type="number" min="0.01" step="0.01" value={form.installmentAmount} onChange={setField("installmentAmount")} required /></label>}
+            {validPlan && (
+              <div style={{ ...collateralCard, display: "grid", gap: 4 }}>
+                <small>Automatically Calculated</small>
+                <strong>{form.repaymentMode === "MONTHS" ? `Monthly recovery: ${money(effectiveInstallment)}` : `Repayment duration: ${plan.installmentCount} month(s)`}</strong>
+              </div>
+            )}
             {!editingLoan && <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>}
             {!editingLoan && <label><small>External Accounts Payment Date</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>}
             <label><small>Payroll Recovery Start Month</small><input style={inputStyle} type="month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required /></label>
@@ -582,7 +630,7 @@ function Loans({ completedOnly = false }) {
               <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Revised Repayment Schedule</strong>
               <div style={collateralGrid}>
                 <span>Balance to recover: <strong>{money(proposedBalance)}</strong></span>
-                <span>Monthly installment: <strong>{money(form.installmentAmount)}</strong></span>
+                <span>Monthly installment: <strong>{money(effectiveInstallment)}</strong></span>
                 <span>Total installments: <strong>{plan.installmentCount}</strong></span>
                 <span>From: <strong>{plan.startMonth}</strong></span>
                 <span>To: <strong>{plan.endMonth}</strong></span>
