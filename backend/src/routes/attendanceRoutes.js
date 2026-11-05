@@ -450,6 +450,12 @@ router.get(
             req.auth.organizationId,
           employeeNumber:
             req.query.employeeNumber,
+          // Never expose other branches' manual attendance through the list.
+          locationIds: req.auth?.activeLocationId
+            ? [req.auth.activeLocationId]
+            : req.auth?.locationScope === "ALL_LOCATIONS"
+              ? undefined
+              : (req.auth?.availableLocations || []).map((location) => location.id).filter(Boolean),
         });
 
       return res.json({
