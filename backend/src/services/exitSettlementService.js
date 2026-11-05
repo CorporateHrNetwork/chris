@@ -877,7 +877,7 @@ async function calculateSettlement({
         entityType: "ExitSettlement",
         entityId: settlement.id,
         action: "EXIT_SETTLEMENT_ACCOUNT_CALCULATED",
-        ...(existing ? { oldValue: { status: existing.status, calculationSnapshot: existing.calculationSnapshot } } : {}),
+        ...(existing ? { previousValue: { status: existing.status, calculationSnapshot: existing.calculationSnapshot } } : {}),
         newValue: snapshot,
         reason: text(input.notes) || "Employee Exit Settlement Account calculated",
       },
@@ -943,7 +943,7 @@ async function updateNoticePeriod({ organizationId, actorUserId, exitProcessId, 
       data: {
         organizationId, actorUserId, entityType: "EmployeeExitProcess", entityId: exit.id,
         action: "EXIT_NOTICE_PERIOD_CORRECTED", reason: correctionReason,
-        oldValue: { entitledNoticeDays: exit.entitledNoticeDays, settlementStatus: existing?.status || null, calculationSnapshot: existing?.calculationSnapshot || null },
+        previousValue: { entitledNoticeDays: exit.entitledNoticeDays, settlementStatus: existing?.status || null, calculationSnapshot: existing?.calculationSnapshot || null },
         newValue: { entitledNoticeDays: days, settlementStatus: settlement?.status || null, recalculationRequired: Boolean(existing) },
       },
     });
@@ -988,7 +988,7 @@ async function reopenSettlement({ organizationId, actorUserId, exitProcessId, re
       data: {
         organizationId, actorUserId, entityType: "ExitSettlement", entityId: settlement.id,
         action: "EXIT_SETTLEMENT_REOPENED",
-        oldValue: {
+        previousValue: {
           status: settlement.status, calculationSnapshot: settlement.calculationSnapshot,
           approvedByUserId: settlement.approvedByUserId, approvedAt: settlement.approvedAt?.toISOString() || null,
         },
