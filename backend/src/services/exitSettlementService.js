@@ -686,7 +686,7 @@ async function calculateSettlement({
   return prismaClient.$transaction(async (tx) => {
     await assertActor(tx, organizationId, actorUserId);
 
-    const existing = await tx.exitSettlement.findUnique({ where: { exitProcessId } });
+    const existing = await tx.exitSettlement.findFirst({ where: { exitProcessId, organizationId } });
     if (existing && !["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(existing.status)) {
       throw settlementError(
         "SETTLEMENT_IMMUTABLE",
@@ -877,6 +877,7 @@ async function calculateSettlement({
         entityType: "ExitSettlement",
         entityId: settlement.id,
         action: "EXIT_SETTLEMENT_ACCOUNT_CALCULATED",
+        ...(existing ? { oldValue: { status: existing.status, calculationSnapshot: existing.calculationSnapshot } } : {}),
         newValue: snapshot,
         reason: text(input.notes) || "Employee Exit Settlement Account calculated",
       },
@@ -907,6 +908,56 @@ async function assertCurrentSettlementBenefits(tx, organizationId, settlement) {
   }
 }
 
+
+async function reopenSettlement({ organizationId, actorUserId, exitProcessId, reason, confirmedUnpaid, prismaClient = prisma }) {
+  const correctionReason = text(reason);
+  if (!correctionReason) {
+    throw settlementError("SETTLEMENT_CORRECTION_REASON_REQUIRED", "Enter a reason for correcting the settlement.", 400);
+  }
+  if (confirmedUnpaid !== true) {
+    throw settlementError("SETTLEMENT_UNPAID_CONFIRMATION_REQUIRED", "Confirm with Accounts that no payment or recovery has taken place.", 400);
+  }
+  return prismaClient.$transaction(async (tx) => {
+    await assertActor(tx, organizationId, actorUserId);
+    const settlement = await tx.exitSettlement.findFirst({ where: { exitProcessId, organizationId } });
+    if (!settlement) {
+      throw settlementError("EXIT_SETTLEMENT_NOT_FOUND", "Exit settlement not found.", 404);
+    }
+    if (!["APPROVED", "PAYMENT_PENDING"].includes(settlement.status) ||
+        Number(settlement.amountPaid || 0) !== 0 || settlement.paidAt || settlement.paidByUserId) {
+      throw settlementError("SETTLEMENT_NOT_REOPENABLE", "Only approved, unpaid settlements can be reopened. Recorded payments and recoveries must be reconciled separately.");
+    }
+    const paymentProof = await tx.employeeDocument.findFirst({
+      where: { organizationId, exitProcessId, category: "EXIT_SETTLEMENT_PAYMENT_PROOF" },
+      select: { id: true },
+    });
+    if (paymentProof) {
+      throw settlementError("SETTLEMENT_PAYMENT_PROOF_EXISTS", "Payment proof is attached. Reconcile the payout with Accounts before any financial correction.");
+    }
+    const updated = await tx.exitSettlement.update({
+      where: { id: settlement.id },
+      data: { status: "DRAFT", approvedByUserId: null, approvedAt: null },
+    });
+    await tx.employeeExitProcess.update({
+      where: { id: exitProcessId },
+      data: { financialStatus: "PENDING", finalClosureAt: null },
+    });
+    await tx.organizationAudit.create({
+      data: {
+        organizationId, actorUserId, entityType: "ExitSettlement", entityId: settlement.id,
+        action: "EXIT_SETTLEMENT_REOPENED",
+        oldValue: {
+          status: settlement.status, calculationSnapshot: settlement.calculationSnapshot,
+          approvedByUserId: settlement.approvedByUserId, approvedAt: settlement.approvedAt?.toISOString() || null,
+        },
+        newValue: { status: "DRAFT", approvedByUserId: null, approvedAt: null, confirmedUnpaid: true },
+        reason: correctionReason,
+      },
+    });
+    return updated;
+  }, { isolationLevel: "Serializable" });
+}
+
 async function submitSettlement({ organizationId, actorUserId, exitProcessId, prismaClient = prisma }) {
   return prismaClient.$transaction(async (tx) => {
     await assertActor(tx, organizationId, actorUserId);
@@ -919,7 +970,7 @@ async function submitSettlement({ organizationId, actorUserId, exitProcessId, pr
       where: { id: settlement.id },
       data: { status: "PENDING_APPROVAL" },
     });
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 async function approveSettlement({ organizationId, actorUserId, exitProcessId, notes, prismaClient = prisma }) {
@@ -952,7 +1003,7 @@ async function approveSettlement({ organizationId, actorUserId, exitProcessId, n
       },
     });
     return updated;
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 async function recordSettlementPayment({ organizationId, actorUserId, exitProcessId, amount, notes, prismaClient = prisma }) {
@@ -1020,7 +1071,7 @@ async function waiveSettlement({ organizationId, actorUserId, exitProcessId, rea
       data: { financialStatus: "WAIVED", finalClosureAt: new Date() },
     });
     return updated;
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 async function getSettlement({ organizationId, exitProcessId, prismaClient = prisma }) {
@@ -1038,6 +1089,7 @@ module.exports = {
   calculateAccount,
   getSettlementPreview,
   calculateSettlement,
+  reopenSettlement,
   submitSettlement,
   approveSettlement,
   recordSettlementPayment,

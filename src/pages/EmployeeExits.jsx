@@ -235,6 +235,8 @@ export default function EmployeeExits() {
   const settlementPreviewRequestId = useRef(0);
   const [settlementForm, setSettlementForm] = useState(EMPTY_SETTLEMENT);
   const [settlementDecisionNotes, setSettlementDecisionNotes] = useState("");
+  const [settlementCorrectionReason, setSettlementCorrectionReason] = useState("");
+  const [settlementConfirmedUnpaid, setSettlementConfirmedUnpaid] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -270,6 +272,11 @@ export default function EmployeeExits() {
     if (!settlementExitId) {
       return undefined;
     }
+    setSettlement(null);
+    setSettlementForm(EMPTY_SETTLEMENT);
+    setSettlementPreview(null);
+    setSettlementCorrectionReason("");
+    setSettlementConfirmedUnpaid(false);
     apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`)
       .then((result) => {
         if (!active) return;
@@ -840,9 +847,15 @@ export default function EmployeeExits() {
         { method: "POST", ...(body === undefined ? {} : { body }) }
       );
       setSettlement(result?.data || null);
+      if (["calculate", "reopen"].includes(action)) setSettlementForm(settlementFormFromRecord(result?.data));
+      if (action === "reopen") {
+        setSettlementCorrectionReason("");
+        setSettlementConfirmedUnpaid(false);
+        setSettlementDecisionNotes("");
+      }
       const actionLabel = action === "calculate" ? "calculated" : action === "submit" ? "submitted" : action === "approve" ? "approved" : "waived";
-      setFeedback(`Exit settlement ${actionLabel} successfully.`);
-      if (["approve", "payment", "waive"].includes(action)) await loadData();
+      setFeedback(action === "reopen" ? "Exit Settlement Account reopened for correction. Save the recalculated account and obtain fresh approval before using a replacement printout." : `Exit settlement ${actionLabel} successfully.`);
+      if (["approve", "payment", "waive", "reopen"].includes(action)) await loadData();
       if (["approve", "waive"].includes(action)) setSettlementDecisionNotes("");
     } catch (error) {
       setFeedback(error?.message || "Unable to update the exit settlement.");
@@ -885,6 +898,10 @@ export default function EmployeeExits() {
       reason: settlementExit.exitProcess.reason || "",
     } : null;
     const settlementCanRecalculate = !settlement || ["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(settlement.status);
+    const settlementHasUnsavedChanges = Boolean(settlement && settlementCanRecalculate &&
+      JSON.stringify(settlementForm) !== JSON.stringify(settlementFormFromRecord(settlement)));
+    const settlementCanReopen = settlement && ["APPROVED", "PAYMENT_PENDING"].includes(settlement.status) &&
+      Number(settlement.amountPaid || 0) === 0 && !settlement.paidAt && !settlement.paidByUserId;
     const snapshotReady = Boolean(settlement && snapshot.employee && snapshot.exit && snapshot.creditItems && snapshot.debitItems && snapshot.totals);
     const previewReady = Boolean(settlementPreview?.employee && settlementPreview?.exit && settlementPreview?.credits && settlementPreview?.debits && settlementPreview?.totals);
     const savedGratuity = snapshotReady ? Number(snapshot.creditItems.gratuityEosb?.amount || 0) : null;
@@ -937,7 +954,7 @@ export default function EmployeeExits() {
                       className="exit-settlement-print-button"
                       style={secondaryButton}
                       onClick={printExitSettlementDocument}
-                      disabled={(!snapshotReady && !previewReady) || (benefitsNeedRecalculation && settlementCanRecalculate)}
+                      disabled={(!snapshotReady && !previewReady) || (benefitsNeedRecalculation && settlementCanRecalculate) || settlementHasUnsavedChanges || settlement?.status === "DRAFT"}
                       aria-label="Print or download Employee Exit Settlement Account as PDF"
                     >
                       <FaPrint /> Print / Download PDF
@@ -980,6 +997,27 @@ export default function EmployeeExits() {
                   {accountSalary ? <div style={full}><span style={metaLabel}>Settlement Salary Basis</span><strong>{moneyText(accountSalary.monthlyGross, accountSalary.currency)} monthly gross · Daily rate {moneyText(accountSalary.dayRate, accountSalary.currency)} · Hourly rate {moneyText(accountSalary.hourRate, accountSalary.currency)}</strong></div> : null}
                 </section>
               ) : null}
+
+              {settlementCanReopen && canUpdate && canManagePayroll ? (
+                <section style={{ ...warning, marginBottom: 16 }}>
+                  <h3 style={sectionTitle}>Edit Exit Settlement Account</h3>
+                  <p>Reopening withdraws the current approval. Confirm with Accounts that no payment or recovery has taken place, then enter the correction reason. Save the corrected calculation and approve it again. Replace any previously printed copy.</p>
+                  <Field label="Correction Reason">
+                    <textarea value={settlementCorrectionReason} onChange={(event) => setSettlementCorrectionReason(event.target.value)} style={textarea} />
+                  </Field>
+                  <label style={{ display: "flex", gap: 8, margin: "12px 0" }}>
+                    <input type="checkbox" checked={settlementConfirmedUnpaid} onChange={(event) => setSettlementConfirmedUnpaid(event.target.checked)} />
+                    I have confirmed with Accounts that no payment or recovery has taken place.
+                  </label>
+                  <button type="button" style={primaryButton} disabled={busy || !settlementCorrectionReason.trim() || !settlementConfirmedUnpaid}
+                    onClick={() => runSettlementAction("reopen", { reason: settlementCorrectionReason, confirmedUnpaid: settlementConfirmedUnpaid })}>
+                    {busy ? "Reopening..." : "Reopen for Correction"}
+                  </button>
+                </section>
+              ) : null}
+
+              {settlementHasUnsavedChanges ? <div role="status" style={warning}>You have unsaved settlement corrections. Select Recalculate Exit Settlement Account before approval or printing.</div> : null}
+              {settlement?.status === "DRAFT" ? <div role="status" style={warning}>This account is a draft. Save the recalculated settlement and obtain fresh approval before payout.</div> : null}
 
               {settlementCanRecalculate ? (
                 <form onSubmit={calculateExitSettlement}>
@@ -1144,7 +1182,7 @@ export default function EmployeeExits() {
                   {["CALCULATED", "PENDING_APPROVAL"].includes(settlement.status) ? (
                     <div style={settlementAction}>
                       <Field label="Head HR Approval Notes"><textarea value={settlementDecisionNotes} onChange={(event) => setSettlementDecisionNotes(event.target.value)} style={textarea} /></Field>
-                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy || benefitsNeedRecalculation} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
+                      <button type="button" style={primaryButton} disabled={!canManagePayroll || busy || benefitsNeedRecalculation || settlementHasUnsavedChanges} onClick={approveHeadHrSettlement}>Approve & Prepare for Print</button>
                       {settlement.status === "PENDING_APPROVAL" ? <button type="button" style={dangerButton} disabled={!canManagePayroll || busy || !settlementDecisionNotes.trim()} onClick={() => runSettlementAction("waive", { reason: settlementDecisionNotes })}>Waive with Reason</button> : null}
                     </div>
                   ) : null}
