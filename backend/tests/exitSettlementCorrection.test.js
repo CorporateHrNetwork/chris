@@ -45,7 +45,11 @@ function fixture(record = original(), options = {}) {
       assert.equal(where.category, "EXIT_SETTLEMENT_PAYMENT_PROOF");
       return options.proof ? { id: "proof" } : null;
     } },
-    employeeExitProcess: { update: async ({ where, data }) => {
+    employeeExitProcess: { findFirst: async ({ where }) => {
+      assert.equal(where.organizationId, org);
+      assert.equal(where.id, exitId);
+      return options.missingExit ? null : { id: exitId, status: options.cancelled ? "CANCELLED" : "COMPLETED", entitledNoticeDays: 30 };
+    }, update: async ({ where, data }) => {
       assert.equal(where.id, exitId); writes.push(data); return data;
     } },
     organizationAudit: { create: async ({ data }) => { audits.push(data); return data; } },
@@ -115,4 +119,50 @@ test("requires active tenant actor and a tenant-scoped settlement", async () => 
 test("reopen endpoint requires employee update and payroll management permissions", () => {
   const routes = fs.readFileSync(path.join(__dirname, "../src/routes/exitRoutes.js"), "utf8");
   assert.match(routes, /settlement\/reopen", requirePermission\("employees.update"\), requirePermission\("payroll.manage"\)/);
+});
+
+test("notice correction changes entitled days, retains source dates and requires fresh calculation", async () => {
+  const f = fixture({ ...original(), status: "CALCULATED" });
+  const result = await service.updateNoticePeriod(input(f, { entitledNoticeDays: "14" }));
+  assert.equal(result.exitProcess.entitledNoticeDays, 14);
+  assert.equal(result.settlement.status, "DRAFT");
+  assert.equal(f.writes[0].lastWorkingDay, undefined);
+  assert.equal(f.writes[0].noticeDate, undefined);
+  assert.equal(f.writes[0].status, undefined);
+  assert.equal(f.audits[0].oldValue.entitledNoticeDays, 30);
+  assert.equal(f.audits[0].newValue.entitledNoticeDays, 14);
+  assert.equal(f.audits[0].reason, "Correct uniform charge");
+  await assert.rejects(service.submitSettlement(input(f)), { code: "SETTLEMENT_NOT_CALCULATED" });
+});
+test("notice correction is available before any settlement is calculated", async () => {
+  const f = fixture(null);
+  const result = await service.updateNoticePeriod(input(f, { entitledNoticeDays: 0 }));
+  assert.equal(result.exitProcess.entitledNoticeDays, 0);
+  assert.equal(result.settlement, null);
+  assert.equal(f.writes.length, 1);
+});
+test("notice correction validates whole days and reason", async () => {
+  const f = fixture();
+  for (const entitledNoticeDays of [null, undefined, "", " ", -1, 1.5, "invalid", true, [], 2147483648]) {
+    await assert.rejects(service.updateNoticePeriod(input(f, { entitledNoticeDays })), { code: "INVALID_NOTICE_PERIOD" });
+  }
+  await assert.rejects(service.updateNoticePeriod(input(f, { entitledNoticeDays: 30, reason: "" })), { code: "NOTICE_CORRECTION_REASON_REQUIRED" });
+  assert.equal(f.writes.length, 0);
+});
+test("notice correction blocks approved, paid, waived and payment-evidenced settlements", async () => {
+  for (const status of ["APPROVED", "PAYMENT_PENDING", "PARTIALLY_PAID", "PAID", "WAIVED"]) {
+    const f = fixture({ ...original(), status });
+    await assert.rejects(service.updateNoticePeriod(input(f, { entitledNoticeDays: 14 })), { code: "NOTICE_SETTLEMENT_LOCKED" });
+    assert.equal(f.writes.length, 0);
+  }
+  const proof = fixture({ ...original(), status: "DRAFT" }, { proof: true });
+  await assert.rejects(service.updateNoticePeriod(input(proof, { entitledNoticeDays: 14 })), { code: "SETTLEMENT_PAYMENT_PROOF_EXISTS" });
+  assert.equal(proof.writes.length, 0);
+});
+test("notice correction rejects missing or cancelled exits", async () => {
+  for (const [options, code] of [[{ missingExit: true }, "EXIT_PROCESS_NOT_FOUND"], [{ cancelled: true }, "EXIT_CANCELLED"]]) {
+    const f = fixture(null, options);
+    await assert.rejects(service.updateNoticePeriod(input(f, { entitledNoticeDays: 14 })), { code });
+    assert.equal(f.writes.length, 0);
+  }
 });

@@ -909,6 +909,48 @@ async function assertCurrentSettlementBenefits(tx, organizationId, settlement) {
 }
 
 
+
+async function updateNoticePeriod({ organizationId, actorUserId, exitProcessId, entitledNoticeDays, reason, prismaClient = prisma }) {
+  const correctionReason = text(reason);
+  if (!correctionReason) throw settlementError("NOTICE_CORRECTION_REASON_REQUIRED", "Enter a reason for changing the notice period.", 400);
+  const days = Number(entitledNoticeDays);
+  if (!["number", "string"].includes(typeof entitledNoticeDays) || String(entitledNoticeDays).trim() === "" || !Number.isSafeInteger(days) || days < 0 || days > 2147483647) {
+    throw settlementError("INVALID_NOTICE_PERIOD", "Entitled notice days must be a whole number of zero or more.", 400);
+  }
+  return prismaClient.$transaction(async (tx) => {
+    await assertActor(tx, organizationId, actorUserId);
+    const exit = await tx.employeeExitProcess.findFirst({ where: { id: exitProcessId, organizationId } });
+    if (!exit) throw settlementError("EXIT_PROCESS_NOT_FOUND", "Exit process not found.", 404);
+    if (exit.status === "CANCELLED") throw settlementError("EXIT_CANCELLED", "Cancelled exit records cannot be changed.");
+    const existing = await tx.exitSettlement.findFirst({ where: { exitProcessId, organizationId } });
+    if (existing && (!["DRAFT", "CALCULATED", "DISPUTED", "PENDING_APPROVAL"].includes(existing.status) ||
+        Number(existing.amountPaid || 0) !== 0 || existing.paidAt || existing.paidByUserId)) {
+      throw settlementError("NOTICE_SETTLEMENT_LOCKED", "Reopen the approved unpaid settlement before editing the notice period. Paid records must be reconciled with Accounts.");
+    }
+    const proof = await tx.employeeDocument.findFirst({
+      where: { organizationId, exitProcessId, category: "EXIT_SETTLEMENT_PAYMENT_PROOF" }, select: { id: true },
+    });
+    if (proof) throw settlementError("SETTLEMENT_PAYMENT_PROOF_EXISTS", "Payment proof is attached. Reconcile the payout with Accounts before changing the notice period.");
+    const updatedExit = await tx.employeeExitProcess.update({
+      where: { id: exit.id },
+      data: { entitledNoticeDays: days, ...(existing ? { financialStatus: "PENDING", finalClosureAt: null } : {}) },
+    });
+    const settlement = existing ? await tx.exitSettlement.update({
+      where: { id: existing.id },
+      data: { status: "DRAFT", approvedByUserId: null, approvedAt: null },
+    }) : null;
+    await tx.organizationAudit.create({
+      data: {
+        organizationId, actorUserId, entityType: "EmployeeExitProcess", entityId: exit.id,
+        action: "EXIT_NOTICE_PERIOD_CORRECTED", reason: correctionReason,
+        oldValue: { entitledNoticeDays: exit.entitledNoticeDays, settlementStatus: existing?.status || null, calculationSnapshot: existing?.calculationSnapshot || null },
+        newValue: { entitledNoticeDays: days, settlementStatus: settlement?.status || null, recalculationRequired: Boolean(existing) },
+      },
+    });
+    return { exitProcess: updatedExit, settlement };
+  }, { isolationLevel: "Serializable" });
+}
+
 async function reopenSettlement({ organizationId, actorUserId, exitProcessId, reason, confirmedUnpaid, prismaClient = prisma }) {
   const correctionReason = text(reason);
   if (!correctionReason) {
@@ -1089,6 +1131,7 @@ module.exports = {
   calculateAccount,
   getSettlementPreview,
   calculateSettlement,
+  updateNoticePeriod,
   reopenSettlement,
   submitSettlement,
   approveSettlement,
