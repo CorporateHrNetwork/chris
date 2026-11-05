@@ -183,9 +183,10 @@ function mapLoan(row) {
 async function updateLoan({ organizationId, actorUserId, loanId, input, prismaClient = prisma }) {
   return prismaClient.$transaction(async (tx) => {
     const rows = await tx.$queryRawUnsafe(
-      `SELECT l.*,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName"
+      `SELECT l.*,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",o."slug" AS "organizationSlug"
          FROM "payroll_loans" l
          JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
+         JOIN "organizations" o ON o."id"=l."organizationId"
         WHERE l."organizationId"=$1 AND l."id"=$2
         FOR UPDATE`,
       organizationId,
@@ -204,10 +205,11 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
     const postedRecoveryCount = Number(recoveryRows[0]?.postedRecoveryCount || 0);
     const postedRecoveryAmount = Number(recoveryRows[0]?.postedRecoveryAmount || 0);
     const financialHistoryLocked = postedRecoveryCount > 0;
+    const isZermatt = existing.organizationSlug === "zermatt-liquor-limited";
     const disbursed = Boolean(existing.disbursedDate) || ["ACTIVE", "PAUSED", "COMPLETED"].includes(String(existing.status));
 
     if (["REJECTED", "CANCELLED", "COMPLETED"].includes(String(existing.status))) {
-      const onlyNotesChanged = ["employeeNumber", "principalAmount", "installmentAmount", "applicationDate", "recoveryStartDate", "purpose"]
+      const onlyNotesChanged = ["employeeNumber", "principalAmount", "installmentAmount", "applicationDate", "approvedDate", "gmApprovalDate", "disbursedDate", "recoveryStartDate", "purpose"]
         .every((key) => input?.[key] === undefined);
       if (!onlyNotesChanged) {
         throw error("LOAN_CLOSED_RECORD_LOCKED", "Closed loan records preserve their financial history. Only Notes may be amended.", 409);
@@ -217,7 +219,32 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
     const requestedEmployeeNumber = text(input?.employeeNumber || existing.employeeNumber).toUpperCase();
     const requestedPrincipal = money(input?.principalAmount ?? existing.principalAmount, "Principal Amount");
     const requestedInstallment = money(input?.installmentAmount ?? existing.installmentAmount, "Installment Amount");
-    const requestedApplicationDate = dateOnly(input?.applicationDate || new Date(existing.applicationDate).toISOString().slice(0, 10), "Application Date");
+    const originalApplicationDate = new Date(existing.applicationDate).toISOString().slice(0, 10);
+    const originalApprovalDate = existing.approvedDate ? new Date(existing.approvedDate).toISOString().slice(0, 10) : null;
+    const originalDisbursementDate = existing.disbursedDate ? new Date(existing.disbursedDate).toISOString().slice(0, 10) : null;
+    const approvalInput = input?.gmApprovalDate ?? input?.approvedDate;
+    const hasApprovalCorrection = approvalInput !== undefined;
+    const hasDisbursementCorrection = input?.disbursedDate !== undefined;
+    if (!isZermatt && (hasApprovalCorrection || hasDisbursementCorrection)) {
+      throw error("LOAN_DATE_CORRECTION_ZERMATT_ONLY", "External GM approval and Accounts payment date corrections apply only to Zermatt loans.", 403);
+    }
+    const requestedApprovalDate = hasApprovalCorrection ? dateOnly(approvalInput, "GM Approval Date") : originalApprovalDate;
+    const requestedDisbursementDate = hasDisbursementCorrection ? dateOnly(input.disbursedDate, "External Accounts Payment Date") : originalDisbursementDate;
+    // Zermatt's external GM approval and recorded application dates were identical at creation.
+    const requestedApplicationDate = isZermatt && hasApprovalCorrection
+      ? requestedApprovalDate
+      : dateOnly(input?.applicationDate || originalApplicationDate, "Application Date");
+    const correctingExternalDates = isZermatt && (
+      requestedApprovalDate !== originalApprovalDate || requestedDisbursementDate !== originalDisbursementDate
+    );
+    const correctionReason = text(input?.correctionReason);
+    if (correctingExternalDates && correctionReason.length < 10) {
+      throw error("LOAN_DATE_CORRECTION_REASON_REQUIRED", "Explain the date correction in at least 10 characters.");
+    }
+    if (correctingExternalDates && requestedApprovalDate && requestedDisbursementDate
+      && requestedDisbursementDate < requestedApprovalDate) {
+      throw error("INVALID_EXTERNAL_APPROVAL_SEQUENCE", "Accounts payment date cannot be earlier than GM approval date.");
+    }
     const requestedRecoveryStart = input?.recoveryStartDate
       ? dateOnly(input.recoveryStartDate, "Recovery Start Date")
       : existing.recoveryStartDate
@@ -233,8 +260,11 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       if (requestedEmployeeNumber !== String(existing.employeeNumber).toUpperCase()) {
         throw error("LOAN_EMPLOYEE_LOCKED_AFTER_DISBURSEMENT", "The borrower cannot be changed after external disbursement. Head HR may delete and re-record an unused mistaken record.", 409);
       }
-      if (requestedApplicationDate !== new Date(existing.applicationDate).toISOString().slice(0, 10)) {
+      if (!isZermatt && requestedApplicationDate !== originalApplicationDate) {
         throw error("LOAN_APPROVAL_DATE_LOCKED_AFTER_DISBURSEMENT", "The recorded approval/application date cannot be changed after external disbursement.", 409);
+      }
+      if (isZermatt && requestedApplicationDate !== originalApplicationDate && !correctingExternalDates) {
+        throw error("LOAN_APPROVAL_DATE_CORRECTION_REQUIRED", "Use the GM Approval Date field with a recorded correction reason.", 409);
       }
     }
 
@@ -269,10 +299,10 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       throw error("INVALID_LOAN_INSTALLMENT", "Monthly Installment cannot exceed the current recoverable balance.");
     }
 
-    if (requestedRecoveryStart && existing.disbursedDate) {
-      const disbursedDate = new Date(existing.disbursedDate).toISOString().slice(0, 10);
-      if (requestedRecoveryStart < disbursedDate) {
-        throw error("INVALID_RECOVERY_START", "Recovery Start Date cannot be earlier than Disbursed Date.");
+    if (requestedRecoveryStart && requestedDisbursementDate) {
+      // The recovery start is a payroll month, not the exact payment day.
+      if (requestedRecoveryStart.slice(0, 7) < requestedDisbursementDate.slice(0, 7)) {
+        throw error("INVALID_RECOVERY_START", "Payroll recovery month cannot be earlier than the external disbursement month.");
       }
     }
 
@@ -280,7 +310,7 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       requestedEmployeeNumber !== String(existing.employeeNumber).toUpperCase() ||
       requestedPrincipal !== Number(existing.principalAmount) ||
       requestedInstallment !== Number(existing.installmentAmount) ||
-      requestedApplicationDate !== new Date(existing.applicationDate).toISOString().slice(0, 10) ||
+      requestedApplicationDate !== originalApplicationDate ||
       requestedPurpose !== text(existing.purpose);
     const resetApproval = existing.status === "APPROVED" && !disbursed && !financialHistoryLocked && approvalSensitiveChange;
     const nextStatus = resetApproval ? "PENDING_APPROVAL" : existing.status;
@@ -290,7 +320,8 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
           SET "employeeId"=$3,"principalAmount"=$4,"outstandingAmount"=$5,"installmentAmount"=$6,
               "applicationDate"=$7::date,"recoveryStartDate"=$8::date,"purpose"=$9,"notes"=$10,
               "status"=$11,
-              "approvedDate"=CASE WHEN $12::boolean THEN NULL ELSE "approvedDate" END,
+              "approvedDate"=CASE WHEN $12::boolean THEN NULL ELSE $13::date END,
+               "disbursedDate"=$14::date,
               "approvedByUserId"=CASE WHEN $12::boolean THEN NULL ELSE "approvedByUserId" END,
               "updatedAt"=CURRENT_TIMESTAMP
         WHERE "organizationId"=$1 AND "id"=$2
@@ -306,7 +337,9 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       requestedPurpose || null,
       requestedNotes || null,
       nextStatus,
-      resetApproval
+      resetApproval,
+      requestedApprovalDate,
+      requestedDisbursementDate
     );
 
     const currentEmployee = requestedEmployeeNumber === String(existing.employeeNumber).toUpperCase()
@@ -323,7 +356,7 @@ async function updateLoan({ organizationId, actorUserId, loanId, input, prismaCl
       action: "LOAN_UPDATED",
       previousValue: original,
       newValue: { ...updated, approvalReset: resetApproval },
-      reason: requestedNotes || requestedPurpose || "Loan record edited",
+      reason: correctionReason || requestedNotes || requestedPurpose || "Loan record edited",
     });
 
     return { ...updated, postedRecoveryCount, postedRecoveryAmount, financialHistoryLocked, approvalReset: resetApproval };
