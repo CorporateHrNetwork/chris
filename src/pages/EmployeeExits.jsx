@@ -237,6 +237,9 @@ export default function EmployeeExits() {
   const [settlementDecisionNotes, setSettlementDecisionNotes] = useState("");
   const [settlementCorrectionReason, setSettlementCorrectionReason] = useState("");
   const [settlementConfirmedUnpaid, setSettlementConfirmedUnpaid] = useState(false);
+  const [noticePeriodEditing, setNoticePeriodEditing] = useState(false);
+  const [noticePeriodDays, setNoticePeriodDays] = useState("");
+  const [noticePeriodReason, setNoticePeriodReason] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -277,6 +280,8 @@ export default function EmployeeExits() {
     setSettlementPreview(null);
     setSettlementCorrectionReason("");
     setSettlementConfirmedUnpaid(false);
+    setNoticePeriodEditing(false);
+    setNoticePeriodReason("");
     apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement`)
       .then((result) => {
         if (!active) return;
@@ -864,6 +869,36 @@ export default function EmployeeExits() {
     }
   }
 
+
+  async function saveNoticePeriod(event) {
+    event.preventDefault();
+    if (!settlementExitId) return;
+    setBusy(true);
+    setFeedback("");
+    try {
+      const result = await apiRequest(
+        `/api/exits/${encodeURIComponent(settlementExitId)}/settlement/notice-period`,
+        { method: "PATCH", body: { entitledNoticeDays: noticePeriodDays, reason: noticePeriodReason } }
+      );
+      setSettlement(result?.data?.settlement || null);
+      setNoticePeriodEditing(false);
+      setNoticePeriodReason("");
+      setFeedback("Notice period saved. Recalculate the Exit Settlement Account and approve it again before payout.");
+      const params = new URLSearchParams();
+      for (const key of ["bonusGift", "noticePayDays", "previousSalaryShortPaid", "unreturnedUniform", "previousSalaryOverpaid"]) {
+        params.set(key, String(settlementForm[key] || 0));
+      }
+      const preview = await apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview?${params.toString()}`);
+      setSettlementPreview(preview?.data || null);
+      setSettlementPreviewError("");
+      await loadData();
+    } catch (error) {
+      setFeedback(error?.message || "Unable to update the notice period.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function calculateExitSettlement(event) {
     event.preventDefault();
     const amountFields = [
@@ -1040,6 +1075,35 @@ export default function EmployeeExits() {
               ) : null}
 
 
+
+              <section id="exit-notice-period-editor" style={{ ...panel, margin: "16px 0" }}>
+                <h3 style={sectionTitle}>Entitled Notice Period</h3>
+                <p style={muted}>Required notice: <strong>{settlementPreview?.hrInputs?.entitledNoticeDays ?? snapshot.hrInputs?.entitledNoticeDays ?? "—"} days</strong>. CHRiS calculates notice given and any deficient days from the recorded dates.</p>
+                {noticePeriodEditing ? (
+                  <form onSubmit={saveNoticePeriod} style={formGrid}>
+                    <Field label="Entitled Notice Period (Days)">
+                      <input type="number" min="0" step="1" required value={noticePeriodDays}
+                        onChange={(event) => setNoticePeriodDays(event.target.value)} style={input} disabled={busy} />
+                    </Field>
+                    <Field label="Reason for Notice Period Correction">
+                      <textarea required value={noticePeriodReason} onChange={(event) => setNoticePeriodReason(event.target.value)} style={textarea} disabled={busy} />
+                    </Field>
+                    <div style={footer}>
+                      <button type="submit" style={primaryButton} disabled={busy || !canUpdate || !settlementCanRecalculate || !noticePeriodReason.trim() || noticePeriodDays === ""}>
+                        {busy ? "Saving..." : "Save Notice Period"}
+                      </button>
+                      <button type="button" style={secondaryButton} disabled={busy} onClick={() => setNoticePeriodEditing(false)}>Cancel</button>
+                    </div>
+                  </form>
+                ) : <button type="button" style={primaryButton} disabled={busy || !canUpdate || !settlementCanRecalculate}
+                  onClick={() => {
+                    setNoticePeriodDays(String(settlementPreview?.hrInputs?.entitledNoticeDays ?? snapshot.hrInputs?.entitledNoticeDays ?? ""));
+                    setNoticePeriodReason("");
+                    setNoticePeriodEditing(true);
+                  }}>Edit Notice Period</button>}
+                {!settlementCanRecalculate ? <p style={muted}>Reopen an approved, unpaid settlement above before editing its notice period. Paid records require reconciliation with Accounts.</p> : null}
+                {!canUpdate ? <p style={muted}>Only an authorized HR user can save notice corrections.</p> : null}
+              </section>
 
               {settlementHasUnsavedChanges ? <div role="status" style={warning}>You have unsaved settlement corrections. Select Recalculate Exit Settlement Account before approval or printing.</div> : null}
               {settlement?.status === "DRAFT" ? <div role="status" style={warning}>This account is a draft. Save the recalculated settlement and obtain fresh approval before payout.</div> : null}
