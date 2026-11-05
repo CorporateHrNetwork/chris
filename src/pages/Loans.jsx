@@ -605,7 +605,7 @@ function Loans({ completedOnly = false }) {
               </div>
             )}
             <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>
-            <label><small>External Accounts Payment / Disbursement Date</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>
+            <label><small>External Accounts Payment Date (Disbursement)</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>
             <label><small>Payroll Recovery Start Month</small><input style={inputStyle} type="month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required /></label>
             {!editingLoan && !topUpParent && <div style={collateralCard}><strong>System References</strong><span>CHRiS will generate the next sequential GM Approval Reference and Accounts Payment Reference automatically when this loan is first recorded. The same authoritative references are visible at Branch and Head Office.</span></div>}
             <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required><option value="">Select ZERMATT loan policy</option>{form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}{loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}</select></label>
