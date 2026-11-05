@@ -104,12 +104,14 @@ async function getWorkedHours({
     }
   }
 
-  if (employeeNumber) {
+  if (employeeNumber || locationIds !== undefined) {
     where.employee = {
-      employeeNumber:
-        String(
-          employeeNumber
-        ).trim(),
+      ...(employeeNumber ? {
+        employeeNumber: String(employeeNumber).trim(),
+      } : {}),
+      ...(locationIds !== undefined ? {
+        locationId: { in: locationIds },
+      } : {}),
     };
   }
 
@@ -467,6 +469,7 @@ async function listManualPayrollInputs({
   from,
   to,
   employeeNumber,
+  locationIds,
 }) {
   const where = {
     organizationId,
