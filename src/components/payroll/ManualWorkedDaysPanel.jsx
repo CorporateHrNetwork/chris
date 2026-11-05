@@ -49,7 +49,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
         setSavedRows(rows.filter((row) =>
           String(row.periodStart || "").slice(0, 10) === String(selectedPeriodStart).slice(0, 10)
           && String(row.periodEnd || "").slice(0, 10) === String(selectedPeriodEnd).slice(0, 10)
-        ));
+        ).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)));
       })
       .catch((loadError) => {
         if (!active) return;
@@ -120,7 +120,13 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
       setMessage(result?.message || "Worked days saved. Any affected draft payroll is marked for recalculation.");
       // Keep entered values visible so HR sees what was saved and can correct
       // an exception without retyping. The period change still clears them.
-      await refreshSavedEntries(result?.data || null);
+      try {
+        await refreshSavedEntries(result?.data || null);
+      } catch (refreshError) {
+        // Saving succeeded; a separate payroll dashboard refresh error must
+        // never misrepresent a committed attendance record as a failed save.
+        setMessage("Worked days saved. Payroll dashboard refresh was interrupted; use Refresh Saved Entries to verify the current period.");
+      }
     } catch (requestError) {
       setError(requestError?.message || "Unable to save manual worked days.");
     } finally {
