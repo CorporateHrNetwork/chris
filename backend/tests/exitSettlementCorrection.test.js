@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { Prisma } = require("@prisma/client");
+const auditFields = new Set(Prisma.dmmf.datamodel.models.find((model) => model.name === "OrganizationAudit").fields.map((field) => field.name));
 
 const source = fs.readFileSync(path.join(__dirname, "../src/services/exitSettlementService.js"), "utf8");
 const sandbox = { module: { exports: {} }, require: () => ({}), console, Date };
@@ -52,7 +54,10 @@ function fixture(record = original(), options = {}) {
     }, update: async ({ where, data }) => {
       assert.equal(where.id, exitId); writes.push(data); return data;
     } },
-    organizationAudit: { create: async ({ data }) => { audits.push(data); return data; } },
+    organizationAudit: { create: async ({ data }) => {
+      for (const key of Object.keys(data)) assert.ok(auditFields.has(key), `Unknown OrganizationAudit field: ${key}`);
+      audits.push(data); return data;
+    } },
   };
   const prismaClient = { $transaction: async (fn, config) => {
     assert.equal(config.isolationLevel, "Serializable");
@@ -75,8 +80,8 @@ for (const status of ["APPROVED", "PAYMENT_PENDING"]) {
     assert.equal(result.approvedAt, null);
     assert.deepEqual(result.calculationSnapshot, record.calculationSnapshot);
     assert.equal(f.audits.length, 1);
-    assert.equal(f.audits[0].oldValue.status, status);
-    assert.deepEqual(f.audits[0].oldValue.calculationSnapshot, record.calculationSnapshot);
+    assert.equal(f.audits[0].previousValue.status, status);
+    assert.deepEqual(f.audits[0].previousValue.calculationSnapshot, record.calculationSnapshot);
     assert.equal(f.audits[0].actorUserId, actor);
     assert.equal(f.audits[0].reason, "Correct uniform charge");
     assert.equal(f.writes[1].financialStatus, "PENDING");
@@ -129,7 +134,7 @@ test("notice correction changes entitled days, retains source dates and requires
   assert.equal(f.writes[0].lastWorkingDay, undefined);
   assert.equal(f.writes[0].noticeDate, undefined);
   assert.equal(f.writes[0].status, undefined);
-  assert.equal(f.audits[0].oldValue.entitledNoticeDays, 30);
+  assert.equal(f.audits[0].previousValue.entitledNoticeDays, 30);
   assert.equal(f.audits[0].newValue.entitledNoticeDays, 14);
   assert.equal(f.audits[0].reason, "Correct uniform charge");
   await assert.rejects(service.submitSettlement(input(f)), { code: "SETTLEMENT_NOT_CALCULATED" });
@@ -165,4 +170,9 @@ test("notice correction rejects missing or cancelled exits", async () => {
     await assert.rejects(service.updateNoticePeriod(input(f, { entitledNoticeDays: 14 })), { code });
     assert.equal(f.writes.length, 0);
   }
+});
+
+test("generated audit schema accepts previousValue and rejects oldValue", () => {
+  assert.equal(auditFields.has("previousValue"), true);
+  assert.equal(auditFields.has("oldValue"), false);
 });

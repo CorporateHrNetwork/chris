@@ -848,6 +848,18 @@ router.post(
   }
 );
 
+
+function settlementWorkflowError(res, error) {
+  const expected = Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 500;
+  if (!expected) console.error("Exit settlement operation failed:", error);
+  return res.status(expected ? error.statusCode : 500).json({
+    status: "error",
+    code: expected ? error.code : "EXIT_SETTLEMENT_OPERATION_FAILED",
+    message: expected ? error.message : "Unable to complete the exit settlement operation. Please retry or contact support.",
+    ...(expected && error.details ? { details: error.details } : {}),
+  });
+}
+
 router.get("/:id/settlement/preview", requirePermission("employees.view"), async (req, res) => {
   try {
     return res.json({
@@ -877,18 +889,18 @@ router.get("/:id/settlement/preview", requirePermission("employees.view"), async
 
 router.get("/:id/settlement", requirePermission("employees.view"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.getSettlement({ organizationId: req.auth.organizationId, exitProcessId: req.params.id }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 router.post("/:id/settlement/calculate", requirePermission("employees.update"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.calculateSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, input: req.body || {} }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message, details: error.details }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 router.patch("/:id/settlement/notice-period", requirePermission("employees.update"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.updateNoticePeriod({
     organizationId: req.auth.organizationId, actorUserId: req.auth.userId,
     exitProcessId: req.params.id, entitledNoticeDays: req.body?.entitledNoticeDays, reason: req.body?.reason,
   }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 router.post("/:id/settlement/reopen", requirePermission("employees.update"), requirePermission("payroll.manage"), async (req, res) => {
   try {
@@ -896,24 +908,24 @@ router.post("/:id/settlement/reopen", requirePermission("employees.update"), req
       organizationId: req.auth.organizationId, actorUserId: req.auth.userId,
       exitProcessId: req.params.id, reason: req.body?.reason, confirmedUnpaid: req.body?.confirmedUnpaid,
     }) });
-  } catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  } catch (error) { return settlementWorkflowError(res, error); }
 });
 
 router.post("/:id/settlement/submit", requirePermission("employees.update"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.submitSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 router.post("/:id/settlement/approve", requirePermission("payroll.manage"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.approveSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, notes: req.body?.notes }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 router.post("/:id/settlement/payment", requirePermission("payroll.manage"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.recordSettlementPayment({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, amount: req.body?.amount, notes: req.body?.notes }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 router.post("/:id/settlement/waive", requirePermission("payroll.manage"), async (req, res) => {
   try { return res.json({ status: "success", data: await settlements.waiveSettlement({ organizationId: req.auth.organizationId, actorUserId: req.auth.userId, exitProcessId: req.params.id, reason: req.body?.reason }) }); }
-  catch (error) { return res.status(error.statusCode || 500).json({ status: "error", code: error.code, message: error.message }); }
+  catch (error) { return settlementWorkflowError(res, error); }
 });
 
 module.exports = router;
