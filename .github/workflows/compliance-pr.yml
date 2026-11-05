@@ -45,6 +45,9 @@ jobs:
       - name: Simplified disciplinary workflow acceptance
         run: node --test tests/simpleDisciplinary.test.js
 
+      - name: Validate exit settlement corrections
+        run: node --test tests/exitSettlementCorrection.test.js
+
       - name: Validate approved leave KPI and dashboard visibility
         run: node --test tests/approvedLeaveVisibility.test.js tests/leaveAnalytics.test.js tests/workforceAnalytics.test.js
 
