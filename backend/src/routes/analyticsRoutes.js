@@ -76,7 +76,7 @@ router.post("/workforce/snapshot", requirePermission("employees.update"), async 
 router.get("/workforce", requirePermission("employees.view"), async (req, res) => {
   try {
     const filters = { ...req.query, ...(req.auth.activeLocationId ? { locationId: req.auth.activeLocationId } : {}) };
-    const data = await getWorkforceAnalytics(prisma, { organizationId: req.auth.organizationId, filters });
+    const data = await getWorkforceAnalytics(prisma, { organizationId: req.auth.organizationId, filters, timezone:req.auth.organization?.timezone || "Africa/Lagos", locationIds:req.auth.locationScope === "ALL_LOCATIONS" ? undefined : (req.auth.availableLocations || []).map(location=>location.id).filter(Boolean) });
     return res.status(200).json({
       status: "success",
       data: {
@@ -91,3 +91,4 @@ router.get("/workforce", requirePermission("employees.view"), async (req, res) =
 });
 
 module.exports = router;
+

@@ -67,9 +67,23 @@ test('isolated PostgreSQL/HTTP: ESS read-only leave access and identity isolatio
   assert.deepEqual(scoped.map(row=>row.employeeNumber),[employee.employeeNumber]);
   assert.equal((await attendance.listManualPayrollInputs({organizationId:org.id,locationIds:[]})).length,0);
   assert.equal((await attendance.listManualPayrollInputs({organizationId:org.id})).length,2);
+  // Current approved dates must flow into live dashboards without lifecycle writes.
+  await prisma.leaveRequest.update({where:{id:recorded.id},data:{status:'APPROVED'}});
+  await prisma.leaveRequest.create({data:{organizationId:org.id,employeeId:victim.id,leaveTypeId:type.id,leavePolicyId:policy.id,startDate:new Date(day(20)),endDate:new Date(day(21)),requestedUnits:2,status:'APPROVED',createdByUserId:user.id}});
+  const asOf=new Date(day(5)+'T12:00:00Z');
+  const overview=await require('../src/services/leaveOperationalService').getLeaveOverview({organizationId:org.id,asOfDate:asOf});
+  assert.equal(overview.activeLeaveRequests,1);assert.equal(overview.employeesOnLeave,1);assert.equal(overview.approvedUpcoming,1);
+  const analytics=await require('../src/services/workforceAnalyticsService').getWorkforceAnalytics(prisma,{organizationId:org.id,now:asOf});
+  assert.equal(analytics.leave.employeesOnLeaveToday,1);assert.equal(analytics.leave.activeLeaveRequests,1);assert.equal(analytics.leave.approvedUpcoming,1);
+  assert.equal(analytics.headcount.byStatus.find(row=>row.key==='LEAVE').count,0,'Persisted workforce status remains unchanged');
+  assert.equal(analytics.headcount.operationalByStatus.find(row=>row.key==='LEAVE').count,1);
+  const branchOverview=await require('../src/services/leaveOperationalService').getLeaveOverview({organizationId:org.id,asOfDate:asOf,locationIds:[locationB.id]});
+  assert.equal(branchOverview.activeLeaveRequests,0);assert.equal(branchOverview.approvedUpcoming,1);
+  assert.equal((await prisma.employee.findUnique({where:{id:employee.id}})).status,'ACTIVE');
   await prisma.user.update({where:{id:user.id},data:{isActive:false}});
   assert.equal((await request('/api/ess/leave/applications','POST',input)).httpStatus,403);
   assert.equal((await request('/api/ess/leave/applications')).httpStatus,403);
  }finally{await new Promise(resolve=>server.close(resolve));await prisma.$disconnect();}
 });
+
 
