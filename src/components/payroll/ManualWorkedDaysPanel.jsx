@@ -3,9 +3,9 @@ import WorkedDaysBulkUpload from "./WorkedDaysBulkUpload";
 import EmployeeSearchSelect from "../EmployeeSearchSelect";
 import { apiRequest } from "../../services/api";
 
-export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
+export default function ManualWorkedDaysPanel({ periods = [], onSaved, initialPeriodId = "", includeClosedPeriods = false, canEdit = true }) {
   const [employeeNumber, setEmployeeNumber] = useState("");
-  const [periodId, setPeriodId] = useState("");
+  const [periodId, setPeriodId] = useState(initialPeriodId);
   const [workedDays, setWorkedDays] = useState("");
   const [workedHours, setWorkedHours] = useState("");
   const [notes, setNotes] = useState("");
@@ -24,6 +24,8 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
   );
 
 
+  const readOnly = !canEdit || selectedPeriod?.status === "CLOSED";
+  const workedDaysInputId = "manual-worked-days-input";
   const selectedPeriodStart = selectedPeriod?.periodStart;
   const selectedPeriodEnd = selectedPeriod?.periodEnd;
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
   };
 
   const loadSavedForCorrection = (row) => {
+    if (readOnly) return;
     setEmployeeNumber(row.employeeNumber);
     setWorkedDays(row.workedDays == null ? "" : String(row.workedDays));
     setWorkedHours(row.workedHours == null ? "" : String(row.workedHours));
@@ -73,6 +76,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
     setMessage(`Loaded saved worked days for ${row.employeeName || row.employeeNumber}. Review and save to update this payroll period.`);
     setError("");
     setLastSaved(null);
+    document.getElementById(workedDaysInputId)?.focus();
   };
 
   const changePeriod = (nextPeriodId) => {
@@ -91,6 +95,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
 
   const save = async (event) => {
     event.preventDefault();
+    if (readOnly) { setError("This payroll period is view-only. Select an open period to record corrections."); return; }
     if (!employeeNumber || !selectedPeriod || workedDays === "") {
       setError("Select an employee and payroll period, then enter Worked Days.");
       return;
@@ -151,6 +156,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
           <small>Saved to the employee's selected payroll period. Recalculate any affected draft payroll before approval.</small>
         </div>
       )}
+      {readOnly && <p role="status" style={helpStyle}>View-only: {selectedPeriod?.status === "CLOSED" ? "this payroll period is closed." : "your role does not permit attendance corrections."}</p>}
       <form onSubmit={save} style={gridStyle}>
         <EmployeeSearchSelect
           label="Employee"
@@ -163,25 +169,25 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
           <span>Payroll Period</span>
           <select style={inputStyle} value={periodId} onChange={(event) => changePeriod(event.target.value)} required>
             <option value="">Select payroll period</option>
-            {(periods || []).filter((period) => period.status !== "CLOSED").map((period) => (
-              <option key={period.id} value={period.id}>{period.code} — {period.name}</option>
+            {(periods || []).filter((period) => includeClosedPeriods || period.status !== "CLOSED").map((period) => (
+              <option key={period.id} value={period.id}>{period.code} — {period.name}{period.status === "CLOSED" ? " (closed · view only)" : ""}</option>
             ))}
           </select>
         </label>
         <label style={fieldStyle}>
           <span>Worked Days</span>
-          <input style={inputStyle} type="number" min="0" step="0.5" value={workedDays} onChange={(event) => setWorkedDays(event.target.value)} required />
+          <input id={workedDaysInputId} disabled={readOnly || busy} style={inputStyle} type="number" min="0" step="0.5" value={workedDays} onChange={(event) => setWorkedDays(event.target.value)} required />
         </label>
         <label style={fieldStyle}>
           <span>Worked Hours (optional)</span>
-          <input style={inputStyle} type="number" min="0" step="0.25" value={workedHours} onChange={(event) => setWorkedHours(event.target.value)} />
+          <input disabled={readOnly || busy} style={inputStyle} type="number" min="0" step="0.25" value={workedHours} onChange={(event) => setWorkedHours(event.target.value)} />
         </label>
         <label style={{ ...fieldStyle, gridColumn: "span 2" }}>
           <span>Reason / Notes</span>
-          <input style={inputStyle} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="e.g. 3 absent days confirmed by Branch HR" />
+          <input disabled={readOnly || busy} style={inputStyle} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="e.g. 3 absent days confirmed by Branch HR" />
         </label>
         <div style={{ display: "flex", alignItems: "end" }}>
-          <button style={buttonStyle} disabled={busy || !employeeNumber || !periodId || workedDays === ""}>
+          <button style={buttonStyle} disabled={readOnly || busy || !employeeNumber || !periodId || workedDays === ""}>
             {busy ? "Saving…" : "Save Worked Days"}
           </button>
         </div>
@@ -224,7 +230,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
                     <td style={tableCellStyle}>{row.notes || "—"}</td>
                     <td style={tableCellStyle}>{row.recordedByName || "—"}</td>
                     <td style={tableCellStyle}>{row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}</td>
-                    <td style={tableCellStyle}><button type="button" style={rowButtonStyle}
+                    <td style={tableCellStyle}><button type="button" disabled={readOnly || busy} style={rowButtonStyle}
                       onClick={() => loadSavedForCorrection(row)}>Load for Correction</button></td>
                   </tr>
                 ))}</tbody>
@@ -233,7 +239,7 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved }) {
           </>
         )}
       </div>
-      <WorkedDaysBulkUpload key={periodId} periodId={periodId} onSaved={refreshSavedEntries} />
+      {!readOnly && <WorkedDaysBulkUpload key={periodId} periodId={periodId} onSaved={refreshSavedEntries} />}
       {selectedPeriod && <div style={periodStyle}>Attendance period: {selectedPeriod.periodStart} → {selectedPeriod.periodEnd}</div>}
     </section>
   );
@@ -258,3 +264,4 @@ const tableStyle = { borderCollapse: "collapse", width: "100%", minWidth: 780, c
 const tableHeaderStyle = { textAlign: "left", padding: 10, borderBottom: "1px solid rgba(212,175,55,.4)", color: "#D4AF37", position: "sticky", top: 0, background: "#0B241A" };
 const tableCellStyle = { padding: "9px 10px", borderBottom: "1px solid rgba(255,255,255,.11)", verticalAlign: "top" };
 const rowButtonStyle = { border: "1px solid rgba(212,175,55,.55)", background: "transparent", color: "#F7E6A0", borderRadius: 7, padding: "7px 8px", cursor: "pointer" };
+

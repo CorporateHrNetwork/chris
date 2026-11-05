@@ -1111,8 +1111,13 @@ async function getLeaveRequests({
   status,
   leaveYear = null,
   locationId = null,
+  locationIds,
 }) {
-  const normalizedYear = Number(leaveYear);
+  const hasYear = leaveYear !== null && leaveYear !== undefined && String(leaveYear).trim() !== "";
+  const normalizedYear = hasYear ? Number(leaveYear) : null;
+  if (hasYear && (!Number.isInteger(normalizedYear) || normalizedYear < 2000 || normalizedYear > 2200)) {
+    throw Object.assign(new Error("INVALID_LEAVE_YEAR"), { statusCode: 400 });
+  }
   const yearStart = Number.isInteger(normalizedYear)
     ? new Date(Date.UTC(normalizedYear, 0, 1))
     : null;
@@ -1132,6 +1137,9 @@ async function getLeaveRequests({
         : {}),
       ...(locationId
         ? { employee: { is: { locationId } } }
+        : {}),
+      ...(locationIds !== undefined
+        ? { AND: [{ employee: { is: { locationId: { in: locationIds } } } }] }
         : {}),
     },
     include: {
@@ -1194,4 +1202,5 @@ module.exports = {
   getLeaveConsistency,
   getEmployeeBalances,
 };
+
 
