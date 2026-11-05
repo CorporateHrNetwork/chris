@@ -167,6 +167,7 @@ function Benefits() {
         </AnalyticsPanel>
       }
       quickActions={[
+        <QuickActionCard key="transport-support" title="Transport Support Pay" subtitle="Separate benefit register, approvals, payments and carry-forward balances" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits/transport-support")} />,
         <QuickActionCard
           key="leave-allowance"
           title="Leave Allowance"

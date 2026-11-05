@@ -12,8 +12,8 @@ import MainLayout from "./layouts/MainLayout";
 import CHRiSAutomationCentre from "./pages/CHRiSAutomationCentre";
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
-const TransportSupportPreparation = lazy(() => import("./pages/payroll/TransportSupportPreparation"));
-const TransportSupportPayroll = lazy(() => import("./pages/payroll/TransportSupportPayroll"));
+const TransportSupportPreparation = lazy(() => import("./pages/benefits/TransportSupportPreparation"));
+const TransportSupportPayroll = lazy(() => import("./pages/benefits/TransportSupportPayroll"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 import RecruitmentReports from "./pages/RecruitmentReports";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -168,8 +168,8 @@ function App() {
 
         <Route element={<ProtectedLayout><Suspense fallback={<p role="status">Loading payroll workspace…</p>}><Outlet /></Suspense></ProtectedLayout>}>
           <Route path="/payroll" element={<PermissionRoute permission="payroll.view"><Payroll /></PermissionRoute>} />
-          <Route path="/payroll/transport-support" element={<TransportSupportPayroll />} />
-          <Route path="/payroll/full-salary-upload" element={<TransportSupportPreparation />} />
+          <Route path="/payroll/transport-support" element={<Navigate to="/benefits/transport-support" replace />} />
+          <Route path="/payroll/full-salary-upload" element={<Navigate to="/benefits/transport-support/preparation" replace />} />
         </Route>
         <Route path="/loans/completed" element={<PermissionLayout permission="loans.view"><Loans key="completed" completedOnly /></PermissionLayout>} />
         <Route path="/loans" element={<PermissionLayout permission="loans.view"><Loans key="active" /></PermissionLayout>} />
@@ -193,13 +193,15 @@ function App() {
 
         <Route path="/compensation" element={<ProtectedLayout><ModuleDashboard moduleKey="compensation" /></ProtectedLayout>} />
         <Route path="/benefits" element={<ProtectedLayout><Benefits /></ProtectedLayout>} />
+        <Route path="/benefits/transport-support" element={<ProtectedLayout><TransportSupportPayroll /></ProtectedLayout>} />
+        <Route path="/benefits/transport-support/preparation" element={<ProtectedLayout><TransportSupportPreparation /></ProtectedLayout>} />
         <Route path="/benefits/pension" element={<ProtectedLayout><BenefitChildPage title="Pension" description="Manage pension-related employee benefits, participation and contribution readiness." metricLabels={["Eligible Employees","Enrolled Employees","Employer Contribution","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/gratuity" element={<ProtectedLayout><BenefitChildPage title="Gratuity" description="Manage gratuity eligibility, service-based benefit rules and accrued obligations." metricLabels={["Eligible Employees","Accrued Liability","Upcoming Eligibility","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/health-insurance" element={<ProtectedLayout><BenefitChildPage title="Health Insurance" description="Manage employee health-insurance coverage, dependants, eligibility and plan participation." metricLabels={["Active Plans","Covered Employees","Dependants","Coverage Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/life-insurance" element={<ProtectedLayout><BenefitChildPage title="Life Insurance" description="Manage employee life-insurance participation, coverage levels and eligibility." metricLabels={["Covered Employees","Active Policies","Coverage Value","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/medical" element={<ProtectedLayout><BenefitChildPage title="Medical Benefits" description="Manage medical-benefit programmes, utilization readiness and employee coverage." metricLabels={["Eligible Employees","Active Coverage","Claims / Usage","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/housing" element={<ProtectedLayout><BenefitChildPage title="Housing / Rent" description="Manage housing and rent-related employee benefit programmes and eligibility." metricLabels={["Eligible Employees","Active Beneficiaries","Employer Cost","Exceptions"]} /></ProtectedLayout>} />
-        <Route path="/benefits/transport" element={<ProtectedLayout><BenefitChildPage title="Transport Benefits" description="Manage transport benefit programmes, employee eligibility and employer support." metricLabels={["Eligible Employees","Active Beneficiaries","Employer Cost","Exceptions"]} /></ProtectedLayout>} />
+        <Route path="/benefits/transport" element={<Navigate to="/benefits/transport-support" replace />} />
         <Route path="/benefits/meals" element={<ProtectedLayout><BenefitChildPage title="Meal Benefits" description="Manage meal benefit programmes, eligibility, participation and employer support." metricLabels={["Eligible Employees","Active Beneficiaries","Employer Cost","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/other" element={<ProtectedLayout><BenefitChildPage title="Other Benefits" description="Manage additional employee benefit programmes outside the standard benefit categories." metricLabels={["Benefit Types","Eligible Employees","Active Beneficiaries","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/enrolments" element={<ProtectedLayout><BenefitChildPage title="Benefit Enrolments" description="Manage employee benefit enrolments, status, eligibility and participation workflows." metricLabels={["Eligible Employees","Enrolled Employees","Pending Enrolments","Exceptions"]} activityTitle="Enrolment Activity" /></ProtectedLayout>} />

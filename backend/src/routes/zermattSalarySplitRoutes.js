@@ -21,7 +21,7 @@ async function employees(client,organizationId) {
   return client.employee.findMany({where:{organizationId,status:{in:['ACTIVE','PROBATION','LEAVE','SUSPENDED']}},select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,employmentType:true,hireDate:true,location:{select:{name:true}}},orderBy:{employeeNumber:'asc'}});
 }
 
-const individual=require('../services/zermattSalaryPreparationService').createService(prisma,employees);
+const individual=require('../services/zermattSalaryPreparationService').createService(prisma,employees,{benefitsOnly:true});
 router.get('/employees',async(req,res)=>{
   try { const staff=await employees(prisma,req.auth.organizationId);return res.json({status:'success',data:staff.map(e=>({employeeNumber:e.employeeNumber,employeeName:[e.firstName,e.middleName,e.lastName].filter(Boolean).join(' '),branch:e.location?.name||'Unassigned'}))}); } catch(e){return error(res,e);}
 });
@@ -48,11 +48,11 @@ router.get('/template',async(req,res)=>{
       ['Employment Type and hire date are read from authoritative employee records.'],
       ['Employee Name, Branch, Employment Type and Hire Date reference columns identify records; editing them does not change CHRiS employee authority.'],
       ['Effective From: YYYY-MM-01; Reason is required.'],
-      ['Full-time >= ₦100,000: 25% mid-month, 75% end-month. Below ₦100,000: 16% and 84%.'],
-      ['Other employment types: no mid-month; 100% end-month.'],
+      ['Transport support for full-time employees: 25% of the reviewed basis at ₦100,000 or above; 16% below ₦100,000. Regular salary is unchanged.'],
+      ['Other employment types: no transport support under this policy. Regular salary is unchanged.'],
       ['The preview prorates eligible full-time new hires over the inclusive 1st–15th period.'],
       ['Mid-month loan recovery: ZERO. Previous unpaid and previous overpaid belong to the separate reconciliation ledger.'],
-      ['This import prepares salaries for review. It does not activate payroll or change approved payroll.'],
+      ['This import stores the transport-benefit calculation basis only. It does not change salary rates or regular payroll.'],
       ['Leave the sheet name and column headers unchanged. Remove rows for employees you are not uploading.'],
     ]),'Instructions');
     res.setHeader('Content-Disposition','attachment; filename="CHRiS_Zermatt_Full_Salaries_Template.xlsx"');

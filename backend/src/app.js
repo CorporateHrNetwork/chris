@@ -148,6 +148,9 @@ app.use("/api/zermatt", zermattOperationsRoutes);
 
 app.use("/api/payroll/employee-options", payrollEmployeeOptionRoutes);
 app.use("/api/payroll/full-salary-preparation", zermattSalarySplitRoutes);
+app.use("/api/benefits/transport-support", zermattMidmonthRoutes);
+app.use("/api/benefits/transport-support/preparation", zermattSalarySplitRoutes);
+// Compatibility aliases use the same Benefits-only service and ledger.
 app.use("/api/payroll/transport-support", zermattMidmonthRoutes);
 app.use("/api", zermattFinancialSupportRoutes);
 app.use("/api", zermattHrPayrollInputRoutes);
