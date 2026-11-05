@@ -166,7 +166,7 @@ test("unapproved settlements can refresh but stale benefits cannot be approved",
   assert.ok(service.includes("settlement.calculationSnapshot"));
   assert.ok(service.includes("SETTLEMENT_BENEFITS_RECALCULATION_REQUIRED"));
   assert.ok(frontend.includes('"Recalculate Exit Settlement Account"'));
-  assert.ok(frontend.includes("disabled={!canManagePayroll || busy || benefitsNeedRecalculation}"));
+  assert.ok(frontend.includes("disabled={!canManagePayroll || busy || benefitsNeedRecalculation || settlementHasUnsavedChanges}"));
   assert.ok(frontend.includes('"PAYMENT_PENDING"') && frontend.includes('"PAID"'));
 });
 
