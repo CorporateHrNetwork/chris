@@ -29,6 +29,9 @@ jobs:
         run: npx prisma generate
       - name: Run safe Zermatt loan edit regression
         working-directory: backend
+        env:
+          # Unit tests inject an in-memory Prisma adapter: this address is never contacted.
+          DATABASE_URL: postgresql://synthetic:synthetic@127.0.0.1:5432/synthetic_loan_edit
         run: node --test tests/zermattLoanCompleteEdit.test.js
       - name: Verify backend syntax
         run: |
