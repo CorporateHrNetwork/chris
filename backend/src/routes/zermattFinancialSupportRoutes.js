@@ -5,6 +5,8 @@ const { requireAuth } = require("../middleware/authMiddleware");
 const { validateLoanPurpose } = require("../services/loanPolicyService");
 const { assessLoanCollateral } = require("../services/eosbService");
 const loanService = require("../services/loanService");
+const { updateLoan } = require("../services/payrollLiabilityEditService");
+const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
 const {
   recordApprovedDisbursedLoan,
   applyApprovedDisbursedLoanTopUp,
@@ -162,6 +164,40 @@ router.post("/loans/:id/top-up", zermattOnly, requireLoanEditor, async (req, res
     });
   } catch (error) {
     return sendError(res, error, "Unable to merge the approved top-up into the existing loan account.");
+  }
+});
+
+// Zermatt externally approved loans are recorded/edited by authorized HR only.
+// Register before the generic loan workflow route so Branch HR does not trigger
+// the retired in-CHRiS approval process or inherit unrelated permissions.
+router.patch("/loans/:id", zermattOnly, requireLoanEditor, async (req, res) => {
+  try {
+    await assertLoanRecordAccess({ req, loanId: req.params.id, prismaClient: prisma });
+    if (req.body?.employeeNumber) {
+      await assertEmployeeNumberAccess({ req, employeeNumber: req.body.employeeNumber, prismaClient: prisma });
+    }
+    const input = { ...(req.body || {}) };
+    if (input.purpose !== undefined) {
+      input.purpose = await validateLoanPurpose({
+        organizationId: req.auth.organizationId,
+        purpose: input.purpose,
+        prismaClient: prisma,
+      });
+    }
+    const data = await updateLoan({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      loanId: req.params.id,
+      input,
+    });
+    const freshness = await markDraftRunsRecalculationRequired({
+      organizationId: req.auth.organizationId,
+      actorUserId: req.auth.userId,
+      reason: `Authorized Zermatt HR corrected loan ${req.params.id}; payroll drafts require recalculation.`,
+    });
+    return res.json({ status: "success", data: { ...data, payrollDraftFreshness: freshness } });
+  } catch (error) {
+    return sendError(res, error, "Unable to update the Zermatt loan record.");
   }
 });
 

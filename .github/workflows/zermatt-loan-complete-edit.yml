@@ -1,0 +1,39 @@
+name: Zermatt Loan Complete Edit Regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/pages/Loans.jsx'
+      - 'backend/src/services/payrollLiabilityEditService.js'
+      - 'backend/src/routes/zermattFinancialSupportRoutes.js'
+      - 'backend/tests/zermattLoanCompleteEdit.test.js'
+      - '.github/workflows/zermatt-loan-complete-edit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  loan-edit-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Generate Prisma client for isolated tests
+        working-directory: backend
+        run: npx prisma generate
+      - name: Run safe Zermatt loan edit regression
+        working-directory: backend
+        env:
+          # Unit tests inject an in-memory Prisma adapter: this address is never contacted.
+          DATABASE_URL: postgresql://synthetic:synthetic@127.0.0.1:5432/synthetic_loan_edit
+        run: node --test tests/zermattLoanCompleteEdit.test.js
+      - name: Verify backend syntax
+        run: |
+          node --check backend/src/services/payrollLiabilityEditService.js
+          node --check backend/src/routes/zermattFinancialSupportRoutes.js

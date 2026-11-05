@@ -54,6 +54,7 @@ const emptyForm = () => ({
   installmentAmount: "",
   repaymentMode: "AMOUNT",
   repaymentMonths: "",
+  correctionReason: "",
   gmApprovalDate: today(),
   disbursedDate: today(),
   recoveryStartMonth: currentMonth(),
@@ -243,6 +244,7 @@ function Loans({ completedOnly = false }) {
       installmentAmount: String(loan.installmentAmount || ""),
       repaymentMode: "AMOUNT",
       repaymentMonths: "",
+      correctionReason: "",
       gmApprovalDate: today(),
       disbursedDate: today(),
       recoveryStartMonth: currentMonth(),
@@ -265,6 +267,7 @@ function Loans({ completedOnly = false }) {
       installmentAmount: String(loan.installmentAmount ?? ""),
       repaymentMode: "AMOUNT",
       repaymentMonths: "",
+      correctionReason: "",
       gmApprovalDate: String(loan.approvedDate || loan.applicationDate || today()).slice(0, 10),
       disbursedDate: String(loan.disbursedDate || today()).slice(0, 10),
       recoveryStartMonth: String(loan.recoveryStartDate || today()).slice(0, 7),
@@ -305,6 +308,15 @@ function Loans({ completedOnly = false }) {
       : null;
   const validPlan = Boolean(plan && !plan.invalidReason
     && plan.installmentCount === repaymentTerms?.installmentCount);
+  const loanDatesChanged = Boolean(editingLoan && (
+    form.gmApprovalDate !== String(editingLoan.approvedDate || editingLoan.applicationDate || "").slice(0, 10)
+    || form.disbursedDate !== String(editingLoan.disbursedDate || "").slice(0, 10)
+  ));
+  const datesInOrder = !form.gmApprovalDate || !form.disbursedDate || (
+    form.disbursedDate >= form.gmApprovalDate
+    && (!form.recoveryStartMonth || form.recoveryStartMonth >= form.disbursedDate.slice(0, 7))
+  );
+  const validDateCorrection = !editingLoan || !loanDatesChanged || form.correctionReason.trim().length >= 10;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -314,6 +326,14 @@ function Loans({ completedOnly = false }) {
     }
     if (!validPlan) {
       setError(plan?.invalidReason || "Enter the loan balance, a valid repayment term and recovery start month.");
+      return;
+    }
+    if (!datesInOrder) {
+      setError("Accounts payment must follow GM approval, and payroll recovery cannot start before the payment month.");
+      return;
+    }
+    if (!validDateCorrection) {
+      setError("Correcting a loan date requires an audit explanation of at least 10 characters.");
       return;
     }
     try {
@@ -328,12 +348,15 @@ function Loans({ completedOnly = false }) {
             employeeNumber: editingLoan.employeeNumber,
             principalAmount: form.approvedAmount,
             installmentAmount: effectiveInstallment,
+            gmApprovalDate: form.gmApprovalDate,
+            disbursedDate: form.disbursedDate,
+            correctionReason: form.correctionReason.trim() || undefined,
             recoveryStartDate: `${form.recoveryStartMonth}-01`,
             purpose: form.purpose,
             notes: form.notes,
           }),
         });
-        setMessage(`Loan ${editingLoan.loanNumber} changes saved. Payroll history remains protected and draft payroll was marked for recalculation.`);
+        setMessage(`Loan ${editingLoan.loanNumber} updated and audited. Posted payroll recovery history remains protected.`);
         resetForm();
         await load();
         return;
@@ -542,7 +565,7 @@ function Loans({ completedOnly = false }) {
         <AnalyticsPanel
           title={editingLoan ? `Edit Loan · ${editingLoan.loanNumber}` : topUpParent ? `Record Approved Top-Up · ${topUpParent.loanNumber}` : "Record Approved & Disbursed Loan"}
           subtitle={editingLoan
-            ? "Correct the permitted payroll-recovery terms. An increase in principal must be recorded as a Top-Up so collateral is revalidated; posted payroll history remains immutable."
+            ? "Review the complete loan record and correct permitted details, including GM approval and Accounts payment dates. Changes are audited; principal increases require Top-Up, and posted payroll history remains immutable."
             : topUpParent
               ? "The approved top-up is merged into this same loan account. Existing recoveries remain unchanged, and the revised outstanding balance is redistributed using the selected repayment term below."
               : "Use only after the GM has manually approved the loan and Accounts has completed payment outside CHRiS. Authorized HR records the financial liability for payroll recovery."}
@@ -581,8 +604,8 @@ function Loans({ completedOnly = false }) {
                 <strong>{form.repaymentMode === "MONTHS" ? `Monthly recovery: ${money(effectiveInstallment)}` : `Repayment duration: ${plan.installmentCount} month(s)`}</strong>
               </div>
             )}
-            {!editingLoan && <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>}
-            {!editingLoan && <label><small>External Accounts Payment Date</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>}
+            <label><small>GM Approval Date</small><input style={inputStyle} type="date" value={form.gmApprovalDate} onChange={setField("gmApprovalDate")} required /></label>
+            <label><small>External Accounts Payment Date (Disbursement)</small><input style={inputStyle} type="date" value={form.disbursedDate} onChange={setField("disbursedDate")} required /></label>
             <label><small>Payroll Recovery Start Month</small><input style={inputStyle} type="month" value={form.recoveryStartMonth} onChange={setField("recoveryStartMonth")} required /></label>
             {!editingLoan && !topUpParent && <div style={collateralCard}><strong>System References</strong><span>CHRiS will generate the next sequential GM Approval Reference and Accounts Payment Reference automatically when this loan is first recorded. The same authoritative references are visible at Branch and Head Office.</span></div>}
             <label><small>Loan Policy / Purpose</small><select style={inputStyle} value={form.purpose} onChange={setField("purpose")} required><option value="">Select ZERMATT loan policy</option>{form.purpose && !loanPolicies.some((policy) => policy.name === form.purpose) && <option value={form.purpose}>{form.purpose} (existing)</option>}{loanPolicies.map((policy) => <option key={policy.code} value={policy.name}>{policy.name} · 0% interest</option>)}</select></label>
@@ -604,6 +627,24 @@ function Loans({ completedOnly = false }) {
               {suretyCheck?.assessment?.surety && <p>Surety validated: {suretyCheck.assessment.surety.name} · Cover: {money(suretyCheck.assessment.surety.coveredAmount)}. Eligibility will be checked again when recording.</p>}
             </div>}
 
+            {editingLoan && (
+              <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
+                <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Complete Loan Record · {editingLoan.loanNumber}</strong>
+                <div style={collateralGrid}>
+                  <span>Employee: <strong>{editingLoan.employeeNumber} — {editingLoan.employeeName}</strong></span>
+                  <span>Branch: <strong>{editingLoan.locationName || "—"}</strong></span>
+                  <span>Status: <strong>{editingLoan.status || "—"}</strong></span>
+                  <span>GM Approval Ref: <strong>{editingLoan.gmApprovalReference || "—"}</strong></span>
+                  <span>Accounts Payment Ref: <strong>{editingLoan.accountsPaymentReference || editingLoan.disbursementReference || "—"}</strong></span>
+                  <span>Original Application Date: <strong>{editingLoan.applicationDate || "—"}</strong></span>
+                  <span>Original GM Approval Date: <strong>{editingLoan.approvedDate || "—"}</strong></span>
+                  <span>Original Accounts Payment Date: <strong>{editingLoan.disbursedDate || "—"}</strong></span>
+                  <span>Recovery Start: <strong>{editingLoan.recoveryStartDate || "—"}</strong></span>
+                  <span>Recorded Monthly Instalment: <strong>{money(editingLoan.installmentAmount)}</strong></span>
+                </div>
+                <small>System-generated references and posted recoveries remain read-only. Use the editable fields to correct permitted loan details.</small>
+              </div>
+            )}
             {editingLoan && <div style={{ ...collateralCard, gridColumn: "1 / -1" }}>
               <strong style={{ color: "var(--chris-dashboard-gold-bright)" }}>Controlled Edit</strong>
               <div style={collateralGrid}>
@@ -638,9 +679,19 @@ function Loans({ completedOnly = false }) {
               </div>
             </div>}
 
+            {editingLoan && loanDatesChanged && (
+              <label style={{ gridColumn: "1 / -1" }}>
+                <small>Reason for GM Approval / Accounts Payment Date Correction (required for audit)</small>
+                <textarea style={{ ...inputStyle, minHeight: 68, resize: "vertical" }}
+                  value={form.correctionReason} onChange={setField("correctionReason")}
+                  minLength={10} required
+                  placeholder="Explain the source document or correction basis" />
+              </label>
+            )}
+            {editingLoan && !datesInOrder && <p role="alert" style={{ gridColumn: "1 / -1", color: "#ef4444" }}>Accounts payment must follow GM approval; recovery month cannot precede payment month.</p>}
             <label style={{ gridColumn: "1 / -1" }}><small>Recording Notes</small><textarea style={{ ...inputStyle, minHeight: 76, resize: "vertical" }} value={form.notes} onChange={setField("notes")} placeholder="Optional internal note; payment itself is processed outside CHRiS." /></label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", gridColumn: "1 / -1" }}>
-              <button style={primaryButton} disabled={Boolean(busy) || !validPlan}>{busy ? "Saving…" : editingLoan ? "Save Loan Changes" : topUpParent ? "Merge Approved Top-Up" : "Record Approved & Disbursed Loan"}</button>
+              <button style={primaryButton} disabled={Boolean(busy) || !validPlan || !datesInOrder || !validDateCorrection}>{busy ? "Saving…" : editingLoan ? "Save Loan Changes" : topUpParent ? "Merge Approved Top-Up" : "Record Approved & Disbursed Loan"}</button>
               {(topUpParent || editingLoan) && <button type="button" style={secondaryButton} onClick={resetForm} disabled={Boolean(busy)}>Cancel</button>}
             </div>
           </form>
