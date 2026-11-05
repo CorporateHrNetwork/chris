@@ -960,9 +960,50 @@ export default function EmployeeExits() {
                       <FaPrint /> Print / Download PDF
                     </button>
                   ) : null}
+                  <button type="button" style={primaryButton} disabled={busy || !canUpdate}
+                    onClick={() => document.getElementById(settlementCanRecalculate ? "exit-settlement-inputs" : "exit-settlement-correction")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                    Edit Settlement Account
+                  </button>
                   {settlement ? <span style={countBadge}>{titleCase(settlement.status)}</span> : null}
                 </div>
               </div>
+
+              {settlement ? (
+                <section id="exit-settlement-correction" style={{ ...warning, margin: "16px 0", scrollMarginTop: 100 }}>
+                  <h3 style={sectionTitle}>Edit Exit Settlement Account</h3>
+                  <p>Current account status: <strong>{titleCase(settlement.status)}</strong>.</p>
+                  {settlementCanRecalculate ? (
+                    <p>This account is already open for editing. Change the HR inputs below and select Recalculate Exit Settlement Account to save.</p>
+                  ) : !canUpdate || !canManagePayroll ? (
+                    <p>Your account needs employee update and payroll management access to reopen an approved settlement. Contact Head HR or your administrator.</p>
+                  ) : !settlementCanReopen ? (
+                    <p>This account cannot be reopened because it is paid, partly paid, waived or has a recorded payment/recovery. Head HR and Accounts must reconcile any correction separately.</p>
+                  ) : (
+                    <>
+                      <p>Reopening withdraws the current approval. Confirm with Accounts that no payment or recovery has taken place, then enter the correction reason. Save the corrected calculation and approve it again. Replace any previously printed copy.</p>
+                      <Field label="Correction Reason">
+                        <textarea value={settlementCorrectionReason} onChange={(event) => setSettlementCorrectionReason(event.target.value)} style={textarea} />
+                      </Field>
+                      <label style={{ display: "flex", gap: 8, margin: "12px 0" }}>
+                        <input type="checkbox" checked={settlementConfirmedUnpaid} onChange={(event) => setSettlementConfirmedUnpaid(event.target.checked)} />
+                        I have confirmed with Accounts that no payment or recovery has taken place.
+                      </label>
+                    </>
+                  )}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                    {settlementCanRecalculate ? <button type="button" style={primaryButton} disabled={!canUpdate || busy}
+                      onClick={() => document.getElementById("exit-settlement-inputs")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                      Edit Saved Inputs
+                    </button> : null}
+                    <button type="button" style={settlementCanReopen ? primaryButton : secondaryButton}
+                      disabled={!settlementCanReopen || !canUpdate || !canManagePayroll || busy || !settlementCorrectionReason.trim() || !settlementConfirmedUnpaid}
+                      onClick={() => runSettlementAction("reopen", { reason: settlementCorrectionReason, confirmedUnpaid: settlementConfirmedUnpaid })}>
+                      {busy && settlementCanReopen ? "Reopening..." : "Reopen for Correction"}
+                    </button>
+                  </div>
+                  {settlementCanRecalculate && !canUpdate ? <p>You have view-only access. An authorized HR user can save corrections.</p> : null}
+                </section>
+              ) : null}
 
               {benefitsNeedRecalculation ? (
                 <div role="alert" style={warning}>
@@ -998,29 +1039,13 @@ export default function EmployeeExits() {
                 </section>
               ) : null}
 
-              {settlementCanReopen && canUpdate && canManagePayroll ? (
-                <section style={{ ...warning, marginBottom: 16 }}>
-                  <h3 style={sectionTitle}>Edit Exit Settlement Account</h3>
-                  <p>Reopening withdraws the current approval. Confirm with Accounts that no payment or recovery has taken place, then enter the correction reason. Save the corrected calculation and approve it again. Replace any previously printed copy.</p>
-                  <Field label="Correction Reason">
-                    <textarea value={settlementCorrectionReason} onChange={(event) => setSettlementCorrectionReason(event.target.value)} style={textarea} />
-                  </Field>
-                  <label style={{ display: "flex", gap: 8, margin: "12px 0" }}>
-                    <input type="checkbox" checked={settlementConfirmedUnpaid} onChange={(event) => setSettlementConfirmedUnpaid(event.target.checked)} />
-                    I have confirmed with Accounts that no payment or recovery has taken place.
-                  </label>
-                  <button type="button" style={primaryButton} disabled={busy || !settlementCorrectionReason.trim() || !settlementConfirmedUnpaid}
-                    onClick={() => runSettlementAction("reopen", { reason: settlementCorrectionReason, confirmedUnpaid: settlementConfirmedUnpaid })}>
-                    {busy ? "Reopening..." : "Reopen for Correction"}
-                  </button>
-                </section>
-              ) : null}
+
 
               {settlementHasUnsavedChanges ? <div role="status" style={warning}>You have unsaved settlement corrections. Select Recalculate Exit Settlement Account before approval or printing.</div> : null}
               {settlement?.status === "DRAFT" ? <div role="status" style={warning}>This account is a draft. Save the recalculated settlement and obtain fresh approval before payout.</div> : null}
 
               {settlementCanRecalculate ? (
-                <form onSubmit={calculateExitSettlement}>
+                <form id="exit-settlement-inputs" style={{ scrollMarginTop: 100 }} onSubmit={calculateExitSettlement}>
                   <div className="exit-settlement-account-columns">
                     <div className="exit-settlement-credit-column">
                     <SettlementAccountSection title="Benefits" tone="credit">
