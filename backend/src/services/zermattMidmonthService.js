@@ -4,7 +4,7 @@ const {splitSalary,dateOnly}=require('./zermattSalarySplit');
 const id=()=>crypto.randomUUID();
 const hash=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const ym=value=>dateOnly(value).slice(0,7);
-function createService(prisma) {
+function createService(prisma, { benefitsOnly = false } = {}) {
  const q=(c,sql,...args)=>c.$queryRawUnsafe(sql,...args);
  const exec=(c,sql,...args)=>c.$executeRawUnsafe(sql,...args);
  const tx=fn=>prisma.$transaction(fn,{timeout:60000});
@@ -14,7 +14,13 @@ function createService(prisma) {
   return r.map(x=>x.responsibility);
  }
  async function requireRole(c,org,user,role) { if(!(await roles(c,org,user)).includes(role))domain.invalid(`The assigned ${role.replaceAll('_',' ')} must perform this action.`,403); }
- async function settings(c,org) { return (await q(c,'SELECT * FROM public.zermatt_payroll_split_settings WHERE "organizationId"=$1',org))[0]||null; }
+ async function settings(c,org) {
+  if (benefitsOnly) {
+   const event=await c.organizationAudit.findFirst({where:{organizationId:org,entityType:'TransportBenefitConfiguration',entityId:org,action:'ENABLED'},orderBy:{createdAt:'desc'}});
+   if(event?.newValue?.enabled)return event.newValue;
+  }
+  return (await q(c,'SELECT * FROM public.zermatt_payroll_split_settings WHERE "organizationId"=$1',org))[0]||null;
+ }
  async function configuration(org,user) {
   const responsibilities=await roles(prisma,org,user);
   if(!responsibilities.length)domain.invalid('A regular payroll approval assignment is required.',403);
@@ -32,6 +38,14 @@ function createService(prisma) {
    if(current?.enabled)domain.invalid('The initial salary batch is already activated. Use effective-dated salary reviews for subsequent changes.');
    const assignments=await q(c,'SELECT responsibility,COUNT(*)::int as count FROM public.payroll_approval_assignments WHERE "organizationId"=$1 AND "isActive" GROUP BY responsibility',org);
    if(['HEAD_HR','PAYROLL_AUDITOR','GENERAL_MANAGER','CHIEF_ACCOUNTANT'].some(role=>assignments.find(a=>a.responsibility===role)?.count!==1))domain.invalid('Configure exactly one active regular-payroll assignee for each of Head HR, Auditor, General Manager and Chief Accountant before activation.');
+   if(benefitsOnly) {
+    const staff=await q(c,`SELECT e.id,e."employeeNumber",e."employmentType",e."hireDate",s."fullMonthlyGross",s."employmentTypeSnapshot",s."hireDateSnapshot" FROM public.employees e LEFT JOIN public.zermatt_salary_split_preparations s ON s."organizationId"=e."organizationId" AND s."employeeId"=e.id AND s."effectiveFrom"=$2::date WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') ORDER BY e.id FOR SHARE OF e`,org,from);
+    if(!staff.length||staff.some(e=>!e.fullMonthlyGross))domain.invalid('Prepare a transport-benefit salary basis for every current employee in Benefits for the activation month.');
+    for(const e of staff)if(e.employmentType!==e.employmentTypeSnapshot||dateOnly(e.hireDate)!==dateOnly(e.hireDateSnapshot))domain.invalid('Employee records changed after preparation. Revalidate the benefit basis.');
+    const config={enabled:true,activationFrom:from,module:'BENEFITS',payrollWrites:false};
+    await c.organizationAudit.create({data:{organizationId:org,actorUserId:user,entityType:'TransportBenefitConfiguration',entityId:org,action:'ENABLED',newValue:config,reason:'Transport Support enabled as a separate benefit. Salary authorities, regular payroll and split settings unchanged.'}});
+    return {...config,employees:staff.length};
+   }
    const approved=await q(c,`SELECT r.id FROM public.payroll_runs r JOIN public.payroll_periods p ON p.id=r."periodId" AND p."organizationId"=r."organizationId" WHERE r."organizationId"=$1 AND r.status='APPROVED' AND p."periodEnd">=$2::date LIMIT 1`,org,from);
    if(approved.length)domain.invalid('Activation overlaps approved payroll. Choose a month after the last approved payroll.');
    const staff=await q(c,`SELECT e.id,e."employeeNumber",e."employmentType",e."hireDate",s.id as preparation,s."fullMonthlyGross",s."employmentTypeSnapshot",s."hireDateSnapshot" FROM public.employees e LEFT JOIN public.zermatt_salary_split_preparations s ON s."organizationId"=e."organizationId" AND s."employeeId"=e.id AND s."effectiveFrom"=$2::date WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') ORDER BY e.id FOR UPDATE OF e`,org,from);
@@ -56,14 +70,18 @@ function createService(prisma) {
   const config=await settings(c,org);
   if(!config?.enabled||dateOnly(config.activationFrom)>from)domain.invalid('Full salaries have not been activated for this month.');
   const employees=await q(c,`SELECT e.id,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",e."employmentType",e."hireDate",e.status FROM public.employees e WHERE e."organizationId"=$1 AND e."hireDate"<=$2::date AND e.status::text<>'INACTIVE' AND NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events d WHERE d."organizationId"=e."organizationId" AND d."employeeId"=e.id AND d."eventType"::text='DEACTIVATED' AND d."effectiveDate">=$3::date AND d."effectiveDate"<$3::date+interval '1 month') AND (e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') OR EXISTS(SELECT 1 FROM public.zermatt_midmonth_balances b WHERE b."employeeId"=e.id AND b."organizationId"=e."organizationId" AND b.amount>0 AND b."dueMonth"<=$3::date)) ORDER BY e.id FOR SHARE`,org,end,from);
-  const rates=await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date ORDER BY "employeeId","effectiveFrom" DESC`,org,`${periodMonth}-15`,from);
+  const rates=benefitsOnly ? await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM (
+   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","createdAt" AS "updatedAt",2 AS priority FROM public.zermatt_salary_split_preparations WHERE "organizationId"=$1 AND "effectiveFrom"<=$2::date
+   UNION ALL
+   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt",1 AS priority FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "fullMonthlyGross">0 AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date
+  ) bases ORDER BY "employeeId","effectiveFrom" DESC,priority DESC`,org,`${periodMonth}-15`,from) : await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date ORDER BY "employeeId","effectiveFrom" DESC`,org,`${periodMonth}-15`,from);
   const balances=await q(c,`SELECT id,"employeeId",kind,amount,"dueMonth" FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND amount>0 AND "dueMonth"<=$2::date ORDER BY id FOR UPDATE`,org,from);
   const byEmployee=new Map(rates.map(r=>[r.employeeId,r]));
   const onboarding=await q(c,`SELECT DISTINCT ON("employeeId") "employeeId","sectionData" FROM public.employee_onboardings WHERE "organizationId"=$1 ORDER BY "employeeId","updatedAt" DESC,"createdAt" DESC`,org);
   const bankByEmployee=new Map(onboarding.map(o=>[o.employeeId,o.sectionData?.['payment-details']||o.sectionData?.paymentDetails||{}]));
   const lines=employees.map(employee=>{
    const salary=byEmployee.get(employee.id);
-   if(['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Record it in regular Salary Rates before generating payroll.`);
+   if(['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
    const debts=balances.filter(b=>b.employeeId===employee.id);
    const unpaid=debts.filter(b=>b.kind==='UNPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const overpaid=debts.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;

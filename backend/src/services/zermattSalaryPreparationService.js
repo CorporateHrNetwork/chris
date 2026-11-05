@@ -2,12 +2,12 @@ const crypto=require('node:crypto');
 const {prepareSalaryRows,dateOnly}=require('./zermattSalarySplit');
 const digest=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function invalid(message,statusCode=409){const error=new Error(message);error.statusCode=statusCode;throw error;}
-function createService(prisma,loadEmployees){
+function createService(prisma,loadEmployees,{benefitsOnly=false}={}){
  async function preview(client,org,user,input){
   const assigned=await client.$queryRawUnsafe('SELECT id FROM public.payroll_approval_assignments WHERE "organizationId"=$1 AND "assignedUserId"=$2 AND responsibility=\'HEAD_HR\' AND "isActive"',org,user);
   if(!assigned.length)invalid('The assigned Head HR must review individual salary corrections.',403);
   const settings=await client.$queryRawUnsafe('SELECT enabled FROM public.zermatt_payroll_split_settings WHERE "organizationId"=$1',org);
-  if(settings[0]?.enabled)invalid('Full salaries are already activated. Use Salary Rates for an effective-dated salary review.');
+  if(!benefitsOnly&&settings[0]?.enabled)invalid('Full salaries are already activated. Use Salary Rates for an effective-dated salary review.');
   const [row]=prepareSalaryRows([{'Employee No':input.employeeNumber,'Full Monthly Gross Salary':input.amount,Currency:'NGN','Effective From':input.effectiveFrom,Reason:input.reason}],await loadEmployees(client,org));
   if(!row.valid)invalid(row.errors.join('; '),400);
   const current=(await client.$queryRawUnsafe('SELECT * FROM public.zermatt_salary_split_preparations WHERE "organizationId"=$1 AND "employeeId"=$2 AND "effectiveFrom"=$3::date',org,row.employeeId,row.effectiveFrom))[0]||null;

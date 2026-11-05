@@ -4,6 +4,7 @@ on:
     paths:
       - 'backend/**'
       - 'src/pages/payroll/**'
+      - 'src/pages/benefits/**'
       - 'src/App.jsx'
       - 'src/pages/ESSPortal.jsx'
       - 'src/components/ess/**'

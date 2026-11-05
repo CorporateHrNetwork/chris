@@ -31,7 +31,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
  const staff=(await pool.query('SELECT * FROM employees ORDER BY id')).rows;
  const gross=[200000,80000,120000,120000];
  for(let i=0;i<staff.length;i++)await pool.query(`INSERT INTO zermatt_salary_split_preparations(id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId") VALUES($1,'zll',$2,$3,'NGN','2026-11-01','Fixture',$4,$5,'{}','hr')`,[`p${i}`,staff[i].id,gross[i],staff[i].employmentType,staff[i].hireDate]);
- function wrap(client) {return {$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)])}};}
+ function wrap(client) {return {$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)]),findFirst:async({where})=>(await client.query(`SELECT record FROM organization_audits WHERE record->>'organizationId'=$1 AND record->>'entityType'=$2 AND record->>'entityId'=$3 AND record->>'action'=$4 ORDER BY ctid DESC LIMIT 1`,[where.organizationId,where.entityType,where.entityId,where.action])).rows[0]?.record||null}};}
  const db={...wrap(pool),$transaction:async fn=>{const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(wrap(c));await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}};
  const service=require('../src/services/zermattMidmonthService').createService(db);
  const preparation=require('../src/services/zermattSalaryPreparationService').createService(db,(client,org)=>client.$queryRawUnsafe('SELECT * FROM employees WHERE "organizationId"=$1',org));
@@ -55,6 +55,44 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   assert.equal(Number((await pool.query('SELECT COUNT(*) as count FROM zermatt_midmonth_runs')).rows[0].count),0);
   assert.equal(Number((await pool.query("SELECT amount FROM payroll_loans WHERE id='unchanged-loan'")).rows[0].amount),70000);
   assert.equal(Number((await pool.query("SELECT COUNT(*) as count FROM organization_audits WHERE record->>'action'='INDIVIDUAL_CORRECTION'")).rows[0].count),2);
+
+  // Exercise Benefits mode inside a rolled-back transaction with existing approved payroll.
+  const benefitsClient=await pool.connect();
+  await benefitsClient.query('BEGIN');
+  try {
+   await benefitsClient.query(`INSERT INTO payroll_salary_rates(id,"organizationId","employeeId",amount,"fullMonthlyGross",frequency,"effectiveFrom",status) VALUES('protected-benefit-rate','zll','e1',150000,200000,'MONTHLY','2026-01-01','ACTIVE');
+    INSERT INTO payroll_periods VALUES('protected-period','zll','2026-11-01','2026-11-30');
+    INSERT INTO payroll_runs VALUES('protected-run','zll','protected-period','APPROVED','APPROVED',CURRENT_TIMESTAMP);
+    INSERT INTO payroll_run_lines VALUES('protected-line','zll','e1','protected-run');`);
+   for(const e of staff)await benefitsClient.query(`INSERT INTO employee_onboardings VALUES($1,'zll',$2,$3::jsonb,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,['benefit-bank-'+e.id,e.id,JSON.stringify({'payment-details':{bankName:'Fixture Bank',accountName:'Fixture',accountNumber:'1234567890'}})]);
+   const protectedTables=['payroll_salary_rates','payroll_periods','payroll_runs','payroll_run_lines','payroll_loans','zermatt_payroll_split_settings'];
+   const snapshot=async()=>JSON.stringify(await Promise.all(protectedTables.map(async table=>(await benefitsClient.query('SELECT row_to_json(t) AS row FROM '+table+' t ORDER BY row_to_json(t)::text')).rows)));
+   const beforeBenefits=await snapshot();
+   const benefitWrap={...wrap(benefitsClient)};
+   const execute=benefitWrap.$executeRawUnsafe;
+   benefitWrap.$executeRawUnsafe=async(sql,...args)=>{
+    assert.doesNotMatch(sql,/\b(?:UPDATE|INSERT INTO|DELETE FROM)\s+(?:public\.)?(?:payroll_|zermatt_payroll_split_settings)/i,'Benefits must not write salary or regular payroll');
+    return execute(sql,...args);
+   };
+   const benefitsDb={...benefitWrap,$transaction:async fn=>fn(benefitWrap)};
+   const benefits=require('../src/services/zermattMidmonthService').createService(benefitsDb,{benefitsOnly:true});
+   await assert.rejects(benefits.activate('zll','outsider','2026-11'),/assigned/);
+   const enabled=await benefits.activate('zll','hr','2026-11');
+   assert.equal(enabled.module,'BENEFITS');
+   assert.equal(enabled.payrollWrites,false);
+   const benefitRun=await benefits.generate('zll','hr','2026-11');
+   const benefitDetail=await benefits.detail('zll','hr',benefitRun);
+   assert.ok(benefitDetail.lines.length>0);
+   assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
+   await benefits.decide('zll','hr',benefitRun,'SUBMIT','Benefit fixture submitted');
+   await benefits.decide('zll','auditor',benefitRun,'AUDIT_APPROVE','Benefit fixture audited');
+   await benefits.decide('zll','gm',benefitRun,'GM_APPROVE','Benefit fixture approved');
+   const approvedBenefit=await benefits.detail('zll','finance',benefitRun);
+   await benefits.decide('zll','finance',benefitRun,'CONFIRM_PAYMENT','Benefit fixture receipt',approvedBenefit.lines.map(line=>({lineId:line.id,actualPaid:line.netPay,reference:'Fixture only'})));
+   assert.equal((await benefits.detail('zll','hr',benefitRun)).run.status,'PAID');
+   assert.equal(await snapshot(),beforeBenefits,'Benefits activation, approval and payment must leave protected payroll tables byte-identical');
+  } finally {await benefitsClient.query('ROLLBACK');benefitsClient.release();}
+
   await assert.rejects(service.activate('zll','outsider','2026-11'),/assigned/);
   const result=await service.activate('zll','hr','2026-11');assert.equal(result.employees,4);
   await assert.rejects(preparation.preview('zll','hr',correction),/already activated/);
