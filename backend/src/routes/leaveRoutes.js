@@ -67,7 +67,7 @@ router.use(
 );
 
 
-router.get("/overview",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getLeaveOverview({organizationId:req.auth.organizationId})})}catch(error){return handleError(error,res)}});
+router.get("/overview",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getLeaveOverview({organizationId:req.auth.organizationId,locationId:req.auth.activeLocationId || null,timezone:req.auth.organization?.timezone || "Africa/Lagos",locationIds:req.auth.locationScope === "ALL_LOCATIONS" ? undefined : (req.auth.availableLocations || []).map(location=>location.id).filter(Boolean)})})}catch(error){return handleError(error,res)}});
 router.get("/balance-register",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getBalanceRegister({organizationId:req.auth.organizationId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
 router.get("/employees/:employeeNumber/profile",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEmployeeLeaveProfile({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,asOfDate:req.query.asOfDate})})}catch(error){return handleError(error,res)}});
 router.get("/employees/:employeeNumber/ledger",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getEmployeeLeaveLedger({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,leavePolicyId:req.query.leavePolicyId,leaveYear:req.query.leaveYear,proposedUnits:req.query.proposedUnits})})}catch(error){return handleError(error,res)}});
@@ -671,4 +671,5 @@ function handleError(
 
 module.exports =
   router;
+
 

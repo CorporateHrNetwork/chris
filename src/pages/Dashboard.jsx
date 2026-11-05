@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useState,
 } from "react";
@@ -6,7 +8,7 @@ import {
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import KpiCard from "../components/dashboard/KpiCard";
 import AttendanceChart from "../components/dashboard/AttendanceChart";
-import LeaveCalendar from "../components/dashboard/LeaveCalendar";
+const LeaveCalendar = lazy(() => import("../components/dashboard/LeaveCalendar"));
 import RecentEmployees from "../components/dashboard/RecentEmployees";
 import Announcements from "../components/dashboard/Announcements";
 import QuickActions from "../components/dashboard/QuickActions";
@@ -43,6 +45,8 @@ function Dashboard() {
   const [operationalSummary, setOperationalSummary] = useState({
     attendanceRecords: null,
     pendingLeave: null,
+    activeEmployees: null,
+    probationEmployees: null,
     loading: true,
   });
 
@@ -56,6 +60,8 @@ function Dashboard() {
       setOperationalSummary({
         attendanceRecords: Number(result?.data?.attendance?.recordsToday || 0),
         pendingLeave: Number(result?.data?.leave?.pendingRequests || 0),
+        activeEmployees: result?.data?.headcount?.operationalByStatus?.find(row => row.key === "ACTIVE")?.count ?? null,
+        probationEmployees: result?.data?.headcount?.operationalByStatus?.find(row => row.key === "PROBATION")?.count ?? null,
         loading: false,
       });
     };
@@ -227,7 +233,7 @@ function Dashboard() {
           subtitle={
             employeeLoading
               ? "Loading employee data"
-              : `${employeeSummary.active} Active • ${employeeSummary.probation} Probation`
+              : `${operationalSummary.activeEmployees ?? employeeSummary.active} Active • ${operationalSummary.probationEmployees ?? employeeSummary.probation} Probation`
           }
           icon="👥"
           color="var(--chris-green, #087A43)"
@@ -324,7 +330,7 @@ function Dashboard() {
         }}
       >
         <AttendanceChart />
-        <LeaveCalendar />
+        <Suspense fallback={<p role="status">Loading leave calendar…</p>}><LeaveCalendar /></Suspense>
       </div>
 
       <div
@@ -417,3 +423,4 @@ function MiniStat({ title, value }) {
 }
 
 export default Dashboard;
+

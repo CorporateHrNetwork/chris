@@ -37,9 +37,10 @@ const prisma = {
   assert.ok(calls.every((call) => call.query.where.organizationId === "org-a"), "all queries are tenant scoped");
   const leaveQuery = calls.find((call) => call.name === "leave").query;
   assert.equal(leaveQuery.where.organizationId, "org-a", "leave analytics must remain tenant scoped");
-  assert.deepEqual(leaveQuery.where.status.in, ["PENDING", "APPROVED"]);
+  assert.deepEqual(leaveQuery.where.status.in, ["PENDING", "APPROVED", "ACTIVE"]);
   assert.equal(leaveQuery.where.cancelledAt, null);
-  assert.equal(leaveQuery.where.endDate.gte.toISOString(), "2026-08-20T23:00:00.000Z");
+  assert.equal(leaveQuery.where.endDate, undefined, "Overdue commenced leave must remain available for return tracking");
+  assert.equal(leaveQuery.where.returnedAt, null);
   assert.equal(leaveQuery.select.cancelledAt, true);
   const exitWhere = calls.find((call) => call.name === "exits").query.where;
   assert.equal(exitWhere.status, "COMPLETED"); assert.equal(exitWhere.cancelledAt, null);
@@ -49,3 +50,4 @@ const prisma = {
   assert.equal(empty.headcount.current, 0); assert.equal(empty.demographics.gender[0].percentage, 0); assert.equal(empty.managers.averageDirectReports, 0);
   console.log("PASS: CHRIS workforce analytics tests passed.");
 })().catch((error) => { console.error(error); process.exitCode = 1; });
+

@@ -6,7 +6,8 @@ const routes=["/leave","/leave/requests","/leave/active","/leave/returns","/leav
 for(const route of routes){assert.ok(app.includes(`path="${route}"`),`missing route ${route}`);assert.ok(sidebar.includes(`"${route}"`),`missing sidebar path ${route}`)}
 assert.doesNotMatch(sidebar.slice(sidebar.indexOf('"leave"'),sidebar.indexOf('"payroll"')),/planned:/);
 assert.match(read("src/components/leave/LeaveUi.jsx"),/DRAFT.*PENDING.*APPROVED.*ACTIVE.*COMPLETED.*REJECTED.*CANCELLED/s);
-assert.match(read("src/pages/LeaveActive.jsx"),/status=ACTIVE/);
+assert.match(read("src/pages/LeaveActive.jsx"),/activeLeaves/);
+assert.match(read("src/pages/LeaveActive.jsx"),/Approved dates in effect/);
 assert.match(read("src/pages/LeaveReturns.jsx"),/Confirm Return/);
 assert.match(read("src/pages/LeaveReturns.jsx"),/setMessage.*load\(\)/s);
 assert.match(read("src/pages/LeaveRequests.jsx"),/Policy \/ Version/);
@@ -14,3 +15,4 @@ assert.match(read("src/pages/LeaveRequests.jsx"),/leave\.approve.*leave\.manage/
 assert.match(read("src/pages/LeaveCalendarPage.jsx"),/calendarLeaves/);
 assert.match(read("src/pages/LeaveExceptions.jsx"),/consistency/);
 console.log("PASS: CHRIS operational leave frontend tests passed.");
+

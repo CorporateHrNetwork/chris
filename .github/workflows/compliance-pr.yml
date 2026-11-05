@@ -45,6 +45,9 @@ jobs:
       - name: Simplified disciplinary workflow acceptance
         run: node --test tests/simpleDisciplinary.test.js
 
+      - name: Validate approved leave KPI and dashboard visibility
+        run: node --test tests/approvedLeaveVisibility.test.js tests/leaveAnalytics.test.js tests/workforceAnalytics.test.js
+
       - name: Validate saved attendance and leave registers
         run: node --test tests/savedAttendanceAndLeaveRegisters.test.js
 
@@ -221,4 +224,5 @@ jobs:
             throw new Error(`Initial CHRiS bundle exceeded 500 KB budget: ${(bytes / 1024).toFixed(2)} KB`);
           }
           NODE
+
 

@@ -4,6 +4,8 @@ const {
 } = require("./employeeStatusSemantics");
 const {
   summarizeOperationalLeave,
+  projectLeaveStatuses,
+  leaveDayBounds,
   reconcileLeaveStatus,
 } = require("./leaveAnalyticsService");
 
@@ -88,7 +90,7 @@ function employeeRelationScope(f) {
 
 async function getWorkforceAnalytics(
   prisma,
-  { organizationId, filters = {}, now = new Date() }
+  { organizationId, filters = {}, now = new Date(), timezone = "Africa/Lagos", locationIds }
 ) {
   if (!organizationId) throw new Error("organizationId is required");
 
@@ -98,8 +100,8 @@ async function getWorkforceAnalytics(
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const yearStart = new Date(f.year, 0, 1);
   const yearEnd = new Date(f.year + 1, 0, 1);
-  const scope = employeeScope(f);
-  const relationScope = employeeRelationScope(f);
+  const scope = {...employeeScope(f), ...(locationIds !== undefined ? {AND:[{locationId:{in:locationIds}}]} : {})};
+  const relationScope = Object.keys(scope).length ? {employee:{is:scope}} : {};
 
   const currentWhere = {
     organizationId,
@@ -207,10 +209,11 @@ async function getWorkforceAnalytics(
     prisma.leaveRequest.findMany({
       where: {
         organizationId,
-        status: { in: ["PENDING", "APPROVED"] },
+        status: { in: ["PENDING", "APPROVED", "ACTIVE"] },
         cancelledAt: null,
-        endDate: { gte: today },
+        returnedAt: null,
         ...relationScope,
+        ...(f.status ? {employee:{is:{...scope,status:f.status}}} : {}),
       },
       select: {
         employeeId: true,
@@ -218,6 +221,8 @@ async function getWorkforceAnalytics(
         startDate: true,
         endDate: true,
         cancelledAt: true,
+        returnedAt: true,
+        employee: { select: { status: true } },
       },
     }),
     prisma.attendanceRecord.findMany({
@@ -263,10 +268,8 @@ async function getWorkforceAnalytics(
     );
   }
   const assigned = new Set(assignments.map((row) => row.employeeId));
-  const operationalLeave = summarizeOperationalLeave(leaveRequests, {
-    today,
-    tomorrow,
-  });
+  const operationalLeave = summarizeOperationalLeave(leaveRequests, leaveDayBounds(now,timezone));
+  const operationalStatuses = distribution(projectLeaveStatuses(allEmployees, operationalLeave.activeEmployeeIds), [...CURRENT_STATUSES,...EXIT_STATUSES], row=>row.status, allEmployees.length);
   const leaveConsistency = reconcileLeaveStatus(
     allEmployees,
     operationalLeave.activeEmployeeIds
@@ -293,6 +296,7 @@ async function getWorkforceAnalytics(
         .filter((row) => EXIT_STATUSES.includes(row.key))
         .reduce((sum, row) => sum + row.count, 0),
       byStatus: status,
+      operationalByStatus: operationalStatuses,
     },
     demographics: {
       denominator: current.length,
@@ -366,6 +370,9 @@ async function getWorkforceAnalytics(
     leave: {
       employeesOnLeaveToday: operationalLeave.activeEmployeeIds.size,
       activeApprovedRequests: operationalLeave.activeApprovedRequests,
+      activeLeaveRequests: operationalLeave.activeLeaveRequests,
+      approvedUpcoming: operationalLeave.approvedUpcoming,
+      commencedLeaveRequests: operationalLeave.commencedLeaveRequests,
       pendingRequests: operationalLeave.pendingRequests,
       approvedCurrentOrUpcoming: operationalLeave.approvedCurrentOrUpcoming,
       statusRequestConsistency: leaveConsistency,
@@ -388,3 +395,4 @@ module.exports = {
   monthTrend,
   getWorkforceAnalytics,
 };
+

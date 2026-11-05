@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { leaveDayBounds, summarizeOperationalLeave } = require("./leaveAnalyticsService");
 const { balanceAvailable, policyEntitlementForService } = require("./leaveService");
 const { getEmployeePolicyBalance } = require("./leaveBalanceService");
 
@@ -16,46 +17,30 @@ function requestLocationWhere(locationId) {
   return locationId ? { employee: { is: { locationId } } } : {};
 }
 
-async function getLeaveOverview({ organizationId, asOfDate = new Date(), locationId = null }) {
-  const today = dayStart(asOfDate);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const employeeScope = employeeLocationWhere(locationId);
-  const requestScope = requestLocationWhere(locationId);
-
-  const [
-    pendingRequests,
-    approvedUpcoming,
-    employeesOnLeave,
-    activeLeaveRequests,
-    returnsDue,
-    leaveEmployees,
-    activeRequests,
-  ] = await Promise.all([
-    prisma.leaveRequest.count({ where: { organizationId, status: "PENDING", ...requestScope } }),
-    prisma.leaveRequest.count({ where: { organizationId, status: "APPROVED", endDate: { gte: today }, ...requestScope } }),
-    prisma.employee.count({ where: { organizationId, status: "LEAVE", ...employeeScope } }),
-    prisma.leaveRequest.count({ where: { organizationId, status: "ACTIVE", ...requestScope } }),
-    prisma.leaveRequest.count({ where: { organizationId, status: "ACTIVE", endDate: { lt: tomorrow }, ...requestScope } }),
-    prisma.employee.findMany({ where: { organizationId, status: "LEAVE", ...employeeScope }, select: { id: true } }),
-    prisma.leaveRequest.findMany({
-      where: { organizationId, status: "ACTIVE", ...requestScope },
-      select: { employeeId: true, employee: { select: { status: true } } },
-    }),
+async function getLeaveOverview({ organizationId, asOfDate = new Date(), locationId = null, locationIds, timezone = "Africa/Lagos" }) {
+  const {today,tomorrow} = leaveDayBounds(asOfDate,timezone);
+  const employeeScope = {
+    ...employeeLocationWhere(locationId),
+    ...(locationIds !== undefined ? {AND:[{locationId:{in:locationIds}}]} : {}),
+  };
+  const requestScope = Object.keys(employeeScope).length ? {employee:{is:employeeScope}} : {};
+  const [leaveEmployees, requests] = await Promise.all([
+    prisma.employee.findMany({where:{organizationId,status:"LEAVE",...employeeScope},select:{id:true}}),
+    prisma.leaveRequest.findMany({where:{organizationId,status:{in:["PENDING","APPROVED","ACTIVE"]},cancelledAt:null,returnedAt:null,...requestScope},select:{employeeId:true,status:true,startDate:true,endDate:true,cancelledAt:true,returnedAt:true,employee:{select:{status:true}}}}),
   ]);
-
-  const activeIds = new Set(activeRequests.map((x) => x.employeeId));
-  const exceptions =
-    leaveEmployees.filter((x) => !activeIds.has(x.id)).length +
-    activeRequests.filter((x) => x.employee.status !== "LEAVE").length;
-
+  const summary = summarizeOperationalLeave(requests,{today,tomorrow});
+  const commenced = requests.filter(request => request.status === "ACTIVE");
+  const commencedIds = new Set(commenced.map(request => request.employeeId));
+  const employeeIds = new Set([...summary.activeEmployeeIds,...leaveEmployees.map(employee=>employee.id)]);
   return {
-    pendingRequests,
-    approvedUpcoming,
-    employeesOnLeave,
-    activeLeaveRequests,
-    returnsDue,
-    leaveExceptions: exceptions,
+    pendingRequests:summary.pendingRequests,
+    approvedUpcoming:summary.approvedUpcoming,
+    employeesOnLeave:employeeIds.size,
+    activeLeaveRequests:summary.activeLeaveRequests,
+    approvedInEffect:summary.activeApprovedRequests,
+    commencedLeaveRequests:summary.commencedLeaveRequests,
+    returnsDue:commenced.filter(request=>new Date(request.endDate)<tomorrow).length,
+    leaveExceptions:leaveEmployees.filter(employee=>!commencedIds.has(employee.id)).length + commenced.filter(request=>request.employee.status!=="LEAVE").length,
   };
 }
 
@@ -311,3 +296,4 @@ module.exports = {
   getBalanceRegister,
   getEntitlementRegister,
 };
+
