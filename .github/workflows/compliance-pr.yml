@@ -45,6 +45,9 @@ jobs:
       - name: Simplified disciplinary workflow acceptance
         run: node --test tests/simpleDisciplinary.test.js
 
+      - name: Validate saved attendance and leave registers
+        run: node --test tests/savedAttendanceAndLeaveRegisters.test.js
+
       - name: Validate Zermatt-only retrospective leave timing
         run: |
           node --check src/services/zermattLeaveRequestTimingService.js
@@ -218,3 +221,4 @@ jobs:
             throw new Error(`Initial CHRiS bundle exceeded 500 KB budget: ${(bytes / 1024).toFixed(2)} KB`);
           }
           NODE
+

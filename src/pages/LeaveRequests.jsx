@@ -71,6 +71,8 @@ export default function LeaveRequests() {
 
   const [open, setOpen] = useState(false);
   const [requests, setRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestsError, setRequestsError] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
@@ -87,14 +89,19 @@ export default function LeaveRequests() {
     return raw;
   };
 
-  const loadRequests = () =>
-    apiRequest("/api/leave/requests")
-      .then((response) => {
-        setRequests(response.data || []);
-      })
-      .catch((requestError) => {
-        setError(requestError.message);
-      });
+  const loadRequests = async () => {
+    setRequestsLoading(true);
+    setRequestsError("");
+    try {
+      const response = await apiRequest("/api/leave/requests");
+      if (!Array.isArray(response.data)) throw new Error("Unable to read the request register response.");
+      setRequests(response.data);
+    } catch (requestError) {
+      setRequestsError(requestError.message || "Unable to load leave requests.");
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
 
   const loadReferenceData = async () => {
     try {
@@ -791,11 +798,16 @@ export default function LeaveRequests() {
       {message && <Notice>{message}</Notice>}
 
       <Panel title="Request Register">
-        <Table
-          rows={requests}
-          columns={columns}
-          empty="No leave requests found."
-        />
+        <button type="button" style={styles.button} disabled={requestsLoading} onClick={loadRequests}>
+          {requestsLoading ? "Refreshing…" : "Refresh Requests"}
+        </button>
+        {requestsError && <Notice error>{requestsError}</Notice>}
+        {requestsLoading ? <p role="status">Loading recorded leave requests…</p> : !requestsError && (
+          <>
+            <p style={styles.muted}>{requests.length} recorded request{requests.length === 1 ? "" : "s"}</p>
+            <Table rows={requests} columns={columns} empty="No leave requests found." />
+          </>
+        )}
       </Panel>
 
       {open && createPortal(
@@ -1207,3 +1219,4 @@ export default function LeaveRequests() {
     </LeavePage>
   );
 }
+

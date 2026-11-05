@@ -329,6 +329,11 @@ router.get(
       const result = await getLeaveRequests({
         organizationId: req.auth.organizationId,
         status: req.query.status,
+        locationIds: req.auth?.activeLocationId
+          ? [req.auth.activeLocationId]
+          : req.auth?.locationScope === "ALL_LOCATIONS"
+            ? undefined
+            : (req.auth?.availableLocations || []).map(location => location.id).filter(Boolean),
       });
       return res.json({ status: "success", data: result });
     } catch (error) {
@@ -666,3 +671,4 @@ function handleError(
 
 module.exports =
   router;
+

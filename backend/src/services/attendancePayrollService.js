@@ -104,15 +104,8 @@ async function getWorkedHours({
     }
   }
 
-  if (employeeNumber || locationIds !== undefined) {
-    where.employee = {
-      ...(employeeNumber ? {
-        employeeNumber: String(employeeNumber).trim(),
-      } : {}),
-      ...(locationIds !== undefined ? {
-        locationId: { in: locationIds },
-      } : {}),
-    };
+  if (employeeNumber) {
+    where.employee = { employeeNumber: String(employeeNumber).trim() };
   }
 
   const records =
@@ -504,12 +497,14 @@ async function listManualPayrollInputs({
     }
   }
 
-  if (employeeNumber) {
+  if (employeeNumber || locationIds !== undefined) {
     where.employee = {
-      employeeNumber:
-        String(
-          employeeNumber
-        ).trim(),
+      ...(employeeNumber ? {
+        employeeNumber: String(employeeNumber).trim(),
+      } : {}),
+      ...(locationIds !== undefined ? {
+        locationId: { in: locationIds },
+      } : {}),
     };
   }
 
@@ -600,3 +595,4 @@ module.exports = {
   createManualPayrollInput,
   listManualPayrollInputs,
 };
+

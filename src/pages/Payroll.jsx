@@ -28,6 +28,7 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
+const ManualWorkedDays = lazy(() => import("./payroll/ManualWorkedDays"));
 const AccountantPayroll = lazy(() => import("./payroll/AccountantPayroll"));
 const PayrollWorkspace = lazy(() => import("./payroll/PayrollWorkspace"));
 const NigeriaPayrollSupplementWorkspace = lazy(() => import("./payroll/NigeriaPayrollSupplementWorkspace"));
@@ -40,6 +41,7 @@ import { apiRequest } from "../services/api";
 
 const WORKSPACES = new Set([
   "execute",
+  "manual-worked-days",
   "periods",
   "rates",
   "allowances",
@@ -123,6 +125,7 @@ function Payroll() {
   if (WORKSPACES.has(workspace)) {
     let workspaceView = <PayrollWorkspace mode={workspace} />;
     if (["execute", "payslips", "statutory"].includes(workspace)) workspaceView = <PayrollIntegratedManaged mode={workspace} />;
+    else if (workspace === "manual-worked-days") workspaceView = <ManualWorkedDays />;
     else if (workspace === "salary-advances") workspaceView = <SalaryAdvancesManaged />;
     else if (workspace === "rates") workspaceView = <SalaryRatesManaged />;
     else if (workspace === "allowances") workspaceView = <PayrollComponentsManaged kind="ALLOWANCE" />;
@@ -233,6 +236,7 @@ function Payroll() {
       }
       quickActions={[
         <QuickActionCard key="run" title="Execute Payroll" subtitle="Calculate PAYE, pension, advances and loan recoveries" icon={<FaCalculator />} onClick={() => openWorkspace("execute")} />,
+        <QuickActionCard key="manual-worked-days" title="Manual Worked Days" subtitle="View saved records by period and load corrections" icon={<FaCalendarAlt />} onClick={() => openWorkspace("manual-worked-days")} />,
         <QuickActionCard key="periods" title="Payroll Periods" subtitle="Create, lock and close periods" icon={<FaCalendarAlt />} onClick={() => openWorkspace("periods")} />,
         <QuickActionCard key="rates" title="Salary Rates" subtitle="Maintain authoritative monthly gross salaries" icon={<FaMoneyBillWave />} onClick={() => openWorkspace("rates")} />,
         <QuickActionCard key="statutory" title="Nigeria Statutory Review" subtitle="Active deductions, employer costs and activation candidates" icon={<FaShieldAlt />} onClick={() => openWorkspace("statutory")} />,
@@ -250,3 +254,4 @@ function Payroll() {
 }
 
 export default Payroll;
+

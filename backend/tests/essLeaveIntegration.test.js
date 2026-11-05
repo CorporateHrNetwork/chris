@@ -50,8 +50,26 @@ test('isolated PostgreSQL/HTTP: ESS read-only leave access and identity isolatio
   assert.equal(await prisma.leaveRequest.count({where:{organizationId:org.id}}),0,'Denied ESS attempts cannot create requests');
   assert.equal(await prisma.leaveBalance.count({where:{employeeId:employee.id,leaveTypeId:type.id}}),1,'ESS cannot alter balance records');
   assert.equal(await prisma.leaveRequest.count({where:{employeeId:victim.id}}),0,'Forged employee selector must never create requests');
+  // HR-created records must populate the register without enabling ESS writes.
+  const recorded=await prisma.leaveRequest.create({data:{organizationId:org.id,employeeId:employee.id,leaveTypeId:type.id,leavePolicyId:policy.id,startDate:new Date(day(5)),endDate:new Date(day(6)),requestedUnits:2,status:'PENDING',createdByUserId:user.id}});
+  const registerService=require('../src/services/leaveService');
+  assert.ok((await registerService.getLeaveRequests({organizationId:org.id})).some(row=>row.id===recorded.id),'No-year register must include recorded requests');
+  assert.ok((await registerService.getLeaveRequests({organizationId:org.id,leaveYear:year})).some(row=>row.id===recorded.id));
+  assert.equal((await registerService.getLeaveRequests({organizationId:otherOrg.id})).length,0,'Register must remain tenant scoped');
+  assert.equal((await registerService.getLeaveRequests({organizationId:org.id,locationIds:[]})).length,0);
+  const locationA=await prisma.organizationLocation.create({data:{organizationId:org.id,name:'Synthetic Branch A',code:'REG-A'}});
+  const locationB=await prisma.organizationLocation.create({data:{organizationId:org.id,name:'Synthetic Branch B',code:'REG-B'}});
+  await prisma.employee.update({where:{id:employee.id},data:{locationId:locationA.id}});
+  await prisma.employee.update({where:{id:victim.id},data:{locationId:locationB.id}});
+  for(const staff of [employee,victim])await prisma.attendancePayrollInput.create({data:{organizationId:org.id,employeeId:staff.id,periodStart:new Date(day(1)),periodEnd:new Date(day(31)),workedDays:5,recordedByUserId:user.id}});
+  const attendance=require('../src/services/attendancePayrollService');
+  const scoped=await attendance.listManualPayrollInputs({organizationId:org.id,locationIds:[locationA.id]});
+  assert.deepEqual(scoped.map(row=>row.employeeNumber),[employee.employeeNumber]);
+  assert.equal((await attendance.listManualPayrollInputs({organizationId:org.id,locationIds:[]})).length,0);
+  assert.equal((await attendance.listManualPayrollInputs({organizationId:org.id})).length,2);
   await prisma.user.update({where:{id:user.id},data:{isActive:false}});
   assert.equal((await request('/api/ess/leave/applications','POST',input)).httpStatus,403);
   assert.equal((await request('/api/ess/leave/applications')).httpStatus,403);
  }finally{await new Promise(resolve=>server.close(resolve));await prisma.$disconnect();}
 });
+
