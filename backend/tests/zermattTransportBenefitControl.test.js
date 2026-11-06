@@ -35,3 +35,20 @@ test('authoritative export has all 18 columns in order and keeps AccountNO as te
  const loaded=XLSX.read(XLSX.write(w,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});
  assert.equal(loaded.Sheets.Register.R2.v,'0012345678');assert.equal(loaded.Sheets.Register.R2.t,'s');
 });
+
+
+test('prior-month corrections replace ledger totals, reset to ledger, and apply once on repeated recalculation',()=>{
+ const input={previousShortPayment:20000,previousOverpayment:90000,bonus:1000,overtimePhPay:2000};
+ const corrected=c.applyInputs(base(),input);
+ assert.equal(corrected.netPay,0);assert.equal(corrected.overpaidRemaining,17000);
+ assert.equal(corrected.ledgerPreviousUnpaid,10000);assert.equal(corrected.ledgerPreviousOverpaid,5000);
+ assert.deepEqual(c.applyInputs(corrected,input),corrected);
+ const reset=c.applyInputs(corrected,{previousShortPayment:'',previousOverpayment:''});
+ assert.equal(reset.previousUnpaid,10000);assert.equal(reset.previousOverpaid,5000);assert.equal(reset.netPay,55000);
+ const zero=c.applyInputs(corrected,{previousShortPayment:0,previousOverpayment:0});
+ assert.equal(zero.netPay,50000);assert.equal(zero.previousUnpaid,0);assert.equal(zero.previousOverpaid,0);
+ assert.throws(()=>c.normalizeInputs({previousOverpayment:-1}));
+ assert.throws(()=>c.normalizeInputs({previousShortPayment:2.001}));
+ const row=c.buildRegister([{snapshot:corrected,netPay:corrected.netPay}]).rows[0];
+ assert.equal(row[14],20000);assert.equal(row[15],90000);assert.equal(row[16],0);
+});

@@ -1,3 +1,4 @@
+import PayrollColumnExport from '../../components/payroll/PayrollColumnExport';
 const PAYROLL_REVIEW_CONFIRMATION_TEXT = "I confirm I reviewed CHRiS-calculated PAYE/pension";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -304,6 +305,7 @@ function ApprovalsWorkspace() {
 
   return (
     <>
+      <PayrollColumnExport runId={selectedRun?.id} />
       <Panel title="Zermatt Sequential Payroll Approval">
         <p style={controlNote}>
           Controlled workflow: <strong>Head HR → Payroll Auditor → General Manager → Chief Accountant</strong>.
@@ -508,3 +510,4 @@ const controlNote = { margin: "0 0 14px", color: "#C7D3CC", lineHeight: 1.55, fo
 const checkboxLabel = { display: "flex", alignItems: "center", gap: 8, color: "#F7FAF8", fontSize: 12, fontWeight: 800 };
 const loadingStyle = { padding: 14, color: "#C7D3CC" };
 const waitingBanner = { padding: 12, borderRadius: 10, border: "1px solid rgba(212,175,55,.35)", background: "rgba(212,175,55,.08)", color: "#F7D66A", lineHeight: 1.5, fontSize: 12 };
+

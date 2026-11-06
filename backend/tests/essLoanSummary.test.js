@@ -84,7 +84,8 @@ test('benefit export uses authoritative columns and external sign-off without lo
   let exportsRecorded = 0;
   const sandbox = { module: { exports: {} }, process, console, Buffer, require: id => {
     if (id === 'express') return { Router: () => router };
-    if (id === 'xlsx') return { utils: { book_new: () => ({}), aoa_to_sheet: rows => rows, encode_cell: require('xlsx').utils.encode_cell, book_append_sheet: (book, rows, name) => { book[name] = rows; } }, write: book => book };
+    if (id === 'xlsx') return require('xlsx');
+    if (id === '../services/payrollRegisterExport') return require('../src/services/payrollRegisterExport');
     if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail, recordExternalExport: async () => { exportsRecorded++; } }) };
     if (id === '../services/zermattMidmonthDomain') return { invalid: (message,statusCode=409) => { throw Object.assign(new Error(message),{statusCode}); } };
     if (id === '../middleware/authMiddleware') return { requireAuth: () => {} };
@@ -92,7 +93,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
   }};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes/zermattMidmonthRoutes.js'), 'utf8'), sandbox);
   const exportRoute = routes.find(row => row[0] === '/runs/:id/export');
-  const res = { setHeader() {}, type() { return this; }, send(book) { this.book = book; return this; }, status() { return this; }, json(error) { assert.fail(error.message); } };
+  const res = { setHeader() {}, type() { return this; }, send(buffer) { const xlsx=require('xlsx'),book=xlsx.read(buffer,{type:'buffer'});this.book=Object.fromEntries(book.SheetNames.map(name=>[name,xlsx.utils.sheet_to_json(book.Sheets[name],{header:1,defval:''})])); return this; }, status() { return this; }, json(error) { assert.fail(error.message); } };
   await exportRoute[1]({ auth: { organizationId: 'org', userId: 'hr' }, params: { id: 'run' }, query: { stage: 'payout' } }, res);
   const [headers, row] = res.book['Transport Support Pay'];
   assert.equal(headers.some(header => /loan/i.test(header)), false);
@@ -105,11 +106,17 @@ test('benefit export uses authoritative columns and external sign-off without lo
   assert.equal(res.book.Reconciliation[1][5],'');
   assert.ok(res.book['External Approvals'].some(row=>String(row[0]).includes('Auditor')));
   assert.equal(exportsRecorded,1);
+  assert.ok(res.book.Abuja && res.book.Lagos && res.book['Port Harcourt']);
+  await exportRoute[1]({auth:{organizationId:'org',userId:'hr'},params:{id:'run'},query:{stage:'external',columns:'[2,3,16]'}},res);
+  assert.deepEqual(res.book['Transport Support Pay'][0],['EmployeeNO','FullName','Net']);
+  assert.equal(res.book.Reconciliation,undefined,'Selected copies omit unselected reconciliation fields');
+  assert.equal(JSON.stringify(res.book).includes('0000000000'),false);
+  assert.equal(exportsRecorded,2);
   detail.responsibilities=['PAYROLL_AUDITOR'];
   const denied={status(code){this.code=code;return this;},json(error){this.error=error;return this;}};
   await exportRoute[1]({auth:{organizationId:'org',userId:'auditor'},params:{id:'run'},query:{stage:'external'}},denied);
   assert.equal(denied.code,403);
-  assert.equal(exportsRecorded,1,'Unauthorized export is not generated or recorded');
+  assert.equal(exportsRecorded,2,'Unauthorized export is not generated or recorded');
 });
 
 test('document-portal policy includes the agreed support-pay rules', () => {
@@ -120,4 +127,5 @@ test('document-portal policy includes the agreed support-pay rules', () => {
   const content = policy.sections.map(row => row.join(' ')).join(' ');
   for (const expected of ['100,000', '25%', '75%', '16%', '84%', '15th', '26-day', '57%', '11%', '10%', '9%', '8%', '5%', 'Previous Unpaid', 'Previous Overpaid', 'Loan recovery must never', 'before any new-hire proration', 'annual-leave calculation remains unchanged']) assert.ok(content.includes(expected), expected);
 });
+
 

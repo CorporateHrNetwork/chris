@@ -28,15 +28,13 @@ router.get('/runs/:id/export',async(req,res)=>{
    if(external&&Number(line.netPay)>0&&(!bank.bankName||!bank.accountName||!bank.accountNumber))invalid('Complete payment details and regenerate the draft before approval.');
   }
   const workbook=XLSX.utils.book_new();
-  const sheet=XLSX.utils.aoa_to_sheet([data.register.headers,...data.register.rows]);
-  sheet['!cols']=[7,23,16,32,26,26,20,19,21,19,22,19,18,22,30,30,20,22].map(wch=>({wch}));
-  for(let row=1;row<=data.register.rows.length;row++){
-   for(const col of [7,8,9,12,13,14,15,16]){const cell=sheet[XLSX.utils.encode_cell({r:row,c:col})];if(cell)cell.z='#,##0.00';}
-   const account=sheet[XLSX.utils.encode_cell({r:row,c:17})];if(account){account.t='s';account.z='@';}
-  }
-  XLSX.utils.book_append_sheet(workbook,sheet,'Transport Support Pay');
+  const indexes=require('../services/payrollRegisterExport').appendRegisterSheets(workbook,{
+   ...data.register,columns:req.query.columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Transport Support Pay',
+  });
+  const selected=indexes.length<data.register.headers.length;
   XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
    ['Benefit stage',data.run.status],
+   ['Selected columns',indexes.map(i=>data.register.headers[i]).join(', ')],
    ['Export stage',external?'HEAD HR APPROVED — FOR EXTERNAL APPROVAL':'DRAFT REVIEW — NOT APPROVED'],
    ['Workflow','Head HR prepares and approves in CHRiS; Auditor → General Manager → Chief Accountant approvals and payment processing occur externally.'],
    ['Payment date',`${new Date(data.run.periodMonth).toISOString().slice(0,7)}-15`],
@@ -53,7 +51,7 @@ router.get('/runs/:id/export',async(req,res)=>{
    ['General Manager — External Approval','','','',''],
    ['Chief Accountant — External Payment Processing','','','',''],
   ]),'External Approvals');
-  XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
+  if(!selected)XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
    ['EmployeeNO','FullName','Opening Overpayment','Applied Deduction','Remaining Overpayment','Actual Paid','Payment Reference'],
    ...data.lines.map(line=>{const s=line.snapshot;return [s.employeeNumber,s.employeeName,Number(s.previousOverpaid||0),Number(s.overpaidDeduction||0),Number(s.overpaidRemaining||0),line.actualPaid==null?'':Number(line.actualPaid),line.paymentReference||''];}),
   ]),'Reconciliation');
@@ -63,4 +61,5 @@ router.get('/runs/:id/export',async(req,res)=>{
  }catch(e){return sendError(res,e);}
 });
 module.exports=router;
+
 
