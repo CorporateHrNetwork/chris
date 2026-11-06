@@ -7,6 +7,7 @@ const { requireAuth, requirePermission } = require('../middleware/authMiddleware
 const { isZermatt, isHeadHr } = require('../services/zermattHrFinancialAccessService');
 const { prepareSalaryRows: prepare } = require('../services/zermattSalarySplit');
 const {readWorkbook}=require('../services/zermattSalaryWorkbook');
+const {preparationEnabled,storageReady,assertPreparationReady}=require('../services/zermattBenefitPreparationReadiness');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5*1024*1024 } });
 router.use(requireAuth, requirePermission('payroll.manage'));
@@ -30,7 +31,7 @@ router.post('/individual/preview',async(req,res)=>{
 });
 router.post('/individual',async(req,res)=>{
   try {
-    if(process.env.CHRIS_ZERMATT_SALARY_PREPARATION_ENABLED!=='true'){const e=new Error('Salary preparation is awaiting deployment verification.');e.statusCode=409;throw e;}
+    await assertPreparationReady(prisma);
     return res.json({status:'success',data:await individual.save(req.auth.organizationId,req.auth.userId,req.body||{}),message:'Individual full salary saved for review. Payroll has not been activated.'});
   } catch(e){return error(res,e);}
 });
@@ -69,7 +70,7 @@ router.post('/preview',upload.single('file'),async(req,res)=>{
 });
 router.post('/import',upload.single('file'),async(req,res)=>{
   try {
-    if (process.env.CHRIS_ZERMATT_SALARY_PREPARATION_ENABLED!=='true') { const e=new Error('Salary preparation imports are awaiting deployment verification. Template generation and preview remain available.'); e.statusCode=409; throw e; }
+    await assertPreparationReady(prisma);
     if (!req.file?.buffer) invalid('Select the validated template.');
     const source=readWorkbook(req.file.buffer);
     const imported=await prisma.$transaction(async tx=>{
@@ -94,7 +95,8 @@ router.post('/import',upload.single('file'),async(req,res)=>{
 });
 router.get('/',async(req,res)=>{
   try {
-    if (process.env.CHRIS_ZERMATT_SALARY_PREPARATION_ENABLED!=='true') return res.json({status:'success',data:[],preparationEnabled:false});
+    const schemaReady=await storageReady(prisma);
+    if (!schemaReady||!preparationEnabled()) return res.json({status:'success',data:[],preparationEnabled:false,preparationStatus:schemaReady?'AWAITING_RELEASE':'STORAGE_NOT_READY'});
     const rows=await prisma.$queryRawUnsafe(`SELECT s.id,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",l.name AS branch,s."fullMonthlyGross",s.currency,s.reason,s."effectiveFrom",s.status,s."activatedAt",s."allocationPreview" FROM public.zermatt_salary_split_preparations s JOIN public.employees e ON e.id=s."employeeId" AND e."organizationId"=s."organizationId" LEFT JOIN public.organization_locations l ON l.id=e."locationId" AND l."organizationId"=e."organizationId" WHERE s."organizationId"=$1 ORDER BY s."effectiveFrom" DESC,e."employeeNumber" LIMIT 2000`,req.auth.organizationId);
     return res.json({status:'success',data:rows,preparationEnabled:true});
   } catch(e) { return error(res,e); }
