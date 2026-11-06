@@ -7,6 +7,7 @@ function normalizeInputs(input={}) {
 function applyInputs(line,input) {
  const benefitInputs=normalizeInputs(input);
  const available=cents(line.currentEntitlement)+cents(line.previousUnpaid)+cents(benefitInputs.bonus)+cents(benefitInputs.overtimePhPay);
+ if(!Number.isSafeInteger(available))invalid('Benefit total is too large to calculate safely.',400);
  const recovered=Math.min(cents(line.previousOverpaid),available);
  return {...line,benefitInputs,overpaidDeduction:recovered/100,overpaidRemaining:(cents(line.previousOverpaid)-recovered)/100,netPay:(available-recovered)/100};
 }
