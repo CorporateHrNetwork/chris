@@ -95,7 +95,8 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const meta=metadataMap.get(employee.id);
    return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||''},adjustmentMap.get(employee.id)):line;
   }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0)));
-  return {lines,balances,sourceHash:hash({employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata,benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
+  const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{})};
+  return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
  }
  async function generate(org,user,periodMonth) {
   return tx(async c=>{
@@ -183,6 +184,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const snapshot=benefit.applyInputs(line.snapshot,input);
    await exec(c,'UPDATE public.zermatt_midmonth_lines SET snapshot=$3::jsonb,"netPay"=$4 WHERE "organizationId"=$1 AND id=$2',org,lineId,JSON.stringify(snapshot),snapshot.netPay);
    const refreshed=await source(c,org,ym(run.periodMonth));
+   if(refreshed.baseHash!==current.baseHash)domain.invalid('Source records changed while saving. No inputs were saved; regenerate the draft.');
    await exec(c,'UPDATE public.zermatt_midmonth_runs SET "sourceHash"=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND id=$2',org,runId,refreshed.sourceHash);
    await c.organizationAudit.create({data:{organizationId:org,actorUserId:user,entityType:'TransportBenefitLine',entityId:lineId,action:'BENEFIT_INPUTS_UPDATED',previousValue:{inputs:line.snapshot.benefitInputs||{},netPay:Number(line.netPay)},newValue:{inputs:snapshot.benefitInputs,netPay:snapshot.netPay},reason:String(notes).trim()}});
    await audit(c,org,user,runId,'BENEFIT_INPUTS_UPDATED',String(notes).trim());

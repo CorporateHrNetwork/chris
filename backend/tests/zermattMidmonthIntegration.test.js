@@ -114,7 +114,11 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
     assert.doesNotMatch(sql,/\b(?:UPDATE|INSERT INTO|DELETE FROM)\s+(?:public\.)?(?:payroll_|zermatt_payroll_split_settings)/i,'Benefits must not write salary or regular payroll');
     return execute(sql,...args);
    };
-   const benefitsDb={...benefitWrap,$transaction:async fn=>fn(benefitWrap)};
+   const benefitsDb={...benefitWrap,$transaction:async fn=>{
+    await benefitsClient.query('SAVEPOINT benefits_operation');
+    try{const result=await fn(benefitWrap);await benefitsClient.query('RELEASE SAVEPOINT benefits_operation');return result;}
+    catch(error){await benefitsClient.query('ROLLBACK TO SAVEPOINT benefits_operation');await benefitsClient.query('RELEASE SAVEPOINT benefits_operation');throw error;}
+   }};
    const benefits=require('../src/services/zermattMidmonthService').createService(benefitsDb,{benefitsOnly:true});
    await assert.rejects(benefits.activate('zll','outsider','2026-11'),/assigned/);
    const enabled=await benefits.activate('zll','hr','2026-11');
@@ -125,6 +129,16 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    assert.ok(benefitDetail.lines.length>0);
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
    const first=benefitDetail.lines[0];
+   const readMetadata=benefitWrap.employee.findMany;
+   let metadataReads=0;
+   benefitWrap.employee.findMany=async(args)=>{
+    const rows=await readMetadata(args);metadataReads++;
+    return metadataReads===2?rows.map(row=>({...row,location:{name:'Concurrent metadata change'}})):rows;
+   };
+   await assert.rejects(benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{bonus:9000},'Concurrent source test'),/Source records changed while saving/);
+   benefitWrap.employee.findMany=readMetadata;
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
+
    await assert.rejects(benefits.saveBenefitInputs('zll','auditor',benefitRun,first.id,{bonus:1000},'Unauthorized'),/assigned HEAD HR/);
    await benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2500},'Approved benefit extras');
    let changed=await benefits.detail('zll','hr',benefitRun);
