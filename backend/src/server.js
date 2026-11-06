@@ -38,6 +38,8 @@ const annualCarryoverScheduler = createZermattAnnualCarryoverScheduler({ prisma 
 const payrollPeriodAutomationScheduler = createPayrollPeriodAutomationScheduler({ prisma });
 const server = app.listen(PORT, async () => {
   console.log(`CHRIS API running on http://localhost:${PORT}`);
+  const benefitPreparation=require("./services/zermattBenefitPreparationReadiness");
+  benefitPreparation.storageReady(prisma).then(ready=>console.log(`CHRIS_TRANSPORT_PREPARATION_STORAGE_READY=${ready}; ENABLED=${benefitPreparation.preparationEnabled()}`));
   performanceEvaluationScheduler.start();
   celebrationScheduler.start();
   probationScheduler.start();

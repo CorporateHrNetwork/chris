@@ -7,12 +7,12 @@ export default function TransportSupportPreparation() {
   const navigate=useNavigate();
   const [file,setFile]=useState(null),[preview,setPreview]=useState(null),[records,setRecords]=useState([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
-  const [enabled,setEnabled]=useState(false);
+  const [enabled,setEnabled]=useState(false),[preparationStatus,setPreparationStatus]=useState('AWAITING_RELEASE');
   const [staff,setStaff]=useState([]),[individual,setIndividual]=useState(null),[individualPreview,setIndividualPreview]=useState(null);
   const emptyIndividual={employeeNumber:'',amount:'',effectiveFrom:'',reason:'',preparationId:null};
   async function load() {
     const response=await apiRequest(endpoint);
-    setRecords(response.data||[]); setEnabled(response.preparationEnabled===true);
+    setRecords(response.data||[]); setEnabled(response.preparationEnabled===true);setPreparationStatus(response.preparationStatus||'READY');
   }
   useEffect(()=>{Promise.all([load(),apiRequest(`${endpoint}/employees`).then(r=>setStaff(r.data||[]))]).catch(e=>setError(e.message||'Unable to open salary preparation.'));},[]);
   function editIndividual(row) {
@@ -45,7 +45,7 @@ export default function TransportSupportPreparation() {
       <button disabled={busy||!file} onClick={()=>act(async()=>{setPreview(null);const r=await send('preview');setPreview(r.data);})}>Preview salary allocations</button>
       <button disabled={busy||!enabled||!preview||preview.invalidRows>0} onClick={()=>act(async()=>{const r=await send('import');setMessage(r.message);setPreview(null);await load();})}>Import for review</button>
     </div>
-    {!enabled&&<p>Import activation is awaiting deployment verification. You can generate the template and preview allocations.</p>}
+    {!enabled&&<p>{preparationStatus==='STORAGE_NOT_READY'?'Benefit storage needs verification before imports. Contact support; preview remains available.':'Benefit imports are awaiting release verification. Preview remains available.'}</p>}
     <h2>Individual full salary</h2>
     {!individual?<button type="button" disabled={busy} onClick={()=>{setIndividual({...emptyIndividual});setIndividualPreview(null);}}>Add / correct individual salary</button>:<div style={{border:'1px solid #65776b',padding:16,marginBlock:12}}>
       <label>Employee <select aria-label="Individual salary employee" disabled={busy||!!individual.preparationId} value={individual.employeeNumber} onChange={e=>updateIndividual('employeeNumber',e.target.value)}><option value="">Choose employee</option>{staff.map(e=><option key={e.employeeNumber} value={e.employeeNumber}>{e.employeeNumber} · {e.employeeName} · {e.branch}</option>)}</select></label>
