@@ -12,6 +12,7 @@ const actions={
 const moneyColumns=new Set([7,8,9,12,13,14,15,16]);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
+ const [exportColumns,setExportColumns]=useState([]);
  const [basisReadiness,setBasisReadiness]=useState(null);
  const [state,setState]=useState(null),[detail,setDetail]=useState(null),[periodMonth,setMonth]=useState(''),[notes,setNotes]=useState('');
  const [receipts,setReceipts]=useState({}),[editor,setEditor]=useState(null),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
@@ -32,7 +33,7 @@ export default function TransportSupportPayroll() {
 
  async function open(id){
   const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setMonth(String(r.data.run.periodMonth).slice(0,7));
-  setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);
+  setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));
  }
  async function act(fn){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError(e.message||'Unable to complete benefit operation.');}finally{setBusy(false);}}
  async function action(actionName){
@@ -41,7 +42,7 @@ export default function TransportSupportPayroll() {
  }
  function editLine(lineId){
   const line=detail.lines.find(l=>l.id===lineId);const input=line?.snapshot.benefitInputs||{};
-  setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,overtimePhPay:input.overtimePhPay||0}});
+  setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,overtimePhPay:input.overtimePhPay||0,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
  }
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const editable=detail&&['DRAFT','REJECTED'].includes(detail.run.status);
@@ -76,8 +77,13 @@ export default function TransportSupportPayroll() {
   {!state?.runs?.length?<p>No transport benefit runs yet.</p>:<div style={{display:'flex',gap:10,flexWrap:'wrap'}}>{state.runs.map(r=><button key={r.id} disabled={busy} onClick={()=>act(()=>open(r.id))}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')} · {money(r.netTotal)}</button>)}</div>}
   {detail&&<>
    <h2>{String(detail.run.periodMonth).slice(0,7)} · {detail.run.status.replaceAll('_',' ')}</h2>
-   {head&&<><button disabled={busy||!!editor} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export`)))}>Export Draft Review Register</button>
-    {['APPROVED','PAID'].includes(detail.run.status)&&<button disabled={busy} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external`)))}>Export for External Approval</button>}
+   {head&&<fieldset><legend>Choose export columns</legend>
+    <button type="button" onClick={()=>setExportColumns(detail.register.headers.map((_,i)=>i))}>Select all</button> <button type="button" onClick={()=>setExportColumns([])}>Clear selection</button>
+    <div style={{display:'flex',gap:14,flexWrap:'wrap',margin:12}}>{detail.register.headers.map((label,index)=><label key={label}><input type="checkbox" checked={exportColumns.includes(index)} onChange={e=>setExportColumns(c=>e.target.checked?[...c,index]:c.filter(i=>i!==index))}/>{label}</label>)}</div>
+    <p>The master roll is ordered Abuja, Lagos, Port Harcourt. Each branch also has its own sheet. Only checked columns are included in register sheets.</p>
+   </fieldset>}
+   {head&&<><button disabled={busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Draft Review Register</button>
+    {['APPROVED','PAID'].includes(detail.run.status)&&<button disabled={busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export for External Approval</button>}
    </>}
    <div style={{overflowX:'auto'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{detail.register?.headers.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
@@ -86,11 +92,11 @@ export default function TransportSupportPayroll() {
    <p>Previous Month Overpayment shows the opening balance. Recovery is capped at available benefits; the remainder carries forward. End of the Month is a salary reference and is excluded from this benefit Net.</p>
    <label>Preparation / approval notes or payment batch reference <textarea style={{display:'block',width:'100%',minHeight:70}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
    {head&&editable&&<>
-    {!editor?<button disabled={busy||!ready||!detail.lines.length} onClick={()=>editLine(detail.lines[0].id)}>Edit Benefit Inputs</button>:<fieldset>
-     <legend>Benefit-only extras</legend>
+    {!editor?<button disabled={busy||!ready||!detail.lines.length} onClick={()=>editLine(detail.lines[0].id)}>Edit Days / Pay / Previous-month Corrections</button>:<fieldset>
+     <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
      <label>Employee <select value={editor.lineId} disabled={busy} onChange={e=>editLine(e.target.value)}>{detail.lines.map(l=><option key={l.id} value={l.id}>{l.snapshot.employeeNumber} · {l.snapshot.employeeName}</option>)}</select></label>
-     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['overtimePhPay','Approved Overtime/Ph Pay']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
-     <p>Enter the approved overtime/PH amount. Day counts are reference quantities; they do not automatically create a payment. Previous short/overpayments come from the transport ledger.</p>
+     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['overtimePhPay','Approved Overtime/Ph Pay'],['previousShortPayment','Previous Month Short Payment (blank = ledger)'],['previousOverpayment','Previous Month Overpayment (blank = ledger)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
+     <p>Enter the approved overtime/PH amount. Day counts are reference quantities; they do not automatically create a payment. Prior-month amounts default to the transport ledger. Enter a corrected total, including zero, with the reason above; leave blank to use the ledger. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
      <button disabled={busy||!ready||!notes.trim()} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Benefit Inputs</button>
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
     </fieldset>}
@@ -111,3 +117,4 @@ export default function TransportSupportPayroll() {
   </>}
  </section>;
 }
+

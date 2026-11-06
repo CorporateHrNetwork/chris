@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { createEmployeeWithDependencies } = require("../src/services/employeeCreationService");
 
 function fixture({ failOnTasks = false } = {}) {
-  const saved = { employees: [], salaryRows: [], levels: [], onboardings: [], tasks: [], episodes: [], audits: [] };
+  const saved = { employees: [], salaryRows: [], benefitRows: [], levels: [], onboardings: [], tasks: [], episodes: [], audits: [] };
   let sequence = 0;
   const prisma = {
     employee: { findFirst: async () => null },
@@ -12,7 +12,7 @@ function fixture({ failOnTasks = false } = {}) {
     organizationLocation: { findFirst: async () => ({ id: "loc", isActive: true }) },
     costCentre: { findFirst: async () => ({ id: "cc", isActive: true }) },
     $transaction: async (action) => {
-      const staged = { employees: [], salaryRows: [], levels: [], onboardings: [], tasks: [], episodes: [], audits: [] };
+      const staged = { employees: [], salaryRows: [], benefitRows: [], levels: [], onboardings: [], tasks: [], episodes: [], audits: [] };
       const tx = {
         organization: { update: async () => ({ employeeNumberSequence: ++sequence, slug: "zermatt-liquor-limited" }) },
         employee: { create: async ({ data }) => {
@@ -22,6 +22,7 @@ function fixture({ failOnTasks = false } = {}) {
         } },
         $executeRawUnsafe: async (query, ...values) => {
           if (query.includes('"payroll_salary_rates"')) staged.salaryRows.push(values);
+          if (query.includes('zermatt_salary_split_preparations')) staged.benefitRows.push(values);
           return 1;
         },
         organizationEmploymentLevel: { findUnique: async () => ({ levelNumber: 204, code: "L4", name: "Assistant Branch Management", isActive: true }) },
@@ -91,6 +92,10 @@ test("complete Zermatt bulk row creates salary, level, onboarding and tasks toge
   assert.equal(employee.employeeNumber, "ZLL000001");
   assert.equal(saved.employees.length, 1);
   assert.equal(saved.salaryRows.length, 1);
+  assert.equal(saved.benefitRows.length, 1, "Bulk onboarding maps one benefit basis in the same transaction");
+  assert.equal(saved.benefitRows[0][3], 450000);
+  assert.equal(JSON.parse(saved.benefitRows[0][8]).midMonthPayable, 112500);
+  assert.ok(saved.audits.some(audit => audit.action === "ONBOARDING_BENEFIT_BASIS_CREATED"));
   assert.equal(saved.levels[0].levelNumber, 204);
   assert.equal(saved.onboardings[0].sectionData["payment-details"].accountNumber, "0123456789");
   assert.equal(saved.onboardings[0].status, "IN_PROGRESS");
@@ -109,3 +114,4 @@ test("failed onboarding task creation rolls the entire bulk employee unit back",
 });
 
 console.log("PASS: complete bulk onboarding transaction safeguards");
+

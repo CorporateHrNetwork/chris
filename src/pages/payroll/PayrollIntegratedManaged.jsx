@@ -1,3 +1,4 @@
+import PayrollColumnExport from '../../components/payroll/PayrollColumnExport';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -276,6 +277,7 @@ function ExecuteIntegrated() {
               <Td>{money(run.grossTotal)}</Td><Td>{money(run.deductionTotal)}</Td><Td>{money(run.netPreviewTotal)}</Td>
               <Td><div style={buttonRow}>
                 <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
+                <PayrollColumnExport runId={run.id} />
                 {["DRAFT", "REJECTED", "SUBMITTED"].includes(run.status) && <button type="button" style={smallButton} disabled={busy === `draft-export-${run.id}`} onClick={() => exportDraftReview(run)}>{busy === `draft-export-${run.id}` ? "Exporting…" : "Export Draft Review"}</button>}
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `approved-export-${run.id}`} onClick={() => exportApprovedPayout(run)}>{busy === `approved-export-${run.id}` ? "Exporting…" : "Export Approved Payout"}</button>}
@@ -1142,3 +1144,4 @@ const payslipPreviewOrganizationNameStyle = { color: "#F7FAF8", fontSize: 20, fo
 const payslipPreviewTitleStyle = { marginTop: 6, color: "#9A7410", fontSize: 13, fontWeight: 900, letterSpacing: ".12em" };
 const payslipPreviewWatermarkImageStyle = { position: "absolute", zIndex: 0, top: "54%", left: "50%", width: "42%", maxWidth: 280, maxHeight: 280, transform: "translate(-50%, -50%)", objectFit: "contain", opacity: 0.055, filter: "grayscale(100%)", pointerEvents: "none" };
 const payslipPreviewWatermarkTextStyle = { position: "absolute", zIndex: 0, top: "54%", left: "50%", width: "78%", transform: "translate(-50%, -50%) rotate(-28deg)", textAlign: "center", color: "#D4AF37", opacity: 0.05, fontSize: "clamp(30px,6vw,56px)", fontWeight: 900, letterSpacing: ".08em", pointerEvents: "none" };
+

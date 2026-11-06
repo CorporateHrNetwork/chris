@@ -448,6 +448,12 @@ async function createEmployeeWithDependencies(
       });
     }
 
+    if (openingSalaryRate && sequenceOwner.slug === ZERMATT_SLUG) {
+      await require("./transportBenefitOnboardingService").createOpeningBenefitBasis(tx, {
+        organizationId, actorUserId, employee, salary: openingSalaryRate,
+      });
+    }
+
     // Bulk imports store the governed level override and onboarding sections
     // in the same transaction as the employee and opening salary authority.
     const requestedLevel = input.openingEmploymentLevelNumber == null
@@ -555,3 +561,4 @@ module.exports = {
   normalizeEmploymentType,
   normalizeZermattEmploymentType,
 };
+

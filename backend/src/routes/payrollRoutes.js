@@ -2682,6 +2682,37 @@ router.get("/runs/:id/gm-review.xlsx", requirePermission("payroll.view"), async 
     return res.send(buffer);
   } catch (error) { return sendError(res, error, "Unable to export the auditor-approved GM review pack."); }
 });
+// Selected-column copies never approve, pay or lock a payroll. Full workflow packs remain available.
+const registerExportPermission = [requirePermission("payroll.view", "reports.export"), (req,res,next)=>{
+  if(!isZermatt(req)||isHeadHr(req)||isPayrollAuditor(req)||isGeneralManager(req)||isChiefAccountant(req))return next();
+  return res.status(403).json({status:'error',message:'An assigned payroll workflow role is required to export this register.'});
+}];
+router.get('/runs/:id/export-columns', ...registerExportPermission, async(req,res)=>{
+ try {
+  const context=await payrollExportContext(req.auth.organizationId,req.params.id,{includePaymentDetails:true});
+  const model=payrollWorkbookModel(context.lines,context.employeeMeta);
+  return res.json({status:'success',data:{columns:model.headers.map((label,index)=>({index,label}))}});
+ }catch(error){return sendError(res,error,'Unable to load payroll export columns.');}
+});
+router.get('/runs/:id/register-export.xlsx', ...registerExportPermission, async(req,res)=>{
+ try {
+  const context=await payrollExportContext(req.auth.organizationId,req.params.id,{includePaymentDetails:true});
+  const model=payrollWorkbookModel(context.lines,context.employeeMeta);
+  // Confirm the current schema too: a changed dynamic allowance cannot silently select another field.
+  if(req.query.schema!==JSON.stringify(model.headers))throw payroll.operationalError('EXPORT_COLUMNS_CHANGED','Payroll columns changed. Refresh the column selection before downloading.',409);
+  const workbook=XLSX.utils.book_new();
+  const indexes=require('../services/payrollRegisterExport').appendRegisterSheets(workbook,{headers:model.headers,rows:model.rows.map(row=>row.cells),columns:req.query.columns,branchIndex:model.headers.indexOf('Branch'),employeeIndex:0,masterName:'Payroll Register'});
+  XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
+   ['Payroll Period',context.run.periodCode],['Run Status',context.run.status],
+   ['Copy Control','SELECTED-COLUMN REGISTER — NOT A PAYOUT INSTRUCTION. No approval or payout transition.'],
+   ['Selected columns',indexes.map(i=>model.headers[i]).join(', ')],
+  ]),'Workflow Control');
+  await prisma.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,entityType:'PayrollRun',entityId:req.params.id,action:'PAYROLL_SELECTED_COLUMNS_EXPORTED',newValue:{columns:indexes.map(i=>model.headers[i]),status:context.run.status},reason:'Read-only selected-column master and branch registers; approval and payout state unchanged.'}});
+  res.setHeader('Content-Disposition','attachment; filename="CHRiS_Payroll_Selected_Columns.xlsx"');
+  return res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(XLSX.write(workbook,{type:'buffer',bookType:'xlsx'}));
+ }catch(error){return sendError(res,error,'Unable to export selected payroll columns.');}
+});
+
 router.get("/runs/:id/draft-review.xlsx", requirePermission("payroll.view"), (req, res, next) => {
   if (!isZermatt(req) || isHeadHr(req) || isPayrollAuditor(req) || isGeneralManager(req)) return next();
   return res.status(403).json({ status: "error", code: "ZERMATT_PAYROLL_REVIEW_ROLE_REQUIRED", message: "Only Head HR or the designated Payroll Auditor may export the payroll review workbook." });
@@ -2816,3 +2847,4 @@ router.get("/payslips", requirePermission("payroll.view"), async (req, res) => {
 });
 
 module.exports = router;
+

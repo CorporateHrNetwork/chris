@@ -139,9 +139,13 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    const enabled=await benefits.activate('zll','hr','2026-11');
    assert.equal(enabled.module,'BENEFITS');
    assert.equal(enabled.payrollWrites,false);
+   await benefitsClient.query(`INSERT INTO employees VALUES('new-hire','zll','Z9','New',NULL,'Hire','Full-Time','2026-11-06','ACTIVE')`);
+   await require('../src/services/transportBenefitOnboardingService').createOpeningBenefitBasis(benefitWrap,{organizationId:'zll',actorUserId:'hr',employee:{id:'new-hire',employmentType:'Full-Time',hireDate:'2026-11-06'},salary:{amount:144000,currency:'NGN',effectiveFrom:'2026-11-06'}});
+   await benefitsClient.query(`INSERT INTO employee_onboardings VALUES('new-hire-bank','zll','new-hire','{"payment-details":{"bankName":"Fixture","accountName":"Fixture","accountNumber":"0012345678"}}'::jsonb,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`);
    const benefitRun=await benefits.generate('zll','hr','2026-11');
    const benefitDetail=await benefits.detail('zll','hr',benefitRun);
    assert.ok(benefitDetail.lines.length>0);
+   assert.equal(benefitDetail.lines.find(line=>line.employeeId==='new-hire').snapshot.currentEntitlement,24000,'New hire flows from opening salary mapping into the calculated benefit run');
    assert.ok(!benefitDetail.lines.some(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)),'Zero-entitlement employees do not need a basis or receive guessed support');
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
    const first=benefitDetail.lines[0];
@@ -166,6 +170,15 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    await benefits.generate('zll','hr','2026-11');
    changed=await benefits.detail('zll','hr',benefitRun);
    assert.equal(changed.lines[0].snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
+   const correctedLine=changed.lines[0];
+   const correctedInputs={...correctedLine.snapshot.benefitInputs,previousShortPayment:2000,previousOverpayment:100000};
+   await benefits.saveBenefitInputs('zll','hr',benefitRun,correctedLine.id,correctedInputs,'Correct documented opening benefit balances');
+   await benefits.generate('zll','hr','2026-11');
+   changed=await benefits.detail('zll','hr',benefitRun);
+   const correctedSnapshot=changed.lines.find(l=>l.employeeId===correctedLine.employeeId).snapshot;
+   assert.equal(correctedSnapshot.previousUnpaid,2000);
+   assert.equal(correctedSnapshot.previousOverpaid,100000);
+   assert.ok(correctedSnapshot.overpaidRemaining>0);
    await assert.rejects(benefits.decide('zll','auditor',benefitRun,'HEAD_HR_APPROVE','Wrong actor'),/assigned HEAD HR/);
    await benefits.decide('zll','hr',benefitRun,'HEAD_HR_APPROVE','Head HR approved for external Auditor, GM and Accounts');
    await assert.rejects(benefits.saveBenefitInputs('zll','hr',benefitRun,changed.lines[0].id,{bonus:9000},'Locked'),/Only draft or rejected/);
@@ -174,6 +187,10 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    const approvedBenefit=await benefits.detail('zll','finance',benefitRun);
    await benefits.decide('zll','finance',benefitRun,'CONFIRM_PAYMENT','Benefit fixture receipt',approvedBenefit.lines.map(line=>({lineId:line.id,actualPaid:line.netPay,reference:'Fixture only'})));
    assert.equal((await benefits.detail('zll','hr',benefitRun)).run.status,'PAID');
+   const carried=await benefitsClient.query(`SELECT amount FROM zermatt_midmonth_balances WHERE "organizationId"=$1 AND "employeeId"=$2 AND kind='OVERPAID' AND amount>0`,['zll',correctedLine.employeeId]);
+   assert.equal(carried.rows.reduce((total,row)=>total+Number(row.amount),0),correctedSnapshot.overpaidRemaining,'Corrected residual carries forward exactly once');
+   await assert.rejects(benefits.decide('zll','finance',benefitRun,'CONFIRM_PAYMENT','Duplicate receipt',approvedBenefit.lines.map(line=>({lineId:line.id,actualPaid:line.netPay,reference:'Duplicate'}))),/unavailable/);
+
    assert.equal(await snapshot(),beforeBenefits,'Benefits activation, approval and payment must leave protected payroll tables byte-identical');
   } finally {await benefitsClient.query('ROLLBACK');benefitsClient.release();}
 
@@ -227,4 +244,5 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   assert.equal((await pool.query(`SELECT has_table_privilege('anon','public.zermatt_midmonth_lines','SELECT') as allowed`)).rows[0].allowed,false);
  } finally {await pool.end();}
 });
+
 

@@ -127,7 +127,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const line={...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
    const meta=metadataMap.get(employee.id);
    return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||''},adjustmentMap.get(employee.id)):line;
-  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0)));
+  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
   const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{})};
   return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
  }
@@ -158,7 +158,8 @@ function createService(prisma, { benefitsOnly = false } = {}) {
  async function detail(org,user,runId) {
   const responsibilities=await roles(prisma,org,user);if(!responsibilities.length)domain.invalid('Payroll assignment required.',403);
   const run=(await q(prisma,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2',org,runId))[0];if(!run)domain.invalid('Payroll run not found.',404);
-  const lines=await q(prisma,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY snapshot->>\'employeeNumber\'',org,runId);
+  let lines=await q(prisma,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY snapshot->>\'employeeNumber\'',org,runId);
+  if(benefitsOnly)lines.sort((a,b)=>require('./payrollRegisterExport').compareBranches(a.snapshot.location,b.snapshot.location)||String(a.snapshot.employeeNumber).localeCompare(String(b.snapshot.employeeNumber),undefined,{numeric:true}));
   const events=await q(prisma,'SELECT action,notes,"actorUserId","createdAt" FROM public.zermatt_midmonth_events WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "createdAt"',org,runId);
   return {run,lines,events,responsibilities,...(benefitsOnly?{register:benefit.buildRegister(lines),workflow:"HEAD_HR_EXTERNAL"}:{})};
  }
@@ -187,15 +188,15 @@ function createService(prisma, { benefitsOnly = false } = {}) {
      const balances=await q(c,`SELECT * FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND "employeeId"=$2 AND amount>0 AND "dueMonth"<=$3::date ORDER BY "dueMonth",id FOR UPDATE`,org,line.employeeId,run.periodMonth);
      const expectedUnpaid=balances.filter(b=>b.kind==='UNPAID').reduce((s,b)=>s+domain.cents(b.amount),0);
      const expectedOverpaid=balances.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0);
-     if(expectedUnpaid!==domain.cents(line.snapshot.previousUnpaid)||expectedOverpaid!==domain.cents(line.snapshot.previousOverpaid))domain.invalid('Approved carry-forward balances changed; reconciliation is blocked.');
+     if(expectedUnpaid!==domain.cents(line.snapshot.ledgerPreviousUnpaid??line.snapshot.previousUnpaid)||expectedOverpaid!==domain.cents(line.snapshot.ledgerPreviousOverpaid??line.snapshot.previousOverpaid))domain.invalid('Approved carry-forward balances changed; reconciliation is blocked.');
      let recover=domain.cents(line.snapshot.overpaidDeduction);
      for(const balance of balances) {
-      const remaining=balance.kind==='UNPAID'?0:Math.max(0,domain.cents(balance.amount)-recover);
+      const remaining=benefitsOnly||balance.kind==='UNPAID'?0:Math.max(0,domain.cents(balance.amount)-recover);
       if(balance.kind==='OVERPAID')recover=Math.max(0,recover-domain.cents(balance.amount));
       await exec(c,'UPDATE public.zermatt_midmonth_balances SET amount=$3 WHERE "organizationId"=$1 AND id=$2',org,balance.id,remaining/100);
      }
      await exec(c,'UPDATE public.zermatt_midmonth_lines SET "actualPaid"=$3,"paymentReference"=$4 WHERE "organizationId"=$1 AND id=$2',org,line.id,settlement.actualPaid,String(receipt.reference).trim());
-     for(const [kind,amount] of [['UNPAID',settlement.newUnpaid],['OVERPAID',settlement.newOverpaid]])if(amount>0)await exec(c,`INSERT INTO public.zermatt_midmonth_balances(id,"organizationId","employeeId",kind,"dueMonth",amount,"sourceLineId") VALUES($1,$2,$3,$4,$5::date,$6,$7)`,id(),org,line.employeeId,kind,`${domain.nextMonth(ym(run.periodMonth))}-01`,amount,line.id);
+     for(const [kind,amount] of [['UNPAID',settlement.newUnpaid],['OVERPAID',(domain.cents(settlement.newOverpaid)+(benefitsOnly?domain.cents(line.snapshot.overpaidRemaining):0))/100]])if(amount>0)await exec(c,`INSERT INTO public.zermatt_midmonth_balances(id,"organizationId","employeeId",kind,"dueMonth",amount,"sourceLineId") VALUES($1,$2,$3,$4,$5::date,$6,$7)`,id(),org,line.employeeId,kind,`${domain.nextMonth(ym(run.periodMonth))}-01`,amount,line.id);
     }
    }
    await exec(c,'UPDATE public.zermatt_midmonth_runs SET status=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND id=$2',org,runId,next);
@@ -236,3 +237,4 @@ function createService(prisma, { benefitsOnly = false } = {}) {
  return {activate,generate,list,detail,decide,configuration,saveBenefitInputs,recordExternalExport,getPreparationReadiness};
 }
 module.exports={createService};
+
