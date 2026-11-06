@@ -14,6 +14,22 @@ function buildLine({employee,salary,periodMonth,unpaid=0,overpaid=0}) {
     overpaidDeduction:recovered/100,overpaidRemaining:(o-recovered)/100,netPay:(current+u-recovered)/100,
     loanRecovery:0,salaryAdvanceRecovery:0,statutoryDeductions:0,payrollElement:'MID_MONTH_TRANSPORT_SUPPORT'};
 }
+
+function eligibleForCurrentSupport(employee,periodMonth) {
+ month(periodMonth);
+ const fullTime=String(employee.employmentType||'').toLowerCase().replace(/[\s-]+/g,'')==='fulltime';
+ return ['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(String(employee.status))&&fullTime&&Boolean(employee.hireDate)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`;
+}
+function preparationCoverage(staff,periodMonth) {
+ const eligible=staff.filter(employee=>eligibleForCurrentSupport(employee,periodMonth));
+ const missing=eligible.filter(employee=>!(Number(employee.fullMonthlyGross)>0)).map(employee=>employee.employeeNumber).sort();
+ const stale=eligible.filter(employee=>Number(employee.fullMonthlyGross)>0&&employee.basisSource==='PREPARATION'&&
+  (employee.employmentType!==employee.employmentTypeSnapshot||dateOnly(employee.hireDate)!==dateOnly(employee.hireDateSnapshot))).map(employee=>employee.employeeNumber).sort();
+ return {eligibleEmployees:eligible.length,completeEmployees:eligible.length-missing.length-stale.length,
+  excludedEmployees:staff.length-eligible.length,missingEmployeeNumbers:missing,staleEmployeeNumbers:stale,
+  canActivate:eligible.length>0&&!missing.length&&!stale.length};
+}
+
 function settleLine(line,actualPaid) {
   const expected=cents(line.netPay),actual=cents(actualPaid);
   return {actualPaid:actual/100,newUnpaid:Math.max(0,expected-actual)/100,newOverpaid:Math.max(0,actual-expected)/100};
@@ -31,4 +47,4 @@ function transition(status,action,responsibilities) {
   if(!responsibilities.includes(t.responsibility))invalid('The current regular-payroll assignee must perform this action.',403);
   return t.to;
 }
-module.exports={invalid,month,nextMonth,cents,buildLine,settleLine,transition,transitions};
+module.exports={eligibleForCurrentSupport,preparationCoverage,invalid,month,nextMonth,cents,buildLine,settleLine,transition,transitions};

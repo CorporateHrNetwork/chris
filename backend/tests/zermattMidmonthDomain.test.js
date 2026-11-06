@@ -32,3 +32,27 @@ test('rollover is the next calendar month and invalid payment amounts fail close
  for(const n of [-1,Infinity,NaN,1.001])assert.throws(()=>d.settleLine(line(),n));
  assert.throws(()=>d.month('2026-13'));
 });
+
+test('benefit activation coverage follows current support eligibility and names only missing eligible bases',()=>{
+ const rows=[
+  {...employee,id:'ready',employeeNumber:'READY',fullMonthlyGross:200000,basisSource:'PREPARATION',employmentTypeSnapshot:'Full-Time',hireDateSnapshot:'2020-01-01'},
+  {...employee,id:'missing',employeeNumber:'MISSING'},
+  {...employee,id:'exempt',employeeNumber:'EXEMPT',employmentType:'Part-Time'},
+  {...employee,id:'expat',employeeNumber:'EXPAT',employmentType:'Expatriate'},
+  {...employee,id:'future',employeeNumber:'FUTURE',hireDate:'2026-11-16'},
+ ];
+ const result=d.preparationCoverage(rows,'2026-11');
+ assert.equal(result.eligibleEmployees,2);
+ assert.equal(result.completeEmployees,1);
+ assert.equal(result.excludedEmployees,3);
+ assert.deepEqual(result.missingEmployeeNumbers,['MISSING']);
+ assert.equal(result.canActivate,false);
+ assert.equal(d.preparationCoverage(rows.filter(e=>e.employeeNumber!=='MISSING'),'2026-11').canActivate,true);
+ assert.equal(d.eligibleForCurrentSupport({...employee,hireDate:'2026-11-15'},'2026-11'),true);
+ assert.equal(d.eligibleForCurrentSupport({...employee,hireDate:'2026-11-16'},'2026-11'),false);
+});
+test('prepared references with changed employee details remain blocked while authoritative full-gross references are accepted',()=>{
+ const changed={...employee,fullMonthlyGross:200000,basisSource:'PREPARATION',employmentTypeSnapshot:'Part-Time',hireDateSnapshot:'2020-01-01'};
+ assert.deepEqual(d.preparationCoverage([changed],'2026-11').staleEmployeeNumbers,['A']);
+ assert.equal(d.preparationCoverage([{...changed,basisSource:'SALARY_REFERENCE'}],'2026-11').canActivate,true);
+});
