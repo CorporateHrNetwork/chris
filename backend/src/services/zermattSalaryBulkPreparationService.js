@@ -15,6 +15,7 @@ async function savePreparedSalaryRows(prisma,{organizationId,actorUserId,source,
    (id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId")
    SELECT p.id,$2,p."employeeId",p.amount,'NGN',p."effectiveFrom"::date,p.reason,p."employmentType",p."hireDate"::date,p.allocation,$3
    FROM jsonb_to_recordset($1::jsonb) AS p(id text,"employeeId" text,amount numeric,"effectiveFrom" text,reason text,"employmentType" text,"hireDate" text,allocation jsonb)
+   WHERE true
    ON CONFLICT("organizationId","employeeId","effectiveFrom") DO UPDATE SET
    "fullMonthlyGross"=EXCLUDED."fullMonthlyGross",reason=EXCLUDED.reason,"employmentTypeSnapshot"=EXCLUDED."employmentTypeSnapshot",
    "hireDateSnapshot"=EXCLUDED."hireDateSnapshot","allocationPreview"=EXCLUDED."allocationPreview",
