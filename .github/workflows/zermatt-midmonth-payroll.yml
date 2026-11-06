@@ -36,7 +36,7 @@ jobs:
       - name: Generate Prisma client for production-adapter import and ESS tests
         run: npx prisma generate
         working-directory: backend
-      - run: node --test tests/performanceEvaluation.test.js tests/zermattRoleProfiles.test.js tests/confirmedRoleManagers.test.js tests/essLoanSummary.test.js tests/zermattSalarySplit.test.js tests/zermattSalaryWorkbook.test.js tests/zermattBenefitPreparationReadiness.test.js tests/zermattMidmonthDomain.test.js tests/zermattMidmonthIntegration.test.js tests/zermattLeaveCalendarRules.test.js
+      - run: node --test tests/performanceEvaluation.test.js tests/zermattRoleProfiles.test.js tests/confirmedRoleManagers.test.js tests/essLoanSummary.test.js tests/zermattSalarySplit.test.js tests/zermattSalaryWorkbook.test.js tests/zermattBenefitPreparationReadiness.test.js tests/zermattMidmonthDomain.test.js tests/zermattTransportBenefitControl.test.js tests/zermattMidmonthIntegration.test.js tests/zermattLeaveCalendarRules.test.js
         working-directory: backend
         env:
           CHRIS_MIDMONTH_TEST_DATABASE_URL: postgresql://fixture:fixture-only@localhost:5432/chris_midmonth_test

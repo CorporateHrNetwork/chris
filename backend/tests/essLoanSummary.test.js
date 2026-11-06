@@ -75,16 +75,18 @@ test('ESS loan endpoint ignores injected employee and organization selectors', a
   assert.equal(res.value.status, 'success');
 });
 
-test('mid-month export omits loan column and keeps payment details aligned', async () => {
+test('benefit export uses authoritative columns and external sign-off without loan recovery', async () => {
   const routes = [];
-  const router = { get: (...args) => routes.push(args), post: () => {}, use: () => {} };
+  const router = { get: (...args) => routes.push(args), post: () => {}, patch: () => {}, use: () => {} };
   const snapshot = { employeeNumber: 'E1', employeeName: 'Example Employee', fullMonthlyGross: 120000, currentEntitlement: 30000, previousUnpaid: 1000, previousOverpaid: 500, overpaidDeduction: 500, overpaidRemaining: 0, paymentDetails: { bankName: 'Example Bank', accountName: 'Example Employee', accountNumber: '0000000000' } };
-  const detail = { run: { status: 'APPROVED', periodMonth: '2026-11-01' }, lines: [{ snapshot, netPay: 30500, actualPaid: null }] };
+  const detail = { run: { status: 'APPROVED', periodMonth: '2026-11-01' }, responsibilities: ['HEAD_HR'], lines: [{ snapshot, netPay: 30500, actualPaid: null }] };
+  detail.register = require('../src/services/zermattTransportBenefitControl').buildRegister(detail.lines);
+  let exportsRecorded = 0;
   const sandbox = { module: { exports: {} }, process, console, Buffer, require: id => {
     if (id === 'express') return { Router: () => router };
-    if (id === 'xlsx') return { utils: { book_new: () => ({}), aoa_to_sheet: rows => rows, book_append_sheet: (book, rows, name) => { book[name] = rows; } }, write: book => book };
-    if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail }) };
-    if (id === '../services/zermattMidmonthDomain') return { invalid: message => { throw new Error(message); } };
+    if (id === 'xlsx') return { utils: { book_new: () => ({}), aoa_to_sheet: rows => rows, encode_cell: require('xlsx').utils.encode_cell, book_append_sheet: (book, rows, name) => { book[name] = rows; } }, write: book => book };
+    if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail, recordExternalExport: async () => { exportsRecorded++; } }) };
+    if (id === '../services/zermattMidmonthDomain') return { invalid: (message,statusCode=409) => { throw Object.assign(new Error(message),{statusCode}); } };
     if (id === '../middleware/authMiddleware') return { requireAuth: () => {} };
     return {};
   }};
@@ -95,10 +97,19 @@ test('mid-month export omits loan column and keeps payment details aligned', asy
   const [headers, row] = res.book['Transport Support Pay'];
   assert.equal(headers.some(header => /loan/i.test(header)), false);
   assert.equal(headers.length, row.length);
-  assert.equal(row[headers.indexOf('Net Pay')], 30500);
-  assert.equal(row[headers.indexOf('Bank')], 'Example Bank');
-  assert.equal(row[headers.indexOf('Account Number')], '0000000000');
-  assert.equal(row[headers.indexOf('Actual Paid')], '');
+  assert.equal(headers.length,18);
+  assert.equal(row[headers.indexOf('Net')],30500);
+  assert.equal(row[headers.indexOf('Previous Month Short Payment')],1000);
+  assert.equal(row[headers.indexOf('Previous Month Overpayment')],500);
+  assert.equal(row[headers.indexOf('AccountNO')],'0000000000');
+  assert.equal(res.book.Reconciliation[1][5],'');
+  assert.ok(res.book['External Approvals'].some(row=>String(row[0]).includes('Auditor')));
+  assert.equal(exportsRecorded,1);
+  detail.responsibilities=['PAYROLL_AUDITOR'];
+  const denied={status(code){this.code=code;return this;},json(error){this.error=error;return this;}};
+  await exportRoute[1]({auth:{organizationId:'org',userId:'auditor'},params:{id:'run'},query:{stage:'external'}},denied);
+  assert.equal(denied.code,403);
+  assert.equal(exportsRecorded,1,'Unauthorized export is not generated or recorded');
 });
 
 test('document-portal policy includes the agreed support-pay rules', () => {

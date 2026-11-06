@@ -31,7 +31,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
  const staff=(await pool.query('SELECT * FROM employees ORDER BY id')).rows;
  const gross=[200000,80000,120000,120000];
  for(let i=0;i<staff.length;i++)await pool.query(`INSERT INTO zermatt_salary_split_preparations(id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId") VALUES($1,'zll',$2,$3,'NGN','2026-11-01','Fixture',$4,$5,'{}','hr')`,[`p${i}`,staff[i].id,gross[i],staff[i].employmentType,staff[i].hireDate]);
- function wrap(client) {return {$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)]),findFirst:async({where})=>(await client.query(`SELECT record FROM organization_audits WHERE record->>'organizationId'=$1 AND record->>'entityType'=$2 AND record->>'entityId'=$3 AND record->>'action'=$4 ORDER BY ctid DESC LIMIT 1`,[where.organizationId,where.entityType,where.entityId,where.action])).rows[0]?.record||null}};}
+ function wrap(client) {return {employee:{findMany:async({where})=>(await client.query('SELECT id FROM employees WHERE "organizationId"=$1 AND id=ANY($2::text[]) ORDER BY id',[where.organizationId,where.id.in])).rows.map(e=>({...e,location:{name:'Fixture Branch'},designation:{name:'Fixture Position'},department:{name:'Fixture Department'}}))},$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)]),findFirst:async({where})=>(await client.query(`SELECT record FROM organization_audits WHERE record->>'organizationId'=$1 AND record->>'entityType'=$2 AND record->>'entityId'=$3 AND record->>'action'=$4 ORDER BY ctid DESC LIMIT 1`,[where.organizationId,where.entityType,where.entityId,where.action])).rows[0]?.record||null}};}
  const db={...wrap(pool),$transaction:async fn=>{const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(wrap(c));await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}};
  assert.equal(await require('../src/services/zermattBenefitPreparationReadiness').storageReady(db),true,'Real preparation columns and unique key must be verified');
  const service=require('../src/services/zermattMidmonthService').createService(db);
@@ -114,7 +114,11 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
     assert.doesNotMatch(sql,/\b(?:UPDATE|INSERT INTO|DELETE FROM)\s+(?:public\.)?(?:payroll_|zermatt_payroll_split_settings)/i,'Benefits must not write salary or regular payroll');
     return execute(sql,...args);
    };
-   const benefitsDb={...benefitWrap,$transaction:async fn=>fn(benefitWrap)};
+   const benefitsDb={...benefitWrap,$transaction:async fn=>{
+    await benefitsClient.query('SAVEPOINT benefits_operation');
+    try{const result=await fn(benefitWrap);await benefitsClient.query('RELEASE SAVEPOINT benefits_operation');return result;}
+    catch(error){await benefitsClient.query('ROLLBACK TO SAVEPOINT benefits_operation');await benefitsClient.query('RELEASE SAVEPOINT benefits_operation');throw error;}
+   }};
    const benefits=require('../src/services/zermattMidmonthService').createService(benefitsDb,{benefitsOnly:true});
    await assert.rejects(benefits.activate('zll','outsider','2026-11'),/assigned/);
    const enabled=await benefits.activate('zll','hr','2026-11');
@@ -124,9 +128,33 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    const benefitDetail=await benefits.detail('zll','hr',benefitRun);
    assert.ok(benefitDetail.lines.length>0);
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
-   await benefits.decide('zll','hr',benefitRun,'SUBMIT','Benefit fixture submitted');
-   await benefits.decide('zll','auditor',benefitRun,'AUDIT_APPROVE','Benefit fixture audited');
-   await benefits.decide('zll','gm',benefitRun,'GM_APPROVE','Benefit fixture approved');
+   const first=benefitDetail.lines[0];
+   const readMetadata=benefitWrap.employee.findMany;
+   let metadataReads=0;
+   benefitWrap.employee.findMany=async(args)=>{
+    const rows=await readMetadata(args);metadataReads++;
+    return metadataReads===2?rows.map(row=>({...row,location:{name:'Concurrent metadata change'}})):rows;
+   };
+   await assert.rejects(benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{bonus:9000},'Concurrent source test'),/Source records changed while saving/);
+   benefitWrap.employee.findMany=readMetadata;
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
+
+   await assert.rejects(benefits.saveBenefitInputs('zll','auditor',benefitRun,first.id,{bonus:1000},'Unauthorized'),/assigned HEAD HR/);
+   await benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2500},'Approved benefit extras');
+   let changed=await benefits.detail('zll','hr',benefitRun);
+   assert.equal(Number(changed.lines[0].netPay),Number(first.netPay)+3500);
+   assert.equal(changed.register.headers.length,18);
+   assert.equal(changed.register.rows[0][1],'Fixture Branch');
+   assert.equal(changed.register.rows[0][4],'Fixture Position');
+   assert.equal(changed.register.rows[0][5],'Fixture Department');
+   await benefits.generate('zll','hr','2026-11');
+   changed=await benefits.detail('zll','hr',benefitRun);
+   assert.equal(changed.lines[0].snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
+   await assert.rejects(benefits.decide('zll','auditor',benefitRun,'HEAD_HR_APPROVE','Wrong actor'),/assigned HEAD HR/);
+   await benefits.decide('zll','hr',benefitRun,'HEAD_HR_APPROVE','Head HR approved for external Auditor, GM and Accounts');
+   await assert.rejects(benefits.saveBenefitInputs('zll','hr',benefitRun,changed.lines[0].id,{bonus:9000},'Locked'),/Only draft or rejected/);
+   await assert.rejects(benefits.recordExternalExport('zll','auditor',benefitRun,'external'),/assigned HEAD HR/);
+   await benefits.recordExternalExport('zll','hr',benefitRun,'external');
    const approvedBenefit=await benefits.detail('zll','finance',benefitRun);
    await benefits.decide('zll','finance',benefitRun,'CONFIRM_PAYMENT','Benefit fixture receipt',approvedBenefit.lines.map(line=>({lineId:line.id,actualPaid:line.netPay,reference:'Fixture only'})));
    assert.equal((await benefits.detail('zll','hr',benefitRun)).run.status,'PAID');
