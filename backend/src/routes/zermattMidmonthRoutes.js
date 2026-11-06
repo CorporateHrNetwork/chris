@@ -7,9 +7,10 @@ const service=require('../services/zermattMidmonthService').createService(prisma
 const {invalid}=require('../services/zermattMidmonthDomain');
 const router=express.Router();
 router.use(requireAuth,(req,res,next)=>isZermatt(req)?next():res.status(403).json({status:'error',message:'This portal is restricted to Zermatt.'}));
-const sendError=(res,e)=>res.status(e.statusCode||500).json({status:'error',code:e.code||'MIDMONTH_ERROR',message:e.statusCode?e.message:'Unable to complete the transport benefit operation.'});
+const sendError=(res,e)=>res.status(e.statusCode||500).json({status:'error',code:e.code||'MIDMONTH_ERROR',message:e.statusCode?e.message:'Unable to complete the transport benefit operation.',...(e.details?{details:e.details}:{})});
 const ready=()=>{if(process.env.CHRIS_ZERMATT_SPLIT_PAYROLL_RELEASE_READY!=='true')invalid('Transport benefit processing is awaiting verified deployment.');};
 router.get('/',async(req,res)=>{try{return res.json({status:'success',data:{...await service.list(req.auth.organizationId,req.auth.userId),releaseReady:process.env.CHRIS_ZERMATT_SPLIT_PAYROLL_RELEASE_READY==='true'}});}catch(e){return sendError(res,e);}});
+router.get('/readiness',async(req,res)=>{try{return res.json({status:'success',data:await service.getPreparationReadiness(req.auth.organizationId,req.auth.userId,req.query.periodMonth)});}catch(e){return sendError(res,e);}});
 router.post('/activate',async(req,res)=>{try{ready();return res.json({status:'success',data:await service.activate(req.auth.organizationId,req.auth.userId,req.body?.periodMonth)});}catch(e){return sendError(res,e);}});
 router.post('/runs',async(req,res)=>{try{ready();return res.status(201).json({status:'success',data:{runId:await service.generate(req.auth.organizationId,req.auth.userId,req.body?.periodMonth)}});}catch(e){return sendError(res,e);}});
 router.get('/runs/:id',async(req,res)=>{try{return res.json({status:'success',data:await service.detail(req.auth.organizationId,req.auth.userId,req.params.id)});}catch(e){return sendError(res,e);}});

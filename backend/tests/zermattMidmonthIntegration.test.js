@@ -107,6 +107,9 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    for(const e of staff)await benefitsClient.query(`INSERT INTO employee_onboardings VALUES($1,'zll',$2,$3::jsonb,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,['benefit-bank-'+e.id,e.id,JSON.stringify({'payment-details':{bankName:'Fixture Bank',accountName:'Fixture',accountNumber:'1234567890'}})]);
    const protectedTables=['payroll_salary_rates','payroll_periods','payroll_runs','payroll_run_lines','payroll_loans','zermatt_payroll_split_settings'];
    const snapshot=async()=>JSON.stringify(await Promise.all(protectedTables.map(async table=>(await benefitsClient.query('SELECT row_to_json(t) AS row FROM '+table+' t ORDER BY row_to_json(t)::text')).rows)));
+   await benefitsClient.query(`INSERT INTO employees(id,"organizationId","employeeNumber","firstName","middleName","lastName","employmentType","hireDate",status) VALUES
+    ('benefit-exempt','zll','Z-EXEMPT','Exempt',NULL,'Fixture','Expatriate','2020-01-01','ACTIVE'),
+    ('benefit-future','zll','Z-FUTURE','Future',NULL,'Fixture','Full-Time','2026-11-16','ACTIVE')`);
    const beforeBenefits=await snapshot();
    const benefitWrap={...wrap(benefitsClient)};
    const execute=benefitWrap.$executeRawUnsafe;
@@ -121,12 +124,25 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    }};
    const benefits=require('../src/services/zermattMidmonthService').createService(benefitsDb,{benefitsOnly:true});
    await assert.rejects(benefits.activate('zll','outsider','2026-11'),/assigned/);
+   const coverage=await benefits.getPreparationReadiness('zll','hr','2026-11');
+   assert.equal(coverage.eligibleEmployees,3);
+   assert.equal(coverage.completeEmployees,3);
+   assert.equal(coverage.canActivate,true,'Exempt and post-15th employees without bases do not block activation');
+   await assert.rejects(benefits.getPreparationReadiness('zll','auditor','2026-11'),/assigned HEAD HR/);
+   await benefitsClient.query(`UPDATE zermatt_salary_split_preparations SET "effectiveFrom"='2026-12-01' WHERE id='p1'`);
+   const incomplete=await benefits.getPreparationReadiness('zll','hr','2026-11');
+   assert.deepEqual(incomplete.missingEmployeeNumbers,['Z2']);
+   await assert.rejects(benefits.activate('zll','hr','2026-11'),error=>error.code==='BENEFIT_BASIS_INCOMPLETE'&&error.details.missingEmployeeNumbers.includes('Z2'));
+   await benefitsClient.query(`UPDATE zermatt_salary_split_preparations SET "effectiveFrom"='2026-10-01' WHERE id='p1'`);
+   assert.equal((await benefits.getPreparationReadiness('zll','hr','2026-11')).canActivate,true,'Earlier reviewed basis remains valid');
+   await benefitsClient.query(`UPDATE zermatt_salary_split_preparations SET "effectiveFrom"='2026-11-01' WHERE id='p1'`);
    const enabled=await benefits.activate('zll','hr','2026-11');
    assert.equal(enabled.module,'BENEFITS');
    assert.equal(enabled.payrollWrites,false);
    const benefitRun=await benefits.generate('zll','hr','2026-11');
    const benefitDetail=await benefits.detail('zll','hr',benefitRun);
    assert.ok(benefitDetail.lines.length>0);
+   assert.ok(!benefitDetail.lines.some(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)),'Zero-entitlement employees do not need a basis or receive guessed support');
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
    const first=benefitDetail.lines[0];
    const readMetadata=benefitWrap.employee.findMany;

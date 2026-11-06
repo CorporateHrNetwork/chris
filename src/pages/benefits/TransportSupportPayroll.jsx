@@ -12,11 +12,24 @@ const actions={
 const moneyColumns=new Set([7,8,9,12,13,14,15,16]);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
+ const [basisReadiness,setBasisReadiness]=useState(null);
  const [state,setState]=useState(null),[detail,setDetail]=useState(null),[periodMonth,setMonth]=useState(''),[notes,setNotes]=useState('');
  const [receipts,setReceipts]=useState({}),[editor,setEditor]=useState(null),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const roles=state?.responsibilities||[],head=roles.includes('HEAD_HR'),ready=state?.releaseReady===true;
  async function load(){const r=await apiRequest(api);setState(r.data);}
  useEffect(()=>{load().catch(e=>setError(e.message));},[]);
+ async function loadReadiness(){
+  if(!periodMonth||!head||state?.settings?.enabled)return;
+  const r=await apiRequest(`${api}/readiness?periodMonth=${encodeURIComponent(periodMonth)}`);setBasisReadiness(r.data);
+ }
+ useEffect(()=>{
+  let active=true;setBasisReadiness(null);
+  if(periodMonth&&head&&!state?.settings?.enabled){
+   apiRequest(`${api}/readiness?periodMonth=${encodeURIComponent(periodMonth)}`).then(r=>{if(active)setBasisReadiness(r.data);}).catch(e=>{if(active)setError(e.message||'Unable to check benefit preparation coverage.');});
+  }
+  return()=>{active=false;};
+ },[periodMonth,head,state?.settings?.enabled]);
+
  async function open(id){
   const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setMonth(String(r.data.run.periodMonth).slice(0,7));
   setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);
@@ -41,12 +54,24 @@ export default function TransportSupportPayroll() {
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
   <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
    {head&&<button onClick={()=>navigate('/benefits/transport-support/preparation')}>Benefit basis template &amp; bulk upload</button>}
-   <button disabled={busy} onClick={()=>act(load)}>Refresh</button>
+   <button disabled={busy} onClick={()=>act(async()=>{await load();await loadReadiness();})}>Refresh</button>
    {head&&<><label>Benefit month <input type="month" value={periodMonth} onChange={e=>setMonth(e.target.value)}/></label>
-    {!state?.settings?.enabled&&<button disabled={busy||!ready||!periodMonth} onClick={()=>act(async()=>{await apiRequest(`${api}/activate`,{method:'POST',body:{periodMonth}});await load();setMessage('Transport Support Benefits enabled. Regular salary rates and payroll were not changed.');})}>Enable Transport Support Benefits for this month</button>}
+    {!state?.settings?.enabled&&<button disabled={busy||!ready||!periodMonth||!basisReadiness?.canActivate} onClick={()=>act(async()=>{await apiRequest(`${api}/activate`,{method:'POST',body:{periodMonth}});await load();setMessage('Transport Support Benefits enabled. Regular salary rates and payroll were not changed.');})}>Enable Transport Support Benefits for this month</button>}
     <button disabled={busy||!!editor||!ready||!periodMonth||!state?.settings?.enabled} onClick={()=>act(async()=>{const r=await apiRequest(`${api}/runs`,{method:'POST',body:{periodMonth}});await load();await open(r.data.runId);})}>Generate / recalculate draft</button>
    </>}
   </div>
+
+  {head&&periodMonth&&!state?.settings?.enabled&&<section aria-label="Benefit activation readiness" style={{padding:14,margin:'14px 0',border:'1px solid #806b23',borderRadius:10}}>
+   <h3>Preparation coverage · {periodMonth}</h3>
+   {!basisReadiness?<p>Checking eligible employees and saved benefit bases...</p>:<>
+    <p><strong>{basisReadiness.completeEmployees} of {basisReadiness.eligibleEmployees}</strong> eligible employees have a current full-gross basis. {basisReadiness.excludedEmployees} current records outside support eligibility do not block activation.</p>
+    {!basisReadiness.eligibleEmployees&&<p>No current employees qualify for this month's Transport Support.</p>}
+    {basisReadiness.missingEmployeeNumbers.length>0&&<details open><summary>Missing benefit bases: {basisReadiness.missingEmployeeNumbers.length}</summary><p>{basisReadiness.missingEmployeeNumbers.join(', ')}</p></details>}
+    {basisReadiness.staleEmployeeNumbers.length>0&&<details open><summary>Employee details changed since preparation: {basisReadiness.staleEmployeeNumbers.length}</summary><p>{basisReadiness.staleEmployeeNumbers.join(', ')}</p></details>}
+    {basisReadiness.canActivate?<p role="status">Eligible bases are ready. You can enable Transport Support Benefits for this month.</p>:<p>Open the preparation register, preview and import the missing or changed eligible employee bases for this month, then return here and select Refresh. Existing authoritative full-gross salary references are accepted; reduced salary amounts are never guessed.</p>}
+    <button type="button" disabled={busy} onClick={()=>navigate('/benefits/transport-support/preparation')}>Open Preparation Register</button>
+   </>}
+  </section>}
   <h2>Transport benefit payment runs</h2>
   {!state?.runs?.length?<p>No transport benefit runs yet.</p>:<div style={{display:'flex',gap:10,flexWrap:'wrap'}}>{state.runs.map(r=><button key={r.id} disabled={busy} onClick={()=>act(()=>open(r.id))}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')} · {money(r.netTotal)}</button>)}</div>}
   {detail&&<>

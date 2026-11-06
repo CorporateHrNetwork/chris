@@ -30,6 +30,35 @@ function createService(prisma, { benefitsOnly = false } = {}) {
  async function audit(c,org,user,run,action,notes) {
   await exec(c,'INSERT INTO public.zermatt_midmonth_events(id,"organizationId","runId","actorUserId",action,notes) VALUES($1,$2,$3,$4,$5,$6)',id(),org,run,user,action,notes);
  }
+
+ async function preparationReadiness(c,org,periodMonth) {
+  domain.month(periodMonth);
+  const from=`${periodMonth}-01`,mid=`${periodMonth}-15`;
+  const staff=await q(c,`SELECT e.id,e."employeeNumber",e."employmentType",e."hireDate",e.status,
+   b."fullMonthlyGross",b."basisSource",b."employmentTypeSnapshot",b."hireDateSnapshot"
+   FROM public.employees e
+   LEFT JOIN LATERAL (
+    SELECT * FROM (
+     SELECT p."fullMonthlyGross",'PREPARATION'::text AS "basisSource",p."employmentTypeSnapshot",p."hireDateSnapshot",p."effectiveFrom",2 AS priority
+     FROM public.zermatt_salary_split_preparations p
+     WHERE p."organizationId"=e."organizationId" AND p."employeeId"=e.id AND p."effectiveFrom"<=$3::date
+     UNION ALL
+     SELECT r."fullMonthlyGross",'SALARY_REFERENCE'::text,e."employmentType",e."hireDate",r."effectiveFrom",1 AS priority
+     FROM public.payroll_salary_rates r WHERE r."organizationId"=e."organizationId" AND r."employeeId"=e.id AND r.status='ACTIVE'
+     AND r."fullMonthlyGross">0 AND r."effectiveFrom"<=$3::date AND COALESCE(r."effectiveTo",'9999-12-31'::date)>=$2::date
+    ) refs ORDER BY "effectiveFrom" DESC,priority DESC LIMIT 1
+   ) b ON true
+   WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED')
+   AND NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events l WHERE l."organizationId"=e."organizationId" AND l."employeeId"=e.id
+    AND l."eventType"::text='DEACTIVATED' AND l."effectiveDate">=$2::date AND l."effectiveDate"<$2::date+interval '1 month')
+   ORDER BY e.id FOR SHARE OF e`,org,from,mid);
+  return domain.preparationCoverage(staff,periodMonth);
+ }
+ async function getPreparationReadiness(org,user,periodMonth) {
+  await requireRole(prisma,org,user,'HEAD_HR');
+  return preparationReadiness(prisma,org,periodMonth);
+ }
+
  async function activate(org,user,periodMonth) {
   domain.month(periodMonth);
   return tx(async c=>{
@@ -40,12 +69,16 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const assignments=await q(c,'SELECT responsibility,COUNT(*)::int as count FROM public.payroll_approval_assignments WHERE "organizationId"=$1 AND "isActive" GROUP BY responsibility',org);
    if((benefitsOnly?['HEAD_HR']:['HEAD_HR','PAYROLL_AUDITOR','GENERAL_MANAGER','CHIEF_ACCOUNTANT']).some(role=>assignments.find(a=>a.responsibility===role)?.count!==1))domain.invalid('Configure exactly one active regular-payroll assignee for each of Head HR, Auditor, General Manager and Chief Accountant before activation.');
    if(benefitsOnly) {
-    const staff=await q(c,`SELECT e.id,e."employeeNumber",e."employmentType",e."hireDate",s."fullMonthlyGross",s."employmentTypeSnapshot",s."hireDateSnapshot" FROM public.employees e LEFT JOIN public.zermatt_salary_split_preparations s ON s."organizationId"=e."organizationId" AND s."employeeId"=e.id AND s."effectiveFrom"=$2::date WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') ORDER BY e.id FOR SHARE OF e`,org,from);
-    if(!staff.length||staff.some(e=>!e.fullMonthlyGross))domain.invalid('Prepare a transport-benefit salary basis for every current employee in Benefits for the activation month.');
-    for(const e of staff)if(e.employmentType!==e.employmentTypeSnapshot||dateOnly(e.hireDate)!==dateOnly(e.hireDateSnapshot))domain.invalid('Employee records changed after preparation. Revalidate the benefit basis.');
+    const coverage=await preparationReadiness(c,org,periodMonth);
+    if(!coverage.canActivate) {
+     const message=!coverage.eligibleEmployees?'No employees are eligible for current Transport Support in this month.'
+      :coverage.missingEmployeeNumbers.length?`Missing benefit bases for ${coverage.missingEmployeeNumbers.length} eligible employee(s): ${coverage.missingEmployeeNumbers.slice(0,20).join(', ')}. Review the preparation register for ${periodMonth}.`
+      :`Employee details changed for ${coverage.staleEmployeeNumbers.length} eligible employee(s): ${coverage.staleEmployeeNumbers.slice(0,20).join(', ')}. Re-preview and save their bases.`;
+     throw Object.assign(new Error(message),{statusCode:409,code:'BENEFIT_BASIS_INCOMPLETE',details:coverage});
+    }
     const config={enabled:true,activationFrom:from,module:'BENEFITS',payrollWrites:false};
     await c.organizationAudit.create({data:{organizationId:org,actorUserId:user,entityType:'TransportBenefitConfiguration',entityId:org,action:'ENABLED',newValue:config,reason:'Transport Support enabled as a separate benefit. Salary authorities, regular payroll and split settings unchanged.'}});
-    return {...config,employees:staff.length};
+    return {...config,employees:coverage.eligibleEmployees};
    }
    const approved=await q(c,`SELECT r.id FROM public.payroll_runs r JOIN public.payroll_periods p ON p.id=r."periodId" AND p."organizationId"=r."organizationId" WHERE r."organizationId"=$1 AND r.status='APPROVED' AND p."periodEnd">=$2::date LIMIT 1`,org,from);
    if(approved.length)domain.invalid('Activation overlaps approved payroll. Choose a month after the last approved payroll.');
@@ -86,7 +119,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   const adjustmentMap=new Map(adjustments.map(a=>[a.employeeId,a.inputs||{}]));
   const lines=employees.map(employee=>{
    const salary=byEmployee.get(employee.id);
-   if(['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
+   if((benefitsOnly?domain.eligibleForCurrentSupport(employee,periodMonth):['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`)&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
    const debts=balances.filter(b=>b.employeeId===employee.id);
    const unpaid=debts.filter(b=>b.kind==='UNPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const overpaid=debts.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
@@ -200,6 +233,6 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    await audit(c,org,user,runId,'EXPORTED_FOR_EXTERNAL_APPROVAL',stage==='review'?'Draft review register generated by Head HR.':'Head HR-approved register exported for external Auditor → GM → Chief Accountant workflow. This does not confirm external approval or payment.');
   });
  }
- return {activate,generate,list,detail,decide,configuration,saveBenefitInputs,recordExternalExport};
+ return {activate,generate,list,detail,decide,configuration,saveBenefitInputs,recordExternalExport,getPreparationReadiness};
 }
 module.exports={createService};
