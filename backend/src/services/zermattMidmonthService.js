@@ -8,7 +8,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
  const q=(c,sql,...args)=>c.$queryRawUnsafe(sql,...args);
  const exec=(c,sql,...args)=>c.$executeRawUnsafe(sql,...args);
  const tx=fn=>prisma.$transaction(fn,{timeout:60000});
- async function lock(c,org) { await q(c,'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',org); }
+ async function lock(c,org) { await exec(c,'SELECT pg_advisory_xact_lock(hashtextextended($1,0))',org); }
  async function roles(c,org,user) {
   const r=await q(c,'SELECT responsibility FROM public.payroll_approval_assignments WHERE "organizationId"=$1 AND "assignedUserId"=$2 AND "isActive"',org,user);
   return r.map(x=>x.responsibility);

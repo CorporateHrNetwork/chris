@@ -7,6 +7,7 @@ const { requireAuth, requirePermission } = require('../middleware/authMiddleware
 const { isZermatt, isHeadHr } = require('../services/zermattHrFinancialAccessService');
 const { prepareSalaryRows: prepare } = require('../services/zermattSalarySplit');
 const {readWorkbook}=require('../services/zermattSalaryWorkbook');
+const {savePreparedSalaryRows}=require('../services/zermattSalaryBulkPreparationService');
 const {preparationEnabled,storageReady,assertPreparationReady}=require('../services/zermattBenefitPreparationReadiness');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5*1024*1024 } });
@@ -16,7 +17,12 @@ router.use((req,res,next)=> {
   next();
 });
 const headers = ['Employee No','Employee Name (reference)','Branch (reference)','Full Monthly Gross Salary','Currency','Effective From','Reason','Employment Type (reference)','Hire Date (reference)'];
-function error(res,e) { return res.status(e.statusCode||400).json({status:'error',code:e.code||'SALARY_SPLIT_ERROR',message:e.statusCode ? e.message : 'Unable to complete salary preparation. Check the workbook and try again.'}); }
+function error(res,e) {
+ if(e.statusCode)return res.status(e.statusCode).json({status:'error',code:e.code||'SALARY_SPLIT_ERROR',message:e.message});
+ const reference=crypto.randomUUID();
+ console.error('CHRIS_BENEFIT_PREPARATION_ERROR',JSON.stringify({reference,code:e.code||'UNEXPECTED',databaseCode:e.meta?.code||e.meta?.driverAdapterError?.cause?.originalCode||null}));
+ return res.status(500).json({status:'error',code:'BENEFIT_PREPARATION_SAVE_FAILED',message:`Unable to complete benefit preparation. Please retry or contact support. Reference: ${reference}`});
+}
 function invalid(message) { const e=new Error(message); e.statusCode=400; throw e; }
 async function employees(client,organizationId) {
   return client.employee.findMany({where:{organizationId,status:{in:['ACTIVE','PROBATION','LEAVE','SUSPENDED']}},select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,employmentType:true,hireDate:true,location:{select:{name:true}}},orderBy:{employeeNumber:'asc'}});
@@ -73,23 +79,10 @@ router.post('/import',upload.single('file'),async(req,res)=>{
     await assertPreparationReady(prisma);
     if (!req.file?.buffer) invalid('Select the validated template.');
     const source=readWorkbook(req.file.buffer);
-    const imported=await prisma.$transaction(async tx=>{
-      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',req.auth.organizationId);
-      // Employee locks prevent employment type / hire-date edits between revalidation and import.
-      await tx.$queryRawUnsafe('SELECT id FROM public.employees WHERE "organizationId"=$1 ORDER BY id FOR UPDATE',req.auth.organizationId);
-      const rows=prepare(source,await employees(tx,req.auth.organizationId));
-      if (rows.some(r=>!r.valid)) invalid('Resolve every validation error before importing. No rows were imported.');
-      if (req.body?.previewToken!==digest(rows)) invalid('The workbook or employee records changed. Preview the upload again.');
-      const batchId=crypto.randomUUID();
-      for(const row of rows) {
-        const changed=await tx.$executeRawUnsafe(`INSERT INTO public.zermatt_salary_split_preparations
-          (id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId")
-          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9::date,$10::jsonb,$11) ON CONFLICT("organizationId","employeeId","effectiveFrom") DO UPDATE SET "fullMonthlyGross"=EXCLUDED."fullMonthlyGross",reason=EXCLUDED.reason,"employmentTypeSnapshot"=EXCLUDED."employmentTypeSnapshot","hireDateSnapshot"=EXCLUDED."hireDateSnapshot","allocationPreview"=EXCLUDED."allocationPreview","createdByUserId"=EXCLUDED."createdByUserId","createdAt"=CURRENT_TIMESTAMP WHERE zermatt_salary_split_preparations."activatedAt" IS NULL`,crypto.randomUUID(),req.auth.organizationId,row.employeeId,row.amount,row.currency,row.effectiveFrom,row.reason,row.employmentType,row.hireDate,JSON.stringify(row.allocation),req.auth.userId);
-        if(changed!==1) invalid("An activated salary cannot be overwritten. Create an effective-dated salary review instead.");
-      }
-      await tx.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,entityType:'SalarySplitPreparation',entityId:batchId,action:'IMPORTED_FOR_REVIEW',newValue:{count:rows.length,status:'PENDING_ACTIVATION'},reason:'Full salaries prepared; regular payroll and loan balances unchanged.'}});
-      return rows.length;
-    },{timeout:30000});
+    const imported=await savePreparedSalaryRows(prisma,{
+      organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+      source,previewToken:req.body?.previewToken,loadEmployees:employees,
+    });
     return res.status(201).json({status:'success',data:{imported,status:'PENDING_ACTIVATION'},message:'Full salaries imported for review. Payroll activation has not occurred.'});
   } catch(e) { return error(res,e); }
 });

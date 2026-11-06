@@ -17,7 +17,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   CREATE TABLE payroll_run_lines(id text PRIMARY KEY,"organizationId" text,"employeeId" text,"runId" text);
   CREATE TABLE employee_onboardings(id text PRIMARY KEY,"organizationId" text,"employeeId" text,"sectionData" jsonb,"updatedAt" timestamptz,"createdAt" timestamptz);
   CREATE TABLE payroll_loans(id text PRIMARY KEY,amount numeric);
-  CREATE TABLE organization_audits(record jsonb);
+  CREATE TABLE organization_audits(record jsonb,id text PRIMARY KEY DEFAULT gen_random_uuid()::text,"organizationId" text,"actorUserId" text,"entityType" text,"entityId" text,action text,"previousValue" jsonb,"newValue" jsonb,reason text,"createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP);
  `);
  const sqlDir=path.join(__dirname,'../sql');
  await pool.query(fs.readFileSync(path.join(sqlDir,'zermatt_salary_split_preparation.sql'),'utf8'));
@@ -56,6 +56,45 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   assert.equal(Number((await pool.query('SELECT COUNT(*) as count FROM zermatt_midmonth_runs')).rows[0].count),0);
   assert.equal(Number((await pool.query("SELECT amount FROM payroll_loans WHERE id='unchanged-loan'")).rows[0].amount),70000);
   assert.equal(Number((await pool.query("SELECT COUNT(*) as count FROM organization_audits WHERE record->>'action'='INDIVIDUAL_CORRECTION'")).rows[0].count),2);
+
+
+  // Use the exact production PrismaPg adapter, not the pg wrapper, for a 315-row import.
+  await pool.query(`INSERT INTO organizations VALUES('bulk','bulk-fixture');
+   INSERT INTO employees SELECT 'bulk-e-'||g,'bulk','B'||lpad(g::text,5,'0'),'Fixture',NULL,'Employee','Full-Time','2020-01-01','ACTIVE' FROM generate_series(1,315) g;`);
+  const {PrismaClient}=require('@prisma/client');
+  const {PrismaPg}=require('@prisma/adapter-pg');
+  const actualPrisma=new PrismaClient({adapter:new PrismaPg({connectionString:url})});
+  try {
+   assert.equal((await actualPrisma.$queryRawUnsafe('SELECT current_database() AS name'))[0].name,'chris_midmonth_test');
+   try {
+    await actualPrisma.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1,0))','bulk-diagnostic');
+    console.log('TRANSPORT_IMPORT_LEGACY_LOCK_READ=supported');
+   } catch(error) {
+    console.log('TRANSPORT_IMPORT_LEGACY_LOCK_READ='+error.code+'; unsupportedVoid='+/void|unsupported/i.test(error.message));
+   }
+   const {savePreparedSalaryRows,digestRows}=require('../src/services/zermattSalaryBulkPreparationService');
+   const {prepareSalaryRows}=require('../src/services/zermattSalarySplit');
+   const loadEmployees=(client,org)=>client.$queryRawUnsafe('SELECT * FROM employees WHERE "organizationId"=$1 ORDER BY id',org);
+   const bulkStaff=await loadEmployees(actualPrisma,'bulk');
+   const source=bulkStaff.map(e=>({'Employee No':e.employeeNumber,'Full Monthly Gross Salary':120000,Currency:'NGN','Effective From':'2026-11-01',Reason:'Synthetic benefit basis'}));
+   const previewToken=digestRows(prepareSalaryRows(source,bulkStaff));
+   const protectedTables=['payroll_salary_rates','payroll_runs','payroll_run_lines','payroll_loans','zermatt_payroll_split_settings'];
+   const protectedSnapshot=async()=>JSON.stringify(await Promise.all(protectedTables.map(async table=>(await pool.query('SELECT row_to_json(t) row FROM '+table+' t ORDER BY row_to_json(t)::text')).rows)));
+   const before=await protectedSnapshot();
+   const input={organizationId:'bulk',actorUserId:'hr',source,previewToken,loadEmployees};
+   assert.equal(await savePreparedSalaryRows(actualPrisma,input),315);
+   assert.equal(await savePreparedSalaryRows(actualPrisma,input),315,'Repeat save updates preparations without duplicate rows');
+   assert.equal(Number((await pool.query(`SELECT count(*) n FROM zermatt_salary_split_preparations WHERE "organizationId"='bulk'`)).rows[0].n),315);
+   const saved=(await pool.query(`SELECT sum("fullMonthlyGross") total FROM zermatt_salary_split_preparations WHERE "organizationId"='bulk'`)).rows[0].total;
+   await assert.rejects(savePreparedSalaryRows(actualPrisma,{...input,previewToken:'stale'}),/Preview the upload again/);
+   await pool.query(`UPDATE zermatt_salary_split_preparations SET "activatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"='bulk' AND "employeeId"='bulk-e-1'`);
+   const changedSource=source.map(row=>({...row,'Full Monthly Gross Salary':140000}));
+   await assert.rejects(savePreparedSalaryRows(actualPrisma,{...input,source:changedSource,previewToken:digestRows(prepareSalaryRows(changedSource,bulkStaff))}),/activated record cannot be overwritten/);
+   assert.equal((await pool.query(`SELECT sum("fullMonthlyGross") total FROM zermatt_salary_split_preparations WHERE "organizationId"='bulk'`)).rows[0].total,saved,'Protected-row failure rolls back the entire 315-row update');
+   assert.equal(Number((await pool.query(`SELECT count(*) n FROM organization_audits WHERE "organizationId"='bulk' AND action='IMPORTED_FOR_REVIEW'`)).rows[0].n),2,'Failed imports create no success audit');
+   assert.equal(await protectedSnapshot(),before,'Real adapter benefit imports leave payroll and loan data unchanged');
+   console.log('TRANSPORT_IMPORT_PRISMA_315_ROWS=passed; atomicRollback=passed; payrollUnchanged=passed');
+  } finally {await actualPrisma.$disconnect();}
 
   // Exercise Benefits mode inside a rolled-back transaction with existing approved payroll.
   const benefitsClient=await pool.connect();

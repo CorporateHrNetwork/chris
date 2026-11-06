@@ -18,7 +18,7 @@ function createService(prisma,loadEmployees,{benefitsOnly=false}={}){
  return {
   preview:async(org,user,input)=>{const result=await preview(prisma,org,user,input);return {row:result.row,previewToken:result.previewToken};},
   save:async(org,user,input)=>prisma.$transaction(async client=>{
-   await client.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',org);
+   await client.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',org);
    await client.$queryRawUnsafe('SELECT id FROM public.employees WHERE "organizationId"=$1 AND "employeeNumber"=$2 FOR UPDATE',org,String(input.employeeNumber||'').trim().toUpperCase());
    const result=await preview(client,org,user,input);
    if(input.previewToken!==result.previewToken)invalid('The salary or employee record changed. Preview this correction again before saving.');
