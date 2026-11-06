@@ -1,0 +1,37 @@
+const test=require('node:test'),assert=require('node:assert/strict'),XLSX=require('xlsx');
+const c=require('../src/services/zermattTransportBenefitControl');
+const d=require('../src/services/zermattMidmonthDomain');
+const employee={id:'e',employeeNumber:'Z1',employeeName:'Fixture Employee',employmentType:'Full-Time',hireDate:'2020-01-01',status:'ACTIVE'};
+const base=()=>d.buildLine({employee,salary:{fullMonthlyGross:200000},periodMonth:'2026-11',unpaid:10000,overpaid:5000});
+test('Head HR approves benefits for external workflow without altering regular payroll approval stages',()=>{
+ assert.equal(c.benefitTransition('DRAFT','HEAD_HR_APPROVE',['HEAD_HR']),'APPROVED');
+ assert.equal(c.benefitTransition('REJECTED','HEAD_HR_APPROVE',['HEAD_HR']),'APPROVED');
+ assert.throws(()=>c.benefitTransition('DRAFT','HEAD_HR_APPROVE',['PAYROLL_AUDITOR']),/assigned HEAD HR/);
+ assert.throws(()=>c.benefitTransition('DRAFT','AUDIT_APPROVE',['PAYROLL_AUDITOR']),/external benefit/);
+ assert.throws(()=>c.benefitTransition('PAID','HEAD_HR_APPROVE',['HEAD_HR']));
+ assert.equal(c.benefitTransition('AUDIT_REVIEW','RETURN_TO_DRAFT',['HEAD_HR']),'DRAFT');
+ assert.equal(c.benefitTransition('APPROVED','CONFIRM_PAYMENT',['CHIEF_ACCOUNTANT']),'PAID');
+ assert.throws(()=>c.benefitTransition('APPROVED','CONFIRM_PAYMENT',['HEAD_HR']),/CHIEF ACCOUNTANT/);
+ assert.equal(d.transition('DRAFT','SUBMIT',['HEAD_HR']),'AUDIT_REVIEW');
+ assert.throws(()=>d.transition('DRAFT','HEAD_HR_APPROVE',['HEAD_HR']));
+});
+test('benefit inputs add approved amounts once and preserve capped overpayment recovery',()=>{
+ const result=c.applyInputs(base(),{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2000});
+ assert.equal(result.netPay,58000);
+ const capped=c.applyInputs({...base(),previousOverpaid:80000},{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2000});
+ assert.equal(capped.overpaidDeduction,63000);
+ assert.equal(capped.overpaidRemaining,17000);
+ assert.equal(capped.netPay,0);
+ const counts=c.applyInputs(base(),{extraDays:2,phDays:1});
+ assert.equal(counts.netPay,base().netPay,'Reference day counts do not create guessed pay');
+ for(const input of [{bonus:-1},{overtimePhPay:1.001},{extraDays:-1},{phDays:Infinity}])assert.throws(()=>c.normalizeInputs(input));
+});
+test('authoritative export has all 18 columns in order and keeps AccountNO as text',()=>{
+ assert.deepEqual(c.HEADERS,['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime/Ph Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO']);
+ const s=c.applyInputs({...base(),location:'Fixture Branch',position:'Fixture Position',department:'Fixture Department',paymentDetails:{accountNumber:'0012345678'}},{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2000});
+ const r=c.buildRegister([{snapshot:s,netPay:s.netPay}]);
+ assert.deepEqual(r.rows[0],[1,'Fixture Branch','Z1','Fixture Employee','Fixture Position','Fixture Department','Full-Time',200000,150000,50000,2,1,1000,2000,10000,5000,58000,'0012345678']);
+ const w=XLSX.utils.book_new();XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet([r.headers,...r.rows]),'Register');
+ const loaded=XLSX.read(XLSX.write(w,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});
+ assert.equal(loaded.Sheets.Register.R2.v,'0012345678');assert.equal(loaded.Sheets.Register.R2.t,'s');
+});

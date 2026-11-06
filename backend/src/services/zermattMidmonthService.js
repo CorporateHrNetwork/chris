@@ -1,5 +1,6 @@
 const crypto=require('crypto');
 const domain=require('./zermattMidmonthDomain');
+const benefit=require('./zermattTransportBenefitControl');
 const {splitSalary,dateOnly}=require('./zermattSalarySplit');
 const id=()=>crypto.randomUUID();
 const hash=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -24,7 +25,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
  async function configuration(org,user) {
   const responsibilities=await roles(prisma,org,user);
   if(!responsibilities.length)domain.invalid('A regular payroll approval assignment is required.',403);
-  return {responsibilities,settings:await settings(prisma,org)};
+  return {responsibilities,settings:await settings(prisma,org),workflow:benefitsOnly?'HEAD_HR_EXTERNAL':'INTERNAL_PAYROLL'};
  }
  async function audit(c,org,user,run,action,notes) {
   await exec(c,'INSERT INTO public.zermatt_midmonth_events(id,"organizationId","runId","actorUserId",action,notes) VALUES($1,$2,$3,$4,$5,$6)',id(),org,run,user,action,notes);
@@ -37,7 +38,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const current=await settings(c,org);
    if(current?.enabled)domain.invalid('The initial salary batch is already activated. Use effective-dated salary reviews for subsequent changes.');
    const assignments=await q(c,'SELECT responsibility,COUNT(*)::int as count FROM public.payroll_approval_assignments WHERE "organizationId"=$1 AND "isActive" GROUP BY responsibility',org);
-   if(['HEAD_HR','PAYROLL_AUDITOR','GENERAL_MANAGER','CHIEF_ACCOUNTANT'].some(role=>assignments.find(a=>a.responsibility===role)?.count!==1))domain.invalid('Configure exactly one active regular-payroll assignee for each of Head HR, Auditor, General Manager and Chief Accountant before activation.');
+   if((benefitsOnly?['HEAD_HR']:['HEAD_HR','PAYROLL_AUDITOR','GENERAL_MANAGER','CHIEF_ACCOUNTANT']).some(role=>assignments.find(a=>a.responsibility===role)?.count!==1))domain.invalid('Configure exactly one active regular-payroll assignee for each of Head HR, Auditor, General Manager and Chief Accountant before activation.');
    if(benefitsOnly) {
     const staff=await q(c,`SELECT e.id,e."employeeNumber",e."employmentType",e."hireDate",s."fullMonthlyGross",s."employmentTypeSnapshot",s."hireDateSnapshot" FROM public.employees e LEFT JOIN public.zermatt_salary_split_preparations s ON s."organizationId"=e."organizationId" AND s."employeeId"=e.id AND s."effectiveFrom"=$2::date WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') ORDER BY e.id FOR SHARE OF e`,org,from);
     if(!staff.length||staff.some(e=>!e.fullMonthlyGross))domain.invalid('Prepare a transport-benefit salary basis for every current employee in Benefits for the activation month.');
@@ -79,6 +80,10 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   const byEmployee=new Map(rates.map(r=>[r.employeeId,r]));
   const onboarding=await q(c,`SELECT DISTINCT ON("employeeId") "employeeId","sectionData" FROM public.employee_onboardings WHERE "organizationId"=$1 ORDER BY "employeeId","updatedAt" DESC,"createdAt" DESC`,org);
   const bankByEmployee=new Map(onboarding.map(o=>[o.employeeId,o.sectionData?.['payment-details']||o.sectionData?.paymentDetails||{}]));
+  const metadata=benefitsOnly?await c.employee.findMany({where:{organizationId:org,id:{in:employees.map(e=>e.id)}},orderBy:{id:'asc'},select:{id:true,location:{select:{name:true}},designation:{select:{name:true}},department:{select:{name:true}}}}):[];
+  const metadataMap=new Map(metadata.map(e=>[e.id,e]));
+  const adjustments=benefitsOnly?await q(c,`SELECT l."employeeId",l.snapshot->'benefitInputs' AS inputs FROM public.zermatt_midmonth_lines l JOIN public.zermatt_midmonth_runs r ON r.id=l."runId" AND r."organizationId"=l."organizationId" WHERE l."organizationId"=$1 AND r."periodMonth"=$2::date`,org,from):[];
+  const adjustmentMap=new Map(adjustments.map(a=>[a.employeeId,a.inputs||{}]));
   const lines=employees.map(employee=>{
    const salary=byEmployee.get(employee.id);
    if(['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
@@ -86,9 +91,11 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const unpaid=debts.filter(b=>b.kind==='UNPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const overpaid=debts.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const bank=bankByEmployee.get(employee.id)||{};
-   return {...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
-  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0);
-  return {lines,balances,sourceHash:hash({employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails)})};
+   const line={...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
+   const meta=metadataMap.get(employee.id);
+   return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||''},adjustmentMap.get(employee.id)):line;
+  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0)));
+  return {lines,balances,sourceHash:hash({employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata,benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
  }
  async function generate(org,user,periodMonth) {
   return tx(async c=>{
@@ -118,8 +125,8 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   const responsibilities=await roles(prisma,org,user);if(!responsibilities.length)domain.invalid('Payroll assignment required.',403);
   const run=(await q(prisma,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2',org,runId))[0];if(!run)domain.invalid('Payroll run not found.',404);
   const lines=await q(prisma,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY snapshot->>\'employeeNumber\'',org,runId);
-  const events=await q(prisma,'SELECT action,notes,"createdAt" FROM public.zermatt_midmonth_events WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "createdAt"',org,runId);
-  return {run,lines,events,responsibilities};
+  const events=await q(prisma,'SELECT action,notes,"actorUserId","createdAt" FROM public.zermatt_midmonth_events WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "createdAt"',org,runId);
+  return {run,lines,events,responsibilities,...(benefitsOnly?{register:benefit.buildRegister(lines),workflow:"HEAD_HR_EXTERNAL"}:{})};
  }
  async function list(org,user) {
   const config=await configuration(org,user);
@@ -129,12 +136,12 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   return tx(async c=>{
    await lock(c,org);
    const run=(await q(c,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2 FOR UPDATE',org,runId))[0];if(!run)domain.invalid('Payroll run not found.',404);
-   const next=domain.transition(run.status,action,await roles(c,org,user));
+   const next=(benefitsOnly?benefit.benefitTransition:domain.transition)(run.status,action,await roles(c,org,user));
    if(!String(notes||'').trim())domain.invalid('Enter review notes or a payment-batch reference.',400);
-   if(['SUBMIT','AUDIT_APPROVE','GM_APPROVE'].includes(action)) {
+   if(['SUBMIT','AUDIT_APPROVE','GM_APPROVE','HEAD_HR_APPROVE'].includes(action)) {
     const current=await source(c,org,ym(run.periodMonth));
     if(current.sourceHash!==run.sourceHash)domain.invalid('Salary, employee or carry-forward records changed. Return this run for correction and regenerate it.');
-    if(action==='GM_APPROVE'&&current.lines.some(l=>l.netPay>0&&(!l.paymentDetails.bankName||!l.paymentDetails.accountName||!l.paymentDetails.accountNumber)))domain.invalid('Complete bank details before final approval. Return the run to Head HR and regenerate it after correction.');
+    if(['GM_APPROVE','HEAD_HR_APPROVE'].includes(action)&&current.lines.some(l=>l.netPay>0&&(!l.paymentDetails.bankName||!l.paymentDetails.accountName||!l.paymentDetails.accountNumber)))domain.invalid('Complete bank details before final approval. Return the run to Head HR and regenerate it after correction.');
    }
    if(action==='CONFIRM_PAYMENT') {
     const lines=await q(c,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY id FOR UPDATE',org,runId);
@@ -161,6 +168,36 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    await audit(c,org,user,runId,action,String(notes).trim());return {runId,status:next};
   });
  }
- return {activate,generate,list,detail,decide,configuration};
+
+ async function saveBenefitInputs(org,user,runId,lineId,input,notes) {
+  if(!benefitsOnly)domain.invalid('Benefit inputs are unavailable in regular payroll.');
+  if(!String(notes||'').trim())domain.invalid('Enter a reason for the benefit inputs.',400);
+  return tx(async c=>{
+   await lock(c,org);await requireRole(c,org,user,'HEAD_HR');
+   const run=(await q(c,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2 FOR UPDATE',org,runId))[0];
+   if(!run||!['DRAFT','REJECTED'].includes(run.status))domain.invalid('Only draft or rejected benefit runs can be edited.');
+   const current=await source(c,org,ym(run.periodMonth));
+   if(current.sourceHash!==run.sourceHash)domain.invalid('Source records changed. Regenerate the draft before editing benefit inputs.');
+   const line=(await q(c,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 AND id=$3 FOR UPDATE',org,runId,lineId))[0];
+   if(!line)domain.invalid('Benefit line not found.',404);
+   const snapshot=benefit.applyInputs(line.snapshot,input);
+   await exec(c,'UPDATE public.zermatt_midmonth_lines SET snapshot=$3::jsonb,"netPay"=$4 WHERE "organizationId"=$1 AND id=$2',org,lineId,JSON.stringify(snapshot),snapshot.netPay);
+   const refreshed=await source(c,org,ym(run.periodMonth));
+   await exec(c,'UPDATE public.zermatt_midmonth_runs SET "sourceHash"=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND id=$2',org,runId,refreshed.sourceHash);
+   await c.organizationAudit.create({data:{organizationId:org,actorUserId:user,entityType:'TransportBenefitLine',entityId:lineId,action:'BENEFIT_INPUTS_UPDATED',previousValue:{inputs:line.snapshot.benefitInputs||{},netPay:Number(line.netPay)},newValue:{inputs:snapshot.benefitInputs,netPay:snapshot.netPay},reason:String(notes).trim()}});
+   await audit(c,org,user,runId,'BENEFIT_INPUTS_UPDATED',String(notes).trim());
+   return {runId,lineId,netPay:snapshot.netPay};
+  });
+ }
+ async function recordExternalExport(org,user,runId,stage) {
+  return tx(async c=>{
+   await lock(c,org);await requireRole(c,org,user,'HEAD_HR');
+   const run=(await q(c,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2 FOR SHARE',org,runId))[0];
+   if(!run)domain.invalid('Benefit run not found.',404);
+   if(stage!=='review'&&!['APPROVED','PAID'].includes(run.status))domain.invalid('Head HR must approve this benefit run before external-workflow export.');
+   await audit(c,org,user,runId,'EXPORTED_FOR_EXTERNAL_APPROVAL',stage==='review'?'Draft review register generated by Head HR.':'Head HR-approved register exported for external Auditor → GM → Chief Accountant workflow. This does not confirm external approval or payment.');
+  });
+ }
+ return {activate,generate,list,detail,decide,configuration,saveBenefitInputs,recordExternalExport};
 }
 module.exports={createService};
