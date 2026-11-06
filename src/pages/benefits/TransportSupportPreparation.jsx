@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
 import { apiDownload, apiRequest, saveDownloadedBlob } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 const endpoint='/api/benefits/transport-support/preparation';
@@ -48,7 +49,7 @@ export default function TransportSupportPreparation() {
     {!enabled&&<p>{preparationStatus==='STORAGE_NOT_READY'?'Benefit storage needs verification before imports. Contact support; preview remains available.':'Benefit imports are awaiting release verification. Preview remains available.'}</p>}
     <h2>Individual full salary</h2>
     {!individual?<button type="button" disabled={busy} onClick={()=>{setIndividual({...emptyIndividual});setIndividualPreview(null);}}>Add / correct individual salary</button>:<div style={{border:'1px solid #65776b',padding:16,marginBlock:12}}>
-      <label>Employee <select aria-label="Individual salary employee" disabled={busy||!!individual.preparationId} value={individual.employeeNumber} onChange={e=>updateIndividual('employeeNumber',e.target.value)}><option value="">Choose employee</option>{staff.map(e=><option key={e.employeeNumber} value={e.employeeNumber}>{e.employeeNumber} · {e.employeeName} · {e.branch}</option>)}</select></label>
+      <EmployeeSearchSelect label="Individual salary employee" options={staff} disabled={busy||!!individual.preparationId} value={individual.employeeNumber} onChange={value=>updateIndividual('employeeNumber',value)} placeholder="Search employee name or number" />
       <label> Full agreed monthly salary (NGN) <input aria-label="Individual full monthly salary" type="number" min="0.01" step="0.01" disabled={busy} value={individual.amount} onChange={e=>updateIndividual('amount',e.target.value)}/></label>
       <label> Effective benefit month <input aria-label="Individual salary effective month" type="month" disabled={busy||!!individual.preparationId} value={individual.effectiveFrom.slice(0,7)} onChange={e=>updateIndividual('effectiveFrom',e.target.value?`${e.target.value}-01`:'')}/></label>
       <label style={{display:'block',marginBlock:12}}>Correction / preparation reason <textarea aria-label="Individual salary correction reason" disabled={busy} maxLength={1000} value={individual.reason} onChange={e=>updateIndividual('reason',e.target.value)}/></label>
@@ -75,5 +76,6 @@ export default function TransportSupportPreparation() {
     <p>Previous unpaid amounts will be added on the following month’s 15th; previous overpaid amounts will be deducted in a separate column. They are reconciliations, not changes to the agreed full salary.</p>
   </section>;
 }
+
 
 

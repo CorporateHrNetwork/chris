@@ -17,6 +17,7 @@ export default function EmployeeSearchSelect({
   required = false,
   placeholder = "Search employee number or name",
   endpoint = null,
+  options: providedOptions = null,
   suretyFor = null,
 }) {
   const [options, setOptions] = useState([]);
@@ -31,6 +32,10 @@ export default function EmployeeSearchSelect({
 
   useEffect(() => {
     let active = true;
+    if (providedOptions !== null) {
+      setOptions(providedOptions);setLoading(false);setError("");
+      return () => { active = false; };
+    }
     (async () => {
       try {
         setLoading(true);
@@ -47,7 +52,7 @@ export default function EmployeeSearchSelect({
       }
     })();
     return () => { active = false; };
-  }, [lookupEndpoint]);
+  }, [lookupEndpoint, providedOptions]);
 
   useEffect(() => {
     if (!value && committedValueRef.current) {
