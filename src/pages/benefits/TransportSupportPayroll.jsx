@@ -1,4 +1,5 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
+import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
 import {useNavigate} from 'react-router-dom';
 import {apiRequest,apiDownload,saveDownloadedBlob} from '../../services/api';
 const api='/api/benefits/transport-support';
@@ -44,6 +45,7 @@ export default function TransportSupportPayroll() {
   const line=detail.lines.find(l=>l.id===lineId);const input=line?.snapshot.benefitInputs||{};
   setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,overtimePhPay:input.overtimePhPay||0,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
  }
+ const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const editable=detail&&['DRAFT','REJECTED'].includes(detail.run.status);
  return <section style={{padding:24,maxWidth:1700,margin:'0 auto'}}>
@@ -94,10 +96,10 @@ export default function TransportSupportPayroll() {
    {head&&editable&&<>
     {!editor?<button disabled={busy||!ready||!detail.lines.length} onClick={()=>editLine(detail.lines[0].id)}>Edit Days / Pay / Previous-month Corrections</button>:<fieldset>
      <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
-     <label>Employee <select value={editor.lineId} disabled={busy} onChange={e=>editLine(e.target.value)}>{detail.lines.map(l=><option key={l.id} value={l.id}>{l.snapshot.employeeNumber} · {l.snapshot.employeeName}</option>)}</select></label>
+     <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
      {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['overtimePhPay','Approved Overtime/Ph Pay'],['previousShortPayment','Previous Month Short Payment (blank = ledger)'],['previousOverpayment','Previous Month Overpayment (blank = ledger)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
      <p>Enter the approved overtime/PH amount. Day counts are reference quantities; they do not automatically create a payment. Prior-month amounts default to the transport ledger. Enter a corrected total, including zero, with the reason above; leave blank to use the ledger. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
-     <button disabled={busy||!ready||!notes.trim()} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Benefit Inputs</button>
+     <button disabled={busy||!ready||!notes.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Benefit Inputs</button>
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
     </fieldset>}
    </>}
@@ -117,4 +119,5 @@ export default function TransportSupportPayroll() {
   </>}
  </section>;
 }
+
 
