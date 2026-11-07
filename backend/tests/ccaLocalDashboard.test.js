@@ -38,6 +38,17 @@ test("loopback server serves UI and rejects foreign host and origin", async () =
     const page = await fetch(base);
     assert.equal(page.status, 200);
     assert.match(await page.text(), /Local-only fictional simulation/);
+    const controlCentre = await fetch(base + "/control-centre");
+    assert.equal(controlCentre.status, 200);
+    const controlHtml = await controlCentre.text();
+    assert.match(controlHtml, /Central Agency Control Centre/);
+    assert.match(controlHtml, /Offline fictional preview/);
+    assert.match(controlHtml, /AI Agent Studio/);
+    const controlScript = await fetch(base + "/control-centre.js");
+    assert.equal(controlScript.status, 200);
+    assert.match(await controlScript.text(), /Static fictional data/);
+    const unapprovedRoute = await fetch(base + "/control-centre/private");
+    assert.equal(unapprovedRoute.status, 404);
     const state = await (await fetch(base + "/api/state")).json();
     assert.equal(state.demonstration, true);
     const foreignHostStatus = await new Promise((resolve, reject) => {
