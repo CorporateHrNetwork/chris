@@ -9,6 +9,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { createSyntheticSupportWorkflow } = require("../../backend/src/cca/syntheticSupportWorkflow");
 const { derivePlatformContext } = require("../../backend/src/cca/platformDirectoryPolicy");
+const { createLocalSnapshotStore } = require("./localSnapshotStore");
 
 const HOST = "127.0.0.1";
 const TENANTS = Object.freeze([
@@ -28,9 +29,22 @@ function platformContext(id, role, tenantId) {
   });
 }
 
-function createDemoState() {
-  const flow = createSyntheticSupportWorkflow();
+function createDemoState(savedSnapshot) {
+  if (savedSnapshot && (!savedSnapshot.workflow || !Array.isArray(savedSnapshot.index)))
+    throw new Error("CCA_INVALID_DEMO_SNAPSHOT");
+  const flow = createSyntheticSupportWorkflow(savedSnapshot?.workflow);
   const index = new Map();
+  if (savedSnapshot) {
+    for (const pair of savedSnapshot.index) {
+      if (!Array.isArray(pair) || pair.length !== 2 ||
+          typeof pair[0] !== "string" ||
+          !TENANTS.some(t => t.id === pair[1])) throw new Error("CCA_INVALID_DEMO_INDEX");
+      if (index.has(pair[0]) || !savedSnapshot.workflow.cases.some(c => c.id === pair[0] && c.tenantId === pair[1]))
+        throw new Error("CCA_INVALID_DEMO_INDEX");
+      index.set(pair[0], pair[1]);
+    }
+    if (index.size !== savedSnapshot.workflow.cases.length) throw new Error("CCA_INCOMPLETE_DEMO_INDEX");
+  }
   function submit(tenantId, description) {
     const tenant = TENANTS.find(t => t.id === tenantId);
     if (!tenant) return { ok: false, code: "UNKNOWN_DEMO_TENANT" };
@@ -43,8 +57,10 @@ function createDemoState() {
     return result;
   }
   // Fictional seeded cases; no integration with the live CHRiS demo tenants.
-  submit("demo-cedar", "Synthetic onboarding request: explain the employee record workflow.");
-  submit("demo-atlas", "Synthetic support request: report filtering needs clarification.");
+  if (!savedSnapshot) {
+    submit("demo-cedar", "Synthetic onboarding request: explain the employee record workflow.");
+    submit("demo-atlas", "Synthetic support request: report filtering needs clarification.");
+  }
 
   function state() {
     const cases = [...index].map(([id, tenantId]) => {
@@ -74,7 +90,38 @@ function createDemoState() {
     if (!tenantId) return { ok: false, code: "CASE_NOT_FOUND" };
     return flow.getEvents({ caseId, context: platformContext("demo-audit-reader", "SERVICE_AGENT", tenantId) });
   }
-  return Object.freeze({ state, submit, operate, audit });
+  function exportSnapshot() {
+    return { workflow: flow.exportSnapshot(), index: [...index.entries()] };
+  }
+  return Object.freeze({ state, submit, operate, audit, exportSnapshot });
+}
+
+/** Persist before acknowledging a successful mutation. Restore the previous
+ * in-memory state if disk writing fails, instead of reporting false success. */
+function createDurableDemoState({ dataDir } = {}) {
+  const store = createLocalSnapshotStore({ dataDir });
+  const existing = store.load();
+  let demo = createDemoState(existing || undefined);
+  if (!existing) store.save(demo.exportSnapshot());
+  function mutation(method, ...args) {
+    const previous = demo.exportSnapshot();
+    const result = demo[method](...args);
+    if (!result.ok) return result;
+    try {
+      store.save(demo.exportSnapshot());
+      return result;
+    } catch {
+      demo = createDemoState(previous);
+      return { ok: false, code: "CCA_LOCAL_SAVE_FAILED" };
+    }
+  }
+  return Object.freeze({
+    state: () => demo.state(),
+    audit: (caseId) => demo.audit(caseId),
+    submit: (tenantId, description) => mutation("submit", tenantId, description),
+    operate: (operation) => mutation("operate", operation),
+    storageInfo: () => ({ primary: store.primary, backup: store.backup }),
+  });
 }
 
 function parseBody(req) {
@@ -144,11 +191,21 @@ function createServer(demo = createDemoState()) {
 }
 
 if (require.main === module) {
-  const server = createServer();
+  let demo;
+  try { demo = createDurableDemoState(); }
+  catch (error) {
+    console.error("CCA local persistence unavailable; no server started:", error.message);
+    process.exitCode = 1;
+  }
+  if (demo) {
+  const server = createServer(demo);
   const port = Number(process.env.CCA_LOCAL_PORT || 4179);
   server.listen(port, HOST, () => {
     console.log("CCA fictional local prototype: http://" + HOST + ":" + server.address().port);
-    console.log("No CHRiS production connection. Close with Ctrl+C.");
+    console.log("Fictional cases saved locally. No CHRiS production connection.");
+    console.log("Local data: " + demo.storageInfo().primary);
+    console.log("Close with Ctrl+C.");
   });
+  }
 }
-module.exports = { createServer, createDemoState, HOST };
+module.exports = { createServer, createDemoState, createDurableDemoState, HOST };
