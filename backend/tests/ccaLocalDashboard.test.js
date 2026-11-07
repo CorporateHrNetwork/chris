@@ -1,6 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const { createServer, createDemoState, HOST } = require("../../tools/cca-local-demo/server");
 
 test("fictional dashboard state contains no real tenant or production data", () => {
@@ -39,8 +40,15 @@ test("loopback server serves UI and rejects foreign host and origin", async () =
     assert.match(await page.text(), /Local-only fictional simulation/);
     const state = await (await fetch(base + "/api/state")).json();
     assert.equal(state.demonstration, true);
-    const foreignHost = await fetch(base + "/api/state", { headers: { Host: "example.org" } });
-    assert.equal(foreignHost.status, 403);
+    const foreignHostStatus = await new Promise((resolve, reject) => {
+      const req = http.get({ hostname: HOST, port: server.address().port,
+        path: "/api/state", headers: { Host: "example.org" } }, response => {
+        response.resume();
+        response.on("end", () => resolve(response.statusCode));
+      });
+      req.on("error", reject);
+    });
+    assert.equal(foreignHostStatus, 403);
     const foreignOrigin = await fetch(base + "/api/submit", {
       method: "POST", headers: { Origin: "https://attacker.example", "Content-Type": "application/json" },
       body: JSON.stringify({ tenantId: "demo-cedar", description: "test" })
