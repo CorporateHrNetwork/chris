@@ -6,11 +6,53 @@ const { resolveIntake } = require("./tenantIntakePolicy");
 const { PERMISSIONS } = require("./controlPlanePolicy");
 const { isAuthorized } = require("./platformDirectoryPolicy");
 
-function createSyntheticSupportWorkflow() {
+function validateSnapshot(snapshot) {
+  if (!snapshot || snapshot.version !== 1 ||
+      !Number.isSafeInteger(snapshot.sequence) || snapshot.sequence < 0 ||
+      !Array.isArray(snapshot.cases) || !Array.isArray(snapshot.idempotency) ||
+      !Array.isArray(snapshot.events) ||
+      snapshot.cases.length > 3000 || snapshot.events.length > 20000 ||
+      snapshot.idempotency.length > 3000) throw new Error("CCA_INVALID_WORKFLOW_SNAPSHOT");
+  const caseIds = new Set();
+  const statuses = new Set(["NEW", "TRIAGED", "ASSIGNED", "AWAITING_APPROVAL", "APPROVED", "AWAITING_CLIENT_VALIDATION", "CLOSED"]);
+  let greatestId = 0;
+  for (const c of snapshot.cases) {
+    if (!c || typeof c.id !== "string" || !/^CCA-DEMO-[0-9]{4,}$/.test(c.id) ||
+        caseIds.has(c.id) || !["demo-cedar", "demo-atlas"].includes(c.tenantId) ||
+        typeof c.requesterSubjectId !== "string" || !c.requesterSubjectId ||
+        typeof c.description !== "string" || c.description.length > 10000 ||
+        !statuses.has(c.status)) throw new Error("CCA_INVALID_WORKFLOW_CASE");
+    caseIds.add(c.id);
+    greatestId = Math.max(greatestId, Number(c.id.replace("CCA-DEMO-", "")));
+  }
+  if (snapshot.sequence < greatestId) throw new Error("CCA_INVALID_WORKFLOW_SEQUENCE");
+  const keys = new Set();
+  for (const entry of snapshot.idempotency) {
+    if (!Array.isArray(entry) || entry.length !== 2 ||
+        typeof entry[0] !== "string" || !entry[0].startsWith("demo-") ||
+        keys.has(entry[0]) || !caseIds.has(entry[1])) throw new Error("CCA_INVALID_WORKFLOW_IDEMPOTENCY");
+    keys.add(entry[0]);
+  }
+  for (let i = 0; i < snapshot.events.length; i++) {
+    const ev = snapshot.events[i];
+    if (!ev || ev.sequence !== i + 1 || !caseIds.has(ev.caseId) ||
+        !["demo-cedar", "demo-atlas"].includes(ev.tenantId) ||
+        typeof ev.event !== "string" || typeof ev.actor !== "string")
+      throw new Error("CCA_INVALID_WORKFLOW_AUDIT");
+  }
+}
+function createSyntheticSupportWorkflow(initialSnapshot) {
+  if (initialSnapshot !== undefined) validateSnapshot(initialSnapshot);
   const cases = new Map();
   const idempotency = new Map();
   const eventLog = [];
   let sequence = 0;
+  if (initialSnapshot) {
+    for (const c of initialSnapshot.cases) cases.set(c.id, { ...c });
+    for (const [key, id] of initialSnapshot.idempotency) idempotency.set(key, id);
+    for (const ev of initialSnapshot.events) eventLog.push({ ...ev, details: { ...ev.details } });
+    sequence = initialSnapshot.sequence;
+  }
   const deny = (code) => ({ ok: false, code });
   const record = (ticket, event, actor, details = {}) => {
     const entry = Object.freeze({
@@ -114,6 +156,13 @@ function createSyntheticSupportWorkflow() {
       return deny("CASE_NOT_FOUND");
     return { ok: true, events: eventLog.filter(e => e.caseId === caseId).map(e => ({ ...e })) };
   }
-  return Object.freeze({ submit, act, clientConfirm, getCase, getEvents });
+  function exportSnapshot() {
+    return JSON.parse(JSON.stringify({
+      version: 1, sequence,
+      cases: [...cases.values()], idempotency: [...idempotency.entries()],
+      events: eventLog
+    }));
+  }
+  return Object.freeze({ submit, act, clientConfirm, getCase, getEvents, exportSnapshot });
 }
 module.exports = { createSyntheticSupportWorkflow };
