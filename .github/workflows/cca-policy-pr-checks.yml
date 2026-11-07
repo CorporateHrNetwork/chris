@@ -1,0 +1,30 @@
+name: CCA isolated policy tests
+
+on:
+  pull_request:
+    paths:
+      - "backend/src/cca/**"
+      - "backend/tests/cca*.test.js"
+      - "src/pages/cca/**"
+      - "docs/cca/**"
+      - ".github/workflows/cca-policy-pr-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout proposed changes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run CCA pure policy unit tests
+        run: node --test backend/tests/ccaControlPlanePolicy.test.js backend/tests/ccaLifecyclePolicy.test.js
