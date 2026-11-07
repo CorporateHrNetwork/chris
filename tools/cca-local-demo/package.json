@@ -1,0 +1,6 @@
+{
+  "name": "cca-local-fictional-dashboard",
+  "private": true,
+  "type": "commonjs",
+  "description": "Local-only standalone CCA demo; never production"
+}
