@@ -110,13 +110,18 @@ function createServer(demo = createDemoState()) {
     if (origin && !["http://127.0.0.1:" + req.socket.localPort, "http://localhost:" + req.socket.localPort].includes(origin)) {
       return send(res, 403, { ok: false, code: "INVALID_ORIGIN" });
     }
-    if (req.method === "GET" && ["/", "/client.js"].includes(url.pathname)) {
-      const isJS = url.pathname === "/client.js";
+    const staticPages = Object.freeze({
+      "/": html, "/client.js": js,
+      "/control-centre": path.join(__dirname, "control-centre.html"),
+      "/control-centre.js": path.join(__dirname, "control-centre.js"),
+    });
+    if (req.method === "GET" && Object.prototype.hasOwnProperty.call(staticPages, url.pathname)) {
+      const isJS = url.pathname.endsWith(".js");
       res.writeHead(200, { "Content-Type": isJS ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8",
         "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
         "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" });
-      return fs.createReadStream(isJS ? js : html).pipe(res);
+      return fs.createReadStream(staticPages[url.pathname]).pipe(res);
     }
     if (req.method === "GET" && url.pathname === "/api/state") return send(res, 200, demo.state());
     if (req.method === "GET" && url.pathname === "/api/audit")
