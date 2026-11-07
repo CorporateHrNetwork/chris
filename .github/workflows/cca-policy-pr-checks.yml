@@ -27,4 +27,4 @@ jobs:
         with:
           node-version: "22"
       - name: Run CCA pure policy unit tests
-        run: node --test backend/tests/ccaControlPlanePolicy.test.js backend/tests/ccaLifecyclePolicy.test.js
+        run: node --test backend/tests/ccaControlPlanePolicy.test.js backend/tests/ccaLifecyclePolicy.test.js backend/tests/ccaPlatformSessionPolicy.test.js
