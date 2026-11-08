@@ -111,17 +111,18 @@ test("protected Service Desk automatically routes fictional intake and persists 
     assert.equal(receipt.tenantId, "demo-cedar");
     assert.equal(receipt.assignee, "Payroll Support Agent");
     assert.equal(receipt.status, "ASSIGNED");
+    assert.match(receipt.draft, /missing payslip.*payroll month/);
     const replay = await (await post("support-intake", request, headers)).json();
     assert.equal(replay.case.id, receipt.id);
     assert.equal(replay.replayed, true);
     const view = await (await fetch(origin + "/api/workspace?module=support", { headers })).json();
-    assert.equal(view.routingCases.filter(c => c.id === receipt.id).length, 1);
+    assert.deepEqual(view.routingCases.filter(c => c.id === receipt.id).map(c => c.draft), [receipt.draft]);
     assert.equal(JSON.stringify(view).includes("Atlas"), false);
   });
   const { createDurableDemoState } = require("../../tools/cca-local-demo/server");
   const restored = createDurableDemoState({ dataDir: path.join(options.directory, "fictional-support") });
   assert.deepEqual(restored.audit(receipt.id).events.map(e => e.event),
-    ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED"]);
+    ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED", "SUPPORT_DRAFT_PREPARED"]);
 });
 
 test("expired staging page refresh returns to sign-in while APIs stay protected", async t => {

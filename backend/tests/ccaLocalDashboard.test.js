@@ -22,7 +22,7 @@ test("local demo walks through the full safe synthetic workflow", () => {
   assert.equal(demo.operate({ caseId: id, operation: "APPROVE" }).case.status, "APPROVED");
   assert.equal(demo.operate({ caseId: id, operation: "RESOLVE", resolution: "Fictional guidance provided" }).case.status, "AWAITING_CLIENT_VALIDATION");
   assert.equal(demo.operate({ caseId: id, operation: "CONFIRM" }).case.status, "CLOSED");
-  assert.equal(demo.audit(id).events.length, 7);
+  assert.equal(demo.audit(id).events.length, 8);
 });
 test("unknown organizations and cases cannot be acted on", () => {
   const demo = createDemoState();

@@ -51,7 +51,7 @@ async function selectCase(id, rerender = true) {
   $("caseDetails").textContent = c.id + " | " + (tenant?.name || c.tenantId) + " | " + c.description;
   $("caseStatus").textContent = "Status: " + c.status.replaceAll("_", " ") + (c.assignee ? " · Assigned to " + c.assignee : "");
   $("caseAnalysis").textContent = [c.analysis?.reason, c.analysis?.question].filter(Boolean).join(" ");
-  $("recommendation").value = c.recommendation || "";
+  $("recommendation").value = c.recommendation || c.draft || "";
   $("resolution").value = c.resolution || "";
   const valid = { ASSIGNED: ["RECOMMEND"],
     AWAITING_APPROVAL: ["APPROVE"], APPROVED: ["RESOLVE"], AWAITING_CLIENT_VALIDATION: ["CONFIRM"] };

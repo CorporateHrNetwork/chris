@@ -16,6 +16,11 @@ function renderRouting(view, data){
   item.append(text("strong",c.id+" · "+c.status.replaceAll("_"," ")+" · "+(c.assignee||"Unassigned")),
    text("p",c.description),text("p",c.analysis?.reason||""));
   if(c.analysis?.question)item.append(text("p",c.analysis.question));
+  if(c.draft){
+   const draft=document.createElement("section");
+   draft.append(text("strong","Draft response · Awaiting human review"),text("p",c.draft));
+   item.append(draft);
+  }
   list.append(item);
  }
  view.append(list);
@@ -51,7 +56,7 @@ async function openWorkspace(id){
   const intro=text("p",data.description);intro.className="muted";view.append(intro);
   if(data.routingCases){
    renderRouting(view,data);
-   byId("feedback").textContent="Automatic routing · fictional data · no agent execution";
+   byId("feedback").textContent="Automatic routing and response drafts · fictional data · human review required";
   }else{
   const table=document.createElement("table"),body=document.createElement("tbody");
   for(const entry of data.records){

@@ -31,4 +31,21 @@ function analyzeSupportRequest(description) {
   };
 }
 
-module.exports = { ANALYSIS_AGENT, analyzeSupportRequest };
+const DRAFTS = Object.freeze({
+  PAYROLL: "Thanks for reporting this payroll issue. Which payroll period and branch are affected, and what did you expect to see? A support reviewer can use those details to check the payroll workflow.",
+  HR: "Thanks for contacting HR Support. Which HR screen or workflow are you using, and which step needs guidance? Please describe the issue without including personal employee information.",
+  BILLING: "Thanks for contacting Billing Support. Please share the invoice reference or subscription period and describe the discrepancy. Leave out payment card and bank details.",
+  TECHNICAL: "Thanks for reporting this technical issue. Please share the affected screen, when it occurred, and the exact error message if available. Leave out passwords and authenticator codes.",
+  CUSTOMER_SUCCESS: "Thanks for reaching out. Please share the CHRiS workflow your team wants to learn, the intended audience, and the outcome you want. We can use those details to prepare a walkthrough.",
+});
+
+function draftSupportResponse({ analysis, assignee, description }) {
+  if (!analysis || !ROUTES.some(route => route.category === analysis.category && route.agent === assignee)) return null;
+  if (analysis.category === "PAYROLL" && /\bpayslips?\b/i.test(description) &&
+      /\b(missing|unavailable|not (?:visible|showing|available)|can(?:not|'t) (?:find|see))\b/i.test(description)) {
+    return "Thanks for reporting the missing payslip. Please confirm the payroll month, the branch, and whether the payslip is missing from Employee Self-Service or from a payroll export. A Payroll Support reviewer can then check whether the payslip was generated and made available.";
+  }
+  return DRAFTS[analysis.category];
+}
+
+module.exports = { ANALYSIS_AGENT, analyzeSupportRequest, draftSupportResponse };

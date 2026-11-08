@@ -14,8 +14,11 @@ together before the server acknowledges receipt. The same request identifier
 returns the existing case. Pending cases in older fictional snapshots are
 routed automatically when the snapshot is loaded.
 
-This local stage records assignments. Specialist agents do not execute work,
-send messages or modify customer systems. The existing synthetic workflow
+Assigned cases get a specialist draft from category-specific templates.
+CCA saves the draft with the case and displays it for human review. A case
+that needs clarification displays its follow-up question. Previously assigned
+cases with a supported route get a draft when their saved state is loaded.
+Drafts remain internal. The existing synthetic workflow
 still requires separate approval before resolution and requester confirmation
 before closure. Live portal, email and WhatsApp connectors are outside this
 stage.

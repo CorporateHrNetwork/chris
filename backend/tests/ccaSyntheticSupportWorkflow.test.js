@@ -31,14 +31,14 @@ test("end-to-end synthetic support case requires independent approval and client
   assert.equal(receipt.case.status, "ASSIGNED");
   assert.equal(receipt.case.assignee, "HR Support Agent");
   assert.deepEqual(flow.getEvents({ caseId: id, context: agent }).events.map(e => e.event),
-    ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED"]);
+    ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED", "SUPPORT_DRAFT_PREPARED"]);
   assert.equal(flow.act({ caseId: id, context: agent, operation: "RECOMMEND", recommendation: "Review the synthetic branch filter" }).case.status, "AWAITING_APPROVAL");
   assert.equal(flow.act({ caseId: id, context: agent, operation: "RESOLVE", resolution: "Change completed" }).code, "INVALID_WORKFLOW_TRANSITION");
   assert.equal(flow.act({ caseId: id, context: agent, operation: "APPROVE", approval: { approverId: "support-A", context: agent, reference: "bad" } }).code, "INDEPENDENT_APPROVAL_REQUIRED");
   assert.equal(flow.act({ caseId: id, context: agent, operation: "APPROVE", approval: { approverId: "approver-A", context: approver, reference: "mock-approval-001" } }).case.status, "APPROVED");
   assert.equal(flow.act({ caseId: id, context: agent, operation: "RESOLVE", resolution: "Synthetic guidance issued for client validation" }).case.status, "AWAITING_CLIENT_VALIDATION");
   assert.equal(flow.clientConfirm({ caseId: id, verifiedTenantId: "tenant-A", verifiedSubjectId: "client-A" }).case.status, "CLOSED");
-  assert.equal(flow.getEvents({ caseId: id, context: agent }).events.length, 7);
+  assert.equal(flow.getEvents({ caseId: id, context: agent }).events.length, 8);
 });
 test("cross-tenant staff cannot read, modify or approve another tenant's case", () => {
   const flow = createSyntheticSupportWorkflow();

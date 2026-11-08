@@ -68,3 +68,24 @@ test("existing malformed primary cannot be overwritten by an unrelated save", ()
     assert.equal(fs.readFileSync(store.primary, "utf8"), "BROKEN");
   } finally { clean(dir); }
 });
+
+test("assigned cases get exactly one draft when a pre-draft snapshot is reopened", () => {
+  const dir = temp();
+  try {
+    const store = createLocalSnapshotStore({ dataDir: dir });
+    createDurableDemoState({ dataDir: dir });
+    const previous = store.load();
+    for (const ticket of previous.workflow.cases) delete ticket.draft;
+    previous.workflow.events = previous.workflow.events.filter(e => e.event !== "SUPPORT_DRAFT_PREPARED")
+      .map((e, i) => ({ ...e, sequence: i + 1 }));
+    store.save(previous);
+
+    for (let i = 0; i < 2; i++) {
+      const reopened = createDurableDemoState({ dataDir: dir });
+      const [assigned, clarification] = reopened.state().cases;
+      assert.match(assigned.draft, /HR Support/);
+      assert.equal(clarification.draft, undefined);
+      assert.equal(reopened.audit(assigned.id).events.filter(e => e.event === "SUPPORT_DRAFT_PREPARED").length, 1);
+    }
+  } finally { clean(dir); }
+});

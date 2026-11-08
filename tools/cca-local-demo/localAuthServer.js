@@ -180,7 +180,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       }
       if (support && moduleId === "support") {
         const routingCases = support.state("demo-cedar").cases.map(
-          ({ id, description, status, assignee, analysis }) => ({ id, description, status, assignee, analysis })
+          ({ id, description, status, assignee, analysis, draft }) => ({ id, description, status, assignee, analysis, draft })
         );
         return json(res, 200, { ok: true, demonstration: true,
           description: "Fictional Cedar support requests are analyzed and routed automatically.",

@@ -2,7 +2,7 @@
 
 // Synthetic in-memory CCA service workflow. No network/DB/file access,
 // credentials, background agents, tenant sessions or production actions.
-const { ANALYSIS_AGENT, analyzeSupportRequest } = require("./supportIntakeAnalysis");
+const { ANALYSIS_AGENT, analyzeSupportRequest, draftSupportResponse } = require("./supportIntakeAnalysis");
 const { resolveIntake } = require("./tenantIntakePolicy");
 const { PERMISSIONS } = require("./controlPlanePolicy");
 const { isAuthorized } = require("./platformDirectoryPolicy");
@@ -67,8 +67,15 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     id: c.id, tenantId: c.tenantId, requesterSubjectId: c.requesterSubjectId,
     status: c.status, description: c.description, assignee: c.assignee,
     recommendation: c.recommendation, resolution: c.resolution,
-    analysis: c.analysis && { ...c.analysis }
+    analysis: c.analysis && { ...c.analysis }, draft: c.draft
   });
+  function prepareDraft(ticket) {
+    if (ticket.status !== "ASSIGNED" || ticket.draft) return;
+    const draft = draftSupportResponse(ticket);
+    if (!draft) return;
+    ticket.draft = draft;
+    record(ticket, "SUPPORT_DRAFT_PREPARED", ticket.assignee, { category: ticket.analysis.category });
+  }
   function route(ticket) {
     const analysis = analyzeSupportRequest(ticket.description);
     ticket.analysis = analysis;
@@ -79,6 +86,7 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
   }
   for (const ticket of cases.values()) {
     if (ticket.status === "NEW" || ticket.status === "TRIAGED") route(ticket);
+    prepareDraft(ticket);
   }
 
   function submit({ channel, payload, identity }) {
@@ -101,6 +109,7 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     idempotency.set(key, ticket.id);
     record(ticket, "CASE_RECEIVED", intake.requesterSubjectId, { channel });
     route(ticket);
+    prepareDraft(ticket);
     return { ok: true, replayed: false, case: safeCase(ticket) };
   }
 
