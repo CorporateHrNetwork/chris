@@ -112,7 +112,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
             scope: "CCA", demonstration: true }
         : FAIL);
     }
-    if (support && req.method === "POST" && url.pathname === "/api/support-intake") {
+    if (support && req.method === "POST" && ["/api/support-intake", "/api/support-workflow"].includes(url.pathname)) {
       if (!origins.includes(origin)) return json(res, 403, FAIL);
       if (!auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted)
         return json(res, 403, FAIL);
@@ -123,8 +123,19 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       catch { return json(res, 400, FAIL); }
       try { verifyState(); }
       catch { return json(res, 503, FAIL); }
-      if (!auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted)
-        return json(res, 403, FAIL);
+      const operator = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar");
+      if (!operator.accepted) return json(res, 403, FAIL);
+      if (url.pathname === "/api/support-workflow") {
+        if (typeof body.caseId !== "string" || !/^CCA-DEMO-[0-9]{4,}$/.test(body.caseId) ||
+            !Number.isSafeInteger(body.version) || body.version < 0 ||
+            !["RECOMMEND", "APPROVE", "RETURN", "REPLY", "CONFIRM"].includes(body.operation) ||
+            (["RECOMMEND", "RETURN", "REPLY"].includes(body.operation) &&
+             (typeof body.text !== "string" || !body.text.trim() || body.text.length > 1500)))
+          return json(res, 400, { ok: false, code: "INVALID_WORKFLOW_REQUEST" });
+        const result = support.simulate("demo-cedar", operator.principalId, body);
+        return json(res, result.ok ? 200 : result.code === "CASE_CHANGED" ? 409 :
+          result.code === "CCA_LOCAL_SAVE_FAILED" ? 503 : 400, result);
+      }
       if (typeof body.description !== "string" || body.description.length > 500 ||
           typeof body.requestId !== "string" || !/^[a-f0-9-]{36}$/i.test(body.requestId))
         return json(res, 400, FAIL);
@@ -179,12 +190,20 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         return json(res, 403, { ok: false, code: "PERMISSION_DENIED" });
       }
       if (support && moduleId === "support") {
+        const canSimulateIntake = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted;
         const routingCases = support.state("demo-cedar").cases.map(
-          ({ id, description, status, assignee, analysis, draft }) => ({ id, description, status, assignee, analysis, draft })
+          ({ id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution }) => {
+            const history = support.audit(id).events;
+            return { id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution,
+              decisions: history.filter(e => ["RECOMMENDATION_APPROVED", "RECOMMENDATION_RETURNED"].includes(e.event)),
+              deliveredResponses: history.filter(e => e.event === "RESOLUTION_SENT_TO_CLIENT" && e.details.response)
+                .map(e => e.details.response)
+            };
+          }
         );
         return json(res, 200, { ok: true, demonstration: true,
           description: "Fictional Cedar support requests are analyzed and routed automatically.",
-          canSimulateIntake: auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted,
+          canSimulateIntake,
           routingCases });
       }
       return json(res, 200, { ok: true, demonstration: true,

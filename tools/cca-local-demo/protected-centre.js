@@ -3,13 +3,61 @@ const byId=id=>document.getElementById(id);
 async function getJSON(url,options){
  const response=await fetch(url,{cache:"no-store",credentials:"same-origin",...(options||{})});
  if(response.status===401){location.replace("/");throw Error("Session expired");}
+ if(response.status===409)throw Error("This case changed. Reopen Service Desk and try again.");
  if(response.status===403)throw Error("Access denied by CCA role policy");
  if(!response.ok)throw Error("Request failed");
  return response.json();
 }
 const labels=Object.freeze({support:"Service Desk",agents:"AI Agent Studio",billing:"Subscriptions",releases:"Release Control",audit:"Security & Audit"});
 function text(tag,value){const node=document.createElement(tag);node.textContent=value;return node;}
-function renderRouting(view, data, openCaseId){
+function caseAction(ticket, operation, title, inputLabel, value = ""){
+ const form=document.createElement("form");
+ form.className="case-action";
+ let field;
+ if(inputLabel){
+  const label=text("label",inputLabel);
+  field=document.createElement("textarea");
+  field.required=true;field.rows=3;field.maxLength=1500;field.value=value;
+  label.append(field);
+  form.append(label);
+ }
+ const button=text("button",title);button.type="submit";
+ const status=text("p","");status.setAttribute("role","status");
+ form.append(button,status);
+ form.addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(button.disabled||(field&&!field.value.trim()))return;
+  button.disabled=true;
+  try{
+   await getJSON("/api/support-workflow",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({caseId:ticket.id,version:ticket.version,operation,text:field?.value.trim()})});
+   await openWorkspace("support",ticket.id,["REPLY","CONFIRM","APPROVE"].includes(operation));
+  }catch(error){status.textContent=error.message;button.disabled=false;}
+ });
+ return form;
+}
+
+function renderInbox(view, cases, openInbox){
+ const inbox=document.createElement("details");
+ inbox.open=openInbox;
+ inbox.append(text("summary","Simulated Cedar tenant inbox"));
+ for(const c of [...cases].reverse()){
+  const question=c.status==="NEEDS_CLARIFICATION" && c.analysis?.question;
+  const responses=c.deliveredResponses.length?c.deliveredResponses:[c.resolution].filter(Boolean);
+  if(!question&&!responses.length)continue;
+  const item=document.createElement("section");
+  item.append(text("h3",c.id+" · "+c.status.replaceAll("_"," ")));
+  for(const response of responses)item.append(text("p",response));
+  if(question)item.append(text("p",question));
+  if(question||c.status==="AWAITING_CLIENT_VALIDATION")
+   item.append(caseAction(c,"REPLY","Simulate tenant reply","Tenant reply"));
+  if(c.status==="AWAITING_CLIENT_VALIDATION")item.append(caseAction(c,"CONFIRM","Simulate confirmation of resolution"));
+  inbox.append(item);
+ }
+ if(inbox.children.length===1)inbox.append(text("p","No clarification questions or approved responses yet."));
+ view.append(inbox);
+}
+function renderRouting(view, data, openCaseId, openInbox){
  const list=document.createElement("ul");
  list.className="case-list";
  for(const c of [...data.routingCases].reverse()){
@@ -19,16 +67,33 @@ function renderRouting(view, data, openCaseId){
   details.append(text("summary",c.id+" · "+c.status.replaceAll("_"," ")+" · "+(c.assignee||"Unassigned")),
    text("p",c.description),text("p",c.analysis?.reason||""));
   if(c.analysis?.question)details.append(text("p",c.analysis.question));
-  if(c.draft){
+  if(c.tenantReply)details.append(text("p","Latest tenant reply · "+c.tenantReply));
+  if(c.draft&&c.status==="ASSIGNED"){
    const draft=document.createElement("section");
    draft.append(text("strong","Draft response · Awaiting human review"),text("p",c.draft));
    details.append(draft);
+  }
+  if(c.recommendation)details.append(text("p","Response submitted for review · "+c.recommendation));
+  for(const decision of c.decisions){
+   const name=decision.event==="RECOMMENDATION_APPROVED"?"Approved":"Returned for revision";
+   const timestamp=decision.at?new Date(decision.at).toLocaleString():"Time unavailable";
+   details.append(text("p",name+" · "+decision.actor+" · "+timestamp+
+    (decision.details.initiatedBy?" · simulated by "+decision.details.initiatedBy:"")+
+    (decision.details.reason?" · "+decision.details.reason:"")));
+  }
+  if(data.canSimulateIntake&&c.status==="ASSIGNED")
+   details.append(caseAction(c,"RECOMMEND","Submit response for review","Response for review",c.draft||""));
+  if(data.canSimulateIntake&&c.status==="AWAITING_APPROVAL"){
+   details.append(text("p","Simulate a decision by the fictional independent reviewer."),
+    caseAction(c,"APPROVE","Simulate approval and send to demo inbox"),
+    caseAction(c,"RETURN","Simulate return for revision","Reason for returning"));
   }
   item.append(details);
   list.append(item);
  }
  view.append(text("p","Select a case to view its details."),list);
  if(!data.canSimulateIntake)return;
+ renderInbox(view,data.routingCases,openInbox);
  const form=document.createElement("form");
  const label=text("label","Simulate a fictional Cedar tenant request");
  label.htmlFor="support-request";
@@ -51,7 +116,7 @@ function renderRouting(view, data, openCaseId){
  });
  view.prepend(form);
 }
-async function openWorkspace(id,openCaseId){
+async function openWorkspace(id,openCaseId,openInbox=false){
  byId("heading").textContent=labels[id]||"Workspace";
  const view=byId("view");view.replaceChildren(text("p","Loading permitted fictional information…"));
  try{
@@ -59,7 +124,7 @@ async function openWorkspace(id,openCaseId){
   view.replaceChildren();
   const intro=text("p",data.description);intro.className="muted";view.append(intro);
   if(data.routingCases){
-   renderRouting(view,data,openCaseId);
+   renderRouting(view,data,openCaseId,openInbox);
    byId("feedback").textContent="Automatic routing and response drafts · fictional data · human review required";
   }else{
   const table=document.createElement("table"),body=document.createElement("tbody");

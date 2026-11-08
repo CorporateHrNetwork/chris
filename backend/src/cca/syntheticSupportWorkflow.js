@@ -58,26 +58,28 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
   const record = (ticket, event, actor, details = {}) => {
     const entry = Object.freeze({
       sequence: eventLog.length + 1, caseId: ticket.id, tenantId: ticket.tenantId,
-      event, actor, details: Object.freeze({ ...details })
+      event, actor, at: new Date().toISOString(), details: Object.freeze({ ...details })
     });
     eventLog.push(entry);
+    ticket.version = entry.sequence;
     return entry;
   };
   const safeCase = (c) => c && ({
     id: c.id, tenantId: c.tenantId, requesterSubjectId: c.requesterSubjectId,
     status: c.status, description: c.description, assignee: c.assignee,
     recommendation: c.recommendation, resolution: c.resolution,
-    analysis: c.analysis && { ...c.analysis }, draft: c.draft
+    analysis: c.analysis && { ...c.analysis }, draft: c.draft,
+    version: c.version || 0, tenantReply: c.tenantReply
   });
   function prepareDraft(ticket) {
     if (ticket.status !== "ASSIGNED" || ticket.draft) return;
-    const draft = draftSupportResponse(ticket);
+    const draft = draftSupportResponse({ ...ticket, description: ticket.tenantReply || ticket.description });
     if (!draft) return;
     ticket.draft = draft;
     record(ticket, "SUPPORT_DRAFT_PREPARED", ticket.assignee, { category: ticket.analysis.category });
   }
-  function route(ticket) {
-    const analysis = analyzeSupportRequest(ticket.description);
+  function route(ticket, description = ticket.description) {
+    const analysis = analyzeSupportRequest(description);
     ticket.analysis = analysis;
     ticket.assignee = analysis.agent;
     ticket.status = analysis.question ? "NEEDS_CLARIFICATION" : "ASSIGNED";
@@ -113,7 +115,7 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     return { ok: true, replayed: false, case: safeCase(ticket) };
   }
 
-  function act({ caseId, context, operation, recommendation, approval, resolution }) {
+  function act({ caseId, context, operation, recommendation, approval, resolution, reason }) {
     const ticket = cases.get(caseId);
     if (!ticket) return deny("CASE_NOT_FOUND");
     if (!isAuthorized(context, PERMISSIONS.TICKETS_MANAGE, ticket.tenantId))
@@ -125,22 +127,28 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
       ticket.recommendation = recommendation.trim();
       ticket.status = "AWAITING_APPROVAL";
       record(ticket, "RECOMMENDATION_DRAFTED", actor);
-    } else if (operation === "APPROVE" && ticket.status === "AWAITING_APPROVAL") {
-      // Separate independently authenticated CCA platform approver.
+    } else if (["APPROVE", "RETURN"].includes(operation) && ticket.status === "AWAITING_APPROVAL") {
       if (!approval || approval.approverId === actor || !approval.context ||
           approval.context.principalId !== approval.approverId ||
           !isAuthorized(approval.context, PERMISSIONS.APPROVALS_GRANT, ticket.tenantId) ||
           typeof approval.reference !== "string" || !approval.reference.trim())
         return deny("INDEPENDENT_APPROVAL_REQUIRED");
-      ticket.status = "APPROVED";
-      record(ticket, "RECOMMENDATION_APPROVED", approval.approverId, {
-        reference: approval.reference
-      });
+      const details = { reference: approval.reference, initiatedBy: actor };
+      if (operation === "RETURN") {
+        if (typeof reason !== "string" || !reason.trim()) return deny("REVISION_REASON_REQUIRED");
+        ticket.draft = ticket.recommendation;
+        ticket.recommendation = null;
+        ticket.status = "ASSIGNED";
+        record(ticket, "RECOMMENDATION_RETURNED", approval.approverId, { ...details, reason: reason.trim() });
+      } else {
+        ticket.status = "APPROVED";
+        record(ticket, "RECOMMENDATION_APPROVED", approval.approverId, details);
+      }
     } else if (operation === "RESOLVE" && ticket.status === "APPROVED" &&
                typeof resolution === "string" && resolution.trim()) {
       ticket.resolution = resolution.trim();
       ticket.status = "AWAITING_CLIENT_VALIDATION";
-      record(ticket, "RESOLUTION_SENT_TO_CLIENT", actor);
+      record(ticket, "RESOLUTION_SENT_TO_CLIENT", actor, { response: ticket.resolution });
     } else return deny("INVALID_WORKFLOW_TRANSITION");
     return { ok: true, case: safeCase(ticket) };
   }
@@ -155,6 +163,22 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     ticket.status = "CLOSED";
     ticket.requesterValidated = true;
     record(ticket, "CLIENT_CONFIRMED_CLOSURE", verifiedSubjectId);
+    return { ok: true, case: safeCase(ticket) };
+  }
+
+  function clientReply({ caseId, verifiedTenantId, verifiedSubjectId, reply }) {
+    const ticket = cases.get(caseId);
+    if (!ticket || ticket.tenantId !== verifiedTenantId ||
+        ticket.requesterSubjectId !== verifiedSubjectId) return deny("CASE_NOT_FOUND");
+    if (!["NEEDS_CLARIFICATION", "AWAITING_CLIENT_VALIDATION"].includes(ticket.status) ||
+        typeof reply !== "string" || !reply.trim()) return deny("INVALID_WORKFLOW_TRANSITION");
+    ticket.tenantReply = reply.trim();
+    ticket.draft = null;
+    ticket.recommendation = null;
+    ticket.resolution = null;
+    record(ticket, "TENANT_REPLIED", verifiedSubjectId, { reply: ticket.tenantReply });
+    route(ticket, ticket.tenantReply);
+    prepareDraft(ticket);
     return { ok: true, case: safeCase(ticket) };
   }
 
@@ -177,6 +201,6 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
       events: eventLog
     }));
   }
-  return Object.freeze({ submit, act, clientConfirm, getCase, getEvents, exportSnapshot });
+  return Object.freeze({ submit, act, clientConfirm, clientReply, getCase, getEvents, exportSnapshot });
 }
 module.exports = { createSyntheticSupportWorkflow };

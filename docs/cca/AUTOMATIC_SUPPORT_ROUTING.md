@@ -22,3 +22,11 @@ Drafts remain internal. The existing synthetic workflow
 still requires separate approval before resolution and requester confirmation
 before closure. Live portal, email and WhatsApp connectors are outside this
 stage.
+
+In the protected Service Desk, the verified Cedar operator can edit a draft
+and submit it for review. The operator can then simulate the fictional
+independent reviewer's approval or return decision. CCA records the decision,
+time, simulated reviewer and initiating operator. Approval publishes the
+reviewed text only to the simulated Cedar inbox. A fictional tenant reply
+reroutes the same case, and a simulated confirmation closes it. The inbox
+and reviewer controls are staging simulations behind the operator session.

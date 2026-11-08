@@ -84,6 +84,28 @@ function createDemoState(savedSnapshot) {
     } : undefined;
     return flow.act({ caseId, operation, context, approval, recommendation, resolution });
   }
+  function simulate(tenantId, actor, { caseId, version, operation, text }) {
+    if (index.get(caseId) !== tenantId) return { ok: false, code: "CASE_NOT_FOUND" };
+    const context = platformContext(actor, "SERVICE_AGENT", tenantId);
+    const { case: ticket } = flow.getCase({ caseId, context });
+    if (ticket.version !== version) return { ok: false, code: "CASE_CHANGED" };
+    const tenant = TENANTS.find(t => t.id === tenantId);
+    const client = { caseId, verifiedTenantId: tenantId, verifiedSubjectId: tenant.requester };
+    if (operation === "CONFIRM") return flow.clientConfirm(client);
+    if (operation === "REPLY") return flow.clientReply({ ...client, reply: text });
+    if (operation === "APPROVE" && (typeof ticket.recommendation !== "string" || !ticket.recommendation.trim()))
+      return { ok: false, code: "REVIEW_RESPONSE_REQUIRED" };
+    const action = { caseId, context, operation, recommendation: text, reason: text };
+    if (["APPROVE", "RETURN"].includes(operation)) {
+      const approverId = "demo-independent-approver";
+      action.approval = { approverId, context: platformContext(approverId, "PLATFORM_APPROVER", tenantId),
+        reference: "DEMO-APPROVAL-" + crypto.randomUUID().slice(0, 8) };
+    }
+    const result = flow.act(action);
+    if (!result.ok || operation !== "APPROVE") return result;
+    return flow.act({ caseId, context, operation: "RESOLVE", resolution: ticket.recommendation });
+  }
+
   function audit(caseId) {
     const tenantId = index.get(caseId);
     if (!tenantId) return { ok: false, code: "CASE_NOT_FOUND" };
@@ -92,7 +114,7 @@ function createDemoState(savedSnapshot) {
   function exportSnapshot() {
     return { workflow: flow.exportSnapshot(), index: [...index.entries()] };
   }
-  return Object.freeze({ state, submit, operate, audit, exportSnapshot });
+  return Object.freeze({ state, submit, operate, simulate, audit, exportSnapshot });
 }
 
 /** Persist before acknowledging a successful mutation. Restore the previous
@@ -120,6 +142,7 @@ function createDurableDemoState({ dataDir } = {}) {
     audit: (caseId) => demo.audit(caseId),
     submit: (tenantId, description, requestId) => mutation("submit", tenantId, description, requestId),
     operate: (operation) => mutation("operate", operation),
+    simulate: (tenantId, actor, action) => mutation("simulate", tenantId, actor, action),
     storageInfo: () => ({ primary: store.primary, backup: store.backup }),
   });
 }

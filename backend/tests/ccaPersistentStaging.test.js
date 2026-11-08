@@ -155,3 +155,50 @@ test("staging refuses a missing checkpoint and interrupted vault recovery", asyn
   fs.writeFileSync(path.join(options.directory, "state", "cca-recovery-review-required"), "review pending");
   assert.throws(() => openStaging(options), /CHECKPOINT_MISMATCH/);
 });
+
+test("staging review persists decisions, hands off only approved text, and reroutes the same case", async t => {
+  const options = fixture(t);
+  await withServer(options, async (post, origin) => {
+    const first = await post("password", { account: ACCOUNT, password });
+    const second = await post("mfa", { challenge: (await first.json()).challenge,
+      code: otpAt(secret, Math.floor(now / 30)) });
+    const headers = { Cookie: second.headers.get("set-cookie").split(";")[0] };
+    const workspace = async () => (await (await fetch(origin + "/api/workspace?module=support", { headers })).json()).routingCases;
+    const [seed] = await workspace();
+    const action = (ticket, operation, text, auth = headers) => post("support-workflow",
+      { caseId: ticket.id, version: ticket.version, operation, text }, auth);
+    const move = async (ticket, operation, text) => {
+      const response = await action(ticket, operation, text);
+      assert.equal(response.status, 200);
+      return (await response.json()).case;
+    };
+    assert.equal((await action(seed, "RECOMMEND", "Unauthorized text", {})).status, 403);
+    assert.equal((await action({ ...seed, id: "CCA-DEMO-0002" }, "RECOMMEND", "Cross tenant")).status, 400);
+    assert.equal((await action(seed, "APPROVE")).status, 400);
+
+    const pending = await move(seed, "RECOMMEND", "Fictional first draft");
+    assert.equal((await action(seed, "RECOMMEND", "Stale draft")).status, 409);
+    const returned = await move(pending, "RETURN", "Explain the next step");
+    assert.equal(returned.status, "ASSIGNED");
+    assert.equal(returned.draft, "Fictional first draft");
+    const revised = await move(returned, "RECOMMEND", "Fictional edited response");
+    const delivered = await move(revised, "APPROVE");
+    assert.equal(delivered.status, "AWAITING_CLIENT_VALIDATION");
+    assert.equal(delivered.resolution, "Fictional edited response");
+    const closed = await move(delivered, "CONFIRM");
+    assert.equal(closed.status, "CLOSED");
+    const recorded = (await workspace()).find(c => c.id === seed.id);
+    assert.deepEqual(recorded.deliveredResponses, ["Fictional edited response"]);
+    assert.equal(recorded.decisions.length, 2);
+    assert.equal(recorded.decisions[1].details.initiatedBy, ACCOUNT);
+    assert.match(recorded.decisions[1].at, /^\d{4}-\d{2}-\d{2}T/);
+
+    const intake = await post("support-intake", { description: "Please help urgently",
+      requestId: "9967e1dc-27af-44c4-9e87-1002462bd243" }, headers);
+    const unclear = (await intake.json()).case;
+    const clarified = await move(unclear, "REPLY", "The payslip is missing for November.");
+    assert.equal(clarified.id, unclear.id);
+    assert.equal(clarified.assignee, "Payroll Support Agent");
+    assert.match(clarified.draft, /missing payslip/);
+  });
+});
