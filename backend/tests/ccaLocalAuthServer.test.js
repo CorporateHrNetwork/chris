@@ -85,3 +85,36 @@ test("sign-in has no attached CHRiS production account, password or tenant data"
   assert.deepEqual(identity.assignedTenantIds, ["demo-cedar"]);
   for(const forbidden of ["password","secret","salt","hashed","token"]) assert.equal(forbidden in identity, false);
 });
+
+test("protected control centre requires MFA session for both HTML and script", async () => {
+  await withServer(async root => {
+    assert.equal((await fetch(root + "/protected-centre")).status, 401);
+    assert.equal((await fetch(root + "/protected-centre.js")).status, 401);
+    assert.equal((await fetch(root + "/api/access")).status, 401);
+    assert.equal((await fetch(root + "/api/workspace?module=support")).status, 401);
+    const stage = await (await post(root, "/api/password",
+      { account: ACCOUNT, password: "Stage4B-Long-Demo-Password!42" })).json();
+    const verified = await post(root, "/api/mfa", {
+      challenge: stage.challenge, code: otpAt(secret, Math.floor(now/30))
+    });
+    const cookie = verified.headers.get("set-cookie").split(";")[0];
+    const headers = { Cookie: cookie };
+    const page = await fetch(root + "/protected-centre", { headers });
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /Protected Control Centre/);
+    assert.equal((await fetch(root + "/protected-centre.js", { headers })).status, 200);
+    const access = await (await fetch(root + "/api/access", { headers })).json();
+    assert.deepEqual(access.modules, ["support"]);
+    const support = await fetch(root + "/api/workspace?module=support", { headers });
+    assert.equal(support.status, 200);
+    assert.equal((await support.json()).records[0][1], "demo-cedar");
+    for (const module of ["billing", "agents", "releases", "audit"]) {
+      const denied = await fetch(root + "/api/workspace?module=" + module, { headers });
+      assert.equal(denied.status, 403);
+    }
+    assert.equal((await fetch(root + "/api/workspace?module=unknown", { headers })).status, 404);
+    const logout = await post(root, "/api/logout", {}, { headers });
+    assert.equal(logout.status, 200);
+    assert.equal((await fetch(root + "/protected-centre", { headers })).status, 401);
+  });
+});
