@@ -107,8 +107,36 @@ test("encrypted vault backup can be inspected and restored only with explicit of
    assert.equal(open(dir).passwordStep("cca-demo-service","UniqueLongDemoPassword!491").ok,true);
    const recovery=restoreVaultBackup({directory:dir,encryptionKey:key,confirm:true});
    assert.equal(recovery.restored,true);
-   assert.equal(open(dir).passwordStep("cca-demo-service","UniqueLongDemoPassword!491").ok,false);
-   assert.equal(open(dir).passwordStep("cca-demo-root","UniqueLongDemoPassword!491").ok,true);
+   assert.throws(()=>open(dir),/CCA_RECOVERY_SECURITY_REVIEW_REQUIRED/);
+   assert.equal(fs.existsSync(path.join(dir,"cca-recovery-review-required")),true);
    assert.equal(fs.readdirSync(dir).some(f=>f.startsWith("cca-identities.before-restore-")),true);
  } finally {fs.rmSync(dir,{force:true,recursive:true});}
+});
+
+test("five incorrect passwords cause persistent timed lockout across restart",()=>{
+ const dir=setup();
+ try{
+  const vault=open(dir);
+  vault.register(enrollment("cca-demo-root",["PLATFORM_APPROVER"]));
+  for(let i=0;i<5;i++)
+    assert.equal(vault.passwordStep("cca-demo-root","invalid").ok,false);
+  assert.equal(vault.passwordStep("cca-demo-root","UniqueLongDemoPassword!491").ok,false);
+  const restarted=open(dir);
+  assert.equal(restarted.passwordStep("cca-demo-root","UniqueLongDemoPassword!491").ok,false);
+  assert.equal(restarted.audit("forged").ok,false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test("five incorrect MFA challenges cause persistent timed lockout across restart",()=>{
+ const dir=setup();
+ try{
+  const vault=open(dir);
+  vault.register(enrollment("cca-demo-root",["PLATFORM_APPROVER"]));
+  for(let i=0;i<5;i++){
+    const password=vault.passwordStep("cca-demo-root","UniqueLongDemoPassword!491");
+    assert.equal(password.ok,true);
+    assert.equal(vault.mfaStep(password.challenge,"000000").ok,false);
+  }
+  assert.equal(vault.passwordStep("cca-demo-root","UniqueLongDemoPassword!491").ok,false);
+  assert.equal(open(dir).passwordStep("cca-demo-root","UniqueLongDemoPassword!491").ok,false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
