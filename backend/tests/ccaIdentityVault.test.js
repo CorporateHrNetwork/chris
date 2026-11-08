@@ -2,7 +2,7 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs"),os=require("node:os"),path=require("node:path"),crypto=require("node:crypto");
-const {createIdentityVault}=require("../../tools/cca-local-demo/identityVault");
+const {createIdentityVault,inspectVaultBackup,restoreVaultBackup}=require("../../tools/cca-local-demo/identityVault");
 const {otpAt}=require("../../tools/cca-local-demo/localIdentityLab");
 const secret=Buffer.from("12345678901234567890");
 const now=1800000030;
@@ -88,4 +88,27 @@ test("unverified users cannot read audit or register additional identities",()=>
    /CCA_INVALID_ENROLLMENT/);
   assert.equal(vault.passwordStep("cca-demo-root","wrong").ok,false);
  }finally{fs.rmSync(dir,{force:true,recursive:true});}
+});
+
+test("encrypted vault backup can be inspected and restored only with explicit offline confirmation",()=>{
+ const dir=setup();
+ try {
+   const first=open(dir);
+   first.register(enrollment("cca-demo-root",["PLATFORM_APPROVER"]));
+   const token=signIn(first,"cca-demo-root");
+   first.register(enrollment("cca-demo-service",["SERVICE_AGENT"],["demo-cedar"]),{
+     actor:"cca-demo-root",token
+   });
+   const backup=inspectVaultBackup({directory:dir,encryptionKey:key});
+   assert.equal(backup.available,true);
+   assert.equal(backup.identityCount,1);
+   assert.throws(()=>restoreVaultBackup({directory:dir,encryptionKey:key}),/CONFIRMATION/);
+   assert.throws(()=>restoreVaultBackup({directory:dir,encryptionKey:Buffer.alloc(32,11),confirm:true}));
+   assert.equal(open(dir).passwordStep("cca-demo-service","UniqueLongDemoPassword!491").ok,true);
+   const recovery=restoreVaultBackup({directory:dir,encryptionKey:key,confirm:true});
+   assert.equal(recovery.restored,true);
+   assert.equal(open(dir).passwordStep("cca-demo-service","UniqueLongDemoPassword!491").ok,false);
+   assert.equal(open(dir).passwordStep("cca-demo-root","UniqueLongDemoPassword!491").ok,true);
+   assert.equal(fs.readdirSync(dir).some(f=>f.startsWith("cca-identities.before-restore-")),true);
+ } finally {fs.rmSync(dir,{force:true,recursive:true});}
 });
