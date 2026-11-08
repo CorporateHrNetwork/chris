@@ -61,13 +61,13 @@ function LeavePolicies(){
   <button style={back} onClick={()=>nav("/leave")}>{"\u2190"} Back to Leave Dashboard</button>
   <header style={{...head, flexWrap:"wrap"}}><div><b style={eye}>POLICY ENGINE</b><h1>Leave Policies</h1><p style={muted}>Current organization policies, previous versions and CHRiS templates.</p></div><button disabled={!canManage} style={{...primary,opacity:canManage?1:.5}} onClick={()=>start("CREATE")}>+ Create Leave Policy</button></header>
   {!canManage&&<Notice>Read-only access. Policy changes require leave management permission.</Notice>}{message&&<Notice ok>{message}</Notice>}{error&&<Notice>{error}</Notice>}
-  <Section title={zermatt ? "Zermatt Organization Policies" : "Organization Policies"} note="Active policies in effect today.">
+  <Disclosure title={zermatt ? "Zermatt Organization Policies" : "Organization Policies"} count={currentPolicies.length} note="Active policies in effect today.">
    {currentPolicies.length ? policyCards(currentPolicies) : <p style={muted}>No policies are currently in effect.</p>}
-  </Section>
-  {otherPolicies.length > 0 && <Disclosure title="Other policy versions" count={otherPolicies.length} note="Drafts, scheduled policies, suspended policies and historical versions.">
-   {policyCards(otherPolicies)}
-  </Disclosure>}
-  <Disclosure title="CHRIS Recommended Policies" count={data.templates.length} open={!zermatt} note="Read-only system templates. Compliance controls are not legal advice.">
+   {otherPolicies.length > 0 && <Disclosure title="Other policy versions" count={otherPolicies.length} note="Drafts, scheduled policies, suspended policies and historical versions.">
+    {policyCards(otherPolicies)}
+   </Disclosure>}
+  </Disclosure>
+  <Disclosure title="CHRIS Recommended Policies" count={data.templates.length} note="Read-only system templates. Compliance controls are not legal advice.">
    <div className="leave-policy-grid">{data.templates.map(t=><Card key={t.code} title={t.name} tag="CHRiS template" text={t.description || t.previewText}>
     <div style={actions}><button style={button} onClick={()=>setView(t)}>View Policy</button><button disabled={!canManage} style={{...primary,opacity:canManage?1:.5}} onClick={()=>call(`/api/leave/policy-templates/${t.code}/use`,{effectiveFrom:today()})}>Use Policy</button><button disabled={!canManage} style={button} onClick={()=>start("CLONE",t)}>Clone & Customize</button></div>
    </Card>)}</div>
@@ -152,10 +152,8 @@ function PolicyDetails({policy}) {
  </div>;
 }
 
-function Section({title,note,children}){return <section style={panel}><h2>{title}</h2><p style={muted}>{note}</p>{children}</section>}
-
-function Disclosure({title,count,note,open,children}) {
- return <details className="leave-policy-disclosure" open={open} style={panel}>
+function Disclosure({title,count,note,children}) {
+ return <details className="leave-policy-disclosure" style={panel}>
   <summary><span>{title}</span><small>{count}</small></summary>
   <p style={muted}>{note}</p>
   {children}

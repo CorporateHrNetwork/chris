@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -6,7 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 
-test("Zermatt opens effective policies and provides a readable, dismissible policy dialog", async () => {
+test("Zermatt groups expand independently and card dialogs use a viewport-bounded layout", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/leave/policies" });
   const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
   const { default: LeavePolicies } = await server.ssrLoadModule("/src/pages/LeavePolicies.jsx");
@@ -55,12 +56,18 @@ test("Zermatt opens effective policies and provides a readable, dismissible poli
   const root = createRoot(window.document.getElementById("root"));
   try {
     await act(async () => root.render(React.createElement(MemoryRouter, null, React.createElement(LeavePolicies))));
-    const section = window.document.querySelector(".leave-policy-page > section");
-    assert.match(section.textContent, /Zermatt Organization Policies.*Annual Leave/);
-    assert.doesNotMatch(section.textContent, /Old Version|Future Version|Inactive Version|Standard Template/);
-    const [versions, templates] = window.document.querySelectorAll("details");
-    assert.equal(versions.open, false);
+    const [organization, templates] = window.document.querySelectorAll(".leave-policy-page > details");
+    assert.equal(organization.open, false);
     assert.equal(templates.open, false);
+    assert.match(organization.querySelector("summary").textContent, /Zermatt Organization Policies/);
+    organization.querySelector("summary").click();
+    assert.equal(organization.open, true);
+    assert.equal(templates.open, false);
+    const section = organization.querySelector(".leave-policy-grid");
+    assert.match(section.textContent, /Annual Leave/);
+    assert.doesNotMatch(section.textContent, /Old Version|Future Version|Inactive Version|Standard Template/);
+    const versions = organization.querySelector("details");
+    assert.equal(versions.open, false);
     assert.match(versions.textContent, /Old Version/);
     assert.match(templates.textContent, /Standard Template/);
 
@@ -74,6 +81,22 @@ test("Zermatt opens effective policies and provides a readable, dismissible poli
     assert.equal(dialog.querySelector("pre"), null);
     await act(async () => dialog.dispatchEvent(new window.Event("cancel", { cancelable: true })));
     assert.equal(window.document.querySelector("dialog"), null);
+
+    const clickAction = async (group, label) => {
+      await act(async () => [...group.querySelectorAll("button")].find(button => button.textContent === label).click());
+      return window.document.querySelector("dialog[open]");
+    };
+    const versionDialog = await clickAction(section, "New Version");
+    assert.equal(versionDialog.querySelector("h2").textContent, "Create Policy Version");
+    await clickAction(versionDialog, "Close");
+    templates.querySelector("summary").click();
+    const cloneDialog = await clickAction(templates, "Clone & Customize");
+    assert.equal(cloneDialog.querySelector("h2").textContent, "Clone & Customize");
+    assert.equal(cloneDialog.querySelector(".leave-policy-modal-header button").textContent, "Close");
+
+    const css = readFileSync(new URL("../src/pages/LeavePolicies.css", import.meta.url), "utf8");
+    assert.match(css, /\.leave-policy-modal \{[^}]*position: fixed;[^}]*inset: 0;[^}]*margin: auto;[^}]*max-block-size: calc\(100dvh - 2rem\)/s);
+    assert.match(css, /\.leave-policy-modal-body \{[^}]*min-block-size: 0;[^}]*overflow-y: auto;/s);
   } finally {
     await act(async () => root.unmount());
     await server.close();

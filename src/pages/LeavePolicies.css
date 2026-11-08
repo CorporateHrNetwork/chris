@@ -26,19 +26,23 @@
   padding-top: 0.35rem;
 }
 
-.leave-policy-disclosure summary {
+.leave-policy-disclosure > summary {
   cursor: pointer;
   font-weight: 700;
 }
 
-.leave-policy-disclosure summary small {
+.leave-policy-disclosure > summary small {
   margin-inline-start: 0.65rem;
   color: var(--chris-text-secondary);
 }
 
 .leave-policy-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   box-sizing: border-box;
   inline-size: min(48rem, calc(100% - 2rem));
+  block-size: fit-content;
   max-block-size: calc(100dvh - 2rem);
   padding: 0;
   overflow: hidden;
@@ -62,6 +66,7 @@
 }
 
 .leave-policy-modal-header {
+  flex: none;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -72,6 +77,7 @@
 }
 
 .leave-policy-modal-body {
+  flex: 1 1 auto;
   min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
