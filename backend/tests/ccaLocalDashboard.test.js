@@ -16,8 +16,8 @@ test("local demo walks through the full safe synthetic workflow", () => {
   const created = demo.submit("demo-cedar", "Fictional benefits question");
   assert.equal(created.ok, true);
   const id = created.case.id;
-  assert.equal(demo.operate({ caseId: id, operation: "TRIAGE" }).case.status, "TRIAGED");
-  assert.equal(demo.operate({ caseId: id, operation: "ASSIGN", agentId: "Mock Agent" }).case.status, "ASSIGNED");
+  assert.equal(created.case.assignee, "HR Support Agent");
+  assert.equal(created.case.status, "ASSIGNED");
   assert.equal(demo.operate({ caseId: id, operation: "RECOMMEND", recommendation: "Review mock records only" }).case.status, "AWAITING_APPROVAL");
   assert.equal(demo.operate({ caseId: id, operation: "APPROVE" }).case.status, "APPROVED");
   assert.equal(demo.operate({ caseId: id, operation: "RESOLVE", resolution: "Fictional guidance provided" }).case.status, "AWAITING_CLIENT_VALIDATION");

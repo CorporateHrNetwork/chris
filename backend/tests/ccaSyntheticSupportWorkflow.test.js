@@ -28,8 +28,10 @@ test("end-to-end synthetic support case requires independent approval and client
   const receipt = flow.submit(sample());
   assert.equal(receipt.ok, true);
   const id = receipt.case.id;
-  assert.equal(flow.act({ caseId: id, context: agent, operation: "TRIAGE" }).case.status, "TRIAGED");
-  assert.equal(flow.act({ caseId: id, context: agent, operation: "ASSIGN", agentId: "mock-diagnostic-agent" }).case.status, "ASSIGNED");
+  assert.equal(receipt.case.status, "ASSIGNED");
+  assert.equal(receipt.case.assignee, "HR Support Agent");
+  assert.deepEqual(flow.getEvents({ caseId: id, context: agent }).events.map(e => e.event),
+    ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED"]);
   assert.equal(flow.act({ caseId: id, context: agent, operation: "RECOMMEND", recommendation: "Review the synthetic branch filter" }).case.status, "AWAITING_APPROVAL");
   assert.equal(flow.act({ caseId: id, context: agent, operation: "RESOLVE", resolution: "Change completed" }).code, "INVALID_WORKFLOW_TRANSITION");
   assert.equal(flow.act({ caseId: id, context: agent, operation: "APPROVE", approval: { approverId: "support-A", context: agent, reference: "bad" } }).code, "INDEPENDENT_APPROVAL_REQUIRED");
@@ -58,7 +60,7 @@ test("idempotency is tenant-scoped and detects conflicting retransmissions", () 
   other.identity.tenantId = "tenant-B";
   assert.notEqual(flow.submit(other).case.id, first.case.id);
 });
-test("forbidden transitions cannot bypass triage or approval", () => {
+test("forbidden transitions cannot bypass automatic assignment or approval", () => {
   const flow = createSyntheticSupportWorkflow();
   const id = flow.submit(sample()).case.id;
   assert.equal(flow.act({ caseId: id, context: agent, operation: "ASSIGN", agentId: "mock" }).ok, false);

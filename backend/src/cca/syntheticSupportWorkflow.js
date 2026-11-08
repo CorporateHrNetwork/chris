@@ -2,6 +2,7 @@
 
 // Synthetic in-memory CCA service workflow. No network/DB/file access,
 // credentials, background agents, tenant sessions or production actions.
+const { ANALYSIS_AGENT, analyzeSupportRequest } = require("./supportIntakeAnalysis");
 const { resolveIntake } = require("./tenantIntakePolicy");
 const { PERMISSIONS } = require("./controlPlanePolicy");
 const { isAuthorized } = require("./platformDirectoryPolicy");
@@ -14,7 +15,7 @@ function validateSnapshot(snapshot) {
       snapshot.cases.length > 3000 || snapshot.events.length > 20000 ||
       snapshot.idempotency.length > 3000) throw new Error("CCA_INVALID_WORKFLOW_SNAPSHOT");
   const caseIds = new Set();
-  const statuses = new Set(["NEW", "TRIAGED", "ASSIGNED", "AWAITING_APPROVAL", "APPROVED", "AWAITING_CLIENT_VALIDATION", "CLOSED"]);
+  const statuses = new Set(["NEW", "TRIAGED", "ASSIGNED", "NEEDS_CLARIFICATION", "AWAITING_APPROVAL", "APPROVED", "AWAITING_CLIENT_VALIDATION", "CLOSED"]);
   let greatestId = 0;
   for (const c of snapshot.cases) {
     if (!c || typeof c.id !== "string" || !/^CCA-DEMO-[0-9]{4,}$/.test(c.id) ||
@@ -65,8 +66,21 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
   const safeCase = (c) => c && ({
     id: c.id, tenantId: c.tenantId, requesterSubjectId: c.requesterSubjectId,
     status: c.status, description: c.description, assignee: c.assignee,
-    recommendation: c.recommendation, resolution: c.resolution
+    recommendation: c.recommendation, resolution: c.resolution,
+    analysis: c.analysis && { ...c.analysis }
   });
+  function route(ticket) {
+    const analysis = analyzeSupportRequest(ticket.description);
+    ticket.analysis = analysis;
+    ticket.assignee = analysis.agent;
+    ticket.status = analysis.question ? "NEEDS_CLARIFICATION" : "ASSIGNED";
+    record(ticket, "CASE_ANALYZED", ANALYSIS_AGENT, { category: analysis.category });
+    record(ticket, "AGENT_ASSIGNED", ANALYSIS_AGENT, { agentId: analysis.agent });
+  }
+  for (const ticket of cases.values()) {
+    if (ticket.status === "NEW" || ticket.status === "TRIAGED") route(ticket);
+  }
+
   function submit({ channel, payload, identity }) {
     const intake = resolveIntake({ channel, payload, identity });
     if (!intake.accepted) return deny(intake.code);
@@ -86,25 +100,18 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     cases.set(ticket.id, ticket);
     idempotency.set(key, ticket.id);
     record(ticket, "CASE_RECEIVED", intake.requesterSubjectId, { channel });
+    route(ticket);
     return { ok: true, replayed: false, case: safeCase(ticket) };
   }
 
-  function act({ caseId, context, operation, agentId, recommendation, approval, resolution }) {
+  function act({ caseId, context, operation, recommendation, approval, resolution }) {
     const ticket = cases.get(caseId);
     if (!ticket) return deny("CASE_NOT_FOUND");
     if (!isAuthorized(context, PERMISSIONS.TICKETS_MANAGE, ticket.tenantId))
       return deny("TENANT_ACCESS_DENIED");
     const actor = context.principalId;
-    if (operation === "TRIAGE" && ticket.status === "NEW") {
-      ticket.status = "TRIAGED";
-      record(ticket, "CASE_TRIAGED", actor);
-    } else if (operation === "ASSIGN" && ticket.status === "TRIAGED" &&
-               typeof agentId === "string" && agentId.trim()) {
-      ticket.assignee = agentId.trim();
-      ticket.status = "ASSIGNED";
-      record(ticket, "AGENT_ASSIGNED", actor, { agentId: ticket.assignee });
-    } else if (operation === "RECOMMEND" && ticket.status === "ASSIGNED" &&
-               typeof recommendation === "string" && recommendation.trim()) {
+    if (operation === "RECOMMEND" && ticket.status === "ASSIGNED" &&
+        typeof recommendation === "string" && recommendation.trim()) {
       // Recommendation is a simulated text artifact, never an execution.
       ticket.recommendation = recommendation.trim();
       ticket.status = "AWAITING_APPROVAL";

@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { base32 } = require("./localAuthServer");
 const { createIdentityVault } = require("./identityVault");
+const { createDurableDemoState } = require("./server");
 const { createAuditLedger } = require("./auditLedger");
 const { createStagingServer } = require("./stagingAuthAdapter");
 const { createCheckpoint, createPersistentThrottle, deriveKey } = require("./stagingState");
@@ -47,6 +48,7 @@ function openStaging({ directory, master, initialize = false, clock }) {
       throw Error("CCA_STAGING_ENROLLMENT_REQUIRED");
     const server = createStagingServer({
       vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST,
+      support: createDurableDemoState({ dataDir: path.join(directory, "fictional-support") }),
       sourceThrottle: createPersistentThrottle({ file: files.throttle, clock }),
     });
     return { release, server };

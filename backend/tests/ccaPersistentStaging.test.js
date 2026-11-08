@@ -94,6 +94,36 @@ test("staging rejects wrong key, second writer and valid audit suffix rollback",
   assert.throws(() => openStaging(options), /CHECKPOINT_MISMATCH/);
 });
 
+test("protected Service Desk automatically routes fictional intake and persists its scope", async t => {
+  const options = fixture(t);
+  let receipt;
+  await withServer(options, async (post, origin) => {
+    const request = { description: "The payslip is missing for the monthly payroll.",
+      requestId: "9967e1dc-27af-44c4-9e87-1002462bd243", tenantId: "demo-atlas", assignee: "Injected Agent" };
+    assert.equal((await post("support-intake", request)).status, 403);
+    const first = await post("password", { account: ACCOUNT, password });
+    const second = await post("mfa", { challenge: (await first.json()).challenge,
+      code: otpAt(secret, Math.floor(now / 30)) });
+    const headers = { Cookie: second.headers.get("set-cookie").split(";")[0] };
+    const result = await post("support-intake", request, headers);
+    assert.equal(result.status, 200);
+    receipt = (await result.json()).case;
+    assert.equal(receipt.tenantId, "demo-cedar");
+    assert.equal(receipt.assignee, "Payroll Support Agent");
+    assert.equal(receipt.status, "ASSIGNED");
+    const replay = await (await post("support-intake", request, headers)).json();
+    assert.equal(replay.case.id, receipt.id);
+    assert.equal(replay.replayed, true);
+    const view = await (await fetch(origin + "/api/workspace?module=support", { headers })).json();
+    assert.equal(view.routingCases.filter(c => c.id === receipt.id).length, 1);
+    assert.equal(JSON.stringify(view).includes("Atlas"), false);
+  });
+  const { createDurableDemoState } = require("../../tools/cca-local-demo/server");
+  const restored = createDurableDemoState({ dataDir: path.join(options.directory, "fictional-support") });
+  assert.deepEqual(restored.audit(receipt.id).events.map(e => e.event),
+    ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED"]);
+});
+
 test("staging refuses a missing checkpoint and interrupted vault recovery", async t => {
   const options = fixture(t);
   const checkpoint = path.join(options.directory, "host-security", "state-checkpoint.json");

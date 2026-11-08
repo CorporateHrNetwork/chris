@@ -16,7 +16,6 @@ const TENANTS = Object.freeze([
   { id: "demo-cedar", name: "Cedar Demo Services", requester: "cedar-requester" },
   { id: "demo-atlas", name: "Atlas Demo Works", requester: "atlas-requester" },
 ]);
-const AGENTS = Object.freeze(["Intake Agent", "HR Support Agent", "Technical Support Agent", "Customer Success Agent"]);
 
 function platformContext(id, role, tenantId) {
   return derivePlatformContext({
@@ -45,12 +44,12 @@ function createDemoState(savedSnapshot) {
     }
     if (index.size !== savedSnapshot.workflow.cases.length) throw new Error("CCA_INCOMPLETE_DEMO_INDEX");
   }
-  function submit(tenantId, description) {
+  function submit(tenantId, description, requestId = crypto.randomUUID()) {
     const tenant = TENANTS.find(t => t.id === tenantId);
     if (!tenant) return { ok: false, code: "UNKNOWN_DEMO_TENANT" };
     const result = flow.submit({
       channel: "CHRIS_PORTAL",
-      payload: { description, idempotencyKey: crypto.randomUUID() },
+      payload: { description, idempotencyKey: requestId },
       identity: { verified: true, channel: "CHRIS_PORTAL", tenantId, subjectId: tenant.requester, tenantActive: true }
     });
     if (result.ok) index.set(result.case.id, tenant.id);
@@ -62,15 +61,15 @@ function createDemoState(savedSnapshot) {
     submit("demo-atlas", "Synthetic support request: report filtering needs clarification.");
   }
 
-  function state() {
-    const cases = [...index].map(([id, tenantId]) => {
+  function state(scope) {
+    const cases = [...index].filter(([, tenantId]) => !scope || tenantId === scope).map(([id, tenantId]) => {
       const context = platformContext("demo-reader", "SERVICE_AGENT", tenantId);
       return flow.getCase({ caseId: id, context }).case;
     });
-    return { ok: true, demonstration: true, tenants: TENANTS, agents: AGENTS, cases,
+    return { ok: true, demonstration: true, tenants: TENANTS.filter(tenant => !scope || tenant.id === scope), cases,
       notice: "FICTIONAL DATA ONLY — NOT CONNECTED TO CHRiS PRODUCTION" };
   }
-  function operate({ caseId, operation, agentId, recommendation, resolution }) {
+  function operate({ caseId, operation, recommendation, resolution }) {
     const tenantId = index.get(caseId);
     if (!tenantId) return { ok: false, code: "CASE_NOT_FOUND" };
     const context = platformContext("demo-support", "SERVICE_AGENT", tenantId);
@@ -83,7 +82,7 @@ function createDemoState(savedSnapshot) {
       context: platformContext("demo-independent-approver", "PLATFORM_APPROVER", tenantId),
       reference: "DEMO-APPROVAL-" + crypto.randomUUID().slice(0, 8)
     } : undefined;
-    return flow.act({ caseId, operation, context, approval, agentId, recommendation, resolution });
+    return flow.act({ caseId, operation, context, approval, recommendation, resolution });
   }
   function audit(caseId) {
     const tenantId = index.get(caseId);
@@ -102,11 +101,12 @@ function createDurableDemoState({ dataDir } = {}) {
   const store = createLocalSnapshotStore({ dataDir });
   const existing = store.load();
   let demo = createDemoState(existing || undefined);
-  if (!existing) store.save(demo.exportSnapshot());
+  const initial = demo.exportSnapshot();
+  if (!existing || initial.workflow.events.length !== existing.workflow.events.length) store.save(initial);
   function mutation(method, ...args) {
     const previous = demo.exportSnapshot();
     const result = demo[method](...args);
-    if (!result.ok) return result;
+    if (!result.ok || result.replayed) return result;
     try {
       store.save(demo.exportSnapshot());
       return result;
@@ -116,9 +116,9 @@ function createDurableDemoState({ dataDir } = {}) {
     }
   }
   return Object.freeze({
-    state: () => demo.state(),
+    state: (tenantId) => demo.state(tenantId),
     audit: (caseId) => demo.audit(caseId),
-    submit: (tenantId, description) => mutation("submit", tenantId, description),
+    submit: (tenantId, description, requestId) => mutation("submit", tenantId, description, requestId),
     operate: (operation) => mutation("operate", operation),
     storageInfo: () => ({ primary: store.primary, backup: store.backup }),
   });

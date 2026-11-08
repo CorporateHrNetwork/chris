@@ -17,11 +17,11 @@ test("fictional cases and audit survive a fresh demo process", () => {
     const created = demo.submit("demo-cedar", "Persist my synthetic test ticket");
     assert.equal(created.ok, true);
     const id = created.case.id;
-    assert.equal(demo.operate({ caseId: id, operation: "TRIAGE" }).ok, true);
-    const restored = createDurableDemoState({ dataDir: dir });
+      const restored = createDurableDemoState({ dataDir: dir });
     const found = restored.state().cases.find(c => c.id === id);
-    assert.equal(found.status, "TRIAGED");
-    assert.equal(restored.audit(id).events.length, 2);
+    assert.equal(found.status, "NEEDS_CLARIFICATION");
+    assert.equal(found.assignee, "Intake Clarification Agent");
+    assert.equal(restored.audit(id).events.length, 3);
     assert.equal(restored.state().cases.length, 3);
     assert.equal(restored.submit("zermatt-liquor-limited", "Must reject").ok, false);
   } finally { clean(dir); }

@@ -44,10 +44,10 @@ button.secondary{background:#e8f0ea;color:#075032}button:disabled{opacity:.45;cu
 <div id="caseActions" hidden>
 <div class="steps"><span>New</span><span>Triaged</span><span>Assigned</span><span>Recommendation</span><span>Human approval</span><span>Client validation</span></div>
 <p id="caseStatus" class="muted"></p>
-<label for="agent">Simulated agent</label><select id="agent"></select>
+<p id="caseAnalysis" class="muted"></p>
 <label for="recommendation">Recommendation (text only; no AI executed)</label><textarea id="recommendation" placeholder="Enter a proposed resolution..."></textarea>
 <label for="resolution">Client-facing resolution</label><textarea id="resolution" placeholder="Describe the fictional guidance sent..."></textarea>
-<div id="actionButtons"><button type="button" data-action="TRIAGE">Triage</button><button type="button" data-action="ASSIGN">Assign</button><button type="button" data-action="RECOMMEND">Recommend</button><button type="button" data-action="APPROVE">Simulate independent approval</button><button type="button" data-action="RESOLVE">Send resolution</button><button type="button" data-action="CONFIRM">Simulate client confirmation</button></div>
+<div id="actionButtons"><button type="button" data-action="RECOMMEND">Recommend</button><button type="button" data-action="APPROVE">Simulate independent approval</button><button type="button" data-action="RESOLVE">Send resolution</button><button type="button" data-action="CONFIRM">Simulate client confirmation</button></div>
 </div></section>
 <section class="panel"><h2>Audit timeline</h2><ol id="events"></ol></section>
 <section class="panel"><h2>Security boundaries</h2><p class="muted">Demo roles and approval identities are selected by the local server, not the browser. This is not real authentication and must never be internet-facing. The real CCA system will require independently verified identity, MFA, tenant authorization, durable audit, and human approval.</p></section>

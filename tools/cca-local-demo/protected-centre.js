@@ -9,6 +9,39 @@ async function getJSON(url,options){
 }
 const labels=Object.freeze({support:"Service Desk",agents:"AI Agent Studio",billing:"Subscriptions",releases:"Release Control",audit:"Security & Audit"});
 function text(tag,value){const node=document.createElement(tag);node.textContent=value;return node;}
+function renderRouting(view, data){
+ const list=document.createElement("ul");
+ for(const c of [...data.routingCases].reverse()){
+  const item=document.createElement("li");
+  item.append(text("strong",c.id+" · "+c.status.replaceAll("_"," ")+" · "+(c.assignee||"Unassigned")),
+   text("p",c.description),text("p",c.analysis?.reason||""));
+  if(c.analysis?.question)item.append(text("p",c.analysis.question));
+  list.append(item);
+ }
+ view.append(list);
+ if(!data.canSimulateIntake)return;
+ const form=document.createElement("form");
+ const label=text("label","Simulate a fictional Cedar tenant request");
+ label.htmlFor="support-request";
+ const field=document.createElement("textarea");
+ field.id="support-request";field.required=true;field.maxLength=500;field.rows=3;
+ const button=text("button","Submit and route automatically");button.type="submit";
+ const status=text("p","Use fictional details only.");status.setAttribute("role","status");
+ let pending;
+ form.append(label,field,button,status);
+ form.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const description=field.value.trim();
+  if(!description||button.disabled)return;
+  if(pending?.description!==description)pending={description,requestId:crypto.randomUUID()};
+  button.disabled=true;
+  try{
+   await getJSON("/api/support-intake",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending)});
+   await openWorkspace("support");
+  }catch(e){status.textContent=e.message;button.disabled=false;}
+ });
+ view.prepend(form);
+}
 async function openWorkspace(id){
  byId("heading").textContent=labels[id]||"Workspace";
  const view=byId("view");view.replaceChildren(text("p","Loading permitted fictional information…"));
@@ -16,6 +49,10 @@ async function openWorkspace(id){
   const data=await getJSON("/api/workspace?module="+encodeURIComponent(id));
   view.replaceChildren();
   const intro=text("p",data.description);intro.className="muted";view.append(intro);
+  if(data.routingCases){
+   renderRouting(view,data);
+   byId("feedback").textContent="Automatic routing · fictional data · no agent execution";
+  }else{
   const table=document.createElement("table"),body=document.createElement("tbody");
   for(const entry of data.records){
    const row=document.createElement("tr");
@@ -24,6 +61,7 @@ async function openWorkspace(id){
   }
   table.append(body);view.append(table);
   byId("feedback").textContent="Server-authorized view · read-only · fictional data";
+  }
   for(const button of byId("nav").querySelectorAll("button"))button.setAttribute("aria-selected",String(button.dataset.id===id));
  }catch(e){view.replaceChildren(text("p",e.message));}
 }

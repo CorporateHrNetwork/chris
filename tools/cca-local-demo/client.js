@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 let currentId = null;
-let snapshot = { cases: [], tenants: [], agents: [] };
+let snapshot = { cases: [], tenants: [] };
 
 async function request(endpoint, options = {}) {
   const result = await fetch(endpoint, { cache: "no-store", ...options });
@@ -20,7 +20,6 @@ function feedback(message, error = false) {
 async function reload() {
   snapshot = await request("/api/state");
   $("tenant").replaceChildren(...snapshot.tenants.map(t => option(t.id, t.name)));
-  $("agent").replaceChildren(...snapshot.agents.map(a => option(a, a)));
   $("total").textContent = snapshot.cases.length;
   $("open").textContent = snapshot.cases.filter(c => c.status !== "CLOSED").length;
   $("approval").textContent = snapshot.cases.filter(c => c.status === "AWAITING_APPROVAL").length;
@@ -51,9 +50,10 @@ async function selectCase(id, rerender = true) {
   const tenant = snapshot.tenants.find(t => t.id === c.tenantId);
   $("caseDetails").textContent = c.id + " | " + (tenant?.name || c.tenantId) + " | " + c.description;
   $("caseStatus").textContent = "Status: " + c.status.replaceAll("_", " ") + (c.assignee ? " · Assigned to " + c.assignee : "");
+  $("caseAnalysis").textContent = [c.analysis?.reason, c.analysis?.question].filter(Boolean).join(" ");
   $("recommendation").value = c.recommendation || "";
   $("resolution").value = c.resolution || "";
-  const valid = { NEW: ["TRIAGE"], TRIAGED: ["ASSIGN"], ASSIGNED: ["RECOMMEND"],
+  const valid = { ASSIGNED: ["RECOMMEND"],
     AWAITING_APPROVAL: ["APPROVE"], APPROVED: ["RESOLVE"], AWAITING_CLIENT_VALIDATION: ["CONFIRM"] };
   for (const button of document.querySelectorAll("[data-action]")) button.disabled = !(valid[c.status] || []).includes(button.dataset.action);
   try {
@@ -91,7 +91,7 @@ $("actionButtons").addEventListener("click", e => {
   const action = e.target.closest("button")?.dataset.action;
   if (!action || !currentId) return;
   mutate("/api/act", { caseId: currentId, operation: action,
-    agentId: $("agent").value, recommendation: $("recommendation").value,
+    recommendation: $("recommendation").value,
     resolution: $("resolution").value });
 });
 $("refresh").addEventListener("click", () => reload().catch(e => feedback(e.message, true)));

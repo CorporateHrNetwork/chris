@@ -53,7 +53,7 @@ function payloadFrom(req) {
     req.on("error", reject);
   });
 }
-function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost } = {}) {
+function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost, support } = {}) {
   const staging = Boolean(stagingHost);
   const cookieName = staging ? "cca_staging_sid" : COOKIE;
   let unavailable = false;
@@ -106,6 +106,27 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
             scope: "CCA", demonstration: true }
         : FAIL);
     }
+    if (support && req.method === "POST" && url.pathname === "/api/support-intake") {
+      if (!origins.includes(origin)) return json(res, 403, FAIL);
+      if (!auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted)
+        return json(res, 403, FAIL);
+      if (!String(req.headers["content-type"] || "").startsWith("application/json"))
+        return json(res, 415, FAIL);
+      let body;
+      try { body = await payloadFrom(req); }
+      catch { return json(res, 400, FAIL); }
+      try { verifyState(); }
+      catch { return json(res, 503, FAIL); }
+      if (!auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted)
+        return json(res, 403, FAIL);
+      if (typeof body.description !== "string" || body.description.length > 500 ||
+          typeof body.requestId !== "string" || !/^[a-f0-9-]{36}$/i.test(body.requestId))
+        return json(res, 400, FAIL);
+      // Staging simulates a fixed Cedar tenant requester. Tenant, channel,
+      // identity and assignee are server-owned and never read from the form.
+      const result = support.submit("demo-cedar", body.description, body.requestId);
+      return json(res, result.ok ? 200 : result.code === "CCA_LOCAL_SAVE_FAILED" ? 503 : 400, result);
+    }
     if (req.method === "GET" && url.pathname === "/api/fictional-cases") {
       const identity = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");
       if (!identity.accepted) return json(res, 401, FAIL);
@@ -150,6 +171,15 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         auditEvents.push({ event: "ACCESS_DENIED", actor: session.principalId, time: new Date().toISOString() });
         if (auditEvents.length > 100) auditEvents.shift();
         return json(res, 403, { ok: false, code: "PERMISSION_DENIED" });
+      }
+      if (support && moduleId === "support") {
+        const routingCases = support.state("demo-cedar").cases.map(
+          ({ id, description, status, assignee, analysis }) => ({ id, description, status, assignee, analysis })
+        );
+        return json(res, 200, { ok: true, demonstration: true,
+          description: "Fictional Cedar support requests are analyzed and routed automatically.",
+          canSimulateIntake: auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted,
+          routingCases });
       }
       return json(res, 200, { ok: true, demonstration: true,
         description: item.description, records: item.records });
