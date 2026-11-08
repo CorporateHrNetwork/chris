@@ -88,8 +88,14 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
     }
     const cookie = parseCookies(req.headers.cookie)[cookieName];
     if (req.method === "GET" && Object.prototype.hasOwnProperty.call(files, url.pathname)) {
-      if (url.pathname.startsWith("/protected-centre") && !auth.lab.resolveSession(cookie).accepted)
+      if (url.pathname.startsWith("/protected-centre") && !auth.lab.resolveSession(cookie).accepted) {
+        if (staging && url.pathname === "/protected-centre" &&
+            String(req.headers.accept || "").split(",").some(type => type.split(";")[0].trim() === "text/html")) {
+          res.writeHead(303, { Location: "/", "Cache-Control": "no-store" });
+          return res.end();
+        }
         return json(res, 401, FAIL);
+      }
       const isScript = url.pathname.endsWith(".js");
       res.writeHead(200, {
         "Content-Type": isScript ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8",

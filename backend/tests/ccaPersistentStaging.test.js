@@ -124,6 +124,26 @@ test("protected Service Desk automatically routes fictional intake and persists 
     ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED"]);
 });
 
+test("expired staging page refresh returns to sign-in while APIs stay protected", async t => {
+  const options = fixture(t);
+  let time = now;
+  options.clock = () => time;
+  await withServer(options, async (post, origin) => {
+    const first = await post("password", { account: ACCOUNT, password });
+    const second = await post("mfa", { challenge: (await first.json()).challenge,
+      code: otpAt(secret, Math.floor(now / 30)) });
+    assert.equal(second.status, 200);
+    const headers = { Cookie: second.headers.get("set-cookie").split(";")[0], Accept: "text/html" };
+    assert.equal((await fetch(origin + "/protected-centre", { headers })).status, 200);
+    time += 901;
+    const refresh = await fetch(origin + "/protected-centre", { headers, redirect: "manual" });
+    assert.equal(refresh.status, 303);
+    assert.equal(refresh.headers.get("location"), "/");
+    assert.equal((await fetch(origin + "/api/access", { headers })).status, 401);
+    assert.equal((await fetch(origin + "/protected-centre.js", { headers })).status, 401);
+  });
+});
+
 test("staging refuses a missing checkpoint and interrupted vault recovery", async t => {
   const options = fixture(t);
   const checkpoint = path.join(options.directory, "host-security", "state-checkpoint.json");
