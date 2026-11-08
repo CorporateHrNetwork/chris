@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiRequest, getStoredOrganization } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 import { LeavePage, Panel, Notice, Table, StatusBadge, formatDate, employeeName, styles } from "../components/leave/LeaveUi";
@@ -9,6 +10,8 @@ export default function LeaveReturns() {
   const { hasPermission, loading: permissionLoading } = useAuthorization();
   const canEdit = hasPermission("leave.manage");
   const zermatt = getStoredOrganization()?.slug === "zermatt-liquor-limited";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedRequest = searchParams.get("request");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -21,7 +24,11 @@ export default function LeaveReturns() {
     setError("");
     try {
       const response = await apiRequest(zermatt ? "/api/leave/return-queue" : "/api/leave/requests?status=ACTIVE");
-      setRows(returnQueue(response?.data));
+      const active = returnQueue(response?.data);
+      const approved = zermatt && Array.isArray(response?.data)
+        ? response.data.filter(row => row.status === "APPROVED" && !row.cancelledAt && !row.returnedAt)
+        : [];
+      setRows([...active, ...approved]);
     } catch (err) {
       setError(err.message || "Unable to load return-to-work cases.");
       setRows([]);
@@ -42,6 +49,7 @@ export default function LeaveReturns() {
   }, [message]);
 
   const today = leaveTodayKey();
+  const visibleRows = selectedRequest ? rows.filter(row => row.id === selectedRequest) : rows;
   const actualDate = row => dates[row.id] ?? (zermatt ? "" : today);
 
   async function submit(request) {
@@ -69,14 +77,14 @@ export default function LeaveReturns() {
     { key: "employee", label: "Employee", render: row => `${employeeName(row.employee)} (${row.employee?.employeeNumber})` },
     { key: "type", label: "Leave Type", render: row => row.leaveType?.name },
     { key: "status", label: "Status", render: row => <StatusBadge status={row.status} /> },
-    ...(zermatt ? [{ key: "commenced", label: "Recorded Commencement", render: row => formatDate(row.commencementDate) }] : []),
+    ...(zermatt ? [{ key: "commenced", label: "Recorded Commencement", render: row => row.commencementDate ? formatDate(row.commencementDate) : `Scheduled · ${formatDate(row.startDate)}` }] : []),
     { key: "expected", label: "Expected Return", render: row => <>{formatDate(row.expectedReturnDate || row.endDate)}{row.returnDue && <div>Confirmation due</div>}</> },
     ...(zermatt ? [{ key: "deficit", label: "Provisional Days This Month", render: row => row.provisionalMissedDays ?? "—" }] : []),
     { key: "actual", label: "Actual Return", render: row => (
       <input
         aria-label={`Actual return date for ${employeeName(row.employee)}`}
         style={styles.input} type="date" value={actualDate(row)}
-        min={zermatt ? row.commencementDate?.slice(0, 10) : undefined} max={zermatt ? today : undefined}
+        min={zermatt ? (row.commencementDate || row.startDate)?.slice(0, 10) : undefined} max={zermatt ? today : undefined}
         onChange={event => setDates({ ...dates, [row.id]: event.target.value })}
       />
     ) },
@@ -95,11 +103,12 @@ export default function LeaveReturns() {
       {!permissionLoading && !canEdit && <Notice error>Read-only access. Confirmation requires leave management permission.</Notice>}
       {error && <Notice error>{error}</Notice>}
       {message && <Notice>{message}</Notice>}
+      {selectedRequest && <button style={styles.button} onClick={() => setSearchParams({})}>Show all returns</button>}
       <Panel title="Return Queue" subtitle={zermatt
-        ? "Expected return follows the last approved leave day. Provisional missed days cover elapsed workdays in the current month. Recorded attendance takes precedence."
+        ? "An approved record can be completed using its scheduled commencement and the actual return date. Provisional missed days cover elapsed workdays in the current month. Recorded attendance takes precedence."
         : "Only active leave requests appear. The queue refreshes after confirmation."}>
         {loading ? <div style={styles.empty}>Loading return-to-work cases...</div>
-          : <Table rows={rows} columns={columns} empty="No employees are currently awaiting return-to-work processing." />}
+          : <Table rows={visibleRows} columns={columns} empty="No employees are currently awaiting return-to-work processing." />}
       </Panel>
     </LeavePage>
   );

@@ -355,12 +355,12 @@ router.get("/return-reminders", async (req, res) => {
 router.get("/return-queue", requirePermission("employees.view"), async (req, res) => {
   try {
     if (!isZermatt(req)) return res.status(404).json({ status: "error", message: "Return queue unavailable." });
+    const today = lagosToday();
     const result = await getLeaveRequests({
       organizationId: req.auth.organizationId,
-      status: "ACTIVE",
+      approvedStartBy: utcDay(today),
       locationIds: leaveLocationIds(req.auth),
     });
-    const today = lagosToday();
     const monthStart = utcDay(`${today.slice(0, 7)}-01`);
     const deficits = await loadReturnDeficits({
       db: prisma, organizationId: req.auth.organizationId,
@@ -427,6 +427,8 @@ router.post(
         leaveRequestId: req.params.id,
         actorUserId: req.auth.userId,
         effectiveDate: req.body.effectiveDate,
+        zermatt: isZermatt(req),
+        locationIds: leaveLocationIds(req.auth),
       });
       return res.json({ status: "success", data: result });
     } catch (error) {
@@ -563,6 +565,9 @@ router.post(
               .organizationId,
           leaveRequestId:
             req.params.id,
+          zermatt: isZermatt(req),
+          actorUserId: req.auth.userId,
+          locationIds: leaveLocationIds(req.auth),
           cancellationReason:
             req.body
               .cancellationReason,
@@ -610,6 +615,7 @@ function handleError(
       "LEAVE_REQUEST_NOT_PENDING",
       "LEAVE_REQUEST_ALREADY_CANCELLED",
       "LEAVE_REQUEST_NOT_CANCELLABLE",
+      "LEAVE_CANCELLATION_REASON_REQUIRED",
       "LEAVE_BALANCE_NOT_FOUND",
       "LEAVE_BALANCE_INTEGRITY_ERROR",
       "INVALID_COMMENCEMENT_DATE",

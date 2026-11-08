@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-const { lagosToday, expectedReturnDate, lockLeaveReturnPayroll } = require("./leaveReturnPayrollService");
+const { lagosToday, lockLeaveReturnPayroll } = require("./leaveReturnPayrollService");
 const { calculateLeaveDays, utcDay } = require("./leaveDayCalculator");
 const { getEmployeePolicyBalance, supportsManualUsedDays } = require("./leaveBalanceService");
 
@@ -721,9 +721,13 @@ async function cancelLeaveRequest({
   organizationId,
   leaveRequestId,
   cancellationReason,
+  actorUserId,
+  locationIds,
+  zermatt = false,
 }) {
   return prisma.$transaction(
     async (tx) => {
+      if (zermatt) await lockLeaveReturnPayroll(tx, organizationId);
       await lockRequestEmployee(tx, organizationId, leaveRequestId);
       const request =
         await tx.leaveRequest.findFirst({
@@ -731,7 +735,9 @@ async function cancelLeaveRequest({
             id:
               leaveRequestId,
             organizationId,
+            ...(locationIds !== undefined ? { employee: { locationId: { in: locationIds } } } : {}),
           },
+          include: { employee: { select: { status: true } } },
         });
 
       if (!request) {
@@ -749,26 +755,20 @@ async function cancelLeaveRequest({
         );
       }
 
-      if (
-        ![
-          "PENDING",
-          "APPROVED",
-        ].includes(
-          request.status
-        )
-      ) {
-        throw new Error(
-          "LEAVE_REQUEST_NOT_CANCELLABLE"
-        );
+      const activeCancellation = zermatt && request.status === "ACTIVE";
+      if (!["PENDING", "APPROVED"].includes(request.status) && !activeCancellation) {
+        throw new Error("LEAVE_REQUEST_NOT_CANCELLABLE");
       }
+      const reason = String(cancellationReason || "").trim();
+      if (zermatt && !reason) throw new Error("LEAVE_CANCELLATION_REASON_REQUIRED");
+      if (activeCancellation && (
+        request.employee.status !== "LEAVE" || !["ACTIVE", "PROBATION"].includes(request.preLeaveStatus)
+      )) throw new Error("EMPLOYEE_STATUS_CHANGED_DURING_LEAVE");
 
-      if (
-        request.status ===
-        "APPROVED"
-      ) {
+      if (request.status === "APPROVED" || activeCancellation) {
         const leaveYear =
           request.startDate
-            .getFullYear();
+            .getUTCFullYear();
 
         const balance =
           await tx.leaveBalance.findUnique({
@@ -821,6 +821,17 @@ async function cancelLeaveRequest({
         });
       }
 
+      if (activeCancellation) {
+        await tx.employee.update({ where: { id: request.employeeId }, data: { status: request.preLeaveStatus } });
+      }
+      if (zermatt) {
+        await tx.organizationAudit.create({ data: {
+          organizationId, actorUserId, entityType: "LeaveRequest", entityId: request.id,
+          action: "LEAVE_CANCELLED", reason,
+          previousValue: { status: request.status, employeeStatus: request.employee.status },
+          newValue: { status: "CANCELLED", employeeStatus: activeCancellation ? request.preLeaveStatus : request.employee.status },
+        } });
+      }
       return tx.leaveRequest.update({
         where: {
           id:
@@ -832,7 +843,8 @@ async function cancelLeaveRequest({
           cancelledAt:
             new Date(),
           cancellationReason:
-            cancellationReason || null,
+            reason || null,
+          cancelledByUserId: actorUserId || null,
         },
       });
     }
@@ -938,88 +950,95 @@ async function commenceLeave({
   leaveRequestId,
   actorUserId,
   effectiveDate,
+  zermatt = false,
+  locationIds,
 }) {
   const commencementDate = parseLifecycleDate(effectiveDate, "INVALID_COMMENCEMENT_DATE");
 
-  return prisma.$transaction(async (tx) => {
-      await lockRequestEmployee(tx, organizationId, leaveRequestId);
-    const request = await tx.leaveRequest.findFirst({
-      where: { id: leaveRequestId, organizationId },
-      include: {
-        employee: {
-          include: {
-            employmentEpisodes: {
-              where: { endDate: null },
-              orderBy: { sequenceNumber: "desc" },
-              take: 1,
-            },
-          },
-        },
-        leavePolicy: true,
-      },
-    });
-
-    if (!request) throw new Error("LEAVE_REQUEST_NOT_FOUND");
-    if (request.status === "ACTIVE" || request.commencedAt) throw new Error("LEAVE_ALREADY_COMMENCED");
-    if (request.status !== "APPROVED") throw new Error("LEAVE_NOT_APPROVED");
-    const lifecycleRules = request.leavePolicy?.lifecycleRules || {};
-    if (startOfUtcDay(commencementDate) < startOfUtcDay(request.startDate) && !lifecycleRules.allowEarlyCommencement) {
-      throw new Error("LEAVE_COMMENCEMENT_TOO_EARLY");
-    }
-    if (!request.employee.employmentEpisodes.length) throw new Error("CURRENT_EMPLOYMENT_EPISODE_NOT_FOUND");
-    if (!["ACTIVE", "PROBATION"].includes(request.employee.status)) {
-      throw new Error("EMPLOYEE_STATUS_NOT_ELIGIBLE_FOR_LEAVE");
-    }
-
-    const competingLeave = await tx.leaveRequest.findFirst({
-      where: {
-        organizationId,
-        employeeId: request.employeeId,
-        status: "ACTIVE",
-        id: { not: request.id },
-      },
-      select: { id: true },
-    });
-    if (competingLeave) throw new Error("EMPLOYEE_ALREADY_ON_ACTIVE_LEAVE");
-
-    const activation = await tx.leaveRequest.updateMany({
-      where: { id: request.id, organizationId, status: "APPROVED", commencedAt: null },
-      data: {
-        status: "ACTIVE",
-        commencedAt: new Date(),
-        commencementDate,
-        commencedByUserId: actorUserId,
-        preLeaveStatus: request.employee.status,
-      },
-    });
-    if (activation.count !== 1) throw new Error("LEAVE_ALREADY_COMMENCED");
-
-    await tx.employee.update({
-      where: { id: request.employeeId },
-      data: { status: "LEAVE" },
-    });
-
-    const updated = await tx.leaveRequest.findUnique({
-      where: { id: request.id },
-      include: { employee: true, leaveType: true },
-    });
-
-    await tx.employeeLifecycleEvent.create({
-      data: {
-        organizationId,
-        employeeId: request.employeeId,
-        eventType: "LEAVE_COMMENCED",
-        effectiveDate: commencementDate,
-        previousStatus: request.employee.status,
-        newStatus: "LEAVE",
-        reason: "Approved leave commenced",
-        notes: "Leave request " + request.id,
-        performedByUserId: actorUserId,
-      },
-    });
-
-    return updated;
+  return prisma.$transaction(async tx => {
+    if (zermatt) await lockLeaveReturnPayroll(tx, organizationId);
+    await lockRequestEmployee(tx, organizationId, leaveRequestId);
+    const request = await loadLifecycleRequest(tx, organizationId, leaveRequestId, locationIds);
+    return commenceLockedLeave(tx, { organizationId, request, actorUserId, commencementDate });
   });
+}
+
+function loadLifecycleRequest(tx, organizationId, leaveRequestId, locationIds) {
+  return tx.leaveRequest.findFirst({
+    where: {
+      id: leaveRequestId, organizationId,
+      ...(locationIds !== undefined ? { employee: { locationId: { in: locationIds } } } : {}),
+    },
+    include: {
+      employee: { include: {
+        employmentEpisodes: { where: { endDate: null }, orderBy: { sequenceNumber: "desc" }, take: 1 },
+      } },
+      leavePolicy: true,
+    },
+  });
+}
+
+async function commenceLockedLeave(tx, { organizationId, request, actorUserId, commencementDate }) {
+  if (!request) throw new Error("LEAVE_REQUEST_NOT_FOUND");
+  if (request.status === "ACTIVE" || request.commencedAt) throw new Error("LEAVE_ALREADY_COMMENCED");
+  if (request.status !== "APPROVED") throw new Error("LEAVE_NOT_APPROVED");
+  const lifecycleRules = request.leavePolicy?.lifecycleRules || {};
+  if (startOfUtcDay(commencementDate) < startOfUtcDay(request.startDate) && !lifecycleRules.allowEarlyCommencement) {
+    throw new Error("LEAVE_COMMENCEMENT_TOO_EARLY");
+  }
+  if (!request.employee.employmentEpisodes.length) throw new Error("CURRENT_EMPLOYMENT_EPISODE_NOT_FOUND");
+  if (!["ACTIVE", "PROBATION"].includes(request.employee.status)) {
+    throw new Error("EMPLOYEE_STATUS_NOT_ELIGIBLE_FOR_LEAVE");
+  }
+
+  const competingLeave = await tx.leaveRequest.findFirst({
+    where: {
+      organizationId,
+      employeeId: request.employeeId,
+      status: "ACTIVE",
+      id: { not: request.id },
+    },
+    select: { id: true },
+  });
+  if (competingLeave) throw new Error("EMPLOYEE_ALREADY_ON_ACTIVE_LEAVE");
+
+  const activation = await tx.leaveRequest.updateMany({
+    where: { id: request.id, organizationId, status: "APPROVED", commencedAt: null },
+    data: {
+      status: "ACTIVE",
+      commencedAt: new Date(),
+      commencementDate,
+      commencedByUserId: actorUserId,
+      preLeaveStatus: request.employee.status,
+    },
+  });
+  if (activation.count !== 1) throw new Error("LEAVE_ALREADY_COMMENCED");
+
+  await tx.employee.update({
+    where: { id: request.employeeId },
+    data: { status: "LEAVE" },
+  });
+
+  const updated = await tx.leaveRequest.findUnique({
+    where: { id: request.id },
+    include: { employee: true, leaveType: true },
+  });
+
+  await tx.employeeLifecycleEvent.create({
+    data: {
+      organizationId,
+      employeeId: request.employeeId,
+      eventType: "LEAVE_COMMENCED",
+      effectiveDate: commencementDate,
+      previousStatus: request.employee.status,
+      newStatus: "LEAVE",
+      reason: actorUserId ? "Approved leave commenced" : "Approved leave commenced automatically",
+      notes: "Leave request " + request.id,
+      performedByUserId: actorUserId,
+    },
+  });
+
+  return updated;
 }
 
 async function returnFromLeave({
@@ -1040,32 +1059,19 @@ async function returnFromLeave({
   return prisma.$transaction(async (tx) => {
     if (zermatt) await lockLeaveReturnPayroll(tx, organizationId);
     await lockRequestEmployee(tx, organizationId, leaveRequestId);
-    const request = await tx.leaveRequest.findFirst({
-      where: {
-        id: leaveRequestId, organizationId,
-        ...(locationIds !== undefined ? { employee: { locationId: { in: locationIds } } } : {}),
-      },
-      include: {
-        employee: {
-          include: {
-            employmentEpisodes: {
-              where: { endDate: null },
-              orderBy: { sequenceNumber: "desc" },
-              take: 1,
-            },
-          },
-        },
-        leavePolicy: true,
-      },
-    });
-
+    let request = await loadLifecycleRequest(tx, organizationId, leaveRequestId, locationIds);
+    if (zermatt && request?.status === "APPROVED") {
+      const commencementDate = startOfUtcDay(request.startDate);
+      if (startOfUtcDay(actualReturnDate) < commencementDate) throw new Error("RETURN_BEFORE_COMMENCEMENT");
+      await commenceLockedLeave(tx, { organizationId, request, actorUserId, commencementDate });
+      request = await loadLifecycleRequest(tx, organizationId, leaveRequestId, locationIds);
+    }
     if (!request) throw new Error("LEAVE_REQUEST_NOT_FOUND");
     if (request.status === "COMPLETED" || request.returnedAt) throw new Error("LEAVE_ALREADY_RETURNED");
     if (request.status !== "ACTIVE" || !request.commencementDate) throw new Error("LEAVE_NOT_ACTIVE");
     const lifecycleRules = request.leavePolicy?.lifecycleRules || {};
     if (startOfUtcDay(actualReturnDate) < startOfUtcDay(request.commencementDate)) throw new Error("RETURN_BEFORE_COMMENCEMENT");
-    const expected = zermatt ? expectedReturnDate(request.endDate) : startOfUtcDay(request.endDate);
-    if (startOfUtcDay(actualReturnDate) < expected && lifecycleRules.allowEarlyReturn === false) throw new Error("EARLY_RETURN_NOT_ALLOWED");
+    if (startOfUtcDay(actualReturnDate) < startOfUtcDay(request.endDate) && lifecycleRules.allowEarlyReturn === false) throw new Error("EARLY_RETURN_NOT_ALLOWED");
     if (lifecycleRules.returnDocumentationRequired && !String(returnDocumentationUrl || "").trim()) throw new Error("RETURN_DOCUMENTATION_REQUIRED");
     if (lifecycleRules.fitnessCertificateRequired && !String(fitnessCertificateUrl || "").trim()) throw new Error("FITNESS_CERTIFICATE_REQUIRED");
     if (!request.employee.employmentEpisodes.length) throw new Error("CURRENT_EMPLOYMENT_EPISODE_NOT_FOUND");
@@ -1120,6 +1126,7 @@ async function getLeaveRequests({
   organizationId,
   status,
   leaveYear = null,
+  approvedStartBy,
   locationId = null,
   locationIds,
 }) {
@@ -1138,7 +1145,9 @@ async function getLeaveRequests({
   return prisma.leaveRequest.findMany({
     where: {
       organizationId,
-      ...(status ? { status } : {}),
+      ...(approvedStartBy
+        ? { OR: [{ status: "ACTIVE" }, { status: "APPROVED", startDate: { lte: approvedStartBy } }] }
+        : status ? { status } : {}),
       ...(yearStart && nextYearStart
         ? {
             startDate: { lt: nextYearStart },

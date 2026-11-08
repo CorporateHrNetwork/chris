@@ -2,7 +2,7 @@
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
-import { apiRequest } from "../services/api";
+import { apiRequest, getStoredOrganization } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 import EmployeeSearchSelect from "../components/leave/EmployeeSearchSelect";
 import {
@@ -53,6 +53,7 @@ export default function LeaveRequests() {
   const canApprove =
     hasPermission("leave.approve") || hasPermission("leave.manage");
   const canManageUsedDays = hasPermission("leave.manage");
+  const zermatt = getStoredOrganization()?.slug === "zermatt-liquor-limited";
 
   const [policies, setPolicies] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -622,31 +623,23 @@ export default function LeaveRequests() {
           </>
         )}
 
-        {["PENDING", "APPROVED"].includes(
-          request.status
-        ) && (
+        {(["PENDING", "APPROVED"].includes(request.status) || (zermatt && request.status === "ACTIVE")) && (
           <button
-            disabled={
-              !canApprove || busy === request.id
-            }
+            disabled={!canManageUsedDays || busy === request.id}
             style={styles.button}
-            onClick={() =>
-              action(
-                request,
-                "cancel",
-                {
-                  cancellationReason:
-                    "Cancelled from leave register",
-                },
-                "Request cancelled."
-              )
-            }
+            onClick={() => {
+              const prompt = request.status === "ACTIVE"
+                ? "Cancel only if the employee did not take this leave. This restores the full leave balance. Enter the reason to continue."
+                : "Enter the reason for cancelling this leave request.";
+              const reason = window.prompt(prompt)?.trim();
+              if (reason) action(request, "cancel", { cancellationReason: reason }, "Request cancelled.");
+            }}
           >
-            Cancel
+            Cancel Leave
           </button>
         )}
 
-        {request.status === "APPROVED" && (
+        {!zermatt && request.status === "APPROVED" && (
           <button
             title={
               !due && !early
@@ -679,10 +672,10 @@ export default function LeaveRequests() {
           </button>
         )}
 
-        {request.status === "ACTIVE" && (
+        {(request.status === "ACTIVE" || (zermatt && due && request.status === "APPROVED")) && (
           <button
             style={styles.primary}
-            onClick={() => nav("/leave/returns")}
+            onClick={() => nav(zermatt ? `/leave/returns?request=${encodeURIComponent(request.id)}` : "/leave/returns")}
           >
             Return to Work
           </button>
@@ -694,7 +687,7 @@ export default function LeaveRequests() {
   function lifecycleLabel(request, due) {
     if (request.status === "APPROVED") {
       return due
-        ? "Approved - Ready to Commence"
+        ? zermatt ? "Approved - Awaiting lifecycle update" : "Approved - Ready to Commence"
         : `Approved - Starts ${formatDate(
             request.startDate
           )}`;

@@ -18,7 +18,7 @@ assert.ok(service.includes("const restoredStatus = request.preLeaveStatus"), "re
 assert.ok(service.includes('request.employee.status !== "LEAVE"'), "return must not overwrite a stronger status");
 assert.ok(service.includes("tx.employeeLifecycleEvent.create"), "lifecycle writes must be audited");
 assert.ok(service.includes("prisma.$transaction"), "lifecycle updates must be transactional");
-assert.ok(service.includes('where: { id: leaveRequestId, organizationId }'), "tenant scope must include organization");
+assert.match(service, /function loadLifecycleRequest[\s\S]*?where: \{\s*id: leaveRequestId, organizationId,/, "tenant scope must include organization");
 assert.ok(routes.includes('"/requests/:id/commence"'), "commence endpoint missing");
 assert.ok(routes.includes('"/requests/:id/return"'), "return endpoint missing");
 assert.ok(routes.includes('requirePermission("leave.manage")'), "canonical leave write permission missing");
