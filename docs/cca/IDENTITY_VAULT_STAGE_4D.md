@@ -32,15 +32,11 @@ administrator enrollment can be enabled through any browser or API:
    identity database with transactional concurrency or centralized access
    control. The encryption key must be protected through a dedicated
    secrets-management solution, not saved in Git, screenshots, logs or prompts.
-3. Password-attempt rate limits, persistent lockouts, MFA challenge rate
-   limits, phishing-resistant factors, passkeys, and safe reset/recovery
-   policies must be completed and security reviewed.
+3. The isolated vault now persists per-account password and MFA failure lockouts (five failures, five-minute delay), but still lacks source-based throttling, safe account recovery, phishing-resistant factors, passkeys, and security review.
 4. Role-change requester authorization still requires formal workflow
    design and assessment. Separate approver checks alone are not sufficient
    for enterprise administrator provisioning.
-5. Encrypted backup restoration can reintroduce previously revoked roles or
-   accepted TOTP counters. Restores must enter a manual security review and
-   revalidation mode before any user may authenticate.
+5. Encrypted backup restoration can reintroduce previously revoked roles or accepted TOTP counters. The updated vault writes a security-review quarantine marker and refuses subsequent startup until reviewed. No automatic unlocking mechanism is provided; recovery and revocation reconciliation remain manual.
 6. Audit history remains in the same vault snapshot and can be rolled back.
    An independent append-only signed/event log is necessary.
 7. Secure HTTPS session cookies, account suspension, consented enrollment,
@@ -58,9 +54,7 @@ From the CCA feature branch:
 node --test backend/tests/cca*.test.js
 ```
 
-The suite covers encrypted persistence, MFA after restart, bad-key and
-tampering failures, role-change approval, session revocation, encrypted
-backup inspection and explicit restoration. Tests operate only on
+The suite covers encrypted persistence, MFA after restart, bad-key and tampering failures, role-change approval, session revocation, persistent password/MFA failure lockouts, encrypted backup inspection and explicit restoration quarantine. Tests operate only on
 temporary directories with synthetic credentials and fictional tenants.
 
 This is entirely within **draft PR #237**, unmerged and undeployed.
