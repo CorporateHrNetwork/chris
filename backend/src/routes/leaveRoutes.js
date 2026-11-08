@@ -1,3 +1,4 @@
+const { listPublicHolidays } = require("../services/attendanceInsightsService");
 const { isZermatt, isHeadHr, isBranchHr } = require("../services/zermattHrFinancialAccessService");
 const { lagosToday, expectedReturnDate, loadReturnDeficits, missedDatesFor } = require("../services/leaveReturnPayrollService");
 const { dateKey, utcDay } = require("../services/leaveDayCalculator");
@@ -69,6 +70,16 @@ router.use(
   requireAuth
 );
 
+
+router.get("/public-holidays", requirePermission("leave.view"), async (req, res) => {
+  try {
+    const holidays = await listPublicHolidays({ organizationId: req.auth.organizationId });
+    const data = holidays.map(({ name, holidayDate, isRecurring }) => ({ name, holidayDate, isRecurring }));
+    return res.json({ status: "success", data });
+  } catch {
+    return res.status(500).json({ status: "error", message: "Unable to load public holidays." });
+  }
+});
 
 router.get("/overview",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getLeaveOverview({organizationId:req.auth.organizationId,locationId:req.auth.activeLocationId || null,timezone:req.auth.organization?.timezone || "Africa/Lagos",locationIds:req.auth.locationScope === "ALL_LOCATIONS" ? undefined : (req.auth.availableLocations || []).map(location=>location.id).filter(Boolean)})})}catch(error){return handleError(error,res)}});
 router.get("/balance-register",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await getBalanceRegister({organizationId:req.auth.organizationId,leaveYear:req.query.leaveYear})})}catch(error){return handleError(error,res)}});
