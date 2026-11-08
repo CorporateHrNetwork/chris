@@ -209,4 +209,40 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
   return Object.freeze({register,passwordStep,mfaStep,context,changeRoles,revoke,audit,
     file:filename,backup});
 }
-module.exports={createIdentityVault,ALLOWED_ROLES};
+function inspectVaultBackup({directory,encryptionKey}) {
+  if(typeof directory!=="string" || !path.isAbsolute(directory) ||
+      !Buffer.isBuffer(encryptionKey) || encryptionKey.length!==32)
+    throw Error("CCA_VAULT_CONFIGURATION_REQUIRED");
+  const backup=path.join(directory,"cca-identities.previous.enc.json");
+  if(!fs.existsSync(backup)) return {available:false};
+  const saved=decrypt(fs.readFileSync(backup,"utf8"),encryptionKey);
+  return {available:true,identityCount:saved.users.length,auditEventCount:saved.events.length};
+}
+function restoreVaultBackup({directory,encryptionKey,confirm=false}) {
+  if(confirm!==true) throw Error("CCA_EXPLICIT_RECOVERY_CONFIRMATION_REQUIRED");
+  const info=inspectVaultBackup({directory,encryptionKey});
+  if(!info.available) throw Error("CCA_NO_RECOVERY_BACKUP");
+  // Run only with all CCA identity processes stopped. This function does not
+  // coordinate multi-process access and must never be exposed via HTTP.
+  const original=path.join(directory,"cca-identities.enc.json");
+  const backup=path.join(directory,"cca-identities.previous.enc.json");
+  const source=fs.readFileSync(backup,"utf8");
+  decrypt(source,encryptionKey);
+  const temporary=path.join(directory,".cca-recover-"+crypto.randomUUID()+".tmp");
+  let fd;
+  try {
+    fd=fs.openSync(temporary,"wx",0o600);
+    fs.writeFileSync(fd,source,"utf8");fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;
+    if(fs.existsSync(original)) {
+      const archive=path.join(directory,"cca-identities.before-restore-"+Date.now()+".enc.json");
+      fs.copyFileSync(original,archive);
+    }
+    fs.renameSync(temporary,original);
+  }finally{
+    if(fd!==undefined)fs.closeSync(fd);
+    if(fs.existsSync(temporary))fs.unlinkSync(temporary);
+  }
+  return {restored:true,identityCount:info.identityCount,
+    warning:"Previous snapshot restored. Review revoked roles and MFA counters before use."};
+}
+module.exports={createIdentityVault,ALLOWED_ROLES,inspectVaultBackup,restoreVaultBackup};
