@@ -40,6 +40,7 @@ test("Zermatt groups expand independently and card dialogs use a viewport-bounde
         policies: [
           current,
           { ...current, id: "old", name: "Old Version", effectiveTo: "2001-01-01" },
+          { ...current, id: "retired", name: "Retired Version", status: "RETIRED", isActive: false },
           { ...current, id: "future", name: "Future Version", effectiveFrom: "2099-01-01" },
           { ...current, id: "inactive", name: "Inactive Version", isActive: false },
         ],
@@ -68,7 +69,8 @@ test("Zermatt groups expand independently and card dialogs use a viewport-bounde
     assert.doesNotMatch(section.textContent, /Old Version|Future Version|Inactive Version|Standard Template/);
     const versions = organization.querySelector("details");
     assert.equal(versions.open, false);
-    assert.match(versions.textContent, /Old Version/);
+    assert.match(versions.textContent, /Future Version/);
+    assert.doesNotMatch(organization.textContent, /Old Version|Retired Version/);
     assert.match(templates.textContent, /Standard Template/);
 
     await act(async () => [...section.querySelectorAll("button")].find(button => button.textContent === "View Policy").click());

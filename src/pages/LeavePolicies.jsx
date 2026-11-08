@@ -36,7 +36,12 @@ function LeavePolicies(){
  }).format(new Date());
  const currentPolicies = data.policies.filter(policy => isCurrentPolicy(policy, effectiveToday));
  const currentIds = new Set(currentPolicies.map(policy => policy.id));
- const otherPolicies = data.policies.filter(policy => !currentIds.has(policy.id));
+ const otherPolicies = data.policies.filter(policy => {
+  if (currentIds.has(policy.id)) return false;
+  if (!zermatt) return true;
+  return policy.status !== "RETIRED" &&
+   (!policy.effectiveTo || policy.effectiveTo.slice(0, 10) >= effectiveToday);
+ });
 
  function policyCards(policies) {
   return <div className="leave-policy-grid">{policies.map(policy => (
@@ -63,7 +68,7 @@ function LeavePolicies(){
   {!canManage&&<Notice>Read-only access. Policy changes require leave management permission.</Notice>}{message&&<Notice ok>{message}</Notice>}{error&&<Notice>{error}</Notice>}
   <Disclosure title={zermatt ? "Zermatt Organization Policies" : "Organization Policies"} count={currentPolicies.length} note="Active policies in effect today.">
    {currentPolicies.length ? policyCards(currentPolicies) : <p style={muted}>No policies are currently in effect.</p>}
-   {otherPolicies.length > 0 && <Disclosure title="Other policy versions" count={otherPolicies.length} note="Drafts, scheduled policies, suspended policies and historical versions.">
+   {otherPolicies.length > 0 && <Disclosure title="Other policy versions" count={otherPolicies.length} note={zermatt ? "Policies available for review, including drafts, scheduled and suspended policies." : "Drafts, scheduled policies, suspended policies and historical versions."}>
     {policyCards(otherPolicies)}
    </Disclosure>}
   </Disclosure>
