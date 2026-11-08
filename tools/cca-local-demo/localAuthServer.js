@@ -54,10 +54,12 @@ function payloadFrom(req) {
   });
 }
 function createAuthServer(auth) {
-  const pending = new Map();
+  const auditEvents = [];
   const files = {
     "/": "admin-login.html",
     "/admin-login.js": "admin-login.js",
+    "/protected-centre": "protected-centre.html",
+    "/protected-centre.js": "protected-centre.js",
   };
   return http.createServer(async (req, res) => {
     const host = (req.headers.host || "").split(":")[0];
@@ -66,7 +68,10 @@ function createAuthServer(auth) {
     const origin = req.headers.origin;
     if (origin && !originFor(req.socket.localPort).includes(origin))
       return json(res, 403, FAIL);
+    const cookie = parseCookies(req.headers.cookie)[COOKIE];
     if (req.method === "GET" && Object.prototype.hasOwnProperty.call(files, url.pathname)) {
+      if (url.pathname.startsWith("/protected-centre") && !auth.lab.resolveSession(cookie).accepted)
+        return json(res, 401, FAIL);
       const isScript = url.pathname.endsWith(".js");
       res.writeHead(200, {
         "Content-Type": isScript ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8",
@@ -76,7 +81,6 @@ function createAuthServer(auth) {
       });
       return fs.createReadStream(path.join(__dirname, files[url.pathname])).pipe(res);
     }
-    const cookie = parseCookies(req.headers.cookie)[COOKIE];
     if (req.method === "GET" && url.pathname === "/api/whoami") {
       const identity = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");
       return json(res, identity.accepted ? 200 : 401, identity.accepted
@@ -91,6 +95,46 @@ function createAuthServer(auth) {
         { id: "CCA-AUTH-DEMO-001", tenantId: "demo-cedar",
           description: "Fictional onboarding question", status: "DEMO_READ_ONLY" }
       ] });
+    }
+    const modules = Object.freeze({
+      support: { permission: PERMISSIONS.TICKETS_READ,
+        description: "Fictional support cases, scoped to explicitly assigned demonstration tenants.", 
+        records: [["CCA-AUTH-DEMO-001", "demo-cedar", "Fictional onboarding question", "READ ONLY"]] },
+      agents: { permission: PERMISSIONS.AGENTS_READ,
+        description: "Fictional AI agent roster. No agents can be executed here.",
+        records: [["Intake Agent", "SIMULATION"], ["Support Agent", "SIMULATION"]] },
+      billing: { permission: PERMISSIONS.BILLING_READ,
+        description: "Fictional subscription overview. No billing writes are enabled.",
+        records: [["Cedar Demo Services", "DEMO", "NO PAYMENT"]] },
+      releases: { permission: PERMISSIONS.RELEASE_READ,
+        description: "Illustrative release proposals only. Deployment controls are not connected.",
+        records: [["CCA Prototype", "LOCAL ONLY", "NO DEPLOYMENT"]] },
+      audit: { permission: PERMISSIONS.AUDIT_READ,
+        description: "In-memory fictional login/authorization events, no production audit data.",
+        records: auditEvents.slice(-20).map(e => [e.event, e.actor, e.time]) },
+    });
+    const permissionFor = item => auth.lab.resolveSession(cookie, item.permission,
+      item.permission === PERMISSIONS.TICKETS_READ ? "demo-cedar" : undefined).accepted;
+    if (req.method === "GET" && url.pathname === "/api/access") {
+      const session = auth.lab.resolveSession(cookie);
+      if (!session.accepted) return json(res, 401, FAIL);
+      return json(res, 200, { ok: true, demonstration: true, account: session.principalId,
+        modules: Object.keys(modules).filter(id => permissionFor(modules[id])) });
+    }
+    if (req.method === "GET" && url.pathname === "/api/workspace") {
+      const session = auth.lab.resolveSession(cookie);
+      if (!session.accepted) return json(res, 401, FAIL);
+      const moduleId = url.searchParams.get("module");
+      if (!Object.prototype.hasOwnProperty.call(modules, moduleId || ""))
+        return json(res, 404, { ok: false, code: "NOT_FOUND" });
+      const item = modules[moduleId];
+      if (!permissionFor(item)) {
+        auditEvents.push({ event: "ACCESS_DENIED", actor: session.principalId, time: new Date().toISOString() });
+        if (auditEvents.length > 100) auditEvents.shift();
+        return json(res, 403, { ok: false, code: "PERMISSION_DENIED" });
+      }
+      return json(res, 200, { ok: true, demonstration: true,
+        description: item.description, records: item.records });
     }
     if (req.method !== "POST" ||
         !["/api/password", "/api/mfa", "/api/logout"].includes(url.pathname))
@@ -112,10 +156,19 @@ function createAuthServer(auth) {
     if (url.pathname === "/api/mfa") {
       const result = auth.lab.loginOtp({ challenge: body.challenge, code: body.code });
       if (!result.ok) return json(res, 401, FAIL);
+      auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.account, time: new Date().toISOString() });
+      if (auditEvents.length > 100) auditEvents.shift();
       return json(res, 200, { ok: true, demonstration: true },
         { "Set-Cookie": COOKIE + "=" + result.token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=900" });
     }
-    if (cookie) auth.lab.revoke(cookie);
+    if (cookie) {
+      const session = auth.lab.resolveSession(cookie);
+      if (session.accepted) {
+        auditEvents.push({ event: "SESSION_REVOKED", actor: session.principalId, time: new Date().toISOString() });
+        if (auditEvents.length > 100) auditEvents.shift();
+      }
+      auth.lab.revoke(cookie);
+    }
     return json(res, 200, { ok: true },
       { "Set-Cookie": COOKIE + "=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0" });
   });
@@ -135,8 +188,9 @@ if (require.main === module) {
   const secret = crypto.randomBytes(20);
   const auth = createDemoAuth({ password, secret });
   const server = createAuthServer(auth);
-  server.listen(PORT, HOST, () => {
-    console.log("LOCAL FICTIONAL CCA LOGIN: http://" + HOST + ":" + PORT);
+  const port = Number(process.env.CCA_AUTH_PORT || PORT);
+  server.listen(port, HOST, () => {
+    console.log("LOCAL FICTIONAL CCA LOGIN: http://" + HOST + ":" + port);
     console.log("DEMO ONLY — account:", ACCOUNT);
     console.log("Ephemeral password (not saved):", password);
     console.log("TOTP enrollment secret (one-time local terminal display):", base32(secret));
