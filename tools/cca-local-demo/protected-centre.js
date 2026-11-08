@@ -9,21 +9,25 @@ async function getJSON(url,options){
 }
 const labels=Object.freeze({support:"Service Desk",agents:"AI Agent Studio",billing:"Subscriptions",releases:"Release Control",audit:"Security & Audit"});
 function text(tag,value){const node=document.createElement(tag);node.textContent=value;return node;}
-function renderRouting(view, data){
+function renderRouting(view, data, openCaseId){
  const list=document.createElement("ul");
+ list.className="case-list";
  for(const c of [...data.routingCases].reverse()){
   const item=document.createElement("li");
-  item.append(text("strong",c.id+" · "+c.status.replaceAll("_"," ")+" · "+(c.assignee||"Unassigned")),
+  const details=document.createElement("details");
+  details.open=c.id===openCaseId;
+  details.append(text("summary",c.id+" · "+c.status.replaceAll("_"," ")+" · "+(c.assignee||"Unassigned")),
    text("p",c.description),text("p",c.analysis?.reason||""));
-  if(c.analysis?.question)item.append(text("p",c.analysis.question));
+  if(c.analysis?.question)details.append(text("p",c.analysis.question));
   if(c.draft){
    const draft=document.createElement("section");
    draft.append(text("strong","Draft response · Awaiting human review"),text("p",c.draft));
-   item.append(draft);
+   details.append(draft);
   }
+  item.append(details);
   list.append(item);
  }
- view.append(list);
+ view.append(text("p","Select a case to view its details."),list);
  if(!data.canSimulateIntake)return;
  const form=document.createElement("form");
  const label=text("label","Simulate a fictional Cedar tenant request");
@@ -41,13 +45,13 @@ function renderRouting(view, data){
   if(pending?.description!==description)pending={description,requestId:crypto.randomUUID()};
   button.disabled=true;
   try{
-   await getJSON("/api/support-intake",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending)});
-   await openWorkspace("support");
+   const result=await getJSON("/api/support-intake",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pending)});
+   await openWorkspace("support",result.case.id);
   }catch(e){status.textContent=e.message;button.disabled=false;}
  });
  view.prepend(form);
 }
-async function openWorkspace(id){
+async function openWorkspace(id,openCaseId){
  byId("heading").textContent=labels[id]||"Workspace";
  const view=byId("view");view.replaceChildren(text("p","Loading permitted fictional information…"));
  try{
@@ -55,7 +59,7 @@ async function openWorkspace(id){
   view.replaceChildren();
   const intro=text("p",data.description);intro.className="muted";view.append(intro);
   if(data.routingCases){
-   renderRouting(view,data);
+   renderRouting(view,data,openCaseId);
    byId("feedback").textContent="Automatic routing and response drafts · fictional data · human review required";
   }else{
   const table=document.createElement("table"),body=document.createElement("tbody");
