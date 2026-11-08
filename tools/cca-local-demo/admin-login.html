@@ -20,7 +20,7 @@ kbd,code{background:#f1f5f1;padding:3px 6px;border-radius:5px}.hidden{display:no
 <div class="layout">
 <section class="card"><h2>Independent CCA account</h2>
 <div id="passwordStage"><form id="passwordForm"><label for="account">Demo account</label><input id="account" autocomplete="username" required value="cca-demo-operator">
-<label for="password">Ephemeral password</label><input id="password" type="password" autocomplete="current-password" required>
+<label for="password">Current temporary demo password</label><input id="password" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required><label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input id="showPassword" type="checkbox" style="width:auto"> Show password to verify pasted characters</label><p class="muted">Use the password from the latest CCA server startup. Earlier passwords are invalid after a restart. Five failed attempts cause a five-minute lockout.</p>
 <button type="submit">Continue to verification</button></form></div>
 <div id="otpStage" class="hidden"><form id="otpForm"><label for="code">Authenticator code (6 digits)</label><input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
 <p class="muted">Enter the current 30-second code from the authenticator configured with the secret shown on the local server terminal.</p>
