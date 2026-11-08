@@ -1,3 +1,4 @@
+const { calendarHolidays } = require("../services/publicHolidayCalendarService");
 const { listPublicHolidays } = require("../services/attendanceInsightsService");
 const { isZermatt, isHeadHr, isBranchHr } = require("../services/zermattHrFinancialAccessService");
 const { lagosToday, expectedReturnDate, loadReturnDeficits, missedDatesFor } = require("../services/leaveReturnPayrollService");
@@ -75,7 +76,7 @@ router.use(
 router.get("/public-holidays", requirePermission("leave.view"), async (req, res) => {
   try {
     const holidays = await listPublicHolidays({ organizationId: req.auth.organizationId });
-    const data = holidays.map(({ name, holidayDate, isRecurring }) => ({ name, holidayDate, isRecurring }));
+    const data = calendarHolidays(holidays, req.auth.organization?.slug);
     return res.json({ status: "success", data });
   } catch {
     return res.status(500).json({ status: "error", message: "Unable to load public holidays." });
