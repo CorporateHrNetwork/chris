@@ -54,11 +54,16 @@ export default function TransportSupportPayroll() {
   setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,overtimePhPay:input.overtimePhPay||0,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
  }
  const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
+ const registerHeaders=detail?.register.headers||state?.registerHeaders||[];
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const externalReady=detail&&['APPROVED','PAID'].includes(detail.run.status);
  const editable=detail&&['DRAFT','REJECTED'].includes(detail.run.status);
- return <section style={{padding:24,maxWidth:1700,margin:'0 auto'}}>
-  <h1>Transport Support Pay · Benefits</h1>
+ return <section style={{padding:24,maxWidth:1700,minWidth:0,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
+  <h1>Transport Support Pay · Payroll Execution Workspace</h1>
+  <nav aria-label="Transport Support workspace sections" style={{display:'flex',flexWrap:'wrap',gap:16,marginBlock:12}}>
+   <a href="#transport-run">Monthly Run</a><a href="#transport-register">Full Register</a><a href="#transport-export">Excel Export Portal</a>
+  </nav>
+  {state&&!head&&<p role="note">Preparation, adjustments and export require the active Head HR payroll assignment for this account.</p>}
   <p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
   <p>Actual payment confirmation remains separate. An export does not confirm external approval or payment.</p>
   <p role="note">Benefit inputs and payments do not update regular salary rates, payroll runs, payslips, statutory deductions or loan recoveries.</p>
@@ -84,7 +89,7 @@ export default function TransportSupportPayroll() {
     <button type="button" disabled={busy} onClick={()=>navigate('/benefits/transport-support/preparation')}>Open Preparation Register</button>
    </>}
   </section>}
-  <h2>Open a monthly run</h2>
+  <h2 id="transport-run">Monthly Run · Prepare or Open</h2>
   <p>Select an existing run to edit adjustments, approve the draft, or export its register.</p>
   {!state?.runs?.length?<p>No transport benefit runs yet.</p>:<div style={{display:'flex',gap:10,flexWrap:'wrap'}}>{state.runs.map(r=><button key={r.id} aria-pressed={detail?.run.id===r.id} disabled={busy||!!editor} onClick={()=>act(()=>open(r.id))}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')} · {money(r.netTotal)}</button>)}</div>}
   {detail&&<>
@@ -109,20 +114,26 @@ export default function TransportSupportPayroll() {
    <label>{canPay?'Payment batch reference':'Approval / return reason (required)'} <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
    {(actions[detail.run.status]||[]).filter(a=>roles.includes(a[2])).map(a=><button key={a[0]} disabled={busy||!!editor||!ready||!notes.trim()} onClick={()=>act(()=>action(a[0]))}>{a[1]}</button>)}
    </section>}
-   {head&&<section aria-label="Export register" style={workflowPanel}><h3>3. Export Register</h3><fieldset><legend>Choose export columns</legend>
+  </>}
+   <section id="transport-export" aria-label="Excel Export Portal" style={workflowPanel}><h2>Excel Export Portal</h2>
+   {!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a monthly run to select columns and download Excel.</p>:<><fieldset><legend>Choose export columns</legend>
     <button type="button" onClick={()=>setExportColumns(detail.register.headers.map((_,i)=>i))}>Select all</button> <button type="button" onClick={()=>setExportColumns([])}>Clear selection</button>
     <div style={{display:'flex',gap:14,flexWrap:'wrap',margin:12}}>{detail.register.headers.map((label,index)=><label key={label}><input type="checkbox" checked={exportColumns.includes(index)} onChange={e=>setExportColumns(c=>e.target.checked?[...c,index]:c.filter(i=>i!==index))}/>{label}</label>)}</div>
     <p>The master roll is ordered Abuja, Lagos, Port Harcourt. Each branch also has its own sheet. Only checked columns are included in register sheets.</p>
    </fieldset>
    <button disabled={busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Review Register (Excel)</button>
     <button disabled={!externalReady||busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Approved Register (Excel)</button>
-   {!externalReady&&<p>Approve this run to enable the external register export.</p>}</section>}
-   <h3>Full Monthly Register · {detail.register.headers.length} columns</h3>
+   {!externalReady&&<p>Approve this run to enable the external register export.</p>}</>}
+   </section>
+   <h2 id="transport-register">Full Monthly Register{registerHeaders.length>0&&` · ${registerHeaders.length} columns`}</h2>
+   {!detail&&<p>Prepare or open a monthly run to populate employee rows.</p>}
+   {registerHeaders.length>0&&<details open><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
-   <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
-    <thead><tr>{detail.register?.headers.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
-    <tbody>{detail.register?.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)?money(value):value}</td>)}</tr>)}</tbody>
+   <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
+    <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
+    <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)?money(value):value}</td>)}</tr>)}</tbody>
    </table></div>
+  {detail&&<>
    <p>Previous Month Overpayment shows the opening balance. Recovery is capped at available benefits; the remainder carries forward. End of the Month is a salary reference and is excluded from this benefit Net.</p>
    {canPay&&<>
     <h3>Actual payment confirmation</h3>
