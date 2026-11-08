@@ -20,7 +20,14 @@ export default function TransportSupportPayroll() {
  const [receipts,setReceipts]=useState({}),[editor,setEditor]=useState(null),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const roles=state?.responsibilities||[],head=roles.includes('HEAD_HR'),ready=state?.releaseReady===true;
  async function load(){const r=await apiRequest(api);setState(r.data);}
- useEffect(()=>{load().catch(e=>setError(e.message));},[]);
+ useEffect(()=>{
+  act(async()=>{
+   const response=await apiRequest(api);
+   const latest=[...(response.data.runs||[])].sort((a,b)=>String(b.periodMonth).localeCompare(String(a.periodMonth)))[0];
+   setState(response.data);
+   if(latest)await open(latest.id);
+  });
+ },[]);
  async function loadReadiness(){
   if(!periodMonth||!head||state?.settings?.enabled)return;
   const r=await apiRequest(`${api}/readiness?periodMonth=${encodeURIComponent(periodMonth)}`);setBasisReadiness(r.data);
@@ -58,7 +65,7 @@ export default function TransportSupportPayroll() {
   {error&&<p role="alert" style={{color:'#fca5a5'}}>{error}</p>}{message&&<p role="status">{message}</p>}
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
   <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
-   {head&&<button onClick={()=>navigate('/benefits/transport-support/preparation')}>Benefit basis template &amp; bulk upload</button>}
+   {head&&<button onClick={()=>navigate('/benefits/transport-support/preparation')}>Salary Basis Setup / Bulk Upload</button>}
    <button disabled={busy} onClick={()=>act(async()=>{await load();await loadReadiness();})}>Refresh</button>
    {head&&<><label>Benefit month <input type="month" value={periodMonth} onChange={e=>setMonth(e.target.value)}/></label>
     {!state?.settings?.enabled&&<button disabled={busy||!ready||!periodMonth||!basisReadiness?.canActivate} onClick={()=>act(async()=>{await apiRequest(`${api}/activate`,{method:'POST',body:{periodMonth}});await load();setMessage('Transport Support Benefits enabled. Regular salary rates and payroll were not changed.');})}>Enable Transport Support Benefits for this month</button>}
@@ -110,7 +117,9 @@ export default function TransportSupportPayroll() {
    <button disabled={busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Review Register (Excel)</button>
     <button disabled={!externalReady||busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Approved Register (Excel)</button>
    {!externalReady&&<p>Approve this run to enable the external register export.</p>}</section>}
-   <div style={{overflowX:'auto'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
+   <h3>Full Monthly Register · {detail.register.headers.length} columns</h3>
+   <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
+   <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{detail.register?.headers.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
     <tbody>{detail.register?.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)?money(value):value}</td>)}</tr>)}</tbody>
    </table></div>

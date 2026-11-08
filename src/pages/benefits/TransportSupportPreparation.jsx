@@ -32,8 +32,9 @@ export default function TransportSupportPreparation() {
     return apiRequest(`${endpoint}/${path}`,{method:'POST',body});
   }
   return <section style={{padding:24,maxWidth:1400,margin:'0 auto'}}>
-    <h1>Transport Support Benefits · Calculation Basis</h1>
-    <button onClick={()=>navigate('/benefits/transport-support')}>Open Transport Support Pay portal</button>
+    <h1>Transport Support Pay · Salary Basis Setup</h1>
+    <p>This table lists salary references used to prepare monthly runs. Open the full monthly register to see all pay columns, adjustments and Excel export options.</p>
+    <button onClick={()=>navigate('/benefits/transport-support')}>Open Full Monthly Register &amp; Excel Export</button>
     <p>Upload the full agreed monthly salary once. CHRiS previews the mid-month and end-of-month allocations using each employee’s recorded employment type and hire date.</p>
     <p><strong>Preparation only:</strong> importing records does not activate payroll or change approved salaries. Mid-month loan recovery is always zero.</p>
     <p>1. Download template → 2. Enter benefit salary bases and effective month → 3. Preview allocations → 4. Import for review.</p>
