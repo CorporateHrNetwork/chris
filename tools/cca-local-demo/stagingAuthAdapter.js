@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Isolated staging adapter. Never connect to CHRiS sessions or real tenants.
- * The encrypted vault and signing keys must be injected by the test harness.
+ * The encrypted vault and signing keys are supplied by the staging host or test harness.
  * The module intentionally provides no executable production bootstrap.
  */
 const {createAuthServer}=require("./localAuthServer");
@@ -26,12 +26,12 @@ function createStagingAuth({vault,account}){
  });
  return Object.freeze({lab,account});
 }
-function createStagingServer({vault,account,auditLedger,sourceThrottle}){
+function createStagingServer({vault,account,auditLedger,sourceThrottle,checkpoint,staging=false}){
  if(!auditLedger || typeof auditLedger.append!=="function" ||
     typeof auditLedger.verify!=="function")
    throw Error("CCA_STAGING_AUDIT_REQUIRED");
  auditLedger.verify(); // fail closed when existing ledger is damaged
  return createAuthServer(createStagingAuth({vault,account}),
-   {auditLedger,sourceThrottle:sourceThrottle||createSourceThrottle()});
+   {auditLedger,sourceThrottle:sourceThrottle||createSourceThrottle(),checkpoint,staging});
 }
 module.exports={createStagingAuth,createStagingServer};

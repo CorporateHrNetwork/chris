@@ -7,6 +7,7 @@ on:
       - "backend/tests/cca*.test.js"
       - "src/pages/cca/**"
       - "docs/cca/**"
+      - "tools/cca-local-demo/**"
       - ".github/workflows/cca-policy-pr-checks.yml"
   workflow_dispatch:
 

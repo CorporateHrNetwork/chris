@@ -53,22 +53,35 @@ function payloadFrom(req) {
     req.on("error", reject);
   });
 }
-function createAuthServer(auth, { sourceThrottle, auditLedger } = {}) {
+function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, staging = false } = {}) {
+  const cookieName = staging ? "cca_staging_sid" : COOKIE;
+  let unavailable = false;
+  function verifyState() {
+    if (unavailable) throw Error("CCA_STAGING_STATE_UNAVAILABLE");
+    checkpoint?.verify();
+  }
   const auditEvents = [];
   const files = {
-    "/": "admin-login.html",
+    "/": staging ? "staging-login.html" : "admin-login.html",
     "/admin-login.js": "admin-login.js",
     "/protected-centre": "protected-centre.html",
     "/protected-centre.js": "protected-centre.js",
   };
-  return http.createServer(async (req, res) => {
+  return http.createServer(staging ? { requestTimeout: 10000, headersTimeout: 5000 } : {}, async (req, res) => {
     const host = (req.headers.host || "").split(":")[0];
     if (!["127.0.0.1", "localhost"].includes(host)) return json(res, 403, FAIL);
-    const url = new URL(req.url || "/", "http://localhost");
+    let url;
+    try { url = new URL(req.url || "/", "http://localhost"); }
+    catch { return json(res, 400, FAIL); }
     const origin = req.headers.origin;
     if (origin && !originFor(req.socket.localPort).includes(origin))
       return json(res, 403, FAIL);
-    const cookie = parseCookies(req.headers.cookie)[COOKIE];
+    try { verifyState(); }
+    catch {
+      unavailable = true;
+      return json(res, 503, { ok: false, code: "CCA_STAGING_STATE_UNAVAILABLE" });
+    }
+    const cookie = parseCookies(req.headers.cookie)[cookieName];
     if (req.method === "GET" && Object.prototype.hasOwnProperty.call(files, url.pathname)) {
       if (url.pathname.startsWith("/protected-centre") && !auth.lab.resolveSession(cookie).accepted)
         return json(res, 401, FAIL);
@@ -147,29 +160,40 @@ function createAuthServer(auth, { sourceThrottle, auditLedger } = {}) {
     let body;
     try { body = await payloadFrom(req); }
     catch { return json(res, 400, FAIL); }
-    if (url.pathname === "/api/password") {
+    if (url.pathname !== "/api/logout") {
+      const passwordStep = url.pathname === "/api/password";
       const peer = req.socket.remoteAddress;
-      if (sourceThrottle && !sourceThrottle.limit(peer).allowed)
-        return json(res, 429, {ok:false,code:"CCA_AUTH_THROTTLED"});
-      const result = auth.lab.loginPassword({ id: body.account, password: body.password });
-      if (!result.ok) {
-        if(sourceThrottle) sourceThrottle.recordFailure(peer);
-        return json(res, 401, FAIL);
+      let result;
+      try {
+        // Recheck after awaiting the body, then perform each operation synchronously
+        // within the sole staging writer before returning anything to the browser.
+        verifyState();
+        const limit = sourceThrottle?.reserve
+          ? sourceThrottle.reserve(peer, passwordStep ? "password" : "mfa")
+          : passwordStep && sourceThrottle?.limit(peer);
+        if (limit && !limit.allowed)
+          return json(res, 429, { ok: false, code: "CCA_AUTH_THROTTLED" },
+            { "Retry-After": String(limit.retryAfterSeconds) });
+        result = passwordStep
+          ? auth.lab.loginPassword({ id: body.account, password: body.password })
+          : auth.lab.loginOtp({ challenge: body.challenge, code: body.code });
+        if (passwordStep && !result.ok && sourceThrottle && !sourceThrottle.reserve)
+          sourceThrottle.recordFailure(peer);
+        if (!passwordStep && result.ok && auditLedger) {
+          auditLedger.append({ event: "CCA_MFA_VERIFIED", actor: auth.account, target: auth.account });
+        }
+        checkpoint?.commit();
+      } catch {
+        if (!passwordStep && result?.ok) auth.lab.revoke(result.token);
+        if (checkpoint) unavailable = true;
+        return json(res, 503, { ok: false, code: "CCA_STAGING_STATE_UNAVAILABLE" });
       }
-      // Separate short-lived browser challenge; never expose account roles.
-      return json(res, 200, { ok: true, challenge: result.challenge });
-    }
-    if (url.pathname === "/api/mfa") {
-      const result = auth.lab.loginOtp({ challenge: body.challenge, code: body.code });
       if (!result.ok) return json(res, 401, FAIL);
-      if (auditLedger) {
-        try { auditLedger.append({event:"CCA_MFA_VERIFIED",actor:auth.account,target:auth.account}); }
-        catch { return json(res, 503, {ok:false,code:"CCA_AUDIT_UNAVAILABLE"}); }
-      }
+      if (passwordStep) return json(res, 200, { ok: true, challenge: result.challenge });
       auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.account, time: new Date().toISOString() });
       if (auditEvents.length > 100) auditEvents.shift();
       return json(res, 200, { ok: true, demonstration: true },
-        { "Set-Cookie": COOKIE + "=" + result.token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=900" });
+        { "Set-Cookie": cookieName + "=" + result.token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=900" });
     }
     if (cookie) {
       const session = auth.lab.resolveSession(cookie);
@@ -180,7 +204,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger } = {}) {
       auth.lab.revoke(cookie);
     }
     return json(res, 200, { ok: true },
-      { "Set-Cookie": COOKIE + "=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0" });
+      { "Set-Cookie": cookieName + "=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0" });
   });
 }
 function base32(bytes) {

@@ -162,6 +162,7 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
       target.failedPasswords=0;target.lockedUntil=0;
       persist(next);
     }
+    for (const [ref, pending] of challenges) if (pending.expires <= clock()) challenges.delete(ref);
     const challenge=crypto.randomBytes(32).toString("base64url");
     challenges.set(keyHash(challenge),{id,expires:clock()+120});
     return {ok:true,challenge};
@@ -186,6 +187,7 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     const next=clone(data), updated=next.users.find(u=>u.id===user.id);
     updated.lastOtpCounter=counter;updated.failedMfa=0;updated.lockedUntil=0;
     audited(next,"CCA_MFA_VERIFIED",user.id,user.id);
+    for (const [ref, session] of sessions) if (session.expiry <= clock()) sessions.delete(ref);
     const token=crypto.randomBytes(32).toString("base64url");
     sessions.set(keyHash(token),{id:user.id,expiry:clock()+900});
     return {ok:true,token,expiresAt:clock()+900};
@@ -267,10 +269,13 @@ function restoreVaultBackup({directory,encryptionKey,confirm=false}) {
       const archive=path.join(directory,"cca-identities.before-restore-"+Date.now()+".enc.json");
       fs.copyFileSync(original,archive);
     }
+    const marker=fs.openSync(quarantine,"wx",0o600);
+    try {
+      fs.writeFileSync(marker,
+        "Vault recovery requires independent security review, revocation reconciliation and MFA reset before activation.\n");
+      fs.fsyncSync(marker);
+    } finally { fs.closeSync(marker); }
     fs.renameSync(temporary,original);
-    fs.writeFileSync(quarantine,
-      "Vault recovered. Independent security review, revocation reconciliation and MFA reset required before activation.\n",
-      {flag:"wx",mode:0o600});
   }finally{
     if(fd!==undefined)fs.closeSync(fd);
     if(fs.existsSync(temporary))fs.unlinkSync(temporary);

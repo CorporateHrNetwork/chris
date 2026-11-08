@@ -1,34 +1,10 @@
 # CCA Stage 4D — Isolated Persistent-Identity Staging Adapter
 
-This is a tested **in-process staging adapter**, not a deployed server.
-
-## Integration
-
-- `tools/cca-local-demo/stagingAuthAdapter.js` injects the encrypted
-  `identityVault` into the already-isolated `localAuthServer`.
-- It maps trusted vault sessions and tenant assignments into server-side CCA
-  permissions, without accepting client-supplied role grants.
-- The existing sign-in page, MFA screen, protected dashboard and role-based
-  workspace denial can run against the persistent vault when a dedicated
-  staging harness supplies the vault and audit ledger.
-- Failed password requests from a trusted direct socket IP are limited by
-  `sourceThrottle` in this prototype.
-- MFA successes are appended to an independent HMAC-chained audit ledger;
-  if the ledger is damaged, the staging adapter refuses startup.
-- Existing demo login ports 4182 and 4183 remain unchanged.
-- All tests use fictional accounts and throwaway temporary directories.
-
-## Important limits
-
-The tested adapter does **not** yet provide a safe persistent browser service
-on a new port. In particular, the vault and audit signing keys are currently
-injected by tests, not provided by an approved secure host key-management
-system. The source throttle is still in-memory and is not sufficient against
-distributed abuse or server restarts. The local audit ledger does not have
-an independently anchored checkpoint, strong rollback protection or
-transactional coordination with changes to the identity vault. MFA failures
-are protected by the vault's per-account persistent lockout, but source
-limiting of all authentication paths remains future work.
+The isolated staging adapter maps verified vault sessions and assignments to
+server-side CCA permissions. Automated tests use fictional identities and
+temporary state. The Windows launcher below provides a separate persistent
+local staging login on port 4184. Existing demo ports use their own accounts
+and sessions.
 
 The local-only server has no public TLS deployment and must never be exposed
 over the Internet. The initial platform approver's enrollment and account
@@ -45,3 +21,36 @@ node --test backend/tests/cca*.test.js
 ```
 
 Draft PR #237 is unmerged and undeployed.
+
+## Windows local staging activation
+
+The Windows launcher is `tools/cca-local-demo/Start-CCA-Staging.ps1`.
+Run it from an interactive PowerShell console using the Windows profile that
+owns the staging checkout. On first run, choose and confirm a distinct
+password and enroll the setup key under **CCA Local Staging** in Google
+Authenticator. The account is `cca-staging-operator`. The staging login listens
+on `http://127.0.0.1:4184/`. Keep the console open. Run the same launcher to
+restart with the saved account and a fresh session. For first-run activation,
+`-GeneratePassword` generates a random staging password and displays it once
+in the local console with the authenticator setup key. Run enrollment only
+in a private, interactive console. Do not capture or share its output.
+
+The Windows profile generates a random master key, wraps it with Windows DPAPI
+(CurrentUser), and supplies it over standard input. The launcher keeps the
+state under an access-restricted LocalAppData directory. Separate derived keys
+protect the identity vault, audit ledger and checkpoint. The loopback socket
+has independent persistent budgets for password and MFA attempts. The server
+allows only one writer and checkpoints the vault, backup, recovery marker,
+audit log and throttle file before returning an authentication response.
+A mismatch pauses access, including access via an existing session.
+
+On an abnormal stop or recovery mismatch, preserve the complete staging
+directory, keep the browser service stopped, and verify that no writer remains.
+A stale `host-security/writer.lock` can be removed after an operator verifies
+the process stopped. Startup will still require the saved checkpoint to match.
+If it does not match, preserve the evidence and keep access disabled pending
+review. Do not remove the recovery marker or rebuild the checkpoint to resume
+access. There is no automatic recovery of interrupted cross-file writes. The
+checkpoint is local and cannot detect a coordinated rollback of the protected
+checkpoint and all state by an attacker controlling the Windows profile. This
+is single-host fictional staging, with no externally anchored audit log.
