@@ -36,7 +36,10 @@ function validateUser(user) {
     !Array.isArray(user.tenantIds) || !user.tenantIds.every(id =>
       ["demo-cedar", "demo-atlas"].includes(id)) ||
     typeof user.active !== "boolean" ||
-    !Number.isSafeInteger(user.lastOtpCounter)) throw Error("CCA_INVALID_IDENTITY_VAULT");
+    !Number.isSafeInteger(user.lastOtpCounter) ||
+    !Number.isSafeInteger(user.failedPasswords) || user.failedPasswords<0 || user.failedPasswords>5 ||
+    !Number.isSafeInteger(user.lockedUntil) || user.lockedUntil<0 ||
+    !Number.isSafeInteger(user.failedMfa) || user.failedMfa<0 || user.failedMfa>5) throw Error("CCA_INVALID_IDENTITY_VAULT");
 }
 function validateData(data) {
   if (!data || data.version !== VERSION || !Array.isArray(data.users) ||
@@ -84,6 +87,8 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     throw Error("CCA_VAULT_CONFIGURATION_REQUIRED");
   const filename = path.join(directory, "cca-identities.enc.json");
   const backup = path.join(directory, "cca-identities.previous.enc.json");
+  const quarantine = path.join(directory, "cca-recovery-review-required");
+  if (fs.existsSync(quarantine)) throw Error("CCA_RECOVERY_SECURITY_REVIEW_REQUIRED");
   const sessions = new Map(), challenges = new Map();
   let data;
   if (fs.existsSync(filename)) {
@@ -131,7 +136,7 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     next.users.push({id,salt:salt.toString("base64"),
       passwordHash:passwordHash(password,salt),mfaSecret:mfaSecret.toString("base64"),
       roles:[...new Set(roles)],tenantIds:[...new Set(tenantIds)],
-      active:true,lastOtpCounter:-1});
+      active:true,lastOtpCounter:-1,failedPasswords:0,failedMfa:0,lockedUntil:0});
     audited(next, "CCA_IDENTITY_ENROLLED", data.users.length===0?"LOCAL_INITIAL_BOOTSTRAP":authorizer.actor,id);
     return {ok:true,id};
   }
@@ -141,7 +146,22 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     const actual=typeof password==="string" && password.length<=256 ?
       Buffer.from(passwordHash(password, user?Buffer.from(user.salt,"base64"):fake),"base64") : Buffer.alloc(64);
     const expected=user?Buffer.from(user.passwordHash,"base64"):Buffer.alloc(64);
-    if (!safeEqual(actual,expected)) return {ok:false,code:"CCA_AUTH_FAILED"};
+    if (!user || clock()<user.lockedUntil) return {ok:false,code:"CCA_AUTH_FAILED"};
+    if (!safeEqual(actual,expected)) {
+      const next=clone(data), target=next.users.find(u=>u.id===user.id);
+      target.failedPasswords+=1;
+      if (target.failedPasswords>=5) {
+        target.failedPasswords=0;
+        target.lockedUntil=clock()+300;
+      }
+      audited(next,"CCA_PASSWORD_REJECTED",user.id,user.id);
+      return {ok:false,code:"CCA_AUTH_FAILED"};
+    }
+    if(user.failedPasswords!==0 || user.lockedUntil!==0) {
+      const next=clone(data), target=next.users.find(u=>u.id===user.id);
+      target.failedPasswords=0;target.lockedUntil=0;
+      persist(next);
+    }
     const challenge=crypto.randomBytes(32).toString("base64url");
     challenges.set(keyHash(challenge),{id,expires:clock()+120});
     return {ok:true,challenge};
@@ -151,11 +171,20 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     const ref=keyHash(challenge), pending=challenges.get(ref);
     challenges.delete(ref);
     const user=pending && data.users.find(u=>u.id===pending.id && u.active);
-    if (!user || pending.expires<=clock()) return {ok:false,code:"CCA_AUTH_FAILED"};
+    if (!user || pending.expires<=clock() || clock()<user.lockedUntil)
+      return {ok:false,code:"CCA_AUTH_FAILED"};
     const counter=checkOtp(Buffer.from(user.mfaSecret,"base64"),code,clock(),user.lastOtpCounter);
-    if (counter<0) return {ok:false,code:"CCA_AUTH_FAILED"};
+    if (counter<0) {
+      const next=clone(data), target=next.users.find(u=>u.id===user.id);
+      target.failedMfa+=1;
+      if(target.failedMfa>=5) {
+        target.failedMfa=0;target.lockedUntil=clock()+300;
+      }
+      audited(next,"CCA_MFA_REJECTED",user.id,user.id);
+      return {ok:false,code:"CCA_AUTH_FAILED"};
+    }
     const next=clone(data), updated=next.users.find(u=>u.id===user.id);
-    updated.lastOtpCounter=counter;
+    updated.lastOtpCounter=counter;updated.failedMfa=0;updated.lockedUntil=0;
     audited(next,"CCA_MFA_VERIFIED",user.id,user.id);
     const token=crypto.randomBytes(32).toString("base64url");
     sessions.set(keyHash(token),{id:user.id,expiry:clock()+900});
@@ -225,6 +254,7 @@ function restoreVaultBackup({directory,encryptionKey,confirm=false}) {
   // Run only with all CCA identity processes stopped. This function does not
   // coordinate multi-process access and must never be exposed via HTTP.
   const original=path.join(directory,"cca-identities.enc.json");
+  const quarantine=path.join(directory,"cca-recovery-review-required");
   const backup=path.join(directory,"cca-identities.previous.enc.json");
   const source=fs.readFileSync(backup,"utf8");
   decrypt(source,encryptionKey);
@@ -238,6 +268,9 @@ function restoreVaultBackup({directory,encryptionKey,confirm=false}) {
       fs.copyFileSync(original,archive);
     }
     fs.renameSync(temporary,original);
+    fs.writeFileSync(quarantine,
+      "Vault recovered. Independent security review, revocation reconciliation and MFA reset required before activation.\n",
+      {flag:"wx",mode:0o600});
   }finally{
     if(fd!==undefined)fs.closeSync(fd);
     if(fs.existsSync(temporary))fs.unlinkSync(temporary);
