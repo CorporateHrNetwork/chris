@@ -1,0 +1,114 @@
+.leave-policy-page {
+  overflow-wrap: anywhere;
+}
+
+.leave-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.875rem;
+}
+
+.leave-policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.leave-policy-card :is(h3, p),
+.leave-policy-modal-header h2 {
+  margin: 0;
+}
+
+.leave-policy-card-actions {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: auto;
+  padding-top: 0.35rem;
+}
+
+.leave-policy-disclosure summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.leave-policy-disclosure summary small {
+  margin-inline-start: 0.65rem;
+  color: var(--chris-text-secondary);
+}
+
+.leave-policy-modal {
+  box-sizing: border-box;
+  inline-size: min(48rem, calc(100% - 2rem));
+  max-block-size: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: hidden;
+  color: var(--chris-text-main);
+  background: #07150e;
+  border: 1px solid var(--chris-border-gold);
+  border-radius: 1rem;
+}
+
+.leave-policy-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.leave-policy-modal-wide {
+  inline-size: min(53rem, calc(100% - 2rem));
+}
+
+.leave-policy-modal::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.leave-policy-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--chris-border-soft);
+  overflow-wrap: anywhere;
+}
+
+.leave-policy-modal-body {
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+}
+
+.leave-policy-detail {
+  display: grid;
+  gap: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.leave-policy-detail p,
+.leave-policy-facts,
+.leave-policy-facts ul {
+  margin: 0;
+}
+
+.leave-policy-facts {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.leave-policy-facts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 0.65rem;
+}
+
+.leave-policy-facts dt {
+  color: var(--chris-text-secondary);
+}
+
+.leave-policy-facts dd {
+  margin: 0;
+}
+
+.leave-policy-facts ul {
+  padding-inline-start: 1.1rem;
+}

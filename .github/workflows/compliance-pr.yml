@@ -207,7 +207,7 @@ jobs:
       - name: Test news feedback and ESS session/data recovery
         run: node --test --test-concurrency=1 tests/internalNewsNotice.test.mjs tests/essSessionRecovery.test.mjs tests/simpleDisciplinary.test.mjs
       - name: Test leave request viewport layout
-        run: node --test tests/leaveRequestViewport.test.mjs
+        run: node --test tests/leaveRequestViewport.test.mjs tests/leavePoliciesWorkspace.test.mjs
 
       - name: Build frontend
         run: npm run build
