@@ -26,7 +26,7 @@ kbd,code{background:#f1f5f1;padding:3px 6px;border-radius:5px}.hidden{display:no
 <p class="muted">Enter the current 30-second code from the authenticator configured with the secret shown on the local server terminal.</p>
 <button type="submit">Verify MFA</button><button type="button" class="secondary" id="restart">Start again</button></form></div>
 <div id="sessionStage" class="hidden"><h2>CCA session verified</h2><p class="muted">The server issued a temporary HttpOnly cookie and checked your CCA role. Session data is not accessible to the page script.</p>
-<p id="sessionInfo"></p><button id="logout" type="button">Sign out and revoke session</button></div>
+<p id="sessionInfo"></p><p><a href="/protected-centre" style="display:inline-block;background:#0b6742;color:white;padding:12px 15px;text-decoration:none;border-radius:8px;font-weight:700">Open protected CCA Control Centre</a></p><button id="logout" type="button">Sign out and revoke session</button></div>
 <p id="feedback" class="status" role="status" aria-live="polite"></p></section>
 <section class="card"><h2>Security boundaries</h2>
 <p class="muted"><strong>Two factors:</strong> a password and an independent time-based authenticator code, with one-time challenge verification.</p>
