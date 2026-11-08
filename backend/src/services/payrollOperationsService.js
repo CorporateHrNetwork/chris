@@ -1,3 +1,4 @@
+const { assertLeaveReturnPayrollReady } = require("./leaveReturnPayrollService");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const exitSettlementService = require("./exitSettlementService");
@@ -929,6 +930,7 @@ async function submitPayrollRun({ organizationId, actorUserId, runId, notes, pri
 
   const approvalId = crypto.randomUUID();
   await prismaClient.$transaction(async (tx) => {
+    await assertLeaveReturnPayrollReady({ db: tx, organizationId, runId });
     await tx.$executeRawUnsafe(
       `UPDATE "payroll_runs" SET "status"='PENDING_APPROVAL',"submittedByUserId"=$3,"submittedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "id"=$2`,
       organizationId,
@@ -972,6 +974,7 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
     : "MANUAL_REVIEW_CONFIRMED";
   const approvalId = crypto.randomUUID();
   await prismaClient.$transaction(async (tx) => {
+    if (action === "APPROVE") await assertLeaveReturnPayrollReady({ db: tx, organizationId, runId });
     await tx.$executeRawUnsafe(
       `UPDATE "payroll_runs"
           SET "status"=$3,

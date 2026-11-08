@@ -28,6 +28,9 @@ const { createPayrollStageEmailScheduler } = require("./services/payrollStageEma
 const payrollStageEmailScheduler = createPayrollStageEmailScheduler({ prisma });
 const { createDisciplinaryTaskScheduler } = require("./services/disciplinaryTaskScheduler");
 const disciplinaryTaskScheduler = createDisciplinaryTaskScheduler({ prisma });
+const { commenceLeave } = require("./services/leaveService");
+const { createZermattLeaveCommencementScheduler } = require("./services/zermattLeaveCommencementScheduler");
+const leaveCommencementScheduler = createZermattLeaveCommencementScheduler({ prisma, commenceLeave });
 const PORT = process.env.PORT || 5000;
 const paystackConfigured = Boolean(String(process.env.PAYSTACK_SECRET_KEY || "").trim());
 
@@ -43,6 +46,7 @@ const server = app.listen(PORT, async () => {
   performanceEvaluationScheduler.start();
   celebrationScheduler.start();
   probationScheduler.start();
+  leaveCommencementScheduler.start();
   payrollStageEmailScheduler.start();
   disciplinaryTaskScheduler.start();
   if (shouldAutoStartSnapshotScheduler()) {
@@ -76,6 +80,7 @@ async function shutdown(signal) {
   celebrationScheduler.stop();
   performanceEvaluationScheduler.stop();
   probationScheduler.stop();
+  leaveCommencementScheduler.stop();
   payrollStageEmailScheduler.stop();
   disciplinaryTaskScheduler.stop();
   annualCarryoverScheduler.stop();

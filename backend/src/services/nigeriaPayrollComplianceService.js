@@ -1,3 +1,4 @@
+const { payrollReturnDeficits, missedDatesFor } = require("./leaveReturnPayrollService");
 const { resolvePayableDays } = require("./newHirePayrollProrationService");
 const { splitSalary } = require("./zermattSalarySplit");
 const crypto = require("crypto");
@@ -781,6 +782,13 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   });
   const attendanceByEmployee = new Map(attendanceInputs.map((row) => [row.employeeId, row]));
 
+  const leaveReturnDeficits = organization.slug === "zermatt-liquor-limited"
+    ? await payrollReturnDeficits({
+        db: prismaClient, organizationId, employeeIds: employees.map(row => row.id),
+        start: periodStartDate, end: periodEndDate,
+      })
+    : new Map();
+
   const componentRows = await prismaClient.$queryRawUnsafe(
     `SELECT "id","employeeId","kind","code","name","calculationType","amount","percentage","oneTimePeriodId","taxable"
        FROM "payroll_components"
@@ -867,12 +875,21 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     const standardDays = splitAllocation ? 26 : Number(policy.standardDays[employee.employmentType]);
     const attendanceInput = attendanceByEmployee.get(employee.id);
     const employmentDays = employmentDaysByEmployee.get(employee.id);
-    const payableDays = employmentDays ? employmentDays.payableDays : attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
+    const basePayableDays = employmentDays ? employmentDays.payableDays : attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
       ? standardDays
       : Number(attendanceInput.workedDays);
-    if (!Number.isFinite(payableDays) || payableDays < 0) {
+    if (!Number.isFinite(basePayableDays) || basePayableDays < 0) {
       throw payrollError("INVALID_PAYROLL_WORKED_DAYS", `Invalid payable days for ${employee.employeeNumber}.`, 409);
     }
+    const returnItems = leaveReturnDeficits.get(employee.id);
+    const missedDates = missedDatesFor(returnItems);
+    // HR-entered days are a complete period total and may already include the absence.
+    const manualWorkedDays = attendanceInput?.workedDays != null;
+    const appliedDeficit = manualWorkedDays ? 0 : Math.min(basePayableDays, missedDates.length);
+    const payableDays = basePayableDays - appliedDeficit;
+    const returnNote = returnItems
+      ? `Leave return: ${missedDates.length} missed workday(s)${returnItems.some(item => item.pending) ? " (provisional)" : ""}.${manualWorkedDays ? " HR-entered period total retained." : ""}`
+      : null;
     const prorationFactor = standardDays > 0 ? payableDays / standardDays : 0;
     const structuredGross = round2(scheduledMonthlyGross * prorationFactor);
     const salaryStructure = calculateStructure(structuredGross, splitAllocation ? { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 } : policy.salaryStructure);
@@ -1022,8 +1039,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           standardDays,
           payableDays: round2(payableDays),
           prorationFactor: round2(prorationFactor),
-          source: employmentDays?.source || (attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT"),
-          notes: employmentDays?.notes || attendanceInput?.notes || null,
+          source: appliedDeficit ? "LEAVE_RETURN_DEFICIT" : employmentDays?.source || (attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT"),
+          notes: [employmentDays?.notes || attendanceInput?.notes, returnNote].filter(Boolean).join(" ") || null,
+          ...(returnItems ? { leaveReturn: { missedDates, appliedDeficit, pending: returnItems.some(item => item.pending), requestIds: returnItems.map(item => item.requestId) } } : {}),
           hrNotes: attendanceInput?.notes || null,
           employmentProration: employmentDays?.newHire && (employmentDays.automatic || employmentDays.source === "NEW_HIRE_VERIFIED_WORKED_DAYS") ? { rule: employmentDays.rule, employmentEffectiveDate: employmentDays.hireDate, eligibleFrom: employmentDays.eligibleFrom, periodEnd: employmentDays.periodEnd, verifiedPayableDays: payableDays, maximumCalendarDays: employmentDays.maximumCalendarDays, automatic: employmentDays.automatic === true, weeklyOffDays: employmentDays.weeklyOffDays } : null,
           manualInputResetPolicy: "PERIOD_SCOPED_NO_CARRY_FORWARD",

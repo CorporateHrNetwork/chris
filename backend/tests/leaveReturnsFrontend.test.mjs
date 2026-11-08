@@ -3,8 +3,10 @@ const source=fs.readFileSync(new URL("../../src/pages/LeaveReturns.jsx",import.m
 assert.match(source,/Loading return-to-work cases/);
 assert.match(source,/No employees are currently awaiting return-to-work processing/);
 assert.match(source,/Unable to load return-to-work cases/);
-assert.match(source,/Array\.isArray\(response\?\.data\)/);
+assert.match(source,/returnQueue\(response\?\.data\)/);
 assert.doesNotMatch(source,/return null/);
 assert.match(source,/returnDate:/);
-assert.match(source,/setTimeout\(\(\)=>setMessage\(""\),4000\)/);
+assert.match(source,/setTimeout\(\(\) => setMessage\(""\), 4000\)/);
+assert.match(source,/Recorded Commencement/);
+assert.match(source,/expectedReturnDate/);
 console.log("PASS: Return to Work visible-state tests passed.");
