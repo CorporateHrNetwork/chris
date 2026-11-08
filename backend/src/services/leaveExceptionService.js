@@ -109,8 +109,21 @@ async function listZermattAnnualEligibilityExceptions({ organizationId, location
     orderBy: { startDate: "asc" },
   });
 
-  return requests.flatMap((request) => {
-    const { employee } = request;
+  const employees = await prisma.employee.findMany({
+    where: {
+      organizationId,
+      status: { in: ["ACTIVE", "PROBATION", "LEAVE"] },
+      ...(locationIds ? { locationId: { in: locationIds } } : {}),
+    },
+    select: {
+      id: true, employeeNumber: true, firstName: true, middleName: true, lastName: true,
+      hireDate: true, employmentType: true, status: true, location: { select: { name: true } },
+    },
+    orderBy: { employeeNumber: "asc" },
+  });
+  const today = utcDay(require("./leaveReturnPayrollService").lagosToday());
+
+  function buildException(employee, request) {
     const type = String(employee.employmentType || "").toUpperCase().replace(/[^A-Z]/g, "");
     const anniversary = employee.hireDate ? utcDay(employee.hireDate) : null;
     if (anniversary) {
@@ -123,21 +136,27 @@ async function listZermattAnnualEligibilityExceptions({ organizationId, location
     if (type === "PARTTIME") reasons.push("Part-time employees are ineligible for annual leave");
     if (type === "NYSC") reasons.push("NYSC employees are ineligible for annual leave");
     if (!anniversary) reasons.push("Hire date is required to verify annual leave eligibility");
-    if (anniversary && utcDay(request.startDate) < anniversary) {
-      reasons.push("First employment anniversary falls after the requested leave start");
+    if (anniversary && (request ? utcDay(request.startDate) : today) < anniversary) {
+      reasons.push(request ? "First employment anniversary falls after the requested leave start" : "First employment anniversary not yet completed");
     }
-    if (!reasons.length) return [];
+    if (!reasons.length) return null;
 
-    return [{
-      id: `annual-eligibility:${request.id}`,
+    return {
+      id: request ? `annual-eligibility:${request.id}` : `annual-eligibility-employee:${employee.id}`,
       employee,
       mismatchCode: "ANNUAL_LEAVE_ELIGIBILITY",
       mismatch: reasons.join(". "),
-      activeRequestStatus: request.status,
+      activeRequestStatus: request?.status || "None",
       resolutionStatus: "OPEN",
-      annualRequest: { id: request.id, startDate: request.startDate, endDate: request.endDate, anniversary },
-    }];
-  });
+      annualRequest: { id: request?.id, startDate: request?.startDate, endDate: request?.endDate, anniversary },
+    };
+  }
+
+  const requestExceptions = requests.map(request => buildException(request.employee, request)).filter(Boolean);
+  const represented = new Set(requestExceptions.map(row => row.employee.employeeNumber));
+  const employeeExceptions = employees.filter(employee => !represented.has(employee.employeeNumber))
+    .map(employee => buildException(employee, null)).filter(Boolean);
+  return [...requestExceptions, ...employeeExceptions];
 }
 
 async function listLeaveExceptions({ organizationId }) {
