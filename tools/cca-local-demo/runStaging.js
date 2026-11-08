@@ -2,7 +2,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { base32, HOST } = require("./localAuthServer");
+const { base32 } = require("./localAuthServer");
 const { createIdentityVault } = require("./identityVault");
 const { createAuditLedger } = require("./auditLedger");
 const { createStagingServer } = require("./stagingAuthAdapter");
@@ -10,6 +10,7 @@ const { createCheckpoint, createPersistentThrottle, deriveKey } = require("./sta
 
 const ACCOUNT = "cca-staging-operator";
 const PORT = 4184;
+const STAGING_HOST = "127.0.0.2";
 
 function openStaging({ directory, master, initialize = false, clock }) {
   const state = path.join(directory, "state");
@@ -45,7 +46,7 @@ function openStaging({ directory, master, initialize = false, clock }) {
     if (!fs.existsSync(files.vault) || !fs.existsSync(files.audit))
       throw Error("CCA_STAGING_ENROLLMENT_REQUIRED");
     const server = createStagingServer({
-      vault, account: ACCOUNT, auditLedger: ledger, checkpoint, staging: true,
+      vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST,
       sourceThrottle: createPersistentThrottle({ file: files.throttle, clock }),
     });
     return { release, server };
@@ -90,7 +91,7 @@ async function main() {
       console.error("CCA staging could not bind its local port.");
       process.exitCode = 1;
     });
-    server.listen(PORT, HOST, () => console.log("CCA Local Staging: http://" + HOST + ":" + PORT + "/"));
+    server.listen(PORT, STAGING_HOST, () => console.log("CCA Local Staging: http://" + STAGING_HOST + ":" + PORT + "/"));
   } finally { master.fill(0); }
 }
 
@@ -100,4 +101,4 @@ if (require.main === module) {
     process.exitCode = 1;
   });
 }
-module.exports = { openStaging, ACCOUNT };
+module.exports = { openStaging, ACCOUNT, STAGING_HOST };

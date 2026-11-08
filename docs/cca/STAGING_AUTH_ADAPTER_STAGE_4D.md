@@ -3,8 +3,9 @@
 The isolated staging adapter maps verified vault sessions and assignments to
 server-side CCA permissions. Automated tests use fictional identities and
 temporary state. The Windows launcher below provides a separate persistent
-local staging login on port 4184. Existing demo ports use their own accounts
-and sessions.
+local staging login on the dedicated loopback address 127.0.0.2 and port 4184. The browser
+sends the host-only staging cookie to 127.0.0.2. The existing demo uses
+127.0.0.1 and has its own accounts and sessions.
 
 The local-only server has no public TLS deployment and must never be exposed
 over the Internet. The initial platform approver's enrollment and account
@@ -29,11 +30,13 @@ Run it from an interactive PowerShell console using the Windows profile that
 owns the staging checkout. On first run, choose and confirm a distinct
 password and enroll the setup key under **CCA Local Staging** in Google
 Authenticator. The account is `cca-staging-operator`. The staging login listens
-on `http://127.0.0.1:4184/`. Keep the console open. Run the same launcher to
+on `http://127.0.0.2:4184/`. Keep the console open. Run the same launcher to
 restart with the saved account and a fresh session. For first-run activation,
 `-GeneratePassword` generates a random staging password and displays it once
 in the local console with the authenticator setup key. Run enrollment only
-in a private, interactive console. Do not capture or share its output.
+in a private, interactive console. Do not capture or share its output. Close the enrollment display after the
+authenticator has been verified. A replacement device requires controlled
+re-enrollment.
 
 The Windows profile generates a random master key, wraps it with Windows DPAPI
 (CurrentUser), and supplies it over standard input. The launcher keeps the

@@ -17,7 +17,7 @@ function derivePlatformContext({ sessionResult, principal, assignments } = {}) {
       principal.id !== sessionResult.platformPrincipalId ||
       !Array.isArray(assignments)) return denied;
   const roles = [];
-  const tenantIds = new Set();
+  const tenantGrants = Object.create(null);
   for (const item of assignments) {
     // Reject malformed/inactive rows; do not silently grant across roles.
     if (!item || item.active !== true || item.principalId !== principal.id ||
@@ -29,9 +29,8 @@ function derivePlatformContext({ sessionResult, principal, assignments } = {}) {
     if (item.scope === "PLATFORM") {
       roles.push(item.role);
     } else if (item.scope === "TENANT" && nonempty(item.tenantId)) {
-      // Tenant assignments can restrict case access but do not automatically
-      // create elevated platform-wide grants.
-      tenantIds.add(item.tenantId);
+      const previous = tenantGrants[item.tenantId] || [];
+      tenantGrants[item.tenantId] = Object.freeze([...new Set([...previous, ...roleGrants])]);
     }
   }
   const platformGrants = grantsForRoles(roles);
@@ -43,7 +42,8 @@ function derivePlatformContext({ sessionResult, principal, assignments } = {}) {
     principalId: principal.id,
     sessionId: sessionResult.sessionId,
     platformGrants: Object.freeze(platformGrants),
-    assignedTenantIds: Object.freeze([...tenantIds]),
+    assignedTenantIds: Object.freeze(Object.keys(tenantGrants)),
+    tenantGrants: Object.freeze(tenantGrants),
   });
 }
 

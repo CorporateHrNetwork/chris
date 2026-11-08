@@ -2,9 +2,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const fs = require("node:fs");
+const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const { openStaging, ACCOUNT } = require("../../tools/cca-local-demo/runStaging");
+const { openStaging, ACCOUNT, STAGING_HOST } = require("../../tools/cca-local-demo/runStaging");
 const { otpAt } = require("../../tools/cca-local-demo/localIdentityLab");
 
 const master = Buffer.alloc(32, 28);
@@ -26,8 +27,8 @@ function fixture(t) {
 async function withServer(options, callback) {
   const { server, release } = openStaging(options);
   try {
-    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-    const origin = "http://127.0.0.1:" + server.address().port;
+    await new Promise(resolve => server.listen(0, STAGING_HOST, resolve));
+    const origin = "http://" + STAGING_HOST + ":" + server.address().port;
     const post = (route, body, headers = {}) => fetch(origin + "/api/" + route, {
       method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
@@ -72,6 +73,15 @@ test("staging rejects wrong key, second writer and valid audit suffix rollback",
     assert.equal(second.status, 200);
     cookie = second.headers.get("set-cookie").split(";")[0];
     assert.match(cookie, /^cca_staging_sid=/);
+    assert.doesNotMatch(second.headers.get("set-cookie"), /(?:^|;)\s*domain=/i);
+    assert.equal((await post("logout", {}, { Origin: origin.replace(STAGING_HOST, "127.0.0.1") })).status, 403);
+    const forgedHostStatus = await new Promise((resolve, reject) => {
+      http.get(origin, { headers: { Host: "127.0.0.1:" + new URL(origin).port } }, response => {
+        response.resume();
+        resolve(response.statusCode);
+      }).on("error", reject);
+    });
+    assert.equal(forgedHostStatus, 403);
     const headers = { Cookie: cookie };
     assert.deepEqual((await (await fetch(origin + "/api/access", { headers })).json()).modules, ["support"]);
     assert.equal((await fetch(origin + "/api/workspace?module=billing", { headers })).status, 403);

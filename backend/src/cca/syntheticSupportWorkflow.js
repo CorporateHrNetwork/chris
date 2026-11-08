@@ -113,9 +113,7 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
       // Separate independently authenticated CCA platform approver.
       if (!approval || approval.approverId === actor || !approval.context ||
           approval.context.principalId !== approval.approverId ||
-          !isAuthorized(approval.context, PERMISSIONS.APPROVALS_GRANT) ||
-          !Array.isArray(approval.context.assignedTenantIds) ||
-          !approval.context.assignedTenantIds.includes(ticket.tenantId) ||
+          !isAuthorized(approval.context, PERMISSIONS.APPROVALS_GRANT, ticket.tenantId) ||
           typeof approval.reference !== "string" || !approval.reference.trim())
         return deny("INDEPENDENT_APPROVAL_REQUIRED");
       ticket.status = "APPROVED";

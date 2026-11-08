@@ -5,8 +5,9 @@ CCA session, an active CCA principal, and trusted server-side role/tenant
 assignment records into a constrained authorization context.
 
 - Platform grants only arise from known, active, **platform-scoped** role rows.
-- Tenant-assignment rows restrict case visibility; they do **not** create
-  platform access by themselves.
+- A tenant action requires the permission in both the platform grants and
+  the role grants for that tenant. Tenant assignments cannot add platform
+  permissions or supply access for an unrelated role.
 - Forged or inactive identities, unknown roles, unassigned tenant cases and
   unauthorized approval rights must be denied.
 - No implicit privilege for `corporatehr-network`, superuser wildcards, or

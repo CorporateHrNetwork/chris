@@ -35,7 +35,7 @@ const SENSITIVE_ACTIONS = Object.freeze(new Set([
 
 function grantsForRoles(roles) {
   if (!Array.isArray(roles)) return [];
-  return [...new Set(roles.flatMap((role) => ROLES[role] || []))];
+  return [...new Set(roles.flatMap((role) => typeof role === "string" && Object.hasOwn(ROLES, role) ? ROLES[role] : []))];
 }
 
 // Fail closed. Passing a CHRiS org-scoped session (even corporatehr-network)
@@ -54,10 +54,9 @@ function canAccessPlatform(context, permission) {
 function canAccessTenantCase(context, permission, tenantId) {
   if (!canAccessPlatform(context, permission)) return false;
   if (typeof tenantId !== "string" || !tenantId.trim()) return false;
-  return Boolean(
-    Array.isArray(context.assignedTenantIds) &&
-    context.assignedTenantIds.includes(tenantId)
-  );
+  const scoped = context.tenantGrants;
+  return Boolean(scoped && Object.hasOwn(scoped, tenantId) &&
+    Array.isArray(scoped[tenantId]) && scoped[tenantId].includes(permission));
 }
 
 function requiresHumanApproval(action) {

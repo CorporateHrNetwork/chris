@@ -18,7 +18,7 @@ test("ordinary tenant and fictional CorporateHr sessions are not platform sessio
 });
 
 test("unknown role or permission gives no access", () => {
-  assert.deepEqual(grantsForRoles(["NON_EXISTENT"]), []);
+  assert.deepEqual(grantsForRoles(["NON_EXISTENT", "constructor", "__proto__"]), []);
   assert.equal(canAccessPlatform({ platformIdentityVerified: true, platformScope: "CCA", platformGrants: ["*"] }, PERMISSIONS.TICKETS_READ), false);
   assert.equal(canAccessPlatform({ platformIdentityVerified: true, platformScope: "CCA", platformGrants: [PERMISSIONS.TICKETS_READ] }, "cca.unknown"), false);
 });
@@ -33,7 +33,7 @@ test("verified CCA identity is limited to its explicit grants", () => {
 test("support access requires specific assigned tenant", () => {
   const c = {
     platformIdentityVerified: true, platformScope: "CCA",
-    platformGrants: [PERMISSIONS.TICKETS_READ], assignedTenantIds: ["tenant-A"],
+    platformGrants: [PERMISSIONS.TICKETS_READ], tenantGrants: { "tenant-A": [PERMISSIONS.TICKETS_READ] },
   };
   assert.equal(canAccessTenantCase(c, PERMISSIONS.TICKETS_READ, "tenant-A"), true);
   assert.equal(canAccessTenantCase(c, PERMISSIONS.TICKETS_READ, "tenant-B"), false);

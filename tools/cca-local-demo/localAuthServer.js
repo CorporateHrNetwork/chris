@@ -53,7 +53,8 @@ function payloadFrom(req) {
     req.on("error", reject);
   });
 }
-function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, staging = false } = {}) {
+function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost } = {}) {
+  const staging = Boolean(stagingHost);
   const cookieName = staging ? "cca_staging_sid" : COOKIE;
   let unavailable = false;
   function verifyState() {
@@ -69,12 +70,16 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
   };
   return http.createServer(staging ? { requestTimeout: 10000, headersTimeout: 5000 } : {}, async (req, res) => {
     const host = (req.headers.host || "").split(":")[0];
-    if (!["127.0.0.1", "localhost"].includes(host)) return json(res, 403, FAIL);
+    const authority = stagingHost + ":" + req.socket.localPort;
+    if (staging
+      ? req.socket.localAddress !== stagingHost || req.headers.host !== authority
+      : !["127.0.0.1", "localhost"].includes(host)) return json(res, 403, FAIL);
+    const origins = staging ? ["http://" + authority] : originFor(req.socket.localPort);
     let url;
     try { url = new URL(req.url || "/", "http://localhost"); }
     catch { return json(res, 400, FAIL); }
     const origin = req.headers.origin;
-    if (origin && !originFor(req.socket.localPort).includes(origin))
+    if (origin && !origins.includes(origin))
       return json(res, 403, FAIL);
     try { verifyState(); }
     catch {
@@ -153,7 +158,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         !["/api/password", "/api/mfa", "/api/logout"].includes(url.pathname))
       return json(res, 404, { ok: false, code: "NOT_FOUND" });
     // No cookie auth mutation without Origin + JSON. No HTML form fallback.
-    if (!origin || !originFor(req.socket.localPort).includes(origin))
+    if (!origin || !origins.includes(origin))
       return json(res, 403, FAIL);
     if (!String(req.headers["content-type"] || "").startsWith("application/json"))
       return json(res, 415, FAIL);

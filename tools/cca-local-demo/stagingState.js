@@ -79,7 +79,7 @@ function createPersistentThrottle({ file, clock = () => Math.floor(Date.now() / 
 
   return Object.freeze({
     reserve(peer, route) {
-      if (!["127.0.0.1", "::ffff:127.0.0.1"].includes(peer) || !["password", "mfa"].includes(route))
+      if (!/^(?:::ffff:)?127\.(?:\d{1,3}\.){2}\d{1,3}$/.test(peer) || !["password", "mfa"].includes(route))
         throw Error("CCA_STAGING_TRUSTED_PEER_REQUIRED");
       const id = crypto.createHash("sha256").update("127.0.0.1").digest("hex") + ":" + route;
       const now = clock();

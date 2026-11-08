@@ -200,8 +200,10 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     const assignments=[
       ...user.roles.map((role,i)=>({assignmentId:"cca-"+i,principalId:user.id,
         active:true,scope:"PLATFORM",role})),
-      ...user.tenantIds.map((tenantId,i)=>({assignmentId:"tenant-"+i,principalId:user.id,
-        active:true,scope:"TENANT",tenantId,role:user.roles[0]}))
+      ...user.tenantIds.flatMap(tenantId => user.roles.map(role => ({
+        assignmentId: "tenant-" + tenantId + "-" + role, principalId: user.id,
+        active: true, scope: "TENANT", tenantId, role,
+      })))
     ];
     return derivePlatformContext({sessionResult:{accepted:true,platformPrincipalId:user.id,
       sessionId:keyHash(token).slice(0,16)},principal:{id:user.id,active:true},assignments});

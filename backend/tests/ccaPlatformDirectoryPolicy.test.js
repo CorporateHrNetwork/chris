@@ -51,3 +51,15 @@ test("separation of duties: billing and service roles do not imply approval priv
   assert.equal(isAuthorized(context, PERMISSIONS.TICKETS_MANAGE), false);
   assert.equal(isAuthorized(context, PERMISSIONS.APPROVALS_GRANT), false);
 });
+
+test("tenant access requires the requested permission at both scopes", () => {
+  const release = { ...b, assignmentId: "a3", tenantId: "tenant-B", role: "RELEASE_MANAGER" };
+  const auditor = { ...b, assignmentId: "a4", tenantId: "tenant-C", role: "AUDITOR" };
+  const context = derivePlatformContext({ ...base, assignments: [a, b, release, auditor] });
+  assert.equal(isAuthorized(context, PERMISSIONS.TICKETS_MANAGE, "tenant-A"), true);
+  assert.equal(isAuthorized(context, PERMISSIONS.TICKETS_READ, "tenant-B"), false);
+  assert.equal(isAuthorized(context, PERMISSIONS.TICKETS_MANAGE, "tenant-B"), false);
+  assert.equal(isAuthorized(context, PERMISSIONS.RELEASE_READ, "tenant-B"), false);
+  assert.equal(isAuthorized(context, PERMISSIONS.TICKETS_READ, "tenant-C"), true);
+  assert.equal(isAuthorized(context, PERMISSIONS.TICKETS_MANAGE, "tenant-C"), false);
+});
