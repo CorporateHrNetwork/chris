@@ -1,3 +1,4 @@
+const { assertLeaveReturnPayrollReady } = require("./leaveReturnPayrollService");
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { queueStageEmail, TASKS } = require("./payrollStageEmailService");
@@ -102,6 +103,9 @@ async function transition({organizationId,runId,actorUserId,action,notes,prismaC
   const rule=rules[action]; if(!rule)fail("INVALID_PAYROLL_APPROVAL_ACTION","Unsupported payroll approval action.",400);
   if(!rule[0].includes(wf.stage))fail("INVALID_PAYROLL_APPROVAL_TRANSITION",action+" is not allowed while payroll is "+wf.stage+".");
   if((action==="AUDIT_APPROVE"||action==="AUDIT_DISAPPROVE")&&!String(notes||"").trim())fail("AUDIT_OBSERVATIONS_REQUIRED","Audit observations are required before the Auditor records a decision.",400);
+  if (["REQUEST_AUDIT", "REINITIATE_AUDIT", "AUDIT_APPROVE", "REQUEST_GM", "GM_APPROVE"].includes(action)) {
+    await assertLeaveReturnPayrollReady({ db: tx, organizationId, runId });
+  }
   const to=rule[1];
   if(TASKS[to])await resolveAssignment({organizationId,responsibility:TASKS[to].responsibility,actorUserId,prismaClient:{$transaction:fn=>fn(tx)}});
   const eventId=await event(tx,wf,actorUserId,action,to,notes);

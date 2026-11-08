@@ -1,3 +1,6 @@
+const { isZermatt, isHeadHr, isBranchHr } = require("../services/zermattHrFinancialAccessService");
+const { lagosToday, expectedReturnDate, loadReturnDeficits, missedDatesFor } = require("../services/leaveReturnPayrollService");
+const { dateKey, utcDay } = require("../services/leaveDayCalculator");
 const express =
   require("express");
 
@@ -321,6 +324,62 @@ router.get(
 );
 
 
+function leaveLocationIds(auth) {
+  if (auth.activeLocationId) return [auth.activeLocationId];
+  if (auth.locationScope === "ALL_LOCATIONS") return undefined;
+  return (auth.availableLocations || []).map(location => location.id).filter(Boolean);
+}
+
+router.get("/return-reminders", async (req, res) => {
+  try {
+    const { auth } = req;
+    if (!auth.permissions.includes("leave.manage") || (!isHeadHr(req) && !isBranchHr(req))) {
+      return res.json({ status: "success", data: { count: 0 } });
+    }
+    // Head HR receives all authorized locations even when viewing one branch.
+    const locationIds = leaveLocationIds({ ...auth, activeLocationId: null });
+    const count = await prisma.leaveRequest.count({
+      where: {
+        organizationId: auth.organizationId,
+        status: "ACTIVE", returnedAt: null, cancelledAt: null,
+        endDate: { lt: utcDay(lagosToday()) },
+        ...(locationIds !== undefined ? { employee: { locationId: { in: locationIds } } } : {}),
+      },
+    });
+    return res.json({ status: "success", data: { count } });
+  } catch (error) {
+    return handleError(error, res);
+  }
+});
+
+router.get("/return-queue", requirePermission("employees.view"), async (req, res) => {
+  try {
+    if (!isZermatt(req)) return res.status(404).json({ status: "error", message: "Return queue unavailable." });
+    const result = await getLeaveRequests({
+      organizationId: req.auth.organizationId,
+      status: "ACTIVE",
+      locationIds: leaveLocationIds(req.auth),
+    });
+    const today = lagosToday();
+    const monthStart = utcDay(`${today.slice(0, 7)}-01`);
+    const deficits = await loadReturnDeficits({
+      db: prisma, organizationId: req.auth.organizationId,
+      requests: result.filter(row => row.commencementDate && row.employee?.status === "LEAVE" && !row.returnedAt && !row.cancelledAt),
+      start: monthStart, end: utcDay(today), today,
+    });
+    return res.json({ status: "success", data: result.map(row => {
+      const expected = dateKey(expectedReturnDate(row.endDate));
+      return {
+        ...row, expectedReturnDate: expected,
+        returnDue: today >= expected,
+        provisionalMissedDays: missedDatesFor((deficits.get(row.employeeId) || []).filter(item => item.requestId === row.id)).length,
+      };
+    }) });
+  } catch (error) {
+    return handleError(error, res);
+  }
+});
+
 router.get(
   "/requests",
   requirePermission("employees.view"),
@@ -329,11 +388,7 @@ router.get(
       const result = await getLeaveRequests({
         organizationId: req.auth.organizationId,
         status: req.query.status,
-        locationIds: req.auth?.activeLocationId
-          ? [req.auth.activeLocationId]
-          : req.auth?.locationScope === "ALL_LOCATIONS"
-            ? undefined
-            : (req.auth?.availableLocations || []).map(location => location.id).filter(Boolean),
+        locationIds: leaveLocationIds(req.auth),
       });
       return res.json({ status: "success", data: result });
     } catch (error) {
@@ -390,6 +445,8 @@ router.post(
         leaveRequestId: req.params.id,
         actorUserId: req.auth.userId,
         returnDate: req.body.returnDate,
+        zermatt: isZermatt(req),
+        locationIds: leaveLocationIds(req.auth),
         notes: req.body.notes,
         returnDocumentationUrl: req.body.returnDocumentationUrl,
         fitnessCertificateUrl: req.body.fitnessCertificateUrl,
@@ -564,6 +621,7 @@ function handleError(
       "EMPLOYEE_ALREADY_ON_ACTIVE_LEAVE",
       "LEAVE_NOT_ACTIVE",
       "RETURN_BEFORE_COMMENCEMENT",
+      "RETURN_DATE_IN_FUTURE",
       "EMPLOYEE_STATUS_CHANGED_DURING_LEAVE",
       "INVALID_PRE_LEAVE_STATUS",
       "LEAVE_ALREADY_COMMENCED",

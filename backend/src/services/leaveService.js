@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { lagosToday, expectedReturnDate, lockLeaveReturnPayroll } = require("./leaveReturnPayrollService");
 const { calculateLeaveDays, utcDay } = require("./leaveDayCalculator");
 const { getEmployeePolicyBalance, supportsManualUsedDays } = require("./leaveBalanceService");
 
@@ -1029,13 +1030,21 @@ async function returnFromLeave({
   notes,
   returnDocumentationUrl,
   fitnessCertificateUrl,
+  zermatt = false,
+  locationIds,
 }) {
+  if (zermatt && !returnDate) throw new Error("INVALID_RETURN_DATE");
   const actualReturnDate = parseLifecycleDate(returnDate, "INVALID_RETURN_DATE");
+  if (zermatt && startOfUtcDay(actualReturnDate) > utcDay(lagosToday())) throw new Error("RETURN_DATE_IN_FUTURE");
 
   return prisma.$transaction(async (tx) => {
-      await lockRequestEmployee(tx, organizationId, leaveRequestId);
+    if (zermatt) await lockLeaveReturnPayroll(tx, organizationId);
+    await lockRequestEmployee(tx, organizationId, leaveRequestId);
     const request = await tx.leaveRequest.findFirst({
-      where: { id: leaveRequestId, organizationId },
+      where: {
+        id: leaveRequestId, organizationId,
+        ...(locationIds !== undefined ? { employee: { locationId: { in: locationIds } } } : {}),
+      },
       include: {
         employee: {
           include: {
@@ -1055,7 +1064,8 @@ async function returnFromLeave({
     if (request.status !== "ACTIVE" || !request.commencementDate) throw new Error("LEAVE_NOT_ACTIVE");
     const lifecycleRules = request.leavePolicy?.lifecycleRules || {};
     if (startOfUtcDay(actualReturnDate) < startOfUtcDay(request.commencementDate)) throw new Error("RETURN_BEFORE_COMMENCEMENT");
-    if (startOfUtcDay(actualReturnDate) < startOfUtcDay(request.endDate) && lifecycleRules.allowEarlyReturn === false) throw new Error("EARLY_RETURN_NOT_ALLOWED");
+    const expected = zermatt ? expectedReturnDate(request.endDate) : startOfUtcDay(request.endDate);
+    if (startOfUtcDay(actualReturnDate) < expected && lifecycleRules.allowEarlyReturn === false) throw new Error("EARLY_RETURN_NOT_ALLOWED");
     if (lifecycleRules.returnDocumentationRequired && !String(returnDocumentationUrl || "").trim()) throw new Error("RETURN_DOCUMENTATION_REQUIRED");
     if (lifecycleRules.fitnessCertificateRequired && !String(fitnessCertificateUrl || "").trim()) throw new Error("FITNESS_CERTIFICATE_REQUIRED");
     if (!request.employee.employmentEpisodes.length) throw new Error("CURRENT_EMPLOYMENT_EPISODE_NOT_FOUND");
@@ -1147,6 +1157,7 @@ async function getLeaveRequests({
         select: {
           id: true,
           employeeNumber: true,
+          employmentType: true,
           firstName: true,
           middleName: true,
           lastName: true,

@@ -11,9 +11,9 @@ test('employment window excludes pre-hire days; zero remains explicit; next mont
  assert.equal(P.resolvePayableDays({...period(10),hireDate:'2026-11-01',standardDays:26}).payableDays,0);
  assert.equal(P.resolvePayableDays({...period(10),hireDate:'2026-10-13',standardDays:16,attendanceInput:{workedDays:8}}).payableDays,8);
 });
-function engineFixture({split=false,days,month=10}={}) {
+function engineFixture({split=false,days,month=10,leaveRequests=[]}={}) {
  const state={saved:[],writes:0,month,days,employees:[{id:'new',employeeNumber:'NEW',firstName:'Synthetic',lastName:'New',employmentType:'Full-Time',costCentreId:'cc',hireDate:'2026-10-13'},{id:'old',employeeNumber:'OLD',firstName:'Synthetic',lastName:'Existing',employmentType:'Full-Time',costCentreId:'cc',hireDate:'2020-01-01'}]};
- const client={complianceRule:{findFirst:async()=>null},organization:{findUnique:async()=>({id:'org',slug:'zermatt-liquor-limited',currency:'NGN'})},employee:{findMany:async options=>{assert.equal(options.select.hireDate,true);assert.ok(options.where.OR);return state.employees;}},attendancePayrollInput:{findMany:async()=>state.days==null?[]:[{employeeId:'new',workedDays:state.days,notes:'Verified after employment start'}]},statutoryObligation:{deleteMany:async()=>{}},organizationAudit:{create:async()=>{}},$transaction:async f=>f(client),$queryRawUnsafe:async(sql)=>{
+ const client={leaveRequest:{findMany:async()=>leaveRequests},attendanceRecord:{findMany:async()=>[]},publicHoliday:{findMany:async()=>[]},complianceRule:{findFirst:async()=>null},organization:{findUnique:async()=>({id:'org',slug:'zermatt-liquor-limited',currency:'NGN'})},employee:{findMany:async options=>{assert.equal(options.select.hireDate,true);assert.ok(options.where.OR);return state.employees;}},attendancePayrollInput:{findMany:async()=>state.days==null?[]:[{employeeId:'new',workedDays:state.days,notes:'Verified after employment start'}]},statutoryObligation:{deleteMany:async()=>{}},organizationAudit:{create:async()=>{}},$transaction:async f=>f(client),$queryRawUnsafe:async(sql)=>{
   if(sql.includes('FROM "payroll_periods"'))return [{id:'period',code:`2026-${String(state.month).padStart(2,'0')}`,status:'OPEN',...period(state.month)}];
   if(sql.includes('FROM "payroll_policy_versions"'))return [{id:'policy',code:'NG',versionNumber:1,jurisdiction:'NG',salaryStructure:{basic:50,housing:30,transport:20},standardDays:{'Full-Time':26},pensionableComponents:['basic','housing','transport'],pensionEmployeeRate:8,pensionEmployerRate:10,payeRules:{bands:[{limit:null,rate:10}]},employerStatutoryRules:{}}];
   if(sql.includes('FROM "payroll_salary_rates"'))return state.employees.map(e=>({employeeId:e.id,amount:split?195000:260000,fullMonthlyGross:split?260000:null,currency:'NGN'}));
@@ -23,7 +23,7 @@ function engineFixture({split=false,days,month=10}={}) {
   if(sql.includes('SELECT pr.'))return [{id:'run',periodId:'period',status:'DRAFT',...period(state.month)}];
   if(sql.includes('FROM "payroll_runs"'))return [{id:'run',status:'DRAFT'}];throw Error(sql);
  },$executeRawUnsafe:async(sql,...a)=>{state.writes++;if(sql.includes('INSERT INTO "payroll_run_lines"')){const stride=14;for(let i=0;i<a.length;i+=stride)state.saved.push({id:a[i],employeeId:a[i+3],employeeNumber:a[i+4],baseSalary:a[i+7],allowances:a[i+8],deductions:a[i+9],advanceRecovery:a[i+10],grossPay:a[i+11],netPreview:a[i+12],details:JSON.parse(a[i+13])});}}};
- const deps={'./newHirePayrollProrationService':P,'./zermattSalarySplit':require('../src/services/zermattSalarySplit'),'../config/prisma':client,'./statutoryObligationService':{replaceDraftObligations:async()=>{}},'./zermattLeaveAllowanceService':{applyZermattLeaveAllowanceToDraft:async()=>null},'./zermattVariablePayrollService':{loadPeriodVariableItems:async()=>new Map(),calculateVariableValue:()=>0}};
+ const deps={'./leaveReturnPayrollService':require('../src/services/leaveReturnPayrollService'),'./newHirePayrollProrationService':P,'./zermattSalarySplit':require('../src/services/zermattSalarySplit'),'../config/prisma':client,'./statutoryObligationService':{replaceDraftObligations:async()=>{}},'./zermattLeaveAllowanceService':{applyZermattLeaveAllowanceToDraft:async()=>null},'./zermattVariablePayrollService':{loadPeriodVariableItems:async()=>new Map(),calculateVariableValue:()=>0}};
  const module={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/services/nigeriaPayrollComplianceService.js'),'utf8'),{module,exports:module.exports,require:id=>id in deps?deps[id]:require(id),Date,Map,Set,console});
  return {state,run:()=>module.exports.executeNigeriaDraftPayroll({organizationId:'org',actorUserId:'hr',periodId:'period',prismaClient:client})};
 }
@@ -43,4 +43,19 @@ test('October start dates follow agreed rolling weekly off-day convention; manua
  }
  const input={...period(10),hireDate:'2026-10-13',employmentType:'Full-Time',standardDays:26};assert.equal(P.resolvePayableDays({...input,attendanceInput:{workedDays:0,notes:'Authorized unpaid absence'}}).payableDays,0);assert.equal(P.resolvePayableDays({...input,attendanceInput:{workedDays:12}}).payableDays,12);
  const pt=P.resolvePayableDays({...input,employmentType:'Part-Time',standardDays:16});assert.equal(pt.payableDays,16);assert.equal(pt.automatic,false);assert.equal(pt.source,'STANDARD_DAYS_DEFAULT');
+});
+
+test('the payroll engine deducts a late-return deficit once and preserves HR-entered worked days', async () => {
+ const leaveRequests = [{id:'leave',employeeId:'new',employee:{employmentType:'Full-Time'},endDate:'2026-11-03',actualReturnDate:'2026-11-06',status:'COMPLETED'}];
+ const automatic = engineFixture({month:11,leaveRequests});
+ await automatic.run();
+ const line = automatic.state.saved.find(row => row.employeeId === 'new');
+ assert.equal(line.details.attendance.payableDays,24);
+ assert.equal(line.grossPay,240000);
+ assert.deepEqual(line.details.attendance.leaveReturn.missedDates,['2026-11-04','2026-11-05']);
+ const manual = engineFixture({month:11,days:24,leaveRequests});
+ await manual.run();
+ const reviewed = manual.state.saved.find(row => row.employeeId === 'new');
+ assert.equal(reviewed.grossPay,240000);
+ assert.equal(reviewed.details.attendance.leaveReturn.appliedDeficit,0);
 });

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/layout/Sidebar/Sidebar";
+import ZermattLeaveReturnNotice from "../components/ZermattLeaveReturnNotice";
 import ZermattProbationNotice from "../components/ZermattProbationNotice";
 import Topbar from "../components/layout/Topbar/Topbar";
 
@@ -284,6 +285,7 @@ function MainLayout({ children }) {
       >
         <Topbar />
         <ZermattProbationNotice />
+        <ZermattLeaveReturnNotice />
 
         <main
           className="chris-main-content"
