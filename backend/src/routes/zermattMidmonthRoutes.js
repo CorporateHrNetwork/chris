@@ -1,5 +1,6 @@
 const express=require('express');
 const XLSX=require('xlsx');
+const { appendTransportSupportAnalytics } = require('../services/transportSupportExportAnalytics');
 const prisma=require('../config/prisma');
 const {requireAuth}=require('../middleware/authMiddleware');
 const {isZermatt}=require('../services/zermattHrFinancialAccessService');
@@ -28,6 +29,7 @@ router.get('/runs/:id/export',async(req,res)=>{
    if(external&&Number(line.netPay)>0&&(!bank.bankName||!bank.accountName||!bank.accountNumber))invalid('Complete payment details and regenerate the draft before approval.');
   }
   const workbook=XLSX.utils.book_new();
+  appendTransportSupportAnalytics(workbook,data);
   const indexes=require('../services/payrollRegisterExport').appendRegisterSheets(workbook,{
    ...data.register,columns:req.query.columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Transport Support Pay',
   });
