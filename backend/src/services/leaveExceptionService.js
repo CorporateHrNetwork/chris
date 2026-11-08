@@ -91,6 +91,55 @@ async function exceptionDetail(tx, organizationId, employee) {
   };
 }
 
+async function listZermattAnnualEligibilityExceptions({ organizationId, locationIds }) {
+  const requests = await prisma.leaveRequest.findMany({
+    where: {
+      organizationId,
+      status: { in: ["PENDING", "APPROVED", "ACTIVE"] },
+      leaveType: { name: { equals: "Annual Leave", mode: "insensitive" } },
+      employee: { organizationId, ...(locationIds ? { locationId: { in: locationIds } } : {}) },
+    },
+    select: {
+      id: true, status: true, startDate: true, endDate: true,
+      employee: { select: {
+        employeeNumber: true, firstName: true, middleName: true, lastName: true,
+        hireDate: true, employmentType: true, status: true, location: { select: { name: true } },
+      } },
+    },
+    orderBy: { startDate: "asc" },
+  });
+
+  return requests.flatMap((request) => {
+    const { employee } = request;
+    const type = String(employee.employmentType || "").toUpperCase().replace(/[^A-Z]/g, "");
+    const anniversary = employee.hireDate ? utcDay(employee.hireDate) : null;
+    if (anniversary) {
+      const month = anniversary.getUTCMonth();
+      anniversary.setUTCFullYear(anniversary.getUTCFullYear() + 1);
+      if (anniversary.getUTCMonth() !== month) anniversary.setUTCDate(0);
+    }
+
+    const reasons = [];
+    if (type === "PARTTIME") reasons.push("Part-time employees are ineligible for annual leave");
+    if (type === "NYSC") reasons.push("NYSC employees are ineligible for annual leave");
+    if (!anniversary) reasons.push("Hire date is required to verify annual leave eligibility");
+    if (anniversary && utcDay(request.startDate) < anniversary) {
+      reasons.push("First employment anniversary falls after the requested leave start");
+    }
+    if (!reasons.length) return [];
+
+    return [{
+      id: `annual-eligibility:${request.id}`,
+      employee,
+      mismatchCode: "ANNUAL_LEAVE_ELIGIBILITY",
+      mismatch: reasons.join(". "),
+      activeRequestStatus: request.status,
+      resolutionStatus: "OPEN",
+      annualRequest: { id: request.id, startDate: request.startDate, endDate: request.endDate, anniversary },
+    }];
+  });
+}
+
 async function listLeaveExceptions({ organizationId }) {
   const [employees, activeRequests] = await Promise.all([
     prisma.employee.findMany({ where: { organizationId, status: "LEAVE" }, include: { department: true, designation: { include: { employmentLevel: true } }, location: true }, orderBy: { employeeNumber: "asc" } }),
@@ -167,4 +216,4 @@ async function reconstructHistoricalLeave({ organizationId, employeeNumber, acto
   }, { isolationLevel: "Serializable" });
 }
 
-module.exports = { MISMATCH, listLeaveExceptions, keepExceptionOpen, restoreWorkingStatus, reconstructHistoricalLeave, protectedState, assertProtectedState };
+module.exports = { listZermattAnnualEligibilityExceptions, MISMATCH, listLeaveExceptions, keepExceptionOpen, restoreWorkingStatus, reconstructHistoricalLeave, protectedState, assertProtectedState };
