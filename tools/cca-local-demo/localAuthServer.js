@@ -53,7 +53,7 @@ function payloadFrom(req) {
     req.on("error", reject);
   });
 }
-function createAuthServer(auth) {
+function createAuthServer(auth, { sourceThrottle, auditLedger } = {}) {
   const auditEvents = [];
   const files = {
     "/": "admin-login.html",
@@ -148,14 +148,24 @@ function createAuthServer(auth) {
     try { body = await payloadFrom(req); }
     catch { return json(res, 400, FAIL); }
     if (url.pathname === "/api/password") {
+      const peer = req.socket.remoteAddress;
+      if (sourceThrottle && !sourceThrottle.limit(peer).allowed)
+        return json(res, 429, {ok:false,code:"CCA_AUTH_THROTTLED"});
       const result = auth.lab.loginPassword({ id: body.account, password: body.password });
-      if (!result.ok) return json(res, 401, FAIL);
+      if (!result.ok) {
+        if(sourceThrottle) sourceThrottle.recordFailure(peer);
+        return json(res, 401, FAIL);
+      }
       // Separate short-lived browser challenge; never expose account roles.
       return json(res, 200, { ok: true, challenge: result.challenge });
     }
     if (url.pathname === "/api/mfa") {
       const result = auth.lab.loginOtp({ challenge: body.challenge, code: body.code });
       if (!result.ok) return json(res, 401, FAIL);
+      if (auditLedger) {
+        try { auditLedger.append({event:"CCA_MFA_VERIFIED",actor:auth.account,target:auth.account}); }
+        catch { return json(res, 503, {ok:false,code:"CCA_AUDIT_UNAVAILABLE"}); }
+      }
       auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.account, time: new Date().toISOString() });
       if (auditEvents.length > 100) auditEvents.shift();
       return json(res, 200, { ok: true, demonstration: true },
