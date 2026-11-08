@@ -1,3 +1,4 @@
+const { listPublicHolidays } = require("../services/attendanceInsightsService");
 const express = require("express");
 const fs = require("fs");
 const bcrypt = require("bcryptjs");
@@ -171,6 +172,16 @@ The employee ID is taken only from the authenticated ESS token.
 There is deliberately no employeeId/employeeNumber route parameter.
 Changing the browser URL therefore cannot select another employee.
 */
+router.get("/public-holidays", requireEssAuth, async (req, res) => {
+  try {
+    const holidays = await listPublicHolidays({ organizationId: req.essAuth.organizationId });
+    const data = holidays.map(({ name, holidayDate, isRecurring }) => ({ name, holidayDate, isRecurring }));
+    return res.json({ status: "success", data });
+  } catch {
+    return res.status(500).json({ status: "error", message: "Unable to load public holidays." });
+  }
+});
+
 router.get("/me", requireEssAuth, async (req, res) => {
   try {
     const employee = await prisma.employee.findFirst({
