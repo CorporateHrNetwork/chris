@@ -159,6 +159,16 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    benefitWrap.employee.findMany=readMetadata;
    assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
 
+   const worked=[{employeeNumber:first.snapshot.employeeNumber,extraDays:2,phDays:1,rowNumber:2}];
+   await assert.rejects(benefits.bulkWorkedDays('zll','auditor',benefitRun,worked),/assigned HEAD HR/);
+   await assert.rejects(benefits.bulkWorkedDays('zll','hr',benefitRun,[...worked,{...worked[0],rowNumber:3}]),/must appear once/);
+   const preview=await benefits.bulkWorkedDays('zll','hr',benefitRun,worked);
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay));
+   await assert.rejects(benefits.bulkWorkedDays('zll','hr',benefitRun,worked,'stale','Fixture import'),/changed after preview/);
+   assert.equal((await benefits.bulkWorkedDays('zll','hr',benefitRun,worked,preview.token,'Fixture import')).updated,1);
+   const imported=(await benefits.detail('zll','hr',benefitRun)).lines[0];
+   assert.equal(Number(imported.netPay),preview.rows[0].netPay);
+   assert.equal(imported.snapshot.benefitInputs.calculateFromDays,true);
    await assert.rejects(benefits.saveBenefitInputs('zll','auditor',benefitRun,first.id,{bonus:1000},'Unauthorized'),/assigned HEAD HR/);
    await benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2500},'Approved benefit extras');
    let changed=await benefits.detail('zll','hr',benefitRun);
