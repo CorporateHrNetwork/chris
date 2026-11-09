@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
-import {useNavigate} from 'react-router-dom';
+import {Link,useLocation,useNavigate} from 'react-router-dom';
 import {apiRequest,apiDownload,saveDownloadedBlob} from '../../services/api';
 const workflowPanel={border:'1px solid #385548',borderRadius:10,padding:16,marginBlock:16};
 const api='/api/benefits/transport-support';
@@ -11,9 +11,16 @@ const actions={
  AUDIT_REVIEW:[['RETURN_TO_DRAFT','Return to Head HR Preparation','HEAD_HR']],
  GM_APPROVAL:[['RETURN_TO_DRAFT','Return to Head HR Preparation','HEAD_HR']],
 };
+const workspaces=[
+ ['transport-run','Monthly Run'],
+ ['transport-register','Full Register'],
+ ['transport-export','Excel Export Portal'],
+];
 const moneyColumns=new Set([7,8,9,12,13,14,15,16]);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
+ const {hash,search}=useLocation();
+ const workspace=workspaces.find(([id])=>hash===`#${id}`)?.[0]||'transport-run';
  const [exportColumns,setExportColumns]=useState([]);
  const [basisReadiness,setBasisReadiness]=useState(null);
  const [state,setState]=useState(null),[detail,setDetail]=useState(null),[periodMonth,setMonth]=useState(''),[notes,setNotes]=useState('');
@@ -61,7 +68,7 @@ export default function TransportSupportPayroll() {
  return <section style={{padding:24,maxWidth:1700,minWidth:0,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
   <h1>Transport Support Pay · Payroll Execution Workspace</h1>
   <nav aria-label="Transport Support workspace sections" style={{display:'flex',flexWrap:'wrap',gap:16,marginBlock:12}}>
-   <a href="#transport-run">Monthly Run</a><a href="#transport-register">Full Register</a><a href="#transport-export">Excel Export Portal</a>
+   {workspaces.map(([id,label])=><Link key={id} to={{search,hash:`#${id}`}} aria-current={workspace===id?'location':undefined}>{label}</Link>)}
   </nav>
   {state&&!head&&<p role="note">Preparation, adjustments and export require the active Head HR payroll assignment for this account.</p>}
   <p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
@@ -69,6 +76,8 @@ export default function TransportSupportPayroll() {
   <p role="note">Benefit inputs and payments do not update regular salary rates, payroll runs, payslips, statutory deductions or loan recoveries.</p>
   {error&&<p role="alert" style={{color:'#fca5a5'}}>{error}</p>}{message&&<p role="status">{message}</p>}
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
+  <section id="transport-run" aria-label="Monthly Run" hidden={workspace!=='transport-run'}>
+  <h2>Monthly Run · Prepare or Open</h2>
   <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
    {head&&<button onClick={()=>navigate('/benefits/transport-support/preparation')}>Salary Basis Setup / Bulk Upload</button>}
    <button disabled={busy} onClick={()=>act(async()=>{await load();await loadReadiness();})}>Refresh</button>
@@ -89,7 +98,6 @@ export default function TransportSupportPayroll() {
     <button type="button" disabled={busy} onClick={()=>navigate('/benefits/transport-support/preparation')}>Open Preparation Register</button>
    </>}
   </section>}
-  <h2 id="transport-run">Monthly Run · Prepare or Open</h2>
   <p>Select an existing run to edit adjustments, approve the draft, or export its register.</p>
   {!state?.runs?.length?<p>No transport benefit runs yet.</p>:<div style={{display:'flex',gap:10,flexWrap:'wrap'}}>{state.runs.map(r=><button key={r.id} aria-pressed={detail?.run.id===r.id} disabled={busy||!!editor} onClick={()=>act(()=>open(r.id))}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')} · {money(r.netTotal)}</button>)}</div>}
   {detail&&<>
@@ -115,8 +123,9 @@ export default function TransportSupportPayroll() {
    {(actions[detail.run.status]||[]).filter(a=>roles.includes(a[2])).map(a=><button key={a[0]} disabled={busy||!!editor||!ready||!notes.trim()} onClick={()=>act(()=>action(a[0]))}>{a[1]}</button>)}
    </section>}
   </>}
-   <section id="transport-export" aria-label="Excel Export Portal" style={workflowPanel}><h2>Excel Export Portal</h2>
-   {!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a monthly run to select columns and download Excel.</p>:<><fieldset><legend>Choose export columns</legend>
+  </section>
+   <section hidden={workspace!=='transport-export'} id="transport-export" aria-label="Excel Export Portal" style={workflowPanel}><h2>Excel Export Portal</h2>
+   {!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a run in <Link to={{search,hash:"#transport-run"}}>Monthly Run</Link> to select columns and download Excel.</p>:<><fieldset><legend>Choose export columns</legend>
     <button type="button" onClick={()=>setExportColumns(detail.register.headers.map((_,i)=>i))}>Select all</button> <button type="button" onClick={()=>setExportColumns([])}>Clear selection</button>
     <div style={{display:'flex',gap:14,flexWrap:'wrap',margin:12}}>{detail.register.headers.map((label,index)=><label key={label}><input type="checkbox" checked={exportColumns.includes(index)} onChange={e=>setExportColumns(c=>e.target.checked?[...c,index]:c.filter(i=>i!==index))}/>{label}</label>)}</div>
     <p>The master roll is ordered Abuja, Lagos, Port Harcourt. Each branch also has its own sheet. Only checked columns are included in register sheets.</p>
@@ -125,14 +134,17 @@ export default function TransportSupportPayroll() {
     <button disabled={!externalReady||busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Approved Register (Excel)</button>
    {!externalReady&&<p>Approve this run to enable the external register export.</p>}</>}
    </section>
-   <h2 id="transport-register">Full Monthly Register{registerHeaders.length>0&&` · ${registerHeaders.length} columns`}</h2>
-   {!detail&&<p>Prepare or open a monthly run to populate employee rows.</p>}
+   <section id="transport-register" aria-label="Full Register" hidden={workspace!=='transport-register'}>
+   <h2>Full Monthly Register{registerHeaders.length>0&&` · ${registerHeaders.length} columns`}</h2>
+   {!detail&&<p>Prepare or open a run in <Link to={{search,hash:"#transport-run"}}>Monthly Run</Link> to populate employee rows.</p>}
    {registerHeaders.length>0&&<details open><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
     <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)?money(value):value}</td>)}</tr>)}</tbody>
    </table></div>
+   </section>
+  <section aria-label="Payment confirmation and audit history" hidden={workspace!=='transport-run'}>
   {detail&&<>
    <p>Previous Month Overpayment shows the opening balance. Recovery is capped at available benefits; the remainder carries forward. End of the Month is a salary reference and is excluded from this benefit Net.</p>
    {canPay&&<>
@@ -147,6 +159,7 @@ export default function TransportSupportPayroll() {
    </>}
    <h3>Audit history</h3>{detail.events.map((e,i)=><p key={i}>{e.action.replaceAll('_',' ')} · {e.notes} · {new Date(e.createdAt).toLocaleString('en-NG',{timeZone:'Africa/Lagos'})}</p>)}
   </>}
+  </section>
  </section>;
 }
 
