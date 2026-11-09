@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
-import {Link,useLocation,useNavigate} from 'react-router-dom';
+import {useLocation,useNavigate} from 'react-router-dom';
 import {apiRequest,apiDownload,saveDownloadedBlob} from '../../services/api';
 const workflowPanel={border:'1px solid #385548',borderRadius:10,padding:16,marginBlock:16};
 const api='/api/benefits/transport-support';
@@ -19,8 +19,12 @@ const workspaces=[
 const moneyColumns=new Set([7,8,9,12,13,14,15,16]);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
- const {hash,search}=useLocation();
- const workspace=workspaces.find(([id])=>hash===`#${id}`)?.[0]||'transport-run';
+ const {hash}=useLocation();
+ const [workspace,setWorkspace]=useState(()=>workspaces.find(([id])=>hash===`#${id}`)?.[0]||'transport-run');
+ function showWorkspace(id){
+  setWorkspace(id);
+  requestAnimationFrame(()=>document.getElementById(id)?.scrollIntoView({block:'nearest'}));
+ }
  const [exportColumns,setExportColumns]=useState([]);
  const [basisReadiness,setBasisReadiness]=useState(null);
  const [state,setState]=useState(null),[detail,setDetail]=useState(null),[periodMonth,setMonth]=useState(''),[notes,setNotes]=useState('');
@@ -68,7 +72,7 @@ export default function TransportSupportPayroll() {
  return <section style={{padding:24,maxWidth:1700,minWidth:0,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
   <h1>Transport Support Pay · Payroll Execution Workspace</h1>
   <nav aria-label="Transport Support workspace sections" style={{display:'flex',flexWrap:'wrap',gap:16,marginBlock:12}}>
-   {workspaces.map(([id,label])=><Link key={id} to={{search,hash:`#${id}`}} aria-current={workspace===id?'location':undefined}>{label}</Link>)}
+   {workspaces.map(([id,label])=><button key={id} type="button" onClick={()=>showWorkspace(id)} aria-pressed={workspace===id}>{label}</button>)}
   </nav>
   {state&&!head&&<p role="note">Preparation, adjustments and export require the active Head HR payroll assignment for this account.</p>}
   <p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
@@ -125,7 +129,7 @@ export default function TransportSupportPayroll() {
   </>}
   </section>
    <section hidden={workspace!=='transport-export'} id="transport-export" aria-label="Excel Export Portal" style={workflowPanel}><h2>Excel Export Portal</h2>
-   {!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a run in <Link to={{search,hash:"#transport-run"}}>Monthly Run</Link> to select columns and download Excel.</p>:<><fieldset><legend>Choose export columns</legend>
+   {!state?<p>{error?'The workspace could not load. Use Refresh in Monthly Run to retry.':'Loading export permissions…'}</p>:!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to select columns and download Excel.</p>:<><fieldset><legend>Choose export columns</legend>
     <button type="button" onClick={()=>setExportColumns(detail.register.headers.map((_,i)=>i))}>Select all</button> <button type="button" onClick={()=>setExportColumns([])}>Clear selection</button>
     <div style={{display:'flex',gap:14,flexWrap:'wrap',margin:12}}>{detail.register.headers.map((label,index)=><label key={label}><input type="checkbox" checked={exportColumns.includes(index)} onChange={e=>setExportColumns(c=>e.target.checked?[...c,index]:c.filter(i=>i!==index))}/>{label}</label>)}</div>
     <p>The master roll is ordered Abuja, Lagos, Port Harcourt. Each branch also has its own sheet. Only checked columns are included in register sheets.</p>
@@ -136,7 +140,7 @@ export default function TransportSupportPayroll() {
    </section>
    <section id="transport-register" aria-label="Full Register" hidden={workspace!=='transport-register'}>
    <h2>Full Monthly Register{registerHeaders.length>0&&` · ${registerHeaders.length} columns`}</h2>
-   {!detail&&<p>Prepare or open a run in <Link to={{search,hash:"#transport-run"}}>Monthly Run</Link> to populate employee rows.</p>}
+   {!detail&&<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to populate employee rows.</p>}
    {registerHeaders.length>0&&<details open><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
