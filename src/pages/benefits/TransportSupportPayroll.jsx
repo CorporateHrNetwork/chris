@@ -25,6 +25,9 @@ export default function TransportSupportPayroll() {
   setWorkspace(id);
   requestAnimationFrame(()=>document.getElementById(id)?.scrollIntoView({block:'nearest'}));
  }
+ const [workedFile,setWorkedFile]=useState(null);
+ const [workedPreview,setWorkedPreview]=useState(null);
+ const [workedReason,setWorkedReason]=useState('');
  const [exportColumns,setExportColumns]=useState([]);
  const [basisReadiness,setBasisReadiness]=useState(null);
  const [state,setState]=useState(null),[detail,setDetail]=useState(null),[periodMonth,setMonth]=useState(''),[notes,setNotes]=useState('');
@@ -51,7 +54,22 @@ export default function TransportSupportPayroll() {
   return()=>{active=false;};
  },[periodMonth,head,state?.settings?.enabled]);
 
+ function downloadWorkedTemplate(){
+  const rows=detail.lines.map(line=>[line.snapshot.employeeNumber,'',''].join(','));
+  const blob=new Blob([['Employee No,Extra Days Worked,Public Holiday Days Worked',...rows].join('\r\n')],{type:'text/csv'});
+  saveDownloadedBlob({blob,fileName:`Transport_Support_Worked_Days_${String(detail.run.periodMonth).slice(0,7)}.csv`});
+ }
+ async function uploadWorkedDays(confirm){
+  if(!workedFile||workedFile.size>70000)throw new Error('Choose a worked-day file under 70 KB.');
+  const bytes=new Uint8Array(await workedFile.arrayBuffer());
+  let binary='';
+  for(const byte of bytes)binary+=String.fromCharCode(byte);
+  const r=await apiRequest(`${api}/runs/${detail.run.id}/worked-days`,{method:'POST',body:{file:btoa(binary),confirmation:confirm?workedPreview.token:undefined,notes:workedReason}});
+  if(!confirm){setWorkedPreview(r.data);return;}
+  await load();await open(detail.run.id);setMessage(`Worked days imported and Net recalculated for ${r.data.updated} employee(s).`);
+ }
  async function open(id){
+  setWorkedFile(null);setWorkedPreview(null);setWorkedReason('');
   const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setMonth(String(r.data.run.periodMonth).slice(0,7));
   setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));
  }
@@ -120,6 +138,20 @@ export default function TransportSupportPayroll() {
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
     </fieldset>}
    </>}
+   {editable&&!editor&&<fieldset key={detail.run.id} style={workflowPanel}>
+    <legend>Bulk Upload Overtime &amp; Public Holiday Days</legend>
+    <p>Use the template for this Transport Support draft. Enter each employee's total days worked. Blank cells keep existing day counts. Enter zero to clear a count. Preview recalculates both worked-day amounts and shows the new Net before import.</p>
+    <button type="button" disabled={busy} onClick={downloadWorkedTemplate}>Download Worked-Day Template (CSV)</button>
+    <label>Worked-day file <input type="file" accept=".csv,.xlsx,.xls" disabled={busy} onChange={e=>{setWorkedFile(e.target.files?.[0]||null);setWorkedPreview(null);}}/></label>
+    <button type="button" disabled={busy||!ready||!workedFile} onClick={()=>act(()=>uploadWorkedDays(false))}>Preview Worked Days</button>
+    {workedPreview&&<>
+     <p>{workedPreview.rows.length} employee(s) ready to import.</p>
+     <div style={{overflowX:'auto'}}><table><thead><tr>{['Employee No','Employee','Extra days','Public holiday days','Overtime pay','Public holiday pay','Previous Net','New Net'].map(label=><th key={label}>{label}</th>)}</tr></thead>
+     <tbody>{workedPreview.rows.map(row=><tr key={row.employeeNumber}>{[row.employeeNumber,row.employeeName,row.extraDays,row.phDays,money(row.overtimePay),money(row.publicHolidayPay),money(row.previousNet),money(row.netPay)].map((value,index)=><td key={index}>{value}</td>)}</tr>)}</tbody></table></div>
+     <label>Import reason <textarea value={workedReason} maxLength={1000} disabled={busy} onChange={e=>setWorkedReason(e.target.value)}/></label>
+     <button type="button" disabled={busy||!ready||!workedReason.trim()} onClick={()=>act(()=>uploadWorkedDays(true))}>Confirm Worked-Day Import</button>
+    </>}
+   </fieldset>}
    {editor&&<p role="status">Save or cancel input changes before approving or exporting.</p>}
    </section>}
    {(head||canPay)&&<section aria-label="Approval or payment notes" style={workflowPanel}><h3>2. {canPay?'Payment Confirmation':'Head HR Approval'}</h3>
