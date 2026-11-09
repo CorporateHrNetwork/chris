@@ -136,7 +136,45 @@ async function getActivePolicy({ organizationId, asOf, prismaClient = prisma }) 
     organizationId,
     effectiveDate
   );
-  return mapPolicy(rows[0]);
+  const policy = mapPolicy(rows[0]);
+  if (organizationId !== "chris-demo-org-20261022" || effectiveDate < "2026-01-01") return policy;
+
+  // Fictional participation and employer costs are enabled for demonstrations.
+  const demoPolicy = policy || {
+    id: "northstar-demo-ng-2026",
+    code: "NORTHSTAR-DEMO-NG",
+    versionNumber: 1,
+    jurisdiction: "NG",
+    effectiveFrom: "2026-01-01",
+    salaryStructure: { basic: 50, housing: 30, transport: 20 },
+    standardDays: { "Full-Time": 26, "Part-Time": 16 },
+    pensionEmployeeRate: 8,
+    pensionEmployerRate: 10,
+    pensionableComponents: ["basic", "housing", "transport"],
+    payeRules: {
+      ruleCode: "NG-NTA-2025-2026",
+      minimumWageMonthly: 70000,
+      rentReliefRate: 20,
+      rentReliefCap: 500000,
+      bands: [
+        { limit: 800000, rate: 0 }, { limit: 2200000, rate: 15 },
+        { limit: 9000000, rate: 18 }, { limit: 13000000, rate: 21 },
+        { limit: 25000000, rate: 23 }, { limit: null, rate: 25 },
+      ],
+    },
+  };
+  return {
+    ...demoPolicy,
+    payeRules: {
+      ...demoPolicy.payeRules,
+      nhf: { ...demoPolicy.payeRules?.nhf, enabled: true, employeeRate: 2.5, basis: "BASIC" },
+    },
+    employerStatutoryRules: {
+      ...demoPolicy.employerStatutoryRules,
+      nsitf: { ...demoPolicy.employerStatutoryRules?.nsitf, enabled: true, employerRate: 1 },
+      itf: { ...demoPolicy.employerStatutoryRules?.itf, enabled: true, employerRate: 1 },
+    },
+  };
 }
 
 async function getCompliancePolicy({ organizationId, prismaClient = prisma }) {
