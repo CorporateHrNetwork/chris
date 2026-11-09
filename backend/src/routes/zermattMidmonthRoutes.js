@@ -17,6 +17,31 @@ router.post('/activate',async(req,res)=>{try{ready();return res.json({status:'su
 router.post('/runs',async(req,res)=>{try{ready();return res.status(201).json({status:'success',data:{runId:await service.generate(req.auth.organizationId,req.auth.userId,req.body?.periodMonth)}});}catch(e){return sendError(res,e);}});
 router.get('/runs/:id',async(req,res)=>{try{return res.json({status:'success',data:await service.detail(req.auth.organizationId,req.auth.userId,req.params.id)});}catch(e){return sendError(res,e);}});
 router.patch('/runs/:id/lines/:lineId/benefit-inputs',async(req,res)=>{try{ready();return res.json({status:'success',data:await service.saveBenefitInputs(req.auth.organizationId,req.auth.userId,req.params.id,req.params.lineId,req.body?.inputs||{},req.body?.notes)});}catch(e){return sendError(res,e);}});
+const workedDaysHeaders=['Employee No','Extra Days Worked','Public Holiday Days Worked'];
+const benefitsPath='/api/benefits/transport-support';
+router.post('/runs/:id/worked-days',async(req,res)=>{
+ try {
+  if(req.baseUrl!==benefitsPath)invalid('Use the Benefits Transport Support workspace for worked-day uploads.',404);
+  ready();
+  const {file,confirmation,notes}=req.body||{};
+  if(typeof file!=='string'||!file.length||file.length>95000)invalid('Choose an Excel or CSV file under 70 KB.',400);
+  let values;
+  try {
+   const book=XLSX.read(Buffer.from(file,'base64'),{type:'buffer',sheetRows:1002,sheets:0});
+   const sheet=book.Sheets[book.SheetNames[0]];
+   if(sheet?.["!fullref"] && XLSX.utils.decode_range(sheet["!fullref"]).e.r>1000)throw new Error("Too many rows");
+   values=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',blankrows:true,range:0});
+  } catch {
+   invalid('The worked-day file could not be read.',400);
+  }
+  const [headers,...records]=values;
+  if(workedDaysHeaders.some((label,index)=>String(headers?.[index]??'').trim()!==label))invalid('Use the Transport Support worked-day template headers.',400);
+  const rows=records.map(([employeeNumber,extraDays,phDays],index)=>({employeeNumber,extraDays,phDays,rowNumber:index+2}))
+   .filter(row=>row.extraDays!==''||row.phDays!=='');
+  const data=await service.bulkWorkedDays(req.auth.organizationId,req.auth.userId,req.params.id,rows,confirmation,notes);
+  return res.json({status:'success',data});
+ }catch(e){return sendError(res,e);}
+});
 router.post('/runs/:id/action',async(req,res)=>{try{ready();return res.json({status:'success',data:await service.decide(req.auth.organizationId,req.auth.userId,req.params.id,req.body?.action,req.body?.notes,req.body?.payments)});}catch(e){return sendError(res,e);}});
 router.get('/runs/:id/export',async(req,res)=>{
  try {
@@ -42,7 +67,7 @@ router.get('/runs/:id/export',async(req,res)=>{
    ['Workflow','Head HR prepares and approves in CHRiS; Auditor → General Manager → Chief Accountant approvals and payment processing occur externally.'],
    ['Payment date',`${new Date(data.run.periodMonth).toISOString().slice(0,7)}-15`],
    ['Net basis','Mid-Month + Bonus + approved Overtime/Ph Pay + Previous Month Short Payment − applied overpayment deduction. End of the Month is a reference only.'],
-   ['Extra / PH days','Reference counts. Overtime/Ph Pay is the approved benefit amount entered by Head HR; days do not automatically create a payment.'],
+   ['Extra / PH days','End-of-month gross ÷ 26 × days × 1.5 for overtime and × 2 for public holidays. Older manual amounts remain until recalculated.'],
    ['Overpayment control','Previous Month Overpayment is the opening balance. Deduction is capped at available benefit pay; remaining overpayment carries forward. See Reconciliation.'],
    ['Payment control','This export does not confirm external approval or payment. Record actual receipts, including explicit zero payments, after the external process.'],
    ['Loan recovery',0],
