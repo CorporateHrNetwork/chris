@@ -12,3 +12,19 @@ test('demo allows authenticated pricing reads and calculations, but never invoic
   for(const path of ['/api/billing/invoice/email','/api/billing/payments','/api/billing/subscriptions']) assert.equal(check({path,method:'POST'}).res.statusCode,403);
   assert.equal(check({path:'/api/billing/history'}).res.statusCode,403);
 });
+
+test('only Northstar sessions can enter the permission-checked payroll write routes', () => {
+  for (const path of [
+    '/api/payroll/runs/draft',
+    '/api/payroll/runs/demo-run/submit',
+    '/api/payroll/runs/demo-run/decision',
+    '/api/payroll/runs/demo-run/reopen',
+    '/api/attendance/manual-payroll-inputs',
+  ]) {
+    assert.equal(check({ path, method: 'POST' }).next, true);
+    assert.equal(check({ path, method: 'POST', org: 'chris-client-demo-org-20261025' }).res.statusCode, 403);
+    assert.equal(check({ path, method: 'POST', org: 'production-tenant' }).res.statusCode, 403);
+    assert.equal(check({ path, method: 'POST', body: { organizationId: 'production-tenant' } }).res.statusCode, 403);
+    assert.equal(check({ path, method: 'POST', token: false }).res.statusCode, 403);
+  }
+});

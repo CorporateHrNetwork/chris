@@ -179,6 +179,31 @@ async function writeAudit(prismaClient, { organizationId, actorUserId, entityTyp
 }
 
 async function listPeriods({ organizationId, prismaClient = prisma }) {
+  if (organizationId === "chris-demo-org-20261022") {
+    // Provision only the fictional tenant's missing current Lagos payroll month.
+    await prismaClient.$executeRawUnsafe(
+      `WITH month AS (
+         SELECT date_trunc('month', now() AT TIME ZONE 'Africa/Lagos')::date AS start
+       )
+       INSERT INTO "payroll_periods"
+         ("id", "organizationId", "code", "name", "periodStart", "periodEnd", "payDate")
+       SELECT $1 || ':' || to_char(start, 'YYYY-MM'), $1, to_char(start, 'YYYY-MM'),
+              to_char(start, 'FMMonth YYYY') || ' Payroll', start,
+              (start + interval '1 month - 1 day')::date,
+              (start + interval '1 month - 1 day')::date
+         FROM month
+        WHERE EXISTS (
+          SELECT 1 FROM organizations WHERE id = $1 AND slug = 'chris-demo-company'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM payroll_periods
+           WHERE "organizationId" = $1
+             AND "periodEnd" >= start AND "periodStart" < start + interval '1 month'
+        )
+       ON CONFLICT ("organizationId", "code") DO NOTHING`,
+      organizationId
+    );
+  }
+
   // Operational payroll periods are unique by calendar month. Legacy data may
   // contain duplicate period records (for example OCT-2026 and 2026-10).
   // Keep the canonical YYYY-MM period when present, otherwise keep the newest

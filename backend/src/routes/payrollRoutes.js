@@ -1595,7 +1595,7 @@ router.post("/runs/draft", requirePermission("payroll.process"), requireZermattH
       where: { id: req.auth.organizationId },
       select: { country: true, slug: true },
     });
-    const isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
+    const isNigeriaPayroll = (req.auth.organizationId === "chris-demo-org-20261022" && organization?.slug === "chris-demo-company") || String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
     const data = isNigeriaPayroll
       ? await nigeriaPayroll.executeNigeriaDraftPayroll({
           organizationId: req.auth.organizationId,
@@ -1662,7 +1662,7 @@ router.post("/runs/:id/decision", requirePermission("payroll.manage"), requireZe
         where: { id: req.auth.organizationId },
         select: { country: true, slug: true },
       });
-      isNigeriaPayroll = String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
+      isNigeriaPayroll = (req.auth.organizationId === "chris-demo-org-20261022" && organization?.slug === "chris-demo-company") || String(organization?.country || "").trim().toLowerCase() === "nigeria" || organization?.slug === "zermatt-liquor-limited";
       if (isNigeriaPayroll) {
         statutoryCompliance = await validateNigeriaPayrollApproval({
           organizationId: req.auth.organizationId,

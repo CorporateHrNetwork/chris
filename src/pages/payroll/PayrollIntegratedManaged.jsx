@@ -109,6 +109,17 @@ function ExecuteIntegrated() {
   const organization = profile?.organization || getStoredOrganization() || {};
   const selectablePeriods = (periods || []).filter((period) => period.status !== "CLOSED");
 
+  const currentMonth = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos", year: "numeric", month: "2-digit",
+  }).format(new Date()).slice(0, 7);
+  const currentDemoPeriodId = organization.slug === "chris-demo-company"
+    ? selectablePeriods.find((period) => String(period.periodStart).slice(0, 7) === currentMonth)?.id
+    : undefined;
+
+  useEffect(() => {
+    if (currentDemoPeriodId) setPeriodId((selected) => selected || currentDemoPeriodId);
+  }, [currentDemoPeriodId]);
+
   const fetchIntegratedLines = async (runId) => {
     const response = await apiRequest(`/api/payroll/runs/${runId}/integrated-lines`);
     const nextLines = response?.data || [];
@@ -567,7 +578,7 @@ function PayrollLines({ rows, onViewPayslip }) {
   const columns = [
     "Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic",
     ...allowanceColumns.map((item) => item.label),
-    "PAYE", "Pension",
+    "PAYE", "Employee Pension", "Employer Pension", "NHF", "NSITF", "ITF Accrual",
     ...deductionColumns.map((item) => item.label),
     "Salary Advance", "Loan", "Leave Allowance", "Gross", "Net", "Payslip",
   ];
@@ -616,6 +627,10 @@ function PayrollLines({ rows, onViewPayslip }) {
                 {allowanceColumns.map((item) => <Td key={`a-${item.id}`}>{money(allowanceValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(statutory.payeTax, row.currency)}</Td>
                 <Td>{money(statutory.employeePension, row.currency)}</Td>
+                <Td>{money(statutory.employerPension, row.currency)}</Td>
+                <Td>{money(statutory.nhfEmployee, row.currency)}</Td>
+                <Td>{money(statutory.nsitfEmployer, row.currency)}</Td>
+                <Td>{money(statutory.itfEmployerAccrual, row.currency)}</Td>
                 {deductionColumns.map((item) => <Td key={`d-${item.id}`}>{money(deductionValues.get(item.id) || 0, row.currency)}</Td>)}
                 <Td>{money(row.advanceRecovery, row.currency)}</Td>
                 <Td>{money(row.loanRecovery, row.currency)}</Td>
