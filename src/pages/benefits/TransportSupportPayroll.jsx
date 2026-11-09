@@ -16,7 +16,7 @@ const workspaces=[
  ['transport-register','Full Register'],
  ['transport-export','Excel Export Portal'],
 ];
-const moneyColumns=new Set([7,8,9,12,13,14,15,16]);
+const moneyColumns=new Set([7,8,9,12,13,14,15,16,18,19]);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
  const {hash}=useLocation();
@@ -62,7 +62,7 @@ export default function TransportSupportPayroll() {
  }
  function editLine(lineId){
   const line=detail.lines.find(l=>l.id===lineId);const input=line?.snapshot.benefitInputs||{};
-  setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,overtimePhPay:input.overtimePhPay||0,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
+  setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,calculateFromDays:true,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
  }
  const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
  const registerHeaders=detail?.register.headers||state?.registerHeaders||[];
@@ -113,8 +113,8 @@ export default function TransportSupportPayroll() {
     {!editor?<button disabled={busy||!ready||!detail.lines.length} onClick={()=>editLine('')}>Enter Employee Adjustments</button>:<fieldset>
      <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
      <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
-     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['overtimePhPay','Approved Overtime/Ph Pay'],['previousShortPayment','Previous Month Short Payment (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
-     <p>Enter the approved overtime/PH amount. Day counts are reference quantities; they do not automatically create a payment. Prior-month amounts default to the transport ledger. Enter a corrected total, including zero, with a reason; leave blank to use the ledger. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
+     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
+     <p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Prior-month amounts default to the transport ledger. Enter a corrected total, including zero, with a reason; leave blank to use the ledger. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
      <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
      <button disabled={busy||!ready||!notes.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
@@ -145,7 +145,7 @@ export default function TransportSupportPayroll() {
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
-    <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)?money(value):value}</td>)}</tr>)}</tbody>
+    <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)&&value!==''?money(value):value}</td>)}</tr>)}</tbody>
    </table></div>
    </section>
   <section aria-label="Payment confirmation and audit history" hidden={workspace!=='transport-run'}>
