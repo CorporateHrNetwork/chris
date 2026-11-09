@@ -63,7 +63,7 @@ test('ESS loan endpoint ignores injected employee and organization selectors', a
     if (id === '../config/prisma') return {};
     if (id === '../middleware/authMiddleware') return { requireEssAuth: auth };
     if (id === '../services/essLoanSummaryService') return { getEmployeeLoanSummary: async (_, scope) => { calls.push(scope); return []; } };
-    if (['bcryptjs','jsonwebtoken','../services/essStatutoryService','../services/payrollPayslipEmailService'].includes(id)) return {};
+    if (['bcryptjs','jsonwebtoken','../services/essStatutoryService','../services/payrollPayslipEmailService','../services/attendanceInsightsService'].includes(id)) return {};
     return require(id);
   }};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes/essRoutes.js'), 'utf8'), sandbox);
@@ -86,6 +86,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
     if (id === 'express') return { Router: () => router };
     if (id === 'xlsx') return require('xlsx');
     if (id === '../services/payrollRegisterExport') return require('../src/services/payrollRegisterExport');
+    if (id === '../services/transportSupportExportAnalytics') return require('../src/services/transportSupportExportAnalytics');
     if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail, recordExternalExport: async () => { exportsRecorded++; } }) };
     if (id === '../services/zermattMidmonthDomain') return { invalid: (message,statusCode=409) => { throw Object.assign(new Error(message),{statusCode}); } };
     if (id === '../middleware/authMiddleware') return { requireAuth: () => {} };
@@ -98,7 +99,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
   const [headers, row] = res.book['Transport Support Pay'];
   assert.equal(headers.some(header => /loan/i.test(header)), false);
   assert.equal(headers.length, row.length);
-  assert.equal(headers.length,18);
+  assert.equal(headers.length,20);
   assert.equal(row[headers.indexOf('Net')],30500);
   assert.equal(row[headers.indexOf('Previous Month Short Payment')],1000);
   assert.equal(row[headers.indexOf('Previous Month Overpayment')],500);
