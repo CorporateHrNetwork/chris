@@ -163,7 +163,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    await benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2500},'Approved benefit extras');
    let changed=await benefits.detail('zll','hr',benefitRun);
    assert.equal(Number(changed.lines[0].netPay),Number(first.netPay)+3500);
-   assert.equal(changed.register.headers.length,18);
+   assert.equal(changed.register.headers.length,20);
    assert.equal(changed.register.rows[0][1],'Fixture Branch');
    assert.equal(changed.register.rows[0][4],'Fixture Position');
    assert.equal(changed.register.rows[0][5],'Fixture Department');
