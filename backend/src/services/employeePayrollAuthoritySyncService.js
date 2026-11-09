@@ -32,6 +32,33 @@ function employmentTypeFromWorkflow(value, { zermatt = false } = {}) {
   return null;
 }
 
+async function provisionNorthstarCostCentre(tx, organizationId, department) {
+  const code = department ? `NS-DEPT-${department.id}` : "NS-GENERAL";
+  const centre = await tx.costCentre.upsert({
+    where: { organizationId_code: { organizationId, code } },
+    create: {
+      organizationId,
+      code,
+      name: department?.name || "Northstar General Operations",
+      effectiveFrom: new Date("2026-01-01T00:00:00Z"),
+    },
+    update: {},
+    select: { id: true },
+  });
+  if (department) {
+    await tx.department.updateMany({
+      where: { id: department.id, organizationId, costCentreId: null },
+      data: { costCentreId: centre.id },
+    });
+    const mappedDepartment = await tx.department.findFirstOrThrow({
+      where: { id: department.id, organizationId },
+      select: { costCentreId: true },
+    });
+    return mappedDepartment.costCentreId;
+  }
+  return centre.id;
+}
+
 async function synchronizePayrollAuthorityFromMappings({
   organizationId,
   actorUserId = null,
@@ -41,6 +68,7 @@ async function synchronizePayrollAuthorityFromMappings({
     where: { id: organizationId },
     select: { slug: true },
   });
+  const northstar = organizationId === "chris-demo-org-20261022" && organization?.slug === "chris-demo-company";
   const zermatt =
     String(organization?.slug || "").trim().toLowerCase() ===
     "zermatt-liquor-limited";
@@ -101,13 +129,27 @@ async function synchronizePayrollAuthorityFromMappings({
       }
     }
 
-    if (!Object.keys(updates).length) continue;
+    const missingNorthstarCentre = northstar && !hasText(employee.costCentreId) && !updates.costCentreId;
+    if (!Object.keys(updates).length && !missingNorthstarCentre) continue;
 
-    await prismaClient.$transaction(async (tx) => {
-      await tx.employee.update({
-        where: { id: employee.id },
-        data: updates,
-      });
+    const applied = await prismaClient.$transaction(async (tx) => {
+      if (missingNorthstarCentre) {
+        updates.costCentreId = await provisionNorthstarCostCentre(tx, organizationId, employee.department);
+        source.costCentre = employee.department ? "DEPARTMENT_MAPPING" : "NORTHSTAR_GENERAL_OPERATIONS";
+      }
+
+      if (northstar && updates.costCentreId) {
+        const result = await tx.employee.updateMany({
+          where: { id: employee.id, organizationId, costCentreId: null },
+          data: updates,
+        });
+        if (!result.count) return false;
+      } else {
+        await tx.employee.update({
+          where: { id: employee.id },
+          data: updates,
+        });
+      }
 
       await tx.organizationAudit.create({
         data: {
@@ -133,7 +175,9 @@ async function synchronizePayrollAuthorityFromMappings({
             "Automatically synchronized missing payroll authority from existing CHRiS onboarding and organization mappings before payroll calculation.",
         },
       });
+      return true;
     });
+    if (!applied) continue;
 
     repaired.push({
       employeeNumber: employee.employeeNumber,
