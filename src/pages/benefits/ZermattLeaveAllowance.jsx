@@ -71,7 +71,7 @@ export default function ZermattLeaveAllowance() {
       <h2 style={panelTitle}>Zermatt Leave Allowance Policy</h2>
       <div style={policyGrid}>
         <Policy label="Policy mode" value="Current monthly Basic Salary × 12 × 10%, calculated automatically." />
-        <Policy label="Salary basis" value="Current end-of-month gross from regular payroll and its recorded Basic Salary under the approved structure." />
+        <Policy label="Salary basis" value="Current monthly gross salary rate from regular payroll and the applicable monthly Basic Salary." />
         <Policy label="Payment timing" value="Payable in the employment anniversary payroll month after one completed year, annually thereafter." />
         <Policy label="Tax treatment" value="After-tax / Non-taxable. Leave Allowance does not increase PAYE chargeable income." />
         <Policy label="Payroll treatment" value="CHRiS maps Basic × 12 × 10% to the Leave Allowance payroll column and the separate payslip line." />
@@ -81,13 +81,13 @@ export default function ZermattLeaveAllowance() {
 
     <section style={panelStyle}>
       <div style={toolbar}>
-        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>Shows current end-of-month gross and Basic Salary from regular payroll, with the projected allowance for eligible employees and approved payment history.</div></div>
+        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>Shows current monthly gross salary rates and applicable Basic Salary from regular payroll, with the projected allowance for eligible employees and approved payment history.</div></div>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, branch or employment type" style={searchInput} />
       </div>
       {error && <div style={errorStyle}>{error}</div>}
       {loading ? <div style={loadingStyle}>Loading Leave Allowance register…</div> : <div style={tableWrap}>
         <table style={tableStyle}>
-          <thead><tr>{["Employee","Branch","Employment Type","Policy","Hire Date","Payroll Period","End-of-Month Gross","Monthly Basic","Projected Allowance","Payroll Status","Last Approved Payment","Employee Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
+          <thead><tr>{["Employee","Branch","Employment Type","Policy","Hire Date","Payroll Period","Monthly Gross Rate","Monthly Basic","Projected Allowance","Payroll Status","Last Approved Payment","Employee Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
           <tbody>
             {rows.map((row) => {
               const hasPayroll = Boolean(row.payrollPeriod);

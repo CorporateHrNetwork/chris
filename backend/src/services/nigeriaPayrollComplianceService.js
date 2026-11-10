@@ -5,7 +5,8 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
 const { loadPeriodVariableItems, calculateVariableValue } = require("./zermattVariablePayrollService");
-const { applyZermattLeaveAllowanceToDraft } = require("./zermattLeaveAllowanceService");
+
+const ZERMATT_SPLIT_SALARY_STRUCTURE = { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 };
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
@@ -892,7 +893,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       : null;
     const prorationFactor = standardDays > 0 ? payableDays / standardDays : 0;
     const structuredGross = round2(scheduledMonthlyGross * prorationFactor);
-    const salaryStructure = calculateStructure(structuredGross, splitAllocation ? { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 } : policy.salaryStructure);
+    const salaryStructure = calculateStructure(structuredGross, splitAllocation ? ZERMATT_SPLIT_SALARY_STRUCTURE : policy.salaryStructure);
     const basicSalary = round2(salaryStructure.basic || 0);
     const structuredAllowances = round2(
       Object.entries(salaryStructure)
@@ -1179,6 +1180,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     timeout: 30000,
   });
 
+  const { applyZermattLeaveAllowanceToDraft } = require("./zermattLeaveAllowanceService");
   const leaveAllowance = organization.slug === "zermatt-liquor-limited"
     ? await applyZermattLeaveAllowanceToDraft({
         organizationId,
@@ -1258,6 +1260,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
 }
 
 module.exports = {
+  ZERMATT_SPLIT_SALARY_STRUCTURE,
   calculateAnnualPaye,
   calculateStructure,
   getActivePolicy,
