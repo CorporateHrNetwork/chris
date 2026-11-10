@@ -33,7 +33,7 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
             e."hireDate",e."status",e."employmentType",e."locationId",l."name" AS "locationName"
        FROM "employees" e
        LEFT JOIN "organization_locations" l ON l."id"=e."locationId" AND l."organizationId"=e."organizationId"
-      WHERE e."organizationId"=$1
+      WHERE e."organizationId"=$1 AND e.status IN ('ACTIVE','PROBATION','LEAVE','SUSPENDED')
       ORDER BY e."employeeNumber"`,
     organizationId
   );

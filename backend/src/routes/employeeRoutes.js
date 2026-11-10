@@ -270,10 +270,24 @@ router.get(
       const organizationId =
         req.auth.organizationId;
 
+      const archive = req.query.archive;
+      if (archive !== undefined && archive !== "deactivated" && archive !== "exited") {
+        return res.status(400).json({ message: "Choose the deactivated or exited employee archive." });
+      }
+      const organization = archive ? null : await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { slug: true },
+      });
+      const statuses = archive === "deactivated" ? ["INACTIVE"]
+        : archive === "exited" ? ["TERMINATED", "RESIGNED", "RETIRED"]
+        : organization?.slug === "zermatt-liquor-limited" ? ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"]
+        : null;
+
       const employees =
         await prisma.employee.findMany({
           where: {
             organizationId,
+            ...(statuses && { status: { in: statuses } }),
           },
 
           include: {
