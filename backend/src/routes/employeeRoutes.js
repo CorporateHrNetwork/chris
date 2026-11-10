@@ -32,6 +32,48 @@ const router = express.Router();
 
 router.use(requireAuth);
 
+const { isZermatt, requireEmployeeFinancialInputEditor } = require("../services/zermattHrFinancialAccessService");
+
+router.get("/outstation-voucher/employees", requirePermission("employees.view"), requireEmployeeFinancialInputEditor, async (req, res) => {
+  if (!isZermatt(req)) return res.status(404).json({ message: "Outstation voucher is unavailable." });
+
+  const { organizationId, locationScope, activeLocationId, availableLocations = [] } = req.auth;
+  const allowedLocations = availableLocations.map(location => location.id).filter(Boolean);
+  const scopedLocations = activeLocationId ? allowedLocations.filter(id => id === activeLocationId) : allowedLocations;
+  const where = {
+    organizationId,
+    status: { in: ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"] },
+    ...(locationScope !== "ALL_LOCATIONS" && { locationId: { in: scopedLocations } }),
+  };
+  const employeeNumber = typeof req.query.employeeNumber === "string" ? req.query.employeeNumber.trim() : "";
+  try {
+    if (!employeeNumber) {
+      const employees = await prisma.employee.findMany({
+        where,
+        select: { employeeNumber: true, firstName: true, middleName: true, lastName: true },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }, { employeeNumber: "asc" }],
+      });
+      return res.json({ data: employees });
+    }
+
+    const employee = await prisma.employee.findFirst({
+      where: { ...where, employeeNumber },
+      select: { onboardings: { orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }], take: 1, select: { sectionData: true } } },
+    });
+    if (!employee) return res.status(404).json({ message: "Employee is unavailable in your current scope." });
+    const sections = employee.onboardings[0]?.sectionData;
+    const payment = sections?.["payment-details"] || sections?.paymentDetails || {};
+    return res.json({ data: {
+      bank: String(payment.bankName || "").trim(),
+      accountName: String(payment.accountName || "").trim(),
+      accountNumber: String(payment.accountNumber || "").trim(),
+    } });
+  } catch (error) {
+    console.error("Outstation voucher employee lookup failed:", error);
+    return res.status(500).json({ message: "Unable to load outstation voucher employee information." });
+  }
+});
+
 router.get("/career/levels",requirePermission("employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listEmploymentLevels({organizationId:req.auth.organizationId})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase(),details:error.details})}});
 router.post("/career/levels",requirePermission("employees.update"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:req.body})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
 router.patch("/career/levels/:levelNumber",requirePermission("employees.update"),async(req,res)=>{try{return res.json({status:"success",data:await saveEmploymentLevel({organizationId:req.auth.organizationId,input:{...req.body,levelNumber:req.params.levelNumber}})})}catch(error){return res.status(400).json({status:"error",code:error.message,message:error.message.replaceAll("_"," ").toLowerCase()})}});
