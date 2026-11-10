@@ -26,9 +26,10 @@ const transportLegs = [
 const approvalStages = ["Head HR · Prepared and approved", "Auditor · External review", "General Manager · External approval", "Chief Accountant · External payment processing"];
 const kobo = value => Math.round(Number(value || 0) * 100);
 
+const daysBetween = (start, end) => start && end ? (Date.parse(end) - Date.parse(start)) / 86400000 : NaN;
+
 export default function ZermattOutstationAllowance() {
   const [category, setCategory] = useState("");
-  const [days, setDays] = useState("");
   const [includeTransport, setIncludeTransport] = useState(false);
   const [fields, setFields] = useState({});
   const [employees, setEmployees] = useState([]);
@@ -68,9 +69,11 @@ export default function ZermattOutstationAllowance() {
   }, [employeeNumber]);
 
   const band = bands.find(item => item.id === category);
-  const tripDays = Number(days);
-  const validDays = Number.isInteger(tripDays) && tripDays > 0 && tripDays <= 366;
-  const nights = Number(fields.nights || 0);
+  const tripDays = daysBetween(fields.departure, fields.lastWorkDate) + 1;
+  const tripDatesValid = Boolean(fields.returnDate && fields.lastWorkDate && fields.lastWorkDate < fields.returnDate);
+  const validDays = tripDatesValid && Number.isInteger(tripDays) && tripDays > 0 && tripDays <= 366;
+  const stayDays = daysBetween(fields.departure, fields.returnDate);
+  const nights = Number.isInteger(stayDays) && stayDays >= 0 && stayDays <= 366 ? stayDays : 0;
   const lodging = nights * kobo(fields.nightlyCost);
   const flight = kobo(fields.returnFlight);
   const feeding = validDays && band ? band.dailyRate * tripDays * 100 : 0;
@@ -81,7 +84,7 @@ export default function ZermattOutstationAllowance() {
   const setField = key => event => setFields(current => ({ ...current, [key]: event.target.value }));
   const field = (key, label, type = "text", options = {}) => <label key={key} className="outstation-field">{label}
     <input type={type} value={fields[key] || ""} onChange={setField(key)} style={styles.input} {...options}/>
-    <span className="outstation-print-value">{fields[key] ? (key === "nights" || type !== "number" ? fields[key] : money(Number(fields[key]))) : "—"}</span>
+    <span className="outstation-print-value">{fields[key] ? (type !== "number" ? fields[key] : money(Number(fields[key]))) : "—"}</span>
   </label>;
   const cost = (key, label, options = {}) => field(key, label, "number", { min: 0, max: 1000000000, step: "0.01", ...options });
 
@@ -102,8 +105,9 @@ export default function ZermattOutstationAllowance() {
     <p>Calculate the amount payable to the employee and the full cost of a Zermatt outstation trip.</p>
     <style>{`
       .outstation-field {display:grid;gap:6px;min-width:0}
-      .outstation-field input,.outstation-field select {max-width:100%;box-sizing:border-box}
-      .outstation-fields {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+      .outstation-field input,.outstation-field select {width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+      .outstation-fields {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+      .outstation-fields > * {min-width:0;overflow-wrap:anywhere}
       .outstation-print-value {display:none}
       @media print {
         body:has(.outstation-voucher) * {visibility:hidden}
@@ -116,7 +120,7 @@ export default function ZermattOutstationAllowance() {
         .outstation-print-value {display:block;font-weight:700}
       }
     `}</style>
-    <form className="outstation-voucher" autoComplete="off" onSubmit={event => { event.preventDefault(); if (employee && paymentReady && band && validDays) window.print(); }}>
+    <form className="outstation-voucher" autoComplete="off" onSubmit={event => { event.preventDefault(); if (employee && paymentReady && band && validDays && stayDays <= 366) window.print(); }}>
       <Panel title="Zermatt Liquor Limited · Outstation Allowance Voucher">
         <div className="outstation-fields">
           <label className="outstation-field outstation-screen-only">Search by employee name
@@ -142,8 +146,9 @@ export default function ZermattOutstationAllowance() {
           {paymentField("Employee number", employeeNumber)}
           {station("base", "Base station")}
           {station("destination", "Outstation location")}
-          {field("departure", "Departure date", "date")}
-          {field("returnDate", "Return date", "date", { min: fields.departure || undefined })}
+          {field("departure", "Departure date", "date", { required: true })}
+          {field("lastWorkDate", "Last working date at outstation", "date", { required: true, min: fields.departure || undefined })}
+          {field("returnDate", "Return date", "date", { required: true, min: fields.lastWorkDate || fields.departure || undefined })}
           {field("purpose", "Trip purpose")}
         </div>
       </Panel>
@@ -155,14 +160,14 @@ export default function ZermattOutstationAllowance() {
         </div>
       </Panel>
       {employee && !paymentReady && <p role="status" className="outstation-screen-only">{paymentError || (payment ? "Complete the employee’s bank details in CHRiS before printing the voucher." : "Loading employee payment details…")}</p>}
+      {fields.lastWorkDate && fields.returnDate && !tripDatesValid && <p role="status" className="outstation-screen-only">The last working date must be before the return date.</p>}
       <Panel title="1. Allowance payable">
         <div className="outstation-fields">
           <label className="outstation-field">Employee category <select required value={category} onChange={event => setCategory(event.target.value)} style={styles.input}>
             <option value="">Select a category</option>
             {bands.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select><span className="outstation-print-value">{band?.label || "—"}</span></label>
-          <label className="outstation-field">Outstation days <input required type="number" min="1" max="366" step="1" value={days} onChange={event => setDays(event.target.value)} style={styles.input}/>
-            <span className="outstation-print-value">{days}</span></label>
+          {paymentField("Outstation days (calculated)", validDays ? String(tripDays) : "")}
           {cost("otherAllowance", "Other allowance payable to employee (₦)")}
         </div>
         <p>Feeding {format(feeding)} · Inconvenience {format(feeding)} · Daily rate for each {money(band?.dailyRate || 0)}</p>
@@ -174,7 +179,7 @@ export default function ZermattOutstationAllowance() {
       <Panel title="2. Flight and accommodation costs">
         <div className="outstation-fields">
           {cost("returnFlight", "Return flight ticket cost (₦)")}
-          {cost("nights", "Hotel nights used or planned (count)", { step: "1", max: 366 })}
+          {paymentField("Hotel nights (calculated)", fields.departure && fields.returnDate ? String(nights) : "")}
           {cost("nightlyCost", "Hotel cost per night (₦)")}
         </div>
         <p><strong>Flight and accommodation total {format(flight + lodging)}</strong> · Accommodation {format(lodging)}</p>
@@ -191,7 +196,7 @@ export default function ZermattOutstationAllowance() {
           <thead><tr>{["Stage", "Name", "Signature", "Date / reference"].map(label => <th key={label} style={styles.th}>{label}</th>)}</tr></thead>
           <tbody>{approvalStages.map(label => <tr key={label}><td style={styles.td}>{label}</td><td style={styles.td}></td><td style={styles.td}></td><td style={styles.td}></td></tr>)}</tbody>
         </table></div>
-        <button type="submit" disabled={!employee || !paymentReady} style={styles.primary}>Print / Save Voucher as PDF</button>
+        <button type="submit" disabled={!employee || !paymentReady || !validDays || stayDays > 366} style={styles.primary}>Print / Save Voucher as PDF</button>
       </Panel>
       <details><summary>Daily rate schedule</summary>
         <div style={styles.tableWrap}><table style={{ ...styles.table, minWidth: 600 }}>
