@@ -23,6 +23,10 @@ async function lifecycle(tx, input) {
   } });
 }
 async function listObligations({ organizationId, filters = {}, prismaClient = prisma }) {
+  const approvedRuns = await prismaClient.$queryRaw`
+    SELECT id FROM public.payroll_runs
+    WHERE "organizationId" = ${organizationId} AND status = 'APPROVED'
+  `;
   return prismaClient.statutoryObligation.findMany({
     where: {
       organizationId,
@@ -33,7 +37,7 @@ async function listObligations({ organizationId, filters = {}, prismaClient = pr
       ...(filters.periodMonth ? { periodMonth: Number(filters.periodMonth) } : {}),
       AND: [
         { status: { not: "REVERSED" } },
-        { payrollRunId: { in: (await prismaClient.payrollRun.findMany({ where: { organizationId, status: "APPROVED" }, select: { id: true } })).map(row => row.id) } },
+        { payrollRunId: { in: approvedRuns.map(row => row.id) } },
       ],
     },
     include: { employee: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } } },
