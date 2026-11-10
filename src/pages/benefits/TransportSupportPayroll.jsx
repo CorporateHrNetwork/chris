@@ -16,7 +16,7 @@ const workspaces=[
  ['transport-register','Full Register'],
  ['transport-export','Excel Export Portal'],
 ];
-const moneyColumns=new Set([7,8,9,12,13,14,15,16,18,19]);
+const moneyColumns=new Set(['Gross Salary','End of the Month','Mid-Month','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Overpayment','Net']);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
  const {hash}=useLocation();
@@ -177,7 +177,7 @@ export default function TransportSupportPayroll() {
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
-    <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:col===17?'nowrap':undefined}}>{moneyColumns.has(col)&&value!==''?money(value):value}</td>)}</tr>)}</tbody>
+    <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}</tr>)}</tbody>
    </table></div>
    </section>
   <section aria-label="Payment confirmation and audit history" hidden={workspace!=='transport-run'}>

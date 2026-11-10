@@ -108,7 +108,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
   assert.ok(res.book['External Approvals'].some(row=>String(row[0]).includes('Auditor')));
   assert.equal(exportsRecorded,1);
   assert.ok(res.book.Abuja && res.book.Lagos && res.book['Port Harcourt']);
-  await exportRoute[1]({auth:{organizationId:'org',userId:'hr'},params:{id:'run'},query:{stage:'external',columns:'[2,3,16]'}},res);
+  await exportRoute[1]({auth:{organizationId:'org',userId:'hr'},params:{id:'run'},query:{stage:'external',columns:'[2,3,17]'}},res);
   assert.deepEqual(res.book['Transport Support Pay'][0],['EmployeeNO','FullName','Net']);
   assert.equal(res.book.Reconciliation,undefined,'Selected copies omit unselected reconciliation fields');
   assert.equal(JSON.stringify(res.book).includes('0000000000'),false);

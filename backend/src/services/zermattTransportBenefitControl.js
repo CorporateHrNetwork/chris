@@ -1,5 +1,5 @@
 const {cents,invalid}=require('./zermattMidmonthDomain');
-const HEADERS=['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime/Ph Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO','Extra-Day Overtime Pay','Public Holiday Pay'];
+const HEADERS=['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO','Remark/Notes'];
 function normalizeInputs(input={}) {
  const days=value=>{const n=Number(value||0);if(!Number.isFinite(n)||n<0||!Number.isSafeInteger(Math.round(n*10000))||Math.abs(n*10000-Math.round(n*10000))>0.0001)invalid('Days must be non-negative with at most four decimal places.',400);return n;};
  return {...(input.calculateFromDays===true?{calculateFromDays:true}:{}),extraDays:days(input.extraDays),phDays:days(input.phDays),bonus:cents(input.bonus||0)/100,overtimePhPay:cents(input.overtimePhPay||0)/100,previousShortPayment:input.previousShortPayment==null||input.previousShortPayment===''?null:cents(input.previousShortPayment)/100,previousOverpayment:input.previousOverpayment==null||input.previousOverpayment===''?null:cents(input.previousOverpayment)/100};
@@ -26,7 +26,9 @@ function applyInputs(line,input) {
 function buildRegister(lines) {
  return {headers:HEADERS,rows:lines.map((line,index)=>{
   const s=line.snapshot||{},i=normalizeInputs(s.benefitInputs),bank=s.paymentDetails||{};
-  return [index+1,s.location||'',s.employeeNumber||'',s.employeeName||'',s.position||'',s.department||'',s.employmentType||'',Number(s.fullMonthlyGross||0),Number(s.allocation?.endMonthGross||0),Number(s.currentEntitlement||0),i.extraDays,i.phDays,i.bonus,i.overtimePhPay,Number(s.previousUnpaid||0),Number(s.previousOverpaid||0),Number(line.netPay||0),String(bank.accountNumber||''),s.overtimePay??'',s.publicHolidayPay??''];
+  const notes=[s.eligibilityNote,s.remark].filter(Boolean);
+  if(!i.calculateFromDays&&i.overtimePhPay>0)notes.push(`Previously recorded combined overtime/PH pay: NGN ${i.overtimePhPay.toFixed(2)}`);
+  return [index+1,s.location||'',s.employeeNumber||'',s.employeeName||'',s.position||'',s.department||'',s.employmentType||'',Number(s.fullMonthlyGross||0),Number(s.allocation?.endMonthGross||0),Number(s.currentEntitlement||0),i.extraDays,i.phDays,i.bonus,s.overtimePay??'',s.publicHolidayPay??'',Number(s.previousUnpaid||0),Number(s.previousOverpaid||0),Number(line.netPay||0),String(bank.accountNumber||''),notes.join(' · ')];
  })};
 }
 function benefitTransition(status,action,roles) {
