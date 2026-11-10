@@ -1,6 +1,8 @@
 const { calculateLeaveRequestDays, submitLeaveRequest } = require('./leaveService');
 const { getEmployeePolicyBalance } = require('./leaveBalanceService');
 
+const { getEmployeeLeaveLedger } = require('./employeeLeaveLedgerService');
+
 function fail(code, statusCode = 400) { throw Object.assign(new Error(code), { statusCode }); }
 function dateOnly(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) fail('INVALID_LEAVE_DATES');
@@ -32,8 +34,9 @@ async function options(db, scope, asOfDate) {
   const policies=await db.leavePolicy.findMany({where:{organizationId:scope.organizationId,isActive:true,status:'ACTIVE',effectiveFrom:{lte:date},OR:[{effectiveTo:null},{effectiveTo:{gte:date}}],leaveType:{isActive:true}},include:{leaveType:true},orderBy:{name:'asc'}});
   const rows=[];
   for (const policy of policies) {
-    const balance=await getEmployeePolicyBalance({organizationId:scope.organizationId,employeeNumber:employee.employeeNumber,leavePolicyId:policy.id,leaveYear:year,tx:db});
-    rows.push({id:policy.id,name:policy.name,unit:balance.unit,eligible:eligible(employee,policy),available:Math.max(0,balance.available),pending:balance.committed,used:balance.used,hasEntitlement:balance.hasEntitlement,maximumRequestable:Math.max(0,Math.min(balance.available,balance.maximumRequestable)),requiresAttachment:policy.leaveType.requiresAttachment});
+    const {ledger}=await getEmployeeLeaveLedger({organizationId:scope.organizationId,employeeNumber:employee.employeeNumber,leavePolicyId:policy.id,leaveYear:year,tx:db});
+    const {totalEntitlement,allocatedEntitlement,baseEntitlement,accrued,carryover,adjustments,available,pending,used,maximumRequestable,unit,hasEntitlement}=ledger;
+    rows.push({id:policy.id,name:policy.name,policyVersion:ledger.policyVersion,totalEntitlement,allocatedEntitlement,baseEntitlement,accrued,carryover,adjustments,available,pending,used,maximumRequestable,unit,hasEntitlement,eligible:eligible(employee,policy),requiresAttachment:policy.leaveType.requiresAttachment});
   }
   const requests=await db.leaveRequest.findMany({where:{organizationId:scope.organizationId,employeeId:employee.id},select:{id:true,startDate:true,endDate:true,requestedUnits:true,status:true,reason:true,leavePolicy:{select:{name:true}}},orderBy:{submittedAt:'desc'},take:100});
   return {leaveYear:year,policies:rows,requests};
