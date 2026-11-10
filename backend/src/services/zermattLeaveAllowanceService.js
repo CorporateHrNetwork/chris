@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { ZERMATT_SPLIT_SALARY_STRUCTURE } = require("./nigeriaPayrollComplianceService");
 const { getSettings } = require("./zermattLeaveAllowanceSettingsService");
 
 function calculateStructure(gross, structure) {
@@ -99,8 +100,8 @@ function eligibilityForPeriod({ hireDate, periodStart, periodEnd, employmentType
 
 function calculateLeaveAllowance({ monthlyGross, monthlyBasic, referenceMonthlyGross, scheduledMonthlyGross, salaryStructure }) {
   const gross = round2(monthlyGross ?? referenceMonthlyGross ?? scheduledMonthlyGross ?? 0);
-  const structure = calculateStructure(gross, salaryStructure || {});
-  const basic = round2(monthlyBasic ?? structure.basic ?? 0);
+  const structure = monthlyBasic == null ? calculateStructure(gross, salaryStructure || {}) : null;
+  const basic = round2(monthlyBasic ?? structure?.basic ?? 0);
   const annualBasicSalary = round2(basic * 12);
   const leaveAllowance = round2(annualBasicSalary * LEAVE_ALLOWANCE_RATE / 100);
   return {
@@ -111,8 +112,23 @@ function calculateLeaveAllowance({ monthlyGross, monthlyBasic, referenceMonthlyG
     ratePercent: LEAVE_ALLOWANCE_RATE,
     formula: "Monthly Basic Salary × 12 × 10%",
     salaryBasis: SALARY_BASIS,
-    contractualStructure: structure,
+    contractualStructure: structure ?? { basic },
   };
+}
+
+function calculateLeaveAllowanceFromPayrollLine(line, policy) {
+  const details = jsonValue(line.details);
+  const gross = details.scheduledMonthlyGross;
+  if (gross == null) return null;
+
+  const recordedBasic = details.salaryStructure?.basic;
+  if (recordedBasic != null && details.structuredGross != null && Number(gross) === Number(details.structuredGross)) {
+    return calculateLeaveAllowance({ monthlyGross: gross, monthlyBasic: recordedBasic });
+  }
+  return calculateLeaveAllowance({
+    monthlyGross: gross,
+    salaryStructure: details.fullSalaryAllocation ? ZERMATT_SPLIT_SALARY_STRUCTURE : policy?.salaryStructure,
+  });
 }
 
 async function assertZermatt(client, organizationId) {
@@ -221,11 +237,7 @@ async function applyZermattLeaveAllowanceToDraft({ organizationId, actorUserId, 
         employmentType: row.employmentType,
       });
       const calculation = eligibility.eligible
-        ? calculateLeaveAllowance({
-            monthlyGross: row.grossPay,
-            monthlyBasic: details.salaryStructure?.basic,
-            salaryStructure: policy.salaryStructure,
-          })
+        ? calculateLeaveAllowanceFromPayrollLine(row, policy)
         : null;
       const entitlementKey = eligibility.entitlementYear ? `${row.employeeId}:${eligibility.entitlementYear}` : null;
       const amount = settings.enabled && entitlementKey && !alreadyPaid.has(entitlementKey) ? round2(calculation?.leaveAllowance || 0) : 0;
@@ -355,6 +367,7 @@ module.exports = {
   PAYMENT_TIMING,
   eligibilityForPeriod,
   calculateLeaveAllowance,
+  calculateLeaveAllowanceFromPayrollLine,
   getReferenceSalary,
   applyZermattLeaveAllowanceToDraft,
 };
