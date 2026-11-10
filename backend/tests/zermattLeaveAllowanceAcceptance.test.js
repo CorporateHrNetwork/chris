@@ -76,9 +76,9 @@ test("reference workbook workflow supports template preview and audited import",
     assert.ok(routes.includes(endpoint), `Leave Allowance reference endpoint missing: ${endpoint}`);
   }
 
-  assert.ok(page.includes("Leave Allowance Reference Import"), "Benefits page must expose reference import workspace");
-  assert.ok(page.includes("Validate / Preview"), "Benefits page must require workbook validation before import");
-  assert.ok(page.includes("Confirm Import"), "Benefits page must expose controlled confirm import");
+  assert.ok(!page.includes("Leave Allowance Reference Import"), "Benefits workspace must omit historical reference imports");
+  assert.ok(page.includes("End-of-Month Gross"), "Benefits workspace must display current regular payroll gross");
+  assert.ok(page.includes("Monthly Basic"), "Benefits workspace must display the current payroll calculation basis");
 });
 
 test("Leave Allowance remains after-tax and blank when not due", () => {
