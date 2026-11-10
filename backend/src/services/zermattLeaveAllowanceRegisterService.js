@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-const { ZERMATT_SLUG } = require("./zermattLeaveAllowanceService");
+const { ZERMATT_SLUG, eligibilityForPeriod, calculateLeaveAllowance } = require("./zermattLeaveAllowanceService");
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -37,14 +37,24 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
     organizationId
   );
 
-  const references = await prismaClient.$queryRawUnsafe(
-    `SELECT r."employeeId",r."employeeNumber",r."applicableMonth",r."referenceDecemberYear",
-            r."referenceDecemberGross",r."leaveAllowanceAmount",r."sourceFileName",r."sourceRowNumber"
-       FROM "zermatt_leave_allowance_references" r
-      WHERE r."organizationId"=$1 AND r."status"='ACTIVE'
-      ORDER BY r."applicableMonth" DESC,r."employeeNumber"`,
-    organizationId
+  const month = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos", year: "numeric", month: "2-digit",
+  }).format(new Date()).slice(0, 7);
+  const currentPayroll = await prismaClient.$queryRawUnsafe(
+    `WITH selected_run AS (
+       SELECT pr.id,pp.code,pp."periodStart",pp."periodEnd",pr.status
+       FROM payroll_runs pr JOIN payroll_periods pp
+         ON pp.id=pr."periodId" AND pp."organizationId"=pr."organizationId"
+       WHERE pr."organizationId"=$1 AND to_char(pp."periodEnd",'YYYY-MM')=$2
+         AND pr.status IN ('DRAFT','PENDING_APPROVAL','APPROVED')
+       ORDER BY CASE WHEN pr.status='APPROVED' THEN 0 ELSE 1 END,pr."createdAt" DESC
+       LIMIT 1
+     )
+     SELECT pl."employeeId",pl."grossPay",pl.currency,pl.details,r.code,r.status,r."periodStart",r."periodEnd"
+     FROM selected_run r JOIN payroll_run_lines pl ON pl."runId"=r.id AND pl."organizationId"=$1`,
+    organizationId, month
   );
+  const salaryByEmployee = new Map(currentPayroll.map(row => [row.employeeId, row]));
 
   const payments = await prismaClient.$queryRawUnsafe(
     `SELECT pl."employeeId",pl."employeeNumber",pl."employeeName",pl."currency",pl."details"->'leaveAllowance' AS "leaveAllowance",
@@ -56,20 +66,6 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       ORDER BY pp."periodEnd" DESC`,
     organizationId
   );
-
-  const referenceByEmployee = new Map();
-  for (const reference of references) {
-    const list = referenceByEmployee.get(reference.employeeId) || [];
-    list.push({
-      applicableMonth: dateText(reference.applicableMonth),
-      referenceDecemberYear: Number(reference.referenceDecemberYear),
-      referenceDecemberGross: round2(reference.referenceDecemberGross),
-      leaveAllowanceAmount: round2(reference.leaveAllowanceAmount),
-      sourceFileName: reference.sourceFileName || null,
-      sourceRowNumber: reference.sourceRowNumber || null,
-    });
-    referenceByEmployee.set(reference.employeeId, list);
-  }
 
   const paymentsByEmployee = new Map();
   for (const payment of payments) {
@@ -86,9 +82,16 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
   }
 
   const rows = employees.map((employee) => {
-    const referenceHistory = referenceByEmployee.get(employee.id) || [];
     const paymentHistory = paymentsByEmployee.get(employee.id) || [];
-    const nextReference = referenceHistory[0] || null;
+    const salary = salaryByEmployee.get(employee.id);
+    const basic = jsonValue(salary?.details).salaryStructure?.basic;
+    const eligibility = salary ? eligibilityForPeriod({
+      hireDate: employee.hireDate, employmentType: employee.employmentType,
+      periodStart: salary.periodStart, periodEnd: salary.periodEnd,
+    }) : null;
+    const projection = salary && basic != null ? calculateLeaveAllowance({
+      monthlyGross: salary.grossPay, monthlyBasic: basic,
+    }).leaveAllowance : null;
     return {
       employeeId: employee.id,
       employeeNumber: employee.employeeNumber,
@@ -102,16 +105,15 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       automaticCalculation: true,
       salaryBasis: "CURRENT_MONTH_GROSS_AND_BASIC",
       paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
-      projectedLeaveAllowance: null,
+      monthlyGross: salary ? round2(salary.grossPay) : null,
+      monthlyBasic: basic == null ? null : round2(basic),
+      currency: salary?.currency || "NGN",
+      payrollPeriod: salary?.code || null,
+      payrollStatus: salary?.status || null,
+      projectedLeaveAllowance: eligibility?.eligible ? projection : null,
+      eligibilityStatus: eligibility?.reason || "NO_CURRENT_PAYROLL_LINE",
       formula: "Monthly Basic Salary × 12 × 10%",
-      dueThisMonth: false,
-      amountPayableThisMonth: null,
-      payableSource: "CALCULATED_IN_ANNIVERSARY_MONTH_PAYROLL",
-      referenceDecemberYear: nextReference?.referenceDecemberYear || null,
-      referenceDecemberGross: nextReference?.referenceDecemberGross ?? null,
-      referencedLeaveAllowance: nextReference?.leaveAllowanceAmount ?? null,
-      applicableMonth: nextReference?.applicableMonth || null,
-      referenceHistory,
+      dueThisMonth: Boolean(eligibility?.eligible),
       lastPayment: paymentHistory[0] || null,
       paymentHistory,
     };
@@ -124,17 +126,16 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       automaticCalculation: true,
       salaryBasis: "CURRENT_MONTH_GROSS_AND_BASIC",
       paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
-      rule: "CHRiS calculates current monthly Basic Salary × 12 × 10% for eligible Full-Time employees in their employment anniversary payroll month after one completed year. December references are historical records and do not control payroll.",
+      rule: "CHRiS calculates current monthly Basic Salary × 12 × 10% for eligible Full-Time employees in their employment anniversary payroll month after one completed year.",
       taxable: false,
       payrollTreatment: "AFTER_TAX_NON_TAXABLE",
     },
     rows,
     summary: {
       employees: rows.length,
-      referencesLoaded: references.length,
-      employeesWithReference: rows.filter((row) => row.referenceHistory.length > 0).length,
-      employeesAwaitingReference: rows.filter((row) => row.referenceHistory.length === 0).length,
-      totalReferencedAmount: round2(references.reduce((sum, item) => sum + Number(item.leaveAllowanceAmount || 0), 0)),
+      currentPayrollMonth: month,
+      employeesWithCurrentPayroll: salaryByEmployee.size,
+      employeesDueThisMonth: rows.filter(row => row.dueThisMonth).length,
       totalApprovedPayments: payments.length,
       totalApprovedAmount: round2(payments.reduce((sum, payment) => sum + Number(jsonValue(payment.leaveAllowance, {}).amount || 0), 0)),
     },
