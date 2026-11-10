@@ -21,8 +21,8 @@ export default function EssLeaveApplications(){
   {!data?<p role="status">Loading your leave records…</p>:<>
    <h4>Leave balances {data.leaveYear?'('+data.leaveYear+')':''}</h4>
    {!policies.length?<p>No current leave entitlement is recorded. Contact HR for assistance.</p>:
-    <div className="tablewrap"><table><thead><tr>{['Leave type / policy','Available','Used','Pending','Maximum available','Unit'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>
-     {policies.map(p=><tr key={p.id}><td>{p.name}</td><td>{p.available}</td><td>{p.used}</td><td>{p.pending}</td><td>{p.maximumRequestable}</td><td>{String(p.unit||'').replaceAll('_',' ')}</td></tr>)}
+    <div className="tablewrap"><table><thead><tr>{['Leave type / policy','Allocated','Entitlement','Opening','Accrued','Carryover','Adjustments','Used','Committed / Pending','Available','Maximum Requestable','Unit'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>
+     {policies.map(p=><tr key={p.id}><td>{p.name}</td><td>{p.allocatedEntitlement}</td><td>{p.totalEntitlement}</td><td>{p.baseEntitlement}</td><td>{p.accrued}</td><td>{p.carryover}</td><td>{p.adjustments}</td><td>{p.used}</td><td>{p.pending}</td><td>{p.available}</td><td>{p.maximumRequestable}</td><td>{String(p.unit||'').replaceAll('_',' ')}</td></tr>)}
     </tbody></table></div>}
    <h4>My recorded leave history</h4>
    {!requests.length?<p>No leave records are available.</p>:<div className="tablewrap"><table><thead><tr>{['Policy','Start','End','Days / Units','Status'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>
