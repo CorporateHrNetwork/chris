@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiRequest } from "../services/api";
 import EmployeeStatusBadge from "../components/common/StatusBadge";
 
@@ -7,6 +7,10 @@ const nameOf = (employee) => [employee.firstName, employee.middleName, employee.
 const valueOf = (value) => value?.name || "Not assigned";
 
 export default function DeactivatedEmployees() {
+  const [params] = useSearchParams();
+  const exited = params.get("archive") === "exited";
+  const archive = exited ? "exited" : "deactivated";
+  const title = exited ? "Exited Employees Archive" : "Deactivated Employees Archive";
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState("");
   const [branch, setBranch] = useState("");
@@ -16,14 +20,14 @@ export default function DeactivatedEmployees() {
     try {
       setLoading(true);
       setError("");
-      const result = await apiRequest("/api/employees");
-      setEmployees((result.data || []).filter((employee) => String(employee.status || "").toUpperCase() === "INACTIVE"));
+      const result = await apiRequest(`/api/employees?archive=${archive}`);
+      setEmployees(result.data || []);
     } catch (requestError) {
-      setError(requestError.message || "Unable to load deactivated employees.");
+      setError(requestError.message || "Unable to load the employee archive.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [archive]);
   useEffect(() => {
     load();
     window.addEventListener("focus", load);
@@ -36,19 +40,19 @@ export default function DeactivatedEmployees() {
   }, [employees, search, branch]);
   return <main style={pageStyle}>
     <header style={headerStyle}>
-      <div><p style={{ margin: "0 0 6px", color: "var(--chris-dashboard-muted, #9aac9f)" }}>PEOPLE MANAGEMENT</p><h1 style={{ margin: 0 }}>Deactivated Employees</h1><p>Inactive employee records with retained profiles and employment history.</p></div>
-      <div style={actionsStyle}><Link style={buttonStyle} to="/employees/directory">Employee Directory</Link><Link style={buttonStyle} to="/employees/exits">Exit Register</Link><button style={buttonStyle} onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button></div>
+      <div><p style={{ margin: "0 0 6px", color: "var(--chris-dashboard-muted, #9aac9f)" }}>PEOPLE MANAGEMENT</p><h1 style={{ margin: 0 }}>{title}</h1><p>Archived profiles and employment history.</p></div>
+      <div style={actionsStyle}><Link style={buttonStyle} to="/employees/directory">Employee Directory</Link><Link style={buttonStyle} to={exited ? "/employees/deactivated" : "/employees/deactivated?archive=exited"}>{exited ? "Deactivated Employees Archive" : "Exited Employees Archive"}</Link><Link style={buttonStyle} to="/employees/exits">Exit Register</Link><button style={buttonStyle} onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button></div>
     </header>
     {error && <p role="alert">{error}</p>}
     <section style={panelStyle}>
-      <div style={headerStyle}><div><strong>{loading ? "…" : employees.length} deactivated employee{employees.length === 1 ? "" : "s"}</strong><p>Deactivated records appear here automatically. Open a profile to review lifecycle details or use authorized HR controls.</p></div></div>
+      <div style={headerStyle}><div><strong>{loading ? "…" : employees.length} {archive} employee{employees.length === 1 ? "" : "s"}</strong><p>Employees appear here automatically when their status changes. Open a profile to review lifecycle details or use authorized HR controls.</p></div></div>
       <div style={actionsStyle}>
-        <input aria-label="Search deactivated employees" placeholder="Search employee number, name, department or designation" value={search} onChange={(event) => setSearch(event.target.value)} style={{ ...inputStyle, flex: "1 1 300px" }} />
+        <input aria-label="Search employee archive" placeholder="Search employee number, name, department or designation" value={search} onChange={(event) => setSearch(event.target.value)} style={{ ...inputStyle, flex: "1 1 300px" }} />
         <select aria-label="Filter by branch" style={inputStyle} value={branch} onChange={(event) => setBranch(event.target.value)}><option value="">All available branches</option>{branches.map((name) => <option key={name} value={name}>{name}</option>)}</select>
       </div>
       <p aria-live="polite">{loading ? "Loading records…" : `${filtered.length} record(s) shown`}</p>
       <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 850 }}><thead><tr>{["Employee No", "Name", "Branch", "Department", "Designation", "Employment Type", "Status", "Profile"].map((heading) => <th key={heading} style={cellStyle}>{heading}</th>)}</tr></thead><tbody>
-        {!loading && !filtered.length && <tr><td colSpan={8} style={cellStyle}>No deactivated employees match this view.</td></tr>}
+        {!loading && !filtered.length && <tr><td colSpan={8} style={cellStyle}>No archived employees match this view.</td></tr>}
         {filtered.map((employee) => <tr key={employee.id || employee.employeeNumber}><td style={cellStyle}>{employee.employeeNumber}</td><td style={cellStyle}>{nameOf(employee)}</td><td style={cellStyle}>{valueOf(employee.location)}</td><td style={cellStyle}>{valueOf(employee.department)}</td><td style={cellStyle}>{valueOf(employee.designation)}</td><td style={cellStyle}>{employee.employmentType || "—"}</td><td style={cellStyle}><EmployeeStatusBadge status={employee.status} /></td><td style={cellStyle}><Link style={buttonStyle} to={`/employees/${encodeURIComponent(employee.employeeNumber)}`}>View Profile</Link></td></tr>)}
       </tbody></table></div>
     </section>
