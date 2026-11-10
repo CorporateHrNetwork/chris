@@ -87,7 +87,49 @@ export default function TransportSupportPayroll() {
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const externalReady=detail&&['APPROVED','PAID'].includes(detail.run.status);
  const editable=detail&&['DRAFT','REJECTED'].includes(detail.run.status);
- return <section style={{padding:24,maxWidth:1700,minWidth:0,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
+ return <section className="chris-transport-payroll" style={{padding:24,maxWidth:1700,minWidth:0,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
+  <style>{`
+   .chris-transport-payroll button,
+   .chris-transport-payroll input[type="file"]::file-selector-button {
+    border:1px solid var(--chris-border-gold);
+    border-radius:9px;
+    padding:9px 12px;
+    background:var(--chris-input-bg);
+    color:var(--chris-text-main);
+    font:inherit;
+    font-weight:700;
+    cursor:pointer;
+   }
+   .chris-transport-payroll button[aria-pressed="true"],
+   .chris-transport-payroll button.transport-primary {
+    background:linear-gradient(135deg,var(--chris-gold),var(--chris-gold-deep));
+    color:#07110c;
+   }
+   .chris-transport-payroll button:disabled,
+   .chris-transport-payroll input[type="file"]:disabled::file-selector-button {
+    opacity:.55;
+    cursor:not-allowed;
+   }
+   .chris-transport-payroll button:focus-visible,
+   .chris-transport-payroll input[type="file"]:focus-visible {
+    outline:2px solid var(--chris-gold);
+    outline-offset:2px;
+   }
+   .chris-transport-upload-controls {
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
+   }
+   .chris-transport-upload-controls label {
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+    min-width:0;
+   }
+   .chris-transport-upload-controls input {max-width:100%;}
+  `}</style>
   <h1>Transport Support Pay · Payroll Execution Workspace</h1>
   <nav aria-label="Transport Support workspace sections" style={{display:'flex',flexWrap:'wrap',gap:16,marginBlock:12}}>
    {workspaces.map(([id,label])=><button key={id} type="button" onClick={()=>showWorkspace(id)} aria-pressed={workspace===id}>{label}</button>)}
@@ -105,7 +147,7 @@ export default function TransportSupportPayroll() {
    <button disabled={busy} onClick={()=>act(async()=>{await load();await loadReadiness();})}>Refresh</button>
    {head&&<><label>Benefit month <input type="month" value={periodMonth} onChange={e=>setMonth(e.target.value)}/></label>
     {!state?.settings?.enabled&&<button disabled={busy||!ready||!periodMonth||!basisReadiness?.canActivate} onClick={()=>act(async()=>{await apiRequest(`${api}/activate`,{method:'POST',body:{periodMonth}});await load();setMessage('Transport Support Benefits enabled. Regular salary rates and payroll were not changed.');})}>Enable Transport Support Benefits for this month</button>}
-    <button disabled={busy||!!editor||!ready||!periodMonth||!state?.settings?.enabled} onClick={()=>act(async()=>{const r=await apiRequest(`${api}/runs`,{method:'POST',body:{periodMonth}});await load();await open(r.data.runId);})}>Prepare Monthly Draft</button>
+    <button className="transport-primary" disabled={busy||!!editor||!ready||!periodMonth||!state?.settings?.enabled} onClick={()=>act(async()=>{const r=await apiRequest(`${api}/runs`,{method:'POST',body:{periodMonth}});await load();await open(r.data.runId);})}>Prepare Monthly Draft</button>
    </>}
   </div>
 
@@ -134,29 +176,31 @@ export default function TransportSupportPayroll() {
      {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
      <p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Prior-month amounts default to the transport ledger. Enter a corrected total, including zero, with a reason; leave blank to use the ledger. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
      <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
-     <button disabled={busy||!ready||!notes.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
+     <button className="transport-primary" disabled={busy||!ready||!notes.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
     </fieldset>}
    </>}
    {editable&&!editor&&<fieldset key={detail.run.id} style={workflowPanel}>
     <legend>Bulk Upload Overtime &amp; Public Holiday Days</legend>
     <p>Use the template for this Transport Support draft. Enter each employee's total days worked. Blank cells keep existing day counts. Enter zero to clear a count. Preview recalculates both worked-day amounts and shows the new Net before import.</p>
+    <div className="chris-transport-upload-controls">
     <button type="button" disabled={busy} onClick={downloadWorkedTemplate}>Download Worked-Day Template (CSV)</button>
     <label>Worked-day file <input type="file" accept=".csv,.xlsx,.xls" disabled={busy} onChange={e=>{setWorkedFile(e.target.files?.[0]||null);setWorkedPreview(null);}}/></label>
     <button type="button" disabled={busy||!ready||!workedFile} onClick={()=>act(()=>uploadWorkedDays(false))}>Preview Worked Days</button>
+    </div>
     {workedPreview&&<>
      <p>{workedPreview.rows.length} employee(s) ready to import.</p>
      <div style={{overflowX:'auto'}}><table><thead><tr>{['Employee No','Employee','Extra days','Public holiday days','Overtime pay','Public holiday pay','Previous Net','New Net'].map(label=><th key={label}>{label}</th>)}</tr></thead>
      <tbody>{workedPreview.rows.map(row=><tr key={row.employeeNumber}>{[row.employeeNumber,row.employeeName,row.extraDays,row.phDays,money(row.overtimePay),money(row.publicHolidayPay),money(row.previousNet),money(row.netPay)].map((value,index)=><td key={index}>{value}</td>)}</tr>)}</tbody></table></div>
      <label>Import reason <textarea value={workedReason} maxLength={1000} disabled={busy} onChange={e=>setWorkedReason(e.target.value)}/></label>
-     <button type="button" disabled={busy||!ready||!workedReason.trim()} onClick={()=>act(()=>uploadWorkedDays(true))}>Confirm Worked-Day Import</button>
+     <button className="transport-primary" type="button" disabled={busy||!ready||!workedReason.trim()} onClick={()=>act(()=>uploadWorkedDays(true))}>Confirm Worked-Day Import</button>
     </>}
    </fieldset>}
    {editor&&<p role="status">Save or cancel input changes before approving or exporting.</p>}
    </section>}
    {(head||canPay)&&<section aria-label="Approval or payment notes" style={workflowPanel}><h3>2. {canPay?'Payment Confirmation':'Head HR Approval'}</h3>
    <label>{canPay?'Payment batch reference':'Approval / return reason (required)'} <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
-   {(actions[detail.run.status]||[]).filter(a=>roles.includes(a[2])).map(a=><button key={a[0]} disabled={busy||!!editor||!ready||!notes.trim()} onClick={()=>act(()=>action(a[0]))}>{a[1]}</button>)}
+   {(actions[detail.run.status]||[]).filter(a=>roles.includes(a[2])).map(a=><button className="transport-primary" key={a[0]} disabled={busy||!!editor||!ready||!notes.trim()} onClick={()=>act(()=>action(a[0]))}>{a[1]}</button>)}
    </section>}
   </>}
   </section>
@@ -167,7 +211,7 @@ export default function TransportSupportPayroll() {
     <p>The master roll is ordered Abuja, Lagos, Port Harcourt. Each branch also has its own sheet. Only checked columns are included in register sheets.</p>
    </fieldset>
    <button disabled={busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Review Register (Excel)</button>
-    <button disabled={!externalReady||busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Approved Register (Excel)</button>
+    <button className="transport-primary" disabled={!externalReady||busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Approved Register (Excel)</button>
    {!externalReady&&<p>Approve this run to enable the external register export.</p>}</>}
    </section>
    <section id="transport-register" aria-label="Full Register" hidden={workspace!=='transport-register'}>
