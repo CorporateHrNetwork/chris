@@ -125,16 +125,20 @@ export default function ZermattOutstationAllowance() {
           <label className="outstation-field outstation-screen-only">Search by employee number
             <input type="search" value={numberSearch} onChange={event => { setNumberSearch(event.target.value); setNameSearch(""); }} style={styles.input}/>
           </label>
-          <label className="outstation-field">Employee name
-            <select required value={employeeNumber} onChange={event => {
-              setPaymentResult(null);
-              setEmployeeNumber(event.target.value);
-            }} style={styles.input}>
-              <option value="">{directoryStatus || (matches.length ? "Select an employee" : "No matching employees")}</option>
-              {employee && !matches.includes(employee) && <option value={employeeNumber}>{employeeName(employee)} · {employeeNumber}</option>}
-              {matches.map(item => <option key={item.employeeNumber} value={item.employeeNumber}>{employeeName(item)} · {item.employeeNumber}</option>)}
-            </select><span className="outstation-print-value">{employee ? employeeName(employee) : "—"}</span>
-          </label>
+          {(nameSearch.trim() || numberSearch.trim()) && <div className="outstation-field outstation-screen-only" style={{ gridColumn: "1 / -1" }}>
+            <div role="status">{directoryStatus || (matches.length ? `${matches.length} matching employee(s)` : "No matching employees")}</div>
+            <div style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+              {matches.map(item => <button type="button" key={item.employeeNumber} style={{ ...styles.input, textAlign: "left", cursor: "pointer" }} onClick={() => {
+                if (item.employeeNumber !== employeeNumber) {
+                  setPaymentResult(null);
+                  setEmployeeNumber(item.employeeNumber);
+                }
+                setNameSearch("");
+                setNumberSearch("");
+              }}>{employeeName(item)} · {item.employeeNumber}</button>)}
+            </div>
+          </div>}
+          {paymentField("Employee name", employee ? employeeName(employee) : "")}
           {paymentField("Employee number", employeeNumber)}
           {station("base", "Base station")}
           {station("destination", "Outstation location")}
@@ -187,7 +191,7 @@ export default function ZermattOutstationAllowance() {
           <thead><tr>{["Stage", "Name", "Signature", "Date / reference"].map(label => <th key={label} style={styles.th}>{label}</th>)}</tr></thead>
           <tbody>{approvalStages.map(label => <tr key={label}><td style={styles.td}>{label}</td><td style={styles.td}></td><td style={styles.td}></td><td style={styles.td}></td></tr>)}</tbody>
         </table></div>
-        <button type="submit" disabled={!paymentReady} style={styles.primary}>Print / Save Voucher as PDF</button>
+        <button type="submit" disabled={!employee || !paymentReady} style={styles.primary}>Print / Save Voucher as PDF</button>
       </Panel>
       <details><summary>Daily rate schedule</summary>
         <div style={styles.tableWrap}><table style={{ ...styles.table, minWidth: 600 }}>
