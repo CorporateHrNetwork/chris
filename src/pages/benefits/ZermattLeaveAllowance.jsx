@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
+import { apiRequest } from "../../services/api";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -22,17 +22,6 @@ export default function ZermattLeaveAllowance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [referenceFile, setReferenceFile] = useState(null);
-  const [referencePreview, setReferencePreview] = useState(null);
-  const [busy, setBusy] = useState("");
-  const [message, setMessage] = useState("");
-
-  const loadRegister = async () => {
-    const response = await apiRequest("/api/benefits/leave-allowance");
-    setData(response?.data || null);
-    return response?.data || null;
-  };
-
   useEffect(() => {
     let active = true;
     (async () => {
@@ -49,57 +38,6 @@ export default function ZermattLeaveAllowance() {
     return () => { active = false; };
   }, []);
 
-  const downloadReferenceTemplate = async () => {
-    try {
-      setBusy("download-reference");
-      setError("");
-      const file = await apiDownload("/api/benefits/leave-allowance/reference-template");
-      saveDownloadedBlob(file);
-    } catch (err) {
-      setError(err?.message || "Unable to download the Leave Allowance reference template.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const previewReference = async () => {
-    if (!referenceFile) return;
-    try {
-      setBusy("preview-reference");
-      setError("");
-      setMessage("");
-      const body = new FormData();
-      body.append("file", referenceFile);
-      const response = await apiRequest("/api/benefits/leave-allowance/reference-preview", { method: "POST", body });
-      setReferencePreview(response?.data || null);
-    } catch (err) {
-      setReferencePreview(null);
-      setError(err?.message || "Unable to validate the Leave Allowance reference workbook.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const importReference = async () => {
-    if (!referenceFile || !referencePreview?.importAllowed) return;
-    try {
-      setBusy("import-reference");
-      setError("");
-      setMessage("");
-      const body = new FormData();
-      body.append("file", referenceFile);
-      const response = await apiRequest("/api/benefits/leave-allowance/reference-import", { method: "POST", body });
-      setMessage(response?.message || "Leave Allowance reference imported.");
-      setReferencePreview(null);
-      setReferenceFile(null);
-      await loadRegister();
-    } catch (err) {
-      setError(err?.message || "Unable to import the Leave Allowance reference workbook.");
-    } finally {
-      setBusy("");
-    }
-  };
-
   const rows = useMemo(() => {
     const source = data?.rows || [];
     const needle = query.trim().toLowerCase();
@@ -108,7 +46,6 @@ export default function ZermattLeaveAllowance() {
       .filter(Boolean).join(" ").toLowerCase().includes(needle));
   }, [data, query]);
 
-  const policy = data?.policy || {};
   const summary = data?.summary || {};
   const settings = data?.settings || {};
 
@@ -122,21 +59,19 @@ export default function ZermattLeaveAllowance() {
     <p style={leadStyle}>CHRiS calculates current monthly Basic Salary × 12 × 10% for eligible Full-Time employees whose employment anniversary falls in the payroll month, after one completed year of service. Each monthly payroll applies the rule automatically. Exit settlements use the same annual allowance, prorated by completed service months ÷ 12.</p>
 
     <div style={cards}>
-      <Metric label="Payroll Status" value={loading ? "—" : settings.enabled === false ? "Paused" : "Enabled"} />
-      <Metric label="Policy Mode" value="Reference Import" />
-      <Metric label="References Loaded" value={loading ? "—" : summary.referencesLoaded ?? 0} />
-      <Metric label="Employees Referenced" value={loading ? "—" : summary.employeesWithReference ?? 0} />
-      <Metric label="Awaiting Reference" value={loading ? "—" : summary.employeesAwaitingReference ?? 0} />
-      <Metric label="Referenced Amount" value={loading ? "—" : money(summary.totalReferencedAmount || 0)} />
+      <Metric label="Payroll Status" value={loading || !data ? "—" : settings.enabled === false ? "Paused" : "Enabled"} />
+      <Metric label="Reference Policy" value="Current regular payroll" />
+      <Metric label="Payroll Month" value={monthName(summary.currentPayrollMonth)} />
+      <Metric label="Employees With Payroll" value={loading ? "—" : summary.employeesWithCurrentPayroll ?? "—"} />
+      <Metric label="Due This Month" value={loading ? "—" : summary.employeesDueThisMonth ?? "—"} />
+      <Metric label="Approved Payments" value={loading ? "—" : summary.totalApprovedPayments ?? "—"} />
     </div>
-
-    {!loading && <div style={payableNote}>The Leave Allowance column is calculated automatically in eligible anniversary-month payroll. Historical December reference imports are not required.</div>}
 
     <section style={panelStyle}>
       <h2 style={panelTitle}>Zermatt Leave Allowance Policy</h2>
       <div style={policyGrid}>
         <Policy label="Policy mode" value="Current monthly Basic Salary × 12 × 10%, calculated automatically." />
-        <Policy label="Salary basis" value="Current payroll Basic Salary under the approved salary structure." />
+        <Policy label="Salary basis" value="Current end-of-month gross from regular payroll and its recorded Basic Salary under the approved structure." />
         <Policy label="Payment timing" value="Payable in the employment anniversary payroll month after one completed year, annually thereafter." />
         <Policy label="Tax treatment" value="After-tax / Non-taxable. Leave Allowance does not increase PAYE chargeable income." />
         <Policy label="Payroll treatment" value="CHRiS maps Basic × 12 × 10% to the Leave Allowance payroll column and the separate payslip line." />
@@ -146,60 +81,28 @@ export default function ZermattLeaveAllowance() {
 
     <section style={panelStyle}>
       <div style={toolbar}>
-        <div>
-          <h2 style={{ ...panelTitle, marginBottom: 4 }}>Leave Allowance Reference Import</h2>
-          <div style={subtle}>Optional historical reference import containing Employee Number, Reference December Year and Last December Gross Salary. These references do not control current payroll. Validate the workbook before confirming import.</div>
-        </div>
-      </div>
-      <div style={importControls}>
-        <button type="button" style={settingsButton} disabled={busy === "download-reference"} onClick={downloadReferenceTemplate}>{busy === "download-reference" ? "Preparing…" : "Download Template"}</button>
-        <input type="file" accept=".xlsx,.xls" onChange={(event) => { setReferenceFile(event.target.files?.[0] || null); setReferencePreview(null); setMessage(""); }} />
-        <button type="button" style={settingsButton} disabled={!referenceFile || busy === "preview-reference"} onClick={previewReference}>{busy === "preview-reference" ? "Validating…" : "Validate / Preview"}</button>
-        <button type="button" style={importButton} disabled={!referenceFile || !referencePreview?.importAllowed || busy === "import-reference"} onClick={importReference}>{busy === "import-reference" ? "Importing…" : "Confirm Import"}</button>
-      </div>
-      {referencePreview && <div style={previewSummary}><strong>{referencePreview.totalRows} rows</strong> · {referencePreview.validRows} valid · {referencePreview.invalidRows} errors · {referencePreview.warningRows} warnings</div>}
-      {referencePreview?.rows?.length > 0 && <div style={tableWrap}>
-        <table style={{ ...tableStyle, minWidth: 1200 }}>
-          <thead><tr>{["Row","Employee","Applicable Month","Reference December","Last December Gross","Derived December Basic","Calculated Leave Allowance","Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
-          <tbody>{referencePreview.rows.slice(0,100).map((row) => <tr key={row.rowNumber}>
-            <td style={tdStyle}>{row.rowNumber}</td>
-            <td style={tdStrong}>{row.employeeNumber}{row.employeeName ? " — " + row.employeeName : ""}</td>
-            <td style={tdStyle}>{row.applicableMonth || "—"}</td>
-            <td style={tdStyle}>{row.referenceDecemberYear || "—"}</td>
-            <td style={tdStyle}>{row.referenceDecemberGross == null ? "—" : money(row.referenceDecemberGross)}</td>
-            <td style={tdStyle}>{row.referenceDecemberBasic == null ? "—" : money(row.referenceDecemberBasic)}</td>
-            <td style={tdStrong}>{row.leaveAllowanceAmount == null ? "—" : money(row.leaveAllowanceAmount)}</td>
-            <td style={tdStyle}>{row.valid ? <span style={eligibleBadge}>VALID</span> : <><span style={ineligibleBadge}>ERROR</span><div style={tiny}>{(row.errors || []).join(" ")}</div></>}{row.warnings?.length ? <div style={tiny}>{row.warnings.join(" ")}</div> : null}</td>
-          </tr>)}</tbody>
-        </table>
-      </div>}
-      {message && <div style={successStyle}>{message}</div>}
-    </section>
-
-    <section style={panelStyle}>
-      <div style={toolbar}>
-        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>This register shows historical December references and approved payments. Current allowances are calculated in each eligible anniversary-month payroll.</div></div>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, branch, type or reference" style={searchInput} />
+        <div><h2 style={{ ...panelTitle, marginBottom: 4 }}>Employee Leave Allowance Register</h2><div style={subtle}>Shows current end-of-month gross and Basic Salary from regular payroll, with the projected allowance for eligible employees and approved payment history.</div></div>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employee, branch or employment type" style={searchInput} />
       </div>
       {error && <div style={errorStyle}>{error}</div>}
       {loading ? <div style={loadingStyle}>Loading Leave Allowance register…</div> : <div style={tableWrap}>
         <table style={tableStyle}>
-          <thead><tr>{["Employee","Branch","Employment Type","Policy","Hire Date","Applicable Month","Reference December","Last December Gross","Referenced Allowance","Source","Last Approved Payment","Employee Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
+          <thead><tr>{["Employee","Branch","Employment Type","Policy","Hire Date","Payroll Period","End-of-Month Gross","Monthly Basic","Projected Allowance","Payroll Status","Last Approved Payment","Employee Status"].map((heading) => <th key={heading} style={thStyle}>{heading}</th>)}</tr></thead>
           <tbody>
             {rows.map((row) => {
-              const hasReference = Boolean(row.applicableMonth);
+              const hasPayroll = Boolean(row.payrollPeriod);
               return <tr key={row.employeeId}>
                 <td style={tdStrong}>{row.employeeNumber} — {row.employeeName}</td>
                 <td style={tdStyle}>{row.locationName || "—"}</td>
                 <td style={tdStyle}>{row.employmentType || "—"}</td>
-                <td style={tdStyle}><span style={hasReference ? eligibleBadge : badge}>{hasReference ? "Referenced" : "Awaiting Reference"}</span></td>
+                <td style={tdStyle}><span style={row.dueThisMonth ? eligibleBadge : badge}>{row.dueThisMonth ? "Due This Month" : hasPayroll ? "Not Due" : "No Current Payroll"}</span></td>
                 <td style={tdStyle}>{row.hireDate || "—"}</td>
-                <td style={tdStyle}>{row.applicableMonth || "—"}</td>
-                <td style={tdStyle}>{row.referenceDecemberYear || "—"}</td>
-                <td style={tdStyle}>{row.referenceDecemberGross == null ? "" : money(row.referenceDecemberGross, row.currency)}</td>
-                <td style={tdStrong}>{row.referencedLeaveAllowance == null ? "" : money(row.referencedLeaveAllowance, row.currency)}</td>
-                <td style={tdStyle}>{String(row.payableSource || "AWAITING_REFERENCE").replaceAll("_", " ")}</td>
-                <td style={tdStyle}>{row.lastPayment ? row.lastPayment.periodCode + " · " + money(row.lastPayment.amount, row.currency) : "Not yet paid"}</td>
+                <td style={tdStyle}>{row.payrollPeriod || "—"}</td>
+                <td style={tdStyle}>{row.monthlyGross == null ? "—" : money(row.monthlyGross, row.currency)}</td>
+                <td style={tdStyle}>{row.monthlyBasic == null ? "—" : money(row.monthlyBasic, row.currency)}</td>
+                <td style={tdStrong}>{row.projectedLeaveAllowance == null ? "—" : money(row.projectedLeaveAllowance, row.currency)}</td>
+                <td style={tdStyle}>{String(row.payrollStatus || "—").replaceAll("_", " ")}</td>
+                <td style={tdStyle}>{row.lastPayment ? row.lastPayment.periodCode + " · " + money(row.lastPayment.amount, row.lastPayment.currency) : "Not yet paid"}</td>
                 <td style={tdStyle}><span style={badge}>{String(row.status || "—").replaceAll("_", " ")}</span></td>
               </tr>;
             })}

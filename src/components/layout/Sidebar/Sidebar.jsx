@@ -136,7 +136,7 @@ function Sidebar() {
     if (!childPath) return false;
     const queryIndex = childPath.indexOf("?");
     if (queryIndex !== -1) return location.pathname === childPath.slice(0, queryIndex) && location.search === childPath.slice(queryIndex);
-    if ((childPath === "/payroll" || childPath === "/reports" || childPath === "/settings") && location.pathname === childPath && location.search) return false;
+    if ((childPath === "/benefits" || childPath === "/payroll" || childPath === "/reports" || childPath === "/settings") && location.pathname === childPath && location.search) return false;
     return routerActive;
   };
 
