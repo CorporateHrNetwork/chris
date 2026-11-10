@@ -57,7 +57,7 @@ const MENU_GROUPS = [
     {label:"Compensation Dashboard",path:"/compensation"},{label:"Salary Structure",path:"/compensation/salary-structure"},{label:"Grades & Levels",path:"/compensation/grades-levels"},{label:"Salary Bands",path:"/compensation/salary-bands"},{label:"Compensation Reviews",path:"/compensation/reviews"},{label:"Salary Adjustments",path:"/compensation/adjustments"},{label:"Promotions",path:"/compensation/promotions"},{label:"Bonuses & Incentives",path:"/compensation/bonuses-incentives"},{label:"Total Rewards",path:"/compensation/total-rewards"}
   ]},
   { id:"benefits", label:"Benefits", icon:<FaGift/>, adminOnly:true, children:[
-    {label:"Benefits Overview",path:"/benefits"},{label:"Pension",path:"/benefits/pension"},{label:"Gratuity",path:"/benefits/gratuity"},{label:"Health Insurance",path:"/benefits/health-insurance"},{label:"Life Insurance",path:"/benefits/life-insurance"},{label:"Medical Benefits",path:"/benefits/medical"},{label:"Housing / Rent",path:"/benefits/housing"},{label:"Transport Support Pay",path:"/benefits/transport-support"},{label:"Meal Benefits",path:"/benefits/meals"},{label:"Other Benefits",path:"/benefits/other"},{label:"Benefit Enrolments",path:"/benefits/enrolments"}
+    {label:"Benefits Overview",path:"/benefits"},{label:"Annual Leave Allowance",path:"/benefits?workspace=leave-allowance",zermattOnly:true},{label:"Outstation Allowance",path:"/benefits?workspace=outstation-allowance",zermattOnly:true},{label:"Pension",path:"/benefits/pension"},{label:"Gratuity",path:"/benefits/gratuity"},{label:"Health Insurance",path:"/benefits/health-insurance"},{label:"Life Insurance",path:"/benefits/life-insurance"},{label:"Medical Benefits",path:"/benefits/medical"},{label:"Housing / Rent",path:"/benefits/housing"},{label:"Transport Support Pay",path:"/benefits/transport-support"},{label:"Meal Benefits",path:"/benefits/meals"},{label:"Other Benefits",path:"/benefits/other"},{label:"Benefit Enrolments",path:"/benefits/enrolments"}
   ]},
   { id:"statutories", label:"Statutories", icon:<FaShieldAlt/>, adminOnly:true, children:[
     {label:"Statutory Dashboard",path:"/statutories"},{label:"PAYE / Tax",path:"/statutories/paye-tax"},{label:"Pension Compliance",path:"/statutories/pension-compliance"},{label:"NHIA",path:"/statutories/nhia"},{label:"NSITF",path:"/statutories/nsitf"},{label:"ITF",path:"/statutories/itf"},{label:"Remittances",path:"/statutories/remittances"},{label:"Statutory Reports",path:"/statutories/reports"}
@@ -101,6 +101,7 @@ function Sidebar() {
   const canViewSettings = !authorizationLoading && hasPermission("settings.view");
   const notesAccess = hasPayrollNotesAccess(profile);
   const isPlatformTenant = profile?.organization?.slug === PLATFORM_ORGANIZATION_SLUG;
+  const isZermatt = profile?.organization?.slug === "zermatt-liquor-limited";
   const visibleGroups = useMemo(() => {
     if (authorizationLoading) return [];
     return MENU_GROUPS.filter((group) => {
@@ -111,8 +112,8 @@ function Sidebar() {
       if (group.adminOnly) return canViewSettings;
       if (group.permission) return hasPermission(group.permission);
       return false;
-    }).map((group) => ({ ...group, children: group.children?.filter((child) => child.notesOnly ? notesAccess : (group.id === "payroll" && !hasPermission("payroll.view") ? false : !child.permission || hasPermission(child.permission))) }));
-  }, [authorizationLoading, canViewSettings, hasPermission, isPlatformTenant, notesAccess]);
+    }).map((group) => ({ ...group, children: group.children?.filter((child) => (!child.zermattOnly || isZermatt) && (child.notesOnly ? notesAccess : (group.id === "payroll" && !hasPermission("payroll.view") ? false : !child.permission || hasPermission(child.permission)))) }));
+  }, [authorizationLoading, canViewSettings, hasPermission, isPlatformTenant, isZermatt, notesAccess]);
 
   const pathMatches = (childPath, includeQuery = false) => {
     if (!childPath) return false;

@@ -18,14 +18,19 @@ import {
   QuickActionCard,
   RecentActivityList,
 } from "../components/dashboard";
+import useAuthorization from "../hooks/useAuthorization";
+import ZermattOutstationAllowance from "./benefits/ZermattOutstationAllowance";
 import ZermattLeaveAllowance from "./benefits/ZermattLeaveAllowance";
 import ZermattLeaveAllowanceSettings from "./benefits/ZermattLeaveAllowanceSettings";
 
 function Benefits() {
   const navigate = useNavigate();
+  const { profile } = useAuthorization();
+  const isZermatt = profile?.organization?.slug === "zermatt-liquor-limited";
   const [searchParams] = useSearchParams();
   const workspace = searchParams.get("workspace") || "";
 
+  if (isZermatt && workspace === "outstation-allowance") return <ZermattOutstationAllowance />;
   if (workspace === "leave-allowance") return <ZermattLeaveAllowance />;
   if (workspace === "leave-allowance-settings") return <ZermattLeaveAllowanceSettings />;
 
@@ -84,7 +89,7 @@ function Benefits() {
         />,
         <DashboardCard
           key="employees"
-          title="Leave Allowance"
+          title="Annual Leave Allowance"
           value={"Annual"}
           subtitle="Entry-month cycle after first completed service year"
           icon={<FaCalendarAlt />}
@@ -167,10 +172,11 @@ function Benefits() {
         </AnalyticsPanel>
       }
       quickActions={[
+        ...(isZermatt ? [<QuickActionCard key="outstation-allowance" title="Outstation Allowance" subtitle="Daily feeding and inconvenience rates and trip estimate" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits?workspace=outstation-allowance")} />] : []),
         <QuickActionCard key="transport-support" title="Transport Support Pay" subtitle="Separate benefit register, approvals, payments and carry-forward balances" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits/transport-support")} />,
         <QuickActionCard
           key="leave-allowance"
-          title="Leave Allowance"
+          title="Annual Leave Allowance"
           subtitle="Eligibility, projected amount and approved payment history"
           icon={<FaCalendarAlt />}
           onClick={() => navigate("/benefits?workspace=leave-allowance")}
