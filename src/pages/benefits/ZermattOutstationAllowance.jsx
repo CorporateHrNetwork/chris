@@ -124,10 +124,10 @@ export default function ZermattOutstationAllowance() {
       <Panel title="Zermatt Liquor Limited · Outstation Allowance Voucher">
         <div className="outstation-fields">
           <label className="outstation-field outstation-screen-only">Search by employee name
-            <input type="search" value={nameSearch} onChange={event => { setNameSearch(event.target.value); setNumberSearch(""); }} style={styles.input}/>
+            <input type="search" value={nameSearch || (employee ? employeeName(employee) : "")} onChange={event => { setEmployeeNumber(""); setPaymentResult(null); setNameSearch(event.target.value); setNumberSearch(""); }} style={styles.input}/>
           </label>
           <label className="outstation-field outstation-screen-only">Search by employee number
-            <input type="search" value={numberSearch} onChange={event => { setNumberSearch(event.target.value); setNameSearch(""); }} style={styles.input}/>
+            <input type="search" value={numberSearch || employeeNumber} onChange={event => { setEmployeeNumber(""); setPaymentResult(null); setNumberSearch(event.target.value); setNameSearch(""); }} style={styles.input}/>
           </label>
           {(nameSearch.trim() || numberSearch.trim()) && <div className="outstation-field outstation-screen-only" style={{ gridColumn: "1 / -1" }}>
             <div role="status">{directoryStatus || (matches.length ? `${matches.length} matching employee(s)` : "No matching employees")}</div>
@@ -142,8 +142,8 @@ export default function ZermattOutstationAllowance() {
               }}>{employeeName(item)} · {item.employeeNumber}</button>)}
             </div>
           </div>}
-          {paymentField("Employee name", employee ? employeeName(employee) : "")}
-          {paymentField("Employee number", employeeNumber)}
+          <span className="outstation-print-value">Employee name: {employee ? employeeName(employee) : "—"}</span>
+          <span className="outstation-print-value">Employee number: {employeeNumber || "—"}</span>
           {station("base", "Base station")}
           {station("destination", "Outstation location")}
           {field("departure", "Departure date", "date", { required: true })}
