@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import chrisLogo from "../../assets/images/chris-logo.png";
 import { Link } from "react-router-dom";
 import { Panel, styles } from "../../components/leave/LeaveUi";
 
@@ -10,7 +11,7 @@ const employeeName = employee => [employee.firstName, employee.middleName, emplo
 
 const bands = [
   { id: "gm", label: "General Manager", dailyRate: 30000 },
-  { id: "senior", label: "Senior Management, Branch Operations Managers and expatriates (excluding the GM)", dailyRate: 25000 },
+  { id: "senior", label: "Senior management", dailyRate: 25000 },
   { id: "junior", label: "Junior Management", dailyRate: 20000 },
   { id: "supervisor", label: "Supervisors and equivalent roles", dailyRate: 15000 },
   { id: "team-leader", label: "Team Leaders", dailyRate: 10000 },
@@ -28,7 +29,7 @@ const kobo = value => Math.round(Number(value || 0) * 100);
 
 const daysBetween = (start, end) => start && end ? (Date.parse(end) - Date.parse(start)) / 86400000 : NaN;
 
-function printVoucher(form) {
+async function printVoucher(form) {
   document.getElementById("outstation-print-frame")?.remove();
   const frame = document.createElement("iframe");
   frame.id = "outstation-print-frame";
@@ -40,19 +41,68 @@ function printVoucher(form) {
   printDocument.title = "Outstation Allowance Voucher";
   const stylesheet = printDocument.createElement("style");
   stylesheet.textContent = `
-    @page { margin: 14mm; }
-    body { margin: 0; background: #f7f5ef; color: #17271e; font: 11pt Arial, sans-serif; }
+    @page { size: A4 portrait; margin: 0; }
+    body { box-sizing: border-box; margin: 0; padding: 10mm 12mm; color: #17271e; font: 9pt Arial, sans-serif; }
     .outstation-voucher * { color: inherit !important; }
-    section { background: transparent !important; box-shadow: none !important; break-inside: avoid; }
+    .outstation-voucher section { margin: 0 0 5px !important; padding: 0 !important; background: transparent !important; box-shadow: none !important; border: 0 !important; break-inside: avoid; }
+    h2, h3 { font-size: 10pt !important; margin: 5px 0 3px !important; }
+    p { margin: 3px 0 !important; }
     input, select, button, details, .outstation-screen-only { display: none !important; }
-    .outstation-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-    .outstation-field { display: grid; overflow-wrap: anywhere; }
     .outstation-print-value { display: block; font-weight: bold; }
-    table { width: 100%; min-width: 0 !important; }
-    th, td { background: transparent !important; }
+    table { width: 100%; min-width: 0 !important; border-collapse: collapse; table-layout: fixed; }
+    th, td { padding: 3px 5px !important; background: transparent !important; border: 1px solid #b9c6bc !important; text-align: left; overflow-wrap: anywhere; }
+    .voucher-header, .voucher-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .voucher-header { margin-bottom: 5px; }
+    .voucher-header img { width: 45px; height: 38px; object-fit: contain; }
+    .voucher-header strong { font-size: 14pt; }
+    .voucher-footer { border-top: 1px solid #b9c6bc; margin-top: 8px; padding-top: 4px; font-size: 8pt; }
+    .voucher-footer span:last-child { display: flex; align-items: center; gap: 4px; }
+    .voucher-footer img { width: 42px; height: 18px; object-fit: contain; }
   `;
   printDocument.head.appendChild(stylesheet);
-  printDocument.body.appendChild(printDocument.importNode(form, true));
+  const voucher = printDocument.importNode(form, true);
+  voucher.querySelectorAll(".outstation-screen-only, button, details").forEach(element => element.remove());
+  voucher.querySelector('input[type="checkbox"]')?.closest("label")?.remove();
+  for (const group of voucher.querySelectorAll(".outstation-fields")) {
+    const table = printDocument.createElement("table");
+    const rows = table.createTBody();
+    const cells = Array.from(group.children);
+    for (let index = 0; index < cells.length; index += 2) {
+      const row = rows.insertRow();
+      row.insertCell().appendChild(cells[index]);
+      row.insertCell().appendChild(cells[index + 1] || printDocument.createTextNode(""));
+    }
+    group.replaceWith(table);
+  }
+
+  const header = printDocument.createElement("header");
+  header.className = "voucher-header";
+  const zermattLogo = printDocument.createElement("img");
+  zermattLogo.src = new URL("/zrt-logo.jpeg", window.location.href).href;
+  zermattLogo.alt = "Zermatt";
+  const heading = printDocument.createElement("strong");
+  heading.textContent = "Zermatt Liquor Limited · Outstation Allowance Voucher";
+  header.append(zermattLogo, heading);
+  voucher.querySelector("h2, h3")?.remove();
+
+  const footer = printDocument.createElement("footer");
+  footer.className = "voucher-footer";
+  const timestamp = printDocument.createElement("span");
+  timestamp.textContent = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Lagos", dateStyle: "short", timeStyle: "short",
+  }).format(new Date()) + " Outstation Allowance Voucher";
+  const attribution = printDocument.createElement("span");
+  const logo = printDocument.createElement("img");
+  logo.src = new URL(chrisLogo, window.location.href).href;
+  logo.alt = "CHRiS";
+  attribution.append("Powered by CHRiS", logo);
+  footer.append(timestamp, attribution);
+  printDocument.body.append(header, voucher, footer);
+  await Promise.allSettled([zermattLogo.decode(), logo.decode()]);
+  if (!frame.isConnected) return;
+  const a4Height = 297 * 96 / 25.4;
+  const contentHeight = printDocument.body.scrollHeight;
+  if (contentHeight > a4Height - 4) printDocument.body.style.zoom = String((a4Height - 4) / contentHeight);
   const printWindow = frame.contentWindow;
   printWindow.addEventListener("afterprint", () => frame.remove(), { once: true });
   printWindow.focus();
@@ -192,7 +242,7 @@ export default function ZermattOutstationAllowance() {
           {cost("otherAllowance", "Other allowance payable to employee (₦)")}
         </div>
         <p>Feeding {format(feeding)} · Inconvenience {format(feeding)} · Daily rate for each {money(band?.dailyRate || 0)}</p>
-        <label><input type="checkbox" checked={includeTransport} onChange={event => setIncludeTransport(event.target.checked)}/> Include local transport when the employee did not use a company vehicle</label>
+        <label><input type="checkbox" checked={includeTransport} onChange={event => setIncludeTransport(event.target.checked)}/> Include local transport costs</label>
         <p>Local transport {includeTransport ? "included" : "excluded"} · {format(transport)}</p>
         {includeTransport && <div className="outstation-fields">{transportLegs.map(([key, label]) => cost(key, label))}</div>}
         <p><strong>Amount payable to employee {format(payable)}</strong></p>
