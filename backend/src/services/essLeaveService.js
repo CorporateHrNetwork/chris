@@ -36,6 +36,7 @@ async function options(db, scope, asOfDate) {
   const governingAnnual=policies.filter(isZermattAnnualV3).sort((a,b)=>new Date(b.effectiveFrom)-new Date(a.effectiveFrom)||b.versionNumber-a.versionNumber)[0];
   const rows=[];
   for (const policy of policies) {
+    if(policy.leaveType.code==='MATERNITY'&&String(employee.gender||'').trim().toUpperCase()!=='FEMALE')continue;
     if(governingAnnual&&policy.id!==governingAnnual.id&&(policy.leaveTypeId===governingAnnual.leaveTypeId||policy.leaveType.code==='ANNUAL'))continue;
     const {ledger}=await getEmployeeLeaveLedger({organizationId:scope.organizationId,employeeNumber:employee.employeeNumber,leavePolicyId:policy.id,leaveYear:year,tx:db});
     const {totalEntitlement,allocatedEntitlement,baseEntitlement,accrued,carryover,adjustments,available,pending,used,maximumRequestable,unit,hasEntitlement}=ledger;
