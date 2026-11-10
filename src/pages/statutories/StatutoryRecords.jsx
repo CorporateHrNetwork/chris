@@ -22,7 +22,7 @@ export default function StatutoryRecords({ type, title }) {
     setRecords(null);
     setError("");
     const query = new URLSearchParams();
-    if (type) query.set("obligationType", type);
+    if (type) query.set("obligationType", type === "NSITF" ? "NSITF_ECS" : type);
     apiRequest(`/api/compliance/obligations?${query}`)
       .then(result => { if (active) setRecords(result.data); })
       .catch(error => { if (active) setError(error.message || "Unable to load statutory records."); });
