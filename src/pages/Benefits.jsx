@@ -172,7 +172,7 @@ function Benefits() {
         </AnalyticsPanel>
       }
       quickActions={[
-        ...(isZermatt ? [<QuickActionCard key="outstation-allowance" title="Outstation Allowance" subtitle="Daily feeding and inconvenience rates and trip estimate" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits?workspace=outstation-allowance")} />] : []),
+        ...(isZermatt ? [<QuickActionCard key="outstation-allowance" title="Outstation Allowance Voucher" subtitle="Employee allowances, trip costs and external approval voucher" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits?workspace=outstation-allowance")} />] : []),
         <QuickActionCard key="transport-support" title="Transport Support Pay" subtitle="Separate benefit register, approvals, payments and carry-forward balances" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits/transport-support")} />,
         <QuickActionCard
           key="leave-allowance"
