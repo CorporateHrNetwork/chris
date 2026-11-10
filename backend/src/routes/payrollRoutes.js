@@ -1900,6 +1900,26 @@ function payrollAppendRegisterSheet(workbook, sheetName, headers, rows) {
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
 }
 
+function appendAccountExceptions(workbook, model, selectedIndexes = null) {
+  const accountIndex = model.headers.indexOf("Account Number");
+  if (selectedIndexes && !selectedIndexes.includes(accountIndex)) return;
+  const identityHeaders = ["Employee No", "Employee Name", "Branch", "Bank", "Account Name", "Account Number"];
+  const indexes = identityHeaders.map(header => model.headers.indexOf(header))
+    .filter(index => !selectedIndexes || selectedIndexes.includes(index));
+  const rows = [];
+  for (const row of model.rows) {
+    const account = row.meta.accountNumber || "";
+    const issues = [];
+    if (!account) issues.push("Missing account number");
+    else if (/^\d{1,9}$/.test(account)) issues.push("Account number under 10 digits");
+    else if (!/^\d{10}$/.test(account)) issues.push("Account number must contain exactly 10 digits");
+    if (!row.meta.bankName) issues.push("Missing bank");
+    if (!row.meta.accountName) issues.push("Missing account name");
+    if (issues.length) rows.push({cells: [...indexes.map(index => row.cells[index]), issues.join(", ")]});
+  }
+  payrollAppendRegisterSheet(workbook, "Account Exceptions", [...indexes.map(index => model.headers[index]), "Issue"], rows);
+}
+
 function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage, incidentSources = {} }) {
   const workbook = XLSX.utils.book_new();
   workbook.Workbook = workbook.Workbook || {};
@@ -2501,6 +2521,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     XLSX.utils.book_append_sheet(workbook, handoff, "External Handoff");
   }
 
+  if (organization.slug === "zermatt-liquor-limited") appendAccountExceptions(workbook, model);
+
   const workbookBuffer = XLSX.write(workbook, {
     type: "buffer",
     bookType: "xlsx",
@@ -2707,6 +2729,7 @@ router.get('/runs/:id/register-export.xlsx', ...registerExportPermission, async(
    ['Copy Control','SELECTED-COLUMN REGISTER — NOT A PAYOUT INSTRUCTION. No approval or payout transition.'],
    ['Selected columns',indexes.map(i=>model.headers[i]).join(', ')],
   ]),'Workflow Control');
+  if(context.organization?.slug==='zermatt-liquor-limited')appendAccountExceptions(workbook,model,indexes);
   await prisma.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,entityType:'PayrollRun',entityId:req.params.id,action:'PAYROLL_SELECTED_COLUMNS_EXPORTED',newValue:{columns:indexes.map(i=>model.headers[i]),status:context.run.status},reason:'Read-only selected-column master and branch registers; approval and payout state unchanged.'}});
   res.setHeader('Content-Disposition','attachment; filename="CHRiS_Payroll_Selected_Columns.xlsx"');
   return res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(XLSX.write(workbook,{type:'buffer',bookType:'xlsx'}));
