@@ -434,7 +434,8 @@ async function provisionEmployeeWithConfigured({
         ? isZermattV2InternalLevel(levelNumber)
         : Number.isInteger(levelNumber) && levelNumber >= 1 && levelNumber <= 11;
 
-  if (!validLevel) {
+  const expertExpatriate = hierarchyVersion === "V3" && isExpatriate(employee.employmentType) && effectiveLevel.employmentLevel?.code === "EXPERT";
+  if (!validLevel && !expertExpatriate) {
     throw new Error(`EMPLOYMENT_LEVEL_MAPPING_REQUIRED:${employeeNumber}`);
   }
 
@@ -466,10 +467,9 @@ async function provisionEmployeeWithConfigured({
       continue;
     }
 
-    const entitlement = item.definition.entitlementForLevel(
-      levelNumber,
-      hierarchyVersion
-    );
+    const entitlement = expertExpatriate && item.definition.key === "ANNUAL"
+      ? 45
+      : item.definition.entitlementForLevel(levelNumber, hierarchyVersion);
     if (entitlement == null) continue;
 
     const existingBalance = await tx.leaveBalance.findUnique({
@@ -652,7 +652,8 @@ async function provisionAllCurrentFullTimeEmployees({
         : hierarchyVersion === "V2"
           ? isZermattV2InternalLevel(level)
           : Number.isInteger(level) && level >= 1 && level <= 11;
-      if (!valid) invalidLevels.push(employee.employeeNumber);
+      const expertExpatriate = hierarchyVersion === "V3" && isExpatriate(employee.employmentType) && effectiveLevel.employmentLevel?.code === "EXPERT";
+      if (!valid && !expertExpatriate) invalidLevels.push(employee.employeeNumber);
     } catch (error) {
       if (
         error.message === "EMPLOYMENT_LEVEL_MAPPING_REQUIRED" ||
