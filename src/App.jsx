@@ -196,7 +196,7 @@ function App() {
         <Route path="/benefits" element={<ProtectedLayout><Benefits /></ProtectedLayout>} />
         <Route path="/benefits/transport-support" element={<ProtectedLayout><TransportSupportPayroll /></ProtectedLayout>} />
         <Route path="/benefits/transport-support/preparation" element={<ProtectedLayout><TransportSupportPreparation /></ProtectedLayout>} />
-        <Route path="/benefits/pension" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords type="PENSION" title="Pension Benefits" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/benefits/pension" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="PENSION" title="Pension Benefits" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/benefits/gratuity" element={<ProtectedLayout><BenefitChildPage title="Gratuity" description="Manage gratuity eligibility, service-based benefit rules and accrued obligations." metricLabels={["Eligible Employees","Accrued Liability","Upcoming Eligibility","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/health-insurance" element={<ProtectedLayout><BenefitChildPage title="Health Insurance" description="Manage employee health-insurance coverage, dependants, eligibility and plan participation." metricLabels={["Active Plans","Covered Employees","Dependants","Coverage Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/life-insurance" element={<ProtectedLayout><BenefitChildPage title="Life Insurance" description="Manage employee life-insurance participation, coverage levels and eligibility." metricLabels={["Covered Employees","Active Policies","Coverage Value","Exceptions"]} /></ProtectedLayout>} />
@@ -207,7 +207,7 @@ function App() {
         <Route path="/benefits/other" element={<ProtectedLayout><BenefitChildPage title="Other Benefits" description="Manage additional employee benefit programmes outside the standard benefit categories." metricLabels={["Benefit Types","Eligible Employees","Active Beneficiaries","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/enrolments" element={<ProtectedLayout><BenefitChildPage title="Benefit Enrolments" description="Manage employee benefit enrolments, status, eligibility and participation workflows." metricLabels={["Eligible Employees","Enrolled Employees","Pending Enrolments","Exceptions"]} activityTitle="Enrolment Activity" /></ProtectedLayout>} />
 
-        <Route path="/statutories" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/assets" element={<ProtectedLayout><ModuleDashboard moduleKey="assets" /></ProtectedLayout>} />
         <Route path="/documents" element={<ProtectedLayout><ModuleDashboard moduleKey="documents" /></ProtectedLayout>} />
         <Route path="/organization" element={<ProtectedLayout><ModuleDashboard moduleKey="organization" /></ProtectedLayout>} />
@@ -233,13 +233,13 @@ function App() {
         <Route path="/compensation/promotions" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/compensation/bonuses-incentives" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/compensation/total-rewards" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/statutories/paye-tax" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords type="PAYE" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/pension-compliance" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords type="PENSION" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/nhia" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords type="NHIA" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/nsitf" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords type="NSITF" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/itf" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords type="ITF" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/remittances" element={<ProtectedLayout><ConsolidatedComplianceRoute><RemittanceWorkspace /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/reports" element={<ProtectedLayout><ConsolidatedComplianceRoute><StatutoryRecords title="Statutory Reports" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/paye-tax" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="PAYE" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/pension-compliance" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="PENSION" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/nhia" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="NHIA" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/nsitf" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="NSITF" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/itf" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="ITF" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/remittances" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><RemittanceWorkspace /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/statutories/reports" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords title="Statutory Reports" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/performance/goals-kpis" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
         <Route path="/performance/cycles" element={<ProtectedLayout><Performance /></ProtectedLayout>} />
         <Route path="/performance/reviews" element={<ProtectedLayout><Performance /></ProtectedLayout>} />

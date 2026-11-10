@@ -8,7 +8,8 @@ const remittances = require("../services/statutoryRemittanceService");
 const router = express.Router();
 router.use(requireAuth);
 router.use((req, res, next) => {
-  if (req.auth.activeLocationId) {
+  const branchRead = req.method === "GET" && ["/obligations", "/withheld-obligations", "/withheld-obligations.xlsx"].includes(req.path.replace(/\/$/, ""));
+  if (req.auth.activeLocationId && !branchRead) {
     return res.status(403).json({
       status: "error",
       code: "CONSOLIDATED_COMPLIANCE_SCOPE_REQUIRED",
@@ -44,7 +45,7 @@ router.post("/rules/:id/transition", mayManageRules, async (req, res) => {
   } catch (error) { return send(res, error); }
 });
 router.get("/obligations", mayView, async (req, res) => {
-  try { return res.json({ status: "success", data: await remittances.listObligations({ organizationId: req.auth.organizationId, filters: req.query }) }); }
+  try { return res.json({ status: "success", data: await remittances.listObligations({ organizationId: req.auth.organizationId, locationId: req.auth.activeLocationId, filters: req.query }) }); }
   catch (error) { return send(res, error); }
 });
 router.get("/remittances", mayView, async (req, res) => {
@@ -54,7 +55,7 @@ router.get("/remittances", mayView, async (req, res) => {
 
 router.get("/withheld-obligations", mayView, async (req, res) => {
   try {
-    const data = await remittances.listWithheldObligations({ organizationId: req.auth.organizationId });
+    const data = await remittances.listWithheldObligations({ organizationId: req.auth.organizationId, locationId: req.auth.activeLocationId });
     const outstandingAmount = data.reduce((sum, row) => sum + Number(row.outstandingAmount || 0), 0);
     return res.json({
       status: "success",
@@ -72,7 +73,7 @@ router.get("/withheld-obligations", mayView, async (req, res) => {
 
 router.get("/withheld-obligations.xlsx", mayView, async (req, res) => {
   try {
-    const rows = await remittances.listWithheldObligations({ organizationId: req.auth.organizationId });
+    const rows = await remittances.listWithheldObligations({ organizationId: req.auth.organizationId, locationId: req.auth.activeLocationId });
     const workbook = XLSX.utils.book_new();
     const data = rows.map((row) => ({
       "Employee No": row.employee?.employeeNumber || "",

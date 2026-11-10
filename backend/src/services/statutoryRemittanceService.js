@@ -22,7 +22,7 @@ async function lifecycle(tx, input) {
     newStatus: input.newStatus || null, notes: text(input.notes) || null, metadata: input.metadata || undefined,
   } });
 }
-async function listObligations({ organizationId, filters = {}, prismaClient = prisma }) {
+async function listObligations({ organizationId, locationId, filters = {}, prismaClient = prisma }) {
   const approvedRuns = await prismaClient.$queryRaw`
     SELECT id FROM public.payroll_runs
     WHERE "organizationId" = ${organizationId} AND status = 'APPROVED'
@@ -30,6 +30,7 @@ async function listObligations({ organizationId, filters = {}, prismaClient = pr
   return prismaClient.statutoryObligation.findMany({
     where: {
       organizationId,
+      ...(locationId ? { employee: { is: { organizationId, locationId } } } : {}),
       ...(filters.payrollRunId ? { payrollRunId: filters.payrollRunId } : {}),
       ...(filters.obligationType ? { obligationType: text(filters.obligationType).toUpperCase() } : {}),
       ...(filters.status ? { status: text(filters.status).toUpperCase() } : {}),
@@ -211,10 +212,11 @@ async function listBatches({ organizationId, prismaClient = prisma }) {
   return prismaClient.statutoryRemittanceBatch.findMany({ where: { organizationId }, include: { allocations: true, reconciliation: true }, orderBy: { createdAt: "desc" } });
 }
 
-async function listWithheldObligations({ organizationId, prismaClient = prisma }) {
+async function listWithheldObligations({ organizationId, locationId, prismaClient = prisma }) {
   const rows = await prismaClient.statutoryObligation.findMany({
     where: {
       organizationId,
+      ...(locationId ? { employee: { is: { organizationId, locationId } } } : {}),
       exceptionCode: "WITHHELD_MISSING_STATUTORY_DETAILS",
       status: { in: ["CONFIRMED", "DUE", "OVERDUE", "PARTIALLY_REMITTED"] },
     },
