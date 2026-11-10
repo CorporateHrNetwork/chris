@@ -20,12 +20,13 @@ const money = (value, currency = "NGN") => {
 
 export default function RemittanceWorkspace() {
   const navigate = useNavigate();
-  const { hasAnyPermission } = useAuthorization();
-  const canManage = hasAnyPermission("remittances.manage", "payroll.manage");
+  const { hasAnyPermission, profile } = useAuthorization();
+  const branchId = profile?.activeLocationId;
+  const canManage = !branchId && hasAnyPermission("remittances.manage", "payroll.manage");
   const [batches, setBatches] = useState([]);
   const [obligations, setObligations] = useState([]);
   const [withheld, setWithheld] = useState([]);
-  const [withheldSummary, setWithheldSummary] = useState({ count: 0, employees: 0, outstandingAmount: 0, readyToRelease: 0 });
+  const [withheldSummary, setWithheldSummary] = useState(null);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -47,21 +48,23 @@ export default function RemittanceWorkspace() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [batchResult, obligationResult, withheldResult] = await Promise.all([
-        apiRequest("/api/compliance/remittances"),
+      const [batchResult, obligationResult, withheldResult] = await Promise.allSettled([
+        branchId ? Promise.resolve({ data: [] }) : apiRequest("/api/compliance/remittances"),
         apiRequest("/api/compliance/obligations"),
         apiRequest("/api/compliance/withheld-obligations"),
       ]);
-      setBatches(batchResult?.data || []);
-      setObligations(obligationResult?.data || []);
-      setWithheld(withheldResult?.data || []);
-      setWithheldSummary(withheldResult?.summary || { count: 0, employees: 0, outstandingAmount: 0, readyToRelease: 0 });
+      setBatches(batchResult.value?.data || []);
+      setObligations(obligationResult.value?.data || []);
+      setWithheld(withheldResult.value?.data || []);
+      setWithheldSummary(withheldResult.value?.summary || null);
+      const failures = [batchResult, obligationResult, withheldResult].filter(result => result.status === "rejected");
+      setFeedback({ error: failures.length > 0, message: failures.map(result => result.reason?.message || "Unable to load statutory records.").join(" ") });
     } catch (error) {
       setFeedback({ error: true, message: error.message || "Unable to load statutory remittances." });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -163,14 +166,14 @@ export default function RemittanceWorkspace() {
       <Panel title="Withheld Statutory Remittance Pool" subtitle="Approved payroll liabilities awaiting complete employee statutory details">
         <p style={muted}>Payroll approval is not blocked by missing employee statutory identifiers. Affected PAYE/Pension liabilities remain recorded here and cannot be allocated to a remittance batch until the required employee details are completed. Use the Excel export for future consolidated/lump-sum remittance preparation.</p>
         <div style={summaryGrid}>
-          <Summary label="Withheld Items" value={withheldSummary.count || 0} />
-          <Summary label="Employees" value={withheldSummary.employees || 0} />
-          <Summary label="Outstanding" value={money(withheldSummary.outstandingAmount || 0)} />
-          <Summary label="Ready To Release" value={withheldSummary.readyToRelease || 0} />
+          <Summary label="Withheld Items" value={withheldSummary?.count ?? "—"} />
+          <Summary label="Employees" value={withheldSummary?.employees ?? "—"} />
+          <Summary label="Outstanding" value={withheldSummary ? money(withheldSummary.outstandingAmount) : "—"} />
+          <Summary label="Ready To Release" value={withheldSummary?.readyToRelease ?? "—"} />
         </div>
         <div style={{ ...buttonRow, marginTop: 12 }}>
           <button type="button" style={smallButton} disabled={Boolean(busy) || !withheld.length} onClick={exportWithheld}>{busy === "withheld-export" ? "Exporting…" : "Export Withheld Pool (Excel)"}</button>
-          <button type="button" style={primaryButton} disabled={!canManage || Boolean(busy) || !withheldSummary.readyToRelease} onClick={releaseReadyWithheld}>{busy === "withheld-release" ? "Releasing…" : "Release Completed Details"}</button>
+          <button type="button" style={primaryButton} disabled={!canManage || Boolean(busy) || !withheldSummary?.readyToRelease} onClick={releaseReadyWithheld}>{busy === "withheld-release" ? "Releasing…" : "Release Completed Details"}</button>
         </div>
         {withheld.length ? <div style={{ ...tableWrap, marginTop: 14 }}><table style={table}><thead><tr>{["Period", "Employee", "Type", "Outstanding", "Missing Details", "Pool Status"].map((item) => <th key={item} style={th}>{item}</th>)}</tr></thead><tbody>
           {withheld.map((item) => <tr key={item.id}>
@@ -181,9 +184,10 @@ export default function RemittanceWorkspace() {
             <td style={td}>{(item.missingFields || []).join(", ") || "Completed"}</td>
             <td style={td}><Badge value={item.poolStatus} /></td>
           </tr>)}
-        </tbody></table></div> : <Empty>No statutory obligations are currently withheld for missing employee details.</Empty>}
+        </tbody></table></div> : <Empty>{loading ? "Loading withheld obligations…" : withheldSummary ? "No statutory obligations are currently withheld for missing employee details." : "Withheld obligations are unavailable."}</Empty>}
       </Panel>
 
+      {branchId ? <Empty>Branch view uses employees’ current branch. Switch to Head Office for consolidated remittance batches and release actions.</Empty> : <>
       <Panel title="Create Remittance Batch" subtitle="The preparer cannot approve the same batch.">
         <form style={formGrid} onSubmit={createBatch}>
           <Input label="Internal Reference" value={form.reference} onChange={(value) => setForm((p) => ({ ...p, reference: value }))} placeholder="PAYE-2026-09" required />
@@ -223,6 +227,7 @@ export default function RemittanceWorkspace() {
           {["PAID", "PARTIALLY_ALLOCATED", "ALLOCATED", "RECONCILED"].includes(selected.status) ? <Action title="Reverse batch" text="Restore allocated obligations and retain the reversal reason in the audit trail."><Input label="Reversal Reason" value={reason} onChange={setReason} /><button type="button" style={dangerButton} disabled={!canManage || Boolean(busy) || !reason.trim()} onClick={() => act("reverse", { reason })}>Reverse Batch</button></Action> : null}
         </div>
       </Panel> : null}
+      </>}
     </section>
   );
 }
