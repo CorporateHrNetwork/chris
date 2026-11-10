@@ -1,6 +1,7 @@
+import { Fragment } from "react";
 import useAuthorization from "../../hooks/useAuthorization";
 
-function ConsolidatedComplianceRoute({ children }) {
+function ConsolidatedComplianceRoute({ children, allowBranch = false }) {
   const {
     profile,
     hasAnyPermission,
@@ -26,7 +27,7 @@ function ConsolidatedComplianceRoute({ children }) {
     profile?.consolidatedOrganization === true &&
     !profile?.activeLocationId;
 
-  if (!canViewCompliance || !isConsolidated) {
+  if (!canViewCompliance || (!isConsolidated && !(allowBranch && profile?.activeLocationId))) {
     return (
       <div role="alert" style={stateStyle}>
         <h1 style={titleStyle}>Consolidated access required</h1>
@@ -38,7 +39,7 @@ function ConsolidatedComplianceRoute({ children }) {
     );
   }
 
-  return children;
+  return <Fragment key={profile?.activeLocationId || "consolidated"}>{children}</Fragment>;
 }
 
 const stateStyle = {
