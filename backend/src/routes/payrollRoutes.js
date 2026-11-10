@@ -2479,7 +2479,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     XLSX.utils.book_append_sheet(workbook, paymentSheet, "Payment Register");
 
     const handoff = XLSX.utils.aoa_to_sheet([
-      ["ZERMATT Payroll External Approval & Payout Handoff"],
+      [`${organizationName} Payroll External Approval & Payout Handoff`],
       ["CHRiS Internal Payroll Authority", "Head of HR prepares, processes/executes and approves payroll inside CHRiS."],
       ["External Auditor", "Confirms the approved payroll and management reports outside CHRiS."],
       ["General Manager", "Provides final business approval outside CHRiS after auditor confirmation."],
