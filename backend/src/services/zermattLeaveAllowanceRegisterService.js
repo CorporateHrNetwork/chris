@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
-const { ZERMATT_SLUG, eligibilityForPeriod, calculateLeaveAllowance } = require("./zermattLeaveAllowanceService");
+const { getActivePolicy } = require("./nigeriaPayrollComplianceService");
+const { ZERMATT_SLUG, eligibilityForPeriod, calculateLeaveAllowanceFromPayrollLine } = require("./zermattLeaveAllowanceService");
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -50,10 +51,13 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
        ORDER BY CASE WHEN pr.status='APPROVED' THEN 0 ELSE 1 END,pr."createdAt" DESC
        LIMIT 1
      )
-     SELECT pl."employeeId",pl."grossPay",pl.currency,pl.details,r.code,r.status,r."periodStart",r."periodEnd"
+     SELECT pl."employeeId",pl.currency,pl.details,r.code,r.status,r."periodStart",r."periodEnd"
      FROM selected_run r JOIN payroll_run_lines pl ON pl."runId"=r.id AND pl."organizationId"=$1`,
     organizationId, month
   );
+  const policy = currentPayroll.length ? await getActivePolicy({
+    organizationId, asOf: dateText(currentPayroll[0].periodEnd), prismaClient,
+  }) : null;
   const salaryByEmployee = new Map(currentPayroll.map(row => [row.employeeId, row]));
 
   const payments = await prismaClient.$queryRawUnsafe(
@@ -84,14 +88,18 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
   const rows = employees.map((employee) => {
     const paymentHistory = paymentsByEmployee.get(employee.id) || [];
     const salary = salaryByEmployee.get(employee.id);
-    const basic = jsonValue(salary?.details).salaryStructure?.basic;
+    let calculation = null;
+    if (salary) {
+      try {
+        calculation = calculateLeaveAllowanceFromPayrollLine(salary, policy);
+      } catch (error) {
+        if (error.code !== "INVALID_SALARY_STRUCTURE") throw error;
+      }
+    }
     const eligibility = salary ? eligibilityForPeriod({
       hireDate: employee.hireDate, employmentType: employee.employmentType,
       periodStart: salary.periodStart, periodEnd: salary.periodEnd,
     }) : null;
-    const projection = salary && basic != null ? calculateLeaveAllowance({
-      monthlyGross: salary.grossPay, monthlyBasic: basic,
-    }).leaveAllowance : null;
     return {
       employeeId: employee.id,
       employeeNumber: employee.employeeNumber,
@@ -105,12 +113,12 @@ async function listZermattLeaveAllowanceRegister({ organizationId, prismaClient 
       automaticCalculation: true,
       salaryBasis: "CURRENT_MONTH_GROSS_AND_BASIC",
       paymentTiming: "EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE",
-      monthlyGross: salary ? round2(salary.grossPay) : null,
-      monthlyBasic: basic == null ? null : round2(basic),
+      monthlyGross: jsonValue(salary?.details).scheduledMonthlyGross ?? null,
+      monthlyBasic: calculation?.monthlyBasicSalary ?? null,
       currency: salary?.currency || "NGN",
       payrollPeriod: salary?.code || null,
       payrollStatus: salary?.status || null,
-      projectedLeaveAllowance: eligibility?.eligible ? projection : null,
+      projectedLeaveAllowance: eligibility?.eligible ? calculation?.leaveAllowance ?? null : null,
       eligibilityStatus: eligibility?.reason || "NO_CURRENT_PAYROLL_LINE",
       formula: "Monthly Basic Salary × 12 × 10%",
       dueThisMonth: Boolean(eligibility?.eligible),
