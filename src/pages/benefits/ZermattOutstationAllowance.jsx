@@ -28,6 +28,37 @@ const kobo = value => Math.round(Number(value || 0) * 100);
 
 const daysBetween = (start, end) => start && end ? (Date.parse(end) - Date.parse(start)) / 86400000 : NaN;
 
+function printVoucher(form) {
+  document.getElementById("outstation-print-frame")?.remove();
+  const frame = document.createElement("iframe");
+  frame.id = "outstation-print-frame";
+  frame.title = "Outstation Allowance Voucher print preview";
+  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0";
+  document.body.appendChild(frame);
+
+  const printDocument = frame.contentDocument;
+  printDocument.title = "Outstation Allowance Voucher";
+  const stylesheet = printDocument.createElement("style");
+  stylesheet.textContent = `
+    @page { margin: 14mm; }
+    body { margin: 0; background: #f7f5ef; color: #17271e; font: 11pt Arial, sans-serif; }
+    .outstation-voucher * { color: inherit !important; }
+    section { background: transparent !important; box-shadow: none !important; break-inside: avoid; }
+    input, select, button, details, .outstation-screen-only { display: none !important; }
+    .outstation-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .outstation-field { display: grid; overflow-wrap: anywhere; }
+    .outstation-print-value { display: block; font-weight: bold; }
+    table { width: 100%; min-width: 0 !important; }
+    th, td { background: transparent !important; }
+  `;
+  printDocument.head.appendChild(stylesheet);
+  printDocument.body.appendChild(printDocument.importNode(form, true));
+  const printWindow = frame.contentWindow;
+  printWindow.addEventListener("afterprint", () => frame.remove(), { once: true });
+  printWindow.focus();
+  printWindow.print();
+}
+
 export default function ZermattOutstationAllowance() {
   const [category, setCategory] = useState("");
   const [includeTransport, setIncludeTransport] = useState(false);
@@ -109,18 +140,8 @@ export default function ZermattOutstationAllowance() {
       .outstation-fields {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
       .outstation-fields > * {min-width:0;overflow-wrap:anywhere}
       .outstation-print-value {display:none}
-      @media print {
-        body:has(.outstation-voucher) * {visibility:hidden}
-        body:has(.outstation-voucher) :has(.outstation-voucher) {overflow:visible!important;height:auto!important}
-        .outstation-voucher,.outstation-voucher * {visibility:visible}
-        .outstation-voucher {position:absolute;top:0;left:0;width:100%;color:#111;background:#fff}
-        .outstation-voucher h2,.outstation-voucher th,.outstation-voucher td,.outstation-voucher dt {color:#111!important}
-        .outstation-voucher section {background:#fff!important;box-shadow:none!important;break-inside:avoid}
-        .outstation-voucher input,.outstation-voucher select,.outstation-voucher button,.outstation-voucher .outstation-screen-only,.outstation-voucher details {display:none}
-        .outstation-print-value {display:block;font-weight:700}
-      }
     `}</style>
-    <form className="outstation-voucher" autoComplete="off" onSubmit={event => { event.preventDefault(); if (employee && paymentReady && band && validDays && stayDays <= 366) window.print(); }}>
+    <form className="outstation-voucher" autoComplete="off" onSubmit={event => { event.preventDefault(); if (employee && paymentReady && band && validDays && stayDays <= 366) printVoucher(event.currentTarget); }}>
       <Panel title="Zermatt Liquor Limited · Outstation Allowance Voucher">
         <div className="outstation-fields">
           <label className="outstation-field outstation-screen-only">Search by employee name
