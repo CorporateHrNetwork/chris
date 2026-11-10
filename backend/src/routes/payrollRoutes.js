@@ -1,3 +1,4 @@
+const { ensureNorthstarPayrollRecords } = require("../services/northstarPayrollRecords");
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
@@ -1569,6 +1570,7 @@ router.get("/runs/:id/lines", requirePermission("payroll.view"), async (req, res
 
 router.post("/runs/draft", requirePermission("payroll.process"), requireZermattHeadHrPayrollAuthority, async (req, res) => {
   try {
+    await ensureNorthstarPayrollRecords({organizationId:req.auth.organizationId,actorUserId:req.auth.userId,prismaClient:prisma});
     await synchronizePayrollAuthorityFromMappings({
       organizationId: req.auth.organizationId,
       actorUserId: req.auth.userId,

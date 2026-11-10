@@ -1,4 +1,5 @@
-const { splitSalary } = require("./zermattSalarySplit");
+const { isNorthstar, standardDaysFor, salaryBasis } = require("./northstarPayrollBasis");
+
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
@@ -791,7 +792,10 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     );
   }
 
-  const missingStandardDays = employees.filter((employee) => !rateByEmployee.get(employee.id)?.fullMonthlyGross && !Number(policy.standardDays?.[employee.employmentType]));
+  const northstar = isNorthstar(organizationId, organization.slug);
+  const missingStandardDays = employees.filter((employee) =>
+    (northstar || !rateByEmployee.get(employee.id)?.fullMonthlyGross) &&
+    !(standardDaysFor({ policy, employmentType: employee.employmentType, northstar }) > 0));
   if (missingStandardDays.length) {
     throw payrollError(
       "PAYROLL_STANDARD_DAYS_NOT_CONFIGURED",
@@ -884,9 +888,11 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   const lines = employees.map((employee) => {
     const rate = rateByEmployee.get(employee.id);
     const salaryNote = noteSalaryByEmployee.get(employee.id);
-    const splitAllocation = rate.fullMonthlyGross ? splitSalary({ fullMonthlyGross: salaryNote?.monthlyGross ?? rate.fullMonthlyGross, employmentType: employee.employmentType, hireDate: "2000-01-01", periodMonth: period.periodStart.slice(0,7) }) : null;
-    const scheduledMonthlyGross = splitAllocation ? splitAllocation.endMonthGross : round2(salaryNote?.monthlyGross ?? rate.amount ?? 0);
-    const standardDays = splitAllocation ? 26 : Number(policy.standardDays[employee.employmentType]);
+    const basis = salaryBasis({ organizationId, slug: organization.slug, policy, employee, rate,
+      monthlyOverride: salaryNote?.monthlyGross, periodMonth: period.periodStart.slice(0, 7) });
+    const splitAllocation = basis.splitAllocation;
+    const scheduledMonthlyGross = round2(basis.monthlyGross);
+    const standardDays = basis.standardDays;
     const attendanceInput = attendanceByEmployee.get(employee.id);
     const payableDays = attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
       ? standardDays
@@ -1088,7 +1094,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           salaryAdvanceRecovery: "ONLY_ACTIVE_REPAYMENT_SCHEDULE_DUE_THIS_PERIOD",
           loanRecovery: "AUTHORITATIVE_OUTSTANDING_BALANCE",
         },
-        control: "PAYE and pension are calculated under the effective Nigeria payroll policy except where an explicit CHRiS employment-type exemption rule applies. Part-Time, Expatriate and Internship/Intern employment types are set to zero PAYE and zero pension contribution in payroll under this CHRiS rule. ZERMATT payroll periods reset manual attendance, Salary Advance and Other items to period defaults. Salary Advance is ₦0 unless an active repayment schedule is due in the current payroll period; mapped recurring deduction installments and authoritative loan recoveries continue under their governed schedules. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
+        control: northstar ? "Fictional Northstar payroll demonstration. PAYE, pension, NHF and employer costs use the effective demo policy. No bank payment or statutory remittance is transmitted." : "PAYE and pension are calculated under the effective Nigeria payroll policy except where an explicit CHRiS employment-type exemption rule applies. Part-Time, Expatriate and Internship/Intern employment types are set to zero PAYE and zero pension contribution in payroll under this CHRiS rule. ZERMATT payroll periods reset manual attendance, Salary Advance and Other items to period defaults. Salary Advance is ₦0 unless an active repayment schedule is due in the current payroll period; mapped recurring deduction installments and authoritative loan recoveries continue under their governed schedules. NSITF and ITF are employer costs, not employee deductions. Approval does not transmit bank/payment instructions.",
       },
     };
   });
