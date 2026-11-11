@@ -391,6 +391,20 @@ async function getLoanProfile({ organizationId, loanId, prismaClient = prisma })
     recoveryStartDate: loan.recoveryStartDate,
     legacyPeriodEvents: storedLegacyPeriodEvents,
   });
+  const timedPauses = await prismaClient.$queryRawUnsafe(
+    `SELECT month::date AS "periodStart", 'PAUSED' AS "status", 0 AS "amount",
+            'Scheduled loan pause' AS "reason"
+       FROM "payroll_loan_pause_windows" w
+       CROSS JOIN LATERAL generate_series(w."startMonth", w."resumeMonth" - INTERVAL '1 month', INTERVAL '1 month') month
+      WHERE w."organizationId"=$1 AND w."loanId"=$2`,
+    organizationId, loanId
+  );
+  const postedMonths = new Set(recoveries.filter((row) => row.status === "POSTED").map((row) => monthKey(row.recoveryDate)));
+  const knownMonths = new Set(legacyPeriodEvents.map((row) => monthKey(row.periodStart)));
+  for (const pause of timedPauses) {
+    const month = monthKey(pause.periodStart);
+    if (!postedMonths.has(month) && !knownMonths.has(month)) legacyPeriodEvents.push(pause);
+  }
   const externalSettlement = externalSettlementAmount > 0
     ? {
         amount: externalSettlementAmount,

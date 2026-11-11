@@ -1,3 +1,4 @@
+const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
 const express = require("express");
 const multer = require("multer");
 
@@ -308,8 +309,52 @@ router.post("/:id/demo-action", requirePermission("payroll.manage"), async (req,
     );
     if (!current) return res.status(404).json({ status: "error", message: "Loan not found in your branch scope." });
 
-    if (["PAUSE", "RESUME", "COMPLETE_EXTERNAL"].includes(action)) {
+    if (action === "PAUSE" || action === "RESUME") {
+      const months = Number(req.body?.pauseMonths);
+      if (action === "PAUSE" && (!Number.isInteger(months) || months < 1 || months > 120)) {
+        return res.status(400).json({ status: "error", message: "Enter a pause duration from 1 to 120 months." });
+      }
+      const data = await prisma.$transaction(async (tx) => {
+        const [loan] = await tx.$queryRawUnsafe(
+          `SELECT "id","status" FROM "payroll_loans" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE`,
+          organizationId, loanId
+        );
+        if (loan?.status === "PAUSED" && action === "RESUME") {
+          const resumed = await loans.updateLoanStatus({ organizationId, actorUserId, loanId, action, reason, prismaClient: tx });
+          await markDraftRunsRecalculationRequired({ organizationId, actorUserId, reason: "Loan resumed.", prismaClient: tx });
+          return resumed;
+        }
+        if (loan?.status !== "ACTIVE") return null;
+        const month = "date_trunc('month', now() AT TIME ZONE 'Africa/Lagos')::date";
+        const windows = action === "PAUSE"
+          ? await tx.$queryRawUnsafe(
+              `INSERT INTO "payroll_loan_pause_windows" ("organizationId","loanId","startMonth","resumeMonth")
+               VALUES ($1,$2,${month},(${month} + make_interval(months => $3::int))::date)
+               ON CONFLICT ("organizationId","loanId","startMonth")
+               DO UPDATE SET "resumeMonth"=EXCLUDED."resumeMonth"
+               RETURNING "resumeMonth" AS "pauseResumeMonth"`, organizationId, loanId, months)
+          : await tx.$queryRawUnsafe(
+              `UPDATE "payroll_loan_pause_windows" SET "resumeMonth"=${month}
+               WHERE "organizationId"=$1 AND "loanId"=$2 AND "startMonth" <= ${month} AND "resumeMonth" > ${month}
+               RETURNING "resumeMonth"`, organizationId, loanId);
+        if (!windows.length) return null;
+        const next = { id: loanId, status: action === "PAUSE" ? "PAUSED" : "ACTIVE",
+          pauseResumeMonth: action === "PAUSE" ? windows[0].pauseResumeMonth.toISOString().slice(0, 10) : null };
+        await tx.organizationAudit.create({ data: {
+          organizationId, actorUserId, entityType: "PayrollLoan", entityId: loanId,
+          action: action === "PAUSE" ? "DEMO_LOAN_PAUSED" : "DEMO_LOAN_RESUMED",
+          newValue: next, reason: String(reason || "").slice(0, 240),
+        } });
+        await markDraftRunsRecalculationRequired({ organizationId, actorUserId, reason: "Loan recovery schedule changed.", prismaClient: tx });
+        return next;
+      });
+      if (!data) return res.status(409).json({ status: "error", message: "This loan is no longer eligible for that action." });
+      return res.json({ status: "success", data });
+    }
+
+    if (action === "COMPLETE_EXTERNAL") {
       const data = await loans.updateLoanStatus({ organizationId, actorUserId, loanId, action, reason });
+      await markDraftRunsRecalculationRequired({ organizationId, actorUserId, reason: "Loan settled externally." });
       return res.json({ status: "success", data });
     }
 

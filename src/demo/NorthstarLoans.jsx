@@ -22,6 +22,24 @@ function NorthstarLoans() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
+  const [register, setRegister] = useState("current");
+  const [search, setSearch] = useState("");
+  const registerRef = useRef(null);
+  const portfolio = loans.filter((row) => ["ACTIVE", "PAUSED", "COMPLETED"].includes(row.status));
+  const completed = portfolio.filter((row) => row.status === "COMPLETED");
+  const total = portfolio.reduce((sum, row) => sum + Number(row.principalAmount || 0), 0);
+  const outstanding = portfolio.reduce((sum, row) => sum + Number(row.outstandingAmount || 0), 0);
+  const recovered = Math.max(0, total - outstanding);
+  const completedAmount = completed.reduce((sum, row) => sum + Number(row.principalAmount || 0), 0);
+  const borrowers = new Set(portfolio.map((row) => row.employeeId || row.employeeNumber).filter(Boolean)).size;
+  const percentage = (value) => total ? value / total * 100 : 0;
+  const visibleLoans = (register === "completed" ? completed : register === "recovery"
+    ? portfolio.filter((row) => Number(row.principalAmount) > Number(row.outstandingAmount))
+    : register === "outstanding" ? portfolio.filter((row) => Number(row.outstandingAmount) > 0)
+    : register === "all" ? portfolio : loans.filter((row) => row.status !== "COMPLETED"))
+    .filter((row) => [row.loanNumber, row.employeeName, row.employeeNumber, row.purpose].some(
+      (value) => String(value || "").toLowerCase().includes(search.trim().toLowerCase())
+    ));
   const [openMenu, setOpenMenu] = useState(null);
   const [selected, setSelected] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -112,7 +130,25 @@ function NorthstarLoans() {
   }
 
   return <main className="northstar-attendance">
-    <header><h1>Loans</h1><p>Northstar fictional loan register</p></header>
+    <header><h1>Loans Dashboard</h1><p>Northstar fictional loan portfolio</p></header>
+    <section className="northstar-attendance__metrics" aria-label="Loan portfolio metrics">
+      {[
+        ["Total loan", total, "all", `${borrowers} unique borrower${borrowers === 1 ? "" : "s"}`],
+        ["Total recovery", recovered, "recovery", "Payroll and external settlements"],
+        ["Total outstanding", outstanding, "outstanding", "Remaining principal"],
+        ["Completed loans", completedAmount, "completed", `${completed.length} completed loan${completed.length === 1 ? "" : "s"}`],
+      ].map(([label, amount, view, detail]) => (
+        <button key={view} type="button" aria-pressed={register === view} onClick={() => {
+          setRegister(view);
+          setSearch("");
+          registerRef.current?.scrollIntoView({ block: "start" });
+        }}>
+          {label}<strong>{money.format(amount)}</strong>
+          <span>{percentage(amount).toFixed(1)}% of total principal · {detail}</span>
+          <progress aria-label={`${label} share of total principal`} max={100} value={percentage(amount)} style={{ width: "100%" }} />
+        </button>
+      ))}
+    </section>
     <section className="northstar-attendance__analytics">
       <h2>Record Loan</h2>
       <p>Record a simulated disbursement and schedule monthly payroll recovery.</p>
@@ -132,14 +168,19 @@ function NorthstarLoans() {
       {error && !selected && <p role="alert">{error}</p>}
       <p role="status">{message}</p>
     </section>
-    <section className="northstar-attendance__analytics">
-      <h2>Loan Register</h2>
+    <section ref={registerRef} className="northstar-attendance__analytics" style={{ scrollMarginTop: "5rem" }}>
+      <div role="group" aria-label="Loan registers" style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
+        <button type="button" aria-pressed={register === "current"} onClick={() => { setRegister("current"); setSearch(""); }}>Loan Register</button>
+        <button type="button" aria-pressed={register === "completed"} onClick={() => { setRegister("completed"); setSearch(""); }}>Completed Loan Register</button>
+      </div>
+      <h2>{({ completed: "Completed Loan Register", recovery: "Loans with recoveries", outstanding: "Outstanding Loans", all: "Loan Portfolio" })[register] || "Loan Register"}</h2>
+      <label>Search register<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Employee, reference or purpose" /></label>
       <div className="northstar-attendance__table"><table>
         <thead><tr>{["Reference", "Employee", "Purpose", "Principal", "Installment", "Outstanding", "Recovery starts", "Status", "Action"].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
-        <tbody>{loans.map((row) => <tr key={row.id}>
+        <tbody>{visibleLoans.map((row) => <tr key={row.id}>
           <td>{row.loanNumber}</td><td>{row.employeeName || row.employeeNumber}</td><td>{row.purpose}</td>
           <td>{money.format(row.principalAmount)}</td><td>{money.format(row.installmentAmount)}</td><td>{money.format(row.outstandingAmount)}</td>
-          <td>{String(row.recoveryStartDate || "—").slice(0, 10)}</td><td>{row.status}</td>
+          <td>{String(row.recoveryStartDate || "—").slice(0, 10)}</td><td>{row.status}{row.status === "PAUSED" && row.pauseResumeMonth ? <div>Resumes {String(row.pauseResumeMonth).slice(0, 7)}</div> : null}</td>
           <td>
             <button type="button" aria-label={`Actions for ${row.loanNumber}`} aria-expanded={openMenu === row.id}
               onClick={() => setOpenMenu(openMenu === row.id ? null : row.id)}>…</button>
@@ -152,7 +193,7 @@ function NorthstarLoans() {
           </td>
         </tr>)}</tbody>
       </table></div>
-      {!loans.length && <p>No loans recorded.</p>}
+      {!visibleLoans.length && <p>No loans match this register view.</p>}
     </section>
     <dialog ref={dialog} className="northstar-attendance__analytics" style={{ width: "min(560px, 92vw)", maxHeight: "85vh" }}
       aria-labelledby="loan-action-heading" onClose={() => { setSelected(null); setError(""); }} onCancel={(event) => { if (saving) event.preventDefault(); }}>
@@ -162,7 +203,8 @@ function NorthstarLoans() {
         {selected.action === "Profile" ? (
           profile?.loan.id === selected.loan.id ? <>
             <dl>
-              <dt>Status</dt><dd>{profile.loan.status}</dd>
+              <dt>Status</dt><dd>{selected.loan.status}</dd>
+              {selected.loan.pauseResumeMonth && <><dt>Recovery resumes</dt><dd>{String(selected.loan.pauseResumeMonth).slice(0, 7)}</dd></>}
               <dt>Principal</dt><dd>{money.format(profile.loan.principalAmount)}</dd>
               <dt>Outstanding</dt><dd>{money.format(profile.loan.outstandingAmount)}</dd>
               <dt>Recovered</dt><dd>{money.format(profile.loan.recoveredAmount)}</dd>
@@ -179,6 +221,8 @@ function NorthstarLoans() {
           </> : !error && <p role="status">Loading loan profile…</p>
         ) : <form onSubmit={saveAction}>
           {selected.action === "Complete" && <p>Record a simulated external settlement of {money.format(selected.loan.outstandingAmount)} and close this loan.</p>}
+          {selected.action === "Pause" && <label>Pause duration (months)<input name="pauseMonths" type="number" min="1" max="120" step="1" defaultValue="1" required /></label>}
+          {selected.action === "Pause" && <p>The current payroll month counts as the first paused month.</p>}
           {["Complete", "Pause", "Resume"].includes(selected.action) && <label>Reason or reference<input name="reason" required maxLength={240} /></label>}
           {["Edit", "Top-up"].includes(selected.action) && <>
             <label>Purpose<input name="purpose" required maxLength={160} defaultValue={selected.action === "Edit" ? selected.loan.purpose : ""} /></label>
