@@ -23,8 +23,9 @@ function salesDemoBoundary(req,res,next){
   const isNorthstarPayrollAction =
    claims.organizationId === NORTHSTAR_ID &&
    claims.accessType !== 'ESS' &&
-   req.method === 'POST' &&
-   /^\/api\/(?:payroll\/runs\/(?:draft|[\w-]+\/(?:submit|decision|reopen))|attendance\/manual-payroll-inputs|loans\/(?:demo-record|[\w-]+\/demo-action))\/?$/i.test(req.path);
+   ((req.method === 'POST' &&
+   /^\/api\/(?:payroll\/runs\/(?:draft|[\w-]+\/(?:submit|decision|reopen))|payroll\/salary-advances|attendance\/manual-payroll-inputs|loans\/(?:demo-record|[\w-]+\/demo-action))\/?$/i.test(req.path)) ||
+   (req.method === 'PATCH' && /^\/api\/payroll\/salary-advances\/[\w-]+\/?$/i.test(req.path)));
   if (!['GET', 'HEAD'].includes(req.method) && !pricingQuote && !isNorthstarPayrollAction) return deny();
   for (const key of ['organizationId', 'organization_id', 'tenantId']) {
    if (req.query?.[key] && req.query[key] !== claims.organizationId) return deny();

@@ -16,6 +16,7 @@ test('demo allows authenticated pricing reads and calculations, but never invoic
 test('only Northstar sessions can enter the permission-checked payroll write routes', () => {
   for (const path of [
     '/api/payroll/runs/draft',
+    '/api/payroll/salary-advances',
     '/api/payroll/runs/demo-run/submit',
     '/api/payroll/runs/demo-run/decision',
     '/api/payroll/runs/demo-run/reopen',
@@ -29,4 +30,12 @@ test('only Northstar sessions can enter the permission-checked payroll write rou
     assert.equal(check({ path, method: 'POST', body: { organizationId: 'production-tenant' } }).res.statusCode, 403);
     assert.equal(check({ path, method: 'POST', token: false }).res.statusCode, 403);
   }
+});
+
+test('salary advance edits are restricted to Northstar and the record endpoint', () => {
+  const request = { path: '/api/payroll/salary-advances/advance-1', method: 'PATCH' };
+  assert.equal(check(request).next, true);
+  assert.equal(check({ ...request, org: 'chris-client-demo-org-20261025' }).res.statusCode, 403);
+  assert.equal(check({ ...request, path: request.path + '/status' }).res.statusCode, 403);
+  assert.equal(check({ ...request, method: 'DELETE' }).res.statusCode, 403);
 });
