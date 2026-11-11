@@ -70,3 +70,28 @@ Recovery uses an independent loopback PostgreSQL cluster on port 55435.
 The rehearsal provisions a fresh CHRiS application credential and verifies
 that it can read the restored fictional record. Scheduled off-site backups
 and recovery for a complete CHRiS staging dataset are follow-up milestones.
+
+### Run the CHRiS API on the Windows pilot
+
+In a clean checkout of the pilot branch, install the backend dependencies
+with `npm ci` inside `backend`. With the persistent PostgreSQL pilot already
+started, run from the checkout:
+
+```powershell
+node .\tools\cca-local-demo\startPersistentChrisStaging.cjs
+```
+
+This applies Prisma migrations to the dedicated Windows staging database and
+seeds two fictional organisations with four employees across three branches.
+The process uses a restricted database role to run the existing CHRiS API on
+`127.0.0.1:55436`. It verifies login, access to the first organisation's
+three employees and two branches, and exclusion of the second organisation.
+The fictional login details are written to `fictional-login.json` in the
+account-private staging directory. The launcher skips the production scheduler
+entry point. Stop the API before rerunning the launcher.
+
+Use `-Action Backup -CompressArchive -RecoveryCertificate <path>` to take
+an encrypted archive of the populated database. Add `--with-chris` to the
+Linux recovery command to verify all four employees, their branch and
+department relationships, and the operator's permission in the restored
+database.

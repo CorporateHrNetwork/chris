@@ -1,7 +1,8 @@
 param(
     [ValidateSet('Start', 'Verify', 'Stop', 'Backup')]
     [string]$Action = 'Start',
-    [string]$RecoveryCertificate
+    [string]$RecoveryCertificate,
+    [switch]$CompressArchive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -156,14 +157,31 @@ $opensslPath = if ($openssl) { $openssl.Source } else { Join-Path $env:ProgramFi
 if (!(Test-Path -LiteralPath $opensslPath)) { throw 'OpenSSL is required for the encrypted backup.' }
 $archive = Join-Path $root ('recovery-' + [Guid]::NewGuid().ToString('N') + '.cms')
 $plain = Join-Path $root ('recovery-' + [Guid]::NewGuid().ToString('N') + '.dump')
+$compressed = "$plain.gz"
 try {
     Invoke-Pg 'pg_dump' @('-w', '-U', $admin, '-Fc', '-f', $plain, 'chris_staging')
-    & $opensslPath cms -encrypt -binary -aes-256-gcm -outform DER -in $plain -out $archive $cert
+    $payload = $plain
+    if ($CompressArchive) {
+        $inputStream = [IO.File]::OpenRead($plain)
+        try {
+            $outputStream = [IO.File]::Create($compressed)
+            try {
+                $gzip = [IO.Compression.GZipStream]::new($outputStream, [IO.Compression.CompressionLevel]::Optimal)
+                try { $inputStream.CopyTo($gzip) } finally { $gzip.Dispose() }
+            } finally {
+                $outputStream.Dispose()
+            }
+        } finally {
+            $inputStream.Dispose()
+        }
+        $payload = $compressed
+    }
+    & $opensslPath cms -encrypt -binary -aes-256-gcm -outform DER -in $payload -out $archive $cert
     if ($LASTEXITCODE -ne 0) { throw 'Backup encryption failed.' }
     Write-Output $archive
 } catch {
     Remove-Item -LiteralPath $archive -ErrorAction SilentlyContinue
     throw
 } finally {
-    Remove-Item -LiteralPath $plain -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $plain, $compressed -ErrorAction SilentlyContinue
 }
