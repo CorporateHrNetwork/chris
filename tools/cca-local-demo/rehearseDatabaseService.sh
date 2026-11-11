@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 
-for program in initdb pg_ctl psql pg_dump pg_restore gpg openssl; do
+for program in initdb pg_ctl psql pg_dump pg_restore openssl; do
   command -v "$program" >/dev/null || { echo "Missing prerequisite: $program" >&2; exit 1; }
 done
 
@@ -23,17 +23,20 @@ trap 'exit 143' TERM
 
 # Clear inherited PostgreSQL settings so the rehearsal can only use this cluster.
 for variable in ${!PG@}; do unset "$variable"; done
-export PGHOST="$lab" PGPORT=5432
-mkdir "$lab/gnupg"
-export GNUPGHOME="$lab/gnupg"
+export PGHOST=127.0.0.1 PGPORT=55432
+export LC_ALL=C
 
-initdb -D "$lab/data" -U cca_pilot_admin --auth-local=trust --auth-host=scram-sha-256 >/dev/null
-# The socket directory is owner-only. Give demo roles password authentication.
-cat > "$lab/data/pg_hba.conf" <<'HBA'
-local all cca_pilot_admin trust
-local all all scram-sha-256
-HBA
-pg_ctl -D "$lab/data" -l "$lab/postgres.log" -o "-c listen_addresses='' -c unix_socket_directories=$lab -c unix_socket_permissions=0700" -w start >/dev/null
+openssl rand -hex 24 > "$lab/admin-password"
+initdb -D "$lab/data" -U cca_pilot_admin --auth=scram-sha-256 \
+  --pwfile="$lab/admin-password" >/dev/null
+printf '*:*:*:cca_pilot_admin:%s\n' "$(cat "$lab/admin-password")" > "$lab/pgpass"
+rm -- "$lab/admin-password"
+export PGPASSFILE="$lab/pgpass"
+if ! pg_ctl -D "$lab/data" -l "$lab/postgres.log" \
+  -o "-c listen_addresses=$PGHOST -c port=$PGPORT -c unix_socket_directories=''" -w start >/dev/null; then
+  cat "$lab/postgres.log" >&2
+  exit 1
+fi
 
 admin() {
   psql -X -v ON_ERROR_STOP=1 -U cca_pilot_admin "$@"
@@ -66,8 +69,7 @@ REVOKE CONNECT ON DATABASE postgres, template0, template1, chris_staging, cedar_
 GRANT CONNECT ON DATABASE chris_staging TO chris_staging_app;
 GRANT CONNECT ON DATABASE cedar_pilot TO cedar_pilot_app;
 SQL
-printf '*:*:*:chris_staging_app:%s\n*:*:*:cedar_pilot_app:%s\n' "$chris_password" "$cedar_password" > "$lab/pgpass"
-export PGPASSFILE="$lab/pgpass"
+printf '*:*:*:chris_staging_app:%s\n*:*:*:cedar_pilot_app:%s\n' "$chris_password" "$cedar_password" >> "$lab/pgpass"
 unset chris_password cedar_password
 
 for database in chris_staging cedar_pilot; do
@@ -92,17 +94,17 @@ expect_denied 'is not permitted to log in' cedar_pilot_app cedar_pilot 'SELECT 1
 expect_value chris_staging chris_staging_app chris_staging 'SELECT label FROM pilot_record'
 echo "PASS: Cedar suspension leaves CHRiS available"
 
-openssl rand -hex 32 > "$lab/backup-key"
-backup_cipher() {
-  gpg --batch --quiet --pinentry-mode loopback --passphrase-file "$lab/backup-key" "$@"
-}
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=CCA Pilot Backup' \
+  -keyout "$lab/backup-key.pem" -out "$lab/backup-cert.pem" >/dev/null 2>&1
 pg_dump -U cca_pilot_admin --format=custom chris_staging |
-  backup_cipher --symmetric --cipher-algo AES256 --output "$lab/chris.dump.gpg"
+  openssl cms -encrypt -binary -aes-256-gcm -outform DER \
+    -out "$lab/chris.dump.cms" "$lab/backup-cert.pem"
 admin -d postgres >/dev/null <<'SQL'
 CREATE DATABASE chris_restore;
 REVOKE CONNECT ON DATABASE chris_restore FROM PUBLIC;
 SQL
-backup_cipher --decrypt "$lab/chris.dump.gpg" |
+openssl cms -decrypt -binary -inform DER -in "$lab/chris.dump.cms" \
+  -recip "$lab/backup-cert.pem" -inkey "$lab/backup-key.pem" |
   pg_restore -U cca_pilot_admin --exit-on-error --dbname=chris_restore
 [[ "$(admin -At -d chris_restore -c 'SELECT label FROM pilot_record')" == chris_staging ]]
 echo "PASS: encrypted CHRiS backup restored and the record matched"

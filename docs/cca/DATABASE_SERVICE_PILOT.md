@@ -12,7 +12,7 @@ entitlements and invoicing are handled manually in this pilot.
    application.” Confirm the case routes to Database Services. Review the
    proposed response through the existing CCA workflow.
 2. As the pilot operator, run the following on Linux or WSL as an unprivileged
-   user, with PostgreSQL server and client binaries, GnuPG, and OpenSSL on PATH.
+   user, with PostgreSQL server and client binaries, and OpenSSL on PATH.
 
    ```sh
    bash tools/cca-local-demo/rehearseDatabaseService.sh
@@ -21,7 +21,7 @@ entitlements and invoicing are handled manually in this pilot.
 3. Verify the three reported checks cover database isolation, Cedar suspension,
    and CHRiS backup restoration.
 
-The script creates a new Unix-socket-only cluster and fictional records. It
+The script creates a new password-protected cluster on loopback port 55432 and fictional records. It
 removes the test cluster and artifacts when it finishes. CCA has no live
 provisioning endpoint and the script never reads a CHRiS connection string.
 The restore check covers one database archive within the test cluster. Before
