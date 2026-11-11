@@ -327,7 +327,7 @@ function PaidLeaveWorkspace() {
       <Panel title="Paid Leave Payroll Review">
         <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "All paid leave"], ...periods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
         <p style={controlNote}>Review approved paid leave from Leave Management. Paid leave preserves regular pay for the covered days. Leave allowance is processed separately.</p>
-        <Link to="/leave">Open Leave Management</Link>
+        <Link to="/leave/calendar">Open Leave Calendar</Link>
         {!loading && !error && <p role="status"><strong>{paidDays.toLocaleString()} paid leave days</strong> · {employeeCount} employee(s) · {rows.length} request(s)</p>}
       </Panel>
       <Feedback error={error} />
