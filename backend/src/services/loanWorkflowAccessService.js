@@ -87,6 +87,8 @@ async function listVisibleLoans({ organizationId, userId, status, employeeNumber
   const access = await getUserLocationAccess({ organizationId, userId, prismaClient });
   const values = [organizationId];
   const filters = [];
+  const effectiveStatus = `CASE WHEN l."status"='ACTIVE' AND pause."resumeMonth" IS NOT NULL
+                                THEN 'PAUSED' ELSE l."status" END`;
   let parameter = 2;
   if (!access.allLocations) {
     filters.push(`l."workflowLocationId" = ANY($${parameter}::text[])`);
@@ -94,7 +96,7 @@ async function listVisibleLoans({ organizationId, userId, status, employeeNumber
     parameter += 1;
   }
   if (String(status || "").trim()) {
-    filters.push(`l."status"=$${parameter}`);
+    filters.push(`(${effectiveStatus})=$${parameter}`);
     values.push(String(status).trim().toUpperCase());
     parameter += 1;
   }
@@ -104,17 +106,27 @@ async function listVisibleLoans({ organizationId, userId, status, employeeNumber
   }
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT l.*,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
-            ol."name" AS "locationName",parent."loanNumber" AS "parentLoanNumber"
+            ol."name" AS "locationName",parent."loanNumber" AS "parentLoanNumber",
+            ${effectiveStatus} AS "effectiveStatus", pause."resumeMonth" AS "pauseResumeMonth"
        FROM "payroll_loans" l
        JOIN "employees" e ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
        LEFT JOIN "organization_locations" ol ON ol."id"=l."workflowLocationId" AND ol."organizationId"=l."organizationId"
        LEFT JOIN "payroll_loans" parent ON parent."id"=l."parentLoanId" AND parent."organizationId"=l."organizationId"
+       LEFT JOIN LATERAL (
+         SELECT w."resumeMonth" FROM "payroll_loan_pause_windows" w
+         WHERE w."organizationId"=l."organizationId" AND w."loanId"=l."id"
+           AND l."status"='ACTIVE'
+           AND date_trunc('month', now() AT TIME ZONE 'Africa/Lagos')::date >= w."startMonth"
+           AND date_trunc('month', now() AT TIME ZONE 'Africa/Lagos')::date < w."resumeMonth"
+         ORDER BY w."resumeMonth" DESC LIMIT 1
+       ) pause ON TRUE
       WHERE l."organizationId"=$1 ${filters.length ? `AND ${filters.join(" AND ")}` : ""}
       ORDER BY l."createdAt" DESC`,
     ...values
   );
-  return rows.map((row) => ({
+  return rows.map(({ effectiveStatus, ...row }) => ({
     ...row,
+    status: effectiveStatus,
     principalAmount: Number(row.principalAmount || 0),
     outstandingAmount: Number(row.outstandingAmount || 0),
     installmentAmount: Number(row.installmentAmount || 0),
