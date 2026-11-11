@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest, getStoredOrganization } from "../services/api";
+import { apiRequest, getStoredOrganization, IS_SALES_DEMO_HOST } from "../services/api";
 import { LeavePage, Notice, Panel, Table, employeeName, styles } from "../components/leave/LeaveUi";
 import { exportLedgerCsv, exportLedgerPdf, exportLedgerXlsx, printLedgerReport } from "../utils/leaveLedgerExports";
 import chrisLogo from "../assets/images/chris-logo.png";
@@ -19,7 +19,8 @@ export default function LeaveBalances() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showRegister, setShowRegister] = useState(false);
+  const [showRegister, setShowRegister] = useState(IS_SALES_DEMO_HOST);
+  const [registerLoading, setRegisterLoading] = useState(IS_SALES_DEMO_HOST);
   const [register, setRegister] = useState([]);
   const [reportOrganization, setReportOrganization] = useState(() => getStoredOrganization() || {});
 
@@ -83,11 +84,23 @@ export default function LeaveBalances() {
     else if (event.key === "Escape") setSearchOpen(false);
   }
 
-  async function toggleRegister() {
-    if (!showRegister && !register.length) {
-      try { const response = await apiRequest(`/api/leave/balance-register?leaveYear=${year}`); setRegister(response.data || []); }
-      catch (requestError) { setError(requestError.message); return; }
-    }
+  useEffect(() => {
+    if (!showRegister) return;
+    let active = true;
+    setRegisterLoading(true);
+    apiRequest(`/api/leave/balance-register?leaveYear=${year}`)
+      .then((response) => { if (active) setRegister(response.data || []); })
+      .catch((requestError) => {
+        if (active) {
+          setRegister([]);
+          setError(requestError.message);
+        }
+      })
+      .finally(() => { if (active) setRegisterLoading(false); });
+    return () => { active = false; };
+  }, [showRegister, year]);
+
+  function toggleRegister() {
     setShowRegister((visible) => !visible);
   }
 
@@ -130,7 +143,7 @@ export default function LeaveBalances() {
       <label className="leave-ledger-field">Leave Policy<select className="leave-ledger-control" style={styles.input} value={policyId} onChange={(event) => setPolicyId(event.target.value)} disabled={!data?.policies?.length}><option value="">Select active policy</option>{(data?.policies || []).map((policy) => <option key={policy.id} value={policy.id}>{policy.leaveType?.name} · {policy.name} v{policy.versionNumber}</option>)}</select></label>
     </div>{data?.employee && <p style={styles.muted}>{employeeLabel(data.employee)} · {data.employmentLevel?.name || "Level not mapped"}</p>}</Panel>
     {loading ? <Panel>Loading authoritative leave ledger...</Panel> : ledger ? <Ledger data={data}/> : <Panel>Select an employee and active tenant policy to view the ledger.</Panel>}
-    {showRegister && <Panel title="Organization-wide register" subtitle="Reporting view; the employee ledger above is the primary operational workflow."><Table rows={register} empty="No balances found." columns={[{key:"employee",label:"Employee",render:(row)=>`${row.employee?.employeeNumber} · ${row.employeeName}`},{key:"policy",label:"Policy",render:(row)=>row.policy?.name||row.leaveType?.name},{key:"entitlement",label:"Entitlement"},{key:"used",label:"Used"},{key:"pendingAllocation",label:"Committed"},{key:"available",label:"Available"}]}/></Panel>}
+    {showRegister && <Panel title="Organization-wide register" subtitle="Reporting view; the employee ledger above is the primary operational workflow."><Table rows={registerLoading ? [] : register} empty={registerLoading ? "Loading leave balances…" : "No balances found."} columns={[{key:"employee",label:"Employee",render:(row)=>`${row.employee?.employeeNumber} · ${row.employeeName}`},{key:"policy",label:"Policy",render:(row)=>row.policy?.name||row.leaveType?.name},{key:"entitlement",label:"Entitlement"},{key:"used",label:"Used"},{key:"pendingAllocation",label:"Committed"},{key:"available",label:"Available"}]}/></Panel>}
   </LeavePage>;
 }
 function Ledger({data}){const ledger=data.ledger;const rows=[["Employee",`${data.employee.employeeNumber} · ${employeeName(data.employee)}`],["Leave Year",ledger.leaveYear],["Leave Type",ledger.policy.leaveType?.name],["Policy / Version",`${ledger.policy.name} · v${ledger.policyVersion}`],["Policy Unit",ledger.unit],["Entitlement",ledger.totalEntitlement],["Opening",ledger.baseEntitlement],["Accrued",ledger.accrued],["Carryover",ledger.carryover],["Adjustments",ledger.adjustments],["Used",ledger.used],["Committed / Pending",ledger.pending],["Available",ledger.available],["Maximum Requestable",ledger.maximumRequestable],["Allocation Source",ledger.allocation?.source||"Authoritative policy balance"],["Effective Policy",`${new Date(ledger.policy.effectiveFrom).toLocaleDateString()} — ${ledger.policy.effectiveTo?new Date(ledger.policy.effectiveTo).toLocaleDateString():"Open"}`]];return <Panel title="Read-only Leave Ledger" subtitle="Values come from the same authoritative balance projection used by Leave Requests and Employee Leave Profile."><div style={ledgerGrid}>{rows.map(([key,value])=><div key={key} style={metric}><span style={styles.muted}>{key}</span><strong>{value??"—"}</strong></div>)}</div></Panel>}
