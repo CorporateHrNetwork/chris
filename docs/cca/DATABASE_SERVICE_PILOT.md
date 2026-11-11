@@ -95,3 +95,37 @@ an encrypted archive of the populated database. Add `--with-chris` to the
 Linux recovery command to verify all four employees, their branch and
 department relationships, and the operator's permission in the restored
 database.
+
+### Schedule and verify backups
+
+Run these PowerShell commands from the Windows pilot scripts directory. The
+default storage is an account-private folder on the staging computer.
+
+```powershell
+.\Invoke-StagingBackup.ps1 -Action InitializeKey
+.\Invoke-StagingBackup.ps1 -Action Backup
+.\Invoke-StagingBackup.ps1 -Action Restore
+.\Register-StagingBackupTasks.ps1
+```
+
+Initialize the key once. The encrypted private key and public certificate
+are under `%LOCALAPPDATA%\CRNETWORK-CCA-Database-Staging\backup-keys`.
+The scheduled restore unlocks the encrypted private key using a DPAPI-protected
+passphrase scoped to the current Windows account. Before relying on disaster
+recovery, put a copy of the encrypted private key and certificate in an
+independent CRNETWORK-controlled location and record the passphrase separately
+in a CRNETWORK-controlled credential vault. Test those copies on another
+machine. The DPAPI file alone is tied to the Windows account and device.
+
+The backup runs daily at 08:00 Lagos time. Restore runs Saturdays at 10:00
+and uses a temporary PostgreSQL instance to check the four fictional employee
+records and their organisation, branch and department relationships. Windows
+runs the tasks under the signed-in pilot account and starts a missed task
+when the account is available. Per-run logs are kept under `backup-task-logs`.
+
+For off-site storage, specify `-OffSiteDestination` on both manual test runs
+and the registration script after confirming the rclone account and dedicated
+`CRNETWORK-CCA-Staging-Backups` folder. The backup publishes a success marker
+only after re-reading the stored archive and matching its SHA-256. A separate
+monitor can use that marker to detect a missing backup even when Windows is
+offline. No retention deletion is scheduled.
