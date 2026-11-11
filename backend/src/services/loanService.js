@@ -105,18 +105,29 @@ async function listLoans({ organizationId, status, employeeNumber, prismaClient 
   const rows = await prismaClient.$queryRawUnsafe(
     `SELECT l.*, e."employeeNumber",
             CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
-            parent."loanNumber" AS "parentLoanNumber"
+            parent."loanNumber" AS "parentLoanNumber",
+            pause."resumeMonth" AS "pauseResumeMonth"
        FROM "payroll_loans" l
        JOIN "employees" e
          ON e."id"=l."employeeId" AND e."organizationId"=l."organizationId"
        LEFT JOIN "payroll_loans" parent
          ON parent."id"=l."parentLoanId" AND parent."organizationId"=l."organizationId"
+      LEFT JOIN LATERAL (
+         SELECT w."resumeMonth" FROM "payroll_loan_pause_windows" w
+         WHERE w."organizationId"=l."organizationId" AND w."loanId"=l."id"
+           AND date_trunc('month', now() AT TIME ZONE 'Africa/Lagos')::date >= w."startMonth"
+           AND date_trunc('month', now() AT TIME ZONE 'Africa/Lagos')::date < w."resumeMonth"
+         ORDER BY w."resumeMonth" DESC LIMIT 1
+       ) pause ON TRUE
       WHERE l."organizationId"=$1
         ${filters.length ? `AND ${filters.join(" AND ")}` : ""}
       ORDER BY l."createdAt" DESC`,
     ...values
   );
-  return rows.map(mapLoan);
+  return rows.map((row) => mapLoan({
+    ...row,
+    status: row.status === "ACTIVE" && row.pauseResumeMonth ? "PAUSED" : row.status,
+  }));
 }
 
 async function getLoanSummary({ organizationId, prismaClient = prisma }) {
