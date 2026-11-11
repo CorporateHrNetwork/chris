@@ -20,6 +20,7 @@ test('only Northstar sessions can enter the permission-checked payroll write rou
     '/api/payroll/runs/demo-run/decision',
     '/api/payroll/runs/demo-run/reopen',
     '/api/attendance/manual-payroll-inputs',
+    '/api/loans/demo-record',
   ]) {
     assert.equal(check({ path, method: 'POST' }).next, true);
     assert.equal(check({ path, method: 'POST', org: 'chris-client-demo-org-20261025' }).res.statusCode, 403);
