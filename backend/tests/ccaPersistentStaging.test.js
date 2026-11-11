@@ -125,6 +125,34 @@ test("protected Service Desk automatically routes fictional intake and persists 
     ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED", "SUPPORT_DRAFT_PREPARED"]);
 });
 
+test("authenticated staging routes and audits a database service request", async t => {
+  const options = fixture(t);
+  const request = {
+    description: "Please provision a PostgreSQL database for our staging application.",
+    requestId: "276eb611-326f-4074-b848-e7d381211eca",
+  };
+  await withServer(options, async (post, origin) => {
+    assert.equal((await post("support-intake", request)).status, 403);
+    const first = await post("password", { account: ACCOUNT, password });
+    const second = await post("mfa", { challenge: (await first.json()).challenge,
+      code: otpAt(secret, Math.floor(now / 30)) });
+    assert.equal(second.status, 200);
+    const headers = { Cookie: second.headers.get("set-cookie").split(";")[0] };
+    const response = await post("support-intake", request, headers);
+    assert.equal(response.status, 200);
+    const { case: ticket } = await response.json();
+    assert.equal(ticket.tenantId, "demo-cedar");
+    assert.equal(ticket.assignee, "Database Services Agent");
+    assert.equal(ticket.status, "ASSIGNED");
+    const workspace = await (await fetch(origin + "/api/workspace?module=support", { headers })).json();
+    assert.ok(workspace.routingCases.some(item => item.id === ticket.id && item.assignee === ticket.assignee));
+    const support = require("../../tools/cca-local-demo/server").createDurableDemoState({
+      dataDir: path.join(options.directory, "fictional-support"),
+    });
+    assert.ok(support.audit(ticket.id).events.some(event => event.event === "AGENT_ASSIGNED"));
+  });
+});
+
 test("expired staging page refresh returns to sign-in while APIs stay protected", async t => {
   const options = fixture(t);
   let time = now;

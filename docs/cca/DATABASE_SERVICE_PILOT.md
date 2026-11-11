@@ -21,6 +21,19 @@ entitlements and invoicing are handled manually in this pilot.
 3. Verify the three reported checks cover database isolation, Cedar suspension,
    and CHRiS backup restoration.
 
+To include the CHRiS login smoke test, install the backend dependencies with
+`npm ci` in `backend`, then run:
+
+```sh
+bash tools/cca-local-demo/rehearseDatabaseService.sh --with-chris
+```
+
+This applies the repository's Prisma migrations to the empty CHRiS test
+database, creates a fictional organization and user, and exercises the existing
+CHRiS login route using a restricted database role. The check signs in after
+Cedar is suspended and rejects the same credentials for an unknown organization.
+It verifies the authentication path with a local HTTP server.
+
 The script creates a new password-protected cluster on loopback port 55432 and fictional records. It
 removes the test cluster and artifacts when it finishes. CCA has no live
 provisioning endpoint and the script never reads a CHRiS connection string.

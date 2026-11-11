@@ -3,6 +3,14 @@
 set -euo pipefail
 umask 077
 
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--with-chris" ) ]]; then
+  echo "Usage: bash $0 [--with-chris]" >&2
+  exit 2
+fi
+with_chris=${1:-}
+tool_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+backend_dir="$tool_dir/../../backend"
+
 for program in initdb pg_ctl psql pg_dump pg_restore openssl; do
   command -v "$program" >/dev/null || { echo "Missing prerequisite: $program" >&2; exit 1; }
 done
@@ -26,10 +34,11 @@ for variable in ${!PG@}; do unset "$variable"; done
 export PGHOST=127.0.0.1 PGPORT=55432
 export LC_ALL=C
 
-openssl rand -hex 24 > "$lab/admin-password"
+pilot_admin_password=$(openssl rand -hex 24)
+printf '%s\n' "$pilot_admin_password" > "$lab/admin-password"
 initdb -D "$lab/data" -U cca_pilot_admin --auth=scram-sha-256 \
   --pwfile="$lab/admin-password" >/dev/null
-printf '*:*:*:cca_pilot_admin:%s\n' "$(cat "$lab/admin-password")" > "$lab/pgpass"
+printf '*:*:*:cca_pilot_admin:%s\n' "$pilot_admin_password" > "$lab/pgpass"
 rm -- "$lab/admin-password"
 export PGPASSFILE="$lab/pgpass"
 if ! pg_ctl -D "$lab/data" -l "$lab/postgres.log" \
@@ -70,7 +79,20 @@ GRANT CONNECT ON DATABASE chris_staging TO chris_staging_app;
 GRANT CONNECT ON DATABASE cedar_pilot TO cedar_pilot_app;
 SQL
 printf '*:*:*:chris_staging_app:%s\n*:*:*:cedar_pilot_app:%s\n' "$chris_password" "$cedar_password" >> "$lab/pgpass"
-unset chris_password cedar_password
+unset cedar_password
+
+if [[ "$with_chris" == "--with-chris" ]]; then
+  # Use only credentials generated for this disposable cluster.
+  admin_url="postgresql://cca_pilot_admin:$pilot_admin_password@$PGHOST:$PGPORT/chris_staging"
+  app_url="postgresql://chris_staging_app:$chris_password@$PGHOST:$PGPORT/chris_staging"
+  (
+    cd -- "$backend_dir"
+    env -i PATH="$PATH" HOME="$lab" DOTENV_CONFIG_PATH=/dev/null DATABASE_URL="$admin_url" \
+      ./node_modules/.bin/prisma migrate deploy
+    env -i PATH="$PATH" HOME="$lab" DOTENV_CONFIG_PATH=/dev/null DATABASE_URL="$admin_url" \
+      ./node_modules/.bin/prisma generate
+  )
+fi
 
 for database in chris_staging cedar_pilot; do
   admin -d "$database" >/dev/null <<SQL
@@ -93,6 +115,18 @@ SQL
 expect_denied 'is not permitted to log in' cedar_pilot_app cedar_pilot 'SELECT 1'
 expect_value chris_staging chris_staging_app chris_staging 'SELECT label FROM pilot_record'
 echo "PASS: Cedar suspension leaves CHRiS available"
+
+if [[ "$with_chris" == "--with-chris" ]]; then
+  (
+    cd -- "$lab"
+    admin -d chris_staging >/dev/null <<'SQL'
+GRANT SELECT ON organizations, users, user_roles, roles TO chris_staging_app;
+SQL
+    env -i PATH="$PATH" HOME="$lab" DOTENV_CONFIG_PATH=/dev/null DATABASE_URL="$app_url" \
+      CCA_PILOT_ADMIN_URL="$admin_url" node "$tool_dir/verifyChrisStaging.cjs"
+  )
+fi
+unset pilot_admin_password chris_password
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=CCA Pilot Backup' \
   -keyout "$lab/backup-key.pem" -out "$lab/backup-cert.pem" >/dev/null 2>&1
