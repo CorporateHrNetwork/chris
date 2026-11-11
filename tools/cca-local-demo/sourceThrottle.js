@@ -14,18 +14,26 @@ function createSourceThrottle({ clock = () => Math.floor(Date.now()/1000), windo
       throw Error("CCA_TRUSTED_PEER_REQUIRED");
     return crypto.createHash("sha256").update(peerId).digest("hex");
   }
+  function expireBuckets(now) {
+    // Sweep before enforcing capacity: otherwise stale entries can deny all
+    // new trusted peers until those expired peers happen to return.
+    for(const [key,item] of buckets) {
+      if(now>=item.resetAt) buckets.delete(key);
+    }
+  }
   function limit(peerId) {
     const key=sourceKey(peerId), now=clock();
+    if(!Number.isFinite(now)) throw Error("CCA_THROTTLE_BAD_CLOCK");
+    expireBuckets(now);
     let item=buckets.get(key);
-    if(item && now>=item.resetAt){buckets.delete(key);item=undefined;}
     if(!item){
-      // Resource exhaustion must fail closed. Do not evict blocked sources to
-      // make room for an attacker to reset their count.
+      // Resource exhaustion must fail closed. Do not evict active blocked
+      // sources to make room for an attacker to reset their count.
       if(buckets.size>=maxSources)return {allowed:false,retryAfterSeconds:windowSeconds};
       item={failures:0,resetAt:now+windowSeconds};buckets.set(key,item);
     }
     if(item.failures>=maxAttempts)
-      return {allowed:false,retryAfterSeconds:Math.max(1,item.resetAt-now)};
+      return {allowed:false,retryAfterSeconds:Math.max(1,Math.ceil(item.resetAt-now))};
     return {allowed:true,retryAfterSeconds:0};
   }
   function recordFailure(peerId) {
