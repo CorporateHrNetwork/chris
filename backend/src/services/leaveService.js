@@ -1000,7 +1000,7 @@ async function getLeaveRequests({
   leaveYear = null,
   locationId = null,
 }) {
-  const normalizedYear = Number(leaveYear);
+  const normalizedYear = leaveYear == null || leaveYear === "" ? NaN : Number(leaveYear);
   const yearStart = Number.isInteger(normalizedYear)
     ? new Date(Date.UTC(normalizedYear, 0, 1))
     : null;
