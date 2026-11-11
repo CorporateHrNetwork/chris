@@ -8,6 +8,7 @@ function PermissionRoute({
     hasPermission,
     loading,
     error,
+    refreshAuthorization,
   } = useAuthorization();
 
   if (loading) {
@@ -18,13 +19,22 @@ function PermissionRoute({
     );
   }
 
+  if (error) {
+    return (
+      <div role="alert" style={stateStyle}>
+        <h1 style={titleStyle}>Unable to verify access</h1>
+        <p style={messageStyle}>{error}</p>
+        <button type="button" onClick={refreshAuthorization}>Retry</button>
+      </div>
+    );
+  }
+
   if (!hasPermission(permission)) {
     return (
       <div role="alert" style={stateStyle}>
         <h1 style={titleStyle}>Access denied</h1>
         <p style={messageStyle}>
-          {error ||
-            "You do not have permission to view this CHRIS page."}
+          You do not have permission to view this CHRIS page.
         </p>
       </div>
     );

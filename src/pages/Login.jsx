@@ -18,7 +18,7 @@ import {
 
 import loginBackground from "../assets/images/login-bg.png";
 import chrisLogo from "../assets/images/chris-logo.png";
-import { API_BASE_URL } from "../services/api";
+import { API_BASE_URL, clearAuthSession } from "../services/api";
 
 /*
   CHRIS_TENANT_AWARE_LOGIN
@@ -143,32 +143,6 @@ function Login() {
     };
   }, []);
 
-  const clearExistingSession = () => {
-    localStorage.removeItem(
-      "chris_token"
-    );
-
-    localStorage.removeItem(
-      "chris_user"
-    );
-
-    localStorage.removeItem(
-      "chris_organization"
-    );
-
-    sessionStorage.removeItem(
-      "chris_token"
-    );
-
-    sessionStorage.removeItem(
-      "chris_user"
-    );
-
-    sessionStorage.removeItem(
-      "chris_organization"
-    );
-  };
-
   const handleSubmit = async (
     event
   ) => {
@@ -216,7 +190,7 @@ function Login() {
         );
       }
 
-      clearExistingSession();
+      clearAuthSession();
 
       // Preserve the authenticated tenant for future protected-route redirects.
       if (result.data.organization?.slug) {

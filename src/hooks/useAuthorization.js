@@ -31,8 +31,9 @@ function useAuthorization() {
         "/api/auth/me"
       );
 
-      setProfile(result.data || null);
+      if (getAuthToken() === token) setProfile(result.data || null);
     } catch (err) {
+      if (getAuthToken() !== token) return;
       console.error(
         "CHRIS authorization profile error:",
         err
