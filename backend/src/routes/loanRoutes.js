@@ -248,6 +248,50 @@ router.get("/", requirePermission("payroll.view"), async (req, res) => {
   }
 });
 
+// Northstar records a simulated approval and disbursement in the loan ledger.
+router.post("/demo-record", requirePermission("payroll.manage"), async (req, res) => {
+  const { organizationId, userId: actorUserId, activeLocationId, organization } = req.auth;
+  if (organizationId !== "chris-demo-org-20261022" || organization?.slug !== "chris-demo-company") {
+    return res.status(403).json({ status: "error", message: "Loan recording here is available to Northstar Demo Industries." });
+  }
+
+  const { principalAmount, installmentAmount, recoveryMonth } = req.body || {};
+  const employeeNumber = String(req.body?.employeeNumber || "").trim().toUpperCase();
+  const purpose = String(req.body?.purpose || "").trim().slice(0, 160);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  if (!purpose || !/^\d{4}-(0[1-9]|1[0-2])$/.test(recoveryMonth) || recoveryMonth < today.slice(0, 7)) {
+    return res.status(400).json({ status: "error", message: "Enter a loan purpose and a recovery month from the current month onward." });
+  }
+
+  try {
+    const data = await prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.findFirst({
+        where: { organizationId, employeeNumber, status: { in: ["ACTIVE", "PROBATION"] },
+          ...(activeLocationId ? { locationId: activeLocationId } : {}) },
+        select: { id: true },
+      });
+      if (!employee) {
+        const error = new Error("Choose an active fictional employee in your branch scope.");
+        error.code = "DEMO_LOAN_EMPLOYEE_NOT_FOUND";
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const context = { organizationId, actorUserId, prismaClient: tx };
+      const notes = "Fictional Northstar demo loan recorded for payroll recovery.";
+      const created = await loans.createLoan({
+        ...context, input: { employeeNumber, principalAmount, installmentAmount, purpose, notes, applicationDate: today },
+      });
+      await loans.decideLoan({ ...context, loanId: created.id, decision: "APPROVE", notes });
+      const recoveryStartDate = recoveryMonth === today.slice(0, 7) ? today : recoveryMonth + "-01";
+      return loans.disburseLoan({ ...context, loanId: created.id, input: { disbursedDate: today, recoveryStartDate, notes } });
+    });
+    return res.status(201).json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to record the demo loan.");
+  }
+});
+
 // Compatibility create remains available to payroll administrators, but new
 // Zermatt loan grants cannot bypass EoSB/surety collateral policy.
 router.post("/", requirePermission("payroll.manage"), async (req, res) => {
