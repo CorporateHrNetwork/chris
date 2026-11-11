@@ -280,7 +280,7 @@ router.post("/demo-record", requirePermission("payroll.manage"), async (req, res
       const context = { organizationId, actorUserId, prismaClient: tx };
       const notes = "Fictional Northstar demo loan recorded for payroll recovery.";
       const created = await loans.createLoan({
-        ...context, input: { employeeNumber, principalAmount, installmentAmount, purpose, notes, applicationDate: today },
+        ...context, input: { employeeNumber, principalAmount, installmentAmount, purpose, notes, parentLoanId: req.body?.parentLoanId, applicationDate: today },
       });
       await loans.decideLoan({ ...context, loanId: created.id, decision: "APPROVE", notes });
       const recoveryStartDate = recoveryMonth === today.slice(0, 7) ? today : recoveryMonth + "-01";
@@ -289,6 +289,54 @@ router.post("/demo-record", requirePermission("payroll.manage"), async (req, res
     return res.status(201).json({ status: "success", data });
   } catch (error) {
     return sendError(res, error, "Unable to record the demo loan.");
+  }
+});
+
+router.post("/:id/demo-action", requirePermission("payroll.manage"), async (req, res) => {
+  const { organizationId, userId: actorUserId, activeLocationId, organization } = req.auth;
+  if (organizationId !== "chris-demo-org-20261022" || organization?.slug !== "chris-demo-company") {
+    return res.status(403).json({ status: "error", message: "These actions are available to Northstar Demo Industries." });
+  }
+  const loanId = req.params.id;
+  const { action, installmentAmount, purpose, reason } = req.body || {};
+  try {
+    const [current] = await prisma.$queryRawUnsafe(
+      `SELECT l."id" FROM "payroll_loans" l
+        JOIN "employees" e ON e."organizationId" = l."organizationId" AND e."id" = l."employeeId"
+        WHERE l."organizationId" = $1 AND l."id" = $2 AND ($3::text IS NULL OR e."locationId" = $3)`,
+      organizationId, loanId, activeLocationId || null
+    );
+    if (!current) return res.status(404).json({ status: "error", message: "Loan not found in your branch scope." });
+
+    if (["PAUSE", "RESUME", "COMPLETE_EXTERNAL"].includes(action)) {
+      const data = await loans.updateLoanStatus({ organizationId, actorUserId, loanId, action, reason });
+      return res.json({ status: "success", data });
+    }
+
+    const amount = Math.round(Number(installmentAmount) * 100) / 100;
+    const label = String(purpose || "").trim().slice(0, 160);
+    if (action !== "EDIT" || !label || !Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ status: "error", message: "Enter a purpose and a positive monthly installment." });
+    }
+
+    const data = await prisma.$transaction(async (tx) => {
+      const [updated] = await tx.$queryRawUnsafe(
+        `UPDATE "payroll_loans" SET "purpose" = $3, "installmentAmount" = $4, "updatedAt" = CURRENT_TIMESTAMP
+         WHERE "organizationId" = $1 AND "id" = $2 AND "status" IN ('ACTIVE', 'PAUSED')
+         AND "outstandingAmount" >= $4 RETURNING "id", "purpose", "installmentAmount"`,
+        organizationId, loanId, label, amount
+      );
+      if (!updated) return null;
+      await tx.organizationAudit.create({ data: {
+        organizationId, actorUserId, entityType: "PayrollLoan", entityId: loanId,
+        action: "DEMO_LOAN_TERMS_EDITED", newValue: { purpose: label, installmentAmount: amount },
+      } });
+      return updated;
+    });
+    if (!data) return res.status(409).json({ status: "error", message: "Only active or paused loans can be edited. Installment cannot exceed the outstanding balance." });
+    return res.json({ status: "success", data });
+  } catch (error) {
+    return sendError(res, error, "Unable to update the demo loan.");
   }
 });
 
