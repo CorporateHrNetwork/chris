@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import {
   clearAuthSession,
   getAuthToken,
+  getSessionLoginPath,
   getStoredUser,
   getStoredOrganization,
   verifyAuthSession,
@@ -61,7 +62,7 @@ function ProtectedRoute({ children }) {
         // revalidated in the background so reloads never block the HR workspace
         // on the /api/auth/me round-trip.
         const verified = await verifyAuthSession();
-        if (!active) return;
+        if (!active || getAuthToken() !== token) return;
         if (!hasCachedSession) {
           // A server-verified token can restore missing browser cache safely.
           const profile = verified?.data;
@@ -77,11 +78,11 @@ function ProtectedRoute({ children }) {
             lastName: profile.lastName, roles: profile.roles || []
           }));
           storage.setItem("chris_organization", JSON.stringify(organization));
-          setAuthState("authenticated");
         }
+        setAuthState("authenticated");
         setConnectionError("");
       } catch (error) {
-        if (!active) return;
+        if (!active || getAuthToken() !== token) return;
         if (error.code === "AUTH_INVALID" || error.code === "ACCESS_FORBIDDEN") {
           clearAuthSession();
           setAuthState("unauthenticated");
@@ -135,7 +136,7 @@ function ProtectedRoute({ children }) {
 
   if (authState === "unauthenticated") {
     rememberReturnTo();
-    return <Navigate to="/login" replace />;
+    return <Navigate to={getSessionLoginPath()} replace />;
   }
 
   if (authState === "authenticated" && currentReturnTo() === "/") {

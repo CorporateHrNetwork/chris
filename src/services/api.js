@@ -95,6 +95,27 @@ export function clearAuthSession() {
   }
 }
 
+const DEMO_SLUGS = new Set(["chris-demo-company", "chris-client-demo-10"]);
+
+export function getSessionLoginPath() {
+  if (!IS_SALES_DEMO_HOST) return "/login";
+  const slug = getLastOrganizationSlug();
+  return DEMO_SLUGS.has(slug) ? `/login?organization=${encodeURIComponent(slug)}` : "/login";
+}
+
+function handleUnauthorized(requestToken) {
+  // A late response from an old session must never sign out a newer session.
+  if (getAuthToken() !== requestToken || window.location.pathname === "/login") return;
+  if (IS_SALES_DEMO_HOST) {
+    const target = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (target.startsWith("/") && !target.startsWith("//") && target !== "/") {
+      sessionStorage.setItem("chris_return_to", target);
+    }
+  }
+  clearAuthSession();
+  window.location.replace(getSessionLoginPath());
+}
+
 function authHeaders(extra = {}) {
   const token = getAuthToken();
   const activeLocationId = getActiveLocationId();
@@ -147,6 +168,7 @@ export async function apiRequest(endpoint, options = {}) {
   const isUrlSearchParams = typeof URLSearchParams !== "undefined" && rawBody instanceof URLSearchParams;
   const shouldSerializeJson = rawBody !== undefined && rawBody !== null && typeof rawBody === "object" && !isFormData && !isBlob && !isUrlSearchParams;
   const requestBody = shouldSerializeJson ? JSON.stringify(rawBody) : rawBody;
+  const requestToken = getAuthToken();
   const headers = authHeaders({
     ...((shouldSerializeJson || typeof rawBody === "string") ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
@@ -164,8 +186,7 @@ export async function apiRequest(endpoint, options = {}) {
   let result;
   try { result = await response.json(); } catch { result = { status: "error", message: "Invalid server response." }; }
   if (response.status === 401) {
-    clearAuthSession();
-    if (window.location.pathname !== "/login") window.location.replace("/login");
+    handleUnauthorized(requestToken);
     const error = new Error(result.message || "Your session has expired. Please sign in again.");
     error.code = "AUTH_INVALID";
     throw error;
@@ -181,6 +202,7 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 export async function apiDownload(endpoint, options = {}) {
+  const requestToken = getAuthToken();
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -192,8 +214,7 @@ export async function apiDownload(endpoint, options = {}) {
     throw new Error("CHRIS cannot connect to the server. Check your connection and try again.");
   }
   if (response.status === 401) {
-    clearAuthSession();
-    if (window.location.pathname !== "/login") window.location.replace("/login");
+    handleUnauthorized(requestToken);
     throw new Error("Your session has expired. Please sign in again.");
   }
   if (!response.ok) {
