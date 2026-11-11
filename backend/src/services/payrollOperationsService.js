@@ -1,3 +1,4 @@
+const { loadPayrollLeave } = require("./payrollLeaveService");
 const { NORTHSTAR_ID } = require("../middleware/salesDemoBoundary");
 const crypto = require("crypto");
 const { loadPayrollSalaryAdvances, assertNorthstarAdvancePeriodEditable } = require("./salaryAdvancePayrollService");
@@ -625,30 +626,8 @@ async function updateSalaryAdvanceStatus({ organizationId, actorUserId, advanceI
 }
 
 async function listPaidLeave({ organizationId, periodId, prismaClient = prisma }) {
-  let period = null;
-  if (periodId) period = await getPeriod(prismaClient, organizationId, periodId);
-  const where = {
-    organizationId,
-    status: { in: ["APPROVED", "ACTIVE", "COMPLETED"] },
-    leaveType: { isPaid: true },
-  };
-  if (period) {
-    where.startDate = { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) };
-    where.endDate = { gte: new Date(`${period.periodStart}T00:00:00.000Z`) };
-  }
-  const rows = await prismaClient.leaveRequest.findMany({
-    where,
-    select: {
-      id: true,
-      startDate: true,
-      endDate: true,
-      requestedUnits: true,
-      status: true,
-      employee: { select: { employeeNumber: true, firstName: true, middleName: true, lastName: true } },
-      leaveType: { select: { name: true, code: true, isPaid: true, unit: true } },
-    },
-    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-  });
+  const period = periodId ? await getPeriod(prismaClient, organizationId, periodId) : null;
+  const rows = await loadPayrollLeave({ prismaClient, organizationId, period, paidOnly: true });
   return rows.map((row) => ({
     id: row.id,
     employeeNumber: row.employee.employeeNumber,
@@ -656,7 +635,8 @@ async function listPaidLeave({ organizationId, periodId, prismaClient = prisma }
     leaveType: row.leaveType.name,
     leaveCode: row.leaveType.code,
     unit: row.leaveType.unit,
-    requestedUnits: Number(row.requestedUnits || 0),
+    requestedUnits: row.requestedUnits,
+    periodUnits: row.periodUnits,
     startDate: row.startDate.toISOString().slice(0, 10),
     endDate: row.endDate.toISOString().slice(0, 10),
     status: row.status,

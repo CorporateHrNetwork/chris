@@ -215,7 +215,7 @@ function App() {
         <Route path="/payroll/deductions" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/payslips" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/payroll/salary-advances" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
-        <Route path="/payroll/paid-leave" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/payroll/paid-leave" element={<Navigate to="/payroll?workspace=paid-leave" replace />} />
         <Route path="/compensation/salary-structure" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/compensation/grades-levels" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/compensation/salary-bands" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />

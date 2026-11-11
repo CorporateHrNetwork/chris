@@ -575,8 +575,10 @@ function PayrollLines({ rows, onViewPayslip }) {
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
   const allowanceColumns = payrollComponentColumns(rows, "customAllowances");
   const deductionColumns = payrollComponentColumns(rows, "customDeductions");
+  const northstar = getStoredOrganization()?.slug === "chris-demo-company";
   const columns = [
-    "Select", "Employee", "Branch", "Expected Days", "Worked Days", "Attendance", "Basic",
+    "Select", "Employee", "Branch", "Expected Days", northstar ? "Payable Days" : "Worked Days",
+    ...(northstar ? ["Paid Leave Days"] : []), "Attendance", "Basic",
     ...allowanceColumns.map((item) => item.label),
     "PAYE", "Employee Pension", "Employer Pension", "NHF", "NSITF", "ITF Accrual",
     ...deductionColumns.map((item) => item.label),
@@ -622,6 +624,7 @@ function PayrollLines({ rows, onViewPayslip }) {
                 <Td>{row.locationCode || row.locationName || "—"}</Td>
                 <Td>{details.attendance?.standardDays ?? "—"}</Td>
                 <Td>{details.attendance?.payableDays ?? "—"}{details.attendanceRecalculationRequired ? " *" : ""}</Td>
+                {northstar && <Td>{details.attendance?.approvedPaidLeaveDays ?? 0}</Td>}
                 <Td>{details.attendance?.source ? String(details.attendance.source).replaceAll("_", " ") : "—"}</Td>
                 <Td>{money(structure.basic ?? row.baseSalary, row.currency)}</Td>
                 {allowanceColumns.map((item) => <Td key={`a-${item.id}`}>{money(allowanceValues.get(item.id) || 0, row.currency)}</Td>)}

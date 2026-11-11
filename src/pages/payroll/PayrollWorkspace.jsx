@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../../services/api";
 
@@ -320,16 +320,20 @@ function PaidLeaveWorkspace() {
   const [periodId, setPeriodId] = useState("");
   const path = periodId ? `/api/payroll/paid-leave?periodId=${encodeURIComponent(periodId)}` : "/api/payroll/paid-leave";
   const { data: rows, loading, error } = useLoad(path);
+  const paidDays = rows.reduce((sum, row) => row.unit === "DAYS" ? sum + row.periodUnits : sum, 0);
+  const employeeCount = new Set(rows.map((row) => row.employeeNumber)).size;
   return (
     <>
-      <Panel title="Paid Leave Payroll Input">
+      <Panel title="Paid Leave Payroll Review">
         <Select label="Payroll Period" value={periodId} onChange={setPeriodId} options={[["", "All paid leave"], ...periods.map((p) => [p.id, `${p.code} — ${p.name}`])]} />
-        <p style={controlNote}>Paid leave records are read directly from Leave Management where Leave Type is marked paid and the request is Approved, Active or Completed.</p>
+        <p style={controlNote}>Review approved paid leave from Leave Management. Paid leave preserves regular pay for the covered days. Leave allowance is processed separately.</p>
+        <Link to="/leave">Open Leave Management</Link>
+        {!loading && !error && <p role="status"><strong>{paidDays.toLocaleString()} paid leave days</strong> · {employeeCount} employee(s) · {rows.length} request(s)</p>}
       </Panel>
       <Feedback error={error} />
       <Panel title="Paid Leave Register">
-        <DataTable loading={loading} columns={["Employee", "Name", "Leave Type", "Units", "Start", "End", "Status"]}>
-          {rows.map((row) => <tr key={row.id}><Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{row.leaveType}</Td><Td>{row.requestedUnits} {String(row.unit || "").toLowerCase()}</Td><Td>{row.startDate}</Td><Td>{row.endDate}</Td><Td><Badge>{row.status}</Badge></Td></tr>)}
+        <DataTable loading={loading} columns={["Employee", "Name", "Leave Type", "Approved Units", ...(periodId ? ["Units This Period"] : []), "Start", "End", "Status"]}>
+          {rows.map((row) => <tr key={row.id}><Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{row.leaveType}</Td><Td>{row.requestedUnits} {String(row.unit || "").toLowerCase()}</Td>{periodId && <Td>{row.periodUnits}</Td>}<Td>{row.startDate}</Td><Td>{row.endDate}</Td><Td><Badge>{row.status}</Badge></Td></tr>)}
         </DataTable>
       </Panel>
     </>

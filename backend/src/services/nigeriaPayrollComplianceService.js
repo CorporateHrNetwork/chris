@@ -1,3 +1,4 @@
+const { loadPayrollLeave, calculateLeavePayableDays } = require("./payrollLeaveService");
 const { NORTHSTAR_ID } = require("../middleware/salesDemoBoundary");
 const { isNorthstar, standardDaysFor, salaryBasis } = require("./northstarPayrollBasis");
 
@@ -854,6 +855,19 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   });
 
   const advanceRows = await loadPayrollSalaryAdvances(prismaClient, organizationId, period.periodEnd);
+  const usesApprovedLeave = isNorthstar(organizationId, organization.slug);
+  const leaveByEmployee = new Map();
+  if (usesApprovedLeave) {
+    const leave = await loadPayrollLeave({ prismaClient, organizationId, period });
+    for (const row of leave) {
+      if (row.leaveType.unit !== "DAYS" || row.periodUnits <= 0) continue;
+      const totals = leaveByEmployee.get(row.employeeId) || { paidDays: 0, unpaidDays: 0, requestIds: [] };
+      totals[row.leaveType.isPaid ? "paidDays" : "unpaidDays"] += row.periodUnits;
+      totals.requestIds.push(row.id);
+      leaveByEmployee.set(row.employeeId, totals);
+    }
+  }
+
 
   const taxYear = Number(period.periodEnd.slice(0, 4));
   const reliefRows = await prismaClient.$queryRawUnsafe(
@@ -887,10 +901,12 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     const scheduledMonthlyGross = round2(basis.monthlyGross);
     const standardDays = basis.standardDays;
     const attendanceInput = attendanceByEmployee.get(employee.id);
-    const payableDays = attendanceInput?.workedDays === null || attendanceInput?.workedDays === undefined
-      ? standardDays
-      : Number(attendanceInput.workedDays);
-    if (!Number.isFinite(payableDays) || payableDays < 0) {
+    const workedDays = attendanceInput?.workedDays == null ? null : Number(attendanceInput.workedDays);
+    const leave = leaveByEmployee.get(employee.id);
+    const payableDays = leave
+      ? calculateLeavePayableDays({ standardDays, workedDays, ...leave })
+      : (workedDays ?? standardDays);
+    if ((workedDays !== null && workedDays < 0) || !Number.isFinite(payableDays) || payableDays < 0) {
       throw payrollError("INVALID_PAYROLL_WORKED_DAYS", `Invalid payable days for ${employee.employeeNumber}.`, 409);
     }
     const prorationFactor = standardDays > 0 ? payableDays / standardDays : 0;
@@ -1044,6 +1060,8 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
           employmentType: employee.employmentType,
           standardDays,
           payableDays: round2(payableDays),
+          ...(leave ? { workedDays, approvedPaidLeaveDays: round2(leave.paidDays),
+            approvedUnpaidLeaveDays: round2(leave.unpaidDays), leaveRequestIds: leave.requestIds } : {}),
           prorationFactor: round2(prorationFactor),
           source: attendanceInput ? "ATTENDANCE_PAYROLL_INPUT" : "STANDARD_DAYS_DEFAULT",
           notes: attendanceInput?.notes || null,
