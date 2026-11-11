@@ -5,7 +5,7 @@ const CONFIGURED_API_BASE_URL = String(
 const SALES_DEMO_HOST = "chris-sales-demo.onrender.com";
 const SALES_DEMO_API_BASE_URL = "https://chris-sales-demo-api.onrender.com";
 
-const IS_SALES_DEMO_HOST =
+export const IS_SALES_DEMO_HOST =
   typeof window !== "undefined" &&
   window.location.hostname.toLowerCase() === SALES_DEMO_HOST;
 

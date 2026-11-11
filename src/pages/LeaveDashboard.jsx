@@ -1,4 +1,57 @@
-import {useEffect,useState} from "react";import {useNavigate} from "react-router-dom";import {apiRequest,getStoredOrganization} from "../services/api";import {LeavePage,Panel,Notice,styles} from "../components/leave/LeaveUi";import EmployeeLeaveProfileSelector from "../components/leave/EmployeeLeaveProfileSelector";import ZermattAnnualCarryoverPanel from "../components/leave/ZermattAnnualCarryoverPanel";
-const metrics=[["pendingRequests","Pending Requests"],["approvedUpcoming","Approved Upcoming"],["employeesOnLeave","Employees on Leave"],["activeLeaveRequests","Active Leave Requests"],["returnsDue","Returns Due"],["leaveExceptions","Leave Exceptions"]];
-const links=[["/leave/requests","Requests"],["/leave/active","Active Leave"],["/leave/returns","Return to Work"],["/leave/calendar","Calendar"],["/leave/balances","Balances"],["/leave/entitlements","Entitlements"],["/leave/policies","Policies"],["/leave/exceptions","Exceptions"]];
-export default function LeaveDashboard(){const nav=useNavigate(),[data,setData]=useState({}),[error,setError]=useState("");const isZermatt=getStoredOrganization()?.slug==="zermatt-liquor-limited";useEffect(()=>{apiRequest("/api/leave/overview").then(r=>setData(r.data||{})).catch(e=>setError(e.message))},[]);return <LeavePage title="Leave Overview" description="Live leave demand, workforce status, returns and exceptions.">{error&&<Notice error>{error}</Notice>}<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(175px,1fr))",gap:14,marginBottom:18}}>{metrics.map(([key,label])=><Panel key={key} style={{margin:0}}><div style={styles.muted}>{label}</div><strong style={{fontSize:30,color:"var(--chris-gold)"}}>{data[key]??"-"}</strong></Panel>)}</div><Panel title="Leave Operations" subtitle="Open an operational register or workflow."><div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>{links.map(([path,label])=><button key={path} style={styles.button} onClick={()=>nav(path)}>{label}</button>)}</div></Panel><EmployeeLeaveProfileSelector />{isZermatt&&<ZermattAnnualCarryoverPanel/>}</LeavePage>}
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { apiRequest, getStoredOrganization, IS_SALES_DEMO_HOST } from "../services/api";
+import { LeavePage, Panel, Notice, styles } from "../components/leave/LeaveUi";
+import EmployeeLeaveProfileSelector from "../components/leave/EmployeeLeaveProfileSelector";
+import ZermattAnnualCarryoverPanel from "../components/leave/ZermattAnnualCarryoverPanel";
+
+const metrics = [
+  ["pendingRequests", "Pending Requests", "/leave/requests?status=PENDING"],
+  ["approvedRequests", "Approved Leave", "/leave/requests?status=APPROVED"],
+  ["employeesOnLeave", "Employees Marked On Leave", "/leave/exceptions"],
+  ["activeLeaveRequests", "Active Leave Requests", "/leave/active"],
+  ["returnsDue", "Returns Due", "/leave/returns"],
+  ["completedReturns", "Confirmed Returns", "/leave/returns#return-history"],
+  ["leaveExceptions", "Leave Exceptions", "/leave/exceptions"],
+];
+const links = [
+  ["requests", "Leave Requests"], ["active", "Active Leave"], ["returns", "Return to Work"],
+  ["calendar", "Leave Calendar"], ["balances", "Leave Balances"], ["entitlements", "Leave Entitlements"],
+  ["policies", "Leave Policies"], ["exceptions", "Leave Exceptions"],
+];
+
+export default function LeaveDashboard() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const isZermatt = getStoredOrganization()?.slug === "zermatt-liquor-limited";
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/api/leave/overview").then((response) => {
+      if (active) setData(response.data);
+    }).catch((requestError) => {
+      if (active) setError(requestError.message);
+    });
+    return () => { active = false; };
+  }, []);
+
+  return <LeavePage title="Leave Overview" description="Review approved requests, confirmed active leave, returns and status exceptions.">
+    {error && <Notice error>{error}</Notice>}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 14, marginBottom: 18 }}>
+      {metrics.map(([key, label, path]) => <Panel key={key} style={{ margin: 0 }}>
+        <Link to={path} style={{ color: "inherit", display: "block", textDecoration: "none" }}>
+          <div style={styles.muted}>{label}</div>
+          <strong style={{ fontSize: 30, color: "var(--chris-gold)" }}>{data?.[key] ?? "—"}</strong>
+        </Link>
+      </Panel>)}
+    </div>
+    {data?.leaveExceptions > 0 && <Notice>Employee status and leave requests differ. Open <Link to="/leave/exceptions">Leave Exceptions</Link> to review the discrepancy.</Notice>}
+    <Panel title="Leave Operations">
+      <nav aria-label="Leave operations" style={styles.actions}>
+        {links.map(([path, label]) => <Link key={path} to={`/leave/${path}`} style={styles.button}>{label}</Link>)}
+      </nav>
+    </Panel>
+    {!IS_SALES_DEMO_HOST && <EmployeeLeaveProfileSelector />}
+    {isZermatt && <ZermattAnnualCarryoverPanel />}
+  </LeavePage>;
+}

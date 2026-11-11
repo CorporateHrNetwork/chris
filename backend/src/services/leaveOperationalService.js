@@ -1,3 +1,4 @@
+const { NORTHSTAR_ID } = require("../middleware/salesDemoBoundary");
 const prisma = require("../config/prisma");
 const { balanceAvailable, policyEntitlementForService } = require("./leaveService");
 const { getEmployeePolicyBalance } = require("./leaveBalanceService");
@@ -26,17 +27,21 @@ async function getLeaveOverview({ organizationId, asOfDate = new Date(), locatio
   const [
     pendingRequests,
     approvedUpcoming,
+    approvedRequests,
     employeesOnLeave,
     activeLeaveRequests,
     returnsDue,
+    completedReturns,
     leaveEmployees,
     activeRequests,
   ] = await Promise.all([
     prisma.leaveRequest.count({ where: { organizationId, status: "PENDING", ...requestScope } }),
     prisma.leaveRequest.count({ where: { organizationId, status: "APPROVED", endDate: { gte: today }, ...requestScope } }),
+    prisma.leaveRequest.count({ where: { organizationId, status: "APPROVED", ...requestScope } }),
     prisma.employee.count({ where: { organizationId, status: "LEAVE", ...employeeScope } }),
     prisma.leaveRequest.count({ where: { organizationId, status: "ACTIVE", ...requestScope } }),
     prisma.leaveRequest.count({ where: { organizationId, status: "ACTIVE", endDate: { lt: tomorrow }, ...requestScope } }),
+    prisma.leaveRequest.count({ where: { organizationId, status: "COMPLETED", actualReturnDate: { not: null }, ...requestScope } }),
     prisma.employee.findMany({ where: { organizationId, status: "LEAVE", ...employeeScope }, select: { id: true } }),
     prisma.leaveRequest.findMany({
       where: { organizationId, status: "ACTIVE", ...requestScope },
@@ -52,9 +57,11 @@ async function getLeaveOverview({ organizationId, asOfDate = new Date(), locatio
   return {
     pendingRequests,
     approvedUpcoming,
+    approvedRequests,
     employeesOnLeave,
     activeLeaveRequests,
     returnsDue,
+    completedReturns,
     leaveExceptions: exceptions,
   };
 }
@@ -166,6 +173,12 @@ async function getEntitlementRegister({
 }) {
   const date = dayStart(asOfDate);
   const year = date.getFullYear();
+  const currentEmployment = { employmentEpisodes: { some: { endDate: null } } };
+  const northstar = organizationId === NORTHSTAR_ID;
+  // Seeded demo balances establish entitlement even when employment history is absent.
+  const eligibilityScope = northstar
+    ? { OR: [currentEmployment, { leaveBalances: { some: { organizationId, leaveYear: year } } }] }
+    : currentEmployment;
   const [employees, policies] = await Promise.all([
     prisma.employee.findMany({
       where: {
@@ -173,7 +186,7 @@ async function getEntitlementRegister({
         ...(employeeNumber ? { employeeNumber } : {}),
         ...(locationId ? { locationId } : {}),
         status: { in: ["ACTIVE", "PROBATION", "LEAVE"] },
-        employmentEpisodes: { some: { endDate: null } },
+        ...eligibilityScope,
       },
       select: {
         id: true,
@@ -190,6 +203,10 @@ async function getEntitlementRegister({
             employmentLevel: true,
           },
         },
+        ...(northstar ? { leaveBalances: {
+          where: { organizationId, leaveYear: year },
+          select: { leaveTypeId: true },
+        } } : {}),
         employmentEpisodes: {
           where: { endDate: null },
           orderBy: { sequenceNumber: "desc" },
@@ -219,6 +236,7 @@ async function getEntitlementRegister({
       ? Math.max(0, Math.floor((date - new Date(episode.startDate)) / 86400000))
       : 0;
     for (const policy of policies) {
+      if (northstar && !episode && !employee.leaveBalances.some((balance) => balance.leaveTypeId === policy.leaveTypeId)) continue;
       const eligibility = policy.eligibilityRules || {};
       const minimum = Number(
         eligibility.minimumServiceDays || policy.minimumServiceDays || 0

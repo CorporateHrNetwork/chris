@@ -1,5 +1,5 @@
 import fs from 'node:fs';import path from 'node:path';import {transformSync} from '@babel/core';
-const excluded=new Set(['EmployeeExits.jsx','Benefits.jsx','GratuityAccounts.jsx','ZermattLeaveAllowance.jsx','ZermattLeaveAllowanceSettings.jsx','ZermattEmploymentResources.jsx','ZermattAnnualCarryoverPanel.jsx','TransportSupportPayroll.jsx','TransportSupportPreparation.jsx','SalaryAdvancesManaged.jsx','RentReliefManaged.jsx','LoanBulkUpload.jsx','LoanProfile.jsx','Loans.jsx','PerformanceEvaluationWorkspace.jsx','BillingSubscriptions.jsx','LeaveDashboard.jsx','NigeriaPayrollSupplementWorkspace.jsx','EmployeeLeaveProfilePanel.jsx']);
+const excluded=new Set(['EmployeeExits.jsx','Benefits.jsx','GratuityAccounts.jsx','ZermattLeaveAllowance.jsx','ZermattLeaveAllowanceSettings.jsx','ZermattEmploymentResources.jsx','ZermattAnnualCarryoverPanel.jsx','TransportSupportPayroll.jsx','TransportSupportPreparation.jsx','SalaryAdvancesManaged.jsx','RentReliefManaged.jsx','LoanBulkUpload.jsx','LoanProfile.jsx','Loans.jsx','PerformanceEvaluationWorkspace.jsx','BillingSubscriptions.jsx','NigeriaPayrollSupplementWorkspace.jsx','EmployeeLeaveProfilePanel.jsx','EmployeeLeaveProfileSelector.jsx']);
 export function demoIsolation(){return {
  name:'northstar-demo-policy-boundary',enforce:'pre',apply:'build',
  buildStart(){fs.rmSync(path.resolve('dist'),{recursive:true,force:true});},

@@ -1,10 +1,12 @@
 export const activeLeaves = rows => (Array.isArray(rows) ? rows : []).filter(row => row.status === "ACTIVE");
 export const returnQueue = activeLeaves;
 export function calendarLeaves(rows, month) {
-  if (!month) return [];
-  const start = new Date(`${month}-01T00:00:00`);
-  const end = new Date(start); end.setMonth(end.getMonth() + 1);
-  return (Array.isArray(rows) ? rows : []).filter(row => ["APPROVED", "ACTIVE", "COMPLETED"].includes(row.status) && new Date(row.startDate) < end && new Date(row.endDate) >= start);
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return [];
+  return (Array.isArray(rows) ? rows : []).filter((row) =>
+    ["APPROVED", "ACTIVE", "COMPLETED"].includes(row.status) &&
+    String(row.startDate || "").slice(0, 7) <= month &&
+    String(row.endDate || "").slice(0, 7) >= month
+  );
 }
 export function exceptionRows(data, detectedAt = new Date().toISOString()) {
   return [

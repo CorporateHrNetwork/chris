@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { apiRequest } from "../services/api";
+import { apiRequest, IS_SALES_DEMO_HOST } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 import EmployeeSearchSelect from "../components/leave/EmployeeSearchSelect";
 import {
@@ -44,13 +44,15 @@ function readableUnit(unit) {
 
 export default function LeaveRequests() {
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const status = searchParams.get("status") || "";
   const { hasPermission } = useAuthorization();
 
   const canRequest =
-    hasPermission("leave.request") || hasPermission("leave.manage");
+    !IS_SALES_DEMO_HOST && (hasPermission("leave.request") || hasPermission("leave.manage"));
 
   const canApprove =
-    hasPermission("leave.approve") || hasPermission("leave.manage");
+    !IS_SALES_DEMO_HOST && (hasPermission("leave.approve") || hasPermission("leave.manage"));
 
   const [policies, setPolicies] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -584,8 +586,17 @@ export default function LeaveRequests() {
       {message && <Notice>{message}</Notice>}
 
       <Panel title="Request Register">
+        <label>Request status <select style={styles.input} value={status} onChange={(event) => {
+          const value = event.target.value;
+          setSearchParams(value ? { status: value } : {}, { replace: true });
+        }}>
+          <option value="">All statuses</option>
+          {["PENDING", "APPROVED", "ACTIVE", "COMPLETED", "REJECTED", "CANCELLED"].map((value) =>
+            <option key={value} value={value}>{value[0] + value.slice(1).toLowerCase()}</option>
+          )}
+        </select></label>
         <Table
-          rows={requests}
+          rows={status ? requests.filter((request) => request.status === status) : requests}
           columns={columns}
           empty="No leave requests found."
         />

@@ -15,7 +15,7 @@ import {
   styles,
 } from "../components/leave/LeaveUi";
 import useAuthorization from "../hooks/useAuthorization";
-import { apiRequest, getStoredOrganization } from "../services/api";
+import { apiRequest, getStoredOrganization, IS_SALES_DEMO_HOST } from "../services/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const currentYear = () => new Date().getFullYear();
@@ -46,7 +46,7 @@ export default function LeaveEntitlements() {
     hasPermission,
     loading: permissionLoading,
   } = useAuthorization();
-  const canManage = hasPermission("leave.manage");
+  const canManage = !IS_SALES_DEMO_HOST && hasPermission("leave.manage");
 
   const [rows, setRows] = useState([]);
   const [history, setHistory] = useState([]);
