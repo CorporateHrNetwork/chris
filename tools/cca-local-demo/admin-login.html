@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CCA | Local Administrator Sign-in Lab</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#edf3ef;color:#153c2b;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#064c32;color:#fff;padding:24px max(20px,calc((100vw - 980px)/2))}
+header small{letter-spacing:.1em;color:#d8be79;font-weight:700}h1{margin:8px 0;font-size:27px}
+main{max-width:980px;margin:28px auto;padding:0 18px}.layout{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:#fff;border:1px solid #d5e6d8;border-radius:13px;padding:23px}
+h2{font-size:21px;margin:0 0 15px}label{display:block;font-weight:650;font-size:13px;margin:12px 0 5px}
+input{width:100%;padding:12px;border:1px solid #afcbb7;border-radius:8px;font:inherit}
+button{background:#0b6742;color:#fff;border:0;padding:12px 17px;margin:14px 0 0;border-radius:8px;font-weight:700;cursor:pointer;font:inherit}
+button.secondary{background:#e7f0e9;color:#0b6742}button:focus-visible,input:focus-visible{outline:3px solid #c4a13b}
+.notice{padding:14px;background:#fff6df;border-left:5px solid #bc963e;border-radius:7px;margin-bottom:16px;font-size:14px}
+.muted{color:#5d7768;font-size:13px;line-height:1.65}.status{padding:12px 0;color:#0b6742;min-height:40px}
+kbd,code{background:#f1f5f1;padding:3px 6px;border-radius:5px}.hidden{display:none!important}
+@media(max-width:700px){.layout{grid-template-columns:1fr}}
+</style></head><body>
+<header><small>CORPORATE RESOURCES NETWORK · SECURITY LAB</small><h1>CCA Administrator Sign-in</h1></header>
+<main>
+<div class="notice"><strong>Fictional local prototype only.</strong> Password and authenticator secret are generated locally at server startup. No CHRiS employee, tenant, production identity or payment system is connected. This is not a production-ready login.</div>
+<div class="layout">
+<section class="card"><h2>Independent CCA account</h2>
+<div id="passwordStage"><form id="passwordForm"><label for="account">Demo account</label><input id="account" autocomplete="username" required value="cca-demo-operator">
+<label for="password">Current temporary demo password</label><input id="password" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required><label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input id="showPassword" type="checkbox" style="width:auto"> Show password to verify pasted characters</label><p class="muted">Use the password from the latest CCA server startup. Earlier passwords are invalid after a restart. Five failed attempts cause a five-minute lockout.</p>
+<button type="submit">Continue to verification</button></form></div>
+<div id="otpStage" class="hidden"><form id="otpForm"><label for="code">Authenticator code (6 digits)</label><input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+<p class="muted">Enter the current 30-second code from the authenticator configured with the secret shown on the local server terminal.</p>
+<button type="submit">Verify MFA</button><button type="button" class="secondary" id="restart">Start again</button></form></div>
+<div id="sessionStage" class="hidden"><h2>CCA session verified</h2><p class="muted">The server issued a temporary HttpOnly cookie and checked your CCA role. Session data is not accessible to the page script.</p>
+<p id="sessionInfo"></p><p><a href="/protected-centre" style="display:inline-block;background:#0b6742;color:white;padding:12px 15px;text-decoration:none;border-radius:8px;font-weight:700">Open protected CCA Control Centre</a></p><button id="logout" type="button">Sign out and revoke session</button></div>
+<p id="feedback" class="status" role="status" aria-live="polite"></p></section>
+<section class="card"><h2>Security boundaries</h2>
+<p class="muted"><strong>Two factors:</strong> a password and an independent time-based authenticator code, with one-time challenge verification.</p>
+<p class="muted"><strong>Sessions:</strong> short-lived, revocable, stored in memory and delivered through an HttpOnly SameSite cookie.</p>
+<p class="muted"><strong>Roles:</strong> this synthetic support identity is assigned to fictional Cedar only; other tenants and approval powers are denied.</p>
+<h2>Read-only case access</h2><p id="caseInfo" class="muted">Authenticate to view one fictional, tenant-scoped example.</p>
+<p class="muted">No real administrative functions are enabled. Closing this login server clears the account and sessions.</p></section>
+</div></main><script defer src="/admin-login.js"></script></body></html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCA | Local Prototype</title>
+<style>
+:root {font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#173428;background:#f3f7f4}
+*{box-sizing:border-box}body{margin:0}header{background:#064c32;color:#fff;padding:26px clamp(18px,5vw,64px)}
+.eyebrow{color:#cbb473;letter-spacing:.15em;font-size:12px;font-weight:700}h1{margin:6px 0;font-size:30px}
+header p{margin:0;color:#d9e8de}main{max-width:1260px;margin:22px auto;padding:0 20px}
+.notice{border-left:5px solid #b89134;background:#fff8e5;padding:14px 18px;border-radius:8px;margin-bottom:20px;font-size:14px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.metric,.panel{background:white;border:1px solid #d9e5dd;border-radius:13px;padding:18px}
+.metric strong{display:block;font-size:29px;color:#065337}.metric span{font-size:13px;color:#54695f}
+.layout{display:grid;grid-template-columns:minmax(320px,1fr) minmax(400px,1.4fr);gap:18px;margin-top:18px}
+h2{font-size:19px;margin:0 0 16px}label{font-size:13px;font-weight:700;display:block;margin-bottom:6px}
+input,textarea,select{width:100%;padding:11px;border:1px solid #c6d8cb;border-radius:8px;font:inherit;margin:0 0 12px;background:#fff;color:#143b2b}
+textarea{min-height:78px;resize:vertical}button{border:0;border-radius:8px;padding:10px 13px;font-weight:700;background:#0b653f;color:white;cursor:pointer;margin:3px 4px 3px 0}
+button.secondary{background:#e8f0ea;color:#075032}button:disabled{opacity:.45;cursor:not-allowed}
+.case{border:1px solid #dce7df;border-radius:10px;padding:13px;margin:8px 0;cursor:pointer}
+.case.selected{border:2px solid #0f784c;background:#f3faf6}
+.case small{color:#698276;display:block;margin:5px 0}.status{display:inline-block;background:#e6f2eb;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:800}
+.column{display:grid;gap:18px}.row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.muted{color:#60786b;font-size:13px}.feedback{min-height:30px;color:#0f6e47;font-weight:600}
+.steps{display:flex;flex-wrap:wrap;gap:6px}.steps span{padding:5px 8px;border-radius:6px;background:#eef3ef;font-size:11px}
+#events{padding-left:20px;font-size:13px;line-height:1.8}#events li{border-bottom:1px solid #e7eee9}
+@media(max-width:850px){.layout{grid-template-columns:1fr}}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,.case:focus-visible{outline:3px solid #cea63c;outline-offset:2px}
+</style></head><body>
+<header><div class="eyebrow">CORPORATE RESOURCES NETWORK · DEMONSTRATION</div>
+<h1>CRNetwork Central Agency</h1><p>Central Service Desk · AI Agent Studio · Approval & Audit</p></header>
+<main>
+<div class="notice"><strong>Local-only fictional simulation.</strong> All organizations, approvals and support cases shown here are synthetic. There is no authentication, AI-model call, database persistence, CHRiS connection, or real client action. Closing the server clears changes.</div>
+<div style="margin:14px 0"><a href="/control-centre" style="display:inline-block;background:#0a643f;color:white;padding:11px 16px;border-radius:9px;text-decoration:none;font-weight:700">Explore CCA Control Centre — fictional preview</a></div>
+<div class="metrics"><div class="metric"><strong id="total">—</strong><span>Demo cases</span></div><div class="metric"><strong id="open">—</strong><span>Open cases</span></div><div class="metric"><strong id="approval">—</strong><span>Awaiting approval</span></div><div class="metric"><strong id="closed">—</strong><span>Closed cases</span></div></div>
+<div class="layout">
+<div class="column">
+<section class="panel"><h2>Submit fictional client request</h2>
+<form id="newCase"><label for="tenant">Fictional organization</label><select id="tenant" required></select>
+<label for="description">Support request</label><textarea id="description" required maxlength="10000" placeholder="Describe a fictional issue..."></textarea>
+<button type="submit">Create demo case</button></form></section>
+<section class="panel"><div class="row"><h2>Support queue</h2><button class="secondary" id="refresh" type="button">Refresh</button></div>
+<div id="queue" aria-live="polite"></div></section>
+</div>
+<div class="column">
+<section class="panel"><h2>Case workspace</h2><div id="caseDetails" class="muted">Select a fictional case in the queue.</div>
+<div id="caseActions" hidden>
+<div class="steps"><span>New</span><span>Triaged</span><span>Assigned</span><span>Recommendation</span><span>Human approval</span><span>Client validation</span></div>
+<p id="caseStatus" class="muted"></p>
+<p id="caseAnalysis" class="muted"></p>
+<label for="recommendation">Recommendation (text only; no AI executed)</label><textarea id="recommendation" placeholder="Enter a proposed resolution..."></textarea>
+<label for="resolution">Client-facing resolution</label><textarea id="resolution" placeholder="Describe the fictional guidance sent..."></textarea>
+<div id="actionButtons"><button type="button" data-action="RECOMMEND">Recommend</button><button type="button" data-action="APPROVE">Simulate independent approval</button><button type="button" data-action="RESOLVE">Send resolution</button><button type="button" data-action="CONFIRM">Simulate client confirmation</button></div>
+</div></section>
+<section class="panel"><h2>Audit timeline</h2><ol id="events"></ol></section>
+<section class="panel"><h2>Security boundaries</h2><p class="muted">Demo roles and approval identities are selected by the local server, not the browser. This is not real authentication and must never be internet-facing. The real CCA system will require independently verified identity, MFA, tenant authorization, durable audit, and human approval.</p></section>
+</div></div>
+<p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+</main><script src="/client.js" defer></script></body></html>
