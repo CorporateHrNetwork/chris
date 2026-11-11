@@ -326,7 +326,7 @@ router.get(
   }
 );
 
-router.get("/exceptions",requireAnyPermission("leave.view","employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listLeaveExceptions({organizationId:req.auth.organizationId})})}catch(error){return handleError(error,res)}});
+router.get("/exceptions",requireAnyPermission("leave.view","employees.view"),async(req,res)=>{try{return res.json({status:"success",data:await listLeaveExceptions({organizationId:req.auth.organizationId,locationId:req.auth.activeLocationId})})}catch(error){return handleError(error,res)}});
 router.post("/exceptions/:employeeNumber/investigation",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await keepExceptionOpen({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,actorUserId:req.auth.userId,note:req.body.note})})}catch(error){return handleError(error,res)}});
 router.post("/exceptions/:employeeNumber/restore-status",requirePermission("leave.manage"),async(req,res)=>{try{return res.json({status:"success",data:await restoreWorkingStatus({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,actorUserId:req.auth.userId,newStatus:req.body.newStatus,reason:req.body.reason})})}catch(error){return handleError(error,res)}});
 router.post("/exceptions/:employeeNumber/reconstruct",requirePermission("leave.manage"),async(req,res)=>{try{return res.status(201).json({status:"success",data:await reconstructHistoricalLeave({organizationId:req.auth.organizationId,employeeNumber:req.params.employeeNumber,actorUserId:req.auth.userId,input:req.body})})}catch(error){return handleError(error,res)}});

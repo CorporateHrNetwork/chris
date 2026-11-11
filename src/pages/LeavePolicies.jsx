@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../services/api";
+import { apiRequest, IS_SALES_DEMO_HOST } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
 import { fallbackPolicyNameOptions, fallbackRecommendedDefaults, leaveTypeKey, readablePolicyCode } from "../data/leavePolicyOptions";
 
@@ -20,7 +20,7 @@ const blank=(jurisdiction="")=>({name:"",code:"",leaveTypeId:"",description:"",c
  payrollRules:{treatment:"FULLY_PAID",payPercentage:100},attendanceRules:{excusedAbsence:true,suppressExpectedAttendance:true,clockInRequired:false},calendarRules:{countWeekends:false,countPublicHolidays:false,useEmployeeWorkSchedule:true},
  documentationRules:{},overlapRules:{action:"BLOCK"},coverageRules:{}});
 function LeavePolicies(){
- const nav=useNavigate(),{hasPermission}=useAuthorization(),canManage=hasPermission("leave.manage"),[data,setData]=useState({templates:[],policies:[]}),[types,setTypes]=useState([]),[error,setError]=useState(""),[message,setMessage]=useState(""),[view,setView]=useState(null),[builder,setBuilder]=useState(null),[step,setStep]=useState(1),[saving,setSaving]=useState(false);
+ const nav=useNavigate(),{hasPermission}=useAuthorization(),canManage=!IS_SALES_DEMO_HOST&&hasPermission("leave.manage"),[data,setData]=useState({templates:[],policies:[]}),[types,setTypes]=useState([]),[error,setError]=useState(""),[message,setMessage]=useState(""),[view,setView]=useState(null),[builder,setBuilder]=useState(null),[step,setStep]=useState(1),[saving,setSaving]=useState(false);
  async function load(){try{const [w,t]=await Promise.all([apiRequest("/api/leave/policy-workspace"),apiRequest("/api/leave/types")]);setData(w.data||{templates:[],policies:[]});setTypes(t.data||[])}catch(e){setError(e.message||"Unable to load policies.")}}
  useEffect(()=>{let active=true;(async()=>{try{const [w,t]=await Promise.all([apiRequest("/api/leave/policy-workspace"),apiRequest("/api/leave/types")]);if(active){setData(w.data||{templates:[],policies:[]});setTypes(t.data||[])}}catch(e){if(active)setError(e.message||"Unable to load policies.")}})();return()=>{active=false}},[]);
  function start(mode,source){setError("");setMessage("");const defaultJurisdiction=data.defaultJurisdiction||jurisdictionName(data.organization?.country);let policy=blank(defaultJurisdiction);if(mode==="CLONE")policy={...policy,...source.configuration,name:source.name+" - Custom",code:source.code+"_CUSTOM",description:source.description||"",category:source.category||"",jurisdiction:source.jurisdiction||defaultJurisdiction};if(mode==="VERSION"){for(const k of Object.keys(policy))policy[k]=source[k]??policy[k];policy={...policy,effectiveFrom:today(),effectiveTo:"",status:"DRAFT",changeReason:""}}setBuilder({mode,source,policy});setStep(1)}
@@ -38,8 +38,8 @@ function LeavePolicies(){
   </Section>
   <Section title="Organization Policies" note="Historical versions remain attached to the leave requests they governed.">
    <div style={grid}>{data.policies.map(p=><Card key={p.id} title={p.name} tag={p.status} text={p.previewText}>
-    <small style={muted}>{p.code} - Version {p.versionNumber} - {p.complianceStatus?.replaceAll("_"," ")}</small>
-    <button style={button} onClick={()=>setView(p)}>View</button>{p.status==="DRAFT"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Activate</button>}{p.status==="ACTIVE"&&<button style={button} onClick={()=>status(p,"SUSPENDED")}>Suspend</button>}{p.status==="SUSPENDED"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Reactivate</button>}{p.status!=="RETIRED"&&<button style={button} onClick={()=>start("VERSION",p)}>New Version</button>}{p.status!=="RETIRED"&&<button style={danger} onClick={()=>status(p,"RETIRED")}>Retire</button>}
+    <small style={muted}>{p.code || p.leaveType?.code || "—"} - Version {p.versionNumber} - {p.complianceStatus?.replaceAll("_"," ")}</small>
+    <button style={button} onClick={()=>setView(p)}>View</button>{canManage&&p.status==="DRAFT"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Activate</button>}{canManage&&p.status==="ACTIVE"&&<button style={button} onClick={()=>status(p,"SUSPENDED")}>Suspend</button>}{canManage&&p.status==="SUSPENDED"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Reactivate</button>}{canManage&&p.status!=="RETIRED"&&<button style={button} onClick={()=>start("VERSION",p)}>New Version</button>}{canManage&&p.status!=="RETIRED"&&<button style={danger} onClick={()=>status(p,"RETIRED")}>Retire</button>}
    </Card>)}</div>{!data.policies.length&&<p style={muted}>No organization policies yet.</p>}
   </Section>
   {view&&<Modal title={view.name} close={()=>setView(null)}><pre style={preview}>{view.previewText||JSON.stringify(view.configuration||view,null,2)}</pre>{view.complianceNotes&&<p style={warn}>{view.complianceNotes}</p>}</Modal>}

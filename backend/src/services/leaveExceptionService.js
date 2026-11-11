@@ -91,13 +91,39 @@ async function exceptionDetail(tx, organizationId, employee) {
   };
 }
 
-async function listLeaveExceptions({ organizationId }) {
+async function listLeaveExceptions({ organizationId, locationId }) {
+  const employeeScope = locationId ? { locationId } : {};
+  const employeeDetails = { department: true, designation: { include: { employmentLevel: true } }, location: true };
   const [employees, activeRequests] = await Promise.all([
-    prisma.employee.findMany({ where: { organizationId, status: "LEAVE" }, include: { department: true, designation: { include: { employmentLevel: true } }, location: true }, orderBy: { employeeNumber: "asc" } }),
-    prisma.leaveRequest.findMany({ where: { organizationId, status: "ACTIVE" }, select: { employeeId: true } }),
+    prisma.employee.findMany({
+      where: { organizationId, status: "LEAVE", ...employeeScope },
+      include: employeeDetails,
+      orderBy: { employeeNumber: "asc" },
+    }),
+    prisma.leaveRequest.findMany({
+      where: { organizationId, status: "ACTIVE", ...(locationId ? { employee: { is: employeeScope } } : {}) },
+      select: { id: true, employeeId: true, updatedAt: true, employee: { include: employeeDetails } },
+    }),
   ]);
   const activeIds = new Set(activeRequests.map((request) => request.employeeId));
-  return Promise.all(employees.filter((employee) => detectLeaveMismatch(employee, activeIds)).map((employee) => exceptionDetail(prisma, organizationId, employee)));
+  const missingRequests = await Promise.all(
+    employees.filter((employee) => detectLeaveMismatch(employee, activeIds))
+      .map((employee) => exceptionDetail(prisma, organizationId, employee))
+  );
+  const mismatchedRequests = await Promise.all(
+    activeRequests.filter((request) => request.employee.status !== "LEAVE").map(async (request) => ({
+      ...await exceptionDetail(prisma, organizationId, request.employee),
+      id: request.id + ":ACTIVE_REQUEST_WITHOUT_EMPLOYEE_LEAVE",
+      mismatchCode: "ACTIVE_REQUEST_WITHOUT_EMPLOYEE_LEAVE",
+      mismatch: "Active leave request while the employee is not marked On Leave",
+      activeRequestStatus: "ACTIVE",
+      detectedAt: request.updatedAt,
+      resolutionStatus: "OPEN",
+      latestInvestigation: null,
+      readOnly: true,
+    }))
+  );
+  return [...missingRequests, ...mismatchedRequests];
 }
 
 async function keepExceptionOpen({ organizationId, employeeNumber, actorUserId, note }) {
