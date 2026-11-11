@@ -9,7 +9,8 @@ import {
   FaCalendarAlt,
 } from "react-icons/fa";
 
-import { apiRequest } from "../services/api";
+import NorthstarAttendance from "../demo/NorthstarAttendance";
+import { apiRequest, getStoredOrganization } from "../services/api";
 import {
   AnalyticsPanel,
   DashboardCard,
@@ -19,6 +20,12 @@ import {
 } from "../components/dashboard";
 
 function AttendanceDashboard() {
+  return getStoredOrganization()?.slug === "chris-demo-company"
+    ? <NorthstarAttendance />
+    : <OperationalAttendanceDashboard />;
+}
+
+function OperationalAttendanceDashboard() {
   const navigate = useNavigate();
   const [shifts, setShifts] = useState([]);
   const [report, setReport] = useState(null);

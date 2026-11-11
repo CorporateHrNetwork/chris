@@ -1,0 +1,28 @@
+.northstar-attendance { display: grid; gap: 1.2rem; color: var(--chris-dashboard-text, #f6f5ee); }
+.northstar-attendance h1, .northstar-attendance h2 { margin: 0 0 .5rem; }
+.northstar-attendance p { margin: .5rem 0; }
+.northstar-attendance__metrics, .northstar-attendance__workbench { display: grid; gap: 1rem; }
+.northstar-attendance__metrics { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+.northstar-attendance__workbench { grid-template-columns: minmax(240px, 1fr) minmax(280px, 1.5fr); }
+.northstar-attendance button, .northstar-attendance select, .northstar-attendance input { font: inherit; border: 1px solid #547567; border-radius: 8px; padding: .65rem; color: #f6f5ee; background: #16392e; }
+.northstar-attendance button { cursor: pointer; }
+.northstar-attendance button:disabled { opacity: .55; cursor: default; }
+.northstar-attendance button[aria-pressed="true"] { border-color: #e1bd65; }
+.northstar-attendance__metrics button { text-align: left; padding: 1rem; }
+.northstar-attendance__metrics strong { display: block; margin-top: .35rem; font-size: 1.65rem; color: #f3d287; }
+.northstar-attendance__terminal, .northstar-attendance__analytics { background: #102a22; color: #f6f5ee; border: 1px solid #395e50; border-radius: 14px; padding: 1rem; min-width: 0; }
+.northstar-attendance__display { font: 600 clamp(2rem, 6vw, 3.5rem) monospace; letter-spacing: .06em; text-align: center; border-radius: 8px; background: #081c15; color: #91ebbd; padding: .7rem; margin-block: .75rem; }
+.northstar-attendance form, .northstar-attendance label { display: grid; gap: .5rem; }
+.northstar-attendance select { width: 100%; }
+.northstar-attendance button.northstar-attendance__primary { background: #f3d287; color: #172219; font-weight: 700; }
+.northstar-attendance__reset { display: flex; flex-wrap: wrap; gap: .5rem; }
+.northstar-attendance button.northstar-attendance__bar { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: .4rem; text-align: left; margin-block: .6rem; }
+.northstar-attendance__track { grid-column: 1 / -1; background: #0a2118; height: .5rem; border-radius: 1rem; overflow: hidden; }
+.northstar-attendance__track span { display: block; height: 100%; background: #72d5a1; transition: width .2s; }
+.northstar-attendance__times { display: flex; gap: 1rem; flex-wrap: wrap; }
+.northstar-attendance__times dd { margin: .3rem 0 0; font-weight: 700; color: #f3d287; }
+.northstar-attendance__table { overflow: auto; max-height: 26rem; }
+.northstar-attendance table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.northstar-attendance th, .northstar-attendance td { padding: .65rem; text-align: left; border-bottom: 1px solid #395e50; }
+.northstar-attendance th { position: sticky; top: 0; background: #102a22; }
+@media (max-width: 720px) { .northstar-attendance__workbench { grid-template-columns: minmax(0, 1fr); } }
