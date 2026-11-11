@@ -2200,8 +2200,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   dashboardRows.push(
     [],
     ["HOW TO USE THIS DASHBOARD"],
-    ["1", "Set Branch, Department and Cost Centre Focus to ALL or an exact value. The selected-view KPIs and native Excel chart update when Excel recalculates."],
-    ["2", "Use the real Excel charts on the right side of this dashboard for interactive chart selection, legends, tooltips and chart controls."],
+    ["1", "Set each focus to ALL or an exact value. Excel recalculates the KPIs and selected-view chart."],
+    ["2", "Use the Excel charts to the right for legends, tooltips and chart controls."],
     ["3", "Use filter arrows in Payroll Register and branch registers to drill into employees, departments, cost centres, components and statutory values."],
     ["4", "Click Open Payroll Register or Open Branch Sheet links to move directly to supporting detail."],
     [],
@@ -2212,6 +2212,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   dashboard["!cols"] = [
     { wch: 32 }, { wch: 28 }, { wch: 38 }, { wch: 20 },
     { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 22 },
+    { wch: 8 }, // Gutter between the dashboard cells and charts.
+    ...Array.from({ length: 22 }, () => ({ wch: 10 })),
   ];
 
   if (branchStats.length) {
@@ -2303,7 +2305,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     {
       type: "bar",
       title: "Selected View Payroll Metrics",
-      position: { from: { col: 10, row: 1 }, to: { col: 18, row: 15 } },
+      position: { from: { col: 10, row: 1 }, to: { col: 20, row: 29 } },
       series: [{
         name: "Amount",
         categoriesRange: chartRange("A", selectedChartFirst, selectedChartLast),
@@ -2317,7 +2319,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ...(branchStats.length ? [{
       type: "column",
       title: "Payroll by Branch",
-      position: { from: { col: 10, row: 16 }, to: { col: 18, row: 31 } },
+      position: { from: { col: 10, row: 32 }, to: { col: 20, row: 60 } },
       series: [
         {
           name: "Gross Payroll",
@@ -2340,7 +2342,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ...(departmentChartRows.length ? [{
       type: "bar",
       title: "Gross Payroll by Department",
-      position: { from: { col: 19, row: 1 }, to: { col: 27, row: 18 } },
+      position: { from: { col: 22, row: 1 }, to: { col: 32, row: 29 } },
       series: [{
         name: "Gross Payroll",
         categoriesRange: chartRange("A", departmentChartRows[0].rowIndex, departmentChartRows[departmentChartRows.length - 1].rowIndex),
@@ -2354,7 +2356,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ...(costCentreChartRows.length ? [{
       type: "pie",
       title: "Gross Payroll by Cost Centre",
-      position: { from: { col: 19, row: 19 }, to: { col: 27, row: 35 } },
+      position: { from: { col: 22, row: 32 }, to: { col: 32, row: 60 } },
       series: [{
         name: "Gross Payroll",
         categoriesRange: chartRange("B", costCentreChartRows[0].rowIndex, costCentreChartRows[costCentreChartRows.length - 1].rowIndex),

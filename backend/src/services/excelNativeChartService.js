@@ -154,7 +154,7 @@ function cartesianChartXml(chart, chartIndex) {
     '<c:axId val="' + catAxId + '"/><c:axId val="' + valAxId + '"/></c:' + tag + ">" +
     axisXml(catAxId, valAxId, horizontal) +
     "</c:plotArea>" +
-    '<c:legend><c:legendPos val="b"/><c:layout/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>' +
+    '<c:legend><c:legendPos val="b"/><c:layout/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>' +
     "</c:chart>" +
     '<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings>' +
     "</c:chartSpace>"
@@ -179,9 +179,9 @@ function pieChartXml(chart, chartIndex) {
     "<c:cat><c:strRef><c:f>" + xmlEscape(normalizeRange(series.categoriesRange)) + "</c:f>" + stringCache(series.categories || []) + "</c:strRef></c:cat>" +
     "<c:val><c:numRef><c:f>" + xmlEscape(normalizeRange(series.valuesRange)) + "</c:f>" + numberCache(series.values || []) + "</c:numRef></c:val>" +
     "</c:ser>" +
-    '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="1"/><c:showLeaderLines val="1"/></c:dLbls>' +
+    '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/></c:dLbls>' +
     "</c:pieChart></c:plotArea>" +
-    '<c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/>' +
+    '<c:legend><c:legendPos val="b"/><c:layout/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/>' +
     "</c:chart>" +
     '<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings>' +
     "</c:chartSpace>"
