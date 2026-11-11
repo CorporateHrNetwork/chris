@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest, IS_SALES_DEMO_HOST } from "../services/api";
 import useAuthorization from "../hooks/useAuthorization";
+import "./LeavePolicies.css";
 import { fallbackPolicyNameOptions, fallbackRecommendedDefaults, leaveTypeKey, readablePolicyCode } from "../data/leavePolicyOptions";
 
 const today=()=>new Date().toISOString().slice(0,10);
@@ -42,7 +43,9 @@ function LeavePolicies(){
     <button style={button} onClick={()=>setView(p)}>View</button>{canManage&&p.status==="DRAFT"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Activate</button>}{canManage&&p.status==="ACTIVE"&&<button style={button} onClick={()=>status(p,"SUSPENDED")}>Suspend</button>}{canManage&&p.status==="SUSPENDED"&&<button style={primary} onClick={()=>status(p,"ACTIVE")}>Reactivate</button>}{canManage&&p.status!=="RETIRED"&&<button style={button} onClick={()=>start("VERSION",p)}>New Version</button>}{canManage&&p.status!=="RETIRED"&&<button style={danger} onClick={()=>status(p,"RETIRED")}>Retire</button>}
    </Card>)}</div>{!data.policies.length&&<p style={muted}>No organization policies yet.</p>}
   </Section>
-  {view&&<Modal title={view.name} close={()=>setView(null)}><pre style={preview}>{view.previewText||JSON.stringify(view.configuration||view,null,2)}</pre>{view.complianceNotes&&<p style={warn}>{view.complianceNotes}</p>}</Modal>}
+  {view && <Modal title={view.name} close={() => setView(null)}>
+    <PolicyPreview policy={view} />
+  </Modal>}
   {builder&&<Modal wide title={builder.mode==="CLONE"?"Clone & Customize":builder.mode==="VERSION"?"Create Policy Version":"Create Leave Policy"} close={()=>setBuilder(null)}>
    <div style={steps}>{sections.map((s,i)=><button key={s[0]} style={pill(step===i+1)} onClick={()=>setStep(i+1)}>{i+1}</button>)}</div>
    <h3>{step}. {sections[step-1][0]}</h3><BuilderStep step={step} policy={builder.policy} types={types} workspace={data} change={policy=>setBuilder({...builder,policy})}/>
@@ -58,6 +61,63 @@ function Field({label,value,set,type="text"}){return <label>{label}<input style=
 function Section({title,note,children}){return <section style={panel}><h2>{title}</h2><p style={muted}>{note}</p>{children}</section>}
 function Card({title,tag,text,children}){return <article style={card}><b style={eye}>{tag}</b><h3>{title}</h3><p style={muted}>{text}</p><div style={actions}>{children}</div></article>}
 function Notice({children,ok}){return <div style={{...panel,color:ok?"var(--chris-success)":"var(--chris-warning)"}}>{children}</div>}
-function Modal({title,close,children,wide}){return <div style={overlay}><div style={{...modal,maxWidth:wide?820:700}}><header style={{...head,position:"sticky",top:0,zIndex:2,background:"#07150E"}}><h2>{title}</h2><button style={button} onClick={close}>Close</button></header>{children}</div></div>}
-const panel={marginBottom:18,padding:20,border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",borderRadius:"var(--chris-ui-panel-radius, 16px)",background:"var(--chris-ui-panel-background, rgba(7,24,15,.95))"},head={display:"flex",justifyContent:"space-between",gap:15,alignItems:"center"},grid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12},card={padding:15,border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-soft))",borderRadius:"var(--chris-ui-panel-radius, 12px)",background:"var(--chris-ui-panel-background, rgba(255,255,255,.035))"},actions={display:"flex",gap:7,flexWrap:"wrap"},form={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:"10px 14px"},input={display:"block",width:"100%",boxSizing:"border-box",padding:"8px 10px",marginTop:4,borderRadius:8,border:"1px solid var(--chris-border-soft)",background:"var(--chris-input-bg)",color:"var(--chris-text-main)"},area={...input,minHeight:120,fontFamily:"ui-monospace,monospace"},primary={padding:"9px 12px",border:0,borderRadius:8,background:"var(--chris-gold)",color:"#07110C",fontWeight:800},button={padding:"9px 12px",border:"1px solid var(--chris-border-soft)",borderRadius:8,background:"transparent",color:"var(--chris-text-main)"},danger={...button,color:"#FCA5A5"},eye={color:"var(--chris-gold)",fontSize:11,letterSpacing:".1em"},muted={color:"var(--chris-text-secondary)",lineHeight:1.5},back={...button,border:0,color:"var(--chris-gold)"},overlay={position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:"16px",background:"rgba(0,0,0,.78)"},modal={width:"min(100%,700px)",maxHeight:"calc(100dvh - 28px)",overflowY:"auto",overscrollBehavior:"contain",padding:"16px 18px",borderRadius:16,border:"1px solid var(--chris-border-gold)",background:"#07150E"},steps={display:"flex",gap:6,flexWrap:"wrap",marginBottom:10},pill=active=>({width:30,height:30,borderRadius:"50%",border:"1px solid var(--chris-gold)",background:active?"var(--chris-gold)":"transparent",color:active?"#07110C":"white"}),foot={display:"flex",justifyContent:"space-between",position:"sticky",bottom:0,marginTop:12,paddingTop:10,background:"#07150E"},preview={whiteSpace:"pre-wrap",fontFamily:"inherit",color:"var(--chris-text-secondary)",lineHeight:1.7},warn={padding:12,background:"rgba(212,175,55,.08)",color:"var(--chris-warning)",borderRadius:8},recommendationBox={padding:10,borderRadius:8,border:"1px solid rgba(212,175,55,.35)",background:"rgba(212,175,55,.08)",color:"var(--chris-warning)",lineHeight:1.45};
+function PolicyPreview({ policy }) {
+  const rules = policy.configuration || policy;
+  const humanize = (value) => String(value).replaceAll("_", " ").toLowerCase();
+  const formatDate = (value) => value ? new Intl.DateTimeFormat("en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  }).format(new Date(value)) : null;
+  const units = rules.entitlementRules?.value ?? rules.entitlementDays;
+  const unit = rules.entitlementRules?.unit ?? policy.leaveType?.unit;
+  const treatment = rules.payrollRules?.treatment;
+  const pay = treatment ? humanize(treatment) :
+    typeof policy.leaveType?.isPaid === "boolean" ? (policy.leaveType.isPaid ? "Paid leave" : "Unpaid leave") : null;
+  const frequency = rules.entitlementRules?.frequency ?? rules.accrualMethod;
+  const carryover = rules.balanceRules?.carryoverAllowed ?? rules.allowCarryForward;
+  const notice = rules.requestRules?.minimumNotice ?? rules.noticeDays;
+  const details = [
+    ["Policy code", policy.code || policy.leaveType?.code],
+    ["Status", policy.status ? humanize(policy.status) : "Recommended template"],
+    ["Version", policy.versionNumber],
+    ["Leave type", policy.leaveType?.name],
+    ["Entitlement", units != null && unit ? `${units} ${humanize(unit)}` : units],
+    ["Entitlement frequency", frequency && humanize(frequency)],
+    ["Pay treatment", pay],
+    ["Effective from", formatDate(policy.effectiveFrom)],
+    ["Effective until", formatDate(policy.effectiveTo)],
+    ["Carryover", typeof carryover === "boolean" ? (carryover ? "Allowed" : "None") : null],
+    ["Advance notice", notice != null ? `${notice} day${Number(notice) === 1 ? "" : "s"}` : null],
+    ["Compliance status", policy.complianceStatus && humanize(policy.complianceStatus)],
+  ].filter(([, value]) => value != null && value !== "");
+  const summary = policy.previewText || policy.description;
+  return <>
+    {summary && <p className="leave-policy-preview-summary">{summary}</p>}
+    <dl className="leave-policy-preview-details">
+      {details.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+    </dl>
+    {policy.complianceNotes && <p style={warn}>{policy.complianceNotes}</p>}
+  </>;
+}
+
+function Modal({ title, close, children, wide }) {
+  const dialog = useRef(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const element = dialog.current;
+    if (element && !element.open) element.showModal();
+  }, []);
+
+  return <dialog ref={dialog} aria-labelledby={titleId} onClose={close}
+    className={`leave-policy-dialog${wide ? " leave-policy-dialog--wide" : ""}`}>
+    <div className="leave-policy-dialog-layout">
+      <header className="leave-policy-dialog-header">
+        <h2 id={titleId}>{title}</h2>
+        <button type="button" style={button} onClick={() => dialog.current.close()}>Close</button>
+      </header>
+      <div className="leave-policy-dialog-content">{children}</div>
+    </div>
+  </dialog>;
+}
+const panel={marginBottom:18,padding:20,border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-gold))",borderRadius:"var(--chris-ui-panel-radius, 16px)",background:"var(--chris-ui-panel-background, rgba(7,24,15,.95))"},head={display:"flex",justifyContent:"space-between",gap:15,alignItems:"center"},grid={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12},card={padding:15,border:"var(--chris-ui-panel-border, 1px solid var(--chris-border-soft))",borderRadius:"var(--chris-ui-panel-radius, 12px)",background:"var(--chris-ui-panel-background, rgba(255,255,255,.035))"},actions={display:"flex",gap:7,flexWrap:"wrap"},form={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:"10px 14px"},input={display:"block",width:"100%",boxSizing:"border-box",padding:"8px 10px",marginTop:4,borderRadius:8,border:"1px solid var(--chris-border-soft)",background:"var(--chris-input-bg)",color:"var(--chris-text-main)"},area={...input,minHeight:120,fontFamily:"ui-monospace,monospace"},primary={padding:"9px 12px",border:0,borderRadius:8,background:"var(--chris-gold)",color:"#07110C",fontWeight:800},button={padding:"9px 12px",border:"1px solid var(--chris-border-soft)",borderRadius:8,background:"transparent",color:"var(--chris-text-main)"},danger={...button,color:"#FCA5A5"},eye={color:"var(--chris-gold)",fontSize:11,letterSpacing:".1em"},muted={color:"var(--chris-text-secondary)",lineHeight:1.5},back={...button,border:0,color:"var(--chris-gold)"},steps={display:"flex",gap:6,flexWrap:"wrap",marginBottom:10},pill=active=>({width:30,height:30,borderRadius:"50%",border:"1px solid var(--chris-gold)",background:active?"var(--chris-gold)":"transparent",color:active?"#07110C":"white"}),foot={display:"flex",justifyContent:"space-between",position:"sticky",bottom:0,marginTop:12,paddingTop:10,background:"#07150E"},warn={padding:12,background:"rgba(212,175,55,.08)",color:"var(--chris-warning)",borderRadius:8},recommendationBox={padding:10,borderRadius:8,border:"1px solid rgba(212,175,55,.35)",background:"rgba(212,175,55,.08)",color:"var(--chris-warning)",lineHeight:1.45};
 export default LeavePolicies;
