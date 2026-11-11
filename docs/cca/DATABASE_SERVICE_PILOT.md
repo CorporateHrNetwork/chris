@@ -40,3 +40,33 @@ provisioning endpoint and the script never reads a CHRiS connection string.
 The restore check covers one database archive within the test cluster. Before
 commercial launch, verify off-host backups and complete recovery on an
 independent server, including roles and access grants.
+
+## Persistent Windows staging and off-host recovery
+
+Use a Windows account with PostgreSQL client and server tools on PATH. Run
+the PowerShell script as that account:
+
+```powershell
+.\Start-DatabaseStaging.ps1 -Action Start
+.\Start-DatabaseStaging.ps1 -Action Verify
+```
+
+The pilot binds to loopback port 55434, stores credentials in an account-private
+password file, and keeps its fictional data under
+`%LOCALAPPDATA%\CRNETWORK-CCA-Database-Staging`. Use `-Action Stop` to stop
+the test cluster and `-Action Start` to reopen it. Startup after a machine
+reboot is manual. This database contains only the fictional pilot records.
+
+Generate a recovery key and certificate on the separate recovery host. Keep
+the private key there. Copy only the public certificate to Windows and use
+`-Action Backup -RecoveryCertificate <path>` to make an encrypted archive
+using OpenSSL. Transfer the encrypted archive to the recovery host and run:
+
+```sh
+bash tools/cca-local-demo/verifyOffHostRecovery.sh archive.cms cert.pem key.pem
+```
+
+Recovery uses an independent loopback PostgreSQL cluster on port 55435.
+The rehearsal provisions a fresh CHRiS application credential and verifies
+that it can read the restored fictional record. Scheduled off-site backups
+and recovery for a complete CHRiS staging dataset are follow-up milestones.
