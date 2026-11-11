@@ -3,6 +3,8 @@
 const ANALYSIS_AGENT = "CCA Intake Analysis Agent";
 const CLARIFICATION_AGENT = "Intake Clarification Agent";
 const ROUTES = Object.freeze([
+  { category: "DATABASE_PROVISIONING", agent: "Database Services Agent",
+    signals: /\b(?:provision|request|create|set up)\b[^.!?\n]{0,65}\b(?:postgresql|postgres|database)\b/i },
   { category: "PAYROLL", agent: "Payroll Support Agent",
     signals: /\b(payroll|payslips?|salar(?:y|ies)|paye|pension|statutory deductions?|transport support pay)\b/i },
   { category: "HR", agent: "HR Support Agent",
@@ -32,6 +34,7 @@ function analyzeSupportRequest(description) {
 }
 
 const DRAFTS = Object.freeze({
+  DATABASE_PROVISIONING: "Thanks for requesting a managed database. Please confirm the application, environment, and expected storage. A Database Services operator can review the request before provisioning. Leave out credentials and live data.",
   PAYROLL: "Thanks for reporting this payroll issue. Which payroll period and branch are affected, and what did you expect to see? A support reviewer can use those details to check the payroll workflow.",
   HR: "Thanks for contacting HR Support. Which HR screen or workflow are you using, and which step needs guidance? Please describe the issue without including personal employee information.",
   BILLING: "Thanks for contacting Billing Support. Please share the invoice reference or subscription period and describe the discrepancy. Leave out payment card and bank details.",
