@@ -1,4 +1,6 @@
+const { NORTHSTAR_ID } = require("../middleware/salesDemoBoundary");
 const crypto = require("crypto");
+const { loadPayrollSalaryAdvances, assertNorthstarAdvancePeriodEditable } = require("./salaryAdvancePayrollService");
 const prisma = require("../config/prisma");
 const exitSettlementService = require("./exitSettlementService");
 const { confirmPayrollObligations } = require("./statutoryObligationService");
@@ -551,10 +553,18 @@ async function listSalaryAdvances({ organizationId, prismaClient = prisma }) {
 async function createSalaryAdvance({ organizationId, actorUserId, input, prismaClient = prisma }) {
   const employee = await resolveEmployee(prismaClient, organizationId, input?.employeeNumber);
   const amount = positiveMoney(input?.amount, "Advance Amount");
-  const installmentAmount = positiveMoney(input?.installmentAmount, "Installment Amount");
+  const sameMonthRecovery = organizationId === NORTHSTAR_ID;
+  const installmentAmount = sameMonthRecovery ? amount : positiveMoney(input?.installmentAmount, "Installment Amount");
   if (installmentAmount > amount) throw operationalError("INVALID_ADVANCE_INSTALLMENT", "Installment Amount cannot exceed the advance amount.");
   const issuedDate = dateOnly(input?.issuedDate, "Issued Date");
-  const recoveryStartDate = dateOnly(input?.recoveryStartDate, "Recovery Start Date");
+  const recoveryStartDate = sameMonthRecovery ? issuedDate : dateOnly(input?.recoveryStartDate, "Recovery Start Date");
+  if (sameMonthRecovery) {
+    if (!CURRENT_EMPLOYEE_STATUSES.includes(employee.status)) {
+      throw operationalError("SALARY_ADVANCE_EMPLOYEE_INACTIVE", "Select an employee who is eligible for payroll.");
+    }
+    if (amount < 0.01) throw operationalError("INVALID_AMOUNT", "Advance Amount must be at least ₦0.01.");
+    await assertNorthstarAdvancePeriodEditable(prismaClient, organizationId, issuedDate);
+  }
   const id = crypto.randomUUID();
   const rows = await prismaClient.$queryRawUnsafe(
     `INSERT INTO "payroll_salary_advances"
@@ -765,15 +775,7 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
     period.id
   );
 
-  const advanceRows = await prismaClient.$queryRawUnsafe(
-    `SELECT "id","employeeId","outstandingAmount","installmentAmount"
-       FROM "payroll_salary_advances"
-      WHERE "organizationId"=$1 AND "status"='ACTIVE'
-        AND "outstandingAmount" > 0
-        AND "recoveryStartDate" <= $2::date`,
-    organizationId,
-    period.periodEnd
-  );
+  const advanceRows = await loadPayrollSalaryAdvances(prismaClient, organizationId, period.periodEnd);
   const variableItemsByEmployee = await loadPeriodVariableItems({
     organizationId,
     period,
@@ -814,6 +816,9 @@ async function executeDraftPayroll({ organizationId, actorUserId, periodId, pris
     const allowances = Math.round(allowanceItems.reduce((sum, row) => sum + Number(row.value || 0), 0) * 100) / 100;
     const deductions = Math.round(deductionItems.reduce((sum, row) => sum + Number(row.value || 0), 0) * 100) / 100;
     const advanceRecovery = Math.round(advances.reduce((sum, row) => sum + row.value, 0) * 100) / 100;
+    if (organizationId === NORTHSTAR_ID && advanceRecovery > 0 && Math.round((grossPay - deductions) * 100) < Math.round(advanceRecovery * 100)) {
+      throw operationalError("SALARY_ADVANCE_EXCEEDS_AVAILABLE_PAY", `Salary advances for ${employee.employeeNumber} exceed available pay in ${period.code}. Review the advance or payroll inputs before recalculating.`, 409);
+    }
     const netPreview = Math.max(0, Math.round((grossPay - deductions - advanceRecovery) * 100) / 100);
     return {
       employee,
@@ -1038,16 +1043,21 @@ async function decidePayrollRun({ organizationId, actorUserId, runId, decision, 
         for (const recovery of recoveries) {
           const amount = Number(recovery.value || 0);
           if (!amount) continue;
-          await tx.$executeRawUnsafe(
+          const posted = await tx.$executeRawUnsafe(
             `UPDATE "payroll_salary_advances"
                 SET "outstandingAmount"=GREATEST(0,"outstandingAmount"-$3),
                     "status"=CASE WHEN GREATEST(0,"outstandingAmount"-$3)=0 THEN 'COMPLETED' ELSE "status" END,
                     "updatedAt"=CURRENT_TIMESTAMP
-              WHERE "organizationId"=$1 AND "id"=$2 AND "status"='ACTIVE'`,
+              WHERE "organizationId"=$1 AND "id"=$2 AND "status"='ACTIVE'
+                AND (NOT $4::boolean OR "outstandingAmount"=$3)`,
             organizationId,
             recovery.id,
-            amount
+            amount,
+            organizationId === NORTHSTAR_ID
           );
+          if (organizationId === NORTHSTAR_ID && !posted) {
+            throw operationalError("SALARY_ADVANCE_RECALCULATION_REQUIRED", "A salary advance changed after calculation. Recalculate payroll before approving.", 409);
+          }
         }
       }
       await postDeductionInstallments(tx, {

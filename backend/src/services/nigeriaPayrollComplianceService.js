@@ -1,7 +1,9 @@
+const { NORTHSTAR_ID } = require("../middleware/salesDemoBoundary");
 const { isNorthstar, standardDaysFor, salaryBasis } = require("./northstarPayrollBasis");
 
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const { loadPayrollSalaryAdvances } = require("./salaryAdvancePayrollService");
 const { replaceDraftObligations } = require("./statutoryObligationService");
 const { loadPeriodVariableItems, calculateVariableValue } = require("./zermattVariablePayrollService");
 const { applyZermattLeaveAllowanceToDraft } = require("./zermattLeaveAllowanceService");
@@ -851,16 +853,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     prismaClient,
   });
 
-  const advanceRows = await prismaClient.$queryRawUnsafe(
-    `SELECT "id","employeeId","outstandingAmount","installmentAmount","recoveryStartDate"
-       FROM "payroll_salary_advances"
-      WHERE "organizationId"=$1 AND "status"='ACTIVE'
-        AND "outstandingAmount" > 0
-        AND "installmentAmount" > 0
-        AND "recoveryStartDate" <= $2::date`,
-    organizationId,
-    period.periodEnd
-  );
+  const advanceRows = await loadPayrollSalaryAdvances(prismaClient, organizationId, period.periodEnd);
 
   const taxYear = Number(period.periodEnd.slice(0, 4));
   const reliefRows = await prismaClient.$queryRawUnsafe(
@@ -1021,6 +1014,9 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     const advanceRecovery = advances.length
       ? round2(advances.reduce((sum, row) => sum + row.value, 0))
       : 0;
+    if (organizationId === NORTHSTAR_ID && advanceRecovery > 0 && Math.round((grossPay - deductions) * 100) < Math.round(advanceRecovery * 100)) {
+      throw payrollError("SALARY_ADVANCE_EXCEEDS_AVAILABLE_PAY", `Salary advances for ${employee.employeeNumber} exceed available pay in ${period.code}. Review the advance or payroll inputs before recalculating.`, 409);
+    }
     const netPreview = Math.max(0, round2(grossPay - deductions - advanceRecovery));
 
     const employerNsitf = nsitfRule.enabled === true ? percent(grossPay, Number(nsitfRule.employerRate || 0)) : 0;

@@ -1,4 +1,6 @@
 const prisma = require("../config/prisma");
+const { NORTHSTAR_ID } = require("../middleware/salesDemoBoundary");
+const { assertNorthstarAdvancePeriodEditable } = require("./salaryAdvancePayrollService");
 
 function error(code, message, statusCode = 400, details) {
   const value = new Error(message);
@@ -94,12 +96,25 @@ async function updateSalaryAdvance({ organizationId, actorUserId, advanceId, inp
     const recoveredAmount = Math.max(0, Number(existing.amount || 0) - Number(existing.outstandingAmount || 0));
     const financialHistoryLocked = recoveredAmount > 0;
 
-    const requestedEmployeeNumber = text(input?.employeeNumber || existing.employeeNumber).toUpperCase();
+    const sameMonthRecovery = organizationId === NORTHSTAR_ID;
+    const requestedEmployeeNumber = text((sameMonthRecovery ? existing.employeeNumber : input?.employeeNumber) || existing.employeeNumber).toUpperCase();
     const requestedAmount = money(input?.amount ?? existing.amount, "Advance Amount");
-    const requestedInstallment = money(input?.installmentAmount ?? existing.installmentAmount, "Installment Amount");
+    const requestedInstallment = sameMonthRecovery ? requestedAmount : money(input?.installmentAmount ?? existing.installmentAmount, "Installment Amount");
     const requestedIssuedDate = dateOnly(input?.issuedDate || new Date(existing.issuedDate).toISOString().slice(0, 10), "Issued Date");
-    const requestedRecoveryStart = dateOnly(input?.recoveryStartDate || new Date(existing.recoveryStartDate).toISOString().slice(0, 10), "Recovery Start Date");
+    const requestedRecoveryStart = sameMonthRecovery ? requestedIssuedDate : dateOnly(input?.recoveryStartDate || new Date(existing.recoveryStartDate).toISOString().slice(0, 10), "Recovery Start Date");
     const requestedReason = text(input?.reason);
+
+    if (sameMonthRecovery) {
+      if (existing.status !== "ACTIVE" || financialHistoryLocked) {
+        throw error("SALARY_ADVANCE_FINANCIAL_HISTORY_LOCKED", "Only scheduled advances with no posted recovery can be edited.", 409);
+      }
+      if (requestedAmount < 0.01) throw error("INVALID_FINANCIAL_AMOUNT", "Advance Amount must be at least ₦0.01.");
+      const originalDate = original.issuedDate;
+      await assertNorthstarAdvancePeriodEditable(tx, organizationId, originalDate);
+      if (originalDate.slice(0, 7) !== requestedIssuedDate.slice(0, 7)) {
+        await assertNorthstarAdvancePeriodEditable(tx, organizationId, requestedIssuedDate);
+      }
+    }
 
     if (requestedRecoveryStart < requestedIssuedDate) {
       throw error("INVALID_RECOVERY_START", "Recovery Start Date cannot be earlier than Issued Date.");
