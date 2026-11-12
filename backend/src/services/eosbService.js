@@ -349,6 +349,7 @@ module.exports = {
   FIXED_MONTH_DAYS,
   serviceDaysBetween,
   calculateEosbValue,
+  isFullTime,
   getEosbStatement,
   listEosbAccounts,
   assessLoanCollateral,
