@@ -112,6 +112,26 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
             scope: "CCA", demonstration: true }
         : FAIL);
     }
+    if (support && staging && req.method === "POST" && url.pathname === "/api/database-approval") {
+      if (!origins.includes(origin) ||
+          !String(req.headers["content-type"] || "").startsWith("application/json"))
+        return json(res, 403, FAIL);
+      let body;
+      try { body = await payloadFrom(req); }
+      catch { return json(res, 400, FAIL); }
+      try { verifyState(); }
+      catch { return json(res, 503, FAIL); }
+      const context = auth.lab.databaseDecisionContext(cookie);
+      if (!context.accepted) return json(res, 401, FAIL);
+      if (!body || typeof body.caseId !== "string" || !Number.isSafeInteger(body.version) ||
+          !["REQUEST_DATABASE_APPROVAL", "APPROVE_DATABASE"].includes(body.operation))
+        return json(res, 400, FAIL);
+      const result = support.databaseDecision({
+        caseId: body.caseId, version: body.version, operation: body.operation, context,
+      });
+      return json(res, result.ok ? 200 : result.code === "CASE_CHANGED" ? 409 :
+        result.code === "CCA_LOCAL_SAVE_FAILED" ? 503 : 403, result);
+    }
     if (support && req.method === "POST" && ["/api/support-intake", "/api/support-workflow"].includes(url.pathname)) {
       if (!origins.includes(origin)) return json(res, 403, FAIL);
       if (!auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted)
@@ -169,8 +189,12 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         description: "In-memory fictional login/authorization events, no production audit data.",
         records: auditEvents.slice(-20).map(e => [e.event, e.actor, e.time]) },
     });
-    const permissionFor = item => auth.lab.resolveSession(cookie, item.permission,
-      item.permission === PERMISSIONS.TICKETS_READ ? "demo-cedar" : undefined).accepted;
+    const canApproveDatabase = Boolean(support && staging &&
+      auth.lab.resolveSession(cookie, PERMISSIONS.APPROVALS_GRANT, "demo-cedar").accepted);
+    const canReadSupport = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar").accepted;
+    const permissionFor = item => item === modules.support
+      ? canReadSupport || canApproveDatabase
+      : auth.lab.resolveSession(cookie, item.permission).accepted;
     if (req.method === "GET" && url.pathname === "/api/access") {
       const session = auth.lab.resolveSession(cookie);
       if (!session.accepted) return json(res, 401, FAIL);
@@ -191,10 +215,12 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       }
       if (support && moduleId === "support") {
         const canSimulateIntake = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted;
-        const routingCases = support.state("demo-cedar").cases.map(
-          ({ id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution }) => {
+        const routingCases = support.state("demo-cedar").cases
+          .filter(ticket => canReadSupport || ticket.databaseApproval)
+          .map(
+          ({ id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution, databaseApproval }) => {
             const history = support.audit(id).events;
-            return { id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution,
+            return { id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution, databaseApproval,
               decisions: history.filter(e => ["RECOMMENDATION_APPROVED", "RECOMMENDATION_RETURNED"].includes(e.event)),
               deliveredResponses: history.filter(e => e.event === "RESOLUTION_SENT_TO_CLIENT" && e.details.response)
                 .map(e => e.details.response)
@@ -203,7 +229,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         );
         return json(res, 200, { ok: true, demonstration: true,
           description: "Fictional Cedar support requests are analyzed and routed automatically.",
-          canSimulateIntake,
+          canSimulateIntake, canApproveDatabase, canRequestDatabaseApproval: staging && canSimulateIntake,
           routingCases });
       }
       return json(res, 200, { ok: true, demonstration: true,

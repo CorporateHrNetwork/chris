@@ -29,7 +29,9 @@ function caseAction(ticket, operation, title, inputLabel, value = ""){
   if(button.disabled||(field&&!field.value.trim()))return;
   button.disabled=true;
   try{
-   await getJSON("/api/support-workflow",{method:"POST",headers:{"Content-Type":"application/json"},
+   const endpoint = operation.endsWith("DATABASE") || operation === "REQUEST_DATABASE_APPROVAL"
+    ? "/api/database-approval" : "/api/support-workflow";
+   await getJSON(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({caseId:ticket.id,version:ticket.version,operation,text:field?.value.trim()})});
    await openWorkspace("support",ticket.id,["REPLY","CONFIRM","APPROVE"].includes(operation));
   }catch(error){status.textContent=error.message;button.disabled=false;}
@@ -83,7 +85,17 @@ function renderRouting(view, data, openCaseId, openInbox){
   }
   if(data.canSimulateIntake&&c.status==="ASSIGNED")
    details.append(caseAction(c,"RECOMMEND","Submit response for review","Response for review",c.draft||""));
-  if(data.canSimulateIntake&&c.status==="AWAITING_APPROVAL"){
+  if(data.canRequestDatabaseApproval&&c.status==="ASSIGNED"&&c.tenantReply&&
+     c.analysis?.category==="DATABASE_PROVISIONING")
+   details.append(caseAction(c,"REQUEST_DATABASE_APPROVAL","Request database provisioning approval"));
+  if(c.databaseApproval){
+   details.append(text("p","Provisioning approval requested by "+c.databaseApproval.requestedBy));
+   if(c.databaseApproval.approvedBy)
+    details.append(text("p","Provisioning approved by "+c.databaseApproval.approvedBy+". Database creation pending."));
+   else if(data.canApproveDatabase)
+    details.append(caseAction(c,"APPROVE_DATABASE","Approve staging database provisioning"));
+  }
+  if(data.canSimulateIntake&&c.status==="AWAITING_APPROVAL"&&!c.databaseApproval){
    details.append(text("p","Simulate a decision by the fictional independent reviewer."),
     caseAction(c,"APPROVE","Simulate approval and send to demo inbox"),
     caseAction(c,"RETURN","Simulate return for revision","Reason for returning"));

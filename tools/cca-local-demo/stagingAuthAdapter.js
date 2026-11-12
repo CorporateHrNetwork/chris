@@ -22,6 +22,7 @@ function createStagingAuth({vault,account}){
      return {accepted:true,principalId:ctx.principalId,
        assignedTenantIds:ctx.assignedTenantIds,platformScope:"CCA"};
    },
+   databaseDecisionContext:(token)=>vault.context(token),
    revoke:(token)=>vault.revoke(token)
  });
  return Object.freeze({lab,account});

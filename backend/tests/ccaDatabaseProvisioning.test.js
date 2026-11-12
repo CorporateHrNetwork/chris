@@ -45,3 +45,38 @@ test("Cedar's provisioning details stay with Database Services and repair existi
   assert.equal(createDemoState(restored.exportSnapshot()).exportSnapshot().workflow.events.length,
     restored.exportSnapshot().workflow.events.length);
 });
+
+test("database approval requires a separate authorized Cedar identity", () => {
+  const { derivePlatformContext } = require("../../backend/src/cca/platformDirectoryPolicy");
+  const context = (id, roles, tenantId = "demo-cedar") => derivePlatformContext({
+    sessionResult: { accepted: true, platformPrincipalId: id },
+    principal: { id, active: true },
+    assignments: roles.flatMap(role => ["PLATFORM", "TENANT"].map(scope => ({
+      assignmentId: scope + role, principalId: id, active: true, role, scope, tenantId,
+    }))),
+  });
+  const demo = createDemoState();
+  const request = demo.submit("demo-cedar", "Please provision a PostgreSQL database.").case;
+  const simulate = (ticket, operation, text) => demo.simulate("demo-cedar", "cca-staging-operator", {
+    caseId: ticket.id, version: ticket.version, operation, text,
+  });
+  const drafted = simulate(request, "RECOMMEND", request.draft).case;
+  const delivered = simulate(drafted, "APPROVE").case;
+  const ready = simulate(delivered, "REPLY", "We need a dedicated PostgreSQL database for fictional staging.").case;
+  const requester = context("cca-staging-operator", ["SERVICE_AGENT", "PLATFORM_APPROVER"]);
+  const decide = (operation, ticket, actor) => demo.databaseDecision({
+    caseId: ticket.id, version: ticket.version, operation, context: actor,
+  });
+  const pending = decide("REQUEST_DATABASE_APPROVAL", ready, requester).case;
+  assert.equal(pending.status, "AWAITING_APPROVAL");
+  assert.equal(simulate(pending, "APPROVE").ok, false);
+  assert.equal(decide("APPROVE_DATABASE", pending, requester).code, "INDEPENDENT_APPROVAL_REQUIRED");
+  assert.equal(decide("APPROVE_DATABASE", pending,
+    context("cca-atlas-approver", ["PLATFORM_APPROVER"], "demo-atlas")).code, "DATABASE_APPROVAL_DENIED");
+  const approver = context("cca-cedar-approver", ["PLATFORM_APPROVER"]);
+  assert.equal(decide("APPROVE_DATABASE", ready, approver).code, "CASE_CHANGED");
+  const approved = decide("APPROVE_DATABASE", pending, approver).case;
+  assert.equal(approved.status, "APPROVED");
+  assert.equal(approved.databaseApproval.approvedBy, "cca-cedar-approver");
+  assert.equal(demo.audit(approved.id).events.at(-1).event, "DATABASE_PROVISIONING_APPROVED");
+});
