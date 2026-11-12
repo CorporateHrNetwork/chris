@@ -88,6 +88,14 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
   }
   for (const ticket of cases.values()) {
     if (ticket.status === "NEW" || ticket.status === "TRIAGED") route(ticket);
+    // Repair replies already misrouted by the old application-login rule.
+    if (ticket.status === "ASSIGNED" && !ticket.recommendation &&
+        ticket.analysis?.category === "TECHNICAL" && ticket.tenantReply &&
+        analyzeSupportRequest(ticket.description).category === "DATABASE_PROVISIONING" &&
+        analyzeSupportRequest(ticket.tenantReply).category === "DATABASE_PROVISIONING") {
+      ticket.draft = null;
+      route(ticket, ticket.tenantReply);
+    }
     prepareDraft(ticket);
   }
 

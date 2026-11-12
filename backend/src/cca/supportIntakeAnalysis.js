@@ -4,7 +4,7 @@ const ANALYSIS_AGENT = "CCA Intake Analysis Agent";
 const CLARIFICATION_AGENT = "Intake Clarification Agent";
 const ROUTES = Object.freeze([
   { category: "DATABASE_PROVISIONING", agent: "Database Services Agent",
-    signals: /\b(?:provision|request|create|set up)\b[^.!?\n]{0,65}\b(?:postgresql|postgres|database)\b/i },
+    signals: /\b(?:provision|request|create|set up|need|want)\b[^.!?\n]{0,65}\b(?:postgresql|postgres|database)\b|\bdatabase provisioning\b/i },
   { category: "PAYROLL", agent: "Payroll Support Agent",
     signals: /\b(payroll|payslips?|salar(?:y|ies)|paye|pension|statutory deductions?|transport support pay)\b/i },
   { category: "HR", agent: "HR Support Agent",
@@ -19,7 +19,12 @@ const ROUTES = Object.freeze([
 
 function analyzeSupportRequest(description) {
   const text = description.normalize("NFKC").replace(/[‘’]/g, "'");
-  const matches = ROUTES.filter(route => route.signals.test(text));
+  const databaseRequest = ROUTES[0].signals.test(text);
+  const matches = ROUTES.filter(route => route.signals.test(
+    databaseRequest && route.category === "TECHNICAL"
+      ? text.replace(/\b(?:separate|dedicated) application login\b/gi, "")
+      : text
+  ));
   if (matches.length === 1) {
     const [{ category, agent }] = matches;
     return { category, agent, reason: "The request matches the " + category.toLowerCase().replace("_", " ") + " routing rules." };
@@ -42,11 +47,14 @@ const DRAFTS = Object.freeze({
   CUSTOMER_SUCCESS: "Thanks for reaching out. Please share the CHRiS workflow your team wants to learn, the intended audience, and the outcome you want. We can use those details to prepare a walkthrough.",
 });
 
-function draftSupportResponse({ analysis, assignee, description }) {
+function draftSupportResponse({ analysis, assignee, description, tenantReply }) {
   if (!analysis || !ROUTES.some(route => route.category === analysis.category && route.agent === assignee)) return null;
   if (analysis.category === "PAYROLL" && /\bpayslips?\b/i.test(description) &&
       /\b(missing|unavailable|not (?:visible|showing|available)|can(?:not|'t) (?:find|see))\b/i.test(description)) {
     return "Thanks for reporting the missing payslip. Please confirm the payroll month, the branch, and whether the payslip is missing from Employee Self-Service or from a payroll export. A Payroll Support reviewer can then check whether the payslip was generated and made available.";
+  }
+  if (analysis.category === "DATABASE_PROVISIONING" && tenantReply) {
+    return "Thanks for the additional information. A Database Services operator will review the staging database request and confirm the next steps.";
   }
   return DRAFTS[analysis.category];
 }
