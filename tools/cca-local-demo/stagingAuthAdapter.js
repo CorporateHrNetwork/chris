@@ -27,12 +27,12 @@ function createStagingAuth({vault,account}){
  });
  return Object.freeze({lab,account});
 }
-function createStagingServer({vault,account,auditLedger,sourceThrottle,checkpoint,stagingHost,support}){
+function createStagingServer({vault,account,auditLedger,sourceThrottle,checkpoint,stagingHost,support,provisionDatabase}){
  if(!auditLedger || typeof auditLedger.append!=="function" ||
     typeof auditLedger.verify!=="function")
    throw Error("CCA_STAGING_AUDIT_REQUIRED");
  auditLedger.verify(); // fail closed when existing ledger is damaged
  return createAuthServer(createStagingAuth({vault,account}),
-   {auditLedger,sourceThrottle:sourceThrottle||createSourceThrottle(),checkpoint,stagingHost,support});
+   {auditLedger,sourceThrottle:sourceThrottle||createSourceThrottle(),checkpoint,stagingHost,support,provisionDatabase});
 }
 module.exports={createStagingAuth,createStagingServer};

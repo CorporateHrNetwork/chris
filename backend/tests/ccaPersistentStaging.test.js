@@ -245,6 +245,11 @@ test("offline Cedar approver enrollment supports separate MFA and case-linked ap
     enrollment.release();
   }
 
+  const databaseActions = [];
+  options.provisionDatabase = (action) => {
+    databaseActions.push(action);
+    return { database: "fictional_cedar_db", login: "fictional_cedar_app" };
+  };
   await withServer(options, async (post, origin) => {
     async function signIn(account, password, secret) {
       const response = await post("password", { account, password });
@@ -290,6 +295,31 @@ test("offline Cedar approver enrollment supports separate MFA and case-linked ap
     assert.deepEqual(cases.map(item => item.id), [ticket.id]);
     const result = await post("database-approval", approval, approverHeaders);
     assert.equal(result.status, 200);
-    assert.equal((await result.json()).case.databaseApproval.approvedBy, approver);
+    ticket = (await result.json()).case;
+    assert.equal(ticket.databaseApproval.approvedBy, approver);
+    const create = { caseId: ticket.id, version: ticket.version, operation: "PROVISION_DATABASE" };
+    assert.equal((await post("database-approval", create, approverHeaders)).status, 403);
+    assert.equal(databaseActions.length, 0);
+    const created = await post("database-approval", create, operatorHeaders);
+    assert.equal(created.status, 200);
+    ticket = (await created.json()).case;
+    assert.equal(ticket.databaseApproval.databaseState, "ACTIVE");
+    assert.equal((await post("database-approval", create, operatorHeaders)).status, 409);
+    const suspended = await post("database-approval", {
+      caseId: ticket.id, version: ticket.version, operation: "SUSPEND_DATABASE",
+    }, operatorHeaders);
+    assert.equal(suspended.status, 200);
+    assert.equal((await suspended.json()).case.databaseApproval.databaseState, "SUSPENDED");
+    assert.deepEqual(databaseActions, [
+      { caseId: ticket.id, operation: "PROVISION_DATABASE" },
+      { caseId: ticket.id, operation: "SUSPEND_DATABASE" },
+    ]);
   });
+  const support = require("../../tools/cca-local-demo/server").createDurableDemoState({
+    dataDir: path.join(options.directory, "fictional-support"),
+  });
+  const id = databaseActions[0].caseId;
+  assert.equal(support.state("demo-cedar").cases.find(item => item.id === id).databaseApproval.databaseState, "SUSPENDED");
+  assert.deepEqual(support.audit(id).events.slice(-2).map(event => event.event),
+    ["DATABASE_PROVISIONED", "DATABASE_SUSPENDED"]);
 });

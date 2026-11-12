@@ -9,11 +9,13 @@ const { createAuditLedger } = require("./auditLedger");
 const { createStagingServer } = require("./stagingAuthAdapter");
 const { createCheckpoint, createPersistentThrottle, deriveKey } = require("./stagingState");
 
+const { createStagingDatabaseProvisioner } = require("./stagingDatabaseProvisioner");
+
 const ACCOUNT = "cca-staging-operator";
 const PORT = 4184;
 const STAGING_HOST = "127.0.0.2";
 
-function openStaging({ directory, master, initialize = false, enrollApprover = false, clock }) {
+function openStaging({ directory, master, initialize = false, enrollApprover = false, clock, provisionDatabase }) {
   const state = path.join(directory, "state");
   const security = path.join(directory, "host-security");
   const files = {
@@ -55,8 +57,15 @@ function openStaging({ directory, master, initialize = false, enrollApprover = f
         checkpoint.commit();
       } };
     }
+    if (!provisionDatabase && process.platform === "win32" &&
+        path.basename(directory) === "CRNetwork-CCA-Stage4D-Pilot") {
+      provisionDatabase = createStagingDatabaseProvisioner({
+        root: path.join(path.dirname(directory), "CRNETWORK-CCA-Database-Staging"),
+        credentialDirectory: security, key: deriveKey(master, "cedar-postgres-v1"),
+      });
+    }
     const server = createStagingServer({
-      vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST,
+      vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST, provisionDatabase,
       support: createDurableDemoState({ dataDir: path.join(directory, "fictional-support") }),
       sourceThrottle: createPersistentThrottle({ file: files.throttle, clock }),
     });

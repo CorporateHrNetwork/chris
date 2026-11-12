@@ -192,13 +192,14 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     return { ok: true, case: safeCase(ticket) };
   }
 
-  function databaseDecision({ caseId, version, operation, context }) {
+  function databaseDecision({ caseId, version, operation, context, provisionDatabase }) {
     const ticket = cases.get(caseId);
     if (!ticket || ticket.analysis?.category !== "DATABASE_PROVISIONING")
       return deny("CASE_NOT_FOUND");
 
     const requesting = operation === "REQUEST_DATABASE_APPROVAL";
-    const permission = requesting ? PERMISSIONS.TICKETS_MANAGE : PERMISSIONS.APPROVALS_GRANT;
+    const permission = operation === "APPROVE_DATABASE"
+      ? PERMISSIONS.APPROVALS_GRANT : PERMISSIONS.TICKETS_MANAGE;
     if (!isAuthorized(context, permission, ticket.tenantId))
       return deny("DATABASE_APPROVAL_DENIED");
     if (ticket.version !== version) return deny("CASE_CHANGED");
@@ -217,6 +218,20 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
       ticket.databaseApproval = { ...approval, approvedBy: actor };
       ticket.status = "APPROVED";
       record(ticket, "DATABASE_PROVISIONING_APPROVED", actor, { requestedBy: approval.requestedBy });
+    } else if (["PROVISION_DATABASE", "SUSPEND_DATABASE"].includes(operation)) {
+      const approval = ticket.databaseApproval;
+      const creating = operation === "PROVISION_DATABASE";
+      if (ticket.tenantId !== "demo-cedar" || ticket.status !== "APPROVED" ||
+          !approval?.approvedBy || approval.requestedBy !== actor ||
+          (creating ? approval.databaseState : approval.databaseState !== "ACTIVE"))
+        return deny("INVALID_WORKFLOW_TRANSITION");
+      if (typeof provisionDatabase !== "function") return deny("CCA_STAGING_DATABASE_UNAVAILABLE");
+      let details;
+      try { details = provisionDatabase({ caseId, operation }); }
+      catch { return deny("CCA_STAGING_DATABASE_ACTION_FAILED"); }
+      const databaseState = creating ? "ACTIVE" : "SUSPENDED";
+      ticket.databaseApproval = { ...approval, ...details, databaseState };
+      record(ticket, creating ? "DATABASE_PROVISIONED" : "DATABASE_SUSPENDED", actor, details);
     } else {
       return deny("INVALID_WORKFLOW_TRANSITION");
     }
