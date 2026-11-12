@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const prisma = require("../config/prisma");
+const { isFullTime } = require("../services/eosbService");
 const { requireEssAuth } = require("../middleware/authMiddleware");
 
 const { ESS_STATUTORY_OBLIGATIONS_SQL, ESS_PAYROLL_PREVIEWS_SQL, ESS_CURRENT_SALARY_SQL } = require("../services/essStatutoryService");
@@ -319,6 +320,7 @@ router.get("/dashboard", requireEssAuth, async (req,res) => {
     } catch(error) {
       if(!["EMPLOYMENT_LEVEL_MAPPING_REQUIRED","EMPLOYEE_LEVEL_OVERRIDE_INACTIVE"].includes(error.message))throw error;
     }
+    const gratuityEligible = isFullTime(employee.employmentType);
     const [onboardingRows,documents,statutory,attendance,payslips,leaveBalances,cycles,gratuityRows,newsRows,birthdayRows,anniversaryRows,payrollPreviews,currentSalary]=await Promise.all([
       prisma.$queryRawUnsafe('SELECT eo."id",eo."completionPercent",eo."currentStage",eo."status",eo."sectionProgress",eo."sectionData",t."sections" AS "templateSections",eo."updatedAt" FROM "employee_onboardings" eo JOIN "onboarding_workflow_templates" t ON t."id"=eo."templateId" AND t."organizationId"=eo."organizationId" WHERE eo."organizationId"=$1 AND eo."employeeId"=$2 ORDER BY eo."updatedAt" DESC LIMIT 1',orgId,eid),
       prisma.$queryRawUnsafe('SELECT "id","category","originalName","mimeType","sizeBytes","createdAt" FROM "employee_documents" WHERE "organizationId"=$1 AND "employeeId"=$2 ORDER BY "createdAt" DESC',orgId,eid),
@@ -327,7 +329,7 @@ router.get("/dashboard", requireEssAuth, async (req,res) => {
       prisma.$queryRawUnsafe('SELECT l."id",l."runId",l."currency",l."baseSalary",l."allowances",l."deductions",l."advanceRecovery",l."loanRecovery",l."grossPay",l."netPreview",l."statutoryStatus",l."details",r."status" AS "runStatus",r."approvedAt",p."code" AS "periodCode",p."name" AS "periodName",p."periodStart",p."periodEnd",p."payDate" FROM payroll_run_lines l JOIN payroll_runs r ON r."id"=l."runId" AND r."organizationId"=l."organizationId" JOIN payroll_periods p ON p."id"=r."periodId" AND p."organizationId"=r."organizationId" WHERE l."organizationId"=$1 AND l."employeeId"=$2 AND r."status"=\'APPROVED\' ORDER BY p."periodStart" DESC,r."approvedAt" DESC',orgId,eid),
       prisma.$queryRawUnsafe('SELECT lb."id",lb."leaveYear",lb."openingBalance",lb."accrued",lb."carriedForward",lb."used",lb."adjusted",lt."name" AS "leaveType" FROM "leave_balances" lb JOIN "leave_types" lt ON lt."id"=lb."leaveTypeId" AND lt."organizationId"=lb."organizationId" WHERE lb."organizationId"=$1 AND lb."employeeId"=$2 ORDER BY lb."leaveYear" DESC,lt."name"',orgId,eid),
       prisma.$queryRawUnsafe('SELECT * FROM "chris_performance_cycles" WHERE "organizationId"=$1 ORDER BY "year" DESC,"quarter" DESC LIMIT 4',orgId),
-      prisma.$queryRawUnsafe('SELECT "id","currency","finalSalary","gratuitySeverance","grossPayable","netSettlement","amountPaid","status","approvedAt","paidAt","updatedAt" FROM "exit_settlements" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status" IN (\'APPROVED\',\'PAYMENT_PENDING\',\'PARTIALLY_PAID\',\'PAID\') ORDER BY "updatedAt" DESC LIMIT 1',orgId,eid),
+      gratuityEligible ? prisma.$queryRawUnsafe('SELECT "id","currency","finalSalary","gratuitySeverance","grossPayable","netSettlement","amountPaid","status","approvedAt","paidAt","updatedAt" FROM "exit_settlements" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "status" IN (\'APPROVED\',\'PAYMENT_PENDING\',\'PARTIALLY_PAID\',\'PAID\') ORDER BY "updatedAt" DESC LIMIT 1',orgId,eid) : [],
       prisma.$queryRawUnsafe('SELECT n."id",n."category",n."title",n."summary",n."body",n."status",n."isPinned",n."publishAt",n."expireAt",n."attachmentFileName",n."attachmentMimeType",n."attachmentSize" FROM "internal_news_posts" n WHERE n."organizationId"=$1 AND n."status"=\'PUBLISHED\' AND (n."publishAt" IS NULL OR n."publishAt"<=CURRENT_TIMESTAMP) AND (n."expireAt" IS NULL OR n."expireAt">=CURRENT_TIMESTAMP) ORDER BY n."isPinned" DESC,COALESCE(n."publishAt",n."createdAt") DESC LIMIT 100',orgId),
       prisma.$queryRawUnsafe('SELECT e."id",e."employeeNumber",e."firstName",e."middleName",e."lastName",e."hireDate",d."name" AS "designation",(eo."sectionData"->\'personal-details\'->>\'dateOfBirth\') AS "dateOfBirth" FROM "employees" e LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId" LEFT JOIN LATERAL (SELECT "sectionData" FROM "employee_onboardings" WHERE "organizationId"=$1 AND "employeeId"=e."id" ORDER BY "updatedAt" DESC LIMIT 1) eo ON TRUE WHERE e."organizationId"=$1 AND e."status" IN (\'ACTIVE\',\'PROBATION\',\'LEAVE\') AND (eo."sectionData"->\'personal-details\'->>\'dateOfBirth\') IS NOT NULL AND (eo."sectionData"->\'personal-details\'->>\'dateOfBirth\') ~ \'^[0-9]{4}-[0-9]{2}-[0-9]{2}\' AND EXTRACT(MONTH FROM (eo."sectionData"->\'personal-details\'->>\'dateOfBirth\')::date)=EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(DAY FROM (eo."sectionData"->\'personal-details\'->>\'dateOfBirth\')::date)=EXTRACT(DAY FROM CURRENT_DATE) ORDER BY e."firstName",e."lastName"',orgId),
       prisma.$queryRawUnsafe('SELECT e."id",e."employeeNumber",e."firstName",e."middleName",e."lastName",e."hireDate",d."name" AS "designation" FROM "employees" e LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId" WHERE e."organizationId"=$1 AND e."status" IN (\'ACTIVE\',\'PROBATION\',\'LEAVE\') AND e."hireDate" IS NOT NULL AND e."hireDate" < CURRENT_DATE AND EXTRACT(MONTH FROM e."hireDate")=EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(DAY FROM e."hireDate")=EXTRACT(DAY FROM CURRENT_DATE) ORDER BY e."firstName",e."lastName"',orgId),
@@ -336,15 +338,18 @@ router.get("/dashboard", requireEssAuth, async (req,res) => {
     ]);
     const onboarding=onboardingRows[0]||null,sectionData=onboarding?.sectionData||{},personalDetails=sectionData["personal-details"]||{},approvedGratuity=gratuityRows[0]||null,performance=[],news=newsRows||[],birthdays=birthdayRows||[],workAnniversaries=anniversaryRows||[];
     const latestCalculation=[...payslips,...payrollPreviews].sort((a,b)=>new Date(b.periodEnd)-new Date(a.periodEnd))[0]||null;
-    const grossMonthly=Number(currentSalary[0]?.amount ?? latestCalculation?.grossPay ?? approvedGratuity?.finalSalary ?? 0);
-    const salaryCurrency=currentSalary[0]?.currency||latestCalculation?.currency||approvedGratuity?.currency||"NGN";
-    const serviceStart=employee.hireDate||employee.employmentEpisodes?.[0]?.startDate||null;
-    const today=new Date();
-    const startDate=serviceStart?new Date(serviceStart):null;
-    const serviceDays=startDate?Math.max(0,Math.floor((Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate())-Date.UTC(startDate.getUTCFullYear(),startDate.getUTCMonth(),startDate.getUTCDate()))/86400000)):0;
-    const serviceMonths=serviceDays/30;
-    const liveGratuity=serviceStart&&grossMonthly>0?grossMonthly*(serviceDays/30)*0.075:0;
-    const gratuity=approvedGratuity?{...approvedGratuity,serviceStartDate:serviceStart,serviceDays,equivalentMonths:serviceMonths,grossMonthly,calculationRule:"Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%",amountAsOfToday:liveGratuity,currency:approvedGratuity.currency||salaryCurrency}:{currency:salaryCurrency,serviceStartDate:serviceStart,serviceDays,equivalentMonths:serviceMonths,grossMonthly,calculationRule:"Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%",amountAsOfToday:liveGratuity,status:"ACCRUING"};
+    let gratuity = null;
+    if (gratuityEligible) {
+      const grossMonthly=Number(currentSalary[0]?.amount ?? latestCalculation?.grossPay ?? approvedGratuity?.finalSalary ?? 0);
+      const salaryCurrency=currentSalary[0]?.currency||latestCalculation?.currency||approvedGratuity?.currency||"NGN";
+      const serviceStart=employee.hireDate||employee.employmentEpisodes?.[0]?.startDate||null;
+      const today=new Date();
+      const startDate=serviceStart?new Date(serviceStart):null;
+      const serviceDays=startDate?Math.max(0,Math.floor((Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate())-Date.UTC(startDate.getUTCFullYear(),startDate.getUTCMonth(),startDate.getUTCDate()))/86400000)):0;
+      const serviceMonths=serviceDays/30;
+      const liveGratuity=serviceStart&&grossMonthly>0?grossMonthly*(serviceDays/30)*0.075:0;
+      gratuity=approvedGratuity?{...approvedGratuity,serviceStartDate:serviceStart,serviceDays,equivalentMonths:serviceMonths,grossMonthly,calculationRule:"Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%",amountAsOfToday:liveGratuity,currency:approvedGratuity.currency||salaryCurrency}:{currency:salaryCurrency,serviceStartDate:serviceStart,serviceDays,equivalentMonths:serviceMonths,grossMonthly,calculationRule:"Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%",amountAsOfToday:liveGratuity,status:"ACCRUING"};
+    }
     for(const cycle of cycles){
       const kpis=await prisma.$queryRawUnsafe('SELECT "id","title","objective","measurement","target","weight","source","version","status","approvedAt" FROM "chris_performance_kpis" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "cycleId"=$3 ORDER BY "createdAt"',orgId,eid,cycle.id);
       const assessments=await prisma.$queryRawUnsafe('SELECT "id","selfAssessment","managerAssessment","finalRating","improvementNotes","status","submittedAt","managerReviewedAt" FROM "chris_performance_assessments" WHERE "organizationId"=$1 AND "employeeId"=$2 AND "cycleId"=$3 LIMIT 1',orgId,eid,cycle.id);

@@ -62,6 +62,7 @@ test('ESS loan endpoint ignores injected employee and organization selectors', a
     if (id === 'express') return { Router: () => router };
     if (id === '../config/prisma') return {};
     if (id === '../middleware/authMiddleware') return { requireEssAuth: auth };
+    if (id === '../services/eosbService') return {};
     if (id === '../services/essLoanSummaryService') return { getEmployeeLoanSummary: async (_, scope) => { calls.push(scope); return []; } };
     if (['bcryptjs','jsonwebtoken','../services/essStatutoryService','../services/payrollPayslipEmailService','../services/attendanceInsightsService'].includes(id)) return {};
     return require(id);
