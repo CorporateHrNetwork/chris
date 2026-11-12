@@ -114,7 +114,7 @@ function createDemoState(savedSnapshot) {
   function exportSnapshot() {
     return { workflow: flow.exportSnapshot(), index: [...index.entries()] };
   }
-  return Object.freeze({ state, submit, operate, simulate, audit, exportSnapshot });
+  return Object.freeze({ state, submit, operate, simulate, audit, exportSnapshot, databaseDecision: flow.databaseDecision });
 }
 
 /** Persist before acknowledging a successful mutation. Restore the previous
@@ -143,6 +143,7 @@ function createDurableDemoState({ dataDir } = {}) {
     submit: (tenantId, description, requestId) => mutation("submit", tenantId, description, requestId),
     operate: (operation) => mutation("operate", operation),
     simulate: (tenantId, actor, action) => mutation("simulate", tenantId, actor, action),
+    databaseDecision: (decision) => mutation("databaseDecision", decision),
     storageInfo: () => ({ primary: store.primary, backup: store.backup }),
   });
 }

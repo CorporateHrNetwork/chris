@@ -69,7 +69,8 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     status: c.status, description: c.description, assignee: c.assignee,
     recommendation: c.recommendation, resolution: c.resolution,
     analysis: c.analysis && { ...c.analysis }, draft: c.draft,
-    version: c.version || 0, tenantReply: c.tenantReply
+    version: c.version || 0, tenantReply: c.tenantReply,
+    databaseApproval: c.databaseApproval && { ...c.databaseApproval }
   });
   function prepareDraft(ticket) {
     if (ticket.status !== "ASSIGNED" || ticket.draft) return;
@@ -88,6 +89,14 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
   }
   for (const ticket of cases.values()) {
     if (ticket.status === "NEW" || ticket.status === "TRIAGED") route(ticket);
+    // Repair replies already misrouted by the old application-login rule.
+    if (ticket.status === "ASSIGNED" && !ticket.recommendation &&
+        ticket.analysis?.category === "TECHNICAL" && ticket.tenantReply &&
+        analyzeSupportRequest(ticket.description).category === "DATABASE_PROVISIONING" &&
+        analyzeSupportRequest(ticket.tenantReply).category === "DATABASE_PROVISIONING") {
+      ticket.draft = null;
+      route(ticket, ticket.tenantReply);
+    }
     prepareDraft(ticket);
   }
 
@@ -120,6 +129,7 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     if (!ticket) return deny("CASE_NOT_FOUND");
     if (!isAuthorized(context, PERMISSIONS.TICKETS_MANAGE, ticket.tenantId))
       return deny("TENANT_ACCESS_DENIED");
+    if (ticket.databaseApproval) return deny("DATABASE_APPROVAL_WORKFLOW_REQUIRED");
     const actor = context.principalId;
     if (operation === "RECOMMEND" && ticket.status === "ASSIGNED" &&
         typeof recommendation === "string" && recommendation.trim()) {
@@ -182,6 +192,52 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
     return { ok: true, case: safeCase(ticket) };
   }
 
+  function databaseDecision({ caseId, version, operation, context, provisionDatabase }) {
+    const ticket = cases.get(caseId);
+    if (!ticket || ticket.analysis?.category !== "DATABASE_PROVISIONING")
+      return deny("CASE_NOT_FOUND");
+
+    const requesting = operation === "REQUEST_DATABASE_APPROVAL";
+    const permission = operation === "APPROVE_DATABASE"
+      ? PERMISSIONS.APPROVALS_GRANT : PERMISSIONS.TICKETS_MANAGE;
+    if (!isAuthorized(context, permission, ticket.tenantId))
+      return deny("DATABASE_APPROVAL_DENIED");
+    if (ticket.version !== version) return deny("CASE_CHANGED");
+
+    const actor = context.principalId;
+    if (requesting) {
+      if (ticket.status !== "ASSIGNED" || !ticket.tenantReply || ticket.databaseApproval)
+        return deny("INVALID_WORKFLOW_TRANSITION");
+      ticket.databaseApproval = { requestedBy: actor, approvedBy: null };
+      ticket.status = "AWAITING_APPROVAL";
+      record(ticket, "DATABASE_APPROVAL_REQUESTED", actor);
+    } else if (operation === "APPROVE_DATABASE") {
+      const approval = ticket.databaseApproval;
+      if (ticket.status !== "AWAITING_APPROVAL" || !approval || approval.approvedBy ||
+          approval.requestedBy === actor) return deny("INDEPENDENT_APPROVAL_REQUIRED");
+      ticket.databaseApproval = { ...approval, approvedBy: actor };
+      ticket.status = "APPROVED";
+      record(ticket, "DATABASE_PROVISIONING_APPROVED", actor, { requestedBy: approval.requestedBy });
+    } else if (["PROVISION_DATABASE", "SUSPEND_DATABASE"].includes(operation)) {
+      const approval = ticket.databaseApproval;
+      const creating = operation === "PROVISION_DATABASE";
+      if (ticket.tenantId !== "demo-cedar" || ticket.status !== "APPROVED" ||
+          !approval?.approvedBy || approval.requestedBy !== actor ||
+          (creating ? approval.databaseState : approval.databaseState !== "ACTIVE"))
+        return deny("INVALID_WORKFLOW_TRANSITION");
+      if (typeof provisionDatabase !== "function") return deny("CCA_STAGING_DATABASE_UNAVAILABLE");
+      let details;
+      try { details = provisionDatabase({ caseId, operation }); }
+      catch { return deny("CCA_STAGING_DATABASE_ACTION_FAILED"); }
+      const databaseState = creating ? "ACTIVE" : "SUSPENDED";
+      ticket.databaseApproval = { ...approval, ...details, databaseState };
+      record(ticket, creating ? "DATABASE_PROVISIONED" : "DATABASE_SUSPENDED", actor, details);
+    } else {
+      return deny("INVALID_WORKFLOW_TRANSITION");
+    }
+    return { ok: true, case: safeCase(ticket) };
+  }
+
   function getCase({ caseId, context }) {
     const ticket = cases.get(caseId);
     if (!ticket || !isAuthorized(context, PERMISSIONS.TICKETS_READ, ticket.tenantId))
@@ -201,6 +257,6 @@ function createSyntheticSupportWorkflow(initialSnapshot) {
       events: eventLog
     }));
   }
-  return Object.freeze({ submit, act, clientConfirm, clientReply, getCase, getEvents, exportSnapshot });
+  return Object.freeze({ submit, act, clientConfirm, clientReply, databaseDecision, getCase, getEvents, exportSnapshot });
 }
 module.exports = { createSyntheticSupportWorkflow };

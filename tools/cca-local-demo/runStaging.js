@@ -3,17 +3,19 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { base32 } = require("./localAuthServer");
-const { createIdentityVault } = require("./identityVault");
+const { createIdentityVault, STAGING_CEDAR_APPROVER } = require("./identityVault");
 const { createDurableDemoState } = require("./server");
 const { createAuditLedger } = require("./auditLedger");
 const { createStagingServer } = require("./stagingAuthAdapter");
 const { createCheckpoint, createPersistentThrottle, deriveKey } = require("./stagingState");
 
+const { createStagingDatabaseProvisioner } = require("./stagingDatabaseProvisioner");
+
 const ACCOUNT = "cca-staging-operator";
 const PORT = 4184;
 const STAGING_HOST = "127.0.0.2";
 
-function openStaging({ directory, master, initialize = false, clock }) {
+function openStaging({ directory, master, initialize = false, enrollApprover = false, clock, provisionDatabase }) {
   const state = path.join(directory, "state");
   const security = path.join(directory, "host-security");
   const files = {
@@ -46,8 +48,24 @@ function openStaging({ directory, master, initialize = false, clock }) {
     }
     if (!fs.existsSync(files.vault) || !fs.existsSync(files.audit))
       throw Error("CCA_STAGING_ENROLLMENT_REQUIRED");
+    if (enrollApprover) {
+      return { release, enroll(password, mfaSecret) {
+        checkpoint.verify();
+        vault.enrollStagingCedarApprover({ password, mfaSecret });
+        ledger.append({ event: "CCA_STAGING_APPROVER_ENROLLED", actor: "LOCAL_STAGING_HOST",
+          target: STAGING_CEDAR_APPROVER });
+        checkpoint.commit();
+      } };
+    }
+    if (!provisionDatabase && process.platform === "win32" &&
+        path.basename(directory) === "CRNetwork-CCA-Stage4D-Pilot") {
+      provisionDatabase = createStagingDatabaseProvisioner({
+        root: path.join(path.dirname(directory), "CRNETWORK-CCA-Database-Staging"),
+        credentialDirectory: security, key: deriveKey(master, "cedar-postgres-v1"),
+      });
+    }
     const server = createStagingServer({
-      vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST,
+      vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST, provisionDatabase,
       support: createDurableDemoState({ dataDir: path.join(directory, "fictional-support") }),
       sourceThrottle: createPersistentThrottle({ file: files.throttle, clock }),
     });
@@ -60,7 +78,7 @@ function openStaging({ directory, master, initialize = false, clock }) {
 
 async function main() {
   const [directory, mode] = process.argv.slice(2);
-  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve"].includes(mode))
+  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "enroll-approver", "serve"].includes(mode))
     throw Error("CCA_STAGING_WINDOWS_HOST_REQUIRED");
   let input = "";
   for await (const chunk of process.stdin.setEncoding("utf8")) {
@@ -70,18 +88,20 @@ async function main() {
   const payload = JSON.parse(input.replace(/^\uFEFF/, ""));
   const master = Buffer.from(payload.master, "base64");
   try {
-    const runtime = openStaging({ directory, master, initialize: mode === "enroll" });
-    if (mode === "enroll") {
+    const runtime = openStaging({ directory, master, initialize: mode === "enroll",
+      enrollApprover: mode === "enroll-approver" });
+    if (mode !== "serve") {
       const secret = crypto.randomBytes(20);
       try {
         const password = payload.generatePassword === true
           ? crypto.randomBytes(24).toString("base64url")
           : payload.password;
         runtime.enroll(password, secret);
-        console.log("Account:", ACCOUNT);
+        console.log("Account:", mode === "enroll" ? ACCOUNT : STAGING_CEDAR_APPROVER);
         if (payload.generatePassword === true)
           console.log("Generated staging password (keep private, shown once):", password);
-        console.log("Google Authenticator: Add a setup key, name it CCA Local Staging, and select Time based.");
+        const label = mode === "enroll" ? "CCA Local Staging" : "CCA Cedar Approver";
+        console.log("Google Authenticator: Add a setup key, name it " + label + ", and select Time based.");
         console.log("Setup key (keep private, shown once):", base32(secret));
       } finally { secret.fill(0); runtime.release(); }
       return;
