@@ -106,7 +106,8 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       return fs.createReadStream(path.join(__dirname, files[url.pathname])).pipe(res);
     }
     if (req.method === "GET" && url.pathname === "/api/whoami") {
-      const identity = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");
+      const identity = staging ? auth.lab.resolveSession(cookie)
+        : auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");
       return json(res, identity.accepted ? 200 : 401, identity.accepted
         ? { ok: true, account: identity.principalId, assignedTenants: identity.assignedTenantIds,
             scope: "CCA", demonstration: true }
@@ -266,7 +267,9 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         if (passwordStep && !result.ok && sourceThrottle && !sourceThrottle.reserve)
           sourceThrottle.recordFailure(peer);
         if (!passwordStep && result.ok && auditLedger) {
-          auditLedger.append({ event: "CCA_MFA_VERIFIED", actor: auth.account, target: auth.account });
+          const principalId = auth.lab.resolveSession(result.token).principalId;
+          if (!principalId) throw Error("CCA_STAGING_AUTH_IDENTITY_REQUIRED");
+          auditLedger.append({ event: "CCA_MFA_VERIFIED", actor: principalId, target: principalId });
         }
         checkpoint?.commit();
       } catch {
@@ -276,7 +279,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       }
       if (!result.ok) return json(res, 401, FAIL);
       if (passwordStep) return json(res, 200, { ok: true, challenge: result.challenge });
-      auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.account, time: new Date().toISOString() });
+      auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.lab.resolveSession(result.token).principalId, time: new Date().toISOString() });
       if (auditEvents.length > 100) auditEvents.shift();
       return json(res, 200, { ok: true, demonstration: true },
         { "Set-Cookie": cookieName + "=" + result.token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=900" });

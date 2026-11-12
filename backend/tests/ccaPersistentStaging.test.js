@@ -230,3 +230,66 @@ test("staging review persists decisions, hands off only approved text, and rerou
     assert.match(clarified.draft, /missing payslip/);
   });
 });
+
+test("offline Cedar approver enrollment supports separate MFA and case-linked approval", async t => {
+  const options = fixture(t);
+  const approver = "cca-staging-cedar-approver";
+  const approverPassword = "Different fictional approver password";
+  const approverSecret = Buffer.from("09876543210987654321");
+  const enrollment = openStaging({ ...options, enrollApprover: true });
+  try {
+    assert.throws(() => enrollment.enroll(password, approverSecret), /APPROVER_PASSWORD_REQUIRED/);
+    enrollment.enroll(approverPassword, approverSecret);
+    assert.throws(() => enrollment.enroll(approverPassword, approverSecret), /APPROVER_ENROLLMENT_DENIED/);
+  } finally {
+    enrollment.release();
+  }
+
+  await withServer(options, async (post, origin) => {
+    async function signIn(account, password, secret) {
+      const response = await post("password", { account, password });
+      assert.equal(response.status, 200);
+      const { challenge } = await response.json();
+      const mfa = await post("mfa", { challenge, code: otpAt(secret, Math.floor(now / 30)) });
+      assert.equal(mfa.status, 200);
+      return { Cookie: mfa.headers.get("set-cookie").split(";")[0] };
+    }
+
+    const operatorHeaders = await signIn(ACCOUNT, password, secret);
+    const approverHeaders = await signIn(approver, approverPassword, approverSecret);
+    const identity = await fetch(origin + "/api/whoami", { headers: approverHeaders });
+    assert.equal((await identity.json()).account, approver);
+
+    const support = await post("support-intake", {
+      description: "Please provision a PostgreSQL database for our staging application.",
+      requestId: "3a622200-581c-4991-8c41-4d10526fe268",
+    }, operatorHeaders);
+    let ticket = (await support.json()).case;
+    for (const [operation, text] of [
+      ["RECOMMEND", "Please provide the fictional staging requirements."],
+      ["APPROVE"],
+      ["REPLY", "We need a dedicated PostgreSQL database for fictional staging."],
+    ]) {
+      const result = await post("support-workflow", {
+        caseId: ticket.id, version: ticket.version, operation, text,
+      }, operatorHeaders);
+      assert.equal(result.status, 200);
+      ticket = (await result.json()).case;
+    }
+    const request = await post("database-approval", {
+      caseId: ticket.id, version: ticket.version, operation: "REQUEST_DATABASE_APPROVAL",
+    }, operatorHeaders);
+    assert.equal(request.status, 200);
+    ticket = (await request.json()).case;
+    const approval = { caseId: ticket.id, version: ticket.version, operation: "APPROVE_DATABASE" };
+    assert.equal((await post("database-approval", approval, operatorHeaders)).status, 403);
+
+    const workspace = await fetch(origin + "/api/workspace?module=support", { headers: approverHeaders });
+    assert.equal(workspace.status, 200);
+    const cases = (await workspace.json()).routingCases;
+    assert.deepEqual(cases.map(item => item.id), [ticket.id]);
+    const result = await post("database-approval", approval, approverHeaders);
+    assert.equal(result.status, 200);
+    assert.equal((await result.json()).case.databaseApproval.approvedBy, approver);
+  });
+});
