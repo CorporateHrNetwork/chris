@@ -99,6 +99,11 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    return {activationFrom:from,employees:staff.length};
   });
  }
+ async function loadBankDetails(c,org) {
+  const onboarding=await q(c,`SELECT DISTINCT ON("employeeId") "employeeId","sectionData" FROM public.employee_onboardings WHERE "organizationId"=$1 ORDER BY "employeeId","updatedAt" DESC,"createdAt" DESC`,org);
+  return new Map(onboarding.map(o=>[o.employeeId,o.sectionData?.['payment-details']||o.sectionData?.paymentDetails||{}]));
+ }
+
  async function source(c,org,periodMonth) {
   const from=`${domain.month(periodMonth)}-01`,end=new Date(Date.UTC(Number(periodMonth.slice(0,4)),Number(periodMonth.slice(5,7)),0)).toISOString().slice(0,10);
   const config=await settings(c,org);
@@ -111,8 +116,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   ) bases ORDER BY "employeeId","effectiveFrom" DESC,priority DESC`,org,`${periodMonth}-15`,from) : await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date ORDER BY "employeeId","effectiveFrom" DESC`,org,`${periodMonth}-15`,from);
   const balances=await q(c,`SELECT id,"employeeId",kind,amount,"dueMonth" FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND amount>0 AND "dueMonth"<=$2::date ORDER BY id FOR UPDATE`,org,from);
   const byEmployee=new Map(rates.map(r=>[r.employeeId,r]));
-  const onboarding=await q(c,`SELECT DISTINCT ON("employeeId") "employeeId","sectionData" FROM public.employee_onboardings WHERE "organizationId"=$1 ORDER BY "employeeId","updatedAt" DESC,"createdAt" DESC`,org);
-  const bankByEmployee=new Map(onboarding.map(o=>[o.employeeId,o.sectionData?.['payment-details']||o.sectionData?.paymentDetails||{}]));
+  const bankByEmployee=await loadBankDetails(c,org);
   const metadata=benefitsOnly?await c.employee.findMany({where:{organizationId:org,id:{in:employees.map(e=>e.id)}},orderBy:{id:'asc'},select:{id:true,location:{select:{name:true}},designation:{select:{name:true}},department:{select:{name:true}}}}):[];
   const metadataMap=new Map(metadata.map(e=>[e.id,e]));
   const adjustments=benefitsOnly?await q(c,`SELECT l."employeeId",l.snapshot->'benefitInputs' AS inputs FROM public.zermatt_midmonth_lines l JOIN public.zermatt_midmonth_runs r ON r.id=l."runId" AND r."organizationId"=l."organizationId" WHERE l."organizationId"=$1 AND r."periodMonth"=$2::date`,org,from):[];
@@ -176,15 +180,19 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    if(['SUBMIT','AUDIT_APPROVE','GM_APPROVE','HEAD_HR_APPROVE'].includes(action)) {
     const current=await source(c,org,ym(run.periodMonth));
     if(current.sourceHash!==run.sourceHash)domain.invalid('Salary, employee or carry-forward records changed. Return this run for correction and regenerate it.');
-    if(['GM_APPROVE','HEAD_HR_APPROVE'].includes(action)&&current.lines.some(l=>l.netPay>0&&(!l.paymentDetails.bankName||!l.paymentDetails.accountName||!l.paymentDetails.accountNumber)))domain.invalid('Complete bank details before final approval. Return the run to Head HR and regenerate it after correction.');
+    if(!(benefitsOnly&&action==='HEAD_HR_APPROVE')&&['GM_APPROVE','HEAD_HR_APPROVE'].includes(action)&&current.lines.some(l=>l.netPay>0&&(!l.paymentDetails.bankName||!l.paymentDetails.accountName||!l.paymentDetails.accountNumber)))domain.invalid('Complete bank details before final approval. Return the run to Head HR and regenerate it after correction.');
    }
    if(action==='CONFIRM_PAYMENT') {
     const lines=await q(c,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY id FOR UPDATE',org,runId);
     if(!Array.isArray(payments)||payments.length!==lines.length)domain.invalid('Provide actual payment (including explicit zero) and reference for every payroll line.',400);
+    const paymentDetails=benefitsOnly?await loadBankDetails(c,org):null;
     const receipts=new Map(payments.map(p=>[p.lineId,p]));if(receipts.size!==lines.length)domain.invalid('Duplicate payment line.',400);
     for(const line of lines) {
      const receipt=receipts.get(line.id);if(!receipt||!String(receipt.reference||'').trim()||receipt.actualPaid===''||receipt.actualPaid==null)domain.invalid('Every payroll line needs an actual payment and reference or reason for nonpayment.',400);
      const settlement=domain.settleLine(line.snapshot,receipt.actualPaid);
+     if(benefitsOnly&&settlement.actualPaid>0&&benefit.requiresBankDetails(paymentDetails.get(line.employeeId))) {
+      domain.invalid(`Complete bank details for ${line.snapshot.employeeNumber} before confirming a positive payment.`);
+     }
      const balances=await q(c,`SELECT * FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND "employeeId"=$2 AND amount>0 AND "dueMonth"<=$3::date ORDER BY "dueMonth",id FOR UPDATE`,org,line.employeeId,run.periodMonth);
      const expectedUnpaid=balances.filter(b=>b.kind==='UNPAID').reduce((s,b)=>s+domain.cents(b.amount),0);
      const expectedOverpaid=balances.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0);
