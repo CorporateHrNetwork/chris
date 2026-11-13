@@ -1,7 +1,7 @@
 const express=require('express');
 const XLSX=require('xlsx');
 const { appendTransportSupportAnalytics } = require('../services/transportSupportExportAnalytics');
-const { HEADERS: registerHeaders } = require('../services/zermattTransportBenefitControl');
+const { HEADERS: registerHeaders, requiresBankDetails } = require('../services/zermattTransportBenefitControl');
 const prisma=require('../config/prisma');
 const {requireAuth}=require('../middleware/authMiddleware');
 const {isZermatt}=require('../services/zermattHrFinancialAccessService');
@@ -50,16 +50,37 @@ router.get('/runs/:id/export',async(req,res)=>{
   const external=['external','payout'].includes(req.query.stage);
   const approved=['APPROVED','PAID'].includes(data.run.status);
   if(external&&!approved)invalid('Head HR approval is required before external-workflow export.');
-  for(const line of data.lines) {
-   const bank=line.snapshot.paymentDetails||{};
-   if(external&&Number(line.netPay)>0&&(!bank.bankName||!bank.accountName||!bank.accountNumber))invalid('Complete payment details and regenerate the draft before approval.');
-  }
+  const bankExceptions=external?data.lines.filter(line=>Number(line.netPay)>0&&requiresBankDetails(line.snapshot.paymentDetails)):[];
+  if(req.query.stage==='payout'&&bankExceptions.length)invalid('Complete bank details before generating a payout export.');
   const workbook=XLSX.utils.book_new();
   appendTransportSupportAnalytics(workbook,data);
-  const indexes=require('../services/payrollRegisterExport').appendRegisterSheets(workbook,{
-   ...data.register,columns:req.query.columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Transport Support Pay',
+  const {appendRegisterSheets,selectedIndexes}=require('../services/payrollRegisterExport');
+  const remarksIndex=data.register.headers.indexOf('Remark/Notes');
+  const exceptionEmployees=new Set(bankExceptions.map(line=>line.snapshot.employeeNumber));
+  const columns=selectedIndexes(data.register.headers,req.query.columns);
+  if(bankExceptions.length&&!columns.includes(remarksIndex))columns.push(remarksIndex);
+  const rows=data.register.rows.map(row=>{
+   if(!exceptionEmployees.has(row[2]))return row;
+   const flagged=[...row];
+   flagged[remarksIndex]=['REQUIRES COMPLETE BANK DETAILS — HOLD PAYMENT',row[remarksIndex]].filter(Boolean).join(' · ');
+   return flagged;
+  });
+  const indexes=appendRegisterSheets(workbook,{
+   ...data.register,rows,columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Transport Support Pay',
   });
   const selected=indexes.length<data.register.headers.length;
+  if(bankExceptions.length) {
+   const sheet=XLSX.utils.aoa_to_sheet([
+    ['REQUIRES COMPLETE BANK DETAILS — HOLD PAYMENT'],
+    ['EmployeeNO','FullName','Location','Net','Payment status'],
+    ...bankExceptions.map(({snapshot,netPay})=>[
+     snapshot.employeeNumber,snapshot.employeeName,snapshot.location,Number(netPay),'REQUIRES COMPLETE BANK DETAILS',
+    ]),
+   ]);
+   sheet['!cols']=[{wch:20},{wch:32},{wch:22},{wch:16},{wch:40}];
+   XLSX.utils.book_append_sheet(workbook,sheet,'Bank Details Required');
+  }
+
   XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
    ['Benefit stage',data.run.status],
    ['Selected columns',indexes.map(i=>data.register.headers[i]).join(', ')],
@@ -69,6 +90,7 @@ router.get('/runs/:id/export',async(req,res)=>{
    ['Net basis','Mid-Month + Bonus + Overtime Pay + Public Holiday Pay (or preserved legacy combined amount) + Previous Month Short Payment − applied overpayment deduction. End of the Month is a reference only.'],
    ['Extra / PH days','End-of-month gross ÷ 26 × days × 1.5 for overtime and × 2 for public holidays. Older manual amounts remain until recalculated.'],
    ['Overpayment control','Previous Month Overpayment is the opening balance. Deduction is capped at available benefit pay; remaining overpayment carries forward. See Reconciliation.'],
+   ...(bankExceptions.length?[['Bank details required',`${bankExceptions.length} payable employee(s) require complete bank details. Hold payment for these employees. See Bank Details Required.`]]:[]),
    ['Payment control','This export does not confirm external approval or payment. Record actual receipts, including explicit zero payments, after the external process.'],
    ['Loan recovery',0],
   ]),'Controls');
