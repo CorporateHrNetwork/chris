@@ -35,10 +35,16 @@ function bankDetailIssues(details) {
 function requiresBankDetails(details) {
  return bankDetailIssues(details).length>0;
 }
+function withImpactNote(snapshot,note) {
+ const impactNotes=[...new Set([...(snapshot.impactNotes||[]),String(note).trim()])];
+ return {...snapshot,impactNotes};
+}
 function buildRegister(lines) {
  return {headers:HEADERS,rows:lines.map((line,index)=>{
   const s=line.snapshot||{},i=normalizeInputs(s.benefitInputs),bank=s.paymentDetails||{};
-  const notes=[s.eligibilityNote,s.remark].filter(Boolean);
+  const notes=[s.eligibilityNote,s.remark,...(s.impactNotes||[])].filter(Boolean);
+  const days=s.allocation?.eligibleDays;
+  if(days>0&&days<15)notes.push(`Mid-Month prorated: ${days}/15 eligible days`);
   if(!i.calculateFromDays&&i.overtimePhPay>0)notes.push(`Previously recorded combined overtime/PH pay: NGN ${i.overtimePhPay.toFixed(2)}`);
   return [index+1,s.location||'',s.employeeNumber||'',s.employeeName||'',s.position||'',s.department||'',s.employmentType||'',Number(s.fullMonthlyGross||0),Number(s.allocation?.endMonthGross||0),Number(s.currentEntitlement||0),i.extraDays,i.phDays,i.bonus,s.overtimePay??'',s.publicHolidayPay??'',Number(s.previousUnpaid||0),Number(s.previousOverpaid||0),Number(line.netPay||0),String(bank.accountNumber||''),notes.join(' · ')];
  })};
@@ -46,6 +52,7 @@ function buildRegister(lines) {
 function benefitTransition(status,action,roles) {
  const rules={
   HEAD_HR_APPROVE:{from:['DRAFT','REJECTED'],role:'HEAD_HR',to:'APPROVED'},
+  REOPEN_FOR_CORRECTION:{from:['APPROVED'],role:'HEAD_HR',to:'DRAFT'},
   RETURN_TO_DRAFT:{from:['AUDIT_REVIEW','GM_APPROVAL','REJECTED'],role:'HEAD_HR',to:'DRAFT'},
   CONFIRM_PAYMENT:{from:['APPROVED'],role:'CHIEF_ACCOUNTANT',to:'PAID'},
  };
@@ -54,5 +61,5 @@ function benefitTransition(status,action,roles) {
  if(!roles.includes(rule.role))invalid('The assigned '+rule.role.replaceAll('_',' ')+' must perform this action.',403);
  return rule.to;
 }
-module.exports={HEADERS,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
+module.exports={HEADERS,withImpactNote,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
 
