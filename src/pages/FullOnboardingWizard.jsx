@@ -68,7 +68,7 @@ const initialForm = () => {
     idType: "", idNumber: "", idExpiryDate: "",
     status: "Probation", hireDate: today,
     employmentType: "Full-Time", templateId: "", departmentId: "", designationId: "", locationId: "", costCentreId: "",
-    grossSalary: "", salaryCurrency: organization.currency || "NGN", salaryEffectiveFrom: today,
+    grossSalary: "", tspPercentage: "", salaryCurrency: organization.currency || "NGN", salaryEffectiveFrom: today,
   };
 };
 
@@ -263,6 +263,7 @@ export default function FullOnboardingWizard() {
     if (targetStep === 2 && (!form.departmentId || !form.designationId || !form.locationId || !form.costCentreId)) return "Department, Designation, Work Location and Cost Centre / Operating Unit are required. Mapped Cost Centre values are filled automatically.";
     if (targetStep === 2 && !Number.isInteger(designation?.careerLevel)) return "The selected Designation has no Employment Level. Configure its career level before continuing.";
     if (targetStep === 3 && zermattTenant && (!Number.isFinite(Number(form.grossSalary)) || Number(form.grossSalary) <= 0)) return "Enter the employee's Monthly Gross Salary so the employee is payroll-ready at creation.";
+    if (targetStep === 3 && zermattTenant && form.tspPercentage !== "" && (!/^\d+(?:\.\d{1,2})?$/.test(form.tspPercentage) || Number(form.tspPercentage) > 100)) return "Enter a TSP percentage from 0 to 100 with up to two decimal places.";
     if (targetStep === 3 && zermattTenant && !form.salaryEffectiveFrom) return "Salary Effective From is required.";
     return "";
   }
@@ -328,6 +329,7 @@ export default function FullOnboardingWizard() {
                   amount: Number(form.grossSalary),
                   currency: form.salaryCurrency || organization.currency || "NGN",
                   effectiveFrom: form.salaryEffectiveFrom || form.hireDate,
+                  ...(zermattTenant && form.tspPercentage !== "" ? { tspPercentage: form.tspPercentage } : {}),
                   reason: "Opening salary rate from unified employee onboarding",
                 },
               }
@@ -462,6 +464,9 @@ export default function FullOnboardingWizard() {
         <div className="qa-panel-title"><div><small>4 · COMPENSATION & PAYMENT</small><h2>Payroll Readiness</h2></div><span className="fo-auto-badge">Opening salary created with employee</span></div>
         <div className="fo-note"><strong>Enter compensation once</strong><span>CHRiS creates the effective salary authority in the same employee-creation transaction. Payroll should not require a separate Salary Rates setup for a newly onboarded employee.</span></div>
         <div className="qa-grid"><Field label="Monthly Gross Salary" optional={!zermattTenant}><input type="number" min="0.01" step="0.01" value={form.grossSalary} onChange={set("grossSalary")} placeholder="e.g. 450000" /></Field><Field label="Salary Currency"><select value={form.salaryCurrency} onChange={set("salaryCurrency")}><option value={organization.currency || "NGN"}>{organization.currency || "NGN"}</option>{organization.currency !== "NGN" && <option value="NGN">NGN</option>}</select></Field><Field label="Salary Effective From"><input type="date" value={form.salaryEffectiveFrom} onChange={set("salaryEffectiveFrom")} /></Field></div>
+        {zermattTenant && <Field label="Mid-month Transport Support Pay (%)" optional>
+          <input type="number" min="0" max="100" step="0.01" value={form.tspPercentage} onChange={set("tspPercentage")} placeholder="Use standard policy" />
+        </Field>}
         <OnboardingSectionDataForm sectionKey="payment-details" value={payment} onChange={setPayment} inputStyle={inputStyle} />
       </section>
 
