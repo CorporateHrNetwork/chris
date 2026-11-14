@@ -58,6 +58,9 @@ router.get('/runs/:id/export',async(req,res)=>{
   const remarksIndex=data.register.headers.indexOf('Remark/Notes');
   const exceptionEmployees=new Map(bankExceptions.map(line=>[line.snapshot.employeeNumber,line.issues.join(', ')]));
   const columns=selectedIndexes(data.register.headers,req.query.columns);
+  const movementIndex=data.register.headers.indexOf('Hire / Exit in Period');
+  if(data.register.rows.some(row=>row[movementIndex])&&!columns.includes(movementIndex))columns.push(movementIndex);
+
   if((bankExceptions.length||data.register.rows.some(row=>row[remarksIndex]))&&!columns.includes(remarksIndex))columns.push(remarksIndex);
   const rows=data.register.rows.map(row=>{
    if(!exceptionEmployees.has(row[2]))return row;
