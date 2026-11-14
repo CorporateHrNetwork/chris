@@ -159,10 +159,14 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    return runId;
   });
  }
- async function detail(org,user,runId) {
+ async function detail(org,user,runId,{useCurrentBankDetails=false}={}) {
   const responsibilities=await roles(prisma,org,user);if(!responsibilities.length)domain.invalid('Payroll assignment required.',403);
   const run=(await q(prisma,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2',org,runId))[0];if(!run)domain.invalid('Payroll run not found.',404);
   let lines=await q(prisma,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY snapshot->>\'employeeNumber\'',org,runId);
+  if(benefitsOnly&&useCurrentBankDetails&&responsibilities.includes('HEAD_HR')&&run.status==='APPROVED') {
+   const currentBankDetails=await loadBankDetails(prisma,org);
+   lines=lines.map(line=>({...line,snapshot:{...line.snapshot,paymentDetails:currentBankDetails.get(line.employeeId)||{}}}));
+  }
   if(benefitsOnly)lines.sort((a,b)=>require('./payrollRegisterExport').compareBranches(a.snapshot.location,b.snapshot.location)||String(a.snapshot.employeeNumber).localeCompare(String(b.snapshot.employeeNumber),undefined,{numeric:true}));
   const events=await q(prisma,'SELECT action,notes,"actorUserId","createdAt" FROM public.zermatt_midmonth_events WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "createdAt"',org,runId);
   return {run,lines,events,responsibilities,...(benefitsOnly?{register:benefit.buildRegister(lines),workflow:"HEAD_HR_EXTERNAL"}:{})};
