@@ -86,6 +86,29 @@ function buildRegister(lines) {
   return [index+1,s.location||'',s.employeeNumber||'',s.employeeName||'',s.position||'',s.department||'',s.employmentType||'',Number(s.fullMonthlyGross||0),Number(s.allocation?.endMonthGross||0),Number(s.currentEntitlement||0),i.extraDays,i.phDays,i.bonus,s.overtimePay??'',s.publicHolidayPay??'',Number(s.previousUnpaid||0),Number(s.previousOverpaid||0),Number(line.netPay||0),String(bank.accountNumber||''),notes.join(' · '),s.periodMovement||''];
  })};
 }
+function ineligibleEmployees(employees,lines,periodMonth) {
+ const snapshots=new Map(lines.map(line=>[line.employeeId,line.snapshot]));
+ const first=periodMonth+'-01',mid=periodMonth+'-15';
+ const end=new Date(Date.UTC(Number(periodMonth.slice(0,4)),Number(periodMonth.slice(5)),0)).toISOString().slice(0,10);
+ return employees.flatMap(employee=>{
+  const snapshot=snapshots.get(employee.id);
+  const hire=employee.hireDate?dateOnly(employee.hireDate):'';
+  const exit=employee.exitDate?dateOnly(employee.exitDate):'';
+  if(!hire||hire>end||exit&&exit<first)return [];
+  if(!snapshot&&!exit&&!['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status))return [];
+  if(snapshot?.allocation?.eligibleDays>0&&snapshot.allocation.normalMidMonth>0)return [];
+  const type=snapshot?.employmentType||employee.employmentType||'';
+  let reason='';
+  if(hire>mid)reason='Hired after the mid-month cutoff';
+  else if(snapshot?.benefitInputs?.lastPayableDate<hire)reason='TSP cutoff precedes the hire date';
+  else if(snapshot?.allocation?.eligibleDays>0&&snapshot.allocation.normalMidMonth===0)reason='Zero mid-month TSP allocation';
+  else if(type&&type.toLowerCase().replace(/[\s-]+/g,'')!=='fulltime'&&!snapshot?.eligibilityNote)reason='Employment type is outside full-time TSP eligibility';
+  if(!reason)return [];
+  return [[employee.employeeNumber,[employee.firstName,employee.middleName,employee.lastName].filter(Boolean).join(' '),
+   snapshot?.location||employee.location?.name||'',snapshot?.department||employee.department?.name||'',
+   snapshot?.position||employee.designation?.name||'',type,hire,exit,reason]];
+ });
+}
 function benefitTransition(status,action,roles) {
  const rules={
   HEAD_HR_APPROVE:{from:['DRAFT','REJECTED'],role:'HEAD_HR',to:'APPROVED'},
@@ -98,5 +121,5 @@ function benefitTransition(status,action,roles) {
  if(!roles.includes(rule.role))invalid('The assigned '+rule.role.replaceAll('_',' ')+' must perform this action.',403);
  return rule.to;
 }
-module.exports={HEADERS,applyLastPayableDate,applyPeriodProration,withImpactNote,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
+module.exports={HEADERS,ineligibleEmployees,applyLastPayableDate,applyPeriodProration,withImpactNote,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
 

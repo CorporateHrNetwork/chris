@@ -72,6 +72,15 @@ router.get('/runs/:id/export',async(req,res)=>{
    ...data.register,rows,columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Combined',
   });
   const selected=indexes.length<data.register.headers.length;
+  const ineligible=await service.ineligibleReport(req.auth.organizationId,data);
+  const ineligibleSheet=XLSX.utils.aoa_to_sheet([
+   ['Employee No','Full Name','Branch','Department','Designation','Employment Type','Hire Date','Exit Date','Reason'],
+   ...ineligible,
+  ]);
+  ineligibleSheet['!cols']=[18,32,22,27,28,20,16,16,58].map(wch=>({wch}));
+  if(ineligible.length)ineligibleSheet['!autofilter']={ref:`A1:I${ineligible.length+1}`};
+  XLSX.utils.book_append_sheet(workbook,ineligibleSheet,'TSP Ineligible');
+
   if(bankExceptions.length) {
    const sheet=XLSX.utils.aoa_to_sheet([
     ['REQUIRES COMPLETE BANK DETAILS — HOLD PAYMENT'],
@@ -86,6 +95,7 @@ router.get('/runs/:id/export',async(req,res)=>{
 
   XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([
    ['Benefit stage',data.run.status],
+   ['TSP Ineligible',`${ineligible.length} employee(s) with no current-period TSP entitlement under the identified rules. Uses saved run allocations where available and current workforce records for omitted employees. Prior-period adjustments may still be payable.`],
    ['Selected columns',indexes.map(i=>data.register.headers[i]).join(', ')],
    ['Export stage',external?'HEAD HR APPROVED — FOR EXTERNAL APPROVAL':'DRAFT REVIEW — NOT APPROVED'],
    ['Workflow','Head HR prepares and approves in CHRiS; Auditor → General Manager → Chief Accountant approvals and payment processing occur externally.'],
