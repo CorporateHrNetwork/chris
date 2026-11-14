@@ -86,9 +86,14 @@ export default function TransportSupportPayroll() {
  }
  const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
  const [registerFilters,setRegisterFilters]=useState({});
+ const [employeeQuery,setEmployeeQuery]=useState('');
+ const searchWords=employeeQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
  const registerRows=detail?.register.rows||[];
  const filterColumns=[[1,'Branch'],[5,'Department'],[4,'Designation']];
- const filteredRows=registerRows.filter(row=>filterColumns.every(([index])=>!registerFilters[index]||row[index]===registerFilters[index]));
+ const filteredRows=registerRows.filter(row=>{
+  const employee=`${row[2]} ${row[3]}`.toLowerCase();
+  return searchWords.every(word=>employee.includes(word))&&filterColumns.every(([index])=>!registerFilters[index]||row[index]===registerFilters[index]);
+ });
  const registerHeaders=detail?.register.headers||state?.registerHeaders||[];
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const externalReady=detail&&['APPROVED','PAID'].includes(detail.run.status);
@@ -225,12 +230,14 @@ export default function TransportSupportPayroll() {
    {!detail&&<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to populate employee rows.</p>}
    {registerHeaders.length>0&&<details open><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
    {detail&&<div style={{display:'flex',gap:12,flexWrap:'wrap',marginBlock:12}}>
+    <label>Employee <input type="search" placeholder="Name or employee number" value={employeeQuery} onChange={event=>setEmployeeQuery(event.target.value)}/></label>
     {filterColumns.map(([index,label])=><label key={index}>{label} <select value={registerFilters[index]||''} onChange={event=>setRegisterFilters(current=>({...current,[index]:event.target.value}))}>
      <option value="">All</option>
      {[...new Set(registerRows.map(row=>row[index]).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}
     </select></label>)}
     <span role="status">{filteredRows.length} of {registerRows.length} employees</span>
    </div>}
+   {detail&&!filteredRows.length&&<p>No employees match the current filters.</p>}
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
