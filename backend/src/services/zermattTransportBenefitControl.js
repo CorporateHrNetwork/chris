@@ -23,10 +23,17 @@ function applyInputs(line,input) {
  const recovered=Math.min(cents(previousOverpaid),available);
  return {...line,overtimePay,publicHolidayPay,ledgerPreviousUnpaid,ledgerPreviousOverpaid,previousUnpaid,previousOverpaid,benefitInputs,overpaidDeduction:recovered/100,overpaidRemaining:(cents(previousOverpaid)-recovered)/100,netPay:(available-recovered)/100};
 }
-function requiresBankDetails(details = {}) {
- return !String(details.bankName || '').trim()
-  || !String(details.accountName || '').trim()
-  || !/^\d{10}$/.test(String(details.accountNumber || '').trim());
+function bankDetailIssues(details) {
+ const bank=details||{};
+ const accountNumber=String(bank.accountNumber||'').trim();
+ return [
+  !String(bank.bankName||'').trim()&&'Bank name missing',
+  !String(bank.accountName||'').trim()&&'Account name missing',
+  !accountNumber?'Account number missing':!/^\d{10}$/.test(accountNumber)&&'Account number must contain exactly 10 digits',
+ ].filter(Boolean);
+}
+function requiresBankDetails(details) {
+ return bankDetailIssues(details).length>0;
 }
 function buildRegister(lines) {
  return {headers:HEADERS,rows:lines.map((line,index)=>{
@@ -47,5 +54,5 @@ function benefitTransition(status,action,roles) {
  if(!roles.includes(rule.role))invalid('The assigned '+rule.role.replaceAll('_',' ')+' must perform this action.',403);
  return rule.to;
 }
-module.exports={HEADERS,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
+module.exports={HEADERS,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
 
