@@ -26,11 +26,11 @@ test('benefit inputs add approved amounts once and preserve capped overpayment r
  assert.equal(counts.netPay,base().netPay,'Reference day counts do not create guessed pay');
  for(const input of [{bonus:-1},{overtimePhPay:1.001},{extraDays:-1},{phDays:Infinity}])assert.throws(()=>c.normalizeInputs(input));
 });
-test('authoritative export has all 20 columns in order and keeps AccountNO as text',()=>{
- assert.deepEqual(c.HEADERS,['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO','Remark/Notes']);
+test('authoritative export has all 21 columns in order and keeps AccountNO as text',()=>{
+ assert.deepEqual(c.HEADERS,['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO','Remark/Notes','Hire / Exit in Period']);
  const s=c.applyInputs({...base(),location:'Fixture Branch',position:'Fixture Position',department:'Fixture Department',paymentDetails:{accountNumber:'0012345678'}},{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2000});
  const r=c.buildRegister([{snapshot:s,netPay:s.netPay}]);
- assert.deepEqual(r.rows[0],[1,'Fixture Branch','Z1','Fixture Employee','Fixture Position','Fixture Department','Full-Time',200000,150000,50000,2,1,1000,'','',10000,5000,58000,'0012345678','Previously recorded combined overtime/PH pay: NGN 2000.00']);
+ assert.deepEqual(r.rows[0],[1,'Fixture Branch','Z1','Fixture Employee','Fixture Position','Fixture Department','Full-Time',200000,150000,50000,2,1,1000,'','',10000,5000,58000,'0012345678','Previously recorded combined overtime/PH pay: NGN 2000.00','']);
  const w=XLSX.utils.book_new();XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet([r.headers,...r.rows]),'Register');
  const loaded=XLSX.read(XLSX.write(w,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});
  assert.equal(loaded.Sheets.Register.S2.v,'0012345678');assert.equal(loaded.Sheets.Register.S2.t,'s');
@@ -61,4 +61,16 @@ test('worked days use end-month gross and round each amount before adding to net
  assert.equal(result.netPay,78846.15);
  assert.deepEqual(c.applyInputs(base(),result.benefitInputs),result);
  assert.deepEqual(c.buildRegister([{snapshot:result,netPay:result.netPay}]).rows[0].slice(13,15),[17307.69,11538.46]);
+});
+
+test('TSP applies the onboarding percentage and counts hire and exit dates inclusively',()=>{
+ const periodMonth='2026-11';
+ const salary={fullMonthlyGross:150000,tspPercentage:10};
+ const leaver={...employee,hireDate:'2026-11-07',exitDate:'2026-11-09',status:'TERMINATED'};
+ const line=d.buildLine({employee:leaver,salary,periodMonth});
+ c.applyPeriodProration(line,leaver,salary,periodMonth);
+ assert.equal(line.currentEntitlement,3000);
+ const row=c.buildRegister([{snapshot:line}]).rows[0];
+ assert.match(row[19],/Mid-Month prorated: 3\/15 eligible days/);
+ assert.match(row[20],/Hired 2026-11-07.*Exited 2026-11-09/);
 });
