@@ -129,6 +129,10 @@ function normalizeOpeningSalaryRate(value, fallbackDate) {
     throw employeeCreationError("INVALID_OPENING_SALARY_RATE");
   }
 
+  const tspPercentage = String(value.tspPercentage ?? "").trim();
+  if (tspPercentage && (!/^\d+(?:\.\d{1,2})?$/.test(tspPercentage) || Number(tspPercentage) > 100)) {
+    throw employeeCreationError("INVALID_OPENING_SALARY_RATE");
+  }
   const currency = String(value.currency || "NGN").trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) {
     throw employeeCreationError("INVALID_OPENING_SALARY_RATE");
@@ -146,6 +150,7 @@ function normalizeOpeningSalaryRate(value, fallbackDate) {
   return {
     amount,
     currency,
+    tspPercentage: tspPercentage === "" ? null : Number(tspPercentage),
     effectiveFrom,
     reason:
       String(value.reason || "Opening salary rate from employee creation").trim() ||

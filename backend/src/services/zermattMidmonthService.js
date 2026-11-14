@@ -49,7 +49,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
     ) refs ORDER BY "effectiveFrom" DESC,priority DESC LIMIT 1
    ) b ON true
    WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED')
-   AND NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events l WHERE l."organizationId"=e."organizationId" AND l."employeeId"=e.id
+   AND (${benefitsOnly?'(e."exitDate"::date BETWEEN $3::date AND $2::date) OR ':''}NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events l WHERE l."organizationId"=e."organizationId" AND l."employeeId"=e.id
     AND l."eventType"::text='DEACTIVATED' AND l."effectiveDate">=$2::date AND l."effectiveDate"<$2::date+interval '1 month')
    ORDER BY e.id FOR SHARE OF e`,org,from,mid);
   return domain.preparationCoverage(staff,periodMonth);
@@ -108,11 +108,11 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   const from=`${domain.month(periodMonth)}-01`,end=new Date(Date.UTC(Number(periodMonth.slice(0,4)),Number(periodMonth.slice(5,7)),0)).toISOString().slice(0,10);
   const config=await settings(c,org);
   if(!config?.enabled||dateOnly(config.activationFrom)>from)domain.invalid('Full salaries have not been activated for this month.');
-  const employees=await q(c,`SELECT e.id,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",e."employmentType",e."hireDate",e.status FROM public.employees e WHERE e."organizationId"=$1 AND e."hireDate"<=$2::date AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') AND NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events d WHERE d."organizationId"=e."organizationId" AND d."employeeId"=e.id AND d."eventType"::text='DEACTIVATED' AND d."effectiveDate">=$3::date AND d."effectiveDate"<$3::date+interval '1 month') ORDER BY e.id FOR SHARE`,org,end,from);
-  const rates=benefitsOnly ? await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM (
-   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","createdAt" AS "updatedAt",2 AS priority FROM public.zermatt_salary_split_preparations WHERE "organizationId"=$1 AND "effectiveFrom"<=$2::date
+  const employees=await q(c,`SELECT e.id,e."employeeNumber",CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",e."employmentType",e."hireDate"${benefitsOnly?',e."exitDate"':''},e.status FROM public.employees e WHERE e."organizationId"=$1 AND e."hireDate"<=$2::date AND (e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED') ${benefitsOnly?'OR e."exitDate"::date BETWEEN $3::date AND $2::date':''}) AND (${benefitsOnly?'(e."exitDate"::date BETWEEN $3::date AND $2::date) OR ':''}NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events d WHERE d."organizationId"=e."organizationId" AND d."employeeId"=e.id AND d."eventType"::text='DEACTIVATED' AND d."effectiveDate">=$3::date AND d."effectiveDate"<$3::date+interval '1 month')) ORDER BY e.id FOR SHARE`,org,end,from);
+  const rates=benefitsOnly ? await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt","tspPercentage" FROM (
+   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","createdAt" AS "updatedAt",2 AS priority,("allocationPreview"->>'tspPercentageOverride')::numeric AS "tspPercentage" FROM public.zermatt_salary_split_preparations WHERE "organizationId"=$1 AND "effectiveFrom"<=$2::date
    UNION ALL
-   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt",1 AS priority FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "fullMonthlyGross">0 AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date
+   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt",1 AS priority,NULL::numeric AS "tspPercentage" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "fullMonthlyGross">0 AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date
   ) bases ORDER BY "employeeId","effectiveFrom" DESC,priority DESC`,org,`${periodMonth}-15`,from) : await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date ORDER BY "employeeId","effectiveFrom" DESC`,org,`${periodMonth}-15`,from);
   const balances=await q(c,`SELECT id,"employeeId",kind,amount,"dueMonth" FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND amount>0 AND "dueMonth"<=$2::date ORDER BY id FOR UPDATE`,org,from);
   const byEmployee=new Map(rates.map(r=>[r.employeeId,r]));
@@ -133,9 +133,10 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const overpaid=debts.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const bank=bankByEmployee.get(employee.id)||{};
    const line={...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
+   if(benefitsOnly)benefit.applyPeriodProration(line,employee,salary,periodMonth);
    const meta=metadataMap.get(employee.id);
    return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||'',impactNotes:adjustmentMap.get(employee.id)?.impactNotes},adjustmentMap.get(employee.id)?.inputs):line;
-  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
+  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.periodMovement||l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
   const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{})};
   return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
  }
