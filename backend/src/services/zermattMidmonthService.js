@@ -125,21 +125,29 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    AND a."entityId"=l.id AND a.action='BENEFIT_INPUTS_UPDATED' AND a.reason IS NOT NULL
   )) AS "impactNotes" FROM public.zermatt_midmonth_lines l JOIN public.zermatt_midmonth_runs r ON r.id=l."runId" AND r."organizationId"=l."organizationId" WHERE l."organizationId"=$1 AND r."periodMonth"=$2::date`,org,from):[];
   const adjustmentMap=new Map(adjustments.map(a=>[a.employeeId,a]));
+  const luckyException=benefitsOnly&&periodMonth==='2026-11'&&employees.some(employee=>employee.employeeNumber==='ZLL000042')
+   && (await c.organization.findUnique({where:{id:org},select:{slug:true}}))?.slug==='zermatt-liquor-limited';
   const lines=employees.map(employee=>{
+   const fullTimeException=luckyException&&employee.employeeNumber==='ZLL000042';
+   const tspEmployee=fullTimeException?{...employee,employmentType:'Full-Time'}:employee;
    const salary=byEmployee.get(employee.id);
-   if((benefitsOnly?domain.eligibleForCurrentSupport(employee,periodMonth):['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`)&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
+   if((benefitsOnly?(fullTimeException||domain.eligibleForCurrentSupport(employee,periodMonth)):['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`)&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
    const debts=balances.filter(b=>b.employeeId===employee.id);
    const unpaid=debts.filter(b=>b.kind==='UNPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const overpaid=debts.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const bank=bankByEmployee.get(employee.id)||{};
-   const line={...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
+   const line={...domain.buildLine({employee:tspEmployee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
    const savedInputs=adjustmentMap.get(employee.id)?.inputs;
-   if(benefitsOnly)benefit.applyPeriodProration(line,employee,salary,periodMonth);
+   if(benefitsOnly)benefit.applyPeriodProration(line,tspEmployee,salary,periodMonth);
+   if(fullTimeException){
+    line.employmentType=employee.employmentType;
+    line.eligibilityNote='Full-time TSP exception for November 2026';
+   }
    const payableLine=savedInputs?.lastPayableDate?benefit.applyLastPayableDate(line,savedInputs.lastPayableDate,periodMonth):line;
    const meta=metadataMap.get(employee.id);
    return benefitsOnly?benefit.applyInputs({...payableLine,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||'',impactNotes:adjustmentMap.get(employee.id)?.impactNotes},adjustmentMap.get(employee.id)?.inputs):line;
   }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.periodMovement||l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
-  const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{})};
+  const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{}),...(luckyException?{fullTimeTspException:'ZLL000042'}:{})};
   return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
  }
  async function generate(org,user,periodMonth) {
