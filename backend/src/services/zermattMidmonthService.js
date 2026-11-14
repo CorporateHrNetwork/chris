@@ -163,7 +163,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    return runId;
   });
  }
- async function detail(org,user,runId,{useCurrentBankDetails=false}={}) {
+ async function detail(org,user,runId,{useCurrentBankDetails=false,reviewExport=false}={}) {
   const responsibilities=await roles(prisma,org,user);if(!responsibilities.length)domain.invalid('Payroll assignment required.',403);
   const run=(await q(prisma,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND id=$2',org,runId))[0];if(!run)domain.invalid('Payroll run not found.',404);
   let lines=await q(prisma,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY snapshot->>\'employeeNumber\'',org,runId);
@@ -171,7 +171,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const currentBankDetails=await loadBankDetails(prisma,org);
    lines=lines.map(line=>({...line,snapshot:{...line.snapshot,paymentDetails:currentBankDetails.get(line.employeeId)||{}}}));
   }
-  if(benefitsOnly&&run.status!=='PAID') {
+  if(benefitsOnly&&(run.status!=='PAID'||reviewExport&&responsibilities.includes('HEAD_HR'))) {
    const employees=await prisma.employee.findMany({where:{organizationId:org,id:{in:lines.map(line=>line.employeeId)}},select:{id:true,firstName:true,middleName:true,lastName:true}});
    const recordedNotes=await prisma.organizationAudit.findMany({
     where:{organizationId:org,entityType:'TransportBenefitLine',action:'BENEFIT_INPUTS_UPDATED',entityId:{in:lines.filter(line=>!line.snapshot.impactNotes).map(line=>line.id)}},
