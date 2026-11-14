@@ -10,7 +10,7 @@ function branchName(value) {
  const s=String(value||'').trim(),u=s.toUpperCase();
  if(/ABUJA|HEAD OFFICE/.test(u)||['ABJ','HO'].includes(u))return 'Abuja';
  if(/LAGOS/.test(u)||u==='LAG')return 'Lagos';
- if(/PORT\s*HARCOURT/.test(u)||u==='PHC')return 'Port Harcourt';
+ if(/PORT\s*HARCOURT/.test(u)||/\bPHC\b/.test(u))return 'Port Harcourt';
  return s||'Unassigned';
 }
 function rank(value) {const n=['Abuja','Lagos','Port Harcourt'].indexOf(branchName(value));return n<0?3:n;}

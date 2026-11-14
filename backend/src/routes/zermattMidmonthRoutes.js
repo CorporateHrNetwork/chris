@@ -1,7 +1,7 @@
 const express=require('express');
 const XLSX=require('xlsx');
 const { appendTransportSupportAnalytics } = require('../services/transportSupportExportAnalytics');
-const { HEADERS: registerHeaders, requiresBankDetails } = require('../services/zermattTransportBenefitControl');
+const { HEADERS: registerHeaders, bankDetailIssues } = require('../services/zermattTransportBenefitControl');
 const prisma=require('../config/prisma');
 const {requireAuth}=require('../middleware/authMiddleware');
 const {isZermatt}=require('../services/zermattHrFinancialAccessService');
@@ -45,24 +45,24 @@ router.post('/runs/:id/worked-days',async(req,res)=>{
 router.post('/runs/:id/action',async(req,res)=>{try{ready();return res.json({status:'success',data:await service.decide(req.auth.organizationId,req.auth.userId,req.params.id,req.body?.action,req.body?.notes,req.body?.payments)});}catch(e){return sendError(res,e);}});
 router.get('/runs/:id/export',async(req,res)=>{
  try {
-  const data=await service.detail(req.auth.organizationId,req.auth.userId,req.params.id);
-  if(!data.responsibilities.includes('HEAD_HR'))invalid('The assigned Head HR prepares and exports this benefit register.',403);
   const external=['external','payout'].includes(req.query.stage);
+  const data=await service.detail(req.auth.organizationId,req.auth.userId,req.params.id,{useCurrentBankDetails:external});
+  if(!data.responsibilities.includes('HEAD_HR'))invalid('The assigned Head HR prepares and exports this benefit register.',403);
   const approved=['APPROVED','PAID'].includes(data.run.status);
   if(external&&!approved)invalid('Head HR approval is required before external-workflow export.');
-  const bankExceptions=external?data.lines.filter(line=>Number(line.netPay)>0&&requiresBankDetails(line.snapshot.paymentDetails)):[];
+  const bankExceptions=external?data.lines.filter(line=>Number(line.netPay)>0).map(line=>({...line,issues:bankDetailIssues(line.snapshot.paymentDetails)})).filter(line=>line.issues.length):[];
   if(req.query.stage==='payout'&&bankExceptions.length)invalid('Complete bank details before generating a payout export.');
   const workbook=XLSX.utils.book_new();
   appendTransportSupportAnalytics(workbook,data);
   const {appendRegisterSheets,selectedIndexes}=require('../services/payrollRegisterExport');
   const remarksIndex=data.register.headers.indexOf('Remark/Notes');
-  const exceptionEmployees=new Set(bankExceptions.map(line=>line.snapshot.employeeNumber));
+  const exceptionEmployees=new Map(bankExceptions.map(line=>[line.snapshot.employeeNumber,line.issues.join(', ')]));
   const columns=selectedIndexes(data.register.headers,req.query.columns);
   if(bankExceptions.length&&!columns.includes(remarksIndex))columns.push(remarksIndex);
   const rows=data.register.rows.map(row=>{
    if(!exceptionEmployees.has(row[2]))return row;
    const flagged=[...row];
-   flagged[remarksIndex]=['REQUIRES COMPLETE BANK DETAILS — HOLD PAYMENT',row[remarksIndex]].filter(Boolean).join(' · ');
+   flagged[remarksIndex]=['REQUIRES COMPLETE BANK DETAILS — HOLD PAYMENT',exceptionEmployees.get(row[2]),row[remarksIndex]].filter(Boolean).join(' · ');
    return flagged;
   });
   const indexes=appendRegisterSheets(workbook,{
@@ -72,12 +72,12 @@ router.get('/runs/:id/export',async(req,res)=>{
   if(bankExceptions.length) {
    const sheet=XLSX.utils.aoa_to_sheet([
     ['REQUIRES COMPLETE BANK DETAILS — HOLD PAYMENT'],
-    ['EmployeeNO','FullName','Location','Net','Payment status'],
-    ...bankExceptions.map(({snapshot,netPay})=>[
-     snapshot.employeeNumber,snapshot.employeeName,snapshot.location,Number(netPay),'REQUIRES COMPLETE BANK DETAILS',
+    ['EmployeeNO','FullName','Location','Net','Payment status','Reason'],
+    ...bankExceptions.map(({snapshot,netPay,issues})=>[
+     snapshot.employeeNumber,snapshot.employeeName,snapshot.location,Number(netPay),'REQUIRES COMPLETE BANK DETAILS',issues.join(', '),
     ]),
    ]);
-   sheet['!cols']=[{wch:20},{wch:32},{wch:22},{wch:16},{wch:40}];
+   sheet['!cols']=[{wch:20},{wch:32},{wch:22},{wch:16},{wch:40},{wch:58}];
    XLSX.utils.book_append_sheet(workbook,sheet,'Bank Details Required');
   }
 
