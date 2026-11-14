@@ -71,7 +71,7 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
       `SELECT pl."id",pl."runId",pl."employeeId",pl."employeeNumber",pl."employeeName",pl."currency",
               pl."baseSalary",pl."allowances",pl."deductions",pl."advanceRecovery",pl."loanRecovery",
               pl."grossPay",pl."netPreview",pl."statutoryStatus",pl."details",pl."createdAt",pl."updatedAt",
-              e."locationId",e."email" AS "employeeEmail",d."name" AS "designation",
+              e."locationId",e."email" AS "employeeEmail",d."name" AS "designation",dept."name" AS "department",
               loc."code" AS "locationCode",loc."name" AS "locationName",
               loan."loanOutstandingBalance",
               pr."status" AS "runStatus",pr."approvedAt",
@@ -81,6 +81,7 @@ router.get("/runs/:id/integrated-lines", requirePermission("payroll.view"), asyn
          JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
          JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
          JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
+         LEFT JOIN "departments" dept ON dept."id"=e."departmentId" AND dept."organizationId"=e."organizationId"
          LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
          LEFT JOIN "organization_locations" loc ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
        LEFT JOIN (
