@@ -9,6 +9,7 @@ async function createOpeningBenefitBasis(tx,{organizationId,actorUserId,employee
  const month=Number(salaryDate.slice(8))>15?nextMonth(salaryDate.slice(0,7)):salaryDate.slice(0,7);
  const effectiveFrom=month+'-01',hireDate=dateOnly(employee.hireDate);
  const allocation=splitSalary({fullMonthlyGross:salary.amount,employmentType:employee.employmentType,hireDate,periodMonth:month});
+ if(salary.tspPercentage!=null)allocation.tspPercentageOverride=salary.tspPercentage;
  const id=crypto.randomUUID();
  await tx.$executeRawUnsafe(`INSERT INTO public.zermatt_salary_split_preparations
   (id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId")
