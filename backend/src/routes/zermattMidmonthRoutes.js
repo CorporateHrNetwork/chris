@@ -66,7 +66,7 @@ router.get('/runs/:id/export',async(req,res)=>{
    return flagged;
   });
   const indexes=appendRegisterSheets(workbook,{
-   ...data.register,rows,columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Transport Support Pay',
+   ...data.register,rows,columns,branchIndex:1,employeeIndex:2,serialIndex:0,masterName:'Combined',
   });
   const selected=indexes.length<data.register.headers.length;
   if(bankExceptions.length) {
