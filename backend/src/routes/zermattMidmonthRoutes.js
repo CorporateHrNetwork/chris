@@ -46,7 +46,7 @@ router.post('/runs/:id/action',async(req,res)=>{try{ready();return res.json({sta
 router.get('/runs/:id/export',async(req,res)=>{
  try {
   const external=['external','payout'].includes(req.query.stage);
-  const data=await service.detail(req.auth.organizationId,req.auth.userId,req.params.id,{useCurrentBankDetails:external});
+  const data=await service.detail(req.auth.organizationId,req.auth.userId,req.params.id,{useCurrentBankDetails:external,reviewExport:!external});
   if(!data.responsibilities.includes('HEAD_HR'))invalid('The assigned Head HR prepares and exports this benefit register.',403);
   const approved=['APPROVED','PAID'].includes(data.run.status);
   if(external&&!approved)invalid('Head HR approval is required before external-workflow export.');
@@ -58,7 +58,7 @@ router.get('/runs/:id/export',async(req,res)=>{
   const remarksIndex=data.register.headers.indexOf('Remark/Notes');
   const exceptionEmployees=new Map(bankExceptions.map(line=>[line.snapshot.employeeNumber,line.issues.join(', ')]));
   const columns=selectedIndexes(data.register.headers,req.query.columns);
-  if(bankExceptions.length&&!columns.includes(remarksIndex))columns.push(remarksIndex);
+  if((bankExceptions.length||data.register.rows.some(row=>row[remarksIndex]))&&!columns.includes(remarksIndex))columns.push(remarksIndex);
   const rows=data.register.rows.map(row=>{
    if(!exceptionEmployees.has(row[2]))return row;
    const flagged=[...row];
