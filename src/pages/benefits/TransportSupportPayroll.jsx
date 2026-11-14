@@ -6,6 +6,7 @@ const workflowPanel={border:'1px solid #385548',borderRadius:10,padding:16,margi
 const api='/api/benefits/transport-support';
 const money=v=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN'}).format(Number(v||0));
 const actions={
+ APPROVED:[['REOPEN_FOR_CORRECTION','Reopen for Correction','HEAD_HR']],
  DRAFT:[['HEAD_HR_APPROVE','Approve for External Workflow','HEAD_HR']],
  REJECTED:[['HEAD_HR_APPROVE','Approve for External Workflow','HEAD_HR']],
  AUDIT_REVIEW:[['RETURN_TO_DRAFT','Return to Head HR Preparation','HEAD_HR']],
@@ -70,11 +71,12 @@ export default function TransportSupportPayroll() {
  }
  async function open(id){
   setWorkedFile(null);setWorkedPreview(null);setWorkedReason('');
-  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setMonth(String(r.data.run.periodMonth).slice(0,7));
+  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
   setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));
  }
  async function act(fn){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError(e.message||'Unable to complete benefit operation.');}finally{setBusy(false);}}
  async function action(actionName){
+  if(actionName==='REOPEN_FOR_CORRECTION'&&!window.confirm('Reopen only if external payment has not started. Withdraw any previously shared approved register and issue a new one after approval.'))return;
   await apiRequest(`${api}/runs/${detail.run.id}/action`,{method:'POST',body:{action:actionName,notes,payments:actionName==='CONFIRM_PAYMENT'?detail.lines.map(l=>({lineId:l.id,...receipts[l.id]})):undefined}});
   await load();await open(detail.run.id);setMessage(actionName==='HEAD_HR_APPROVE'?'Head HR approval recorded. Export the register for external Auditor, GM and Chief Accountant processing.':'Benefit action recorded.');
  }
@@ -83,6 +85,10 @@ export default function TransportSupportPayroll() {
   setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,calculateFromDays:true,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
  }
  const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
+ const [registerFilters,setRegisterFilters]=useState({});
+ const registerRows=detail?.register.rows||[];
+ const filterColumns=[[1,'Branch'],[5,'Department'],[4,'Designation']];
+ const filteredRows=registerRows.filter(row=>filterColumns.every(([index])=>!registerFilters[index]||row[index]===registerFilters[index]));
  const registerHeaders=detail?.register.headers||state?.registerHeaders||[];
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const externalReady=detail&&['APPROVED','PAID'].includes(detail.run.status);
@@ -218,10 +224,17 @@ export default function TransportSupportPayroll() {
    <h2>Full Monthly Register{registerHeaders.length>0&&` · ${registerHeaders.length} columns`}</h2>
    {!detail&&<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to populate employee rows.</p>}
    {registerHeaders.length>0&&<details open><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
+   {detail&&<div style={{display:'flex',gap:12,flexWrap:'wrap',marginBlock:12}}>
+    {filterColumns.map(([index,label])=><label key={index}>{label} <select value={registerFilters[index]||''} onChange={event=>setRegisterFilters(current=>({...current,[index]:event.target.value}))}>
+     <option value="">All</option>
+     {[...new Set(registerRows.map(row=>row[index]).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}
+    </select></label>)}
+    <span role="status">{filteredRows.length} of {registerRows.length} employees</span>
+   </div>}
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
-    <tbody>{detail?.register.rows.map((row,index)=><tr key={detail.lines[index].id}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}</tr>)}</tbody>
+    <tbody>{filteredRows.map(row=><tr key={row[2]}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}</tr>)}</tbody>
    </table></div>
    </section>
   <section aria-label="Payment confirmation and audit history" hidden={workspace!=='transport-run'}>
