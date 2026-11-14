@@ -82,7 +82,7 @@ export default function TransportSupportPayroll() {
  }
  function editLine(lineId){
   const line=detail.lines.find(l=>l.id===lineId);const input=line?.snapshot.benefitInputs||{};
-  setEditor({lineId,inputs:{extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,calculateFromDays:true,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
+  setEditor({lineId,inputs:{lastPayableDate:input.lastPayableDate??'',extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,calculateFromDays:true,previousShortPayment:input.previousShortPayment??'',previousOverpayment:input.previousOverpayment??''}});
  }
  const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
  const [registerFilters,setRegisterFilters]=useState({});
@@ -186,6 +186,7 @@ export default function TransportSupportPayroll() {
      <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
      {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
      <p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Prior-month amounts default to the transport ledger. Enter a corrected total, including zero, with a reason; leave blank to use the ledger. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
+     <label>TSP last payable day (inclusive) <input type="date" value={editor.inputs.lastPayableDate} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,lastPayableDate:e.target.value}}))}/></label>
      <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
      <button className="transport-primary" disabled={busy||!ready||!notes.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>

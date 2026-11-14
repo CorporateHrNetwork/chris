@@ -133,9 +133,11 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const overpaid=debts.filter(b=>b.kind==='OVERPAID').reduce((s,b)=>s+domain.cents(b.amount),0)/100;
    const bank=bankByEmployee.get(employee.id)||{};
    const line={...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
+   const savedInputs=adjustmentMap.get(employee.id)?.inputs;
    if(benefitsOnly)benefit.applyPeriodProration(line,employee,salary,periodMonth);
+   const payableLine=savedInputs?.lastPayableDate?benefit.applyLastPayableDate(line,savedInputs.lastPayableDate,periodMonth):line;
    const meta=metadataMap.get(employee.id);
-   return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||'',impactNotes:adjustmentMap.get(employee.id)?.impactNotes},adjustmentMap.get(employee.id)?.inputs):line;
+   return benefitsOnly?benefit.applyInputs({...payableLine,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||'',impactNotes:adjustmentMap.get(employee.id)?.impactNotes},adjustmentMap.get(employee.id)?.inputs):line;
   }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.periodMovement||l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
   const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{})};
   return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
@@ -250,7 +252,9 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const line=(await q(c,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 AND id=$3 FOR UPDATE',org,runId,lineId))[0];
    if(!line)domain.invalid('Benefit line not found.',404);
    const previousNotes=current.lines.find(item=>item.employeeId===line.employeeId)?.impactNotes;
-   const snapshot=benefit.applyInputs(benefit.withImpactNote({...line.snapshot,impactNotes:previousNotes},notes),input);
+   const nextInput={lastPayableDate:line.snapshot.benefitInputs?.lastPayableDate,...input};
+   const payableLine=benefit.applyLastPayableDate(line.snapshot,nextInput.lastPayableDate,ym(run.periodMonth));
+   const snapshot=benefit.applyInputs(benefit.withImpactNote({...payableLine,impactNotes:previousNotes},notes),nextInput);
    await exec(c,'UPDATE public.zermatt_midmonth_lines SET snapshot=$3::jsonb,"netPay"=$4 WHERE "organizationId"=$1 AND id=$2',org,lineId,JSON.stringify(snapshot),snapshot.netPay);
    const refreshed=await source(c,org,ym(run.periodMonth));
    if(refreshed.baseHash!==current.baseHash)domain.invalid('Source records changed while saving. No inputs were saved; regenerate the draft.');

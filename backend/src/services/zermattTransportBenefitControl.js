@@ -3,7 +3,22 @@ const {dateOnly}=require('./zermattSalarySplit');
 const HEADERS=['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO','Remark/Notes','Hire / Exit in Period'];
 function normalizeInputs(input={}) {
  const days=value=>{const n=Number(value||0);if(!Number.isFinite(n)||n<0||!Number.isSafeInteger(Math.round(n*10000))||Math.abs(n*10000-Math.round(n*10000))>0.0001)invalid('Days must be non-negative with at most four decimal places.',400);return n;};
- return {...(input.calculateFromDays===true?{calculateFromDays:true}:{}),extraDays:days(input.extraDays),phDays:days(input.phDays),bonus:cents(input.bonus||0)/100,overtimePhPay:cents(input.overtimePhPay||0)/100,previousShortPayment:input.previousShortPayment==null||input.previousShortPayment===''?null:cents(input.previousShortPayment)/100,previousOverpayment:input.previousOverpayment==null||input.previousOverpayment===''?null:cents(input.previousOverpayment)/100};
+ return {...(input.lastPayableDate?{lastPayableDate:dateOnly(input.lastPayableDate)}:{}),...(input.calculateFromDays===true?{calculateFromDays:true}:{}),extraDays:days(input.extraDays),phDays:days(input.phDays),bonus:cents(input.bonus||0)/100,overtimePhPay:cents(input.overtimePhPay||0)/100,previousShortPayment:input.previousShortPayment==null||input.previousShortPayment===''?null:cents(input.previousShortPayment)/100,previousOverpayment:input.previousOverpayment==null||input.previousOverpayment===''?null:cents(input.previousOverpayment)/100};
+}
+function applyLastPayableDate(line,value,periodMonth) {
+ const cutoff=value?dateOnly(value):null;
+ if(cutoff&&!cutoff.startsWith(periodMonth+'-'))invalid('Last payable date must be in the selected benefit month.',400);
+ const base=line.cutoffBase||{allocation:line.allocation,currentEntitlement:line.currentEntitlement,periodMovement:line.periodMovement};
+ if(!cutoff)return {...line,...base,cutoffBase:undefined};
+ if(!base.allocation)invalid('A salary basis is required for TSP proration.',400);
+ const last=periodMonth+'-15';
+ const start=line.hireDate>periodMonth+'-01'?line.hireDate:periodMonth+'-01';
+ const cutoffDays=start>last||cutoff<start?0:Math.min(15,Number(cutoff.slice(8)))-Number(start.slice(8))+1;
+ const eligibleDays=Math.min(base.allocation.eligibleDays,cutoffDays);
+ const currentEntitlement=Math.round(cents(base.allocation.normalMidMonth)*eligibleDays/15)/100;
+ return {...line,cutoffBase:base,currentEntitlement,
+  allocation:{...base.allocation,eligibleDays,midMonthPayable:currentEntitlement},
+  periodMovement:[base.periodMovement,'TSP last payable day '+cutoff+' (inclusive)'].filter(Boolean).join(' · ')};
 }
 function applyInputs(line,input) {
  const benefitInputs=normalizeInputs(input);
@@ -66,7 +81,7 @@ function buildRegister(lines) {
   const s=line.snapshot||{},i=normalizeInputs(s.benefitInputs),bank=s.paymentDetails||{};
   const notes=[s.eligibilityNote,s.remark,s.periodMovement,...(s.impactNotes||[])].filter(Boolean);
   const days=s.allocation?.eligibleDays;
-  if(days>0&&days<15)notes.push(`Mid-Month prorated: ${days}/15 eligible days`);
+  if(days<15&&(days>0||i.lastPayableDate))notes.push(`Mid-Month prorated: ${days}/15 eligible days`);
   if(!i.calculateFromDays&&i.overtimePhPay>0)notes.push(`Previously recorded combined overtime/PH pay: NGN ${i.overtimePhPay.toFixed(2)}`);
   return [index+1,s.location||'',s.employeeNumber||'',s.employeeName||'',s.position||'',s.department||'',s.employmentType||'',Number(s.fullMonthlyGross||0),Number(s.allocation?.endMonthGross||0),Number(s.currentEntitlement||0),i.extraDays,i.phDays,i.bonus,s.overtimePay??'',s.publicHolidayPay??'',Number(s.previousUnpaid||0),Number(s.previousOverpaid||0),Number(line.netPay||0),String(bank.accountNumber||''),notes.join(' · '),s.periodMovement||''];
  })};
@@ -83,5 +98,5 @@ function benefitTransition(status,action,roles) {
  if(!roles.includes(rule.role))invalid('The assigned '+rule.role.replaceAll('_',' ')+' must perform this action.',403);
  return rule.to;
 }
-module.exports={HEADERS,applyPeriodProration,withImpactNote,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
+module.exports={HEADERS,applyLastPayableDate,applyPeriodProration,withImpactNote,bankDetailIssues,requiresBankDetails,normalizeInputs,applyInputs,buildRegister,benefitTransition};
 
