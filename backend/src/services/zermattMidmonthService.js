@@ -119,8 +119,12 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   const bankByEmployee=await loadBankDetails(c,org);
   const metadata=benefitsOnly?await c.employee.findMany({where:{organizationId:org,id:{in:employees.map(e=>e.id)}},orderBy:{id:'asc'},select:{id:true,location:{select:{name:true}},designation:{select:{name:true}},department:{select:{name:true}}}}):[];
   const metadataMap=new Map(metadata.map(e=>[e.id,e]));
-  const adjustments=benefitsOnly?await q(c,`SELECT l."employeeId",l.snapshot->'benefitInputs' AS inputs FROM public.zermatt_midmonth_lines l JOIN public.zermatt_midmonth_runs r ON r.id=l."runId" AND r."organizationId"=l."organizationId" WHERE l."organizationId"=$1 AND r."periodMonth"=$2::date`,org,from):[];
-  const adjustmentMap=new Map(adjustments.map(a=>[a.employeeId,a.inputs||{}]));
+  const adjustments=benefitsOnly?await q(c,`SELECT l."employeeId",l.snapshot->'benefitInputs' AS inputs,COALESCE(l.snapshot->'impactNotes',(
+   SELECT jsonb_agg(a.reason ORDER BY a."createdAt") FROM public.organization_audits a
+   WHERE a."organizationId"=l."organizationId" AND a."entityType"='TransportBenefitLine'
+   AND a."entityId"=l.id AND a.action='BENEFIT_INPUTS_UPDATED' AND a.reason IS NOT NULL
+  )) AS "impactNotes" FROM public.zermatt_midmonth_lines l JOIN public.zermatt_midmonth_runs r ON r.id=l."runId" AND r."organizationId"=l."organizationId" WHERE l."organizationId"=$1 AND r."periodMonth"=$2::date`,org,from):[];
+  const adjustmentMap=new Map(adjustments.map(a=>[a.employeeId,a]));
   const lines=employees.map(employee=>{
    const salary=byEmployee.get(employee.id);
    if((benefitsOnly?domain.eligibleForCurrentSupport(employee,periodMonth):['ACTIVE','PROBATION','LEAVE','SUSPENDED'].includes(employee.status)&&dateOnly(employee.hireDate)<=`${periodMonth}-15`)&&!salary?.fullMonthlyGross)domain.invalid(`Full salary is missing for ${employee.employeeNumber}. Prepare its reviewed full-salary benefit basis in Benefits before generating Transport Support.`);
@@ -130,7 +134,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const bank=bankByEmployee.get(employee.id)||{};
    const line={...domain.buildLine({employee,salary,periodMonth,unpaid,overpaid}),balanceIds:debts.map(b=>b.id),paymentDetails:{bankName:String(bank.bankName||''),accountName:String(bank.accountName||''),accountNumber:String(bank.accountNumber||'')}};
    const meta=metadataMap.get(employee.id);
-   return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||''},adjustmentMap.get(employee.id)):line;
+   return benefitsOnly?benefit.applyInputs({...line,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||'',impactNotes:adjustmentMap.get(employee.id)?.impactNotes},adjustmentMap.get(employee.id)?.inputs):line;
   }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
   const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{})};
   return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
@@ -167,6 +171,19 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const currentBankDetails=await loadBankDetails(prisma,org);
    lines=lines.map(line=>({...line,snapshot:{...line.snapshot,paymentDetails:currentBankDetails.get(line.employeeId)||{}}}));
   }
+  if(benefitsOnly&&run.status!=='PAID') {
+   const employees=await prisma.employee.findMany({where:{organizationId:org,id:{in:lines.map(line=>line.employeeId)}},select:{id:true,firstName:true,middleName:true,lastName:true}});
+   const recordedNotes=await prisma.organizationAudit.findMany({
+    where:{organizationId:org,entityType:'TransportBenefitLine',action:'BENEFIT_INPUTS_UPDATED',entityId:{in:lines.filter(line=>!line.snapshot.impactNotes).map(line=>line.id)}},
+    select:{entityId:true,reason:true},orderBy:{createdAt:'asc'},
+   });
+   const notesByLine=new Map();
+   for(const {entityId,reason} of recordedNotes) {
+    if(reason)notesByLine.set(entityId,[...(notesByLine.get(entityId)||[]),reason]);
+   }
+   const names=new Map(employees.map(employee=>[employee.id,[employee.firstName,employee.middleName,employee.lastName].filter(Boolean).join(' ')]));
+   lines=lines.map(line=>({...line,snapshot:{...line.snapshot,employeeName:names.get(line.employeeId)||line.snapshot.employeeName,impactNotes:line.snapshot.impactNotes||notesByLine.get(line.id)}}));
+  }
   if(benefitsOnly)lines.sort((a,b)=>require('./payrollRegisterExport').compareBranches(a.snapshot.location,b.snapshot.location)||String(a.snapshot.employeeNumber).localeCompare(String(b.snapshot.employeeNumber),undefined,{numeric:true}));
   const events=await q(prisma,'SELECT action,notes,"actorUserId","createdAt" FROM public.zermatt_midmonth_events WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY "createdAt"',org,runId);
   return {run,lines,events,responsibilities,...(benefitsOnly?{register:benefit.buildRegister(lines),workflow:"HEAD_HR_EXTERNAL"}:{})};
@@ -185,6 +202,10 @@ function createService(prisma, { benefitsOnly = false } = {}) {
     const current=await source(c,org,ym(run.periodMonth));
     if(current.sourceHash!==run.sourceHash)domain.invalid('Salary, employee or carry-forward records changed. Return this run for correction and regenerate it.');
     if(!(benefitsOnly&&action==='HEAD_HR_APPROVE')&&['GM_APPROVE','HEAD_HR_APPROVE'].includes(action)&&current.lines.some(l=>l.netPay>0&&(!l.paymentDetails.bankName||!l.paymentDetails.accountName||!l.paymentDetails.accountNumber)))domain.invalid('Complete bank details before final approval. Return the run to Head HR and regenerate it after correction.');
+   }
+   if(action==='REOPEN_FOR_CORRECTION') {
+    const recorded=await q(c,'SELECT id FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 AND ("actualPaid" IS NOT NULL OR "paymentReference" IS NOT NULL) LIMIT 1',org,runId);
+    if(recorded.length)domain.invalid('A run with recorded payments cannot be reopened.');
    }
    if(action==='CONFIRM_PAYMENT') {
     const lines=await q(c,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 ORDER BY id FOR UPDATE',org,runId);
@@ -227,7 +248,8 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    if(current.sourceHash!==run.sourceHash)domain.invalid('Source records changed. Regenerate the draft before editing benefit inputs.');
    const line=(await q(c,'SELECT * FROM public.zermatt_midmonth_lines WHERE "organizationId"=$1 AND "runId"=$2 AND id=$3 FOR UPDATE',org,runId,lineId))[0];
    if(!line)domain.invalid('Benefit line not found.',404);
-   const snapshot=benefit.applyInputs(line.snapshot,input);
+   const previousNotes=current.lines.find(item=>item.employeeId===line.employeeId)?.impactNotes;
+   const snapshot=benefit.applyInputs(benefit.withImpactNote({...line.snapshot,impactNotes:previousNotes},notes),input);
    await exec(c,'UPDATE public.zermatt_midmonth_lines SET snapshot=$3::jsonb,"netPay"=$4 WHERE "organizationId"=$1 AND id=$2',org,lineId,JSON.stringify(snapshot),snapshot.netPay);
    const refreshed=await source(c,org,ym(run.periodMonth));
    if(refreshed.baseHash!==current.baseHash)domain.invalid('Source records changed while saving. No inputs were saved; regenerate the draft.');
@@ -273,7 +295,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const reason=String(notes||'').trim();
    if(!reason||reason.length>1000)domain.invalid('Enter an import reason of up to 1,000 characters.',400);
    for(const {line,snapshot} of changes) {
-    await exec(c,'UPDATE public.zermatt_midmonth_lines SET snapshot=$3::jsonb,"netPay"=$4 WHERE "organizationId"=$1 AND id=$2',org,line.id,JSON.stringify(snapshot),snapshot.netPay);
+    await exec(c,'UPDATE public.zermatt_midmonth_lines SET snapshot=$3::jsonb,"netPay"=$4 WHERE "organizationId"=$1 AND id=$2',org,line.id,JSON.stringify(benefit.withImpactNote({...snapshot,impactNotes:current.lines.find(item=>item.employeeId===line.employeeId)?.impactNotes},reason)),snapshot.netPay);
    }
    const refreshed=await source(c,org,ym(run.periodMonth));
    if(refreshed.baseHash!==current.baseHash)domain.invalid('Source records changed while saving. Preview the file again.');
