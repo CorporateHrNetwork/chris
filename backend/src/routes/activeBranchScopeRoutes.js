@@ -688,9 +688,12 @@ async function branchPayrollLines(req, runId = null, approvedOnly = false) {
             pl."baseSalary",pl."allowances",pl."deductions",pl."advanceRecovery",pl."loanRecovery",
             pl."grossPay",pl."netPreview",pl."statutoryStatus",pl."details",pl."createdAt",pl."updatedAt",
             pr."status" AS "runStatus",pr."approvedAt",pp."code" AS "periodCode",pp."name" AS "periodName",
-            pp."periodStart",pp."periodEnd",pp."payDate"
+            pp."periodStart",pp."periodEnd",pp."payDate", e."locationId",loc."name" AS "locationName",d."name" AS "designation",dept."name" AS "department"
        FROM "payroll_run_lines" pl
        JOIN "employees" e ON e."id"=pl."employeeId" AND e."organizationId"=pl."organizationId"
+       LEFT JOIN "organization_locations" loc ON loc."id"=e."locationId" AND loc."organizationId"=e."organizationId"
+       LEFT JOIN "departments" dept ON dept."id"=e."departmentId" AND dept."organizationId"=e."organizationId"
+         LEFT JOIN "designations" d ON d."id"=e."designationId" AND d."organizationId"=e."organizationId"
        JOIN "payroll_runs" pr ON pr."id"=pl."runId" AND pr."organizationId"=pl."organizationId"
        JOIN "payroll_periods" pp ON pp."id"=pr."periodId" AND pp."organizationId"=pr."organizationId"
       WHERE pl."organizationId"=$1 AND e."locationId"=$2

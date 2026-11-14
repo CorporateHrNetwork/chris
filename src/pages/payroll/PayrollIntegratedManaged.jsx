@@ -568,7 +568,18 @@ function PayrollLines({ rows, onViewPayslip }) {
   const [leaveRecipientsOnly, setLeaveRecipientsOnly] = useState(false);
   const leaveRecipients = (rows || []).filter((row) => Number(row.details?.leaveAllowance?.amount || 0) > 0);
   const leaveTotal = leaveRecipients.reduce((total, row) => total + Number(row.details.leaveAllowance.amount), 0);
-  const tableRows = leaveRecipientsOnly ? leaveRecipients : (rows || []);
+  const [department, setDepartment] = useState("");
+  const [designation, setDesignation] = useState("");
+  const departmentOf = (row) => row.details?.organizationSnapshot?.departmentName || row.department || "Unassigned";
+  const designationOf = (row) => row.details?.organizationSnapshot?.designationName || row.designation || "Unassigned";
+  const departments = [...new Set((rows || []).map(departmentOf))].sort();
+  const designations = [...new Set((rows || []).map(designationOf))].sort();
+  const selectedDepartment = departments.includes(department) ? department : "";
+  const selectedDesignation = designations.includes(designation) ? designation : "";
+  const tableRows = (leaveRecipientsOnly ? leaveRecipients : (rows || [])).filter((row) =>
+    (!selectedDepartment || departmentOf(row) === selectedDepartment) &&
+    (!selectedDesignation || designationOf(row) === selectedDesignation));
+
   const getSearchText = useCallback((row) => [row.employeeNumber, row.employeeName, row.details?.employmentType, row.details?.costCentre].filter(Boolean).join(" "), []);
   const allowanceColumns = payrollComponentColumns(rows, "customAllowances");
   const deductionColumns = payrollComponentColumns(rows, "customDeductions");
@@ -590,8 +601,12 @@ function PayrollLines({ rows, onViewPayslip }) {
           {leaveRecipientsOnly ? "Show all payroll employees" : "Show leave allowance recipients"}
         </button>
       </div>
+      <div style={branchViewBar}>
+        <Select label="Department" value={selectedDepartment} onChange={setDepartment} options={[["", "All departments"], ...departments.map(value => [value, value])]} />
+        <Select label="Designation" value={selectedDesignation} onChange={setDesignation} options={[["", "All designations"], ...designations.map(value => [value, value])]} />
+      </div>
       <EmployeeBatchSelector
-      key={leaveRecipientsOnly ? "leave-recipients" : "all-payroll"}
+      key={JSON.stringify([leaveRecipientsOnly, selectedDepartment, selectedDesignation])}
       rows={tableRows}
       getId={(row) => row.id}
       getSearchText={getSearchText}
