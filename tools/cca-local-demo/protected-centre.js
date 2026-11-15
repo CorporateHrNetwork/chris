@@ -5,6 +5,11 @@ async function getJSON(url,options){
  if(response.status===401){location.replace("/");throw Error("Session expired");}
  if(response.status===409)throw Error("This case changed. Reopen Service Desk and try again.");
  if(response.status===403)throw Error("Access denied by CCA role policy");
+ if(response.status===503){
+  const {code}=await response.json();
+  if(code==="CCA_STAGING_DATABASE_ACTION_FAILED")throw Error("PostgreSQL staging action failed. Check that the local database is running, then retry.");
+  throw Error("Staging service unavailable");
+ }
  if(!response.ok)throw Error("Request failed");
  return response.json();
 }
@@ -29,7 +34,9 @@ function caseAction(ticket, operation, title, inputLabel, value = ""){
   if(button.disabled||(field&&!field.value.trim()))return;
   button.disabled=true;
   try{
-   await getJSON("/api/support-workflow",{method:"POST",headers:{"Content-Type":"application/json"},
+   const endpoint = operation.endsWith("DATABASE") || operation === "REQUEST_DATABASE_APPROVAL"
+    ? "/api/database-approval" : "/api/support-workflow";
+   await getJSON(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({caseId:ticket.id,version:ticket.version,operation,text:field?.value.trim()})});
    await openWorkspace("support",ticket.id,["REPLY","CONFIRM","APPROVE"].includes(operation));
   }catch(error){status.textContent=error.message;button.disabled=false;}
@@ -83,7 +90,29 @@ function renderRouting(view, data, openCaseId, openInbox){
   }
   if(data.canSimulateIntake&&c.status==="ASSIGNED")
    details.append(caseAction(c,"RECOMMEND","Submit response for review","Response for review",c.draft||""));
-  if(data.canSimulateIntake&&c.status==="AWAITING_APPROVAL"){
+  if(data.canRequestDatabaseApproval&&c.status==="ASSIGNED"&&c.tenantReply&&
+     c.analysis?.category==="DATABASE_PROVISIONING")
+   details.append(caseAction(c,"REQUEST_DATABASE_APPROVAL","Request database provisioning approval"));
+  if(c.databaseApproval){
+   details.append(text("p","Provisioning approval requested by "+c.databaseApproval.requestedBy));
+   if(c.databaseApproval.approvedBy){
+    const {approvedBy,databaseState,database,login}=c.databaseApproval;
+    details.append(text("p","Provisioning approved by "+approvedBy+"."));
+    details.append(text("p",databaseState
+     ? "Database "+databaseState.toLowerCase()+" · "+database+" · "+login
+     : "Database creation pending."));
+    for(const event of c.databaseEvents||[]){
+     const action=event.event==="DATABASE_PROVISIONED"?"Database created":"Database login suspended";
+     details.append(text("p",action+" · "+event.actor+" · "+new Date(event.at).toLocaleString()));
+    }
+    if(data.canOperateDatabase&&c.databaseApproval.requestedBy===data.account){
+     if(!databaseState)details.append(caseAction(c,"PROVISION_DATABASE","Create Cedar staging database"));
+     if(databaseState==="ACTIVE")details.append(caseAction(c,"SUSPEND_DATABASE","Suspend Cedar database login"));
+    }
+   }else if(data.canApproveDatabase)
+    details.append(caseAction(c,"APPROVE_DATABASE","Approve staging database provisioning"));
+  }
+  if(data.canSimulateIntake&&c.status==="AWAITING_APPROVAL"&&!c.databaseApproval){
    details.append(text("p","Simulate a decision by the fictional independent reviewer."),
     caseAction(c,"APPROVE","Simulate approval and send to demo inbox"),
     caseAction(c,"RETURN","Simulate return for revision","Reason for returning"));

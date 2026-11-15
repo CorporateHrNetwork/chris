@@ -125,6 +125,34 @@ test("protected Service Desk automatically routes fictional intake and persists 
     ["CASE_RECEIVED", "CASE_ANALYZED", "AGENT_ASSIGNED", "SUPPORT_DRAFT_PREPARED"]);
 });
 
+test("authenticated staging routes and audits a database service request", async t => {
+  const options = fixture(t);
+  const request = {
+    description: "Please provision a PostgreSQL database for our staging application.",
+    requestId: "276eb611-326f-4074-b848-e7d381211eca",
+  };
+  await withServer(options, async (post, origin) => {
+    assert.equal((await post("support-intake", request)).status, 403);
+    const first = await post("password", { account: ACCOUNT, password });
+    const second = await post("mfa", { challenge: (await first.json()).challenge,
+      code: otpAt(secret, Math.floor(now / 30)) });
+    assert.equal(second.status, 200);
+    const headers = { Cookie: second.headers.get("set-cookie").split(";")[0] };
+    const response = await post("support-intake", request, headers);
+    assert.equal(response.status, 200);
+    const { case: ticket } = await response.json();
+    assert.equal(ticket.tenantId, "demo-cedar");
+    assert.equal(ticket.assignee, "Database Services Agent");
+    assert.equal(ticket.status, "ASSIGNED");
+    const workspace = await (await fetch(origin + "/api/workspace?module=support", { headers })).json();
+    assert.ok(workspace.routingCases.some(item => item.id === ticket.id && item.assignee === ticket.assignee));
+    const support = require("../../tools/cca-local-demo/server").createDurableDemoState({
+      dataDir: path.join(options.directory, "fictional-support"),
+    });
+    assert.ok(support.audit(ticket.id).events.some(event => event.event === "AGENT_ASSIGNED"));
+  });
+});
+
 test("expired staging page refresh returns to sign-in while APIs stay protected", async t => {
   const options = fixture(t);
   let time = now;
@@ -201,4 +229,97 @@ test("staging review persists decisions, hands off only approved text, and rerou
     assert.equal(clarified.assignee, "Payroll Support Agent");
     assert.match(clarified.draft, /missing payslip/);
   });
+});
+
+test("offline Cedar approver enrollment supports separate MFA and case-linked approval", async t => {
+  const options = fixture(t);
+  const approver = "cca-staging-cedar-approver";
+  const approverPassword = "Different fictional approver password";
+  const approverSecret = Buffer.from("09876543210987654321");
+  const enrollment = openStaging({ ...options, enrollApprover: true });
+  try {
+    assert.throws(() => enrollment.enroll(password, approverSecret), /APPROVER_PASSWORD_REQUIRED/);
+    enrollment.enroll(approverPassword, approverSecret);
+    assert.throws(() => enrollment.enroll(approverPassword, approverSecret), /APPROVER_ENROLLMENT_DENIED/);
+  } finally {
+    enrollment.release();
+  }
+
+  const databaseActions = [];
+  options.provisionDatabase = (action) => {
+    databaseActions.push(action);
+    return { database: "fictional_cedar_db", login: "fictional_cedar_app" };
+  };
+  await withServer(options, async (post, origin) => {
+    async function signIn(account, password, secret) {
+      const response = await post("password", { account, password });
+      assert.equal(response.status, 200);
+      const { challenge } = await response.json();
+      const mfa = await post("mfa", { challenge, code: otpAt(secret, Math.floor(now / 30)) });
+      assert.equal(mfa.status, 200);
+      return { Cookie: mfa.headers.get("set-cookie").split(";")[0] };
+    }
+
+    const operatorHeaders = await signIn(ACCOUNT, password, secret);
+    const approverHeaders = await signIn(approver, approverPassword, approverSecret);
+    const identity = await fetch(origin + "/api/whoami", { headers: approverHeaders });
+    assert.equal((await identity.json()).account, approver);
+
+    const support = await post("support-intake", {
+      description: "Please provision a PostgreSQL database for our staging application.",
+      requestId: "3a622200-581c-4991-8c41-4d10526fe268",
+    }, operatorHeaders);
+    let ticket = (await support.json()).case;
+    for (const [operation, text] of [
+      ["RECOMMEND", "Please provide the fictional staging requirements."],
+      ["APPROVE"],
+      ["REPLY", "We need a dedicated PostgreSQL database for fictional staging."],
+    ]) {
+      const result = await post("support-workflow", {
+        caseId: ticket.id, version: ticket.version, operation, text,
+      }, operatorHeaders);
+      assert.equal(result.status, 200);
+      ticket = (await result.json()).case;
+    }
+    const request = await post("database-approval", {
+      caseId: ticket.id, version: ticket.version, operation: "REQUEST_DATABASE_APPROVAL",
+    }, operatorHeaders);
+    assert.equal(request.status, 200);
+    ticket = (await request.json()).case;
+    const approval = { caseId: ticket.id, version: ticket.version, operation: "APPROVE_DATABASE" };
+    assert.equal((await post("database-approval", approval, operatorHeaders)).status, 403);
+
+    const workspace = await fetch(origin + "/api/workspace?module=support", { headers: approverHeaders });
+    assert.equal(workspace.status, 200);
+    const cases = (await workspace.json()).routingCases;
+    assert.deepEqual(cases.map(item => item.id), [ticket.id]);
+    const result = await post("database-approval", approval, approverHeaders);
+    assert.equal(result.status, 200);
+    ticket = (await result.json()).case;
+    assert.equal(ticket.databaseApproval.approvedBy, approver);
+    const create = { caseId: ticket.id, version: ticket.version, operation: "PROVISION_DATABASE" };
+    assert.equal((await post("database-approval", create, approverHeaders)).status, 403);
+    assert.equal(databaseActions.length, 0);
+    const created = await post("database-approval", create, operatorHeaders);
+    assert.equal(created.status, 200);
+    ticket = (await created.json()).case;
+    assert.equal(ticket.databaseApproval.databaseState, "ACTIVE");
+    assert.equal((await post("database-approval", create, operatorHeaders)).status, 409);
+    const suspended = await post("database-approval", {
+      caseId: ticket.id, version: ticket.version, operation: "SUSPEND_DATABASE",
+    }, operatorHeaders);
+    assert.equal(suspended.status, 200);
+    assert.equal((await suspended.json()).case.databaseApproval.databaseState, "SUSPENDED");
+    assert.deepEqual(databaseActions, [
+      { caseId: ticket.id, operation: "PROVISION_DATABASE" },
+      { caseId: ticket.id, operation: "SUSPEND_DATABASE" },
+    ]);
+  });
+  const support = require("../../tools/cca-local-demo/server").createDurableDemoState({
+    dataDir: path.join(options.directory, "fictional-support"),
+  });
+  const id = databaseActions[0].caseId;
+  assert.equal(support.state("demo-cedar").cases.find(item => item.id === id).databaseApproval.databaseState, "SUSPENDED");
+  assert.deepEqual(support.audit(id).events.slice(-2).map(event => event.event),
+    ["DATABASE_PROVISIONED", "DATABASE_SUSPENDED"]);
 });

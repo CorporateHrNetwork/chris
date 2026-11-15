@@ -1,9 +1,10 @@
-param([switch]$GeneratePassword)
+param([switch]$GeneratePassword, [switch]$PilotProfile, [switch]$EnrollCedarApprover)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
 $node = (Get-Command node.exe -CommandType Application).Source
-$directory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D'
+$profileName = if ($PilotProfile) { 'CRNetwork-CCA-Stage4D-Pilot' } else { 'CRNetwork-CCA-Stage4D' }
+$directory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) $profileName
 $security = Join-Path $directory 'host-security'
 $state = Join-Path $directory 'state'
 $keyFile = Join-Path $security 'staging-key.dpapi'
@@ -18,7 +19,7 @@ function Invoke-StagingNode([string]$Mode, [byte[]]$Key, [string]$Password) {
     $process = [Diagnostics.Process]::Start($info)
     try {
         $payload = @{master = [Convert]::ToBase64String($Key)}
-        if ($Mode -eq 'enroll') {
+        if ($Mode -in 'enroll', 'enroll-approver') {
             if ($GeneratePassword) { $payload.generatePassword = $true }
             else { $payload.password = $Password }
         }
@@ -49,6 +50,7 @@ function Assert-PrivateDirectory([string]$Path) {
 }
 
 if (!(Test-Path -LiteralPath $directory)) {
+    if ($EnrollCedarApprover) { throw 'Start and enroll the staging operator first.' }
     $first = $null
     if (!$GeneratePassword) {
         $password = Read-Host 'Set a unique staging password (14-256 characters)' -AsSecureString
@@ -96,5 +98,26 @@ if ($keyItem.PSIsContainer -or $keyItem.Length -gt 4096 -or
     ($keyItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'CCA staging key file is invalid.' }
 $master = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($keyFile), $entropy, $scope)
 try {
-    Invoke-StagingNode 'serve' $master
+    if ($EnrollCedarApprover) {
+        $first = $null
+        if (!$GeneratePassword) {
+            $password = Read-Host 'Set a separate Cedar approver password (14-256 characters)' -AsSecureString
+            $repeat = Read-Host 'Repeat the Cedar approver password' -AsSecureString
+            try {
+                $first = [Net.NetworkCredential]::new('', $password).Password
+                $second = [Net.NetworkCredential]::new('', $repeat).Password
+                if ($first.Length -lt 14 -or $first.Length -gt 256 -or $first -cne $second) {
+                    throw 'Approver passwords must match and contain 14-256 characters.'
+                }
+            } finally {
+                $password.Dispose()
+                $repeat.Dispose()
+                Remove-Variable second -ErrorAction SilentlyContinue
+            }
+        }
+        try { Invoke-StagingNode 'enroll-approver' $master $first }
+        finally { Remove-Variable first }
+    } else {
+        Invoke-StagingNode 'serve' $master
+    }
 } finally { [Array]::Clear($master, 0, $master.Length) }

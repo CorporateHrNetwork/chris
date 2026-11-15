@@ -25,8 +25,12 @@ async function loadSession(){
     const user=await api("/api/whoami");
     stage("session");
     el("sessionInfo").textContent="Account: "+user.account+" · Assigned demo tenants: "+user.assignedTenants.join(", ");
-    const cases=await api("/api/fictional-cases");
-    el("caseInfo").textContent=cases.cases.map(c=>c.id+" — "+c.description).join("; ");
+    if(staging){
+      el("caseInfo").textContent="Open the protected Control Centre to view your permitted workspaces.";
+    }else{
+      const cases=await api("/api/fictional-cases");
+      el("caseInfo").textContent=cases.cases.map(c=>c.id+" — "+c.description).join("; ");
+    }
     note("CCA local demonstration session authenticated.");
   }catch{
     pending=null;stage("password");el("caseInfo").textContent="Authenticate to view one fictional, tenant-scoped example.";

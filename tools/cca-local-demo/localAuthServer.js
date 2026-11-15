@@ -53,7 +53,7 @@ function payloadFrom(req) {
     req.on("error", reject);
   });
 }
-function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost, support } = {}) {
+function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost, support, provisionDatabase } = {}) {
   const staging = Boolean(stagingHost);
   const cookieName = staging ? "cca_staging_sid" : COOKIE;
   let unavailable = false;
@@ -106,11 +106,32 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       return fs.createReadStream(path.join(__dirname, files[url.pathname])).pipe(res);
     }
     if (req.method === "GET" && url.pathname === "/api/whoami") {
-      const identity = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");
+      const identity = staging ? auth.lab.resolveSession(cookie)
+        : auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");
       return json(res, identity.accepted ? 200 : 401, identity.accepted
         ? { ok: true, account: identity.principalId, assignedTenants: identity.assignedTenantIds,
             scope: "CCA", demonstration: true }
         : FAIL);
+    }
+    if (support && staging && req.method === "POST" && url.pathname === "/api/database-approval") {
+      if (!origins.includes(origin) ||
+          !String(req.headers["content-type"] || "").startsWith("application/json"))
+        return json(res, 403, FAIL);
+      let body;
+      try { body = await payloadFrom(req); }
+      catch { return json(res, 400, FAIL); }
+      try { verifyState(); }
+      catch { return json(res, 503, FAIL); }
+      const context = auth.lab.databaseDecisionContext(cookie);
+      if (!context.accepted) return json(res, 401, FAIL);
+      if (!body || typeof body.caseId !== "string" || !Number.isSafeInteger(body.version) ||
+          !["REQUEST_DATABASE_APPROVAL", "APPROVE_DATABASE", "PROVISION_DATABASE", "SUSPEND_DATABASE"].includes(body.operation))
+        return json(res, 400, FAIL);
+      const result = support.databaseDecision({
+        caseId: body.caseId, version: body.version, operation: body.operation, context, provisionDatabase,
+      });
+      return json(res, result.ok ? 200 : result.code === "CASE_CHANGED" ? 409 :
+        ["CCA_LOCAL_SAVE_FAILED", "CCA_STAGING_DATABASE_UNAVAILABLE", "CCA_STAGING_DATABASE_ACTION_FAILED"].includes(result.code) ? 503 : 403, result);
     }
     if (support && req.method === "POST" && ["/api/support-intake", "/api/support-workflow"].includes(url.pathname)) {
       if (!origins.includes(origin)) return json(res, 403, FAIL);
@@ -169,8 +190,12 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         description: "In-memory fictional login/authorization events, no production audit data.",
         records: auditEvents.slice(-20).map(e => [e.event, e.actor, e.time]) },
     });
-    const permissionFor = item => auth.lab.resolveSession(cookie, item.permission,
-      item.permission === PERMISSIONS.TICKETS_READ ? "demo-cedar" : undefined).accepted;
+    const canApproveDatabase = Boolean(support && staging &&
+      auth.lab.resolveSession(cookie, PERMISSIONS.APPROVALS_GRANT, "demo-cedar").accepted);
+    const canReadSupport = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar").accepted;
+    const permissionFor = item => item === modules.support
+      ? canReadSupport || canApproveDatabase
+      : auth.lab.resolveSession(cookie, item.permission).accepted;
     if (req.method === "GET" && url.pathname === "/api/access") {
       const session = auth.lab.resolveSession(cookie);
       if (!session.accepted) return json(res, 401, FAIL);
@@ -191,11 +216,15 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       }
       if (support && moduleId === "support") {
         const canSimulateIntake = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_MANAGE, "demo-cedar").accepted;
-        const routingCases = support.state("demo-cedar").cases.map(
-          ({ id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution }) => {
+        const routingCases = support.state("demo-cedar").cases
+          .filter(ticket => canReadSupport || ticket.databaseApproval)
+          .map(
+          ({ id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution, databaseApproval }) => {
             const history = support.audit(id).events;
-            return { id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution,
+            return { id, description, status, assignee, analysis, draft, version, tenantReply, recommendation, resolution, databaseApproval,
               decisions: history.filter(e => ["RECOMMENDATION_APPROVED", "RECOMMENDATION_RETURNED"].includes(e.event)),
+              databaseEvents: history.filter(e => ["DATABASE_PROVISIONED", "DATABASE_SUSPENDED"].includes(e.event))
+                .map(({ event, actor, at }) => ({ event, actor, at })),
               deliveredResponses: history.filter(e => e.event === "RESOLUTION_SENT_TO_CLIENT" && e.details.response)
                 .map(e => e.details.response)
             };
@@ -203,7 +232,8 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         );
         return json(res, 200, { ok: true, demonstration: true,
           description: "Fictional Cedar support requests are analyzed and routed automatically.",
-          canSimulateIntake,
+          canSimulateIntake, canApproveDatabase, canRequestDatabaseApproval: staging && canSimulateIntake,
+          canOperateDatabase: Boolean(provisionDatabase && canSimulateIntake), account: session.principalId,
           routingCases });
       }
       return json(res, 200, { ok: true, demonstration: true,
@@ -240,7 +270,9 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
         if (passwordStep && !result.ok && sourceThrottle && !sourceThrottle.reserve)
           sourceThrottle.recordFailure(peer);
         if (!passwordStep && result.ok && auditLedger) {
-          auditLedger.append({ event: "CCA_MFA_VERIFIED", actor: auth.account, target: auth.account });
+          const principalId = auth.lab.resolveSession(result.token).principalId;
+          if (!principalId) throw Error("CCA_STAGING_AUTH_IDENTITY_REQUIRED");
+          auditLedger.append({ event: "CCA_MFA_VERIFIED", actor: principalId, target: principalId });
         }
         checkpoint?.commit();
       } catch {
@@ -250,7 +282,7 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       }
       if (!result.ok) return json(res, 401, FAIL);
       if (passwordStep) return json(res, 200, { ok: true, challenge: result.challenge });
-      auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.account, time: new Date().toISOString() });
+      auditEvents.push({ event: "MFA_SESSION_GRANTED", actor: auth.lab.resolveSession(result.token).principalId, time: new Date().toISOString() });
       if (auditEvents.length > 100) auditEvents.shift();
       return json(res, 200, { ok: true, demonstration: true },
         { "Set-Cookie": cookieName + "=" + result.token + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=900" });

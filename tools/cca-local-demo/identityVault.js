@@ -12,6 +12,7 @@ const { grantsForRoles } = require("../../backend/src/cca/controlPlanePolicy");
 const { derivePlatformContext, isAuthorized } = require("../../backend/src/cca/platformDirectoryPolicy");
 
 const VERSION = 1;
+const STAGING_CEDAR_APPROVER = "cca-staging-cedar-approver";
 const MAX_FILE = 1024 * 1024;
 const ALLOWED_ROLES = Object.freeze([
   "SERVICE_AGENT", "AI_OPERATOR", "BILLING_OFFICER",
@@ -122,6 +123,7 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
       event, actor, target, time:new Date(clock()*1000).toISOString() });
     persist(next);
   }
+  const localApproverEnrollment = Symbol("local CCA staging enrollment");
   function register({id,password,mfaSecret,roles,tenantIds=[]}, authorizer) {
     if (!ID_PATTERN.test(id || "") || typeof password !== "string" ||
       password.length < 14 || password.length > 256 ||
@@ -130,15 +132,31 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
       !roles.every(role=>ALLOWED_ROLES.includes(role)) ||
       !Array.isArray(tenantIds) || tenantIds.some(t=>!["demo-cedar","demo-atlas"].includes(t)) ||
       data.users.some(u=>u.id===id)) throw Error("CCA_INVALID_ENROLLMENT");
-    if (data.users.length > 0 && !requireApprover(authorizer))
+    if (data.users.length > 0 && authorizer !== localApproverEnrollment && !requireApprover(authorizer))
       throw Error("CCA_INDEPENDENT_APPROVER_REQUIRED");
     const next=clone(data), salt=crypto.randomBytes(16);
     next.users.push({id,salt:salt.toString("base64"),
       passwordHash:passwordHash(password,salt),mfaSecret:mfaSecret.toString("base64"),
       roles:[...new Set(roles)],tenantIds:[...new Set(tenantIds)],
       active:true,lastOtpCounter:-1,failedPasswords:0,failedMfa:0,lockedUntil:0});
-    audited(next, "CCA_IDENTITY_ENROLLED", data.users.length===0?"LOCAL_INITIAL_BOOTSTRAP":authorizer.actor,id);
+    const actor = data.users.length === 0 ? "LOCAL_INITIAL_BOOTSTRAP"
+      : authorizer === localApproverEnrollment ? "LOCAL_STAGING_HOST" : authorizer.actor;
+    audited(next, "CCA_IDENTITY_ENROLLED", actor, id);
     return {ok:true,id};
+  }
+  function enrollStagingCedarApprover({ password, mfaSecret }) {
+    const [operator] = data.users;
+    if (data.users.length !== 1 || operator.id !== "cca-staging-operator" ||
+        !operator.active || operator.roles.length !== 1 || operator.roles[0] !== "SERVICE_AGENT" ||
+        operator.tenantIds.length !== 1 || operator.tenantIds[0] !== "demo-cedar")
+      throw Error("CCA_STAGING_APPROVER_ENROLLMENT_DENIED");
+    if (typeof password !== "string" || password.length < 14 || password.length > 256 ||
+        passwordHash(password, Buffer.from(operator.salt, "base64")) === operator.passwordHash)
+      throw Error("CCA_STAGING_APPROVER_PASSWORD_REQUIRED");
+    return register({
+      id: STAGING_CEDAR_APPROVER, password, mfaSecret,
+      roles: ["PLATFORM_APPROVER"], tenantIds: ["demo-cedar"],
+    }, localApproverEnrollment);
   }
   function passwordStep(id,password) {
     const user=data.users.find(u=>u.id===id && u.active);
@@ -239,7 +257,7 @@ function createIdentityVault({ directory, encryptionKey, clock = () => Math.floo
     return {ok:true,events:data.events.map(({sequence,event,actor,target,time})=>({
       sequence,event,actor,target,time}))};
   }
-  return Object.freeze({register,passwordStep,mfaStep,context,changeRoles,revoke,audit,
+  return Object.freeze({register,enrollStagingCedarApprover,passwordStep,mfaStep,context,changeRoles,revoke,audit,
     file:filename,backup});
 }
 function inspectVaultBackup({directory,encryptionKey}) {
@@ -285,4 +303,4 @@ function restoreVaultBackup({directory,encryptionKey,confirm=false}) {
   return {restored:true,identityCount:info.identityCount,
     warning:"Previous snapshot restored. Review revoked roles and MFA counters before use."};
 }
-module.exports={createIdentityVault,ALLOWED_ROLES,inspectVaultBackup,restoreVaultBackup};
+module.exports={createIdentityVault,ALLOWED_ROLES,inspectVaultBackup,restoreVaultBackup,STAGING_CEDAR_APPROVER};
