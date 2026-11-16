@@ -152,7 +152,8 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    assert.equal(benefitDetail.lines.find(line=>line.employeeId==='new-hire').snapshot.currentEntitlement,24000,'New hire flows from opening salary mapping into the calculated benefit run');
    assert.ok(benefitDetail.lines.filter(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)).every(line=>Number(line.snapshot.currentEntitlement)===0),'Zero-entitlement employees may remain visible for inclusive hire/exit reporting but must not receive guessed support');
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
-   const first=benefitDetail.lines[0];
+   const first=benefitDetail.lines.find(line=>Number(line.snapshot.allocation?.endMonthGross)>0);
+   assert.ok(first,'Fixture must include a benefit employee with a valid End-of-Month gross basis');
    const readMetadata=benefitWrap.employee.findMany;
    let metadataReads=0;
    benefitWrap.employee.findMany=async(args)=>{
@@ -161,29 +162,29 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    };
    await assert.rejects(benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{bonus:9000},'Concurrent source test'),/Source records changed while saving/);
    benefitWrap.employee.findMany=readMetadata;
-   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines.find(line=>line.id===first.id).netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
 
    const worked=[{employeeNumber:first.snapshot.employeeNumber,extraDays:2,phDays:1,rowNumber:2}];
    await assert.rejects(benefits.bulkWorkedDays('zll','auditor',benefitRun,worked),/assigned HEAD HR/);
    await assert.rejects(benefits.bulkWorkedDays('zll','hr',benefitRun,[...worked,{...worked[0],rowNumber:3}]),/must appear once/);
    const preview=await benefits.bulkWorkedDays('zll','hr',benefitRun,worked);
-   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay));
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines.find(line=>line.id===first.id).netPay),Number(first.netPay));
    await assert.rejects(benefits.bulkWorkedDays('zll','hr',benefitRun,worked,'stale','Fixture import'),/changed after preview/);
    assert.equal((await benefits.bulkWorkedDays('zll','hr',benefitRun,worked,preview.token,'Fixture import')).updated,1);
-   const imported=(await benefits.detail('zll','hr',benefitRun)).lines[0];
+   const imported=(await benefits.detail('zll','hr',benefitRun)).lines.find(line=>line.id===first.id);
    assert.equal(Number(imported.netPay),preview.rows[0].netPay);
    assert.equal(imported.snapshot.benefitInputs.calculateFromDays,true);
    await assert.rejects(benefits.saveBenefitInputs('zll','auditor',benefitRun,first.id,{bonus:1000},'Unauthorized'),/assigned HEAD HR/);
    await benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2500},'Approved benefit extras');
    let changed=await benefits.detail('zll','hr',benefitRun);
-   assert.equal(Number(changed.lines[0].netPay),Number(first.netPay)+3500);
-   assert.equal(changed.register.headers.length,20);
+   assert.equal(Number(changed.lines.find(line=>line.id===first.id).netPay),Number(first.netPay)+3500);
+   assert.equal(changed.register.headers.length,21);
    assert.equal(changed.register.rows[0][1],'Fixture Branch');
    assert.equal(changed.register.rows[0][4],'Fixture Position');
    assert.equal(changed.register.rows[0][5],'Fixture Department');
    await benefits.generate('zll','hr','2026-11');
    changed=await benefits.detail('zll','hr',benefitRun);
-   assert.equal(changed.lines[0].snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
+   assert.equal(changed.lines.find(line=>line.id===first.id).snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
    const correctedLine=changed.lines[0];
    const correctedInputs={...correctedLine.snapshot.benefitInputs,previousShortPayment:2000,previousOverpayment:100000};
    await benefits.saveBenefitInputs('zll','hr',benefitRun,correctedLine.id,correctedInputs,'Correct documented opening benefit balances');
