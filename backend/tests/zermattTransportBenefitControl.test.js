@@ -33,7 +33,7 @@ test('authoritative export has all 22 columns in order and keeps AccountNO as te
  assert.deepEqual(r.rows[0],[1,'Fixture Branch','Z1','Fixture Employee','Fixture Position','Fixture Department','Full-Time',200000,150000,50000,2,1,1000,'','',10000,0,5000,58000,'0012345678','Previously recorded combined overtime/PH pay: NGN 2000.00','']);
  const w=XLSX.utils.book_new();XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet([r.headers,...r.rows]),'Register');
  const loaded=XLSX.read(XLSX.write(w,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});
- assert.equal(loaded.Sheets.Register.S2.v,'0012345678');assert.equal(loaded.Sheets.Register.S2.t,'s');
+ assert.equal(loaded.Sheets.Register.T2.v,'0012345678');assert.equal(loaded.Sheets.Register.T2.t,'s');
 });
 
 
