@@ -1543,6 +1543,108 @@ router.get("/runs", requirePermission("payroll.view"), async (req, res) => {
   }
 });
 
+// An external payment is recorded separately from CHRiS payroll approval and exports.
+// This audit event is a payment-status record, never a bank instruction or salary recalculation.
+router.get("/runs/manual-payment-status", requirePermission("payroll.view"), async (req, res) => {
+  try {
+    const records = await prisma.organizationAudit.findMany({
+      where: { organizationId: req.auth.organizationId, entityType: "PayrollRun", action: "PAYROLL_MANUAL_PAYMENT_CONFIRMED" },
+      select: { entityId: true, newValue: true, createdAt: true, actorUserId: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json({
+      status: "success",
+      data: {
+        canConfirm: isZermatt(req) && isChiefAccountant(req),
+        records: Object.fromEntries(records.map(event => [event.entityId, {
+          ...event.newValue,
+          recordedAt: event.createdAt,
+          recordedByUserId: event.actorUserId,
+        }])),
+      },
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to load manual payroll payment statuses.");
+  }
+});
+
+router.post("/runs/:id/confirm-manual-payment", requirePermission("payroll.manage"), async (req, res) => {
+  if (!isZermatt(req) || !isChiefAccountant(req)) {
+    return res.status(403).json({
+      status: "error", code: "PAYROLL_PAYMENT_CONFIRMATION_AUTHORITY_REQUIRED",
+      message: "Only the assigned Zermatt Chief Accountant may confirm external main-payroll payment.",
+    });
+  }
+  try {
+    const paymentDate = String(req.body?.paymentDate || "").trim();
+    const reference = String(req.body?.reference || "").trim();
+    const paidAmount = Number(req.body?.paidAmount);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) ||
+        !Number.isFinite(Date.parse(paymentDate)) ||
+        new Date(paymentDate).toISOString().slice(0, 10) !== paymentDate ||
+        paymentDate > new Date().toISOString().slice(0, 10)) {
+      return res.status(400).json({ status: "error", message: "Enter a valid actual payment date no later than today." });
+    }
+    if (reference.length < 4 || reference.length > 200 ||
+        !Number.isFinite(paidAmount) || paidAmount <= 0 || Math.round(paidAmount * 100) !== paidAmount * 100 ||
+        req.body?.confirmActualPayment !== true) {
+      return res.status(400).json({
+        status: "error",
+        message: "Confirm an actual completed full payment, valid amount and bank/payment batch reference.",
+      });
+    }
+    const runs = await payroll.listRuns({ organizationId: req.auth.organizationId });
+    const run = runs.find(item => item.id === req.params.id);
+    if (!run) return res.status(404).json({ status: "error", message: "Payroll run not found." });
+    if (run.status !== "APPROVED" || Math.round(Number(run.netPreviewTotal) * 100) !== Math.round(paidAmount * 100)) {
+      return res.status(409).json({
+        status: "error", message: "The approved payroll net total must match the full amount actually paid; partial or unapproved payments cannot be marked PAID.",
+      });
+    }
+    const approval = await payrollApprovalWorkflow.get({ organizationId: req.auth.organizationId, runId: run.id });
+    if (approval?.stage !== "PAYOUT_EXPORTED_LOCKED") {
+      return res.status(409).json({
+        status: "error", message: "The Chief Accountant must first complete the approved payout export and external approvals.",
+      });
+    }
+    const recorded = await prisma.$transaction(async tx => {
+      const rows = await tx.$queryRawUnsafe(
+        'SELECT id,status FROM public.payroll_runs WHERE id=$1 AND "organizationId"=$2 FOR UPDATE',
+        run.id, req.auth.organizationId
+      );
+      if (rows[0]?.status !== "APPROVED") throw payroll.operationalError(
+        "PAYROLL_PAYMENT_APPROVAL_CHANGED", "The approved payroll state changed; refresh and review the run.", 409
+      );
+      const previous = await tx.organizationAudit.findFirst({
+        where: { organizationId: req.auth.organizationId, entityType: "PayrollRun", entityId: run.id, action: "PAYROLL_MANUAL_PAYMENT_CONFIRMED" },
+      });
+      if (previous) throw payroll.operationalError(
+        "PAYROLL_ALREADY_MARKED_PAID", "This payroll has already been manually confirmed as paid.", 409
+      );
+      const evidence = {
+        paymentStatus: "PAID", paymentDate, reference, paidAmount: Math.round(paidAmount * 100) / 100,
+        periodCode: run.periodCode, source: "EXTERNAL_ACCOUNTS_MANUAL_CONFIRMATION",
+      };
+      await tx.organizationAudit.create({
+        data: {
+          organizationId: req.auth.organizationId, actorUserId: req.auth.userId,
+          entityType: "PayrollRun", entityId: run.id, action: "PAYROLL_MANUAL_PAYMENT_CONFIRMED",
+          previousValue: { runStatus: run.status },
+          newValue: evidence,
+          reason: "Chief Accountant confirms the full approved payroll was actually paid outside CHRiS using the recorded bank/payment reference.",
+        },
+      });
+      return evidence;
+    }, { isolationLevel: "Serializable" });
+    return res.json({
+      status: "success", data: recorded,
+      message: "External main payroll payment confirmed in the audit register. No bank transaction was initiated.",
+    });
+  } catch (error) {
+    return sendError(res, error, "Unable to record manual main-payroll payment.");
+  }
+});
+
 router.get("/runs/:id/lines", requirePermission("payroll.view"), async (req, res) => {
   try {
     return res.json({ status: "success", data: await payroll.listRunLines({ organizationId: req.auth.organizationId, runId: req.params.id }) });
