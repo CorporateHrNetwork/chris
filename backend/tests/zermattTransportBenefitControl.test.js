@@ -26,11 +26,11 @@ test('benefit inputs add approved amounts once and preserve capped overpayment r
  assert.equal(counts.netPay,base().netPay,'Reference day counts do not create guessed pay');
  for(const input of [{bonus:-1},{overtimePhPay:1.001},{extraDays:-1},{phDays:Infinity}])assert.throws(()=>c.normalizeInputs(input));
 });
-test('authoritative export has all 21 columns in order and keeps AccountNO as text',()=>{
- assert.deepEqual(c.HEADERS,['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Overpayment','Net','AccountNO','Remark/Notes','Hire / Exit in Period']);
+test('authoritative export has all 22 columns in order and keeps AccountNO as text',()=>{
+ assert.deepEqual(c.HEADERS,['S/No','Location','EmployeeNO','FullName','Position','Department','EmploymentType','Gross Salary','End of the Month','Mid-Month','No Of Extra Day(S)','No Of Ph Day(S)','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Outstanding','Previous Month Overpayment','Net','AccountNO','Remark/Notes','Hire / Exit in Period']);
  const s=c.applyInputs({...base(),location:'Fixture Branch',position:'Fixture Position',department:'Fixture Department',paymentDetails:{accountNumber:'0012345678'}},{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2000});
  const r=c.buildRegister([{snapshot:s,netPay:s.netPay}]);
- assert.deepEqual(r.rows[0],[1,'Fixture Branch','Z1','Fixture Employee','Fixture Position','Fixture Department','Full-Time',200000,150000,50000,2,1,1000,'','',10000,5000,58000,'0012345678','Previously recorded combined overtime/PH pay: NGN 2000.00','']);
+ assert.deepEqual(r.rows[0],[1,'Fixture Branch','Z1','Fixture Employee','Fixture Position','Fixture Department','Full-Time',200000,150000,50000,2,1,1000,'','',10000,0,5000,58000,'0012345678','Previously recorded combined overtime/PH pay: NGN 2000.00','']);
  const w=XLSX.utils.book_new();XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet([r.headers,...r.rows]),'Register');
  const loaded=XLSX.read(XLSX.write(w,{type:'buffer',bookType:'xlsx'}),{type:'buffer'});
  assert.equal(loaded.Sheets.Register.S2.v,'0012345678');assert.equal(loaded.Sheets.Register.S2.t,'s');
@@ -50,7 +50,7 @@ test('prior-month corrections replace ledger totals, reset to ledger, and apply 
  assert.throws(()=>c.normalizeInputs({previousOverpayment:-1}));
  assert.throws(()=>c.normalizeInputs({previousShortPayment:2.001}));
  const row=c.buildRegister([{snapshot:corrected,netPay:corrected.netPay}]).rows[0];
- assert.equal(row[15],20000);assert.equal(row[16],90000);assert.equal(row[17],0);
+ assert.equal(row[15],20000);assert.equal(row[16],0);assert.equal(row[17],90000);assert.equal(row[18],0);
 });
 
 test('worked days use end-month gross and round each amount before adding to net',()=>{
@@ -71,6 +71,27 @@ test('TSP applies the onboarding percentage and counts hire and exit dates inclu
  c.applyPeriodProration(line,leaver,salary,periodMonth);
  assert.equal(line.currentEntitlement,3000);
  const row=c.buildRegister([{snapshot:line}]).rows[0];
- assert.match(row[19],/Mid-Month prorated: 3\/15 eligible days/);
- assert.match(row[20],/Hired 2026-11-07.*Exited 2026-11-09/);
+ assert.match(row[20],/Mid-Month prorated: 3\/15 eligible days/);
+ assert.match(row[21],/Hired 2026-11-07.*Exited 2026-11-09/);
+});
+
+test('previous month outstanding adds once, is separate from arrears and overpayment, and is exported',()=>{
+ const initial=c.applyInputs(base(),{previousMonthOutstanding:12500});
+ assert.equal(initial.previousUnpaid,10000,'Existing ledger arrears remain separate');
+ assert.equal(initial.benefitInputs.previousMonthOutstanding,12500);
+ assert.equal(initial.netPay,67500);
+ assert.deepEqual(c.applyInputs(initial,initial.benefitInputs),initial,'Recalculation never duplicates outstanding');
+ const cleared=c.applyInputs(initial,{previousMonthOutstanding:0});
+ assert.equal(cleared.netPay,55000,'Clearing outstanding restores baseline');
+ assert.equal(c.applyInputs(base(),{previousMonthOutstanding:''}).netPay,55000);
+ assert.throws(()=>c.normalizeInputs({previousMonthOutstanding:-1}));
+ assert.throws(()=>c.normalizeInputs({previousMonthOutstanding:1.001}));
+ const row=c.buildRegister([{snapshot:initial,netPay:initial.netPay}]).rows[0];
+ assert.equal(row[c.HEADERS.indexOf('Previous Month Outstanding')],12500);
+ assert.equal(row[c.HEADERS.indexOf('Previous Month Short Payment')],10000);
+ assert.equal(row[c.HEADERS.indexOf('Net')],67500);
+ const capped=c.applyInputs({...base(),previousOverpaid:80000},{previousMonthOutstanding:12500});
+ assert.equal(capped.overpaidDeduction,67500,'Outstanding is available for recovery under existing overpayment cap');
+ assert.equal(capped.overpaidRemaining,12500);
+ assert.equal(capped.netPay,0);
 });
