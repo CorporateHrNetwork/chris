@@ -153,14 +153,18 @@ function createService(prisma, { benefitsOnly = false } = {}) {
  async function generate(org,user,periodMonth) {
   return tx(async c=>{
    await lock(c,org);await requireRole(c,org,user,'HEAD_HR');domain.month(periodMonth);
-   const prior=await q(c,`SELECT id FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND "periodMonth"<$2::date AND status<>'PAID' LIMIT 1`,org,`${periodMonth}-01`);
-   if(prior.length)domain.invalid('Confirm actual payment or explicit zero payment for the preceding run before generating another month.');
+   // Transport Support monthly preparation is independent of prior-month payment confirmation.
+   // Preserve the legacy salary-split payroll gate and the separate payment ledger.
+   if(!benefitsOnly) {
+    const prior=await q(c,`SELECT id FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND "periodMonth"<$2::date AND status<>'PAID' LIMIT 1`,org,`${periodMonth}-01`);
+    if(prior.length)domain.invalid('Confirm actual payment or explicit zero payment for the preceding run before generating another month.');
+   }
    const existing=(await q(c,'SELECT * FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 AND "periodMonth"=$2::date FOR UPDATE',org,`${periodMonth}-01`))[0];
    if(!existing) {
     const config=await settings(c,org);
     const latest=(await q(c,'SELECT "periodMonth" FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1 ORDER BY "periodMonth" DESC LIMIT 1',org))[0];
     const required=latest?domain.nextMonth(ym(latest.periodMonth)):config?ym(config.activationFrom):null;
-    if(required!==periodMonth)domain.invalid(`Generate and reconcile ${required||'the activation month'} first; unpaid months cannot be skipped.`);
+    if(required!==periodMonth)domain.invalid(benefitsOnly?`Prepare ${required||'the activation month'} first; benefit months must be generated in sequence.`:`Generate and reconcile ${required||'the activation month'} first; unpaid months cannot be skipped.`);
    }
    if(existing&&!['DRAFT','REJECTED'].includes(existing.status))domain.invalid('Submitted or approved payroll is locked.');
    const data=await source(c,org,periodMonth);if(!data.lines.length)domain.invalid('No eligible mid-month entitlement or previous balance exists.');
