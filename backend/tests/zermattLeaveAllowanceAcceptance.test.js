@@ -45,7 +45,7 @@ test("payroll uses current monthly salary elements and retained formula", () => 
     'salaryBasis: SALARY_BASIS',
     'paymentTiming: PAYMENT_TIMING',
     'const recordedBasic = details.salaryStructure?.basic',
-    'monthlyGross: row.grossPay',
+    'const gross = details.scheduledMonthlyGross',
     ]) {
     assert.ok(service.includes(expected), `Reference-only Leave Allowance control missing: ${expected}`);
   }
