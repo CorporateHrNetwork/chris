@@ -101,10 +101,11 @@ test('benefit export uses authoritative columns and external sign-off without lo
   const [headers, row] = res.book.Combined;
   assert.equal(headers.some(header => /loan/i.test(header)), false);
   assert.equal(headers.length, row.length);
-  assert.equal(headers.length,21);
+  assert.equal(headers.length,22);
   assert.ok(res.book['TSP Ineligible'],'The exclusion report must be present even when empty');
   assert.equal(row[headers.indexOf('Net')],30500);
   assert.equal(row[headers.indexOf('Previous Month Short Payment')],1000);
+  assert.equal(row[headers.indexOf('Previous Month Outstanding')],0);
   assert.equal(row[headers.indexOf('Previous Month Overpayment')],500);
   assert.equal(row[headers.indexOf('AccountNO')],'0000000000');
   assert.equal(res.book.Reconciliation[1][5],'');
