@@ -17,6 +17,7 @@ function load(name, dependencies, extra = '') {
 }
 const service = load('zermattLeaveAllowanceService.js', {
   '../config/prisma': {}, './zermattLeaveAllowanceSettingsService': settings,
+  './nigeriaPayrollComplianceService': { ZERMATT_SPLIT_SALARY_STRUCTURE: structure },
 });
 function fixture() {
   const row = { id: 'line', employeeId: 'employee', employeeNumber: '001', employeeName: 'Test Employee',
