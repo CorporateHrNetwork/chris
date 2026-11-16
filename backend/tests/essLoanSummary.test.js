@@ -88,7 +88,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
     if (id === 'xlsx') return require('xlsx');
     if (id === '../services/payrollRegisterExport') return require('../src/services/payrollRegisterExport');
     if (id === '../services/transportSupportExportAnalytics') return require('../src/services/transportSupportExportAnalytics');
-    if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail, recordExternalExport: async () => { exportsRecorded++; } }) };
+    if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail, ineligibleReport: async () => [], recordExternalExport: async () => { exportsRecorded++; } }) };
     if (id === '../services/zermattMidmonthDomain') return { invalid: (message,statusCode=409) => { throw Object.assign(new Error(message),{statusCode}); } };
     if (id === '../middleware/authMiddleware') return { requireAuth: () => {} };
     return {};
@@ -97,10 +97,11 @@ test('benefit export uses authoritative columns and external sign-off without lo
   const exportRoute = routes.find(row => row[0] === '/runs/:id/export');
   const res = { setHeader() {}, type() { return this; }, send(buffer) { const xlsx=require('xlsx'),book=xlsx.read(buffer,{type:'buffer'});this.book=Object.fromEntries(book.SheetNames.map(name=>[name,xlsx.utils.sheet_to_json(book.Sheets[name],{header:1,defval:''})])); return this; }, status() { return this; }, json(error) { assert.fail(error.message); } };
   await exportRoute[1]({ auth: { organizationId: 'org', userId: 'hr' }, params: { id: 'run' }, query: { stage: 'payout' } }, res);
-  const [headers, row] = res.book['Transport Support Pay'];
+  const [headers, row] = res.book.Combined;
   assert.equal(headers.some(header => /loan/i.test(header)), false);
   assert.equal(headers.length, row.length);
-  assert.equal(headers.length,20);
+  assert.equal(headers.length,21);
+  assert.ok(res.book['TSP Ineligible'],'The exclusion report must be present even when empty');
   assert.equal(row[headers.indexOf('Net')],30500);
   assert.equal(row[headers.indexOf('Previous Month Short Payment')],1000);
   assert.equal(row[headers.indexOf('Previous Month Overpayment')],500);
@@ -110,7 +111,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
   assert.equal(exportsRecorded,1);
   assert.ok(res.book.Abuja && res.book.Lagos && res.book['Port Harcourt']);
   await exportRoute[1]({auth:{organizationId:'org',userId:'hr'},params:{id:'run'},query:{stage:'external',columns:'[2,3,17]'}},res);
-  assert.deepEqual(res.book['Transport Support Pay'][0],['EmployeeNO','FullName','Net']);
+  assert.deepEqual(res.book.Combined[0],['EmployeeNO','FullName','Net']);
   assert.equal(res.book.Reconciliation,undefined,'Selected copies omit unselected reconciliation fields');
   assert.equal(JSON.stringify(res.book).includes('0000000000'),false);
   assert.equal(exportsRecorded,2);
