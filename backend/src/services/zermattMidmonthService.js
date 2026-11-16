@@ -50,7 +50,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    ) b ON true
    WHERE e."organizationId"=$1 AND e.status::text IN('ACTIVE','PROBATION','LEAVE','SUSPENDED')
    AND (${benefitsOnly?'(e."exitDate"::date BETWEEN $3::date AND $2::date) OR ':''}NOT EXISTS(SELECT 1 FROM public.employee_lifecycle_events l WHERE l."organizationId"=e."organizationId" AND l."employeeId"=e.id
-    AND l."eventType"::text='DEACTIVATED' AND l."effectiveDate">=$2::date AND l."effectiveDate"<$2::date+interval '1 month')
+    AND l."eventType"::text='DEACTIVATED' AND l."effectiveDate">=$2::date AND l."effectiveDate"<$2::date+interval '1 month'))
    ORDER BY e.id FOR SHARE OF e`,org,from,mid);
   return domain.preparationCoverage(staff,periodMonth);
  }
