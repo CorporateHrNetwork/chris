@@ -307,7 +307,7 @@ function ExecuteIntegrated() {
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `approved-export-${run.id}`} onClick={() => exportApprovedPayout(run)}>{busy === `approved-export-${run.id}` ? "Exporting…" : "Export Approved Payout"}</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}` || !!manualPayments?.records?.[run.id]} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
-                {run.status === "APPROVED" && manualPayments?.canConfirm && !manualPayments?.records?.[run.id] && <button type="button" style={smallButton} disabled={!!busy} onClick={() => setPaymentEditor({runId:run.id,periodCode:run.periodCode,expectedAmount:Number(run.netPreviewTotal),paidAmount:String(run.netPreviewTotal),paymentDate:new Date().toISOString().slice(0,10),reference:"",confirmed:false})}>Mark as Paid Manually</button>
+                {run.status === "APPROVED" && manualPayments?.canConfirm && !manualPayments?.records?.[run.id] && <button type="button" style={smallButton} disabled={!!busy} onClick={() => setPaymentEditor({runId:run.id,periodCode:run.periodCode,expectedAmount:Number(run.netPreviewTotal),paidAmount:String(run.netPreviewTotal),paymentDate:new Date().toISOString().slice(0,10),reference:"",confirmed:false})}>Mark as Paid Manually</button>}
               </div></Td>
             </tr>
           ))}
