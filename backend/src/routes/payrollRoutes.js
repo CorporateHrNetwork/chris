@@ -1568,7 +1568,7 @@ router.get("/runs/manual-payment-status", requirePermission("payroll.view"), asy
   }
 });
 
-router.post("/runs/:id/confirm-manual-payment", requirePermission("payroll.manage"), async (req, res) => {
+router.post("/runs/:id/confirm-manual-payment", requirePermission("payroll.view"), async (req, res) => {
   if (!isZermatt(req) || !isChiefAccountant(req)) {
     return res.status(403).json({
       status: "error", code: "PAYROLL_PAYMENT_CONFIRMATION_AUTHORITY_REQUIRED",
@@ -1586,7 +1586,7 @@ router.post("/runs/:id/confirm-manual-payment", requirePermission("payroll.manag
       return res.status(400).json({ status: "error", message: "Enter a valid actual payment date no later than today." });
     }
     if (reference.length < 4 || reference.length > 200 ||
-        !Number.isFinite(paidAmount) || paidAmount <= 0 || Math.round(paidAmount * 100) !== paidAmount * 100 ||
+        !Number.isFinite(paidAmount) || paidAmount <= 0 || Math.abs(Math.round(paidAmount * 100) - paidAmount * 100) > 0.0001 ||
         req.body?.confirmActualPayment !== true) {
       return res.status(400).json({
         status: "error",
