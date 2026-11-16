@@ -88,6 +88,7 @@ test('benefit export uses authoritative columns and external sign-off without lo
     if (id === 'xlsx') return require('xlsx');
     if (id === '../services/payrollRegisterExport') return require('../src/services/payrollRegisterExport');
     if (id === '../services/transportSupportExportAnalytics') return require('../src/services/transportSupportExportAnalytics');
+    if (id === '../services/zermattTransportBenefitControl') return require('../src/services/zermattTransportBenefitControl');
     if (id === '../services/zermattMidmonthService') return { createService: () => ({ detail: async () => detail, ineligibleReport: async () => [], recordExternalExport: async () => { exportsRecorded++; } }) };
     if (id === '../services/zermattMidmonthDomain') return { invalid: (message,statusCode=409) => { throw Object.assign(new Error(message),{statusCode}); } };
     if (id === '../middleware/authMiddleware') return { requireAuth: () => {} };
