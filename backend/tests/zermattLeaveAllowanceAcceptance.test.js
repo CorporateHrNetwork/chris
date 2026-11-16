@@ -44,7 +44,7 @@ test("payroll uses current monthly salary elements and retained formula", () => 
     'source: "ZERMATT_CURRENT_MONTH_SALARY_FORMULA"',
     'salaryBasis: SALARY_BASIS',
     'paymentTiming: PAYMENT_TIMING',
-    'monthlyBasic: details.salaryStructure?.basic',
+    'const recordedBasic = details.salaryStructure?.basic',
     'monthlyGross: row.grossPay',
     ]) {
     assert.ok(service.includes(expected), `Reference-only Leave Allowance control missing: ${expected}`);
@@ -77,7 +77,7 @@ test("reference workbook workflow supports template preview and audited import",
   }
 
   assert.ok(!page.includes("Leave Allowance Reference Import"), "Benefits workspace must omit historical reference imports");
-  assert.ok(page.includes("End-of-Month Gross"), "Benefits workspace must display current regular payroll gross");
+  assert.ok(page.includes("Monthly Gross Rate"), "Benefits workspace must display current regular payroll gross");
   assert.ok(page.includes("Monthly Basic"), "Benefits workspace must display the current payroll calculation basis");
 });
 
