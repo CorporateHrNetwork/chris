@@ -146,7 +146,7 @@ function createService(prisma, { benefitsOnly = false } = {}) {
    const payableLine=savedInputs?.lastPayableDate?benefit.applyLastPayableDate(line,savedInputs.lastPayableDate,periodMonth):line;
    const meta=metadataMap.get(employee.id);
    return benefitsOnly?benefit.applyInputs({...payableLine,location:meta?.location?.name||'',position:meta?.designation?.name||'',department:meta?.department?.name||'',impactNotes:adjustmentMap.get(employee.id)?.impactNotes},adjustmentMap.get(employee.id)?.inputs):line;
-  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.periodMovement||l.benefitInputs.bonus>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
+  }).filter(l=>l.currentEntitlement>0||l.previousUnpaid>0||l.previousOverpaid>0||(benefitsOnly&&(l.periodMovement||l.benefitInputs.bonus>0||l.benefitInputs.previousMonthOutstanding>0||l.benefitInputs.overtimePhPay>0||l.benefitInputs.previousShortPayment!==null||l.benefitInputs.previousOverpayment!==null)));
   const baseSource={employees,rates,balances,paymentDetails:lines.map(l=>l.paymentDetails),...(benefitsOnly?{metadata}:{}),...(luckyException?{fullTimeTspException:'ZLL000042'}:{})};
   return {lines,balances,baseHash:hash(baseSource),sourceHash:hash({...baseSource,...(benefitsOnly?{benefitInputs:lines.map(l=>({employeeId:l.employeeId,inputs:l.benefitInputs}))}:{})})};
  }

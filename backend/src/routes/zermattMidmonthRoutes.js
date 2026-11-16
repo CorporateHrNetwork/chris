@@ -100,7 +100,7 @@ router.get('/runs/:id/export',async(req,res)=>{
    ['Export stage',external?'HEAD HR APPROVED — FOR EXTERNAL APPROVAL':'DRAFT REVIEW — NOT APPROVED'],
    ['Workflow','Head HR prepares and approves in CHRiS; Auditor → General Manager → Chief Accountant approvals and payment processing occur externally.'],
    ['Payment date',`${new Date(data.run.periodMonth).toISOString().slice(0,7)}-15`],
-   ['Net basis','Mid-Month + Bonus + Overtime Pay + Public Holiday Pay (or preserved legacy combined amount) + Previous Month Short Payment − applied overpayment deduction. End of the Month is a reference only.'],
+   ['Net basis','Mid-Month + Bonus + Overtime Pay + Public Holiday Pay (or preserved legacy combined amount) + Previous Month Short Payment + Previous Month Outstanding (separately recorded; no duplication of ledger arrears) − applied overpayment deduction. End of the Month is a reference only.'],
    ['Extra / PH days','End-of-month gross ÷ 26 × days × 1.5 for overtime and × 2 for public holidays. Older manual amounts remain until recalculated.'],
    ['Overpayment control','Previous Month Overpayment is the opening balance. Deduction is capped at available benefit pay; remaining overpayment carries forward. See Reconciliation.'],
    ...(bankExceptions.length?[['Bank details required',`${bankExceptions.length} payable employee(s) require complete bank details. Hold payment for these employees. See Bank Details Required.`]]:[]),
