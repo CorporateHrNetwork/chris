@@ -99,6 +99,8 @@ function ExecuteIntegrated() {
   const { data: runs, loading, error, setError, load } = useLoad("/api/payroll/runs");
   const { data: policyData, loading: policyLoading } = useLoad("/api/payroll/compliance-policy", {});
   const { data: profile } = useLoad("/api/auth/me", {});
+  const { data: manualPayments, load: reloadManualPayments } = useLoad("/api/payroll/runs/manual-payment-status", {});
+  const [paymentEditor, setPaymentEditor] = useState(null);
   const [periodId, setPeriodId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
@@ -166,6 +168,29 @@ function ExecuteIntegrated() {
       await load();
     } catch (err) {
       setError(err.message || "Unable to submit payroll.");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const confirmManualPayment = async () => {
+    if (!paymentEditor?.confirmed) return;
+    try {
+      setBusy(`pay-${paymentEditor.runId}`); setError(""); setMessage("");
+      const response = await apiRequest(`/api/payroll/runs/${paymentEditor.runId}/confirm-manual-payment`, {
+        method: "POST",
+        body: {
+          paymentDate: paymentEditor.paymentDate,
+          reference: paymentEditor.reference.trim(),
+          paidAmount: Number(paymentEditor.paidAmount),
+          confirmActualPayment: true,
+        },
+      });
+      setPaymentEditor(null);
+      await reloadManualPayments();
+      setMessage(response?.message || "External main payroll payment recorded.");
+    } catch (err) {
+      setError(err.message || "Unable to record the main payroll payment.");
     } finally {
       setBusy("");
     }
@@ -273,7 +298,7 @@ function ExecuteIntegrated() {
         <DataTable loading={loading} columns={["Period", "Status", "Statutory", "Employees", "Gross", "Deductions", "Net", "Action"]}>
           {(runs || []).map((run) => (
             <tr key={run.id}>
-              <Td strong>{run.periodCode}</Td><Td><Badge>{run.status}</Badge></Td><Td><Badge>{run.statutoryStatus}</Badge></Td><Td>{run.employeeCount}</Td>
+              <Td strong>{run.periodCode}</Td><Td><Badge>{run.status}</Badge>{manualPayments?.records?.[run.id]?.paymentStatus === "PAID" && <div role="status" style={{fontWeight:700,color:"#267d48"}}>PAID · Externally confirmed</div>}</Td><Td><Badge>{run.statutoryStatus}</Badge></Td><Td>{run.employeeCount}</Td>
               <Td>{money(run.grossTotal)}</Td><Td>{money(run.deductionTotal)}</Td><Td>{money(run.netPreviewTotal)}</Td>
               <Td><div style={buttonRow}>
                 <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
@@ -281,12 +306,28 @@ function ExecuteIntegrated() {
                 {["DRAFT", "REJECTED", "SUBMITTED"].includes(run.status) && <button type="button" style={smallButton} disabled={busy === `draft-export-${run.id}`} onClick={() => exportDraftReview(run)}>{busy === `draft-export-${run.id}` ? "Exporting…" : "Export Draft Review"}</button>}
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `approved-export-${run.id}`} onClick={() => exportApprovedPayout(run)}>{busy === `approved-export-${run.id}` ? "Exporting…" : "Export Approved Payout"}</button>}
-                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}`} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
+                {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}` || !!manualPayments?.records?.[run.id]} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
+                {run.status === "APPROVED" && manualPayments?.canConfirm && !manualPayments?.records?.[run.id] && <button type="button" style={smallButton} disabled={!!busy} onClick={() => setPaymentEditor({runId:run.id,periodCode:run.periodCode,expectedAmount:Number(run.netPreviewTotal),paidAmount:String(run.netPreviewTotal),paymentDate:new Date().toISOString().slice(0,10),reference:"",confirmed:false})}>Mark as Paid Manually</button>}
               </div></Td>
             </tr>
           ))}
         </DataTable>
       </Panel>
+
+      {paymentEditor && <Panel title={`Manual Main Payroll Payment Confirmation · ${paymentEditor.periodCode}`}>
+        <p style={controlNote}>For the assigned Chief Accountant only. Record a completed external payout, not a planned transfer. The full amount must match the approved net total. This creates an audit record without changing salary calculations or initiating payment.</p>
+        <div style={buttonRow}>
+          <label>Actual payment date <input aria-label="Actual main payroll payment date" type="date" value={paymentEditor.paymentDate} onChange={e=>setPaymentEditor(p=>({...p,paymentDate:e.target.value}))}/></label>
+          <label>Actual amount paid (NGN) <input aria-label="Actual main payroll amount paid" type="number" min="0.01" step="0.01" value={paymentEditor.paidAmount} onChange={e=>setPaymentEditor(p=>({...p,paidAmount:e.target.value}))}/></label>
+          <label>Bank / payment batch reference <input aria-label="Main payroll payment reference" value={paymentEditor.reference} maxLength={200} onChange={e=>setPaymentEditor(p=>({...p,reference:e.target.value}))}/></label>
+        </div>
+        <p>Approved net total: <strong>{money(paymentEditor.expectedAmount)}</strong></p>
+        <label><input type="checkbox" checked={paymentEditor.confirmed} onChange={e=>setPaymentEditor(p=>({...p,confirmed:e.target.checked}))}/> I confirm that the full approved payroll was actually paid outside CHRiS.</label>
+        <div style={buttonRow}>
+          <button type="button" style={primaryButton} disabled={!!busy || !paymentEditor.confirmed || !paymentEditor.reference.trim() || !paymentEditor.paymentDate || Number(paymentEditor.paidAmount)!==paymentEditor.expectedAmount} onClick={confirmManualPayment}>Confirm and Mark as Paid</button>
+          <button type="button" style={smallButton} disabled={!!busy} onClick={()=>setPaymentEditor(null)}>Cancel</button>
+        </div>
+      </Panel>}
 
       {lines.length > 0 && <Panel title="Employee Payroll Calculation">
         <div style={branchViewBar}>

@@ -17,11 +17,12 @@ function load(name, dependencies, extra = '') {
 }
 const service = load('zermattLeaveAllowanceService.js', {
   '../config/prisma': {}, './zermattLeaveAllowanceSettingsService': settings,
+  './nigeriaPayrollComplianceService': { ZERMATT_SPLIT_SALARY_STRUCTURE: structure },
 });
 function fixture() {
   const row = { id: 'line', employeeId: 'employee', employeeNumber: '001', employeeName: 'Test Employee',
     hireDate: '2020-10-15', employmentType: 'Full-Time', grossPay: 200000, netPreview: 180000,
-    details: { salaryStructure: { basic: 100000 }, benefitEarnings: [{ code: 'OTHER', amount: 500 }] } };
+    details: { scheduledMonthlyGross: 200000, structuredGross: 200000, salaryStructure: { basic: 100000 }, benefitEarnings: [{ code: 'OTHER', amount: 500 }] } };
   const state = { row, paid: [], enabled: true, status: 'DRAFT', periodStart: '2026-10-01', periodEnd: '2026-10-31', writes: 0 };
   const client = {
     organization: { findUnique: async () => ({ slug: 'zermatt-liquor-limited' }) },

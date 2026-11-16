@@ -27,11 +27,15 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   INSERT INTO payroll_approval_assignments(id,"organizationId",responsibility,"assignedUserId") VALUES('r1','zll','HEAD_HR','hr'),('r2','zll','PAYROLL_AUDITOR','auditor'),('r3','zll','GENERAL_MANAGER','gm'),('r4','zll','CHIEF_ACCOUNTANT','finance'),('r5','other','HEAD_HR','outsider');
   INSERT INTO employees VALUES('e1','zll','Z1','One',NULL,'Employee','Full-Time','2020-01-01','ACTIVE'),('e2','zll','Z2','Two',NULL,'Employee','Full-Time','2020-01-01','ACTIVE'),('e3','zll','Z3','Three',NULL,'Employee','Part-time','2020-01-01','ACTIVE'),('e4','zll','Z4','Four',NULL,'Employee','Full-Time','2026-11-06','ACTIVE');
   INSERT INTO payroll_loans VALUES('unchanged-loan',70000);
+  ALTER TABLE employees ADD COLUMN "exitDate" date;
  `);
  const staff=(await pool.query('SELECT * FROM employees ORDER BY id')).rows;
  const gross=[200000,80000,120000,120000];
  for(let i=0;i<staff.length;i++)await pool.query(`INSERT INTO zermatt_salary_split_preparations(id,"organizationId","employeeId","fullMonthlyGross",currency,"effectiveFrom",reason,"employmentTypeSnapshot","hireDateSnapshot","allocationPreview","createdByUserId") VALUES($1,'zll',$2,$3,'NGN','2026-11-01','Fixture',$4,$5,'{}','hr')`,[`p${i}`,staff[i].id,gross[i],staff[i].employmentType,staff[i].hireDate]);
- function wrap(client) {return {employee:{findMany:async({where})=>(await client.query('SELECT id FROM employees WHERE "organizationId"=$1 AND id=ANY($2::text[]) ORDER BY id',[where.organizationId,where.id.in])).rows.map(e=>({...e,location:{name:'Fixture Branch'},designation:{name:'Fixture Position'},department:{name:'Fixture Department'}}))},$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)]),findFirst:async({where})=>(await client.query(`SELECT record FROM organization_audits WHERE record->>'organizationId'=$1 AND record->>'entityType'=$2 AND record->>'entityId'=$3 AND record->>'action'=$4 ORDER BY ctid DESC LIMIT 1`,[where.organizationId,where.entityType,where.entityId,where.action])).rows[0]?.record||null}};}
+ function wrap(client) {return {employee:{findMany:async({where})=>(await client.query('SELECT id FROM employees WHERE "organizationId"=$1 AND id=ANY($2::text[]) ORDER BY id',[where.organizationId,where.id.in])).rows.map(e=>({...e,location:{name:'Fixture Branch'},designation:{name:'Fixture Position'},department:{name:'Fixture Department'}}))},$queryRawUnsafe:async(s,...a)=>(await client.query(s,a)).rows,$executeRawUnsafe:async(s,...a)=>(await client.query(s,a)).rowCount,organizationAudit:{create:async({data})=>client.query('INSERT INTO organization_audits(record) VALUES($1::jsonb)',[JSON.stringify(data)]),findFirst:async({where})=>(await client.query(`SELECT record FROM organization_audits WHERE record->>'organizationId'=$1 AND record->>'entityType'=$2 AND record->>'entityId'=$3 AND record->>'action'=$4 ORDER BY ctid DESC LIMIT 1`,[where.organizationId,where.entityType,where.entityId,where.action])).rows[0]?.record||null,findMany:async({where})=>(await client.query(
+  "SELECT record FROM organization_audits WHERE record->>'organizationId'=$1 AND record->>'entityType'=$2 AND record->>'action'=$3 ORDER BY ctid",
+  [where.organizationId,where.entityType,where.action]
+ )).rows.map(row=>row.record).filter(record=>where.entityId?.in?.includes(record.entityId)).map(record=>({entityId:record.entityId,reason:record.reason}))}};}
  const db={...wrap(pool),$transaction:async fn=>{const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(wrap(c));await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}};
  assert.equal(await require('../src/services/zermattBenefitPreparationReadiness').storageReady(db),true,'Real preparation columns and unique key must be verified');
  const service=require('../src/services/zermattMidmonthService').createService(db);
@@ -146,9 +150,10 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    const benefitDetail=await benefits.detail('zll','hr',benefitRun);
    assert.ok(benefitDetail.lines.length>0);
    assert.equal(benefitDetail.lines.find(line=>line.employeeId==='new-hire').snapshot.currentEntitlement,24000,'New hire flows from opening salary mapping into the calculated benefit run');
-   assert.ok(!benefitDetail.lines.some(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)),'Zero-entitlement employees do not need a basis or receive guessed support');
+   assert.ok(benefitDetail.lines.filter(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)).every(line=>Number(line.snapshot.currentEntitlement)===0),'Zero-entitlement employees may remain visible for inclusive hire/exit reporting but must not receive guessed support');
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
-   const first=benefitDetail.lines[0];
+   const first=benefitDetail.lines.find(line=>Number(line.snapshot.allocation?.endMonthGross)>0);
+   assert.ok(first,'Fixture must include a benefit employee with a valid End-of-Month gross basis');
    const readMetadata=benefitWrap.employee.findMany;
    let metadataReads=0;
    benefitWrap.employee.findMany=async(args)=>{
@@ -157,29 +162,29 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    };
    await assert.rejects(benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{bonus:9000},'Concurrent source test'),/Source records changed while saving/);
    benefitWrap.employee.findMany=readMetadata;
-   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines.find(line=>line.id===first.id).netPay),Number(first.netPay),'Concurrent source change rolls back benefit edits');
 
    const worked=[{employeeNumber:first.snapshot.employeeNumber,extraDays:2,phDays:1,rowNumber:2}];
    await assert.rejects(benefits.bulkWorkedDays('zll','auditor',benefitRun,worked),/assigned HEAD HR/);
    await assert.rejects(benefits.bulkWorkedDays('zll','hr',benefitRun,[...worked,{...worked[0],rowNumber:3}]),/must appear once/);
    const preview=await benefits.bulkWorkedDays('zll','hr',benefitRun,worked);
-   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines[0].netPay),Number(first.netPay));
+   assert.equal(Number((await benefits.detail('zll','hr',benefitRun)).lines.find(line=>line.id===first.id).netPay),Number(first.netPay));
    await assert.rejects(benefits.bulkWorkedDays('zll','hr',benefitRun,worked,'stale','Fixture import'),/changed after preview/);
    assert.equal((await benefits.bulkWorkedDays('zll','hr',benefitRun,worked,preview.token,'Fixture import')).updated,1);
-   const imported=(await benefits.detail('zll','hr',benefitRun)).lines[0];
+   const imported=(await benefits.detail('zll','hr',benefitRun)).lines.find(line=>line.id===first.id);
    assert.equal(Number(imported.netPay),preview.rows[0].netPay);
    assert.equal(imported.snapshot.benefitInputs.calculateFromDays,true);
    await assert.rejects(benefits.saveBenefitInputs('zll','auditor',benefitRun,first.id,{bonus:1000},'Unauthorized'),/assigned HEAD HR/);
    await benefits.saveBenefitInputs('zll','hr',benefitRun,first.id,{extraDays:2,phDays:1,bonus:1000,overtimePhPay:2500},'Approved benefit extras');
    let changed=await benefits.detail('zll','hr',benefitRun);
-   assert.equal(Number(changed.lines[0].netPay),Number(first.netPay)+3500);
-   assert.equal(changed.register.headers.length,20);
+   assert.equal(Number(changed.lines.find(line=>line.id===first.id).netPay),Number(first.netPay)+3500);
+   assert.equal(changed.register.headers.length,21);
    assert.equal(changed.register.rows[0][1],'Fixture Branch');
    assert.equal(changed.register.rows[0][4],'Fixture Position');
    assert.equal(changed.register.rows[0][5],'Fixture Department');
    await benefits.generate('zll','hr','2026-11');
    changed=await benefits.detail('zll','hr',benefitRun);
-   assert.equal(changed.lines[0].snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
+   assert.equal(changed.lines.find(line=>line.employeeId===first.employeeId).snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
    const correctedLine=changed.lines[0];
    const correctedInputs={...correctedLine.snapshot.benefitInputs,previousShortPayment:2000,previousOverpayment:100000};
    await benefits.saveBenefitInputs('zll','hr',benefitRun,correctedLine.id,correctedInputs,'Correct documented opening benefit balances');

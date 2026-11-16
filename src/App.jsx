@@ -9,18 +9,18 @@ import {
 
 import SessionLoadingScreen from "./components/system/SessionLoadingScreen";
 import MainLayout from "./layouts/MainLayout";
-import CHRiSAutomationCentre from "./pages/CHRiSAutomationCentre";
+const CHRiSAutomationCentre = lazy(() => import("./pages/CHRiSAutomationCentre"));
 import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
 const TransportSupportPreparation = lazy(() => import("./pages/benefits/TransportSupportPreparation"));
 const TransportSupportPayroll = lazy(() => import("./pages/benefits/TransportSupportPayroll"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
-import RecruitmentReports from "./pages/RecruitmentReports";
+const RecruitmentReports = lazy(() => import("./pages/RecruitmentReports"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
 import ConsolidatedComplianceRoute from "./components/auth/ConsolidatedComplianceRoute";
 
-import ESSPortal from "./pages/ESSPortal";
+const ESSPortal = lazy(() => import("./pages/ESSPortal"));
 const Login = lazy(() => import("./pages/Login"));
 const BillingSubscriptions = lazy(() => import("./pages/BillingSubscriptions"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
