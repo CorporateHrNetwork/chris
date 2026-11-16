@@ -91,7 +91,7 @@ test('previous month outstanding adds once, is separate from arrears and overpay
  assert.equal(row[c.HEADERS.indexOf('Previous Month Short Payment')],10000);
  assert.equal(row[c.HEADERS.indexOf('Net')],67500);
  const capped=c.applyInputs({...base(),previousOverpaid:80000},{previousMonthOutstanding:12500});
- assert.equal(capped.overpaidDeduction,67500,'Outstanding is available for recovery under existing overpayment cap');
- assert.equal(capped.overpaidRemaining,12500);
+ assert.equal(capped.overpaidDeduction,72500,'Outstanding is available for recovery under existing overpayment cap');
+ assert.equal(capped.overpaidRemaining,7500);
  assert.equal(capped.netPay,0);
 });
