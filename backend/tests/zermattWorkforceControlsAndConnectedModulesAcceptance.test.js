@@ -69,11 +69,11 @@ test("Leave Allowance UI and settings disclose current Basic and anniversary pay
   const register = read("src/pages/benefits/ZermattLeaveAllowance.jsx");
   const settings = read("src/pages/benefits/ZermattLeaveAllowanceSettings.jsx");
   const service = read("backend/src/services/zermattLeaveAllowanceRegisterService.js");
-  assert.ok(register.includes("Reference Import"));
+  assert.ok(register.includes("Monthly Gross Rate"));
   assert.ok(register.includes("current monthly Basic Salary × 12 × 10%"));
   assert.ok(register.includes("employment anniversary"));
   assert.ok(register.includes("maps Basic × 12 × 10% to the Leave Allowance payroll column"));
-  assert.ok(register.includes("Leave Allowance Reference Import"));
+  assert.ok(!register.includes("Leave Allowance Reference Import"), "Historical imports must not appear in the current salary-based register");
   assert.ok(service.includes('"CURRENT_MONTH_SALARY_FORMULA"'));
   assert.ok(service.includes('"CURRENT_MONTH_GROSS_AND_BASIC"'));
   assert.ok(service.includes('"EMPLOYEE_ENTRY_MONTH_AFTER_QUALIFYING_SERVICE"'));
