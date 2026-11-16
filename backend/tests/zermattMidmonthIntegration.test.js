@@ -184,7 +184,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    assert.equal(changed.register.rows[0][5],'Fixture Department');
    await benefits.generate('zll','hr','2026-11');
    changed=await benefits.detail('zll','hr',benefitRun);
-   assert.equal(changed.lines.find(line=>line.id===first.id).snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
+   assert.equal(changed.lines.find(line=>line.employeeId===first.employeeId).snapshot.benefitInputs.bonus,1000,'Recalculation preserves saved benefit extras');
    const correctedLine=changed.lines[0];
    const correctedInputs={...correctedLine.snapshot.benefitInputs,previousShortPayment:2000,previousOverpayment:100000};
    await benefits.saveBenefitInputs('zll','hr',benefitRun,correctedLine.id,correctedInputs,'Correct documented opening benefit balances');
