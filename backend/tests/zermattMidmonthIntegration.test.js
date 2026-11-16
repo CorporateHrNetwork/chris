@@ -27,6 +27,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
   INSERT INTO payroll_approval_assignments(id,"organizationId",responsibility,"assignedUserId") VALUES('r1','zll','HEAD_HR','hr'),('r2','zll','PAYROLL_AUDITOR','auditor'),('r3','zll','GENERAL_MANAGER','gm'),('r4','zll','CHIEF_ACCOUNTANT','finance'),('r5','other','HEAD_HR','outsider');
   INSERT INTO employees VALUES('e1','zll','Z1','One',NULL,'Employee','Full-Time','2020-01-01','ACTIVE'),('e2','zll','Z2','Two',NULL,'Employee','Full-Time','2020-01-01','ACTIVE'),('e3','zll','Z3','Three',NULL,'Employee','Part-time','2020-01-01','ACTIVE'),('e4','zll','Z4','Four',NULL,'Employee','Full-Time','2026-11-06','ACTIVE');
   INSERT INTO payroll_loans VALUES('unchanged-loan',70000);
+  ALTER TABLE employees ADD COLUMN "exitDate" date;
  `);
  const staff=(await pool.query('SELECT * FROM employees ORDER BY id')).rows;
  const gross=[200000,80000,120000,120000];
