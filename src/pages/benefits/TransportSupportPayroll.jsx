@@ -151,6 +151,7 @@ export default function TransportSupportPayroll() {
   <p role="note">Benefit inputs and payments do not update regular salary rates, payroll runs, payslips, statutory deductions or loan recoveries.</p>
   {error&&<p role="alert" style={{color:'#fca5a5'}}>{error}</p>}{message&&<p role="status">{message}</p>}
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
+  {canPay&&<button type="button" className="transport-primary" onClick={()=>{showWorkspace('transport-run');document.getElementById('transport-payment-confirmation')?.scrollIntoView({behavior:'smooth',block:'start'});}}>Mark TSP as Paid · Record Actual Payments</button>}
   <section id="transport-run" aria-label="Monthly Run" hidden={workspace!=='transport-run'}>
   <h2>Monthly Run · Prepare or Open</h2>
   <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
@@ -249,7 +250,7 @@ export default function TransportSupportPayroll() {
   {detail&&<>
    <p>Previous Month Overpayment shows the opening balance. Recovery is capped at available benefits; the remainder carries forward. End of the Month is a salary reference and is excluded from this benefit Net.</p>
    {canPay&&<>
-    <h3>Actual payment confirmation</h3>
+    <h3 id="transport-payment-confirmation">Mark TSP as Paid Manually · Actual payment confirmation</h3>
     <p>After the external approval and payout process, record the actual payment and reference for every employee. Enter zero with a reason for a missed payment.</p>
     <div style={{overflowX:'auto'}}><table><thead><tr><th>Employee</th><th>Actual Paid</th><th>Payment Reference / Nonpayment Reason</th></tr></thead><tbody>
      {detail.lines.map(l=><tr key={l.id}><td>{l.snapshot.employeeNumber} · {l.snapshot.employeeName}</td><td><input aria-label={`Actual paid ${l.snapshot.employeeNumber}`} type="number" min="0" step="0.01" value={receipts[l.id]?.actualPaid??''} onChange={e=>setReceipts(s=>({...s,[l.id]:{...s[l.id],actualPaid:e.target.value}}))}/></td><td><input aria-label={`Payment reference ${l.snapshot.employeeNumber}`} value={receipts[l.id]?.reference||''} onChange={e=>setReceipts(s=>({...s,[l.id]:{...s[l.id],reference:e.target.value}}))}/></td></tr>)}
