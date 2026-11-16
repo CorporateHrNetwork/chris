@@ -150,7 +150,7 @@ test('isolated PostgreSQL: activation, automatic salary allocation, approval, re
    const benefitDetail=await benefits.detail('zll','hr',benefitRun);
    assert.ok(benefitDetail.lines.length>0);
    assert.equal(benefitDetail.lines.find(line=>line.employeeId==='new-hire').snapshot.currentEntitlement,24000,'New hire flows from opening salary mapping into the calculated benefit run');
-   assert.ok(!benefitDetail.lines.some(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)),'Zero-entitlement employees do not need a basis or receive guessed support');
+   assert.ok(benefitDetail.lines.filter(line=>['benefit-exempt','benefit-future'].includes(line.employeeId)).every(line=>Number(line.snapshot.currentEntitlement)===0),'Zero-entitlement employees may remain visible for inclusive hire/exit reporting but must not receive guessed support');
    assert.ok(benefitDetail.lines.every(line=>line.snapshot.loanRecovery===0 && line.snapshot.statutoryDeductions===0));
    const first=benefitDetail.lines[0];
    const readMetadata=benefitWrap.employee.findMany;
