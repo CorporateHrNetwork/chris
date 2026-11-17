@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
 const { loadPeriodVariableItems, calculateVariableValue } = require("./zermattVariablePayrollService");
+const { statutoryExemption: zermattEmployeeStatutoryExemption } = require("./zermattEmployeeEntitlementPolicy");
 
 const ZERMATT_SPLIT_SALARY_STRUCTURE = { basic: 57, housing: 11, transport: 10, meal: 9, medical: 8, utility: 5 };
 
@@ -966,13 +967,21 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         source: "ZLL_FULL_SALARY_SPLIT_POLICY",
       });
     }
+    const employeeOverride = zermattEmployeeStatutoryExemption({
+      organizationSlug: organization.slug,
+      employeeNumber: employee.employeeNumber,
+      employmentType: employee.employmentType,
+      asOf: period.periodEnd,
+    });
+    if (employeeOverride) Object.assign(employmentTypeExemption, employeeOverride);
     const employeePension = employmentTypeExemption.pensionExempt
       ? 0
       : percent(pensionableBase, policy.pensionEmployeeRate);
-    const employerPension = employmentTypeExemption.pensionExempt
+    const employerPension = (employmentTypeExemption.employerPensionExempt ?? employmentTypeExemption.pensionExempt)
       ? 0
       : percent(pensionableBase, policy.pensionEmployerRate);
-    const nhfEmployee = splitAllocation && employmentTypeExemption.exempt ? 0 : nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
+    const nhfEmployee = (employmentTypeExemption.nhfExempt === true || (splitAllocation && employmentTypeExemption.exempt))
+      ? 0 : nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
 
     const recurringTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && row.recurring).reduce((sum, row) => sum + row.value, 0));
     const oneTimeTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && !row.recurring).reduce((sum, row) => sum + row.value, 0));
