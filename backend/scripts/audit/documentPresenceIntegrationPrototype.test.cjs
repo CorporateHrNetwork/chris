@@ -66,3 +66,19 @@ test('rejects oversized metadata result',async t=>{
   await assert.rejects(runDocumentPresenceDiagnostic({auth:x.auth,prisma:x.prisma,
     enabled:true,trustedRoot:x.root}),{code:'DOCUMENT_DIAGNOSTIC_DISABLED'});
 });
+
+test('existing engineering escalation permission is insufficient for document audit',async t=>{
+  const x=setup(t);
+  const escalationOnly={...x.auth,permissions:['support.engineering.escalate']};
+  await assert.rejects(runDocumentPresenceDiagnostic({
+    auth:escalationOnly,prisma:x.prisma,enabled:true,trustedRoot:x.root
+  }),{code:'DOCUMENT_DIAGNOSTIC_DISABLED'});
+  assert.equal(x.calls.length,0);
+});
+test('untrusted origin cannot supply a relative upload root',async t=>{
+  const x=setup(t);
+  await assert.rejects(runDocumentPresenceDiagnostic({
+    auth:x.auth,prisma:x.prisma,enabled:true,trustedRoot:'uploads/onboarding-documents'
+  }),{code:'DOCUMENT_DIAGNOSTIC_DISABLED'});
+  assert.equal(x.calls.length,0);
+});
