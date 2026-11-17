@@ -1,15 +1,18 @@
 'use strict';
-// Offline, read-only document presence audit. Not mounted as an API route.
-// A future caller MUST independently authorize platform engineering access and tenant scope.
-// This module does not connect to PostgreSQL or read document file contents.
+// CHRiS DR: isolated document-metadata diagnostic, NOT an API endpoint.
+// No DB queries, authorization claims, file content reads, writes, or logging.
+// A future server integration MUST independently establish caller identity,
+// platform role, tenant scope and a disabled-by-default feature flag.
 const fs = require('node:fs');
 const path = require('node:path');
 
 function auditDocumentPresence(records, trustedRoot) {
-  if (!Array.isArray(records) || typeof trustedRoot !== 'string' || !path.isAbsolute(trustedRoot))
-    throw new TypeError('Expected a records array and absolute trusted root');
+  if (!Array.isArray(records) || records.length > 10000 ||
+      typeof trustedRoot !== 'string' || !path.isAbsolute(trustedRoot)) {
+    throw new TypeError('Expected up to 10000 records and an absolute trusted root');
+  }
   const root = path.resolve(trustedRoot);
-  const counts = { total: 0, present: 0, missing: 0, invalidPath: 0, errors: 0 };
+  const counts = {total: 0, present: 0, missing: 0, invalidPath: 0, errors: 0};
   for (const record of records) {
     counts.total++;
     const input = record && record.storagePath;
@@ -19,23 +22,30 @@ function auditDocumentPresence(records, trustedRoot) {
     }
     const target = path.resolve(input);
     const relative = path.relative(root, target);
-    if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+    if (!relative || relative === '..' || relative.startsWith('..' + path.sep) ||
+        path.isAbsolute(relative)) {
       counts.invalidPath++;
       continue;
     }
     try {
+      // lstat each child component; do not follow symlinks in the upload tree.
+      // Trusted root itself must be configured from a server-owned constant,
+      // never accepted from a client or a database document record.
+      if (!fs.lstatSync(root).isDirectory()) {counts.invalidPath++; continue;}
       let current = root;
-      if (fs.lstatSync(root).isSymbolicLink()) { counts.invalidPath++; continue; }
-      let bad = false;
-      const components = relative.split(path.sep);
-      for (const [index, part] of components.entries()) {
+      let invalid = false;
+      const parts = relative.split(path.sep);
+      for (const [i, part] of parts.entries()) {
         current = path.join(current, part);
         const stat = fs.lstatSync(current);
         if (stat.isSymbolicLink() ||
-          (index < components.length - 1 && !stat.isDirectory()) ||
-          (index === components.length - 1 && !stat.isFile())) { bad = true; break; }
+            (i < parts.length - 1 && !stat.isDirectory()) ||
+            (i === parts.length - 1 && !stat.isFile())) {
+          invalid = true;
+          break;
+        }
       }
-      if (bad) counts.invalidPath++;
+      if (invalid) counts.invalidPath++;
       else counts.present++;
     } catch (error) {
       if (error.code === 'ENOENT' || error.code === 'ENOTDIR') counts.missing++;
@@ -45,24 +55,18 @@ function auditDocumentPresence(records, trustedRoot) {
   return counts;
 }
 
-// Defense in depth for future integration. This check is NOT a replacement for requireAuth
-// or permission middleware. Caller must supply already authenticated and verified values.
-function auditAuthorizedDocumentPresence({ enabled, actor, organizationId, records, trustedRoot }) {
-  if (enabled !== true || actor?.isPlatformEngineer !== true ||
-      typeof organizationId !== 'string' || !organizationId ||
-      actor?.authorizedOrganizationId !== organizationId) {
-    const err = new Error('Document audit unavailable');
-    err.code = 'DOCUMENT_AUDIT_FORBIDDEN';
-    throw err;
-  }
-  if (!Array.isArray(records) || records.some(
-    record => !record || record.organizationId !== organizationId
-  )) {
-    const err = new Error('Document audit scope mismatch');
-    err.code = 'DOCUMENT_AUDIT_SCOPE_MISMATCH';
-    throw err;
+// Defense-in-depth for tenant-filtered input; NOT user authorization.
+// Requires verified tenant-scoped records supplied by an authorized server caller.
+function auditTenantScopedRecords(records, organizationId, trustedRoot) {
+  if (typeof organizationId !== 'string' || !organizationId.trim() ||
+      !Array.isArray(records) || records.some(
+        r => !r || r.organizationId !== organizationId
+      )) {
+    const error = new Error('Document audit tenant scope mismatch');
+    error.code = 'DOCUMENT_AUDIT_SCOPE_MISMATCH';
+    throw error;
   }
   return auditDocumentPresence(records, trustedRoot);
 }
 
-module.exports = { auditDocumentPresence, auditAuthorizedDocumentPresence };
+module.exports = {auditDocumentPresence, auditTenantScopedRecords};
