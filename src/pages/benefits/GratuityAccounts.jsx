@@ -51,10 +51,10 @@ export default function GratuityAccounts() {
   }), [accounts]);
 
   function exportCsv() {
-    const header = ["Employee Number","Employee Name","Employment Type","Status","Branch","Department","Designation","Service Start","Calculation Date","Service Days","Equivalent Months","Gross Monthly Salary","Factor %","EoSB Value","Existing Loan Exposure","Available Loan Collateral","Collateral Mode","Calculation Ready"];
+    const header = ["Employee Number","Employee Name","Employment Type","Status","Branch","Department","Designation","Service Start","Calculation Date","Service Days","Equivalent Months","Gross Monthly Salary","Salary Basis","Qualifying Service Type","Factor %","EoSB Value","Existing Loan Exposure","Available Loan Collateral","Collateral Mode","Calculation Ready"];
     const rows = visible.map((row) => [
       row.employee.employeeNumber,row.employee.name,row.employee.employmentType,row.employee.status,row.employee.location,row.employee.department,row.employee.designation,
-      row.service.serviceStartDate,row.service.calculationDate,row.service.serviceDays,row.service.equivalentMonths,row.salary?.grossMonthlySalary ?? "",row.policy.factorPercent,
+      row.service.serviceStartDate,row.service.calculationDate,row.service.serviceDays,row.service.equivalentMonths,row.salary?.grossMonthlySalary ?? "",row.salary?.source || "",row.eosb.historicalFullTimeService ? "HISTORICAL_FULL_TIME" : "CURRENT",row.policy.factorPercent,
       row.eosb.accruedValue,row.loanCollateral.existingLoanExposure,row.loanCollateral.availableCollateral,row.loanCollateral.mode,row.eosb.calculationReady ? "YES" : "NO",
     ]);
     const content = "\uFEFF" + [header, ...rows].map((row) => row.map(csv).join(",")).join("\r\n");
@@ -102,7 +102,7 @@ export default function GratuityAccounts() {
                     <td><strong>{row.employee.name}</strong><br/><small>{row.employee.employeeNumber} · {row.employee.employmentType || "—"}<br/>{row.employee.location || "—"}</small></td>
                     <td>{row.service.serviceDays} days<br/><small>{row.service.equivalentMonths} fixed-month equivalents</small></td>
                     <td>{row.salary ? money(row.salary.grossMonthlySalary) : <span style={warning}>Missing rate</span>}</td>
-                    <td><strong>{money(row.eosb.accruedValue)}</strong><br/><small>{row.eosb.eligible ? "Eligible" : "Not eligible"}</small></td>
+                    <td><strong>{money(row.eosb.accruedValue)}</strong><br/><small>{row.eosb.historicalFullTimeService ? "Historical full-time entitlement" : row.eosb.eligible ? "Eligible" : "Not eligible"}</small></td>
                     <td>{money(row.loanCollateral.availableCollateral)}<br/><small>Exposure {money(row.loanCollateral.existingLoanExposure)}</small></td>
                     <td><span style={badge}>{row.loanCollateral.mode === "EOSB" ? "EoSB-backed" : "Surety required"}</span></td>
                     <td><button type="button" style={linkButton} onClick={() => setSelected(row)}>Statement</button></td>
@@ -138,6 +138,8 @@ function Statement({ account, onClose }) {
           <Item label="Actual Service Days" value={account.service.serviceDays} />
           <Item label="Fixed-Month Equivalent" value={account.service.equivalentMonths} />
           <Item label="Gross Monthly Salary" value={account.salary ? money(account.salary.grossMonthlySalary) : "Missing effective salary rate"} />
+          <Item label="Salary Basis" value={account.eosb.historicalFullTimeService ? "Approved historical salary at full-time conversion" : "Effective-dated payroll salary"} />
+          <Item label="Qualifying Service Type" value={account.eosb.historicalFullTimeService ? "Historical full-time service only" : "Current employment classification"} />
           <Item label="Gratuity Factor" value="7.5%" />
           <Item label="Accrued EoSB" value={money(account.eosb.accruedValue)} />
           <Item label="Existing Loan Exposure" value={money(account.loanCollateral.existingLoanExposure)} />

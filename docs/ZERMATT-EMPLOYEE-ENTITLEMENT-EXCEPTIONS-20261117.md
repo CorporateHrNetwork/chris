@@ -38,3 +38,14 @@
 - No database write, payroll recalculation, migration, merge or deployment.
 - Current implementation uses named employee numbers in a dedicated Zermatt exception module; future configuration should move this to tenant-scoped, audited effective-dated records.
 - Supabase project reported multiple tables with RLS disabled; resolve separately with an access-policy plan, not by blindly enabling RLS.
+
+## Additional release-gate verification (17 November)
+- 12 selected exemption/EoSB/exit-notice tests passed after installing locked backend dependencies and generating Prisma client in the isolated branch.
+- Frontend production build passed (Vite: 774 modules).
+- Head HR Gratuity Accounts source now labels historical full-time service and salary basis in the register, printable statement and CSV export. Signed-in verification remains pending.
+- Read-only Zermatt database check: ZLL000046 and ZLL000053 have zero 2026 leave allocations and zero 2026 leave balances. A current employment-type change alone cannot provision the ledger for ESS.
+- Existing targeted Zermatt leave provisioning service exists, but its execution after classification update must verify employment level, applicable leave policy and the 17 November effective date. It must not overwrite approved leave.
+- The live payroll line trigger currently checks employment-type-based exemptions; additional draft payroll-line and obligation reconciliation must verify the employee-specific rule for full-time records.
+- Some unrelated legacy leave acceptance assertions expect older literal source text and fail in this branch. These are not evidence of passed leave integration and need independent baseline triage.
+- November payroll timing: exemption decision based on period-end date means an effective date of 17 November could zero employee deductions for the entire November payroll period. Confirm partial-month treatment before release.
+- No production database writes, migrations, historical payroll recalculations, deployment or payment approvals occurred during these checks.
