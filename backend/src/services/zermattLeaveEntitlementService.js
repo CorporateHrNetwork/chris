@@ -501,6 +501,17 @@ async function provisionEmployeeWithConfigured({
       select: { id: true, openingBalance: true, used: true },
     });
 
+    if (conversion && existingBalance && Number(existingBalance.openingBalance) !== Number(entitlement)) {
+      const error = new Error("APPROVED_CONVERSION_EXISTING_LEAVE_BALANCE_REVIEW_REQUIRED");
+      error.details = {
+        ...conversion,
+        policyCode: item.policy.code,
+        existingOpeningBalance: Number(existingBalance.openingBalance),
+        approvedEntitlement: Number(entitlement),
+      };
+      throw error;
+    }
+
     if (
       item.definition.key === "ANNUAL" &&
       existingBalance &&
@@ -581,6 +592,27 @@ async function provisionEmployeeWithConfigured({
           createdByUserId: actorUserId || null,
         },
       });
+      if (conversion) {
+        await tx.organizationAudit.create({
+          data: {
+            organizationId,
+            actorUserId: actorUserId || null,
+            entityType: "LeaveEntitlementAllocation",
+            entityId: allocation.id,
+            action: "APPROVED_FULL_TIME_CONVERSION_LEAVE_ALLOCATED",
+            previousValue: latest
+              ? { allocationId: latest.id, entitlement: Number(latest.allocatedEntitlement) }
+              : null,
+            newValue: {
+              employeeNumber, leaveYear, policyCode: item.policy.code,
+              levelNumber, allocatedEntitlement: Number(entitlement),
+              effectiveFrom: conversion.fullTimeEffectiveFrom, proration: "NONE",
+              leaveBalanceId: balance.id,
+            },
+            reason: conversion.reason,
+          },
+        });
+      }
     }
 
     allocations.push({

@@ -90,3 +90,9 @@
 - Diagnostic schema-only pg_dump against the fictional staging database passed. A full custom-format dump to a random temporary file passed; pg_restore list check passed; the diagnostic dump was deleted.
 - A manual run of the existing encrypted off-site fictional staging backup script succeeded and published marker cca-staging-backup-success-2026-11-17-165040-495e02e6.json; process exited 0. Earlier scheduled task result remains an unresolved unattended-run check until its next scheduled execution.
 - Fictional staging backup success is not evidence of a tested, recoverable Zermatt production Supabase backup. Keep that release blocker open.
+## Simulated full-leave provisioning runtime validation (17 Nov 2026)
+- Tested real `provisionZermattEmployeeLeaveProfile` with injected nonproduction transaction fixtures for ZLL000046/L2/16 days and ZLL000053/L1/14 days.
+- Tests confirm 2026 opening balance and effective-dated allocation, no proration, idempotent repeat calls without duplicate allocation or audit, and fail-closed behavior for Uchenna missing L1 override.
+- New guard rejects conflicting preexisting opening balances rather than overwriting them; existing used/pending ledger fields remain unchanged.
+- Conversion allocation now writes a targeted `organization_audits` event with leave policy, employee number, effective date, level, full entitlement, and reason.
+- 19 selected backend tests passed after these refinements. This is simulated runtime verification, not authenticated ESS or live production verification.
