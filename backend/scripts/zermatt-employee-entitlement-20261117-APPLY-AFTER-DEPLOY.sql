@@ -1,7 +1,10 @@
 -- HOLD: Do not execute before application code, payroll, ESS and leave checks are verified.
 -- Zermatt Live employee classification change: effective 17 November 2026.
 -- This script is intentionally separate from automatic Prisma migrations.
--- MUST first confirm an off-site backup and an approved compliance basis.
+-- HR confirmed in chat: statutory deduction exemptions approved by Zermatt on 17 November 2026.
+-- Full-Time employment classification effective 17 November 2026.
+-- PAYE/employee pension/NHF exemption applies to the full November 2026 payroll period from 1 November.
+-- MUST first confirm an off-site backup, payroll trigger consistency and leave provisioning readiness.
 BEGIN;
 
 DO $$
@@ -32,6 +35,8 @@ BEGIN
     jsonb_build_object('employmentType',e."employmentType"),
     jsonb_build_object('employmentType','Full-Time','effectiveFrom','2026-11-17',
       'statutoryDeductionExempt',true,
+      'statutoryExemptionEffectiveFrom','2026-11-01',
+      'statutoryExemptionAuthorizedBy','ZERMATT_HR_APPROVAL',
       'employeeNumber',e."employeeNumber"),
     'Authorized HR instruction: full-time employment and full-time benefits, with separately recorded statutory exemption',
     now()

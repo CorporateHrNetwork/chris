@@ -8,7 +8,10 @@ const HISTORICAL_EOSB = Object.freeze({
   ZLL000057: Object.freeze({ startDate: "2021-04-22", endDate: "2026-06-30", monthlyGross: 81956 }),
   ZLL000178: Object.freeze({ startDate: "2025-01-22", endDate: "2026-05-14", monthlyGross: 70560 }),
 });
-const EFFECTIVE_FROM = "2026-11-17";
+// The HR-approved deduction exemption covers the entire November payroll month.
+// Employee Full-Time classification separately takes effect from 17 November 2026.
+const EFFECTIVE_FROM = "2026-11-01";
+const FULL_TIME_CLASSIFICATION_FROM = "2026-11-17";
 
 function dateOnly(value) {
   if (!value) return null;
@@ -20,10 +23,13 @@ function statutoryExemption({ organizationSlug, employeeNumber, employmentType, 
   const permitted = organizationSlug === ZERMATT_SLUG
     && FULL_TIME_STATUTORY_EXEMPTIONS.has(String(employeeNumber || "").toUpperCase())
     && String(employmentType || "").replace(/[_-]/g, " ").trim().toUpperCase() === "FULL TIME"
-    && (dateOnly(asOf) || "9999-12-31") >= EFFECTIVE_FROM;
+    && Boolean(dateOnly(asOf))
+    && dateOnly(asOf) >= EFFECTIVE_FROM;
   return permitted
     ? { exempt: true, payeExempt: true, pensionExempt: true, employerPensionExempt: false, nhfExempt: true,
-        source: "ZERMATT_APPROVED_EMPLOYEE_EXCEPTION", reason: "Employee-specific full-time statutory exemption." }
+        source: "ZERMATT_APPROVED_EMPLOYEE_EXCEPTION", exemptionEffectiveFrom: EFFECTIVE_FROM,
+        employmentClassificationEffectiveFrom: FULL_TIME_CLASSIFICATION_FROM,
+        reason: "Approved full-November 2026 employee statutory deduction exemption for named full-time staff." }
     : null;
 }
 
@@ -37,4 +43,4 @@ function historicalEosb({ organizationSlug, employeeNumber, asOf }) {
   return { ...rule, endDate, source: "ZERMATT_APPROVED_HISTORICAL_FULL_TIME_SERVICE" };
 }
 
-module.exports = { ZERMATT_SLUG, EFFECTIVE_FROM, statutoryExemption, historicalEosb };
+module.exports = { ZERMATT_SLUG, EFFECTIVE_FROM, FULL_TIME_CLASSIFICATION_FROM, statutoryExemption, historicalEosb };

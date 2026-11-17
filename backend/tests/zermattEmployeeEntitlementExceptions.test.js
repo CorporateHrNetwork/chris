@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { statutoryExemption, historicalEosb } = require("../src/services/zermattEmployeeEntitlementPolicy");
 
-test("only the two named full-time employees receive Zermatt statutory exemptions from 17 November 2026", () => {
+test("only the two named full-time employees receive Zermatt statutory exemptions for all of November 2026", () => {
   for (const employeeNumber of ["ZLL000046", "ZLL000053"]) {
     const rule = statutoryExemption({ organizationSlug: "zermatt-liquor-limited", employeeNumber, employmentType: "Full-Time", asOf: "2026-11-30" });
     assert.equal(rule.exempt, true);
@@ -11,6 +11,10 @@ test("only the two named full-time employees receive Zermatt statutory exemption
     assert.equal(rule.pensionExempt, true);
     assert.equal(rule.nhfExempt, true);
     assert.equal(rule.employerPensionExempt, false);
+    assert.equal(rule.exemptionEffectiveFrom, "2026-11-01");
+    assert.equal(rule.employmentClassificationEffectiveFrom, "2026-11-17");
+    assert.equal(statutoryExemption({ organizationSlug: "zermatt-liquor-limited", employeeNumber, employmentType: "Full-Time", asOf: "2026-11-01" })?.exempt, true);
+    assert.equal(statutoryExemption({ organizationSlug: "zermatt-liquor-limited", employeeNumber, employmentType: "Full-Time" }), null);
     assert.equal(statutoryExemption({ organizationSlug: "zermatt-liquor-limited", employeeNumber, employmentType: "Part-time", asOf: "2026-11-30" }), null);
     assert.equal(statutoryExemption({ organizationSlug: "zermatt-liquor-limited", employeeNumber, employmentType: "Full-Time", asOf: "2026-10-31" }), null);
     assert.equal(statutoryExemption({ organizationSlug: "another-company", employeeNumber, employmentType: "Full-Time", asOf: "2026-11-30" }), null);

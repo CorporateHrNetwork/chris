@@ -49,3 +49,9 @@
 - Some unrelated legacy leave acceptance assertions expect older literal source text and fail in this branch. These are not evidence of passed leave integration and need independent baseline triage.
 - November payroll timing: exemption decision based on period-end date means an effective date of 17 November could zero employee deductions for the entire November payroll period. Confirm partial-month treatment before release.
 - No production database writes, migrations, historical payroll recalculations, deployment or payment approvals occurred during these checks.
+## HR decision recorded 17 November 2026
+- Zermatt confirms its review and approval of the named employee statutory deductions exemption.
+- Exemption applies to the ENTIRE November 2026 payroll period (from 1 November); Full-Time employment classification begins 17 November 2026.
+- Preserve scheduled salary amounts and approved payroll runs. Do not infer that a full-November statutory exemption also authorizes changing attendance, pay proration or full-month salary treatment.
+- HR has not authorized a new payment, payroll approval, release of funds, or rewriting any approved payroll.
+- Previous blocker asking which November exemption treatment applies is resolved. Remaining release checks include recoverable backup, live draft-calculation and trigger reconciliation, targeted 2026 leave provisioning, ESS confirmation, and pre-deploy regression.
