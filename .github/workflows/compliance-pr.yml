@@ -123,6 +123,16 @@ jobs:
       - name: Verify ESS statutory records and employee isolation
         run: node --test tests/essStatutoryRecords.test.js
 
+      - name: Validate Zermatt approved employee entitlement conversions
+        env:
+          DATABASE_URL: postgresql://test:test@127.0.0.1:5432/chris_test
+        run: |
+          node --test \
+            tests/zermattEmployeeEntitlementExceptions.test.js \
+            tests/zermattLiveEntitlementIntegration.test.js \
+            tests/zermattFullLeaveConversionRuntime.test.js \
+            tests/exitSettlementNoticeCalculation.test.js
+
       - name: Run focused payroll and exit regressions
         run: |
           node tests/payrollIntegratedLiabilitiesPayslipsStatutoryAcceptance.test.js
