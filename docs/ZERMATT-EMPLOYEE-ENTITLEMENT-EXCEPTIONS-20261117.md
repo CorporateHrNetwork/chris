@@ -102,3 +102,7 @@
 - Re-ran the exact payroll employee upload templates / worked days / reports / workflow / new hire / loan / deactivation / final payroll / branch accountant selection from `.github/workflows/compliance-pr.yml`: **60/60 passed** locally.
 - Additional broader leave selection **22/22 passed**, and payroll/statutory/TSP/EoSB selection **22/22 passed**, in addition to dedicated full-leave conversion and EoSB-focused tests.
 - Full GitHub PR compliance job and production backup/Head HR/ESS checks must pass independently before release.
+## Second GitHub CI regression fixture correction
+- The post-fix GitHub compliance workflow passed upload templates, migration rehearsal, compliance safeguards, client-readiness, billing, and ESS isolation, but stopped at focused payroll and exit regressions because the VM harness in `payrollNoteEngine.test.js` lacked the new employee policy dependency.
+- Updated the isolated test harness to load the policy module explicitly without changing production payroll code. `payrollNoteWorkflow.test.js` + `payrollNoteEngine.test.js`: **8/8 passed** locally.
+- CI must be rerun and complete the remaining sequential focused payroll and exit gates before release readiness can be claimed.
