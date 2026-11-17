@@ -52,6 +52,8 @@ try {
   middleware = require('../../src/middleware/authMiddleware.js');
 } finally { Module._load = originalLoad; }
 const {runDocumentPresenceDiagnostic} = require('./documentPresenceIntegrationPrototype.cjs');
+// Only fictional tests enable the server-owned audit gate in this isolated process.
+process.env.CHRIS_DOCUMENT_PRESENCE_AUDIT_ENABLED = 'true';
 
 function response() {
  const r={statusCode:200, body:null, status(code){this.statusCode=code;return this;},
