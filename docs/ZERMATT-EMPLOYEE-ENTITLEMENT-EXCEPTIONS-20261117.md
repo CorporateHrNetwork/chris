@@ -75,3 +75,11 @@
 - Added direct cases and source-order verification: 13 selected production-branch tests passed, JS syntax check passed.
 - Fictional local CCA staging PostgreSQL responds on 127.0.0.1:55434. This does not resolve the 17 Nov staging pg_dump exit 1. A separate production recovery checkpoint is still required.
 - Explicitly avoid using CCA fictional staging backup success as evidence that Zermatt Supabase production data is backed up.
+## Follow-up diagnostic and read-only leave conversion assessment (17 Nov 2026)
+- Verified ZLL000046 (Kitchen Team Leader / Head Chef) and ZLL000053 (Facilities Maintenance Officer) map to active V3 L2 employment level (internal level 202), carrying 16 calendar days annual leave per V3 configuration.
+- Neither employee has any 2026 leave requests, leave allocations or leave balance entries. Active leave policy version 3 remains in force.
+- Inclusive period 17 Nov–31 Dec 2026 is 45 calendar days in a 365-day year; straight-line proportional illustration: 16 x 45/365 = 1.9726 leave days, nearest 0.5 = 2 days, floor = 1 day. These are NOT authorized allocations, and the existing tenant leave policy must govern proration/rounding. The new pure helper returns PREVIEW_ONLY_POLICY_DECISION_REQUIRED without writing data.
+- Added two preview tests. Combined selected test run: 15/15 passed.
+- Diagnostic schema-only pg_dump against the fictional staging database passed. A full custom-format dump to a random temporary file passed; pg_restore list check passed; the diagnostic dump was deleted.
+- A manual run of the existing encrypted off-site fictional staging backup script succeeded and published marker cca-staging-backup-success-2026-11-17-165040-495e02e6.json; process exited 0. Earlier scheduled task result remains an unresolved unattended-run check until its next scheduled execution.
+- Fictional staging backup success is not evidence of a tested, recoverable Zermatt production Supabase backup. Keep that release blocker open.
