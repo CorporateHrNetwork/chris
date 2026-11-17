@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {runDocumentPresenceDiagnostic} = require('./documentPresenceIntegrationPrototype.cjs');
+// Explicit test-only environment gate. No application service is started.
+process.env.CHRIS_DOCUMENT_PRESENCE_AUDIT_ENABLED = 'true';
 function setup(t) {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'chris-integration-fictional-'));
   t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -81,4 +83,14 @@ test('untrusted origin cannot supply a relative upload root',async t=>{
     auth:x.auth,prisma:x.prisma,enabled:true,trustedRoot:'uploads/onboarding-documents'
   }),{code:'DOCUMENT_DIAGNOSTIC_DISABLED'});
   assert.equal(x.calls.length,0);
+});
+
+test('server-owned environment gate denies enabled invocation when OFF',async t=>{
+ const x=setup(t);
+ const old=process.env.CHRIS_DOCUMENT_PRESENCE_AUDIT_ENABLED;
+ try {
+   process.env.CHRIS_DOCUMENT_PRESENCE_AUDIT_ENABLED='false';
+   await assert.rejects(runDocumentPresenceDiagnostic({auth:x.auth,prisma:x.prisma,enabled:true,trustedRoot:x.root}),{code:'DOCUMENT_DIAGNOSTIC_DISABLED'});
+   assert.equal(x.calls.length,0);
+ } finally { process.env.CHRIS_DOCUMENT_PRESENCE_AUDIT_ENABLED=old; }
 });
