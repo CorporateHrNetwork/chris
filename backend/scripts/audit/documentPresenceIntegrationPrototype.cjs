@@ -17,7 +17,9 @@ function refuse() {
 }
 
 function authorize(auth, enabled) {
-  if (enabled !== true || !auth ||
+  // Two independent gates: an approved server-owned environment flag and explicit invocation.
+  if (process.env.CHRIS_DOCUMENT_PRESENCE_AUDIT_ENABLED !== 'true' ||
+      enabled !== true || !auth ||
       auth.organization?.slug !== PLATFORM ||
       !Array.isArray(auth.permissions) ||
       !auth.permissions.includes(PERMISSION) ||
