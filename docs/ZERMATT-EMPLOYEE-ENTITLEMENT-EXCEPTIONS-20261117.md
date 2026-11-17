@@ -55,3 +55,7 @@
 - Preserve scheduled salary amounts and approved payroll runs. Do not infer that a full-November statutory exemption also authorizes changing attendance, pay proration or full-month salary treatment.
 - HR has not authorized a new payment, payroll approval, release of funds, or rewriting any approved payroll.
 - Previous blocker asking which November exemption treatment applies is resolved. Remaining release checks include recoverable backup, live draft-calculation and trigger reconciliation, targeted 2026 leave provisioning, ESS confirmation, and pre-deploy regression.
+## Verified active leave policy and provisioning caution
+- Live read-only check identified Zermatt v3 active leave policies (from 2026-09-23): standard annual leave, compassionate leave, sick leave, unpaid/casual leave and gender-restricted maternity leave; annual base policy row lists 30 days, but employee-level entitlement overrides may differ.
+- Existing targeted Zermatt leave provisioning writes openingBalance directly to annual leave. A 17 November conversion requires an explicit effective-dated entitlement calculation and preservation of prior leave decisions rather than blindly issuing the full-year opening balance.
+- Do not present these workers as having leave balances in ESS until an approved conversion proration/entitlement treatment is calculated and persisted in the main ledger.
