@@ -12,6 +12,13 @@ function auditDocumentPresence(records, trustedRoot) {
     throw new TypeError('Expected up to 10000 records and an absolute trusted root');
   }
   const root = path.resolve(trustedRoot);
+  // A missing or symlinked audit root is an infrastructure failure, NOT proof of missing documents.
+  let rootStat;
+  try { rootStat = fs.lstatSync(root); }
+  catch { throw new Error('DOCUMENT_AUDIT_ROOT_UNAVAILABLE'); }
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+    throw new Error('DOCUMENT_AUDIT_ROOT_INVALID');
+  }
   const counts = {total: 0, present: 0, missing: 0, invalidPath: 0, errors: 0};
   for (const record of records) {
     counts.total++;
