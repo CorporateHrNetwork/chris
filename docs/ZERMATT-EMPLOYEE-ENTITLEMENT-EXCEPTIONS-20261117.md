@@ -1,5 +1,12 @@
 # Zermatt employee entitlements — 17 November 2026
 
+## FINAL HR INSTRUCTION — 17 November 2026 (supersedes earlier prorated leave preview)
+- ZLL000046 Kpokou Michael: Full-Time from 17 Nov 2026, remains L2 (V3 internal 202), **full 16 calendar days annual leave for 2026**.
+- ZLL000053 Uchenna Michael Ubagwu (Michael Uchenna): Full-Time from 17 Nov 2026, employee-specific assignment to **L1 (V3 internal 201)** effective 17 Nov, **full 14 calendar days annual leave for 2026**.
+- NO proration of the two employees' 2026 annual leave. The earlier 1.9726-day proportional illustration is explicitly rejected and superseded; the prior conversion preview helper/tests are removed from this PR.
+- Preserve the Facilities Maintenance Officer designation and its L2 default for unrelated employees; use an audited individual override for Uchenna.
+- Existing 2026 leave balances/allocations/requests for these two were confirmed absent. After the controlled classification and individual L1 override, targeted Zermatt provisioning may create **full** 16/14-day annual balance and effective-dated 2026 allocation. It must not overwrite any existing leave balances or approved requests.
+- November 2026 PAYE, employee pension and NHF exemption remains separately approved for the full month for both employees. No approvals or payments are created by this change.
 ## Authorized requested outcomes
 - ZLL000046 — Kpokou Michael: Full-Time from 2026-11-17, employee deductions exempt; all applicable full-time leave, allowance, payroll, TSP and EoSB entitlements.
 - ZLL000053 — Uchenna Michael Ubagwu: same treatment.

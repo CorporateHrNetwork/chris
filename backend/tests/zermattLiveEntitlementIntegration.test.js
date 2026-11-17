@@ -27,12 +27,19 @@ test("production payroll correction SQL is held and cannot update payroll lines"
   assert.match(source, /v_count<>2/);
   assert.match(source, /INSERT INTO organization_audits/);
   assert.doesNotMatch(source, /UPDATE payroll_run_lines/i);
+  assert.match(source, /INSERT INTO employee_employment_level_assignments/);
+  assert.match(source, /levelNumber"=201/);
+  assert.match(source, /EMPLOYEE_EMPLOYMENT_LEVEL_OVERRIDE_ASSIGNED/);
+  assert.doesNotMatch(source, /UPDATE designations/i);
 });
-test("Zermatt mid-year conversion requires review before automated leave balance writes", () => {
+test("full 2026 leave is approved at L2 for Kpokou and L1 for Uchenna, no proration", () => {
   const {leaveConversionReview} = require("../src/services/zermattEmployeeEntitlementPolicy");
-  for (const employeeNumber of ["ZLL000046", "ZLL000053"]) {
+  for (const [employeeNumber, levelNumber, annualEntitlementDays] of [["ZLL000046",202,16],["ZLL000053",201,14]]) {
     const decision = leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber,leaveYear:2026,employmentType:"Full-Time"});
-    assert.equal(decision.status,"EFFECTIVE_DATED_CONVERSION_REVIEW_REQUIRED");
+    assert.equal(decision.status,"APPROVED_FULL_ANNUAL_ENTITLEMENT");
+    assert.equal(decision.levelNumber,levelNumber);
+    assert.equal(decision.annualEntitlementDays,annualEntitlementDays);
+    assert.equal(decision.proration,"NONE");
     assert.equal(decision.fullTimeEffectiveFrom,"2026-11-17");
     assert.equal(leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber,leaveYear:2027,employmentType:"Full-Time"}),null);
     assert.equal(leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber,leaveYear:2026,employmentType:"Part-time"}),null);
@@ -42,6 +49,9 @@ test("Zermatt mid-year conversion requires review before automated leave balance
   const source=read("src/services/zermattLeaveEntitlementService.js");
   const guard=source.indexOf("const conversion = leaveConversionReview(");
   const write=source.indexOf("const balance = await tx.leaveBalance.upsert(");
-  assert.ok(guard>0 && write>guard,"Conversion guard must precede leave balance mutation");
-  assert.match(source,/throw error;\s*}\s*const hierarchyVersion/);
+  assert.ok(guard>0 && write>guard,"Conversion approval validation must precede leave balance mutation");
+  assert.match(source,/APPROVED_EMPLOYMENT_LEVEL_MAPPING_REQUIRED/);
+  assert.match(source,/APPROVED_ANNUAL_ENTITLEMENT_MISMATCH/);
+  assert.match(source,/update: conversion \? \{\} : \{ openingBalance: entitlement \}/);
+  assert.match(source,/conversion \? new Date/);
 });

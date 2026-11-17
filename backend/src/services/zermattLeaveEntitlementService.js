@@ -422,24 +422,23 @@ async function provisionEmployeeWithConfigured({
   });
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
 
-  // A mid-year conversion must not silently create a full-year opening balance.
+  // HR expressly authorized full 2026 leave days for these two conversions;
+  // enforce the approved employment level and preserve any existing leave ledger.
   const conversion = leaveConversionReview({
     organizationSlug: "zermatt-liquor-limited", employeeNumber,
     leaveYear, employmentType: employee.employmentType,
   });
-  if (conversion) {
-    const error = new Error(conversion.status);
-    error.code = conversion.status;
-    error.details = conversion;
-    throw error;
-  }
-
   const hierarchyVersion = configured[0]?.hierarchyVersion || "V1";
   const effectiveLevel = await resolveEffectiveEmploymentLevel(tx, {
     organizationId,
     employeeId: employee.id,
   });
   const levelNumber = Number(effectiveLevel.levelNumber || 0);
+  if (conversion && (hierarchyVersion !== "V3" || levelNumber !== conversion.levelNumber)) {
+    const error = new Error("APPROVED_EMPLOYMENT_LEVEL_MAPPING_REQUIRED");
+    error.details = { ...conversion, actualLevelNumber: levelNumber, hierarchyVersion };
+    throw error;
+  }
   const validLevel =
     hierarchyVersion === "V3"
       ? isZermattV3InternalLevel(levelNumber)
@@ -484,6 +483,11 @@ async function provisionEmployeeWithConfigured({
       ? 45
       : item.definition.entitlementForLevel(levelNumber, hierarchyVersion);
     if (entitlement == null) continue;
+    if (conversion && item.definition.key === "ANNUAL" && Number(entitlement) !== conversion.annualEntitlementDays) {
+      const error = new Error("APPROVED_ANNUAL_ENTITLEMENT_MISMATCH");
+      error.details = { ...conversion, proposedEntitlement: entitlement };
+      throw error;
+    }
 
     const existingBalance = await tx.leaveBalance.findUnique({
       where: {
@@ -523,7 +527,7 @@ async function provisionEmployeeWithConfigured({
           leaveYear,
         },
       },
-      update: { openingBalance: entitlement },
+      update: conversion ? {} : { openingBalance: entitlement },
       create: {
         organizationId,
         employeeId: employee.id,
@@ -565,9 +569,9 @@ async function provisionEmployeeWithConfigured({
               ? "MANUAL_OVERRIDE"
               : "LEVEL_DEFAULT",
           effectiveDate:
-            effectiveLevel.override?.effectiveFrom || new Date(),
+            conversion ? new Date(`${conversion.fullTimeEffectiveFrom}T00:00:00.000Z`) : effectiveLevel.override?.effectiveFrom || new Date(),
           reason:
-            effectiveLevel.source === "EMPLOYEE_OVERRIDE"
+            conversion ? `${conversion.reason} Full-Time effective ${conversion.fullTimeEffectiveFrom}; no proration.` : effectiveLevel.source === "EMPLOYEE_OVERRIDE"
               ? "Employee-specific Employment Level override applied to ZERMATT leave entitlement"
               : hierarchyVersion === "V3"
                 ? "ZERMATT V3 designation-default Employment Level leave entitlement mapping"

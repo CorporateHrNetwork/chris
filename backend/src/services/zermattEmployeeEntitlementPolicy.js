@@ -41,11 +41,14 @@ function leaveConversionReview({ organizationSlug, employeeNumber, leaveYear, em
     && String(employmentType || "").replace(/[_-]/g, " ").trim().toUpperCase() === "FULL TIME";
   if (!affected) return null;
   return {
-    status: "EFFECTIVE_DATED_CONVERSION_REVIEW_REQUIRED",
+    status: "APPROVED_FULL_ANNUAL_ENTITLEMENT",
     employeeNumber: number,
     leaveYear: 2026,
     fullTimeEffectiveFrom: FULL_TIME_CLASSIFICATION_FROM,
-    reason: "Do not allocate a full-year 2026 leave balance automatically. Confirm the approved conversion entitlement and preserve existing requests and balances."
+    levelNumber: number === "ZLL000053" ? 201 : 202,
+    annualEntitlementDays: number === "ZLL000053" ? 14 : 16,
+    proration: "NONE",
+    reason: "HR approved full 2026 annual leave entitlement for this full-time conversion without proration."
   };
 }
 
