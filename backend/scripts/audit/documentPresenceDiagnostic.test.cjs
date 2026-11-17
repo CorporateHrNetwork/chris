@@ -4,58 +4,51 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { auditDocumentPresence, auditAuthorizedDocumentPresence } = require('./documentPresenceDiagnostic.cjs');
+const {auditDocumentPresence, auditTenantScopedRecords} = require('./documentPresenceDiagnostic.cjs');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chris-document-fixture-'));
-  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
-  fs.mkdirSync(path.join(root, 'sub'));
-  const present = path.join(root, 'sub', 'fictional.pdf');
-  fs.writeFileSync(present, 'FAKE TEST DOCUMENT');
-  return { root, present, missing: path.join(root, 'sub', 'missing.pdf') };
+  t.after(() => fs.rmSync(root,{recursive:true,force:true}));
+  fs.mkdirSync(path.join(root,'sub'));
+  const present = path.join(root,'sub','fictional.pdf');
+  fs.writeFileSync(present,'FICTIONAL TEST BYTES ONLY');
+  return {root,present,missing:path.join(root,'sub','missing.pdf')};
 }
-
-test('aggregate-only presence on fictional files', t => {
-  const { root, present, missing } = fixture(t);
-  const result = auditDocumentPresence([
-    { storagePath: present }, { storagePath: missing },
-    { storagePath: path.resolve(root, '..', 'outside') },
-    { storagePath: 'relative.pdf' }, { storagePath: root }
-  ], root);
-  assert.deepEqual(result, {total:5,present:1,missing:1,invalidPath:3,errors:0});
-  assert.ok(!JSON.stringify(result).includes('fictional.pdf'));
+test('fictional file counts disclose no names or paths',t=>{
+  const {root,present,missing}=fixture(t);
+  const report=auditDocumentPresence([{storagePath:present},{storagePath:missing},
+    {storagePath:path.join(root,'..','outside.txt')},{storagePath:'relative.pdf'},{storagePath:root}],root);
+  assert.deepEqual(report,{total:5,present:1,missing:1,invalidPath:3,errors:0});
+  assert.ok(!JSON.stringify(report).includes('fictional.pdf'));
 });
-test('diagnostic is disabled unless explicitly enabled', t => {
-  const { root, present } = fixture(t);
-  const options = {enabled:false, actor:{isPlatformEngineer:true,authorizedOrganizationId:'fictional-tenant'}, organizationId:'fictional-tenant', records:[{organizationId:'fictional-tenant',storagePath:present}], trustedRoot:root};
-  assert.throws(() => auditAuthorizedDocumentPresence(options), {code:'DOCUMENT_AUDIT_FORBIDDEN'});
+test('tenant-scoped fictional documents produce aggregate counts',t=>{
+  const {root,present,missing}=fixture(t);
+  assert.deepEqual(auditTenantScopedRecords([{organizationId:'fictional-a',storagePath:present},
+    {organizationId:'fictional-a',storagePath:missing}],'fictional-a',root),
+    {total:2,present:1,missing:1,invalidPath:0,errors:0});
 });
-test('non-engineer and wrong tenant are denied', t => {
-  const { root, present } = fixture(t);
-  const base = {enabled:true, organizationId:'fictional-tenant', records:[{organizationId:'fictional-tenant',storagePath:present}], trustedRoot:root};
-  assert.throws(() => auditAuthorizedDocumentPresence({...base, actor:{isPlatformEngineer:false,authorizedOrganizationId:'fictional-tenant'}}), {code:'DOCUMENT_AUDIT_FORBIDDEN'});
-  assert.throws(() => auditAuthorizedDocumentPresence({...base, actor:{isPlatformEngineer:true,authorizedOrganizationId:'other-tenant'}}), {code:'DOCUMENT_AUDIT_FORBIDDEN'});
+test('tenant-mixed records are rejected before access',t=>{
+  const {root,present}=fixture(t);
+  assert.throws(()=>auditTenantScopedRecords([{organizationId:'fictional-b',storagePath:present}],
+    'fictional-a',root),{code:'DOCUMENT_AUDIT_SCOPE_MISMATCH'});
 });
-test('rejects tenant-mixed metadata', t => {
-  const { root, present } = fixture(t);
-  assert.throws(() => auditAuthorizedDocumentPresence({
-    enabled:true, actor:{isPlatformEngineer:true,authorizedOrganizationId:'fictional-tenant'},
-    organizationId:'fictional-tenant', records:[{organizationId:'other-tenant',storagePath:present}], trustedRoot:root
-  }), {code:'DOCUMENT_AUDIT_SCOPE_MISMATCH'});
+test('missing scope and malformed inputs are rejected',t=>{
+  const {root}=fixture(t);
+  assert.throws(()=>auditTenantScopedRecords([], '', root),{code:'DOCUMENT_AUDIT_SCOPE_MISMATCH'});
+  assert.throws(()=>auditDocumentPresence({},root),TypeError);
+  assert.throws(()=>auditDocumentPresence([], 'relative'),TypeError);
 });
-test('authorized fictional records return counts only', t => {
-  const { root, present, missing } = fixture(t);
-  const result = auditAuthorizedDocumentPresence({
-    enabled:true, actor:{isPlatformEngineer:true,authorizedOrganizationId:'fictional-tenant'},
-    organizationId:'fictional-tenant',
-    records:[{organizationId:'fictional-tenant',storagePath:present},{organizationId:'fictional-tenant',storagePath:missing}],
-    trustedRoot:root
-  });
-  assert.deepEqual(result,{total:2,present:1,missing:1,invalidPath:0,errors:0});
+test('limits audit size to 10000 records',t=>{
+  const {root}=fixture(t);
+  assert.throws(()=>auditDocumentPresence(Array(10001).fill({storagePath:'not-a-path'}),root),TypeError);
 });
-test('rejects symlink directory when supported', t => {
-  const {root} = fixture(t);
-  const link = path.join(root,'link');
-  try { fs.symlinkSync(os.tmpdir(), link,'junction'); } catch (e) { t.skip('Symlink permission unavailable'); return; }
-  assert.equal(auditDocumentPresence([{storagePath:path.join(link,'fictional.pdf')}], root).invalidPath,1);
+test('nonfile filesystem entries are invalid',t=>{
+  const {root}=fixture(t);
+  assert.equal(auditDocumentPresence([{storagePath:path.join(root,'sub')}],root).invalidPath,1);
+});
+test('symlink paths rejected when available',t=>{
+  const {root}=fixture(t);
+  const link=path.join(root,'link');
+  try{fs.symlinkSync(os.tmpdir(),link,'junction')}catch(e){t.skip('Symlink privilege unavailable');return;}
+  assert.equal(auditDocumentPresence([{storagePath:path.join(link,'fictional.pdf')}],root).invalidPath,1);
 });
