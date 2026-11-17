@@ -96,3 +96,9 @@
 - New guard rejects conflicting preexisting opening balances rather than overwriting them; existing used/pending ledger fields remain unchanged.
 - Conversion allocation now writes a targeted `organization_audits` event with leave policy, employee number, effective date, level, full entitlement, and reason.
 - 19 selected backend tests passed after these refinements. This is simulated runtime verification, not authenticated ESS or live production verification.
+## Backend compliance CI gate correction
+- PR #308 compliance workflow initial run failed at payroll upload templates, caused by two VM-based isolated test fixtures (`newHirePayrollProration.test.js` and `loanSuretyShortfall.test.js`) not resolving the newly imported employee-policy module. Frontend CI build passed.
+- Fixed the VM harness dependency maps only; no payroll or loan calculation rule was weakened or modified.
+- Re-ran the exact payroll employee upload templates / worked days / reports / workflow / new hire / loan / deactivation / final payroll / branch accountant selection from `.github/workflows/compliance-pr.yml`: **60/60 passed** locally.
+- Additional broader leave selection **22/22 passed**, and payroll/statutory/TSP/EoSB selection **22/22 passed**, in addition to dedicated full-leave conversion and EoSB-focused tests.
+- Full GitHub PR compliance job and production backup/Head HR/ESS checks must pass independently before release.
