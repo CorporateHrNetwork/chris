@@ -52,3 +52,16 @@ test('symlink paths rejected when available',t=>{
   try{fs.symlinkSync(os.tmpdir(),link,'junction')}catch(e){t.skip('Symlink privilege unavailable');return;}
   assert.equal(auditDocumentPresence([{storagePath:path.join(link,'fictional.pdf')}],root).invalidPath,1);
 });
+
+test('missing trusted root fails rather than counting every file missing',t=>{
+  const {root}=fixture(t);
+  assert.throws(()=>auditDocumentPresence([{storagePath:path.join(root,'a.pdf')}],
+    path.join(root,'nonexistent-root')),/DOCUMENT_AUDIT_ROOT_UNAVAILABLE/);
+});
+test('symlinked trusted root rejected when supported',t=>{
+  const {root}=fixture(t);
+  const link=path.join(os.tmpdir(),'chris-root-symlink-'+process.pid+'-'+Date.now());
+  try{fs.symlinkSync(root,link,'junction')}catch(e){t.skip('Symlink permission unavailable');return}
+  t.after(()=>fs.rmSync(link,{force:true}));
+  assert.throws(()=>auditDocumentPresence([],link),/DOCUMENT_AUDIT_ROOT_INVALID/);
+});
