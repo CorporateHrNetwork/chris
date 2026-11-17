@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const { replaceDraftObligations } = require("./statutoryObligationService");
 const { loadPeriodVariableItems, calculateVariableValue } = require("./zermattVariablePayrollService");
+const { statutoryExemption: zermattEmployeeStatutoryExemption } = require("./zermattEmployeeEntitlementPolicy");
 
 const CURRENT_EMPLOYEE_STATUSES = ["ACTIVE", "PROBATION", "LEAVE", "SUSPENDED"];
 
@@ -783,14 +784,21 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
         .filter(([key]) => pensionableKeys.has(String(key).toLowerCase()))
         .reduce((sum, [, value]) => sum + Number(value || 0), 0)
     );
-    const employmentTypeExemption = statutoryEmploymentTypeExemption(employee.employmentType);
+    const employmentTypeExemption = zermattEmployeeStatutoryExemption({
+      organizationSlug: organization.slug,
+      employeeNumber: employee.employeeNumber,
+      employmentType: employee.employmentType,
+      asOf: period.periodEnd,
+    }) || statutoryEmploymentTypeExemption(employee.employmentType);
     const employeePension = employmentTypeExemption.pensionExempt
       ? 0
       : percent(pensionableBase, policy.pensionEmployeeRate);
-    const employerPension = employmentTypeExemption.pensionExempt
+    const employerPension = (employmentTypeExemption.employerPensionExempt ?? employmentTypeExemption.pensionExempt)
       ? 0
       : percent(pensionableBase, policy.pensionEmployerRate);
-    const nhfEmployee = nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
+    const nhfEmployee = employmentTypeExemption.nhfExempt === true || employmentTypeExemption.exempt === true
+      ? 0
+      : nhfRule.enabled === true ? percent(basicSalary, Number(nhfRule.employeeRate || 0)) : 0;
 
     const recurringTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && row.recurring).reduce((sum, row) => sum + row.value, 0));
     const oneTimeTaxableAllowances = round2(customAllowanceItems.filter((row) => row.taxable && !row.recurring).reduce((sum, row) => sum + row.value, 0));

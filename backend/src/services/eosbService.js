@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { historicalEosb } = require("./zermattEmployeeEntitlementPolicy");
 
 const ZERMATT_SLUG = "zermatt-liquor-limited";
 const GRATUITY_FACTOR = 0.075;
@@ -181,12 +182,19 @@ function eligibilityFor(employee, startDate, calculationDate) {
 }
 
 function buildStatement({ organization, employee, asOf, salaryRate, exposure }) {
-  const calculationDate = effectiveAsOf(employee, asOf);
-  const startDate = serviceStartFor(employee);
+  const historical = historicalEosb({
+    organizationSlug: organization.slug,
+    employeeNumber: employee.employeeNumber,
+    asOf,
+  });
+  const calculationDate = historical ? utcDate(historical.endDate) : effectiveAsOf(employee, asOf);
+  const startDate = historical ? utcDate(historical.startDate) : serviceStartFor(employee);
   const serviceDays = serviceDaysBetween(startDate, calculationDate);
-  const eligibility = eligibilityFor(employee, startDate, calculationDate);
-  const grossMonthlySalary = salaryRate ? Number(salaryRate.amount || 0) : null;
-  const calculationReady = Boolean(startDate && salaryRate && grossMonthlySalary > 0);
+  const eligibility = historical
+    ? { eosbEligible: true, loanCollateralMode: "SURETY_REQUIRED", reason: "Historical full-time gratuity does not qualify as current loan collateral." }
+    : eligibilityFor(employee, startDate, calculationDate);
+  const grossMonthlySalary = historical ? historical.monthlyGross : salaryRate ? Number(salaryRate.amount || 0) : null;
+  const calculationReady = Boolean(startDate && (historical || salaryRate) && grossMonthlySalary > 0);
   const accruedEosb = calculationReady && eligibility.eosbEligible
     ? calculateEosbValue(grossMonthlySalary, serviceDays)
     : 0;
@@ -224,19 +232,21 @@ function buildStatement({ organization, employee, asOf, salaryRate, exposure }) 
       equivalentMonths: Math.round((serviceDays / FIXED_MONTH_DAYS) * 10000) / 10000,
       twelveCalendarMonthsCompleted: hasTwelveCalendarMonths(startDate, calculationDate),
     },
-    salary: salaryRate ? {
+    salary: historical || salaryRate ? {
       grossMonthlySalary,
-      currency: salaryRate.currency || "NGN",
-      effectiveFrom: dateOnly(salaryRate.effectiveFrom),
-      effectiveTo: dateOnly(salaryRate.effectiveTo),
+      currency: historical ? "NGN" : (salaryRate.currency || "NGN"),
+      effectiveFrom: historical ? historical.startDate : dateOnly(salaryRate.effectiveFrom),
+      effectiveTo: historical ? historical.endDate : dateOnly(salaryRate.effectiveTo),
+      source: historical ? historical.source : "EFFECTIVE_DATED_SALARY_RATE",
     } : null,
     eosb: {
       eligible: eligibility.eosbEligible,
+      historicalFullTimeService: Boolean(historical),
       calculationReady,
       accruedValue: accruedEosb,
       missingReason: !startDate
         ? "Employment service start date is unavailable."
-        : !salaryRate
+        : !historical && !salaryRate
           ? "No effective-dated Monthly Gross Salary is available for the calculation date."
           : null,
     },
