@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { leaveConversionReview } = require("./zermattEmployeeEntitlementPolicy");
 const { ZERMATT_EMPLOYMENT_LEVELS } = require("../config/zermattEmploymentLevels");
 const ZERMATT_LEAVE_CALENDAR_RULES = require("../config/zermattLeaveCalendarRules");
 const {
@@ -420,6 +421,18 @@ async function provisionEmployeeWithConfigured({
     include: { designation: true },
   });
   if (!employee) throw new Error("EMPLOYEE_NOT_FOUND");
+
+  // A mid-year conversion must not silently create a full-year opening balance.
+  const conversion = leaveConversionReview({
+    organizationSlug: "zermatt-liquor-limited", employeeNumber,
+    leaveYear, employmentType: employee.employmentType,
+  });
+  if (conversion) {
+    const error = new Error(conversion.status);
+    error.code = conversion.status;
+    error.details = conversion;
+    throw error;
+  }
 
   const hierarchyVersion = configured[0]?.hierarchyVersion || "V1";
   const effectiveLevel = await resolveEffectiveEmploymentLevel(tx, {

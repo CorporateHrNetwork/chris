@@ -33,6 +33,22 @@ function statutoryExemption({ organizationSlug, employeeNumber, employmentType, 
     : null;
 }
 
+function leaveConversionReview({ organizationSlug, employeeNumber, leaveYear, employmentType }) {
+  const number = String(employeeNumber || "").toUpperCase();
+  const affected = organizationSlug === ZERMATT_SLUG
+    && FULL_TIME_STATUTORY_EXEMPTIONS.has(number)
+    && Number(leaveYear) === 2026
+    && String(employmentType || "").replace(/[_-]/g, " ").trim().toUpperCase() === "FULL TIME";
+  if (!affected) return null;
+  return {
+    status: "EFFECTIVE_DATED_CONVERSION_REVIEW_REQUIRED",
+    employeeNumber: number,
+    leaveYear: 2026,
+    fullTimeEffectiveFrom: FULL_TIME_CLASSIFICATION_FROM,
+    reason: "Do not allocate a full-year 2026 leave balance automatically. Confirm the approved conversion entitlement and preserve existing requests and balances."
+  };
+}
+
 function historicalEosb({ organizationSlug, employeeNumber, asOf }) {
   if (organizationSlug !== ZERMATT_SLUG) return null;
   const rule = HISTORICAL_EOSB[String(employeeNumber || "").toUpperCase()];
@@ -43,4 +59,4 @@ function historicalEosb({ organizationSlug, employeeNumber, asOf }) {
   return { ...rule, endDate, source: "ZERMATT_APPROVED_HISTORICAL_FULL_TIME_SERVICE" };
 }
 
-module.exports = { ZERMATT_SLUG, EFFECTIVE_FROM, FULL_TIME_CLASSIFICATION_FROM, statutoryExemption, historicalEosb };
+module.exports = { ZERMATT_SLUG, EFFECTIVE_FROM, FULL_TIME_CLASSIFICATION_FROM, statutoryExemption, leaveConversionReview, historicalEosb };

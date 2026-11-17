@@ -69,3 +69,9 @@
 - Render workspace lists no Render Postgres; Zermatt's connected Supabase production-pilot database must have a separately verified restore-capable backup before any write.
 - Full-year leave provisioning is not automatic: both Michael records currently have zero 2026 leave balances and allocations. Targeted leave entitlement must honor full-time effective date 17 November and current Zermatt policy, without overwriting settled leave or assuming an unapproved proration rule.
 - Production SQL update stays held until backup, draft payroll, trigger, HR Head and ESS verification and leave-effective-date safeguards pass. No production records were changed.
+## Release gate follow-up: effective-dated leave provisioning safeguard
+- 17 Nov 2026: added a tenant/employee/year-scoped guard to Zermatt leave provisioning: ZLL000046 and ZLL000053, when Full-Time in leave year 2026, produce EFFECTIVE_DATED_CONVERSION_REVIEW_REQUIRED before any balance upsert.
+- The guard is not a substitute for conversion entitlement calculation. An authorized, audited conversion method must determine eligible leave for 17 Nov–31 Dec 2026 and preserve used/pending/approved leave before creating records. The 2027 ordinary full-time path remains intact.
+- Added direct cases and source-order verification: 13 selected production-branch tests passed, JS syntax check passed.
+- Fictional local CCA staging PostgreSQL responds on 127.0.0.1:55434. This does not resolve the 17 Nov staging pg_dump exit 1. A separate production recovery checkpoint is still required.
+- Explicitly avoid using CCA fictional staging backup success as evidence that Zermatt Supabase production data is backed up.

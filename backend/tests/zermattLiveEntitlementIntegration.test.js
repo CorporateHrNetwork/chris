@@ -28,3 +28,20 @@ test("production payroll correction SQL is held and cannot update payroll lines"
   assert.match(source, /INSERT INTO organization_audits/);
   assert.doesNotMatch(source, /UPDATE payroll_run_lines/i);
 });
+test("Zermatt mid-year conversion requires review before automated leave balance writes", () => {
+  const {leaveConversionReview} = require("../src/services/zermattEmployeeEntitlementPolicy");
+  for (const employeeNumber of ["ZLL000046", "ZLL000053"]) {
+    const decision = leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber,leaveYear:2026,employmentType:"Full-Time"});
+    assert.equal(decision.status,"EFFECTIVE_DATED_CONVERSION_REVIEW_REQUIRED");
+    assert.equal(decision.fullTimeEffectiveFrom,"2026-11-17");
+    assert.equal(leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber,leaveYear:2027,employmentType:"Full-Time"}),null);
+    assert.equal(leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber,leaveYear:2026,employmentType:"Part-time"}),null);
+  }
+  assert.equal(leaveConversionReview({organizationSlug:"another-tenant",employeeNumber:"ZLL000046",leaveYear:2026,employmentType:"Full-Time"}),null);
+  assert.equal(leaveConversionReview({organizationSlug:"zermatt-liquor-limited",employeeNumber:"ZLL000300",leaveYear:2026,employmentType:"Full-Time"}),null);
+  const source=read("src/services/zermattLeaveEntitlementService.js");
+  const guard=source.indexOf("const conversion = leaveConversionReview(");
+  const write=source.indexOf("const balance = await tx.leaveBalance.upsert(");
+  assert.ok(guard>0 && write>guard,"Conversion guard must precede leave balance mutation");
+  assert.match(source,/throw error;\s*}\s*const hierarchyVersion/);
+});
