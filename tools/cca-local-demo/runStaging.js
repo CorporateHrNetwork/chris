@@ -63,7 +63,7 @@ function openStaging({ directory, master, initialize = false, clock, postgresRea
 
 async function main() {
   const [directory, mode] = process.argv.slice(2);
-  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve"].includes(mode))
+  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve", "inspect-vault"].includes(mode))
     throw Error("CCA_STAGING_WINDOWS_HOST_REQUIRED");
   let input = "";
   for await (const chunk of process.stdin.setEncoding("utf8")) {
@@ -73,6 +73,17 @@ async function main() {
   const payload = JSON.parse(input.replace(/^\uFEFF/, ""));
   const master = Buffer.from(payload.master, "base64");
   try {
+    if (mode === "inspect-vault") {
+      if (payload.postgres || payload.password || payload.generatePassword)
+        throw Error("CCA_INSPECTION_UNEXPECTED_PAYLOAD");
+      const {inspectVaultCompatibility}=require("./inspectVaultCompatibility");
+      const results=inspectVaultCompatibility({
+        directory, encryptionKey:deriveKey(master,"vault-v1"),
+      });
+      // Only cryptographic digests and categorical schema statuses appear.
+      console.log("CCA_VAULT_COMPATIBILITY="+JSON.stringify(results));
+      return;
+    }
     // Operator-only opt-in: normal CCA staging continues to use its existing
     // protected local snapshot data and no PostgreSQL client is instantiated.
     if (mode === "enroll" && payload.postgres) throw Error("CCA_PG_ENROLL_DISABLED");
