@@ -54,7 +54,14 @@ async function main(){
   // fixture; all execution remains inside the disposable fictional cluster.
   const schema=fs.readFileSync(path.join(__dirname,"../../sql/cca/001_fictional_staging_service_requests.sql"),"utf8");
   console.log("CCA_STAGE: Applying staging SQL schema in isolated cluster");
-  sql(db,schema);
+  const migration=cp.spawnSync(path.join(bin,"psql.exe"),
+    ["-X","-w","-qAt","-v","ON_ERROR_STOP=1","-d",db,"-c",schema],
+    {env,encoding:"utf8",timeout:30000});
+  if(migration.error||migration.status!==0){
+    // SQL text above contains no credentials, secrets, or client data.
+    console.error("CCA_SCHEMA_SQL_ERROR:",String(migration.stderr||migration.error?.code||"unknown").slice(0,400));
+    throw Error("CCA_STAGING_SCHEMA_MIGRATION_FAILED");
+  }
   console.log("CCA_STAGE: Provisioning fictional restricted login and seed records");
   sql(db,[
     "CREATE ROLE cca_fictional_reader LOGIN PASSWORD '"+readerPassword+"'",
