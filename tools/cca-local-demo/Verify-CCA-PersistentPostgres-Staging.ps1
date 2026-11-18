@@ -47,6 +47,7 @@ ON CONFLICT (id) DO NOTHING;
  $cedar=@(Invoke-Query "BEGIN READ ONLY; SELECT set_config('cca.tenant_id','demo-cedar',true); SELECT COUNT(*) FROM public.cca_service_requests; COMMIT;")
  $atlas=@(Invoke-Query "BEGIN READ ONLY; SELECT set_config('cca.tenant_id','demo-atlas',true); SELECT COUNT(*) FROM public.cca_service_requests; COMMIT;")
  $role=@(Invoke-Query "SELECT (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)::int FROM pg_roles WHERE rolname=current_user;")
+ Write-Output ('SAFE_FICTIONAL_COUNTS: total='+($overall -join ',')+'; noTenant='+($noTenant -join ',')+'; Cedar='+($cedar -join ',')+'; Atlas='+($atlas -join ',')+'; privilegedRole='+($role -join ','))
  if($overall[-1].Trim() -ne '2' -or $noTenant[-1].Trim() -ne '0' -or
   $cedar[-2].Trim() -ne '1' -or $atlas[-2].Trim() -ne '1' -or
   $role[-1].Trim() -ne '0') {throw 'CCA_PERSISTENT_TENANT_ISOLATION_FAILED'}
