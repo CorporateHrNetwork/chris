@@ -53,13 +53,16 @@ async function main(){
   // Exercise the exact proposed staging schema rather than a copied DDL
   // fixture; all execution remains inside the disposable fictional cluster.
   const schema=fs.readFileSync(path.join(__dirname,"../../sql/cca/001_fictional_staging_service_requests.sql"),"utf8");
+  console.log("CCA_STAGE: Applying staging SQL schema in isolated cluster");
   sql(db,schema);
+  console.log("CCA_STAGE: Provisioning fictional restricted login and seed records");
   sql(db,[
     "CREATE ROLE cca_fictional_reader LOGIN PASSWORD '"+readerPassword+"'",
     "GRANT cca_staging_request_reader TO cca_fictional_reader",
     "GRANT CONNECT ON DATABASE "+db+" TO cca_fictional_reader",
     "INSERT INTO public.cca_service_requests(id,tenant_id,service_code,status) VALUES ('fictional-cedar-001','demo-cedar','MANAGED_POSTGRESQL','REQUEST_ONLY'),('fictional-atlas-001','demo-atlas','SSL_TLS_CERTIFICATE','REQUEST_ONLY')"
   ].join(";"));
+  console.log("CCA_STAGE: Fictional staging schema and seeds applied");
   // Validate restored database, not just initial fixture. No original staging
   // database is involved: both source and destination live inside this
   // temporary isolated PostgreSQL cluster.
