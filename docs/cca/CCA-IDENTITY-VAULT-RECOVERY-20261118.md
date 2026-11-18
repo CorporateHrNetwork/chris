@@ -36,7 +36,7 @@ The diagnostic classified **both** encrypted vault versions as `CCA_INVALID_IDEN
 - **Recovered workspace is NOT yet publicly hosted, deployed to Render, or configured as a Windows startup service.** It is a running, local engineering instance.
 - **An actual password + MFA sign-in by the preserved legacy staging operator has not been performed**, because no operator password or MFA code was supplied to the test. HTTP 200/401 alone is not authenticated end-to-end validation on the recovered instance. Do not mark this complete.
 - The two quarantined identities require operator security review and **explicit, independently approved role reassignments** before activation. Never infer their roles from old strings or automatically grant access. The original vault must be retained.
-- The persistent PostgreSQL database has passed encrypted off-site backup and isolated real restore; the recovered *identity-vault workspace* does not yet have separate scheduled and off-site restore coverage.
+- The persistent PostgreSQL database has passed encrypted off-site backup and isolated real restore. The recovered *identity-vault workspace* has also passed a separate **manual encrypted off-site archive upload, download, CMS decryption, and exact 9-file SHA-256 comparison**. Automated scheduling and restored application boot from those downloaded files remain unverified.
 - Current CCA support workflow remains snapshot-backed. Only the optional service-request read path is connected to PostgreSQL. Full application persistence migration remains pending.
 - Backup scheduler, signed-out restart behavior, alerting and off-device commercial hosting remain outstanding launch gates.
 - No Zermatt production changes, Supabase cutover, domain sales, SSL issuance, server purchases, payment runs, or external client onboarding occurred.
@@ -46,3 +46,13 @@ The diagnostic classified **both** encrypted vault versions as `CCA_INVALID_IDEN
 For the authorized Windows development computer, `Start-CCA-Staging.ps1 -UseRecoveredVault -UsePersistentPostgres` starts the recovered CCA staging instance at `http://127.0.0.2:4184/`, subject to the writer lock. The original environment remains available as protected evidence but fails validation due to the unsupported role strings.
 
 **Next verification order:** original operator's sign-in + MFA in the recovered local instance; owner audit of the two quarantined identities; separately verified backup/restore of the recovered identity vault; scheduled recovery and monitoring; off-device platform deployment review and a final go/no-go for 4 December.
+
+## Additional recovered identity off-site backup checkpoint
+
+On 18 November 2026, `Backup-Recovered-CCA-Identity.ps1 -UploadAndTestOffsite` successfully archived the recovered CCA workspace's **nine allowlisted files**, using CMS AES-256-GCM and the existing CCA recovery certificate. The encrypted archive and manifest were stored under `cca_backup:CRNETWORK-CCA-Staging-Backups/Recovered-CCA-Identity`. The archive was downloaded again, SHA-256 matched, decrypted with the protected recovery key, expanded into a temporary isolated directory and all nine restored files matched the source SHA-256 hashes.
+
+- Outcome: **PASS**, including temporary extracted-workspace cleanup.
+- Encrypted archive: `cca-recovered-identity-20261118-214047-56fe27f1.cms`.
+- This is a **file-level restore/integrity verification**, not a fresh CCA server boot or a human MFA login from the off-site restored copy.
+- No original encrypted Stage4D vault, original checkpoint, Zermatt production data, Supabase service, or DNS configuration was modified.
+- The original staging identity vault remains preserved; two unsupported-role users remain quarantined only in the recovered CCA copy pending access review.
