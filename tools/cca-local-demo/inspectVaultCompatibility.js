@@ -7,6 +7,7 @@ const os=require("node:os");
 const path=require("node:path");
 const crypto=require("node:crypto");
 const {createIdentityVault}=require("./identityVault");
+const {simulateVaultQuarantine}=require("./vaultQuarantineRehearsal");
 
 const SAFE_ERRORS=new Set([
  "CCA_INVALID_IDENTITY_VAULT:VAULT_CONTAINER",
@@ -60,7 +61,21 @@ function inspectVaultCompatibility({directory,encryptionKey}={}){
      createIdentityVault({directory:tmp,encryptionKey});
      outcomes.push(Object.freeze({label:specimen.label,status:"VALID",sha256:digest}));
    }catch(error){
-     outcomes.push(Object.freeze({label:specimen.label,status:classify(error),sha256:digest}));
+     const status=classify(error);
+     let quarantineRehearsal=null;
+     if(status==="CCA_INVALID_IDENTITY_VAULT:USER_ROLE_UNRECOGNIZED" ||
+        status==="CCA_INVALID_IDENTITY_VAULT:USER_ROLE_CANONICALIZATION_REQUIRED"){
+       const rehearsal=fs.mkdtempSync(path.join(os.tmpdir(),"cca-vault-quarantine-"));
+       try{
+         quarantineRehearsal=simulateVaultQuarantine({
+           encryptedFile:path.join(tmp,"cca-identities.enc.json"),
+           encryptionKey,tempDir:rehearsal,
+         });
+       }catch{
+         quarantineRehearsal={status:"BLOCKED_BY_OTHER_SCHEMA_VALIDATION"};
+       }finally{fs.rmSync(rehearsal,{recursive:true,force:true,maxRetries:3,retryDelay:150})}
+     }
+     outcomes.push(Object.freeze({label:specimen.label,status,sha256:digest,quarantineRehearsal}));
    }
   }finally {
    fs.rmSync(tmp,{recursive:true,force:true,maxRetries:3,retryDelay:150});
