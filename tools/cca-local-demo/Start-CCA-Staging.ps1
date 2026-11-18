@@ -1,4 +1,4 @@
-param([switch]$GeneratePassword, [switch]$UsePersistentPostgres)
+param([switch]$GeneratePassword, [switch]$UsePersistentPostgres, [switch]$InspectVaultRecovery)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
@@ -70,6 +70,7 @@ function Assert-PrivateDirectory([string]$Path) {
 }
 
 if (!(Test-Path -LiteralPath $directory)) {
+    if ($InspectVaultRecovery) { throw 'CCA_INSPECTION_STAGING_MISSING' }
     if ($UsePersistentPostgres) { throw 'CCA_STAGING_MUST_BE_ENROLLED_BEFORE_POSTGRES' }
     $first = $null
     if (!$GeneratePassword) {
@@ -118,5 +119,10 @@ if ($keyItem.PSIsContainer -or $keyItem.Length -gt 4096 -or
     ($keyItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'CCA staging key file is invalid.' }
 $master = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($keyFile), $entropy, $scope)
 try {
-    Invoke-StagingNode 'serve' $master
+    if ($InspectVaultRecovery) {
+        if ($UsePersistentPostgres -or $GeneratePassword) { throw 'CCA_INSPECTION_INCOMPATIBLE_FLAGS' }
+        Invoke-StagingNode 'inspect-vault' $master
+    } else {
+        Invoke-StagingNode 'serve' $master
+    }
 } finally { [Array]::Clear($master, 0, $master.Length) }
