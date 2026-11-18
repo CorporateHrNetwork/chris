@@ -31,6 +31,19 @@ function createCcaPostgresTenantReader(pool) {
       try {
         await client.query("BEGIN READ ONLY");
         began = true;
+        // Enforce least privilege on the actual checked-out connection.
+        // A privileged pool can bypass row-level security; refuse it even if
+        // an application WHERE clause appears tenant-scoped.
+        const role = await client.query(
+          "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+        );
+        if (!Array.isArray(role?.rows) || role.rows.length !== 1 ||
+            role.rows[0].rolsuper !== false ||
+            role.rows[0].rolbypassrls !== false) {
+          const error = new Error("CCA_DATABASE_PRIVILEGED_ROLE_DENIED");
+          error.code = "CCA_DATABASE_PRIVILEGED_ROLE_DENIED";
+          throw error;
+        }
         // SET LOCAL is deliberately invoked through the parameterized
         // set_config function; it remains transaction-scoped.
         await client.query("SELECT set_config('cca.tenant_id', $1, true)", [tenantId]);
