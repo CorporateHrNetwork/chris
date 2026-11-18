@@ -63,7 +63,7 @@ function openStaging({ directory, master, initialize = false, clock, postgresRea
 
 async function main() {
   const [directory, mode] = process.argv.slice(2);
-  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve", "inspect-vault"].includes(mode))
+  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve", "inspect-vault", "prepare-recovered"].includes(mode))
     throw Error("CCA_STAGING_WINDOWS_HOST_REQUIRED");
   let input = "";
   for await (const chunk of process.stdin.setEncoding("utf8")) {
@@ -73,6 +73,14 @@ async function main() {
   const payload = JSON.parse(input.replace(/^\uFEFF/, ""));
   const master = Buffer.from(payload.master, "base64");
   try {
+    if (mode === "prepare-recovered") {
+      if (payload.postgres || payload.password || payload.generatePassword)
+        throw Error("CCA_RECOVERY_UNEXPECTED_PAYLOAD");
+      const {prepareRecoveredStaging}=require("./prepareRecoveredStaging");
+      const result=prepareRecoveredStaging({directory,master});
+      console.log("CCA_RECOVERED_STAGING_PREPARATION="+JSON.stringify(result));
+      return;
+    }
     if (mode === "inspect-vault") {
       if (payload.postgres || payload.password || payload.generatePassword)
         throw Error("CCA_INSPECTION_UNEXPECTED_PAYLOAD");
