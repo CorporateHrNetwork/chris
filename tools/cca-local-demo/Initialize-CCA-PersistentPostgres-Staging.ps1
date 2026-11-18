@@ -62,8 +62,15 @@ try {
   "password_encryption = 'scram-sha-256'"
  )
  $env:PGHOST='127.0.0.1';$env:PGPORT="$port";$env:PGUSER='cca_staging_admin';$env:PGPASSWORD=$admin
- & (Join-Path $pgBin 'pg_ctl.exe') -D $cluster -l (Join-Path $root 'postgres.log') -o "-p $port -h 127.0.0.1" -w start | Out-Null
- if($LASTEXITCODE -ne 0){throw 'CCA_PERSISTENT_PG_START_FAILED'}
+ # Redirect pg_ctl streams so the postgres daemon cannot hold the parent
+ # PowerShell pipeline open after pg_ctl completes.
+ $arguments=@('-D',('"'+$cluster+'"'),'-l',('"'+(Join-Path $root 'postgres.log')+'"'),
+   '-o',('"'+("-p $port -h 127.0.0.1")+'"'),'-w','start')
+ $pgctl=Start-Process -FilePath (Join-Path $pgBin 'pg_ctl.exe') -ArgumentList $arguments `
+   -RedirectStandardOutput (Join-Path $root 'pgctl-start.stdout.log') `
+   -RedirectStandardError (Join-Path $root 'pgctl-start.stderr.log') -PassThru -NoNewWindow
+ if(!$pgctl.WaitForExit(20000)){ $pgctl.Kill(); throw 'CCA_PERSISTENT_PG_START_TIMEOUT' }
+ if($pgctl.ExitCode -ne 0){throw 'CCA_PERSISTENT_PG_START_FAILED'}
  $started=$true
  'CREATE DATABASE cca_fictional_services;' | & (Join-Path $pgBin 'psql.exe') -X -w -q -v ON_ERROR_STOP=1 -d postgres
  if($LASTEXITCODE -ne 0){throw 'CCA_PERSISTENT_PG_CREATE_DB_FAILED'}
@@ -90,7 +97,7 @@ try {
  Write-Output 'PASS: No production credentials, real customer data, payment or DNS changes. No CCA runtime cutover.'
  Write-Output ('CCA_STAGING_PORT='+$port)
 }catch{
- Write-Error ('CCA_PERSISTENT_PROVISION_FAILED: '+$_.Exception.Message)
+ Write-Warning ('CCA_PERSISTENT_PROVISION_FAILED: '+$_.Exception.Message)
  if($started){
   & (Join-Path $pgBin 'pg_ctl.exe') -D $cluster -m immediate -w stop | Out-Null
  }
