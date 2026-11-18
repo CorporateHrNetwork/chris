@@ -1,4 +1,4 @@
--- CRNETWORK–CCA internal PostgreSQL staging schema proposal.
+-- CRNETWORK-CCA internal PostgreSQL staging schema proposal.
 -- Migration review required before applying to a persistent environment.
 -- NEVER run on Zermatt production, Supabase, or a shared database.
 -- No client/customer records, secrets, login credentials or billing actions.
