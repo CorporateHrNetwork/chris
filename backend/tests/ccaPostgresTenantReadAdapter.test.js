@@ -16,6 +16,7 @@ function poolFixture(rows = []) {
   const client = {
     query: async (sql, args) => {
       calls.push({ sql, args });
+      if (sql.startsWith("SELECT rolsuper")) return { rows: [{rolsuper:false,rolbypassrls:false}] };
       if (sql.startsWith("SELECT id, tenant_id")) return { rows };
       return { rows: [] };
     },
@@ -30,9 +31,9 @@ test("valid tenant can read bounded fictional rows in read-only transaction", as
   const out = await reader.listServiceRequests({ context, tenantId: "fictional-a", limit: 10 });
   assert.deepEqual(out, [{ id: "fictional-1", serviceCode: "MANAGED_POSTGRESQL", status: "REQUEST_ONLY" }]);
   assert.equal(f.calls[0].sql, "BEGIN READ ONLY");
-  assert.deepEqual(f.calls[1], { sql: "SELECT set_config('cca.tenant_id', $1, true)", args: ["fictional-a"] });
-  assert.deepEqual(f.calls[2].args, ["fictional-a", 10]);
-  assert.equal(f.calls[3].sql, "COMMIT");
+  assert.deepEqual(f.calls[2], { sql: "SELECT set_config('cca.tenant_id', $1, true)", args: ["fictional-a"] });
+  assert.deepEqual(f.calls[3].args, ["fictional-a", 10]);
+  assert.equal(f.calls[4].sql, "COMMIT");
   assert.equal(f.released(), 1);
 });
 
@@ -63,6 +64,7 @@ test("database errors roll back and release the connection", async () => {
   const f = poolFixture();
   f.client.query = async (sql) => {
     f.calls.push({sql});
+    if(sql.startsWith("SELECT rolsuper")) return {rows:[{rolsuper:false,rolbypassrls:false}]};
     if(sql.startsWith("SELECT id")) throw Error("fictional database unavailable");
     return {};
   };
@@ -70,6 +72,26 @@ test("database errors roll back and release the connection", async () => {
   await assert.rejects(reader.listServiceRequests({context,tenantId:"fictional-a"}), /fictional database unavailable/);
   assert.equal(f.calls.at(-1).sql, "ROLLBACK");
   assert.equal(f.released(), 1);
+});
+
+test("privileged PostgreSQL pool identities rejected before any tenant query", async () => {
+  for (const role of [{rolsuper:true,rolbypassrls:false},
+    {rolsuper:false,rolbypassrls:true}, null]) {
+    const f=poolFixture();
+    f.client.query=async(sql,args)=>{
+      f.calls.push({sql,args});
+      if(sql.startsWith("SELECT rolsuper"))return {rows:role?[role]:[]};
+      if(sql.startsWith("SELECT id"))throw Error("privileged query must not execute");
+      return {rows:[]};
+    };
+    const reader=createCcaPostgresTenantReader(f.pool);
+    await assert.rejects(reader.listServiceRequests({context,tenantId:"fictional-a"}), {
+      code:"CCA_DATABASE_PRIVILEGED_ROLE_DENIED"
+    });
+    assert.equal(f.calls.filter(c=>c.sql?.startsWith("SELECT id")).length,0);
+    assert.equal(f.calls.at(-1).sql,"ROLLBACK");
+    assert.equal(f.released(),1);
+  }
 });
 
 test("read-only limits and missing pool are denied", async () => {
