@@ -13,7 +13,7 @@ async function fixture(t,{reader,roles=["SERVICE_AGENT"]}={}){
  vault.register({id:"cca-demo-operator",password:"FICTIONAL-STAGING-ONLY-PASSWORD-123!",
   mfaSecret:secret,roles,tenantIds:["demo-cedar"]});
  const auditLedger=createAuditLedger({file:path.join(dir,"ledger.log"),key:Buffer.alloc(32,15)});
- const server=createStagingServer({vault,account:"cca-demo-operator",auditLedger,postgresReader:reader});
+ const server=createStagingServer({vault,account:"cca-demo-operator",auditLedger,postgresReader:reader,stagingHost:"127.0.0.1"});
  await new Promise(ok=>server.listen(0,"127.0.0.1",ok));
  const origin="http://127.0.0.1:"+server.address().port;
  t.after(async()=>{await new Promise(ok=>server.close(ok));fs.rmSync(dir,{recursive:true,force:true});});
