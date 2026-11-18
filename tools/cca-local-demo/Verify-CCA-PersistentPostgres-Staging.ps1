@@ -49,7 +49,7 @@ ON CONFLICT (id) DO NOTHING;
  $role=@(Invoke-Query "SELECT (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole)::int FROM pg_roles WHERE rolname=current_user;")
  Write-Output ('SAFE_FICTIONAL_COUNTS: total='+($overall -join ',')+'; noTenant='+($noTenant -join ',')+'; Cedar='+($cedar -join ',')+'; Atlas='+($atlas -join ',')+'; privilegedRole='+($role -join ','))
  if($overall[-1].Trim() -ne '2' -or $noTenant[-1].Trim() -ne '0' -or
-  $cedar[-2].Trim() -ne '1' -or $atlas[-2].Trim() -ne '1' -or
+  $cedar[-1].Trim() -ne '1' -or $atlas[-1].Trim() -ne '1' -or
   $role[-1].Trim() -ne '0') {throw 'CCA_PERSISTENT_TENANT_ISOLATION_FAILED'}
  Write-Output 'PASS: Persistent CCA PostgreSQL accepts independent restricted login; unscoped rows 0, Cedar 1, Atlas 1; 2 fictional requests persisted.'
  Write-Output 'PASS: No customer, Zermatt or other CCA database records inspected.'
