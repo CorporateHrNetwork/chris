@@ -140,10 +140,19 @@ if (require.main === module) {
       "CCA_STAGING_WINDOWS_HOST_REQUIRED", "CCA_STAGING_INPUT_TOO_LARGE",
       "CCA_STAGING_KEY_REQUIRED", "CCA_STAGING_VAULT_REQUIRED",
       "CCA_STAGING_STATE_UNAVAILABLE", "CCA_AUDIT_SIGNATURE_INVALID",
+      "CCA_INVALID_IDENTITY_VAULT",
     ]);
     const detail = String(error?.message || "");
-    const classification = [...allowed].find(code => detail.includes(code)) ||
-      "CCA_STAGING_STARTUP_UNAVAILABLE";
+    const safeVaultCategories = [
+      "VAULT_CONTAINER", "USER_IDENTIFIER", "USER_CREDENTIAL_FIELDS",
+      "USER_ROLE_ASSIGNMENT", "USER_TENANT_ASSIGNMENT", "USER_ACTIVE_STATUS",
+      "USER_OTP_COUNTER", "USER_PASSWORD_LOCKOUT", "USER_LOCKOUT_TIME",
+      "USER_MFA_LOCKOUT", "AUDIT_EVENT_FIELDS"
+    ];
+    const classification = detail.startsWith("CCA_INVALID_IDENTITY_VAULT:") ?
+      "CCA_INVALID_IDENTITY_VAULT:" +
+      (safeVaultCategories.find(k => detail === "CCA_INVALID_IDENTITY_VAULT:" + k) || "OTHER") :
+      [...allowed].find(code => detail.includes(code)) || "CCA_STAGING_STARTUP_UNAVAILABLE";
     console.error("CCA staging startup blocked: " + classification);
     process.exitCode = 1;
   });
