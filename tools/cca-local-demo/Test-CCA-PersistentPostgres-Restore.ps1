@@ -69,6 +69,7 @@ try{
  if($LASTEXITCODE -ne 0){throw 'CCA_RESTORE_PG_NOT_READY'}
  $started=$true
  @'
+CREATE ROLE cca_staging_admin NOLOGIN;
 CREATE ROLE cca_staging_request_reader NOLOGIN;
 CREATE DATABASE cca_restored_fictional;
 '@ | & (Join-Path $pgBin 'psql.exe') -X -w -q -v ON_ERROR_STOP=1 -d postgres
