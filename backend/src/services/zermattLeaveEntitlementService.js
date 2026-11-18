@@ -285,7 +285,7 @@ async function ensurePolicyDefinition({
       ...(definition.femaleOnly ? { genders: ["FEMALE"] } : {}),
     },
     entitlementRules: {
-      unit: "WORKING_DAYS",
+      unit: "CALENDAR_DAYS",
       allocationBasis: "EMPLOYMENT_LEVEL",
       hierarchyVersion: hierarchy.version,
     },
@@ -358,7 +358,7 @@ async function ensurePolicyDefinition({
         where: { id: activeRule.id },
         data: {
           defaultEntitlement: entitlement,
-          unit: "WORKING_DAYS",
+          unit: "CALENDAR_DAYS",
           newHireTreatment: "FULL",
           isActive: true,
         },
@@ -371,7 +371,7 @@ async function ensurePolicyDefinition({
           leavePolicyId: policy.id,
           leaveTypeId: leaveType.id,
           defaultEntitlement: entitlement,
-          unit: "WORKING_DAYS",
+          unit: "CALENDAR_DAYS",
           newHireTreatment: "FULL",
           effectiveFrom: EFFECTIVE_FROM,
           isActive: true,
