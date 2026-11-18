@@ -131,6 +131,8 @@ jobs:
             tests/zermattEmployeeEntitlementExceptions.test.js \
             tests/zermattLiveEntitlementIntegration.test.js \
             tests/zermattFullLeaveConversionRuntime.test.js \
+            tests/zermattCalendarDayLeave.test.js \
+            tests/zermattLeaveCalendarRules.test.js \
             tests/exitSettlementNoticeCalculation.test.js
 
       - name: Run focused payroll and exit regressions
