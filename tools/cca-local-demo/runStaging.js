@@ -73,7 +73,31 @@ async function main() {
   const payload = JSON.parse(input.replace(/^\uFEFF/, ""));
   const master = Buffer.from(payload.master, "base64");
   try {
-    const runtime = openStaging({ directory, master, initialize: mode === "enroll" });
+    // Operator-only opt-in: normal CCA staging continues to use its existing
+    // protected local snapshot data and no PostgreSQL client is instantiated.
+    if (mode === "enroll" && payload.postgres) throw Error("CCA_PG_ENROLL_DISABLED");
+    let persistentPostgres = null;
+    if (mode === "serve" && payload.postgres) {
+      if (payload.postgres.enabled !== true ||
+          typeof payload.postgres.password !== "string" ||
+          typeof payload.postgres.clientRoot !== "string")
+        throw Error("CCA_PERSISTENT_POSTGRES_CONFIG_INVALID");
+      const {createPersistentStagingPostgres} = require("./persistentPostgresReader");
+      persistentPostgres = createPersistentStagingPostgres({
+        password: payload.postgres.password, clientRoot: payload.postgres.clientRoot,
+      });
+      payload.postgres.password = null;
+      try { await persistentPostgres.verify(); }
+      catch (error) { await persistentPostgres.close(); throw error; }
+    }
+    let runtime;
+    try {
+      runtime = openStaging({ directory, master, initialize: mode === "enroll",
+        postgresReader: persistentPostgres?.reader });
+    } catch (error) {
+      if (persistentPostgres) await persistentPostgres.close();
+      throw error;
+    }
     if (mode === "enroll") {
       const secret = crypto.randomBytes(20);
       try {
@@ -91,7 +115,12 @@ async function main() {
     }
     const { server, release } = runtime;
     process.on("exit", release);
-    process.once("SIGINT", () => server.close(() => process.exit(0)));
+    process.once("SIGINT", () => {
+      server.close(async () => {
+        try { if (persistentPostgres) await persistentPostgres.close(); }
+        finally { process.exit(0); }
+      });
+    });
     server.once("error", () => {
       console.error("CCA staging could not bind its local port.");
       process.exitCode = 1;
