@@ -36,6 +36,7 @@ test("verified MFA staging session reads only server-owned fictional tenant",asy
  const calls=[];
  const pool={connect:async()=>({
   query:async(sql,args)=>{calls.push({sql,args});
+   if(sql.startsWith("SELECT rolsuper"))return {rows:[{rolsuper:false,rolbypassrls:false}]};
    if(sql.startsWith("SELECT id"))return {rows:[
     {id:"fictional-request",tenant_id:"demo-cedar",service_code:"MANAGED_POSTGRESQL",status:"REQUEST_ONLY"}
    ]};return {rows:[]};},
