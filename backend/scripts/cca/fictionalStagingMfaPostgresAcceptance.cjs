@@ -41,7 +41,7 @@ async function main(){
  const env={...process.env,PGHOST:"127.0.0.1",PGPORT:String(port),PGUSER:"cca_fictional_admin",PGPASSWORD:password,PGCONNECT_TIMEOUT:"3"};
  let started=false,server=null,pool=null;
  const auditDir=path.join(tmp,"vault");fs.mkdirSync(auditDir);
- const now=1800000030, account="cca-staging-operator",secret=Buffer.from("12345678901234567890");
+ let now=1800000030; const account="cca-staging-operator",secret=Buffer.from("12345678901234567890");
  try{
   fs.writeFileSync(pwfile,password+"\n",{flag:"wx",mode:0o600});
   runPg(bin,"initdb",["-D",data,"-U","cca_fictional_admin","--auth=scram-sha-256","--pwfile="+pwfile,"--encoding=UTF8","--locale=C"],env);
@@ -109,6 +109,34 @@ async function main(){
   const logout=await post("/api/logout",{},headers);
   assert.equal(logout.status,200);
   assert.equal((await fetch(base+"/api/staging-postgres-requests",{headers})).status,401);
+  // Simulate a real CCA staging restart: close HTTP server, terminate the
+  // connection pool, and reopen the saved encrypted identity vault and an
+  // entirely new PostgreSQL pool against the same restored test database.
+  await new Promise(resolve=>server.close(resolve)); server=null;
+  await pool.end(); pool=null;
+  now+=60;
+  pool=new Pool({host:"127.0.0.1",port,database:restoredDb,user:"cca_fictional_reader",
+   password:readerPassword,ssl:false,max:2,connectionTimeoutMillis:3000,statement_timeout:3000});
+  const reopenedVault=createIdentityVault({directory:auditDir,encryptionKey:Buffer.alloc(32,31),clock:()=>now});
+  const reopenedAuditLedger=createAuditLedger({file:path.join(auditDir,"audit.log"),key:Buffer.alloc(32,33)});
+  server=createStagingServer({vault:reopenedVault,account,auditLedger:reopenedAuditLedger,
+   stagingHost:"127.0.0.1",postgresReader:createCcaPostgresTenantReader(pool)});
+  await new Promise((resolve,reject)=>{server.once("error",reject);server.listen(0,"127.0.0.1",resolve)});
+  const restartedBase="http://127.0.0.1:"+server.address().port;
+  assert.equal((await fetch(restartedBase+"/api/staging-postgres-requests",{headers})).status,401);
+  const postRestart=(url,payload)=>fetch(restartedBase+url,{method:"POST",
+   headers:{Origin:restartedBase,"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const relogin=await postRestart("/api/password",{account,password:"Fictional-CCA-Stage-Only-Password-12345!"});
+  assert.equal(relogin.status,200);
+  const newChallenge=(await relogin.json()).challenge;
+  const remfa=await postRestart("/api/mfa",{challenge:newChallenge,code:otpAt(secret,Math.floor(now/30))});
+  assert.equal(remfa.status,200);
+  const freshHeaders={Cookie:remfa.headers.get("set-cookie").split(";")[0]};
+  const afterRestart=await fetch(restartedBase+"/api/staging-postgres-requests",{headers:freshHeaders});
+  assert.equal(afterRestart.status,200);
+  assert.deepEqual((await afterRestart.json()).requests,
+   [{id:"fictional-cedar-001",serviceCode:"MANAGED_POSTGRESQL",status:"REQUEST_ONLY"}]);
+  console.log("PASS: complete staging HTTP and real PostgreSQL pool restart; newly authenticated MFA session reads the restored fictional record, stale cookie denied.");
   console.log("PASS: isolated PostgreSQL dump/restore + restricted pg pool; MFA staging HTTP reads restored Cedar, Atlas isolated, unscoped zero, writes denied, logout denied.");
  }finally{
   if(server)await new Promise(resolve=>server.close(resolve));
