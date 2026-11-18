@@ -82,6 +82,23 @@ async function main() {
       });
       // Only cryptographic digests and categorical schema statuses appear.
       console.log("CCA_VAULT_COMPATIBILITY="+JSON.stringify(results));
+      try {
+        const {rehearseStagingVaultRecovery}=require("./rehearseStagingVaultRecovery");
+        const rehearsal=rehearseStagingVaultRecovery({directory,master});
+        console.log("CCA_VAULT_FULL_RECOVERY_REHEARSAL="+JSON.stringify(rehearsal));
+      } catch (error) {
+        // No protected paths, users, role labels, secrets or file bodies.
+        const allowedRehearsalFailures=new Set([
+          "CCA_STAGING_CHECKPOINT_MISMATCH", "CCA_VAULT_CHECKPOINT_MISSING",
+          "CCA_VAULT_SOURCE_FILE_INVALID", "CCA_VAULT_FULL_REHEARSAL_INVALID_INPUT",
+          "CCA_INVALID_IDENTITY_VAULT", "CCA_REHEARSAL_SERVER_NOT_CONSTRUCTED",
+        ]);
+        const code=String(error?.message||"");
+        console.log("CCA_VAULT_FULL_RECOVERY_REHEARSAL="+JSON.stringify({
+          status:"BLOCKED",
+          reason:allowedRehearsalFailures.has(code)?code:"CCA_REHEARSAL_VALIDATION_FAILED"
+        }));
+      }
       return;
     }
     // Operator-only opt-in: normal CCA staging continues to use its existing
