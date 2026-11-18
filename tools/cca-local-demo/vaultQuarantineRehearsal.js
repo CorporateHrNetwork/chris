@@ -65,6 +65,9 @@ function simulateVaultQuarantine({encryptedFile,encryptionKey,tempDir}={}){
   status:"PASS",
   quarantinedAccounts:quarantined,
   unaffectedActiveAccounts:data.users.filter(user=>user.active===true).length,
+  stagingOperatorUnaffected:data.users.some(user=>
+    user.id==="cca-staging-operator" && user.active===true &&
+    user.roles.every(role=>Object.hasOwn(ROLES,role))),
   noAccessForQuarantined:true,
   sourceUnchanged:true,
  });
