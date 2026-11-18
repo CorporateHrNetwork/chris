@@ -62,8 +62,17 @@ async function main(){
    "CREATE POLICY cca_fictional_scope ON cca_service_requests FOR SELECT TO cca_fictional_reader USING(tenant_id=current_setting('cca.tenant_id',true))"
   ].join(";");
   sql(db,setup);
+  // Validate restored database, not just initial fixture. No original staging
+  // database is involved: both source and destination live inside this
+  // temporary isolated PostgreSQL cluster.
+  const restoredDb="cca_fictional_mfa_restored";
+  const dump=path.join(tmp,"fictional-restorable.dump");
+  runPg(bin,"pg_dump",["-w","-Fc","-d",db,"-f",dump],env);
+  sql("postgres","CREATE DATABASE "+restoredDb);
+  runPg(bin,"pg_restore",["-w","--exit-on-error","--single-transaction","-d",restoredDb,dump],env);
+  assert.equal(sql(restoredDb,"SELECT COUNT(*) FROM cca_service_requests"),"2");
   assert.equal(sql(db,"SELECT rolsuper::text||':'||rolbypassrls::text FROM pg_roles WHERE rolname='cca_fictional_reader'"),"false:false");
-  pool=new Pool({host:"127.0.0.1",port,database:db,user:"cca_fictional_reader",
+  pool=new Pool({host:"127.0.0.1",port,database:restoredDb,user:"cca_fictional_reader",
    password:readerPassword,ssl:false,max:2,connectionTimeoutMillis:3000,statement_timeout:3000});
   const reader=createCcaPostgresTenantReader(pool);
   const vault=createIdentityVault({directory:auditDir,encryptionKey:Buffer.alloc(32,31),clock:()=>now});
@@ -100,7 +109,7 @@ async function main(){
   const logout=await post("/api/logout",{},headers);
   assert.equal(logout.status,200);
   assert.equal((await fetch(base+"/api/staging-postgres-requests",{headers})).status,401);
-  console.log("PASS: real PostgreSQL and restricted pg pool; MFA staging HTTP read only Cedar, Atlas isolated, unscoped zero, writes denied, logout denied.");
+  console.log("PASS: isolated PostgreSQL dump/restore + restricted pg pool; MFA staging HTTP reads restored Cedar, Atlas isolated, unscoped zero, writes denied, logout denied.");
  }finally{
   if(server)await new Promise(resolve=>server.close(resolve));
   if(pool)await pool.end();
