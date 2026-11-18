@@ -37,7 +37,9 @@ function validateUser(user) {
   if (typeof user.passwordHash !== "string" || typeof user.salt !== "string" ||
       typeof user.mfaSecret !== "string") invalidSchema("USER_CREDENTIAL_FIELDS");
   if (!Array.isArray(user.roles) || user.roles.length < 1 ||
-      !user.roles.every(r => ALLOWED_ROLES.includes(r))) invalidSchema("USER_ROLE_ASSIGNMENT");
+      !user.roles.every(r => typeof r === "string")) invalidSchema("USER_ROLE_SHAPE");
+  if (!user.roles.every(r => ALLOWED_ROLES.includes(r)))
+    invalidSchema("USER_ROLE_UNRECOGNIZED");
   if (!Array.isArray(user.tenantIds) || !user.tenantIds.every(id =>
       ["demo-cedar", "demo-atlas"].includes(id))) invalidSchema("USER_TENANT_ASSIGNMENT");
   if (typeof user.active !== "boolean") invalidSchema("USER_ACTIVE_STATUS");
