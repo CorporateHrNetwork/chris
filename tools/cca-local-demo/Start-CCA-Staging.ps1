@@ -1,4 +1,4 @@
-param([switch]$GeneratePassword)
+param([switch]$GeneratePassword, [switch]$UsePersistentPostgres)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
@@ -21,6 +21,27 @@ function Invoke-StagingNode([string]$Mode, [byte[]]$Key, [string]$Password) {
         if ($Mode -eq 'enroll') {
             if ($GeneratePassword) { $payload.generatePassword = $true }
             else { $payload.password = $Password }
+        }
+        if ($UsePersistentPostgres) {
+            if ($Mode -ne 'serve') { throw 'CCA_POSTGRES_ONLY_AVAILABLE_FOR_SERVE' }
+            $pgRoot=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNETWORK-CCA-ManagedPostgres-Staging'
+            $status=Join-Path $pgRoot 'status.json'
+            $clientRoot=Join-Path $pgRoot 'pg-client\node_modules'
+            if(!(Test-Path $status) -or !(Test-Path (Join-Path $clientRoot 'pg\package.json'))) {
+                throw 'CCA_PERSISTENT_POSTGRES_NOT_CONFIGURED'
+            }
+            $meta=Get-Content $status -Raw | ConvertFrom-Json
+            if($meta.scope -ne 'FICTIONAL_STAGING_ONLY' -or $meta.database -ne 'cca_fictional_services' -or
+               $meta.port -ne 55451 -or $meta.host -ne '127.0.0.1') {
+                throw 'CCA_PERSISTENT_POSTGRES_SCOPE_INVALID'
+            }
+            $salt=[Text.Encoding]::UTF8.GetBytes('CCA managed postgres fictional staging credentials v1')
+            $protected=Join-Path $pgRoot 'protected-credentials\reader.dpapi'
+            $secretBytes=[Security.Cryptography.ProtectedData]::Unprotect(
+                [IO.File]::ReadAllBytes($protected),$salt,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+            try {
+                $payload.postgres=@{enabled=$true;password=[Text.Encoding]::UTF8.GetString($secretBytes);clientRoot=$clientRoot}
+            } finally { [Array]::Clear($secretBytes,0,$secretBytes.Length) }
         }
         $encoded = [Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Compress))
         try {
@@ -49,6 +70,7 @@ function Assert-PrivateDirectory([string]$Path) {
 }
 
 if (!(Test-Path -LiteralPath $directory)) {
+    if ($UsePersistentPostgres) { throw 'CCA_STAGING_MUST_BE_ENROLLED_BEFORE_POSTGRES' }
     $first = $null
     if (!$GeneratePassword) {
         $password = Read-Host 'Set a unique staging password (14-256 characters)' -AsSecureString
