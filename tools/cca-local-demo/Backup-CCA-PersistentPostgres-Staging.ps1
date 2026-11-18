@@ -29,14 +29,7 @@ New-Item -ItemType Directory -Path $working -Force | Out-Null
 $blob=[IO.File]::ReadAllBytes($dpapiPath)
 $plain=[Security.Cryptography.ProtectedData]::Unprotect($blob,$entropy,[Security.Cryptography.DataProtectionScope]::CurrentUser)
 $env:PGHOST='127.0.0.1';$env:PGPORT='55451';$env:PGUSER='cca_staging_admin'
-try{
- $env:PGPASSWORD=[Text.Encoding]::UTF8.GetString($plain)
- & (Join-Path $pgBin 'pg_dump.exe') -X 2>$null
-}catch{
- # pg_dump version-check commands are not needed for this operator run.
-}finally{
- # The actual archive run below uses the same verified dedicated connection.
-}
+$env:PGPASSWORD=[Text.Encoding]::UTF8.GetString($plain)
 try {
  & (Join-Path $pgBin 'pg_dump.exe') -w -Fc -d cca_fictional_services -f $plaintext
  if($LASTEXITCODE -ne 0){throw 'CCA_PERSISTENT_PG_DUMP_FAILED'}
