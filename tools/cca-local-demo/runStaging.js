@@ -13,7 +13,7 @@ const ACCOUNT = "cca-staging-operator";
 const PORT = 4184;
 const STAGING_HOST = "127.0.0.2";
 
-function openStaging({ directory, master, initialize = false, clock }) {
+function openStaging({ directory, master, initialize = false, clock, postgresReader }) {
   const state = path.join(directory, "state");
   const security = path.join(directory, "host-security");
   const files = {
@@ -49,6 +49,9 @@ function openStaging({ directory, master, initialize = false, clock }) {
     const server = createStagingServer({
       vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST,
       support: createDurableDemoState({ dataDir: path.join(directory, "fictional-support") }),
+      // Injected only by a trusted staging operator harness. The normal
+      // production-facing startup never configures a pool or reader.
+      postgresReader,
       sourceThrottle: createPersistentThrottle({ file: files.throttle, clock }),
     });
     return { release, server };
