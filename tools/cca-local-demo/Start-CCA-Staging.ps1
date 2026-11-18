@@ -1,9 +1,13 @@
-param([switch]$GeneratePassword, [switch]$UsePersistentPostgres, [switch]$InspectVaultRecovery)
+param([switch]$GeneratePassword, [switch]$UsePersistentPostgres, [switch]$InspectVaultRecovery, [switch]$PrepareRecoveredVault, [switch]$UseRecoveredVault)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
 $node = (Get-Command node.exe -CommandType Application).Source
-$directory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D'
+$originalDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D'
+$recoveredDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D-Recovered'
+if ($PrepareRecoveredVault -and ($UseRecoveredVault -or $InspectVaultRecovery -or
+    $UsePersistentPostgres -or $GeneratePassword)) { throw 'CCA_RECOVERY_INCOMPATIBLE_FLAGS' }
+$directory = if ($UseRecoveredVault) { $recoveredDirectory } else { $originalDirectory }
 $security = Join-Path $directory 'host-security'
 $state = Join-Path $directory 'state'
 $keyFile = Join-Path $security 'staging-key.dpapi'
@@ -70,7 +74,9 @@ function Assert-PrivateDirectory([string]$Path) {
 }
 
 if (!(Test-Path -LiteralPath $directory)) {
-    if ($InspectVaultRecovery) { throw 'CCA_INSPECTION_STAGING_MISSING' }
+    if ($InspectVaultRecovery -or $UseRecoveredVault -or $PrepareRecoveredVault) {
+        throw 'CCA_SELECTED_STAGING_DIRECTORY_MISSING'
+    }
     if ($UsePersistentPostgres) { throw 'CCA_STAGING_MUST_BE_ENROLLED_BEFORE_POSTGRES' }
     $first = $null
     if (!$GeneratePassword) {
@@ -119,7 +125,24 @@ if ($keyItem.PSIsContainer -or $keyItem.Length -gt 4096 -or
     ($keyItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'CCA staging key file is invalid.' }
 $master = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($keyFile), $entropy, $scope)
 try {
-    if ($InspectVaultRecovery) {
+    if ($PrepareRecoveredVault) {
+        if (Test-Path -LiteralPath $recoveredDirectory) {
+            throw 'CCA_RECOVERED_DIRECTORY_ALREADY_EXISTS'
+        }
+        $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
+        $acl=[Security.AccessControl.DirectorySecurity]::new()
+        $acl.SetOwner($sid)
+        $acl.SetAccessRuleProtection($true,$false)
+        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
+            $sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
+        [IO.Directory]::CreateDirectory($recoveredDirectory,$acl) | Out-Null
+        Assert-PrivateDirectory $recoveredDirectory
+        Invoke-StagingNode 'prepare-recovered' $master
+        foreach($part in @($recoveredDirectory,(Join-Path $recoveredDirectory 'state'),
+                            (Join-Path $recoveredDirectory 'host-security'))) {
+            Assert-PrivateDirectory $part
+        }
+    } elseif ($InspectVaultRecovery) {
         if ($UsePersistentPostgres -or $GeneratePassword) { throw 'CCA_INSPECTION_INCOMPATIBLE_FLAGS' }
         Invoke-StagingNode 'inspect-vault' $master
     } else {
