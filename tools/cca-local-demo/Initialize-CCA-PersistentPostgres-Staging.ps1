@@ -70,7 +70,8 @@ try {
    -RedirectStandardOutput (Join-Path $root 'pgctl-start.stdout.log') `
    -RedirectStandardError (Join-Path $root 'pgctl-start.stderr.log') -PassThru -NoNewWindow
  if(!$pgctl.WaitForExit(20000)){ $pgctl.Kill(); throw 'CCA_PERSISTENT_PG_START_TIMEOUT' }
- if($pgctl.ExitCode -ne 0){throw 'CCA_PERSISTENT_PG_START_FAILED'}
+ & (Join-Path $pgBin 'pg_isready.exe') -h 127.0.0.1 -p $port -t 3 | Out-Null
+ if($LASTEXITCODE -ne 0){throw 'CCA_PERSISTENT_PG_NOT_READY'}
  $started=$true
  'CREATE DATABASE cca_fictional_services;' | & (Join-Path $pgBin 'psql.exe') -X -w -q -v ON_ERROR_STOP=1 -d postgres
  if($LASTEXITCODE -ne 0){throw 'CCA_PERSISTENT_PG_CREATE_DB_FAILED'}
