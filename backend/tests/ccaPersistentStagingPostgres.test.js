@@ -53,6 +53,7 @@ test("explicit server-owned reader works after staging restart with new MFA; old
  const reader=createCcaPostgresTenantReader({connect:async()=>({
   query:async(sql,args)=>{
    calls.push({sql,args});
+   if(sql.startsWith("SELECT rolsuper"))return {rows:[{rolsuper:false,rolbypassrls:false}]};
    if(sql.startsWith("SELECT id"))return {rows:[{id:"fictional-cedar-persisted",
      tenant_id:"demo-cedar",service_code:"MANAGED_POSTGRESQL",status:"REQUEST_ONLY"}]};
    return {rows:[]};
