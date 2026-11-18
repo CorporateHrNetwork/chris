@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   LeavePage,
@@ -638,7 +639,7 @@ export default function LeaveEntitlements() {
         />
       </Panel>
 
-      {provisioningOpen && (
+      {provisioningOpen && createPortal(
         <div
           style={overlay}
           role="presentation"
@@ -920,10 +921,11 @@ export default function LeaveEntitlements() {
               )}
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {selected && (
+      {selected && createPortal(
         <div
           style={overlay}
           role="presentation"
@@ -1012,7 +1014,8 @@ export default function LeaveEntitlements() {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
     </LeavePage>
   );
@@ -1032,16 +1035,28 @@ function Summary({ label, value }) {
 const overlay = {
   position: "fixed",
   inset: 0,
-  zIndex: 1200,
+  zIndex: 10000,
   display: "grid",
   placeItems: "center",
   padding: 16,
+  boxSizing: "border-box",
+  width: "100%",
+  height: "100dvh",
+  overflowY: "auto",
   background: "rgba(0,0,0,.76)",
 };
 
 const modal = {
   width: "min(100%,540px)",
+  maxWidth: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  boxSizing: "border-box",
+  maxHeight: "calc(100dvh - 32px)",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
   display: "grid",
+  gridAutoRows: "max-content",
   gap: 12,
   padding: 20,
   borderRadius: 16,
@@ -1052,9 +1067,7 @@ const modal = {
 
 const provisioningModal = {
   ...modal,
-  width: "min(960px,calc(100vw - 32px))",
-  maxHeight: "calc(100dvh - 32px)",
-  overflowY: "auto",
+  width: "min(960px,100%)",
 };
 
 const modalHeader = {
@@ -1063,7 +1076,7 @@ const modalHeader = {
   justifyContent: "space-between",
   gap: 12,
   position: "sticky",
-  top: -20,
+  top: 0,
   zIndex: 3,
   padding: "14px 0",
   background: "#07150E",
@@ -1074,7 +1087,7 @@ const modalActions = {
   justifyContent: "flex-end",
   gap: 10,
   position: "sticky",
-  bottom: -20,
+  bottom: 0,
   padding: "12px 0",
   background: "#07150E",
 };
@@ -1091,7 +1104,7 @@ const fieldset = {
 const checkGrid = {
   display: "grid",
   gridTemplateColumns:
-    "repeat(auto-fit,minmax(260px,1fr))",
+    "repeat(auto-fit,minmax(min(260px,100%),1fr))",
   gap: 8,
 };
 
