@@ -38,7 +38,20 @@ function validateUser(user) {
       typeof user.mfaSecret !== "string") invalidSchema("USER_CREDENTIAL_FIELDS");
   if (!Array.isArray(user.roles) || user.roles.length < 1 ||
       !user.roles.every(r => typeof r === "string")) invalidSchema("USER_ROLE_SHAPE");
-  if (!user.roles.every(r => ALLOWED_ROLES.includes(r))) {
+  // Only a locally validated offline recovery candidate may carry this
+  // no-grants sentinel. It is never assignable through enrollment/role APIs.
+  const quarantined=user.roles.length===1 &&
+    user.roles[0]==="CCA_QUARANTINED_NO_ACCESS";
+  if(quarantined) {
+    if(user.active!==false ||
+       !Array.isArray(user.quarantineOriginalRoles) ||
+       user.quarantineOriginalRoles.length<1 ||
+       user.quarantineOriginalRoles.length>10 ||
+       !user.quarantineOriginalRoles.every(role=>
+         typeof role==="string"&&role.length>=1&&role.length<=128))
+      invalidSchema("USER_QUARANTINE_INVALID");
+  }
+  if (!quarantined && !user.roles.every(r => ALLOWED_ROLES.includes(r))) {
     const unsupported=user.roles.filter(role=>!ALLOWED_ROLES.includes(role));
     const canonicalizable=unsupported.every(role=>
       ALLOWED_ROLES.includes(role.trim().toUpperCase()));
