@@ -17,8 +17,12 @@ function calculateLeaveDays({ startDate, endDate, policy, publicHolidays = [], s
 
   const entitlementUnit = String(policy?.entitlementRules?.unit || "WORKING_DAYS").toUpperCase();
   const rules = policy?.calendarRules || {};
-  const countWeekends = entitlementUnit === "CALENDAR_DAYS" || rules.countWeekends === true;
-  const countPublicHolidays = entitlementUnit === "CALENDAR_DAYS" || rules.countPublicHolidays === true;
+  // Explicit policy calendar rules take precedence over the entitlement unit.
+  // Zermatt counts weekends but excludes approved public holidays from calendar-day leave.
+  const countWeekends = typeof rules.countWeekends === "boolean"
+    ? rules.countWeekends : entitlementUnit === "CALENDAR_DAYS";
+  const countPublicHolidays = typeof rules.countPublicHolidays === "boolean"
+    ? rules.countPublicHolidays : entitlementUnit === "CALENDAR_DAYS";
   const weekdays = Array.isArray(scheduleWeekdays) && scheduleWeekdays.length
     ? new Set(scheduleWeekdays.map(Number))
     : new Set([1, 2, 3, 4, 5]);

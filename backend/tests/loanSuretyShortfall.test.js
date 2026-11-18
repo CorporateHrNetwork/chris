@@ -13,7 +13,7 @@ function fixture({type='Full-time',amount=200000,committed=false,cover=300000,su
   if(sql.includes('payroll_loans'))return totalExposure ? [{employeeId:'app',status:'ACTIVE',outstandingAmount:totalExposure}] : [];
   throw Error(sql);
  }};
- const module={exports:{}};vm.runInNewContext(source,{require:()=>client,module,exports:module.exports,Date,Number,Math,Set});
+ const module={exports:{}};vm.runInNewContext(source,{require:id=>id==='./zermattEmployeeEntitlementPolicy'?require('../src/services/zermattEmployeeEntitlementPolicy'):client,module,exports:module.exports,Date,Number,Math,Set});
  return module.exports.assessLoanCollateral({organizationId:'org',employeeNumber:'A',requestedAmount:amount,suretyEmployeeNumber:surety,excludeLoanId,asOf:'2026-10-28',prismaClient:client});
 }
 test('only the shortfall is guaranteed',async()=>{const a=await fixture();assert.equal(a.surety.coveredAmount,40514.24);assert.equal(a.applicantCoveredAmount,159485.76);});

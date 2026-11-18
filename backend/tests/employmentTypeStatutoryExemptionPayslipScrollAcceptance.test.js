@@ -49,7 +49,7 @@ test("Nigeria payroll applies zero PAYE and zero pension contribution for exempt
   for (const expected of [
     "employmentTypeExemption = statutoryEmploymentTypeExemption(employee.employmentType)",
     "const employeePension = employmentTypeExemption.pensionExempt",
-    "const employerPension = employmentTypeExemption.pensionExempt",
+    "const employerPension = (employmentTypeExemption.employerPensionExempt ?? employmentTypeExemption.pensionExempt)",
     "const recurringAnnualTax = employmentTypeExemption.payeExempt || minimumWageExempt",
     "const totalAnnualTax = employmentTypeExemption.payeExempt || minimumWageExempt",
     "const payeTax = employmentTypeExemption.payeExempt",
