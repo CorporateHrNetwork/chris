@@ -130,8 +130,21 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(() => {
-    console.error("CCA staging startup blocked. Check enrollment, the writer lock, and the audit checkpoint.");
+  main().catch((error) => {
+    // Safe operator error taxonomy only; never print credentials, file paths,
+    // SQL queries, private identity data or arbitrary exception messages.
+    const allowed = new Set([
+      "CCA_PERSISTENT_POSTGRES_DISABLED", "CCA_PERSISTENT_POSTGRES_SCOPE_INVALID",
+      "CCA_PERSISTENT_POSTGRES_IDENTITY_INVALID", "CCA_PERSISTENT_POSTGRES_CONFIG_INVALID",
+      "CCA_STAGING_CHECKPOINT_MISMATCH", "CCA_STAGING_ENROLLMENT_REQUIRED",
+      "CCA_STAGING_WINDOWS_HOST_REQUIRED", "CCA_STAGING_INPUT_TOO_LARGE",
+      "CCA_STAGING_KEY_REQUIRED", "CCA_STAGING_VAULT_REQUIRED",
+      "CCA_STAGING_STATE_UNAVAILABLE", "CCA_AUDIT_SIGNATURE_INVALID",
+    ]);
+    const detail = String(error?.message || "");
+    const classification = [...allowed].find(code => detail.includes(code)) ||
+      "CCA_STAGING_STARTUP_UNAVAILABLE";
+    console.error("CCA staging startup blocked: " + classification);
     process.exitCode = 1;
   });
 }
