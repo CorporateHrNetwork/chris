@@ -35,8 +35,11 @@ $checks=@(foreach($spec in $tasks){
    $state='AWAITING_DAILY_WINDOW'
   }elseif($lastRun -ge $due){
    if($task.State -eq 'Running'){$state='RUNNING'}
-   elseif($lastResult -eq 0){$state='EXECUTED_SUCCESSFULLY'}
-   else{$state='FAILED';$issues.Add($name+':FAILED')}
+   elseif($lastResult -ne 0){$state='FAILED';$issues.Add($name+':FAILED')}
+   elseif($lastRun -gt $deadline){
+    $state='LATE_EXECUTION'
+    $issues.Add($name+':LATE_EXECUTION')
+   }else{$state='EXECUTED_SUCCESSFULLY'}
   }elseif($now -gt $deadline){
    $state='MISSED'
    $issues.Add($name+':MISSED')
