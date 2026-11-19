@@ -54,8 +54,9 @@ async function listYearEndBonus({ organizationId, year, locationIds = null, pris
   const yearEnd = `${year}-12-31`;
   const rows = employees.map(employee => {
     const months = serviceMonths({ hireDate: employee.hireDate, exitDate: employee.exitDate, episodes: employee.employmentEpisodes, year });
+    const salaryAsOf = employee.exitDate && dateOnly(employee.exitDate) < yearEnd ? dateOnly(employee.exitDate) : yearEnd;
     const payRate = (ratesByEmployee.get(employee.id) || []).find(rate =>
-      dateOnly(rate.effectiveFrom) <= yearEnd && (!rate.effectiveTo || dateOnly(rate.effectiveTo) >= yearEnd)
+      dateOnly(rate.effectiveFrom) <= salaryAsOf && (!rate.effectiveTo || dateOnly(rate.effectiveTo) >= salaryAsOf)
     );
     const calculation = projectBonus({ employee, year, grossMonthly: payRate?.amount, months });
     return {
