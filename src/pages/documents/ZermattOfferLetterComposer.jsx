@@ -76,7 +76,10 @@ function createPrintDocument({ values, sections, brandingLogo }) {
   return { frame, img };
 }
 export default function ZermattOfferLetterComposer() {
-  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [employeeNameSearch, setEmployeeNameSearch] = useState("");
+  const [matches, setMatches] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedEmployeeNumber, setSelectedEmployeeNumber] = useState("");
   const [terms, setTerms] = useState(null);
   const [values, setValues] = useState(initial);
   const [overrides, setOverrides] = useState({});
@@ -91,13 +94,29 @@ export default function ZermattOfferLetterComposer() {
   }), [values, terms]);
   const sections = useMemo(() => clauses.map(([heading, text], i) => [heading, overrides[i] ?? fill(text, resolved)]), [overrides, resolved]);
   const missing = required.filter(key => !String(values[key] || "").trim());
-  async function load() {
+  useEffect(() => {
+    const name = employeeNameSearch.trim();
+    if (selectedEmployeeNumber || name.length < 2) { setMatches([]); setSearchLoading(false); return; }
+    let active = true;
+    setSearchLoading(true);
+    const timer = window.setTimeout(() => {
+      apiRequest(`/api/zermatt/offer-terms/search?name=${encodeURIComponent(name)}`)
+        .then(result => { if (active) setMatches(result.data || []); })
+        .catch(err => { if (active) { setMatches([]); setError(err.message || "Employee name search failed."); } })
+        .finally(() => { if (active) setSearchLoading(false); });
+    }, 300);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [employeeNameSearch, selectedEmployeeNumber]);
+  async function load(employeeNumber) {
     try {
       setLoading(true); setError(""); setTerms(null); setOverrides({});
-      if (!employeeNumber.trim()) throw new Error("Enter an employee number.");
-      const result = await apiRequest(`/api/zermatt/offer-terms/${encodeURIComponent(employeeNumber.trim())}`);
+      if (!employeeNumber) throw new Error("Select an employee from the matching names.");
+      const result = await apiRequest(`/api/zermatt/offer-terms/${encodeURIComponent(employeeNumber)}`);
       const detail = result.data;
       setTerms(detail);
+      setSelectedEmployeeNumber(employeeNumber);
+      setEmployeeNameSearch(detail.employeeName || "");
+      setMatches([]);
       const firstName = String(detail.employeeName || "").split(" ")[0];
       setValues({ ...initial, employee_full_name: detail.employeeName || "", employee_salutation_name: firstName,
         job_title: detail.designation || "", branch_name: detail.branch || "",
@@ -119,8 +138,22 @@ export default function ZermattOfferLetterComposer() {
     <h2>Zermatt Offer Letter Composer · Draft v1.0</h2>
     <p>Load an employee's authoritative CHRiS terms, complete editable HR fields, review clauses, then print or save as PDF. Printing does not approve, sign, issue or archive the letter.</p>
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 15 }}>
-      <label>Employee No. <input value={employeeNumber} onChange={e => setEmployeeNumber(e.target.value)} placeholder="ZLL000043" /></label>
-      <button type="button" onClick={load} disabled={loading}>{loading ? "Loading…" : "Load employee"}</button>
+      <div style={{ minWidth: 280, flex: "1 1 360px", position: "relative" }}>
+        <label htmlFor="zermatt-offer-employee-name">Search employee by name</label>
+        <input id="zermatt-offer-employee-name" aria-label="Search employee by name" style={{ display: "block", width: "100%", boxSizing: "border-box" }}
+          value={employeeNameSearch} autoComplete="off" onChange={e => { setEmployeeNameSearch(e.target.value); setTerms(null); setSelectedEmployeeNumber(""); setError(""); }}
+          placeholder="Type first, middle or surname" />
+        {searchLoading && <p role="status">Searching employees…</p>}
+        {employeeNameSearch.trim().length >= 2 && !searchLoading && !matches.length && !selectedEmployeeNumber && <p>No matching employees in your authorized branch.</p>}
+        {matches.length > 0 && !selectedEmployeeNumber && <div role="listbox" aria-label="Matching employees" style={{ border: "1px solid #91a99d", borderRadius: 6, maxHeight: 250, overflowY: "auto", background: "var(--chris-surface, #fff)", padding: 4 }}>
+          {matches.map(person => <button key={person.employeeNumber} role="option" aria-selected="false" type="button"
+            style={{ display: "block", width: "100%", padding: 10, marginBottom: 4, textAlign: "left", background: "transparent", color: "inherit", border: "1px solid #aaa", borderRadius: 4, cursor: "pointer" }}
+            disabled={loading} onClick={() => load(person.employeeNumber)}>
+            <strong>{person.employeeName}</strong> · {person.designation} · {person.branch}
+          </button>)}
+        </div>}
+        {selectedEmployeeNumber && <p>Selected employee: <strong>{values.employee_full_name}</strong></p>}
+      </div>
     </div>
     {error && <p role="alert" style={{ color: "#d85a44" }}>{error}</p>}
     {terms && <>
