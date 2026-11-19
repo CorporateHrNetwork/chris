@@ -19,6 +19,30 @@ export default function ZermattEmploymentResources() {
   const [sopSearch, setSopSearch] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedSop, setSelectedSop] = useState(null);
+  const [offerEmployeeNumber, setOfferEmployeeNumber] = useState("");
+  const [offerTerms, setOfferTerms] = useState(null);
+  const [offerError, setOfferError] = useState("");
+  const [offerLoading, setOfferLoading] = useState(false);
+  async function previewOfferTerms() {
+    try {
+      setOfferLoading(true); setOfferError(""); setOfferTerms(null);
+      if (!offerEmployeeNumber.trim()) throw new Error("Enter an employee number to resolve their authoritative leave entitlement.");
+      const response = await apiRequest(`/api/zermatt/offer-terms/${encodeURIComponent(offerEmployeeNumber.trim())}`);
+      setOfferTerms(response.data);
+    } catch (error) { setOfferError(error.message || "Unable to resolve employee offer terms."); }
+    finally { setOfferLoading(false); }
+  }
+  function offerLine(line) {
+    if (!offerTerms) return line;
+    return String(line)
+      .replaceAll("{{employee_full_name}}", offerTerms.employeeName || "")
+      .replaceAll("{{job_title}}", offerTerms.designation || "")
+      .replaceAll("{{branch_name}}", offerTerms.branch || "")
+      .replaceAll("{{annual_leave_days}}", String(offerTerms.annualLeaveDays))
+      .replaceAll("{{annual_leave_day_unit}}", String(offerTerms.annualLeaveUnit).replaceAll("_", " ").toLowerCase())
+      .replaceAll("{{year_end_bonus_clause}}", offerTerms.yearEndBonusClause || "");
+  }
+
 
   useEffect(() => {
     let active = true;
@@ -65,7 +89,21 @@ export default function ZermattEmploymentResources() {
 
     {tab === "legal" && <Grid>{(data.legalResources || []).map((item) => <ResourceCard key={item.id} item={item} />)}</Grid>}
     {tab === "policy" && <Document title={data.employmentPolicy?.title} subtitle={`Version: ${data.employmentPolicy?.version}`}>{(data.employmentPolicy?.sections || []).map(([heading, text]) => <Section key={heading} heading={heading} text={text} />)}</Document>}
-    {tab === "offer" && <Document title={data.employmentOfferTemplate?.title} subtitle="Reusable Zermatt recruitment / appointment working template. Management and HR must complete all placeholders before issue.">{(data.employmentOfferTemplate?.body || []).map((line, index) => <p key={index} style={paragraph}>{line}</p>)}</Document>}
+    {tab === "offer" && <>
+      <section style={panel}>
+        <h2 style={h2}>Employee-Specific Offer Terms</h2>
+        <p style={muted}>Resolve annual leave directly from CHRiS effective employment-level and approved leave rules. Other draft placeholders require HR review before issue.</p>
+        <div style={row}>
+          <input aria-label="Employee number for offer" value={offerEmployeeNumber} onChange={e => setOfferEmployeeNumber(e.target.value)} placeholder="Employee No. e.g. ZLL000043" />
+          <button type="button" onClick={previewOfferTerms} disabled={offerLoading}>{offerLoading ? "Checking…" : "Load Authoritative Terms"}</button>
+        </div>
+        {offerError && <p role="alert">{offerError}</p>}
+        {offerTerms && <p>Employee: <strong>{offerTerms.employeeName}</strong> · Level: {offerTerms.employmentLevel} · Annual Leave: <strong>{offerTerms.annualLeaveDays} {offerTerms.annualLeaveUnit.replaceAll("_", " ").toLowerCase()}</strong> · Bonus: {offerTerms.yearEndBonusEligible ? "Eligible" : "Expatriate excluded"} · Source: {offerTerms.annualLeaveSource}</p>}
+      </section>
+      <Document title={data.employmentOfferTemplate?.title} subtitle="Draft only — HR must complete remaining fields, obtain authorized approval and issue the signed letter.">
+        {(data.employmentOfferTemplate?.body || []).map((line, index) => <p key={index} style={paragraph}>{offerLine(line)}</p>)}
+      </Document>
+    </>}
     {tab === "sops" && <>
       <section style={panel}>
         <div style={row}>
