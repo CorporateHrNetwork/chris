@@ -12,7 +12,7 @@ router.get("/search", async (req, res) => {
     if (req.auth.organization?.slug !== "zermatt-liquor-limited") {
       return res.status(404).json({ status: "error", message: "Not available for this organization." });
     }
-    const query = String(req.query.name || "").trim().replace(/\\s+/g, " ");
+    const query = String(req.query.name || "").trim().replace(/\s+/g, " ");
     if (query.length < 2 || query.length > 100) {
       return res.status(400).json({ status: "error", message: "Enter at least two letters of an employee name (maximum 100 characters)." });
     }
