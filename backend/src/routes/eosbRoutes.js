@@ -39,6 +39,30 @@ function requireHeadOfHr(req, res, next) {
   return next();
 }
 
+function canViewGratuity(req) {
+  return isHeadOfHr(req) || (req.auth?.permissions || []).includes("benefits.gratuity.view");
+}
+
+// null is permitted only for a full-location Head HR. Assigned-location users
+// receive an explicit allowlist, including [] when none is assigned.
+function gratuityLocationIds(req) {
+  if (isHeadOfHr(req) && req.auth?.locationScope === "ALL_LOCATIONS" && !req.auth?.activeLocationId) return null;
+  const allowed = (req.auth?.availableLocations || []).map((item) => item.id).filter(Boolean);
+  if (req.auth?.activeLocationId) return allowed.includes(req.auth.activeLocationId) ? [req.auth.activeLocationId] : [];
+  return allowed;
+}
+function requireGratuityView(req, res, next) {
+  if (!canViewGratuity(req)) return res.status(403).json({
+    status: "error", code: "EOSB_GRATUITY_VIEW_DENIED",
+    message: "Gratuity access must be granted by an authorized HR administrator.",
+  });
+  if (gratuityLocationIds(req)?.length === 0) return res.status(403).json({
+    status: "error", code: "EOSB_BRANCH_REQUIRED",
+    message: "No authorized branch has been assigned to this account.",
+  });
+  next();
+}
+
 function handleError(res, error, fallback) {
   console.error(fallback, error);
   return res.status(error.statusCode || 500).json({
@@ -108,11 +132,12 @@ router.get(
 );
 
 // The EoSB register and individual statements are organization-wide sensitive benefit records.
-router.get("/accounts", requireHeadOfHr, async (req, res) => {
+router.get("/accounts", requireGratuityView, async (req, res) => {
   try {
     const accounts = await listEosbAccounts({
       organizationId: req.auth.organizationId,
       asOf: req.query.asOf || new Date(),
+      locationIds: gratuityLocationIds(req),
     });
     return res.json({ status: "success", results: accounts.length, data: accounts });
   } catch (error) {
@@ -120,11 +145,12 @@ router.get("/accounts", requireHeadOfHr, async (req, res) => {
   }
 });
 
-router.get("/accounts/export.csv", requireHeadOfHr, async (req, res) => {
+router.get("/accounts/export.csv", requireGratuityView, async (req, res) => {
   try {
     const accounts = await listEosbAccounts({
       organizationId: req.auth.organizationId,
       asOf: req.query.asOf || new Date(),
+      locationIds: gratuityLocationIds(req),
     });
     const header = [
       "Employee Number", "Employee Name", "Employment Type", "Status", "Branch", "Department", "Designation",
@@ -160,7 +186,23 @@ router.get("/accounts/export.csv", requireHeadOfHr, async (req, res) => {
   }
 });
 
-router.get("/accounts/:employeeNumber", requireHeadOfHr, async (req, res) => {
+router.get("/accounts/:employeeNumber", requireGratuityView, async (req, res) => {
+  const locationIds = gratuityLocationIds(req);
+  if (locationIds !== null) {
+    const prisma = require("../config/prisma");
+    const employee = await prisma.employee.findFirst({
+      where: {
+        organizationId: req.auth.organizationId,
+        employeeNumber: String(req.params.employeeNumber || "").trim().toUpperCase(),
+        locationId: { in: locationIds },
+      },
+      select: { id: true },
+    });
+    if (!employee) return res.status(404).json({
+      status: "error", code: "EOSB_EMPLOYEE_NOT_IN_SCOPE",
+      message: "Gratuity record not available in your authorized branch.",
+    });
+  }
   try {
     const statement = await getEosbStatement({
       organizationId: req.auth.organizationId,
