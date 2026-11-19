@@ -28,6 +28,7 @@ async function resolveZermattOfferTerms({ organizationId, employeeNumber, asOf =
   if (leaveDays == null || !Number.isFinite(leaveDays)) throw new Error("AUTHORITATIVE_ANNUAL_LEAVE_ENTITLEMENT_MISSING");
   return {
     employeeNumber: employee.employeeNumber,
+    hireDate: employee.hireDate ? new Date(employee.hireDate).toISOString().slice(0, 10) : null,
     employeeName: [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "),
     employmentType: employee.employmentType,
     designation: employee.designation?.name || "",
@@ -39,7 +40,7 @@ async function resolveZermattOfferTerms({ organizationId, employeeNumber, asOf =
     yearEndBonusEligible: !expatriate,
     yearEndBonusClause: expatriate
       ? "Expatriates are not eligible for the Zermatt Year-End Bonus."
-      : "Your Year-End Bonus, subject to the approved Zermatt policy, is Basic Salary plus 50% of End-of-Month Gross for a full January–December service year, prorated by eligible months worked in the calendar year.",
+      : "If approved by management, your Year-End Bonus shall be Basic Salary plus 50% of End-of-Month Gross for a full January–December service year, prorated by eligible months worked in the calendar year.",
   };
 }
 module.exports = { resolveZermattOfferTerms };
