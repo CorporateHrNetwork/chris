@@ -14,6 +14,7 @@ import "./styles/ChrisPrintVisualLanguage.css";
 const PlannedWorkspace = lazy(() => import("./pages/shared/PlannedWorkspace"));
 const TransportSupportPreparation = lazy(() => import("./pages/benefits/TransportSupportPreparation"));
 const TransportSupportPayroll = lazy(() => import("./pages/benefits/TransportSupportPayroll"));
+const YearEndBonus = lazy(() => import("./pages/benefits/YearEndBonus"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
 const RecruitmentReports = lazy(() => import("./pages/RecruitmentReports"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -197,6 +198,7 @@ function App() {
         <Route path="/benefits/transport-support" element={<ProtectedLayout><TransportSupportPayroll /></ProtectedLayout>} />
         <Route path="/benefits/transport-support/preparation" element={<ProtectedLayout><TransportSupportPreparation /></ProtectedLayout>} />
         <Route path="/benefits/pension" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords type="PENSION" title="Pension Benefits" /></ConsolidatedComplianceRoute></ProtectedLayout>} />
+        <Route path="/benefits/year-end-bonus" element={<ProtectedLayout><YearEndBonus /></ProtectedLayout>} />
         <Route path="/benefits/gratuity" element={<ProtectedLayout><BenefitChildPage title="Gratuity" description="Manage gratuity eligibility, service-based benefit rules and accrued obligations." metricLabels={["Eligible Employees","Accrued Liability","Upcoming Eligibility","Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/health-insurance" element={<ProtectedLayout><BenefitChildPage title="Health Insurance" description="Manage employee health-insurance coverage, dependants, eligibility and plan participation." metricLabels={["Active Plans","Covered Employees","Dependants","Coverage Exceptions"]} /></ProtectedLayout>} />
         <Route path="/benefits/life-insurance" element={<ProtectedLayout><BenefitChildPage title="Life Insurance" description="Manage employee life-insurance participation, coverage levels and eligibility." metricLabels={["Covered Employees","Active Policies","Coverage Value","Exceptions"]} /></ProtectedLayout>} />
