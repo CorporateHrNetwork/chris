@@ -457,6 +457,16 @@ async function main() {
   */
 
   const permissions = [
+    {
+      key: "benefits.view",
+      name: "View Benefits",
+      description: "View the Benefits module overview without payroll administration rights.",
+    },
+    {
+      key: "benefits.leave_allowance.view",
+      name: "View Leave Allowance",
+      description: "View the branch-scoped Leave Allowance register without management or payroll rights.",
+    },
     /*
     ----------------------------------------------------------
     DASHBOARD
