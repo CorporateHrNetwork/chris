@@ -65,7 +65,7 @@ function scopedLocationWhere(req) {
 }
 function validOfferDate(value) {
   const date = String(value || "");
-  if (!/^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$/.test(date) || new Date(date + "T00:00:00.000Z").toISOString().slice(0,10) !== date) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date) || new Date(date + "T00:00:00.000Z").toISOString().slice(0,10) !== date) {
     const err = new Error("A valid offer letter date in YYYY-MM-DD format is required.");
     err.statusCode = 400; throw err;
   }
@@ -76,7 +76,7 @@ function validOfferDate(value) {
 router.get("/managers/search", async (req,res) => {
   try {
     if (req.auth.organization?.slug !== "zermatt-liquor-limited") return res.status(404).json({ status:"error",message:"Not available for this organization." });
-    const query=String(req.query.name || "").trim().replace(/\\s+/g, " ");
+    const query=String(req.query.name || "").trim().replace(/\s+/g, " ");
     if (query.length < 2 || query.length > 100) return res.status(400).json({ status:"error",message:"Enter at least two letters of the reporting manager's name." });
     const tokens=query.split(" ").slice(0,8);
     const records=await prisma.employee.findMany({
