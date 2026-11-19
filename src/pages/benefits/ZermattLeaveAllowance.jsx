@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../../services/api";
+import { apiRequest, getActiveLocationId } from "../../services/api";
 import useAuthorization from "../../hooks/useAuthorization";
 
 const money = (value, currency = "NGN") => {
@@ -24,6 +24,12 @@ export default function ZermattLeaveAllowance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [locationId, setLocationId] = useState(() => getActiveLocationId());
+  useEffect(() => {
+    const refreshLocation = () => setLocationId(getActiveLocationId());
+    window.addEventListener("chris:location-context-changed", refreshLocation);
+    return () => window.removeEventListener("chris:location-context-changed", refreshLocation);
+  }, []);
   useEffect(() => {
     let active = true;
     (async () => {
@@ -38,7 +44,7 @@ export default function ZermattLeaveAllowance() {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [locationId]);
 
   const rows = useMemo(() => {
     const source = data?.rows || [];
@@ -67,6 +73,7 @@ export default function ZermattLeaveAllowance() {
       <Metric label="Employees With Payroll" value={loading ? "—" : summary.employeesWithCurrentPayroll ?? "—"} />
       <Metric label="Due This Month" value={loading ? "—" : summary.employeesDueThisMonth ?? "—"} />
       <Metric label="Approved Payments" value={loading ? "—" : summary.totalApprovedPayments ?? "—"} />
+      <Metric label="Payable This Month" value={loading ? "—" : money(summary.amountPayableThisMonth ?? 0)} />
     </div>
 
     <section style={panelStyle}>
