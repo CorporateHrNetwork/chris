@@ -96,7 +96,7 @@ export default function ZermattOfferLetterComposer() {
   const missing = required.filter(key => !String(values[key] || "").trim());
   useEffect(() => {
     const name = employeeNameSearch.trim();
-    if (name.length < 2) { setMatches([]); setSearchLoading(false); return; }
+    if (selectedEmployeeNumber || name.length < 2) { setMatches([]); setSearchLoading(false); return; }
     let active = true;
     setSearchLoading(true);
     const timer = window.setTimeout(() => {
@@ -106,7 +106,7 @@ export default function ZermattOfferLetterComposer() {
         .finally(() => { if (active) setSearchLoading(false); });
     }, 300);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [employeeNameSearch]);
+  }, [employeeNameSearch, selectedEmployeeNumber]);
   async function load(employeeNumber) {
     try {
       setLoading(true); setError(""); setTerms(null); setOverrides({});
