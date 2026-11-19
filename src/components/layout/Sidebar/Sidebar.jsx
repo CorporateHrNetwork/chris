@@ -72,7 +72,7 @@ const MENU_GROUPS = [
     {label:"Assets Dashboard",path:"/assets"},{label:"Asset Register",path:"/assets/register"},{label:"Asset Categories",path:"/assets/categories"},{label:"Asset Assignment",path:"/assets/assignment"},{label:"Asset Transfers",path:"/assets/transfers"},{label:"Asset Returns",path:"/assets/returns"},{label:"Maintenance",path:"/assets/maintenance"},{label:"Asset Reports",path:"/assets/reports"}
   ]},
   { id:"documents", label:"Documents", icon:<FaFolderOpen/>, adminOnly:true, children:[
-    {label:"Documents Dashboard",path:"/documents"},{label:"Employee Documents",path:"/documents/employee"},{label:"HR Documents",path:"/documents/hr"},{label:"Company Policies",path:"/documents/policies"},{label:"Templates",path:"/documents/templates"},{label:"Document Categories",path:"/documents/categories"},{label:"Expiry Tracking",path:"/documents/expiry-tracking"},{label:"Document Requests",path:"/documents/requests"}
+    {label:"Documents Dashboard",path:"/documents"},{label:"Employee Documents",path:"/documents/employee"},{label:"HR Documents",path:"/documents/hr"},{label:"Company Policies",path:"/documents/policies"},{label:"Templates",path:"/documents/templates"},{label:"Document Categories",path:"/documents/categories"},{label:"Expiry Tracking",path:"/documents/expiry-tracking"},{label:"Document Requests",path:"/documents/requests"},{label:"Employment Resources & SOPs",path:"/documents/employment-resources",zermattOnly:true,resourceOnly:true}
   ]},
   { id:"reports", label:"Reports & Analytics", icon:<FaFileAlt/>, permission:"reports.view", children:[
     {label:"Reports Dashboard",path:"/reports"},{label:"Workforce Analytics",path:"/reports?view=workforce"},{label:"Employee Reports",path:"/reports?view=employees"},{label:"Headcount Reports",path:"/reports?view=headcount"},{label:"Branch Reports",path:"/reports?view=branches"},{label:"Recruitment Reports",path:"/reports/recruitment"},{label:"Attendance Reports",path:"/reports?view=attendance",permission:"attendance.view"},{label:"Leave Reports",path:"/reports?view=leave",permission:"leave.view"},{label:"Payroll Reports",path:"/reports?view=payroll",permission:"payroll.view"},{label:"Audit Trail",path:"/reports/audit-trail"},{label:"Compensation Reports",path:"/reports/compensation"},{label:"Benefits Reports",path:"/reports/benefits"},{label:"Custom Reports",path:"/reports/custom"}
@@ -109,11 +109,12 @@ function Sidebar() {
       if (group.clientTenantOnly && isPlatformTenant) return false;
       if (group.platformTenantOnly && !isPlatformTenant) return false;
       if (group.authenticated) return true;
+      if (group.id === "documents") return canViewSettings || (isZermatt && (hasPermission("employees.view") || hasPermission("recruitment.view")));
       if (group.adminOnly) return canViewSettings;
       if (group.id === "benefits") return canViewSettings || hasPermission("benefits.view");
       if (group.permission) return hasPermission(group.permission);
       return false;
-    }).map((group) => ({ ...group, children: group.children?.filter((child) => (!child.zermattOnly || isZermatt) && (child.notesOnly ? notesAccess : (group.id === "benefits" && !canViewSettings ? (child.permission ? hasPermission(child.permission) : child.path === "/benefits") : (group.id === "payroll" && !hasPermission("payroll.view") ? false : !child.permission || hasPermission(child.permission))))) }));
+    }).map((group) => ({ ...group, children: group.children?.filter((child) => (!child.zermattOnly || isZermatt) && (group.id !== "documents" || canViewSettings || (child.resourceOnly && (hasPermission("employees.view") || hasPermission("recruitment.view")))) && (child.notesOnly ? notesAccess : (group.id === "benefits" && !canViewSettings ? (child.permission ? hasPermission(child.permission) : child.path === "/benefits") : (group.id === "payroll" && !hasPermission("payroll.view") ? false : !child.permission || hasPermission(child.permission))))) }));
   }, [authorizationLoading, canViewSettings, hasPermission, isPlatformTenant, isZermatt, notesAccess]);
 
   const pathMatches = (childPath, includeQuery = false) => {
