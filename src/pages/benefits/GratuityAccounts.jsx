@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../../services/api";
+import { apiRequest, getActiveLocationId } from "../../services/api";
 import { PrintableReportHeader, PrintableReportFooter } from "../../components/reporting/PrintableReportBranding";
 import "./GratuityAccounts.css";
 
@@ -13,6 +13,7 @@ function csv(value) {
 
 export default function GratuityAccounts() {
   const [accounts, setAccounts] = useState([]);
+  const [locationId, setLocationId] = useState(() => getActiveLocationId());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -32,7 +33,12 @@ export default function GratuityAccounts() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const refresh = () => setLocationId(getActiveLocationId());
+    window.addEventListener("chris:location-context-changed", refresh);
+    return () => window.removeEventListener("chris:location-context-changed", refresh);
+  }, []);
+  useEffect(() => { setAccounts([]); setSelected(null); load(); }, [locationId]);
 
   useEffect(() => {
     const clearPrintMode = () => setPrintMode("");
