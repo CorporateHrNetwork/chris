@@ -275,10 +275,10 @@ async function getEosbStatement({ organizationId, employeeNumber, asOf = new Dat
   return statement;
 }
 
-async function listEosbAccounts({ organizationId, asOf = new Date(), prismaClient = prisma }) {
+async function listEosbAccounts({ organizationId, asOf = new Date(), locationIds = null, prismaClient = prisma }) {
   const organization = await resolveOrganization(prismaClient, organizationId);
   const [employees, rates, loans, guarantees] = await Promise.all([
-    prismaClient.employee.findMany({ where: { organizationId }, select: employeeSelect, orderBy: { employeeNumber: "asc" } }),
+    prismaClient.employee.findMany({ where: { organizationId, ...(locationIds === null ? {} : { locationId: { in: locationIds } }) }, select: employeeSelect, orderBy: { employeeNumber: "asc" } }),
     grossSalaryRates(prismaClient, organizationId),
     loanExposureRows(prismaClient, organizationId),
     suretyCommitments(prismaClient, organizationId, null),
