@@ -458,6 +458,11 @@ async function main() {
 
   const permissions = [
     {
+      key: "benefits.year_end_bonus.view",
+      name: "View and Export Year-End Bonus",
+      description: "View and export branch-scoped Year-End Bonus calculations without approving payouts.",
+    },
+    {
       key: "benefits.gratuity.view",
       name: "View Gratuity",
       description: "View Gratuity records and exports within assigned CHRiS locations.",
