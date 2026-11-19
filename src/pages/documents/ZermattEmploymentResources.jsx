@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../../services/api";
+import ZermattOfferLetterComposer from "./ZermattOfferLetterComposer";
 
 const TABS = [
   ["legal", "Nigerian Employment Resources"],
@@ -90,6 +91,7 @@ export default function ZermattEmploymentResources() {
     {tab === "legal" && <Grid>{(data.legalResources || []).map((item) => <ResourceCard key={item.id} item={item} />)}</Grid>}
     {tab === "policy" && <Document title={data.employmentPolicy?.title} subtitle={`Version: ${data.employmentPolicy?.version}`}>{(data.employmentPolicy?.sections || []).map(([heading, text]) => <Section key={heading} heading={heading} text={text} />)}</Document>}
     {tab === "offer" && <>
+      <ZermattOfferLetterComposer />
       <section style={panel}>
         <h2 style={h2}>Employee-Specific Offer Terms</h2>
         <p style={muted}>Resolve annual leave directly from CHRiS effective employment-level and approved leave rules. Other draft placeholders require HR review before issue.</p>
