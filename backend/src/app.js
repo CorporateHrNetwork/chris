@@ -157,6 +157,7 @@ app.use("/api", zermattFinancialSupportRoutes);
 app.use("/api", zermattHrPayrollInputRoutes);
 app.use("/api", zermattLeaveAllowanceRoutes);
 app.use("/api/benefits/year-end-bonus", zermattYearEndBonusRoutes);
+app.use("/api/zermatt/offer-terms", require("./routes/zermattOfferTermsRoutes"));
 app.use("/api", zermattSalaryReviewRoutes);
 app.use("/api/loans", loanOriginationWorkflowRoutes);
 app.use("/api", payrollLiabilityEditRoutes);
