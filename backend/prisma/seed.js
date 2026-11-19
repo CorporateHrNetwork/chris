@@ -458,6 +458,11 @@ async function main() {
 
   const permissions = [
     {
+      key: "benefits.gratuity.view",
+      name: "View Gratuity",
+      description: "View Gratuity records and exports within assigned CHRiS locations.",
+    },
+    {
       key: "benefits.view",
       name: "View Benefits",
       description: "View the Benefits module overview without payroll administration rights.",
