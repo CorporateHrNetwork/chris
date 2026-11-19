@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../../services/api";
+import { nairaToWords } from "../../utils/nairaToWords";
 
 const clauses = [
   ["1. Remuneration", "Your gross monthly salary shall be {{gross_monthly_salary}} ({{salary_amount_in_words}}), payable in accordance with the Company's established payroll schedule. Applicable statutory deductions, including Pay-As-You-Earn (PAYE) tax, employee pension contributions and other lawful deductions, shall be made in accordance with prevailing legislation and Company policy."],
@@ -29,11 +30,10 @@ const initial = {
 };
 const fields = [
   ["employee_title", "Title"], ["employee_salutation_name", "Salutation name"],
-  ["letter_date", "Letter date"], ["offer_reference_number", "Offer reference"],
+  ["letter_date", "Letter date"], ["offer_reference_number", "Offer reference (system-generated)"],
   ["commencement_date", "Commencement date"], ["gross_monthly_salary", "Gross monthly salary"],
-  ["salary_amount_in_words", "Salary in words"], ["work_start_time", "Work start time"],
+  ["salary_amount_in_words", "Salary in words (automatic)"], ["work_start_time", "Work start time"],
   ["probation_duration", "Probation period"], ["work_location_address", "Duty station address"],
-  ["reporting_manager_or_department", "Reports to"],
   ["authorized_signatory_name", "Company signatory"],
   ["authorized_signatory_position", "Signatory designation"],
 ];
@@ -86,6 +86,11 @@ export default function ZermattOfferLetterComposer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editClauses, setEditClauses] = useState(false);
+  const [managerSearch, setManagerSearch] = useState("");
+  const [managerMatches, setManagerMatches] = useState([]);
+  const [selectedManagerId, setSelectedManagerId] = useState("");
+  const [managerSearching, setManagerSearching] = useState(false);
+  const [referenceLoading, setReferenceLoading] = useState(false);
   const resolved = useMemo(() => ({
     ...values,
     annual_leave_days: terms?.annualLeaveDays ?? "[authoritative entitlement required]",
@@ -107,12 +112,39 @@ export default function ZermattOfferLetterComposer() {
     }, 300);
     return () => { active = false; window.clearTimeout(timer); };
   }, [employeeNameSearch, selectedEmployeeNumber]);
+  useEffect(() => {
+    const query = managerSearch.trim();
+    if (selectedManagerId || !terms || query.length < 2) { setManagerMatches([]); setManagerSearching(false); return; }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setManagerSearching(true);
+      apiRequest(`/api/zermatt/offer-terms/managers/search?name=${encodeURIComponent(query)}`)
+        .then(result => { if (active) setManagerMatches((result.data || []).filter(row => row.employeeNumber !== selectedEmployeeNumber)); })
+        .catch(err => { if (active) { setManagerMatches([]); setError(err.message || "Unable to search reporting managers."); } })
+        .finally(() => { if (active) setManagerSearching(false); });
+    }, 300);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [managerSearch, selectedManagerId, terms, selectedEmployeeNumber]);
+  useEffect(() => {
+    if (!selectedEmployeeNumber || !values.letter_date) return;
+    let active = true;
+    setReferenceLoading(true);
+    setValues(v => ({ ...v, offer_reference_number: "" }));
+    apiRequest("/api/zermatt/offer-terms/reference", {
+      method: "POST", body: { employeeNumber: selectedEmployeeNumber, letterDate: values.letter_date },
+    }).then(result => { if (active) setValues(v => ({ ...v, offer_reference_number: result.data.reference })); })
+      .catch(err => { if (active) setError(err.message || "Unable to create an offer reference."); })
+      .finally(() => { if (active) setReferenceLoading(false); });
+    return () => { active = false; };
+  }, [selectedEmployeeNumber, values.letter_date]);
+
   async function load(employeeNumber) {
     try {
       setLoading(true); setError(""); setTerms(null); setOverrides({});
       if (!employeeNumber) throw new Error("Select an employee from the matching names.");
       const result = await apiRequest(`/api/zermatt/offer-terms/${encodeURIComponent(employeeNumber)}`);
       const detail = result.data;
+      setManagerSearch(""); setSelectedManagerId(""); setManagerMatches([]);
       setTerms(detail);
       setSelectedEmployeeNumber(employeeNumber);
       setEmployeeNameSearch(detail.employeeName || "");
@@ -125,7 +157,7 @@ export default function ZermattOfferLetterComposer() {
     finally { setLoading(false); }
   }
   async function print() {
-    if (!terms || missing.length) { setError("Complete all required fields and load authoritative employee terms before printing."); return; }
+    if (!terms || missing.length || referenceLoading || !selectedManagerId) { setError("Complete required fields, select a reporting manager and generate the offer reference before printing."); return; }
     setError("");
     const logo = new URL("/zrt-logo.jpeg", window.location.href).href;
     const { frame, img } = createPrintDocument({ values, sections, brandingLogo: logo });
@@ -160,9 +192,32 @@ export default function ZermattOfferLetterComposer() {
       <p><strong>{terms.employeeName}</strong> · {terms.designation} · {terms.branch} · {terms.employmentLevel} · <strong>{terms.annualLeaveDays} {terms.annualLeaveUnit.replaceAll("_", " ").toLowerCase()} annual leave</strong> · {terms.yearEndBonusEligible ? "Year-End Bonus subject to management approval" : "Expatriate — bonus excluded"}</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
         {fields.map(([key,label]) => <label key={key} style={{ display: "grid", gap: 4 }}>{label}{required.includes(key) ? " *" : ""}
-          <input aria-label={label} value={values[key] || ""} onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))} />
+          <input aria-label={label} readOnly={key === "offer_reference_number" || key === "salary_amount_in_words"}
+            value={values[key] || ""} onChange={e => setValues(v => key === "gross_monthly_salary"
+              ? { ...v, gross_monthly_salary: e.target.value, salary_amount_in_words: nairaToWords(e.target.value) }
+              : { ...v, [key]: e.target.value })} />
         </label>)}
       </div>
+      <div style={{ marginTop: 15, maxWidth: 560 }}>
+        <label htmlFor="offer-reporting-manager">Reports to — search by name *</label>
+        <input id="offer-reporting-manager" aria-label="Reports to — search by name"
+          placeholder="Type reporting manager's first name or surname"
+          value={managerSearch} onChange={e => {
+            setManagerSearch(e.target.value); setSelectedManagerId(""); setManagerMatches([]);
+            setValues(v => ({ ...v, reporting_manager_or_department: "" }));
+          }} />
+        {managerSearching && <p role="status">Searching reporting managers…</p>}
+        {!!managerMatches.length && !selectedManagerId && <div role="listbox" aria-label="Matching reporting managers" style={{ border: "1px solid #91a99d", borderRadius: 6, padding: 4, maxHeight: 230, overflowY: "auto" }}>
+          {managerMatches.map(person => <button key={person.employeeNumber} type="button"
+            style={{ display:"block", width:"100%", padding:8, textAlign:"left", marginBottom:4 }}
+            onClick={() => { setSelectedManagerId(person.id); setManagerSearch(person.name);
+              setManagerMatches([]); setValues(v => ({ ...v, reporting_manager_or_department: `${person.name} — ${person.designation}` })); }}>
+            {person.name} · {person.designation} · {person.branch}
+          </button>)}
+        </div>}
+        {selectedManagerId && <p>Selected: <strong>{values.reporting_manager_or_department}</strong></p>}
+      </div>
+      {referenceLoading && <p role="status">Generating unique offer reference…</p>}
       <p style={{ marginTop: 10 }}>Authoritative annual-leave entitlement and bonus eligibility are read-only. Salary and other HR fields must be reviewed against approved records before issue.</p>
       <button type="button" onClick={() => setEditClauses(v => !v)}>{editClauses ? "Close clause editor" : "Customize clauses"}</button>
       {editClauses && <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
