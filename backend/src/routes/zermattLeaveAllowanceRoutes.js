@@ -190,8 +190,16 @@ router.get(
         }),
         getSettings(prisma, req.auth.organizationId),
       ]);
+      // Derive every visible KPI from the same authorized rows as the register.
+      // Never return consolidated payroll totals in a selected or assigned branch view.
       const rows = (data.rows || []).filter((row) => visibleInCurrentHrScope(req, row.locationId));
-      const payableRows = rows.filter((row) => row.dueThisMonth && Number(row.amountPayableThisMonth || 0) > 0);
+      const employeesWithCurrentPayroll = rows.filter((row) => Boolean(row.payrollPeriod)).length;
+      const dueRows = rows.filter((row) => row.dueThisMonth);
+      const payableRows = dueRows.filter((row) => Number(row.projectedLeaveAllowance || 0) > 0);
+      const approvedPayments = rows.flatMap((row) => row.paymentHistory || []);
+      const approvedAmount = approvedPayments.reduce(
+        (sum, payment) => sum + Number(payment.amount || payment.leaveAllowance || 0), 0
+      );
       return res.json({
         status: "success",
         data: {
@@ -199,24 +207,19 @@ router.get(
           settings,
           rows,
           summary: {
-            // Benefits-only viewers must not receive organization-wide payroll aggregates.
-            ...(req.auth.permissions?.includes("payroll.view") ? data.summary : {
-              currentPayrollMonth: data.summary?.currentPayrollMonth,
-              employeesWithCurrentPayroll: rows.filter((row) => row.hasCurrentPayroll).length,
-              employeesDueThisMonth: rows.filter((row) => row.dueThisMonth).length,
-              totalApprovedPayments: rows.reduce((sum, row) => sum + (row.paymentHistory?.length || 0), 0),
-            }),
+            employees: rows.length,
+            currentPayrollMonth: data.summary?.currentPayrollMonth || null,
+            employeesWithCurrentPayroll,
+            employeesDueThisMonth: dueRows.length,
+            totalApprovedPayments: approvedPayments.length,
+            totalApprovedAmount: Math.round(approvedAmount * 100) / 100,
             visibleEmployees: rows.length,
-            visibleApprovedPayments: rows.reduce((sum, row) => sum + Number(row.paymentHistory?.length || 0), 0),
-            visibleApprovedAmount: rows.reduce(
-              (sum, row) => sum + (row.paymentHistory || []).reduce((inner, payment) => inner + Number(payment.amount || 0), 0),
-              0
-            ),
+            visibleApprovedPayments: approvedPayments.length,
+            visibleApprovedAmount: Math.round(approvedAmount * 100) / 100,
             payableEmployeesThisMonth: payableRows.length,
-            amountPayableThisMonth: payableRows.reduce(
-              (sum, row) => sum + Number(row.amountPayableThisMonth || 0),
-              0
-            ),
+            amountPayableThisMonth: Math.round(
+              payableRows.reduce((sum, row) => sum + Number(row.projectedLeaveAllowance || 0), 0) * 100
+            ) / 100,
           },
         },
       });
