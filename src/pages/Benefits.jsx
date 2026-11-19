@@ -46,7 +46,9 @@ function Benefits() {
           <button type="button" onClick={() => navigate("/benefits?workspace=leave-allowance")}>Open Leave Allowance Register</button>}
         {hasPermission("benefits.gratuity.view") &&
           <button type="button" style={{ marginLeft: 12 }} onClick={() => navigate("/benefits/gratuity")}>Open Gratuity Accounts</button>}
-        {!hasPermission("benefits.leave_allowance.view") && !hasPermission("benefits.gratuity.view") &&
+        {isZermatt && hasPermission("benefits.year_end_bonus.view") &&
+          <button type="button" style={{ marginLeft: 12 }} onClick={() => navigate("/benefits/year-end-bonus")}>Open Year-End Bonus</button>}
+        {!hasPermission("benefits.leave_allowance.view") && !hasPermission("benefits.gratuity.view") && !hasPermission("benefits.year_end_bonus.view") &&
           <p>Your Benefits overview access is active. No additional Benefits workspaces have been assigned.</p>}
       </section>
     );
@@ -195,6 +197,7 @@ function Benefits() {
       }
       quickActions={[
         ...(isZermatt ? [<QuickActionCard key="outstation-allowance" title="Outstation Allowance Voucher" subtitle="Employee allowances, trip costs and external approval voucher" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits?workspace=outstation-allowance")} />] : []),
+        ...(isZermatt ? [<QuickActionCard key="year-end-bonus" title="Year-End Bonus" subtitle="Basic + 50% of End-of-Month Gross, annual proration, CSV export" icon={<FaGift />} onClick={() => navigate("/benefits/year-end-bonus")} />] : []),
         <QuickActionCard key="transport-support" title="Transport Support Pay" subtitle="Separate benefit register, approvals, payments and carry-forward balances" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits/transport-support")} />,
         <QuickActionCard
           key="leave-allowance"
