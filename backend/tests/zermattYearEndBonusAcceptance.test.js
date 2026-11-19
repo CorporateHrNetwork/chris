@@ -17,17 +17,20 @@ vm.runInNewContext(source, {
 });
 const { serviceMonths, projectBonus } = moduleRef.exports;
 test("full January–December engagement gives all twelve months", () => {
-  assert.equal(serviceMonths({ hireDate: "2024-01-01", year: 2026 }), 12);
+  assert.equal(serviceMonths({ hireDate: "2024-01-01", year: 2026, asOf: "2026-12-31" }), 12);
 });
 test("new hire in October receives three calendar months; exits in September receive nine", () => {
-  assert.equal(serviceMonths({ hireDate: "2026-10-20", year: 2026 }), 3);
-  assert.equal(serviceMonths({ hireDate: "2025-02-01", exitDate: "2026-09-09", year: 2026 }), 9);
+  assert.equal(serviceMonths({ hireDate: "2026-10-20", year: 2026, asOf: "2026-12-31" }), 3);
+  assert.equal(serviceMonths({ hireDate: "2025-02-01", exitDate: "2026-09-09", year: 2026, asOf: "2026-12-31" }), 9);
 });
 test("employment episodes do not double-count overlapping months", () => {
-  assert.equal(serviceMonths({ hireDate: "2025-01-01", year: 2026, episodes: [
+  assert.equal(serviceMonths({ hireDate: "2025-01-01", year: 2026, asOf: "2026-12-31", episodes: [
     { startDate: "2025-01-01", endDate: "2026-03-31" },
     { startDate: "2026-03-20", endDate: "2026-06-15" },
   ] }), 6);
+});
+test("current year does not count unworked future months", () => {
+  assert.equal(serviceMonths({ hireDate: "2024-01-01", year: 2026, asOf: "2026-11-19" }), 11);
 });
 test("bonus is Basic + half end-month gross, prorated and expatriate ineligible", () => {
   const employee = { hireDate: "2026-04-01", employmentType: "Full-Time" };
