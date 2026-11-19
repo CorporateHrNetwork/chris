@@ -21,107 +21,22 @@ $pgHealthy=$false
 $httpHealthy=$false
 $unauthDenied=$false
 $recoveredVaultPresent=$false
-# Require correctly configured, enabled, password-logon backup scheduling.
-# Do not equate a registered task with a successful unattended run.
+# Check that a password-logon backup task is enabled and configured for daily off-site upload.
 $backupScheduled=$false
-$backupTaskName='CRNETWORK-CCA-ManagedPostgres-Backup'
 try {
- $task=Get-ScheduledTask -TaskName $backupTaskName -ErrorAction Stop
- $action=@($task.Actions | Where-Object {
-  $_.Execute -match '(?i)(^|[\\/])powershell(\.exe)?if(!(Test-Path $statusFile)){
- $issues.Add('PERSISTENT_POSTGRES_STATUS_MISSING')
-}else{
- $meta=Get-Content $statusFile -Raw|ConvertFrom-Json
- if($meta.scope -ne 'FICTIONAL_STAGING_ONLY' -or
-    $meta.host -ne '127.0.0.1' -or $meta.port -ne 55451 -or
-    $meta.database -ne 'cca_fictional_services'){
-   $issues.Add('PERSISTENT_POSTGRES_SCOPE_INVALID')
- }
- try{
-  & $pgReady -h 127.0.0.1 -p 55451 -t 3 | Out-Null
-  $pgHealthy=($LASTEXITCODE -eq 0)
- }catch{}
- if(!$pgHealthy){$issues.Add('PERSISTENT_POSTGRES_NOT_READY')}
- if($meta.backupCoverageVerified -ne $true){$issues.Add('RESTORE_NOT_VERIFIED')}
- if($meta.lastIsolatedOffsiteRestoreUtc){
-   $restoreTime=([datetimeoffset]::Parse([string]$meta.lastIsolatedOffsiteRestoreUtc)).UtcDateTime
-   $restoreAge=[math]::Round(($now-$restoreTime).TotalDays,2)
-   if($restoreAge -lt 0 -or $restoreAge -gt $MaxRestoreAgeDays){
-    $issues.Add('RESTORE_CHECK_STALE')
-   }
- }else{$issues.Add('RESTORE_CHECK_MISSING')}
-}
-try{
- $response=Invoke-WebRequest -Uri 'http://127.0.0.2:4184/' -UseBasicParsing -TimeoutSec 4
- $httpHealthy=($response.StatusCode -eq 200)
-}catch{}
-if(!$httpHealthy){$issues.Add('PROTECTED_CCA_WEB_UNAVAILABLE')}
-try{
- $response=Invoke-WebRequest -Uri 'http://127.0.0.2:4184/api/staging-postgres-requests' -UseBasicParsing -TimeoutSec 4
-}catch{
- if($_.Exception.Response){
-  $unauthDenied=([int]$_.Exception.Response.StatusCode -eq 401)
- }
-}
-if(!$unauthDenied){$issues.Add('CCA_PROTECTED_READ_AUTH_GATE_FAILED')}
-if(Test-Path $readinessPath){
- $record=Get-Content $readinessPath -Raw | ConvertFrom-Json
- $recoveredVaultPresent=($record.scope -eq 'ISOLATED_RECOVERED_CCA_STAGING' -and
-    $record.originalVaultUnchanged -eq $true -and
-    $record.stagingOperatorUnaffected -eq $true -and
-    $record.quarantinedAccounts -eq 2)
-}
-if(!$recoveredVaultPresent){$issues.Add('RECOVERED_IDENTITY_STATUS_MISSING')}
-$manifests=@(Get-ChildItem $manifestFolder -File -Filter 'cca-managed-postgres-*.json' -ErrorAction SilentlyContinue|
- Sort-Object LastWriteTime -Descending)
-foreach($entry in $manifests){
- try{
-  $m=Get-Content $entry.FullName -Raw | ConvertFrom-Json
-  if($m.scope -ne 'CCA_FICTIONAL_PERSISTENT_STAGING' -or
-     $m.offsiteUploaded -ne $true -or
-     [string]$m.encryptedFile -notmatch '^cca-managed-postgres-\d{8}-\d{6}-[a-f0-9]{8}\.cms$' -or
-     [string]$m.archiveSha256 -notmatch '^[a-fA-F0-9]{64}$') {continue}
-  $archive=Join-Path $manifestFolder $m.encryptedFile
-  if(!(Test-Path $archive)){continue}
-  $actual=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
-  if($actual -ine [string]$m.archiveSha256){continue}
-  $backupDate=([datetimeoffset]::Parse([string]$m.createdUtc)).UtcDateTime
-  $backupAge=[math]::Round(($now-$backupDate).TotalHours,2)
-  $manifestVerified=$true
-  break
- }catch{continue}
-}
-if(!$manifestVerified){$issues.Add('OFFSITE_BACKUP_LOCAL_EVIDENCE_MISSING')}
-elseif($backupAge -lt 0 -or $backupAge -gt $MaxBackupAgeHours){
- $issues.Add('OFFSITE_BACKUP_STALE')
-}
-$result=[ordered]@{
- schemaVersion=1
- checkedUtc=$now.ToString('o')
- status=if($issues.Count -eq 0){'PASS'}else{'ATTENTION'}
- postgresReady=$pgHealthy
- webReady=$httpHealthy
- unauthenticatedDatabaseReadDenied=$unauthDenied
- recoveredVaultEvidence=$recoveredVaultPresent
- encryptedBackupManifestAndLocalHashValid=$manifestVerified
- latestEncryptedBackupAgeHours=$backupAge
- latestIsolatedRestoreAgeDays=$restoreAge
- automatedBackupScheduled=$backupScheduled
- authenticatedOperatorLoginVerified=$false
- publicHostingVerified=$false
- issues=@($issues)
-}
-$result | ConvertTo-Json -Depth 5
-if($issues.Count -gt 0){exit 2}
- -and
-  $_.Arguments -match [regex]::Escape('Backup-CCA-PersistentPostgres-Staging.ps1') -and
-  $_.Arguments -match '(^|\\s)-UploadOffsite(\\s|$)'
- })
- $daily=@($task.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskDailyTrigger' -and $_.Enabled })
+ $task=Get-ScheduledTask -TaskName 'CRNETWORK-CCA-ManagedPostgres-Backup' -ErrorAction Stop
+ $actionOk=@($task.Actions | Where-Object {
+  $_.Execute -match '(?i)powershell(\.exe)?$' -and
+  $_.Arguments -like '*Backup-CCA-PersistentPostgres-Staging.ps1*' -and
+  $_.Arguments -like '*-UploadOffsite*'
+ }).Count -eq 1
+ $dailyOk=@($task.Triggers | Where-Object {
+  $_.CimClass.CimClassName -eq 'MSFT_TaskDailyTrigger' -and $_.Enabled
+ }).Count -ge 1
  $backupScheduled=($task.Settings.Enabled -and
    [string]$task.Principal.LogonType -eq 'Password' -and
-   $action.Count -eq 1 -and $daily.Count -ge 1)
-} catch { $backupScheduled=$false }
+   $actionOk -and $dailyOk)
+}catch{ $backupScheduled=$false }
 if(!$backupScheduled){$issues.Add('CCA_AUTOMATED_BACKUP_TASK_NOT_VERIFIED')}
 if(!(Test-Path $statusFile)){
  $issues.Add('PERSISTENT_POSTGRES_STATUS_MISSING')
@@ -201,7 +116,7 @@ $result=[ordered]@{
  encryptedBackupManifestAndLocalHashValid=$manifestVerified
  latestEncryptedBackupAgeHours=$backupAge
  latestIsolatedRestoreAgeDays=$restoreAge
- automatedBackupScheduled=$false
+ automatedBackupScheduled=$backupScheduled
  authenticatedOperatorLoginVerified=$false
  publicHostingVerified=$false
  issues=@($issues)
