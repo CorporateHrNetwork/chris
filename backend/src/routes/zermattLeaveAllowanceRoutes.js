@@ -2,7 +2,7 @@ const express = require("express");
 const multer = require("multer");
 
 const prisma = require("../config/prisma");
-const { requireAuth, requirePermission } = require("../middleware/authMiddleware");
+const { requireAuth, requirePermission, requireAnyPermission } = require("../middleware/authMiddleware");
 const { getPayrollReadiness } = require("../services/payrollReadinessService");
 const nigeriaPayroll = require("../services/nigeriaPayrollComplianceService");
 const { isZermatt } = require("../services/zermattHrFinancialAccessService");
@@ -180,7 +180,7 @@ router.post(
 router.get(
   "/benefits/leave-allowance",
   zermattOnly,
-  requirePermission("payroll.view"),
+  requireAnyPermission("payroll.view", "benefits.leave_allowance.view"),
   async (req, res) => {
     try {
       const [data, settings] = await Promise.all([
@@ -199,7 +199,13 @@ router.get(
           settings,
           rows,
           summary: {
-            ...data.summary,
+            // Benefits-only viewers must not receive organization-wide payroll aggregates.
+            ...(req.auth.permissions?.includes("payroll.view") ? data.summary : {
+              currentPayrollMonth: data.summary?.currentPayrollMonth,
+              employeesWithCurrentPayroll: rows.filter((row) => row.hasCurrentPayroll).length,
+              employeesDueThisMonth: rows.filter((row) => row.dueThisMonth).length,
+              totalApprovedPayments: rows.reduce((sum, row) => sum + (row.paymentHistory?.length || 0), 0),
+            }),
             visibleEmployees: rows.length,
             visibleApprovedPayments: rows.reduce((sum, row) => sum + Number(row.paymentHistory?.length || 0), 0),
             visibleApprovedAmount: rows.reduce(

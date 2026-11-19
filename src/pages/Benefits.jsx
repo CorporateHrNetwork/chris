@@ -25,10 +25,29 @@ import ZermattLeaveAllowanceSettings from "./benefits/ZermattLeaveAllowanceSetti
 
 function Benefits() {
   const navigate = useNavigate();
-  const { profile } = useAuthorization();
+  const { profile, hasPermission, loading: authorizationLoading } = useAuthorization();
   const isZermatt = profile?.organization?.slug === "zermatt-liquor-limited";
   const [searchParams] = useSearchParams();
   const workspace = searchParams.get("workspace") || "";
+
+  if (authorizationLoading) return <div role="status">Checking Benefits access…</div>;
+  const isBenefitsAdmin = hasPermission("settings.view");
+  if (!isBenefitsAdmin && !hasPermission("benefits.view")) {
+    return <div role="alert" style={{ padding: 24 }}>You do not have permission to access Benefits.</div>;
+  }
+  if (!isBenefitsAdmin) {
+    if (workspace === "leave-allowance" && hasPermission("benefits.leave_allowance.view")) return <ZermattLeaveAllowance />;
+    if (workspace) return <div role="alert" style={{ padding: 24 }}>This Benefits workspace is not authorized for your role.</div>;
+    return (
+      <section style={{ padding: 24, color: "var(--chris-text, #F7FAF8)" }}>
+        <h1>Benefits</h1>
+        <p>Only your assigned Benefits workspaces are available. Access is limited by your branch assignment.</p>
+        {hasPermission("benefits.leave_allowance.view")
+          ? <button type="button" onClick={() => navigate("/benefits?workspace=leave-allowance")}>Open Leave Allowance Register</button>
+          : <p>Your Benefits overview access is active. No additional Benefits workspaces have been assigned.</p>}
+      </section>
+    );
+  }
 
   if (isZermatt && workspace === "outstation-allowance") return <ZermattOutstationAllowance />;
   if (workspace === "leave-allowance") return <ZermattLeaveAllowance />;

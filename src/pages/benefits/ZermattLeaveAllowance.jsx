@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
+import useAuthorization from "../../hooks/useAuthorization";
 
 const money = (value, currency = "NGN") => {
   const amount = Number(value || 0);
@@ -18,6 +19,7 @@ const monthName = (monthKey) => {
 
 export default function ZermattLeaveAllowance() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuthorization();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -52,7 +54,7 @@ export default function ZermattLeaveAllowance() {
   return <section style={pageStyle}>
     <div style={headerActions}>
       <button type="button" style={backButton} onClick={() => navigate("/benefits")}>← Benefits Dashboard</button>
-      <button type="button" style={settingsButton} onClick={() => navigate("/benefits?workspace=leave-allowance-settings")}>Leave Allowance Settings</button>
+      {hasPermission("payroll.manage") && <button type="button" style={settingsButton} onClick={() => navigate("/benefits?workspace=leave-allowance-settings")}>Leave Allowance Settings</button>}
     </div>
     <div style={eyebrow}>ZERMATT BENEFITS</div>
     <h1 style={titleStyle}>Leave Allowance</h1>
