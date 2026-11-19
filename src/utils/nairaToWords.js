@@ -20,7 +20,7 @@ function words(value) {
 }
 export function nairaToWords(value) {
   const raw=String(value??"").trim().replace(/^₦\s*/,"").replaceAll(",","");
-  if(!/^(?:\d+)(?:\\.\d{1,2})?$/.test(raw))return "";
+  if(!/^(?:\d+)(?:\.\d{1,2})?$/.test(raw))return "";
   const amount=Number(raw);
   if(!Number.isFinite(amount)||amount<0||amount>=1000000000000)return "";
   const koboTotal=Math.round(amount*100);
