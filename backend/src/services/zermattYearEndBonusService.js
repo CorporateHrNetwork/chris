@@ -7,7 +7,7 @@ const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 1
 const normalizeType = (value) => String(value || "").trim().toUpperCase().replace(/[\s_-]+/g, "");
 const expatriate = (value) => normalizeType(value).includes("EXPATRIATE") || normalizeType(value).includes("EXPAT");
 const dateOverlap = (from, to, start, end) => from <= end && (!to || to >= start);
-function serviceMonths({ hireDate, exitDate, episodes = [], year }) {
+function serviceMonths({ hireDate, exitDate, episodes = [], year, asOf = new Date() }) {
   const intervals = episodes.length
     ? episodes.map((episode) => ({ from: dateOnly(episode.startDate), to: dateOnly(episode.endDate) }))
     : [{ from: dateOnly(hireDate), to: dateOnly(exitDate) }];
@@ -15,7 +15,7 @@ function serviceMonths({ hireDate, exitDate, episodes = [], year }) {
     const month = String(i + 1).padStart(2, "0");
     const start = `${year}-${month}-01`;
     const end = new Date(Date.UTC(year, i + 1, 0)).toISOString().slice(0, 10);
-    return intervals.some(({ from, to }) => from && dateOverlap(from, to, start, end));
+    return start <= dateOnly(asOf) && intervals.some(({ from, to }) => from && dateOverlap(from, to, start, end));
   }).filter(Boolean).length;
 }
 function projectBonus({ employee, year, grossMonthly, months }) {
@@ -30,7 +30,7 @@ function projectBonus({ employee, year, grossMonthly, months }) {
   const fullBonus = round2(basicSalary + endMonthGross * 0.5);
   return { status: months > 0 ? "PROJECTED" : "NO_SERVICE_IN_YEAR", months, basicSalary, endMonthGross, fullBonus, bonus: round2(fullBonus * months / 12), calculationBasis: split.policyVersion };
 }
-async function listYearEndBonus({ organizationId, year, locationIds = null, prismaClient = prisma }) {
+async function listYearEndBonus({ organizationId, year, locationIds = null, asOf = new Date(), prismaClient = prisma }) {
   const org = await prismaClient.organization.findUnique({ where: { id: organizationId }, select: { slug: true } });
   if (org?.slug !== "zermatt-liquor-limited") {
     const error = new Error("Year-End Bonus register is available to Zermatt only."); error.statusCode = 404; throw error;
@@ -52,9 +52,10 @@ async function listYearEndBonus({ organizationId, year, locationIds = null, pris
     ratesByEmployee.set(rate.employeeId, list);
   }
   const yearEnd = `${year}-12-31`;
+  const reportCutoff = dateOnly(asOf) < yearEnd ? dateOnly(asOf) : yearEnd;
   const rows = employees.map(employee => {
-    const months = serviceMonths({ hireDate: employee.hireDate, exitDate: employee.exitDate, episodes: employee.employmentEpisodes, year });
-    const salaryAsOf = employee.exitDate && dateOnly(employee.exitDate) < yearEnd ? dateOnly(employee.exitDate) : yearEnd;
+    const months = serviceMonths({ hireDate: employee.hireDate, exitDate: employee.exitDate, episodes: employee.employmentEpisodes, year, asOf });
+    const salaryAsOf = employee.exitDate && dateOnly(employee.exitDate) < reportCutoff ? dateOnly(employee.exitDate) : reportCutoff;
     const payRate = (ratesByEmployee.get(employee.id) || []).find(rate =>
       dateOnly(rate.effectiveFrom) <= salaryAsOf && (!rate.effectiveTo || dateOnly(rate.effectiveTo) >= salaryAsOf)
     );
@@ -74,7 +75,7 @@ async function listYearEndBonus({ organizationId, year, locationIds = null, pris
     };
   });
   return {
-    year, rows,
+    year, asOfDate: reportCutoff, rows,
     summary: {
       employees: rows.length,
       eligible: rows.filter(row => row.status === "PROJECTED").length,
@@ -82,7 +83,7 @@ async function listYearEndBonus({ organizationId, year, locationIds = null, pris
       incomplete: rows.filter(row => row.status === "SALARY_OR_HIRE_DATE_MISSING").length,
       projectedTotal: round2(rows.reduce((sum, row) => sum + Number(row.bonus || 0), 0)),
     },
-    policy: "Basic Salary + (50% of End-of-Month Gross), prorated by engaged calendar months / 12. Expatriates excluded. Read-only projections; no payments are approved.",
+    policy: "Basic Salary + (50% of End-of-Month Gross), prorated by actual engaged calendar months through the reporting date / 12. Expatriates excluded. Read-only projections; no payments are approved.",
   };
 }
 module.exports = { serviceMonths, projectBonus, listYearEndBonus };
