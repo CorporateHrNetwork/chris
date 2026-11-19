@@ -16,6 +16,7 @@ const TransportSupportPreparation = lazy(() => import("./pages/benefits/Transpor
 const TransportSupportPayroll = lazy(() => import("./pages/benefits/TransportSupportPayroll"));
 const YearEndBonus = lazy(() => import("./pages/benefits/YearEndBonus"));
 const ModuleDashboard = lazy(() => import("./components/dashboard/ModuleDashboard"));
+const ZermattEmploymentResources = lazy(() => import("./pages/documents/ZermattEmploymentResources"));
 const RecruitmentReports = lazy(() => import("./pages/RecruitmentReports"));
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PermissionRoute from "./components/auth/PermissionRoute";
@@ -212,6 +213,7 @@ function App() {
         <Route path="/statutories" element={<ProtectedLayout><ConsolidatedComplianceRoute allowBranch><StatutoryRecords /></ConsolidatedComplianceRoute></ProtectedLayout>} />
         <Route path="/assets" element={<ProtectedLayout><ModuleDashboard moduleKey="assets" /></ProtectedLayout>} />
         <Route path="/documents" element={<ProtectedLayout><ModuleDashboard moduleKey="documents" /></ProtectedLayout>} />
+        <Route path="/documents/employment-resources" element={<ProtectedLayout><ZermattEmploymentResources /></ProtectedLayout>} />
         <Route path="/organization" element={<ProtectedLayout><ModuleDashboard moduleKey="organization" /></ProtectedLayout>} />
         <Route path="/workflows" element={<ProtectedLayout><ModuleDashboard moduleKey="workflows" /></ProtectedLayout>} />
         <Route path="/employment-types" element={<ProtectedLayout><ModuleDashboard moduleKey="employmentTypes" /></ProtectedLayout>} />
