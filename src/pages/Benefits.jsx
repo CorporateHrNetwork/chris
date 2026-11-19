@@ -42,9 +42,12 @@ function Benefits() {
       <section style={{ padding: 24, color: "var(--chris-text, #F7FAF8)" }}>
         <h1>Benefits</h1>
         <p>Only your assigned Benefits workspaces are available. Access is limited by your branch assignment.</p>
-        {hasPermission("benefits.leave_allowance.view")
-          ? <button type="button" onClick={() => navigate("/benefits?workspace=leave-allowance")}>Open Leave Allowance Register</button>
-          : <p>Your Benefits overview access is active. No additional Benefits workspaces have been assigned.</p>}
+        {hasPermission("benefits.leave_allowance.view") &&
+          <button type="button" onClick={() => navigate("/benefits?workspace=leave-allowance")}>Open Leave Allowance Register</button>}
+        {hasPermission("benefits.gratuity.view") &&
+          <button type="button" style={{ marginLeft: 12 }} onClick={() => navigate("/benefits/gratuity")}>Open Gratuity Accounts</button>}
+        {!hasPermission("benefits.leave_allowance.view") && !hasPermission("benefits.gratuity.view") &&
+          <p>Your Benefits overview access is active. No additional Benefits workspaces have been assigned.</p>}
       </section>
     );
   }
