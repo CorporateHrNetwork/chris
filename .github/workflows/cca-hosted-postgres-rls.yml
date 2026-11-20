@@ -1,0 +1,49 @@
+name: CCA hosted PostgreSQL RLS acceptance
+
+on:
+  pull_request:
+    paths:
+      - "backend/sql/cca/**"
+      - ".github/workflows/cca-hosted-postgres-rls.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres-rls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cca_migrator
+          POSTGRES_PASSWORD: fictional-disposable-only
+          POSTGRES_DB: cca_hosted_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cca_migrator -d cca_hosted_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout proposed changes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Provision disposable non-privileged CCA reader
+        run: |
+          docker exec "${{ job.services.postgres.id }}" psql -v ON_ERROR_STOP=1 -U cca_migrator -d cca_hosted_test \
+            -c "CREATE ROLE cca_hosted_reader LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE"
+      - name: Apply isolated CCA schema twice to prove idempotency
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql -v ON_ERROR_STOP=1 -U cca_migrator -d cca_hosted_test \
+            < backend/sql/cca/001_hosted_service_requests_rls.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -v ON_ERROR_STOP=1 -U cca_migrator -d cca_hosted_test \
+            < backend/sql/cca/001_hosted_service_requests_rls.sql
+      - name: Enforce real PostgreSQL tenant RLS and read-only access
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql -v ON_ERROR_STOP=1 -U cca_migrator -d cca_hosted_test \
+            < backend/sql/cca/acceptance_hosted_service_requests_rls.sql

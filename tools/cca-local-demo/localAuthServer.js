@@ -53,7 +53,7 @@ function payloadFrom(req) {
     req.on("error", reject);
   });
 }
-function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost, support } = {}) {
+function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagingHost, support, postgresReader } = {}) {
   const staging = Boolean(stagingHost);
   const cookieName = staging ? "cca_staging_sid" : COOKIE;
   let unavailable = false;
@@ -143,6 +143,30 @@ function createAuthServer(auth, { sourceThrottle, auditLedger, checkpoint, stagi
       // identity and assignee are server-owned and never read from the form.
       const result = support.submit("demo-cedar", body.description, body.requestId);
       return json(res, result.ok ? 200 : result.code === "CCA_LOCAL_SAVE_FAILED" ? 503 : 400, result);
+    }
+    // Only a separately injected, read-only PostgreSQL reader can activate this
+    // staging-only API. Never run provider provisioning or accept tenant scope
+    // from a URL, request body, or an unverified CHRiS session.
+    if (req.method === "GET" && url.pathname === "/api/staging-postgres-requests") {
+      if (!staging || !postgresReader ||
+          typeof postgresReader.listServiceRequests !== "function" ||
+          typeof auth.lab.resolvePlatformContext !== "function")
+        return json(res, 404, { ok: false, code: "NOT_FOUND" });
+      const context = auth.lab.resolvePlatformContext(cookie);
+      const tenantId = "demo-cedar";
+      if (!context || context.accepted !== true ||
+          !auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, tenantId).accepted)
+        return json(res, 401, FAIL);
+      if ([...url.searchParams.keys()].length)
+        return json(res, 400, { ok: false, code: "CCA_STAGING_PARAMS_DENIED" });
+      try {
+        const requests = await postgresReader.listServiceRequests({ context, tenantId, limit: 20 });
+        return json(res, 200, { ok: true, demonstration: true,
+          source: "ISOLATED_POSTGRESQL", requests });
+      } catch {
+        // Never leak database names, SQL, data, connection strings or errors.
+        return json(res, 503, { ok: false, code: "CCA_STAGING_POSTGRES_UNAVAILABLE" });
+      }
     }
     if (req.method === "GET" && url.pathname === "/api/fictional-cases") {
       const identity = auth.lab.resolveSession(cookie, PERMISSIONS.TICKETS_READ, "demo-cedar");

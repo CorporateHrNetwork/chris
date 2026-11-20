@@ -1,9 +1,13 @@
-param([switch]$GeneratePassword)
+param([switch]$GeneratePassword, [switch]$UsePersistentPostgres, [switch]$InspectVaultRecovery, [switch]$PrepareRecoveredVault, [switch]$UseRecoveredVault)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
 $node = (Get-Command node.exe -CommandType Application).Source
-$directory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D'
+$originalDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D'
+$recoveredDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNetwork-CCA-Stage4D-Recovered'
+if ($PrepareRecoveredVault -and ($UseRecoveredVault -or $InspectVaultRecovery -or
+    $UsePersistentPostgres -or $GeneratePassword)) { throw 'CCA_RECOVERY_INCOMPATIBLE_FLAGS' }
+$directory = if ($UseRecoveredVault) { $recoveredDirectory } else { $originalDirectory }
 $security = Join-Path $directory 'host-security'
 $state = Join-Path $directory 'state'
 $keyFile = Join-Path $security 'staging-key.dpapi'
@@ -21,6 +25,27 @@ function Invoke-StagingNode([string]$Mode, [byte[]]$Key, [string]$Password) {
         if ($Mode -eq 'enroll') {
             if ($GeneratePassword) { $payload.generatePassword = $true }
             else { $payload.password = $Password }
+        }
+        if ($UsePersistentPostgres) {
+            if ($Mode -ne 'serve') { throw 'CCA_POSTGRES_ONLY_AVAILABLE_FOR_SERVE' }
+            $pgRoot=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CRNETWORK-CCA-ManagedPostgres-Staging'
+            $status=Join-Path $pgRoot 'status.json'
+            $clientRoot=Join-Path $pgRoot 'pg-client\node_modules'
+            if(!(Test-Path $status) -or !(Test-Path (Join-Path $clientRoot 'pg\package.json'))) {
+                throw 'CCA_PERSISTENT_POSTGRES_NOT_CONFIGURED'
+            }
+            $meta=Get-Content $status -Raw | ConvertFrom-Json
+            if($meta.scope -ne 'FICTIONAL_STAGING_ONLY' -or $meta.database -ne 'cca_fictional_services' -or
+               $meta.port -ne 55451 -or $meta.host -ne '127.0.0.1') {
+                throw 'CCA_PERSISTENT_POSTGRES_SCOPE_INVALID'
+            }
+            $salt=[Text.Encoding]::UTF8.GetBytes('CCA managed postgres fictional staging credentials v1')
+            $protected=Join-Path $pgRoot 'protected-credentials\reader.dpapi'
+            $secretBytes=[Security.Cryptography.ProtectedData]::Unprotect(
+                [IO.File]::ReadAllBytes($protected),$salt,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+            try {
+                $payload.postgres=@{enabled=$true;password=[Text.Encoding]::UTF8.GetString($secretBytes);clientRoot=$clientRoot}
+            } finally { [Array]::Clear($secretBytes,0,$secretBytes.Length) }
         }
         $encoded = [Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Compress))
         try {
@@ -49,6 +74,10 @@ function Assert-PrivateDirectory([string]$Path) {
 }
 
 if (!(Test-Path -LiteralPath $directory)) {
+    if ($InspectVaultRecovery -or $UseRecoveredVault -or $PrepareRecoveredVault) {
+        throw 'CCA_SELECTED_STAGING_DIRECTORY_MISSING'
+    }
+    if ($UsePersistentPostgres) { throw 'CCA_STAGING_MUST_BE_ENROLLED_BEFORE_POSTGRES' }
     $first = $null
     if (!$GeneratePassword) {
         $password = Read-Host 'Set a unique staging password (14-256 characters)' -AsSecureString
@@ -96,5 +125,27 @@ if ($keyItem.PSIsContainer -or $keyItem.Length -gt 4096 -or
     ($keyItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'CCA staging key file is invalid.' }
 $master = [Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($keyFile), $entropy, $scope)
 try {
-    Invoke-StagingNode 'serve' $master
+    if ($PrepareRecoveredVault) {
+        if (Test-Path -LiteralPath $recoveredDirectory) {
+            throw 'CCA_RECOVERED_DIRECTORY_ALREADY_EXISTS'
+        }
+        $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
+        $acl=[Security.AccessControl.DirectorySecurity]::new()
+        $acl.SetOwner($sid)
+        $acl.SetAccessRuleProtection($true,$false)
+        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new(
+            $sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
+        [IO.Directory]::CreateDirectory($recoveredDirectory,$acl) | Out-Null
+        Assert-PrivateDirectory $recoveredDirectory
+        Invoke-StagingNode 'prepare-recovered' $master
+        foreach($part in @($recoveredDirectory,(Join-Path $recoveredDirectory 'state'),
+                            (Join-Path $recoveredDirectory 'host-security'))) {
+            Assert-PrivateDirectory $part
+        }
+    } elseif ($InspectVaultRecovery) {
+        if ($UsePersistentPostgres -or $GeneratePassword) { throw 'CCA_INSPECTION_INCOMPATIBLE_FLAGS' }
+        Invoke-StagingNode 'inspect-vault' $master
+    } else {
+        Invoke-StagingNode 'serve' $master
+    }
 } finally { [Array]::Clear($master, 0, $master.Length) }

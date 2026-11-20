@@ -13,7 +13,7 @@ const ACCOUNT = "cca-staging-operator";
 const PORT = 4184;
 const STAGING_HOST = "127.0.0.2";
 
-function openStaging({ directory, master, initialize = false, clock }) {
+function openStaging({ directory, master, initialize = false, clock, postgresReader }) {
   const state = path.join(directory, "state");
   const security = path.join(directory, "host-security");
   const files = {
@@ -49,6 +49,9 @@ function openStaging({ directory, master, initialize = false, clock }) {
     const server = createStagingServer({
       vault, account: ACCOUNT, auditLedger: ledger, checkpoint, stagingHost: STAGING_HOST,
       support: createDurableDemoState({ dataDir: path.join(directory, "fictional-support") }),
+      // Injected only by a trusted staging operator harness. The normal
+      // production-facing startup never configures a pool or reader.
+      postgresReader,
       sourceThrottle: createPersistentThrottle({ file: files.throttle, clock }),
     });
     return { release, server };
@@ -60,7 +63,7 @@ function openStaging({ directory, master, initialize = false, clock }) {
 
 async function main() {
   const [directory, mode] = process.argv.slice(2);
-  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve"].includes(mode))
+  if (process.platform !== "win32" || !directory || !path.isAbsolute(directory) || !["enroll", "serve", "inspect-vault", "prepare-recovered"].includes(mode))
     throw Error("CCA_STAGING_WINDOWS_HOST_REQUIRED");
   let input = "";
   for await (const chunk of process.stdin.setEncoding("utf8")) {
@@ -70,7 +73,67 @@ async function main() {
   const payload = JSON.parse(input.replace(/^\uFEFF/, ""));
   const master = Buffer.from(payload.master, "base64");
   try {
-    const runtime = openStaging({ directory, master, initialize: mode === "enroll" });
+    if (mode === "prepare-recovered") {
+      if (payload.postgres || payload.password || payload.generatePassword)
+        throw Error("CCA_RECOVERY_UNEXPECTED_PAYLOAD");
+      const {prepareRecoveredStaging}=require("./prepareRecoveredStaging");
+      const result=prepareRecoveredStaging({directory,master});
+      console.log("CCA_RECOVERED_STAGING_PREPARATION="+JSON.stringify(result));
+      return;
+    }
+    if (mode === "inspect-vault") {
+      if (payload.postgres || payload.password || payload.generatePassword)
+        throw Error("CCA_INSPECTION_UNEXPECTED_PAYLOAD");
+      const {inspectVaultCompatibility}=require("./inspectVaultCompatibility");
+      const results=inspectVaultCompatibility({
+        directory, encryptionKey:deriveKey(master,"vault-v1"),
+      });
+      // Only cryptographic digests and categorical schema statuses appear.
+      console.log("CCA_VAULT_COMPATIBILITY="+JSON.stringify(results));
+      try {
+        const {rehearseStagingVaultRecovery}=require("./rehearseStagingVaultRecovery");
+        const rehearsal=rehearseStagingVaultRecovery({directory,master});
+        console.log("CCA_VAULT_FULL_RECOVERY_REHEARSAL="+JSON.stringify(rehearsal));
+      } catch (error) {
+        // No protected paths, users, role labels, secrets or file bodies.
+        const allowedRehearsalFailures=new Set([
+          "CCA_STAGING_CHECKPOINT_MISMATCH", "CCA_VAULT_CHECKPOINT_MISSING",
+          "CCA_VAULT_SOURCE_FILE_INVALID", "CCA_VAULT_FULL_REHEARSAL_INVALID_INPUT",
+          "CCA_INVALID_IDENTITY_VAULT", "CCA_REHEARSAL_SERVER_NOT_CONSTRUCTED",
+        ]);
+        const code=String(error?.message||"");
+        console.log("CCA_VAULT_FULL_RECOVERY_REHEARSAL="+JSON.stringify({
+          status:"BLOCKED",
+          reason:allowedRehearsalFailures.has(code)?code:"CCA_REHEARSAL_VALIDATION_FAILED"
+        }));
+      }
+      return;
+    }
+    // Operator-only opt-in: normal CCA staging continues to use its existing
+    // protected local snapshot data and no PostgreSQL client is instantiated.
+    if (mode === "enroll" && payload.postgres) throw Error("CCA_PG_ENROLL_DISABLED");
+    let persistentPostgres = null;
+    if (mode === "serve" && payload.postgres) {
+      if (payload.postgres.enabled !== true ||
+          typeof payload.postgres.password !== "string" ||
+          typeof payload.postgres.clientRoot !== "string")
+        throw Error("CCA_PERSISTENT_POSTGRES_CONFIG_INVALID");
+      const {createPersistentStagingPostgres} = require("./persistentPostgresReader");
+      persistentPostgres = createPersistentStagingPostgres({
+        password: payload.postgres.password, clientRoot: payload.postgres.clientRoot,
+      });
+      payload.postgres.password = null;
+      try { await persistentPostgres.verify(); }
+      catch (error) { await persistentPostgres.close(); throw error; }
+    }
+    let runtime;
+    try {
+      runtime = openStaging({ directory, master, initialize: mode === "enroll",
+        postgresReader: persistentPostgres?.reader });
+    } catch (error) {
+      if (persistentPostgres) await persistentPostgres.close();
+      throw error;
+    }
     if (mode === "enroll") {
       const secret = crypto.randomBytes(20);
       try {
@@ -88,7 +151,12 @@ async function main() {
     }
     const { server, release } = runtime;
     process.on("exit", release);
-    process.once("SIGINT", () => server.close(() => process.exit(0)));
+    process.once("SIGINT", () => {
+      server.close(async () => {
+        try { if (persistentPostgres) await persistentPostgres.close(); }
+        finally { process.exit(0); }
+      });
+    });
     server.once("error", () => {
       console.error("CCA staging could not bind its local port.");
       process.exitCode = 1;
@@ -98,8 +166,30 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(() => {
-    console.error("CCA staging startup blocked. Check enrollment, the writer lock, and the audit checkpoint.");
+  main().catch((error) => {
+    // Safe operator error taxonomy only; never print credentials, file paths,
+    // SQL queries, private identity data or arbitrary exception messages.
+    const allowed = new Set([
+      "CCA_PERSISTENT_POSTGRES_DISABLED", "CCA_PERSISTENT_POSTGRES_SCOPE_INVALID",
+      "CCA_PERSISTENT_POSTGRES_IDENTITY_INVALID", "CCA_PERSISTENT_POSTGRES_CONFIG_INVALID",
+      "CCA_STAGING_CHECKPOINT_MISMATCH", "CCA_STAGING_ENROLLMENT_REQUIRED",
+      "CCA_STAGING_WINDOWS_HOST_REQUIRED", "CCA_STAGING_INPUT_TOO_LARGE",
+      "CCA_STAGING_KEY_REQUIRED", "CCA_STAGING_VAULT_REQUIRED",
+      "CCA_STAGING_STATE_UNAVAILABLE", "CCA_AUDIT_SIGNATURE_INVALID",
+      "CCA_INVALID_IDENTITY_VAULT",
+    ]);
+    const detail = String(error?.message || "");
+    const safeVaultCategories = [
+      "VAULT_CONTAINER", "USER_IDENTIFIER", "USER_CREDENTIAL_FIELDS",
+      "USER_ROLE_ASSIGNMENT", "USER_ROLE_SHAPE", "USER_ROLE_UNRECOGNIZED", "USER_ROLE_CANONICALIZATION_REQUIRED", "USER_TENANT_ASSIGNMENT", "USER_ACTIVE_STATUS",
+      "USER_OTP_COUNTER", "USER_PASSWORD_LOCKOUT", "USER_LOCKOUT_TIME",
+      "USER_MFA_LOCKOUT", "AUDIT_EVENT_FIELDS"
+    ];
+    const classification = detail.startsWith("CCA_INVALID_IDENTITY_VAULT:") ?
+      "CCA_INVALID_IDENTITY_VAULT:" +
+      (safeVaultCategories.find(k => detail === "CCA_INVALID_IDENTITY_VAULT:" + k) || "OTHER") :
+      [...allowed].find(code => detail.includes(code)) || "CCA_STAGING_STARTUP_UNAVAILABLE";
+    console.error("CCA staging startup blocked: " + classification);
     process.exitCode = 1;
   });
 }

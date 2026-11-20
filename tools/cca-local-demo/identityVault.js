@@ -28,23 +28,50 @@ function requireRole(role) {
   if (!ALLOWED_ROLES.includes(role) || grantsForRoles([role]).length === 0)
     throw Error("CCA_INVALID_ROLE");
 }
+function invalidSchema(category) {
+  // Categories describe validation rules only, never protected field contents.
+  throw Error("CCA_INVALID_IDENTITY_VAULT:" + category);
+}
 function validateUser(user) {
-  if (!user || !ID_PATTERN.test(user.id) || typeof user.passwordHash !== "string" ||
-    typeof user.salt !== "string" || typeof user.mfaSecret !== "string" ||
-    !Array.isArray(user.roles) || user.roles.length < 1 ||
-    !user.roles.every(r => ALLOWED_ROLES.includes(r)) ||
-    !Array.isArray(user.tenantIds) || !user.tenantIds.every(id =>
-      ["demo-cedar", "demo-atlas"].includes(id)) ||
-    typeof user.active !== "boolean" ||
-    !Number.isSafeInteger(user.lastOtpCounter) ||
-    !Number.isSafeInteger(user.failedPasswords) || user.failedPasswords<0 || user.failedPasswords>5 ||
-    !Number.isSafeInteger(user.lockedUntil) || user.lockedUntil<0 ||
-    !Number.isSafeInteger(user.failedMfa) || user.failedMfa<0 || user.failedMfa>5) throw Error("CCA_INVALID_IDENTITY_VAULT");
+  if (!user || !ID_PATTERN.test(user.id)) invalidSchema("USER_IDENTIFIER");
+  if (typeof user.passwordHash !== "string" || typeof user.salt !== "string" ||
+      typeof user.mfaSecret !== "string") invalidSchema("USER_CREDENTIAL_FIELDS");
+  if (!Array.isArray(user.roles) || user.roles.length < 1 ||
+      !user.roles.every(r => typeof r === "string")) invalidSchema("USER_ROLE_SHAPE");
+  // Only a locally validated offline recovery candidate may carry this
+  // no-grants sentinel. It is never assignable through enrollment/role APIs.
+  const quarantined=user.roles.length===1 &&
+    user.roles[0]==="CCA_QUARANTINED_NO_ACCESS";
+  if(quarantined) {
+    if(user.active!==false ||
+       !Array.isArray(user.quarantineOriginalRoles) ||
+       user.quarantineOriginalRoles.length<1 ||
+       user.quarantineOriginalRoles.length>10 ||
+       !user.quarantineOriginalRoles.every(role=>
+         typeof role==="string"&&role.length>=1&&role.length<=128))
+      invalidSchema("USER_QUARANTINE_INVALID");
+  }
+  if (!quarantined && !user.roles.every(r => ALLOWED_ROLES.includes(r))) {
+    const unsupported=user.roles.filter(role=>!ALLOWED_ROLES.includes(role));
+    const canonicalizable=unsupported.every(role=>
+      ALLOWED_ROLES.includes(role.trim().toUpperCase()));
+    invalidSchema(canonicalizable ?
+      "USER_ROLE_CANONICALIZATION_REQUIRED" : "USER_ROLE_UNRECOGNIZED");
+  }
+  if (!Array.isArray(user.tenantIds) || !user.tenantIds.every(id =>
+      ["demo-cedar", "demo-atlas"].includes(id))) invalidSchema("USER_TENANT_ASSIGNMENT");
+  if (typeof user.active !== "boolean") invalidSchema("USER_ACTIVE_STATUS");
+  if (!Number.isSafeInteger(user.lastOtpCounter)) invalidSchema("USER_OTP_COUNTER");
+  if (!Number.isSafeInteger(user.failedPasswords) || user.failedPasswords < 0 ||
+      user.failedPasswords > 5) invalidSchema("USER_PASSWORD_LOCKOUT");
+  if (!Number.isSafeInteger(user.lockedUntil) || user.lockedUntil < 0) invalidSchema("USER_LOCKOUT_TIME");
+  if (!Number.isSafeInteger(user.failedMfa) || user.failedMfa < 0 ||
+      user.failedMfa > 5) invalidSchema("USER_MFA_LOCKOUT");
 }
 function validateData(data) {
   if (!data || data.version !== VERSION || !Array.isArray(data.users) ||
       !Array.isArray(data.events) || data.users.length > 30 ||
-      data.events.length > 3000) throw Error("CCA_INVALID_IDENTITY_VAULT");
+      data.events.length > 3000) invalidSchema("VAULT_CONTAINER");
   const ids = new Set();
   for (const user of data.users) {
     validateUser(user);
@@ -53,7 +80,8 @@ function validateData(data) {
   }
   for (const ev of data.events) {
     if (!ev || typeof ev.actor !== "string" || typeof ev.event !== "string" ||
-        typeof ev.target !== "string" || typeof ev.time !== "string") throw Error("CCA_INVALID_AUDIT");
+        typeof ev.target !== "string" || typeof ev.time !== "string")
+      invalidSchema("AUDIT_EVENT_FIELDS");
   }
 }
 function encrypt(data, key) {
