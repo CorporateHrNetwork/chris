@@ -46,3 +46,12 @@ A missed gate must be reported as MISSED/AT RISK, not silently carried forward a
 - Never point the running Zermatt Render API at the free rehearsal instance; this is explicitly a blocker.
 - During final cutover, stop application writers/schedulers, get final consistent backup, restore to verified target, reconcile, switch only after GO, test, preserve source for rollback.
 - All draft PRs and synthetic CI tests are engineering readiness evidence, NOT actual migration evidence.
+
+## 20 November — migration workstation preflight (10:47 WAT)
+- Authorized desktop `DESKTOP-IQEJRMU` is connected; the preflight ran on this Windows host.
+- `pg_dump` PostgreSQL 16 is present; PostgreSQL 17 client tooling is **not** installed. Do not use the older client to dump the 17 source.
+- No source/target connection secrets were configured in the migration process environment. Neither endpoint identity nor its authorization can be validated yet.
+- The PostgreSQL 17 free Render rehearsal database exists but blocks remote connections by IP allowlist. **No real-data transfer performed.** Do not loosen its network policy or treat it as production.
+- The fail-closed preflight `tools/zermatt-migration/migrationPreflight.cjs` ran on Windows and returned `BLOCKED`, with no employee data or credentials accessed.
+- The dedicated GitHub migration-inventory and preflight contract workflow passed at commit `04b713a`; other compliance checks should be read separately.
+- **Priority actions:** install trusted PostgreSQL 17 client tools, establish a protected credential path, and approve a secured/durable migration destination before any real source export.
