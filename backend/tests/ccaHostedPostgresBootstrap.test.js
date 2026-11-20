@@ -17,6 +17,7 @@ const valid = () => ({
 test("CCA hosted database requires explicit CCA isolation and verified TLS",()=>{
  const config=buildCcaHostedPostgresOptions(valid());
  assert.equal(config.database,"cca_pilot_main");
+ assert.equal(config.user,"cca_hosted_reader");
  assert.equal(config.ssl.rejectUnauthorized,true);
  assert.equal(config.max,5);
  assert.equal(config.statement_timeout,5000);
@@ -28,7 +29,7 @@ test("CCA hosted DB fails closed for CHRiS/Supabase settings or insecure destina
   ["CCA_HOSTED_DATABASE_MODE",""],["CCA_HOSTED_DATABASE_SCOPE","OTHER"],
   ["CCA_PG_HOST","localhost"],["CCA_PG_HOST","127.0.0.1"],
   ["CCA_PG_HOST","zermatt.example.org"],["CCA_PG_DATABASE","chris_main"],
-  ["CCA_PG_READER","postgres"],["CCA_PG_PORT","99999"],
+  ["CCA_PG_READER","postgres"],["CCA_PG_READER","cca_reader_pilot"],["CCA_PG_PORT","99999"],
   ["CCA_PG_PASSWORD","short"],["CCA_PG_CA_PEM",""],
   ["DATABASE_URL","postgresql://someone:secret@elsewhere/main"],
   ["SUPABASE_URL","https://example.supabase.co"],
