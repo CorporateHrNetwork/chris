@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {captureInventory,compareInventories}=require("../../tools/zermatt-migration/databaseInventory");
+const {captureInventory,compareInventories}=require("../../tools/zermatt-migration/databaseInventory.cjs");
 
 function evidence(label,overrides={}){
  return {schemaVersion:1,label,versionMajor:17,tableCounts:[
