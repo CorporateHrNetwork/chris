@@ -7,7 +7,7 @@ const {createCcaHostedSessionResolver}=require("../src/cca/hostedOperatorSession
 const {PERMISSIONS}=require("../src/cca/controlPlanePolicy");
 const keys=crypto.generateKeyPairSync("rsa",{modulusLength:2048});
 const publicKeyPem=keys.publicKey.export({type:"spki",format:"pem"});
-const now=1800000000;
+const now=Math.floor(Date.now()/1000);
 const defaults={publicKeyPem,issuer:"https://identity.cca.example.test",audience:"cca-hosted-pilot",keyId:"cca-pilot-1",isRevoked:async()=>false,clock:()=>now*1000};
 const claims=()=>({
  iss:defaults.issuer,aud:defaults.audience,iat:now-10,nbf:now-10,exp:now+600,
@@ -22,7 +22,7 @@ function sign(c=claims(),header={alg:"RS256",typ:"JWT",kid:"cca-pilot-1"}){
 test("CCA JWT verifier requires trusted independent key, issuer, audience and revocation",()=>{
  assert.throws(()=>createCcaOperatorJwtVerifier(),/CCA_JWT_VERIFIER_CONFIG_REQUIRED/);
  assert.throws(()=>createCcaOperatorJwtVerifier({...defaults,isRevoked:undefined}),/CCA_JWT_VERIFIER_CONFIG_REQUIRED/);
- assert.throws(()=>createCcaOperatorJwtVerifier({...defaults,publicKeyPem:"bad"}),/CCA_JWT_KEY_INVALID/);
+ assert.throws(()=>createCcaOperatorJwtVerifier({...defaults,publicKeyPem:"-----BEGIN PUBLIC KEY-----\\nINVALID\\n-----END PUBLIC KEY-----"}),/CCA_JWT_KEY_INVALID/);
 });
 test("CCA RS256 verified operator becomes server-owned Cedar tenant session",async()=>{
  const verifier=createCcaOperatorJwtVerifier(defaults);
@@ -38,7 +38,8 @@ test("CCA RS256 verified operator becomes server-owned Cedar tenant session",asy
 });
 test("CCA verifier rejects tampering, wrong algorithm and unsigned token",async()=>{
  const verify=createCcaOperatorJwtVerifier(defaults);
- assert.equal(await verify(sign().replace(/.$/,"Q")),null);
+ const valid=sign();
+ assert.equal(await verify(valid.slice(0,-1)+(valid.endsWith("A")?"B":"A")),null);
  assert.equal(await verify(sign({...claims(),tenantId:"demo-atlas"}, {alg:"none",typ:"JWT",kid:"cca-pilot-1"})),null);
  assert.equal(await verify("bad"),null);
 });
