@@ -418,14 +418,26 @@ async function createEmployeeWithDependencies(
 
     if (openingSalaryRate) {
       const salaryRateId = crypto.randomUUID();
+      const zermatt = sequenceOwner.slug === ZERMATT_SLUG;
+      const salarySplit = zermatt
+        ? require("./zermattSalarySplit").splitSalary({
+            fullMonthlyGross: openingSalaryRate.amount,
+            employmentType: employee.employmentType,
+            hireDate: employee.hireDate,
+            periodMonth: String(openingSalaryRate.effectiveFrom).slice(0, 7),
+          })
+        : null;
+      const mainPayrollAmount = salarySplit?.endMonthGross ?? openingSalaryRate.amount;
+      const fullMonthlyGross = salarySplit?.fullMonthlyGross ?? null;
       await tx.$executeRawUnsafe(
         `INSERT INTO "payroll_salary_rates"
-          ("id","organizationId","employeeId","amount","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdByUserId")
-         VALUES ($1,$2,$3,$4,$5,'MONTHLY',$6::date,NULL,'ACTIVE',$7,$8)`,
+          ("id","organizationId","employeeId","amount","fullMonthlyGross","currency","frequency","effectiveFrom","effectiveTo","status","reason","createdByUserId")
+         VALUES ($1,$2,$3,$4,$5,$6,'MONTHLY',$7::date,NULL,'ACTIVE',$8,$9)`,
         salaryRateId,
         organizationId,
         employee.id,
-        openingSalaryRate.amount,
+        mainPayrollAmount,
+        fullMonthlyGross,
         openingSalaryRate.currency,
         openingSalaryRate.effectiveFrom,
         openingSalaryRate.reason,
@@ -441,7 +453,10 @@ async function createEmployeeWithDependencies(
           action: "CREATED",
           newValue: {
             employeeNumber: employee.employeeNumber,
-            amount: openingSalaryRate.amount,
+            amount: mainPayrollAmount,
+            fullMonthlyGross,
+            transportSupportBasis: salarySplit?.normalMidMonth ?? null,
+            policyVersion: salarySplit?.policyVersion ?? null,
             currency: openingSalaryRate.currency,
             frequency: "MONTHLY",
             effectiveFrom: openingSalaryRate.effectiveFrom,

@@ -112,8 +112,14 @@ function createService(prisma, { benefitsOnly = false } = {}) {
   const rates=benefitsOnly ? await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt","tspPercentage" FROM (
    SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","createdAt" AS "updatedAt",2 AS priority,("allocationPreview"->>'tspPercentageOverride')::numeric AS "tspPercentage" FROM public.zermatt_salary_split_preparations WHERE "organizationId"=$1 AND "effectiveFrom"<=$2::date
    UNION ALL
-   SELECT id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt",1 AS priority,NULL::numeric AS "tspPercentage" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "fullMonthlyGross">0 AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date
-  ) bases ORDER BY "employeeId","effectiveFrom" DESC,priority DESC`,org,`${periodMonth}-15`,from) : await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date ORDER BY "employeeId","effectiveFrom" DESC`,org,`${periodMonth}-15`,from);
+   SELECT sr.id,sr."employeeId",sr."fullMonthlyGross",sr."effectiveFrom",sr."updatedAt",1 AS priority,
+          (SELECT (p."allocationPreview"->>'tspPercentageOverride')::numeric
+             FROM public.zermatt_salary_split_preparations p
+            WHERE p."organizationId"=sr."organizationId" AND p."employeeId"=sr."employeeId"
+              AND p."effectiveFrom"<=sr."effectiveFrom"
+            ORDER BY p."effectiveFrom" DESC LIMIT 1) AS "tspPercentage"
+     FROM public.payroll_salary_rates sr WHERE sr."organizationId"=$1 AND sr.status='ACTIVE' AND sr."fullMonthlyGross">0 AND sr."effectiveFrom"<=$2::date AND COALESCE(sr."effectiveTo",'9999-12-31'::date)>=$3::date
+  ) bases ORDER BY "employeeId","effectiveFrom" DESC,"updatedAt" DESC,priority DESC`,org,`${periodMonth}-15`,from) : await q(c,`SELECT DISTINCT ON("employeeId") id,"employeeId","fullMonthlyGross","effectiveFrom","updatedAt" FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND status='ACTIVE' AND "effectiveFrom"<=$2::date AND COALESCE("effectiveTo",'9999-12-31'::date)>=$3::date ORDER BY "employeeId","effectiveFrom" DESC`,org,`${periodMonth}-15`,from);
   const balances=await q(c,`SELECT id,"employeeId",kind,amount,"dueMonth" FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND amount>0 AND "dueMonth"<=$2::date ORDER BY id FOR UPDATE`,org,from);
   const byEmployee=new Map(rates.map(r=>[r.employeeId,r]));
   const bankByEmployee=await loadBankDetails(c,org);

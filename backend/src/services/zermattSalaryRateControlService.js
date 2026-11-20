@@ -177,6 +177,27 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
       : null;
     const writeAmount = changedGross ? split.endMonthGross : Number(existing.amount);
     const writeFullGross = changedGross ? split.fullMonthlyGross : existing.fullMonthlyGross;
+    // TSP remains a separate Benefits ledger. Protect its submitted/approved/
+    // paid periods from silent retroactive salary edits, just like main payroll.
+    if (financialChange) {
+      const protectedBenefits = await tx.$queryRawUnsafe(
+        `SELECT id, "periodMonth", status FROM public.zermatt_midmonth_runs
+          WHERE "organizationId"=$1
+            AND status IN ('SUBMITTED','APPROVED','PAID')
+            AND "periodMonth" <= COALESCE($3::date, DATE '9999-12-31')
+            AND ("periodMonth" + INTERVAL '1 month' - INTERVAL '1 day') >= $2::date
+          ORDER BY "periodMonth" DESC LIMIT 1`,
+        organizationId, effectiveFrom, effectiveTo
+      );
+      if (protectedBenefits.length) {
+        throw controlError(
+          "TSP_APPROVED_OR_SUBMITTED_HISTORY_LOCKED",
+          "A submitted, approved or paid TSP run falls within this salary period. Preserve the historical amounts and create a new future effective-dated salary record.",
+          409, { periodMonth: protectedBenefits[0].periodMonth, status: protectedBenefits[0].status }
+        );
+      }
+    }
+
     const rows = await tx.$queryRawUnsafe(
       `UPDATE "payroll_salary_rates"
           SET "amount"=$3, "fullMonthlyGross"=$4, "currency"=$5,
@@ -188,6 +209,32 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
       currency, effectiveFrom, effectiveTo, reason || null
     );
     const updated = mapRate({ ...rows[0], employeeNumber: existing.employeeNumber, employeeName: existing.employeeName });
+    // If an unactivated Benefits preparation exists for this exact salary
+    // effective month, update its full-gross basis and allocation at the same
+    // time. Activated preparations are immutable; the TSP source resolver
+    // prefers the updated authoritative salary rate for an equal effective date.
+    if (changedGross) {
+      const unactivated = await tx.$queryRawUnsafe(
+        `SELECT id, "allocationPreview" FROM public.zermatt_salary_split_preparations
+          WHERE "organizationId"=$1 AND "employeeId"=$2
+            AND "effectiveFrom"=$3::date AND "activatedAt" IS NULL
+          FOR UPDATE`,
+        organizationId, existing.employeeId, effectiveFrom
+      );
+      for (const basis of unactivated) {
+        const override = basis.allocationPreview?.tspPercentageOverride;
+        const allocation = { ...split };
+        if (override != null) allocation.tspPercentageOverride = override;
+        await tx.$executeRawUnsafe(
+          `UPDATE public.zermatt_salary_split_preparations
+            SET "fullMonthlyGross"=$3, "allocationPreview"=$4::jsonb,
+              reason=$5
+            WHERE "organizationId"=$1 AND id=$2 AND "activatedAt" IS NULL`,
+          organizationId, basis.id, amount, JSON.stringify(allocation),
+          "Updated by unified onboarding salary correction: " + reason
+        );
+      }
+    }
     await audit(tx, {
       organizationId,
       actorUserId,
@@ -197,6 +244,26 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
       newValue: updated,
       reason: reason || "Salary rate corrected by authorized HR user",
     });
+    if (financialChange) {
+      await tx.organizationAudit.create({
+        data: {
+          organizationId, actorUserId: actorUserId || null,
+          entityType: "TransportBenefitSalaryBasis",
+          entityId: existing.employeeId,
+          action: "TSP_SALARY_BASIS_UPDATED_REGENERATE_DRAFT",
+          previousValue: { fullMonthlyGross: previous.amount },
+          newValue: {
+            fullMonthlyGross: amount,
+            endMonthGross: writeAmount,
+            normalMidMonth: split?.normalMidMonth ?? null,
+            effectiveFrom,
+            sourceSalaryRateId: rateId,
+            status: "RECALCULATION_REQUIRED",
+          },
+          reason: "Unified salary correction updated TSP basis. Existing TSP draft must be regenerated; no payment was approved.",
+        },
+      });
+    }
     await markDraftRunsRecalculationRequired({
       organizationId,
       actorUserId,
