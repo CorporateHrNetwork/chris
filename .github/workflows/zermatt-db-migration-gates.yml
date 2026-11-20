@@ -1,0 +1,28 @@
+name: Zermatt CRNETWORK database migration gates
+
+on:
+  pull_request:
+    paths:
+      - "tools/zermatt-migration/**"
+      - "backend/tests/zermattMigration*.test.js"
+      - ".github/workflows/zermatt-db-migration-gates.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify the read-only reconciliation gate
+        run: node --test backend/tests/zermattMigrationInventory.test.js
