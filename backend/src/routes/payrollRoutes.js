@@ -1535,6 +1535,91 @@ router.get("/paid-leave", requirePermission("payroll.view"), async (req, res) =>
   }
 });
 
+// Read-only, period-specific reconciliation: authoritative Employee + Salary
+// Rate versus payroll snapshot. Never creates payroll lines or pay instructions.
+router.get("/coverage/employee", requirePermission("payroll.view"), async (req,res) => {
+  try {
+    if (!isZermatt(req)) return res.status(404).json({status:"error",message:"Zermatt payroll reconciliation only."});
+    const employeeNumber=String(req.query.employeeNumber || "").trim().toUpperCase();
+    const periodId=String(req.query.periodId || "").trim();
+    if(!/^ZLL[0-9]{6}$/.test(employeeNumber) || !periodId) {
+      return res.status(400).json({status:"error",message:"Valid Zermatt employee number and payroll period are required."});
+    }
+    const employee=await prisma.employee.findFirst({
+      where:{organizationId:req.auth.organizationId,employeeNumber},
+      select:{
+        id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,status:true,
+        employmentType:true,costCentreId:true,locationId:true,hireDate:true,exitDate:true,
+        location:{select:{name:true}},
+      },
+    });
+    if(!employee) return res.status(404).json({status:"error",message:"Employee not found in Zermatt."});
+    const authorized=(req.auth.availableLocations || []).map(x=>x.id);
+    if(req.auth.locationScope!=="ALL_LOCATIONS" && (!employee.locationId || !authorized.includes(employee.locationId))) {
+      return res.status(403).json({status:"error",message:"Employee is outside your authorized payroll branch."});
+    }
+    if(req.auth.activeLocationId && employee.locationId!==req.auth.activeLocationId) {
+      return res.status(403).json({status:"error",message:"Select the employee's assigned payroll branch."});
+    }
+    const periods=await prisma.$queryRawUnsafe(
+      `SELECT id,code,"periodStart","periodEnd",status FROM public.payroll_periods
+       WHERE "organizationId"=$1 AND id=$2 LIMIT 1`,req.auth.organizationId,periodId);
+    const period=periods[0];
+    if(!period)return res.status(404).json({status:"error",message:"Payroll period not found."});
+    const start=new Date(period.periodStart),end=new Date(period.periodEnd);
+    const startsMonth=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth(),1));
+    const deactivations=await prisma.employeeLifecycleEvent.findMany({
+      where:{organizationId:req.auth.organizationId,employeeId:employee.id,
+        eventType:"DEACTIVATED",effectiveDate:{gte:startsMonth,lte:end}},
+      orderBy:{effectiveDate:"desc"},take:5,
+      select:{effectiveDate:true,eventType:true},
+    });
+    const rates=await prisma.$queryRawUnsafe(
+      `SELECT id,amount,"fullMonthlyGross","effectiveFrom","effectiveTo",status
+       FROM public.payroll_salary_rates WHERE "organizationId"=$1 AND "employeeId"=$2
+       ORDER BY "effectiveFrom" DESC LIMIT 25`,req.auth.organizationId,employee.id);
+    const validRate=rates.find(r=>r.status==="ACTIVE" && new Date(r.effectiveFrom)<=end && (!r.effectiveTo || new Date(r.effectiveTo)>=start));
+    const runs=await prisma.$queryRawUnsafe(
+      `SELECT r.id,r.status,r."employeeCount",r."updatedAt" FROM public.payroll_runs r
+       WHERE r."organizationId"=$1 AND r."periodId"=$2 ORDER BY r."updatedAt" DESC LIMIT 10`,
+      req.auth.organizationId,periodId);
+    const runLines=runs.length?await prisma.$queryRawUnsafe(
+      `SELECT "runId","baseSalary","grossPay" FROM public.payroll_run_lines
+       WHERE "organizationId"=$1 AND "employeeId"=$2 AND "runId" = ANY($3::text[])`,
+      req.auth.organizationId,employee.id,runs.map(r=>r.id)): [];
+    const presentIds=new Set(runLines.map(line=>line.runId));
+    const activeStates=["ACTIVE","PROBATION","LEAVE","SUSPENDED"];
+    const blockers=[];
+    if(!activeStates.includes(employee.status))blockers.push("EMPLOYMENT_STATUS_NOT_PAYROLL_CURRENT");
+    if(employee.hireDate && new Date(employee.hireDate)>end)blockers.push("HIRE_DATE_AFTER_PERIOD_END");
+    if(deactivations.length)blockers.push("DEACTIVATION_EVENT_IN_PERIOD");
+    if(!employee.employmentType)blockers.push("EMPLOYMENT_TYPE_MISSING");
+    if(!employee.costCentreId)blockers.push("COST_CENTRE_MISSING");
+    if(!validRate)blockers.push("NO_SALARY_RATE_EFFECTIVE_IN_PERIOD");
+    const currentRun=runs[0]||null;
+    const inCurrentRun=Boolean(currentRun && presentIds.has(currentRun.id));
+    const status=blockers.length?"AUTHORITY_OR_ELIGIBILITY_BLOCKED"
+      :!currentRun?"NO_PAYROLL_RUN"
+      :inCurrentRun?"PRESENT_IN_PAYROLL"
+      :["DRAFT","REJECTED"].includes(currentRun.status)?"DRAFT_RECALCULATION_REQUIRED"
+      :"APPROVED_OR_SUBMITTED_RUN_MISSING_EMPLOYEE";
+    return res.json({status:"success",data:{
+      employeeNumber:employee.employeeNumber,
+      employeeName:[employee.firstName,employee.middleName,employee.lastName].filter(Boolean).join(" "),
+      branch:employee.location?.name||"Unassigned",employmentStatus:employee.status,
+      hireDate:employee.hireDate,periodCode:period.code,periodStart:period.periodStart,periodEnd:period.periodEnd,
+      eligibleByCurrentRules:!blockers.length,blockers,
+      salaryRate:validRate?{effectiveFrom:validRate.effectiveFrom,effectiveTo:validRate.effectiveTo,
+        endMonthGross:Number(validRate.amount),fullMonthlyGross:validRate.fullMonthlyGross==null?null:Number(validRate.fullMonthlyGross)}:null,
+      salaryRateHistory:rates.map(r=>({status:r.status,effectiveFrom:r.effectiveFrom,effectiveTo:r.effectiveTo})),
+      run:currentRun?{id:currentRun.id,status:currentRun.status,employeeCount:currentRun.employeeCount,included:inCurrentRun}:null,
+      status, action:status==="DRAFT_RECALCULATION_REQUIRED"?"RECALCULATE_DRAFT"
+        :status==="APPROVED_OR_SUBMITTED_RUN_MISSING_EMPLOYEE"?"REOPEN_THROUGH_APPROVAL_WORKFLOW"
+        :status==="AUTHORITY_OR_ELIGIBILITY_BLOCKED"?"CORRECT_EMPLOYEE_AUTHORITY":"NONE",
+    }});
+  }catch(error){console.error("Payroll employee coverage:",error);return res.status(500).json({status:"error",message:"Unable to reconcile employee payroll coverage."});}
+});
+
 router.get("/runs", requirePermission("payroll.view"), async (req, res) => {
   try {
     return res.json({ status: "success", data: await payroll.listRuns({ organizationId: req.auth.organizationId }) });
