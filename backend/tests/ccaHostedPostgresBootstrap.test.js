@@ -10,7 +10,7 @@ const valid = () => ({
   CCA_PG_HOST:"db.cca-pilot.example.org",
   CCA_PG_PORT:"5432",
   CCA_PG_DATABASE:"cca_pilot_main",
-  CCA_PG_READER:"cca_reader_pilot",
+  CCA_PG_READER:"cca_hosted_reader",
   CCA_PG_PASSWORD:"fictional-secret-not-a-real-password-12345678",
   CCA_PG_CA_PEM:"-----BEGIN CERTIFICATE-----\nfictional-ca-fixture\n-----END CERTIFICATE-----"
 });
@@ -41,7 +41,7 @@ test("CCA hosted reader refuses an elevated DB role", async()=>{
  class FakePool {
   constructor(options){assert.equal(options.ssl.rejectUnauthorized,true);}
   async connect(){
-   return {query:async()=>({rows:[{role:"cca_reader_pilot",database:"cca_pilot_main",rolsuper:true,rolbypassrls:false}]}),
+   return {query:async()=>({rows:[{role:"cca_hosted_reader",database:"cca_pilot_main",rolsuper:true,rolbypassrls:false}]}),
    release:()=>{released=true}};
   }
   async end(){closed=true;}
