@@ -13,6 +13,7 @@ const {
 } = require("../services/zermattHrFinancialAccessService");
 const {
   updateSalaryRate,
+  createEffectiveDatedSalaryRevision,
   deleteUnusedSalaryRate,
 } = require("../services/zermattSalaryRateControlService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
@@ -232,6 +233,27 @@ router.post(
     } catch (error) {
       return sendError(res, error, "Unable to save salary rate.");
     }
+  }
+);
+
+// HR can prepare a new future-effective salary without overwriting a rate used
+// by approved payroll. The service end-dates the old rate and saves the new split
+// in one audited transaction.
+router.post(
+  "/onboarding/salary-revision",
+  zermattOnly,
+  requireEmployeeFinancialInputEditor,
+  async (req,res)=>{
+    try{
+      const rateId=String(req.body?.rateId||"");
+      await assertSalaryRateAccess({req,rateId});
+      const data=await createEffectiveDatedSalaryRevision({
+        organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+        rateId,input:req.body||{},
+      });
+      return res.status(201).json({status:"success",data,
+        message:"Future-effective salary allocated to Main Payroll and TSP basis. Regenerate eligible drafts before approval."});
+    }catch(error){return sendError(res,error,"Unable to create effective-dated salary revision.");}
   }
 );
 

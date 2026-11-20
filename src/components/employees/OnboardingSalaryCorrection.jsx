@@ -11,6 +11,8 @@ export default function OnboardingSalaryCorrection() {
   const [reason,setReason] = useState("");
   const [preview,setPreview] = useState(null);
   const [previewBusy,setPreviewBusy] = useState(false);
+  const [revisionMode,setRevisionMode] = useState(false);
+  const [newEffectiveFrom,setNewEffectiveFrom] = useState("");
   const [loading,setLoading] = useState(false);
   const [saving,setSaving] = useState(false);
   const [message,setMessage] = useState("");
@@ -46,20 +48,31 @@ export default function OnboardingSalaryCorrection() {
     }
     if (reason.trim().length < 8) { setError("Enter an explanation of at least eight characters for the correction audit."); return; }
     if (!preview || Number(preview.fullMonthlyGross) !== corrected) { setError("Preview the allocation from the full salary before saving."); return; }
-    if (!window.confirm(`Apply ${money(corrected)} to ${selected.employeeName}? Main end-month ${money(preview.endMonthGross)} and independent TSP ${money(preview.normalMidMonth)}. Draft payroll/TSP must be regenerated; approved periods are protected.`)) return;
+    if (revisionMode && (!newEffectiveFrom || !newEffectiveFrom.endsWith("-01"))) {
+      setError("Select the first day of a future effective salary month.");return;
+    }
+    const confirmation = revisionMode
+      ? `Create a NEW salary rate for ${selected.employeeName} effective ${newEffectiveFrom}? Full gross ${money(corrected)}, Main Payroll ${money(preview.endMonthGross)}, TSP ${money(preview.normalMidMonth)}. The previous rate is preserved through the preceding month.`
+      : `Apply ${money(corrected)} to ${selected.employeeName}? Main end-month ${money(preview.endMonthGross)} and independent TSP ${money(preview.normalMidMonth)}. Draft payroll/TSP must be regenerated; approved periods are protected.`;
+    if (!window.confirm(confirmation)) return;
     setSaving(true);
     try {
-      const response = await apiRequest(`/api/payroll/salary-rates/${encodeURIComponent(selected.id)}`, {
-        method:"PATCH", body: {
-          amount:corrected,
-          currency:selected.currency || "NGN",
-          effectiveFrom:selected.effectiveFrom,
-          effectiveTo:selected.effectiveTo || null,
-          reason:reason.trim(),
-        },
-      });
+      const response = revisionMode
+        ? await apiRequest("/api/onboarding/salary-revision",{
+            method:"POST",body:{
+              rateId:selected.id,amount:corrected,effectiveFrom:newEffectiveFrom,
+              reason:reason.trim(),
+            },
+          })
+        : await apiRequest(`/api/payroll/salary-rates/${encodeURIComponent(selected.id)}`,{
+            method:"PATCH",body:{
+              amount:corrected,currency:selected.currency || "NGN",
+              effectiveFrom:selected.effectiveFrom,
+              effectiveTo:selected.effectiveTo || null,reason:reason.trim(),
+            },
+          });
       setMessage(`Salary allocation saved for ${selected.employeeName}. Full gross: ${money(response.data.amount)}; main payroll end-month: ${money(response.data.endMonthGross)}; TSP basis updated in Benefits. Regenerate affected draft Main Payroll and TSP before approval.`);
-      setSelected(null);setReason("");setAmount("");setPreview(null);
+      setSelected(null);setReason("");setAmount("");setPreview(null);setRevisionMode(false);setNewEffectiveFrom("");
       const updated = await apiRequest(`/api/onboarding/salary-corrections?name=${encodeURIComponent(name.trim())}`);
       setRows(updated.data || []);
     } catch(err) { setError(err.message || "Salary correction was not saved."); }
@@ -81,13 +94,34 @@ export default function OnboardingSalaryCorrection() {
       {message && <p role="status">{message}</p>}
       <div style={{maxHeight:200,overflowY:"auto",margin:"8px 0"}}>
         {rows.map(rate=><button type="button" key={rate.id} style={{display:"block",padding:8,marginBottom:4,width:"100%",textAlign:"left"}}
-          onClick={()=>{setSelected(rate);setAmount(String(rate.amount));setReason("");setPreview(null);setMessage("");}}>
+          onClick={()=>{setSelected(rate);setAmount(String(rate.amount));setReason("");setPreview(null);setRevisionMode(false);setNewEffectiveFrom("");setMessage("");setError("");}}>
           {rate.employeeName} · {rate.employeeNumber} · {money(rate.amount)} · Effective {rate.effectiveFrom}
         </button>)}
       </div>
       {selected && <div style={{display:"grid",gap:10,maxWidth:500}}>
         <strong>{selected.employeeName} · {selected.employeeNumber}</strong>
         <p>Current full monthly gross: {money(selected.amount)} | Main payroll end-month: {money(selected.endMonthGross)} | TSP allocation uses the applicable rate and eligible days.</p>
+        <div style={{border:"1px solid var(--chris-border, #d4af37)",borderRadius:8,padding:12}}>
+          <p style={{marginBottom:8}}><strong>Salary correction method</strong></p>
+          <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <input type="radio" name="onboarding-salary-method" checked={!revisionMode}
+              onChange={()=>{setRevisionMode(false);setPreview(null);setError("");}} />
+            Correct existing unused salary rate
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:8}}>
+            <input type="radio" name="onboarding-salary-method" checked={revisionMode}
+              onChange={()=>{setRevisionMode(true);setPreview(null);setError("");}} />
+            Create new effective-dated salary allocation (when approved payroll exists)
+          </label>
+          {revisionMode && <label style={{display:"block",marginTop:12}}>
+            New effective salary month *
+            <input type="month" aria-label="New effective salary month" value={newEffectiveFrom.slice(0,7)}
+              onChange={e=>{setNewEffectiveFrom(e.target.value ? e.target.value+"-01":"");setPreview(null);}} />
+          </label>}
+          <p style={{fontSize:13,marginTop:8}}>
+            Historical approved payroll and TSP runs remain unchanged. The new rate starts after the last protected period; the old rate ends the preceding day.
+          </p>
+        </div>
         <label>Correct monthly gross salary (₦) *
           <input type="number" min="0.01" step="0.01" value={amount} onChange={e=>{setAmount(e.target.value);setPreview(null);}} />
         </label>
@@ -97,10 +131,11 @@ export default function OnboardingSalaryCorrection() {
         <button type="button" className="qa-secondary" disabled={previewBusy} onClick={async()=>{
           setError("");setPreview(null);
           if(!Number.isFinite(Number(amount)) || Number(amount)<=0) {setError("Enter a positive full gross amount.");return;}
+          if(revisionMode && !newEffectiveFrom) {setError("Select the future effective salary month before calculating.");return;}
           setPreviewBusy(true);
           try {
             const r=await apiRequest("/api/onboarding/salary-allocation-preview",{
-              method:"POST",body:{rateId:selected.id,fullMonthlyGross:amount,effectiveFrom:selected.effectiveFrom}
+              method:"POST",body:{rateId:selected.id,fullMonthlyGross:amount,effectiveFrom:revisionMode ? newEffectiveFrom : selected.effectiveFrom}
             });
             setPreview(r.data);
           } catch(err){setError(err.message||"Unable to preview the CHRiS salary allocation.");}
@@ -116,8 +151,8 @@ export default function OnboardingSalaryCorrection() {
           <p>End-of-month salary components: Basic {money(preview.components?.basic)}, Housing {money(preview.components?.housing)}, Transport {money(preview.components?.transport)}, Meal {money(preview.components?.meal)}, Medical {money(preview.components?.medical)}, Utility {money(preview.components?.utility)}.</p>
           <p>Main Payroll and TSP remain separate. No payment is triggered by saving this allocation. Existing TSP overtime, PH, short payments and overpayments are preserved.</p>
         </div>}
-        <p>Effective from: {selected.effectiveFrom}. Where an approved payroll has used this rate, correction is blocked and a new effective-dated record must be created through salary review.</p>
-        <button type="button" className="qa-primary" onClick={save} disabled={saving || !preview}>{saving?"Saving allocations…":"Save and map salary allocations"}</button>
+        <p>Existing rate starts {selected.effectiveFrom}. Use the new effective-dated allocation option where approved Main Payroll or TSP history prevents editing.</p>
+        <button type="button" className="qa-primary" onClick={save} disabled={saving || !preview}>{saving?"Saving allocations…":revisionMode?"Create future salary allocation":"Save and map salary allocations"}</button>
       </div>}
     </>}
   </section>;
