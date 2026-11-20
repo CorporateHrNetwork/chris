@@ -203,6 +203,7 @@ model User {
   firstName      String?
   lastName       String?
   isActive       Boolean @default(true)
+  accessSuspendedAt DateTime?
 
   // WHAT the user may do is controlled by Roles/Permissions.
   // WHERE the user may do it is controlled here.
