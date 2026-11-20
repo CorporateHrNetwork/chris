@@ -6,6 +6,7 @@ on:
       - "backend/src/cca/**"
       - "backend/tests/ccaHosted*.test.js"
       - "backend/tests/ccaOperatorJwtVerifier.test.js"
+      - "backend/tests/ccaPrivateHostedPilot.test.js"
       - "backend/tests/ccaOperationsAlertsContract.test.js"
       - "backend/tests/ccaHealthSchedulerContract.test.js"
       - "backend/tests/ccaScheduledOperationsContract.test.js"
@@ -32,4 +33,4 @@ jobs:
         with:
           node-version: "22"
       - name: Run CCA hosted application and operator-session contract tests
-        run: node --test backend/tests/ccaHosted*.test.js backend/tests/ccaOperatorJwtVerifier.test.js backend/tests/ccaOperationsAlertsContract.test.js backend/tests/ccaHealthSchedulerContract.test.js backend/tests/ccaScheduledOperationsContract.test.js
+        run: node --test backend/tests/ccaHosted*.test.js backend/tests/ccaOperatorJwtVerifier.test.js backend/tests/ccaPrivateHostedPilot.test.js backend/tests/ccaOperationsAlertsContract.test.js backend/tests/ccaHealthSchedulerContract.test.js backend/tests/ccaScheduledOperationsContract.test.js
