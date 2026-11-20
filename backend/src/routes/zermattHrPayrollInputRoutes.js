@@ -16,6 +16,7 @@ const {
   deleteUnusedSalaryRate,
 } = require("../services/zermattSalaryRateControlService");
 const { markDraftRunsRecalculationRequired } = require("../services/payrollDraftFreshnessService");
+const { splitSalary } = require("../services/zermattSalarySplit");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -108,6 +109,50 @@ async function listScopedSalaryAdvances(req) {
 router.get("/payroll/hr-input-capabilities", zermattOnly, (req, res) => {
   return res.json({ status: "success", data: capabilitySnapshot(req) });
 });
+
+// Read-only preview of a proposed salary correction. Both independent payroll
+// components are derived from one full gross amount with the Zermatt engine.
+router.post(
+  "/onboarding/salary-allocation-preview",
+  zermattOnly,
+  requireEmployeeFinancialInputEditor,
+  async (req, res) => {
+    try {
+      const rateId = String(req.body?.rateId || "");
+      const authority = await assertSalaryRateAccess({ req, rateId });
+      const employee = await prisma.employee.findFirst({
+        where: { id: authority.employeeId, organizationId: req.auth.organizationId },
+        select: { employmentType: true, hireDate: true, employeeNumber: true },
+      });
+      if (!employee?.hireDate || !employee?.employmentType) {
+        return res.status(422).json({ status: "error", message: "Employment type and hire date are required to calculate salary components." });
+      }
+      const fullMonthlyGross = req.body?.fullMonthlyGross;
+      const effectiveFrom = String(req.body?.effectiveFrom || "");
+      if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(effectiveFrom)) {
+        return res.status(400).json({ status: "error", message: "Select a valid salary effective date." });
+      }
+      const allocation = splitSalary({
+        fullMonthlyGross, employmentType: employee.employmentType,
+        hireDate: employee.hireDate, periodMonth: effectiveFrom.slice(0, 7),
+      });
+      return res.json({
+        status: "success",
+        data: {
+          employeeNumber: employee.employeeNumber,
+          effectiveFrom, ...allocation,
+          destinations: {
+            endOfMonth: "MAIN_PAYROLL_SALARY_RATE",
+            tsp: "BENEFITS_TRANSPORT_SUPPORT_BASIS",
+          },
+          status: "PREVIEW_ONLY_NO_PAYMENTS",
+        },
+      });
+    } catch (error) {
+      return sendError(res, error, "Unable to preview salary allocation.");
+    }
+  }
+);
 
 // Zermatt's onboarding entry provides HR correction of an already-created
 // employee's opening salary. Reuse the same scoped payroll salary authority
