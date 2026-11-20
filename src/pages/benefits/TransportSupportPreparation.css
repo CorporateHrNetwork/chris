@@ -17,7 +17,7 @@
   padding:clamp(16px,2.8vw,32px);
   background:#f9faf7;
   color:var(--sb-ink);
-  font:400 15px/1.55 inherit;
+  font-family:inherit; font-size:15px; line-height:1.55; font-weight:400;
 }
 .chris-salary-basis *,
 .chris-salary-basis *::before,
