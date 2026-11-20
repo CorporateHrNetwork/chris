@@ -54,7 +54,8 @@ function mapScopedSalaryRate(row) {
   const { employeeLocationId, ...rest } = row;
   return {
     ...rest,
-    amount: Number(row.amount || 0),
+    amount: Number(row.fullMonthlyGross ?? row.amount ?? 0),
+    endMonthGross: Number(row.amount ?? 0),
     effectiveFrom: dateValue(row.effectiveFrom),
     effectiveTo: dateValue(row.effectiveTo),
   };
@@ -77,7 +78,7 @@ async function listScopedSalaryRates(req) {
     `SELECT sr."id",sr."employeeId",e."employeeNumber",
             CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
             e."locationId" AS "employeeLocationId",
-            sr."amount",sr."currency",sr."frequency",sr."effectiveFrom",sr."effectiveTo",
+            sr."amount",sr."fullMonthlyGross",sr."currency",sr."frequency",sr."effectiveFrom",sr."effectiveTo",
             sr."status",sr."reason",sr."createdAt",sr."updatedAt"
        FROM "payroll_salary_rates" sr
        JOIN "employees" e ON e."id"=sr."employeeId" AND e."organizationId"=sr."organizationId"
