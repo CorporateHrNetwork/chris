@@ -140,6 +140,7 @@ router.post("/login", async (req, res) => {
         where: {
           organizationId: organization.id,
           isActive: true,
+          accessSuspendedAt: null,
           OR: [
             { email: normalizedEmail },
             { employee: { email: { equals: normalizedEmail, mode: "insensitive" } } },
@@ -451,7 +452,8 @@ router.post(
         resetRecord.usedAt ||
         resetRecord.expiresAt <=
           new Date() ||
-        !resetRecord.user.isActive
+        !resetRecord.user.isActive ||
+        Boolean(resetRecord.user.accessSuspendedAt)
       ) {
         return res.status(400).json({
           status: "error",

@@ -408,6 +408,37 @@ function UsersRolesSettings() {
   ACTIVATE / DEACTIVATE USER
   ============================================================
   */
+  const [recoveryUserId,setRecoveryUserId] = useState(null);
+  const handleSendRecovery = async (user,portal) => {
+    if (!canManageUsers || user.id === currentUserId) return;
+    const label=portal === "ess" ? "ESS" : "CHRiS staff login";
+    if (!window.confirm(`Send a one-time ${label} password reset link to ${user.email}? The link expires in 15 minutes.`))return;
+    setRecoveryUserId(user.id);setActionError("");setActionMessage("");
+    try {
+      const response=await apiRequest(`/api/users/${user.id}/send-password-recovery`,{
+        method:"POST",body:{portal,reason:"HR-authorized password recovery requested from User Management"}
+      });
+      setActionMessage(response.message || label+" password recovery email sent.");
+    }catch(error){setActionError(error.message || "Unable to send password recovery email.");}
+    finally{setRecoveryUserId(null);}
+  };
+  const handleSuspension = async user => {
+    if (!canManageUsers || user.id === currentUserId) return;
+    const suspended = !user.accessSuspendedAt;
+    const verb=suspended?"Suspend":"Resume";
+    const reason=window.prompt(`${verb} ${getUserName(user)} on both CHRiS staff login and ESS? Enter audit reason (at least 8 characters).`);
+    if(reason==null)return;
+    if(reason.trim().length<8){setActionError("Enter a reason of at least eight characters.");return;}
+    setRecoveryUserId(user.id);setActionMessage("");setActionError("");
+    try {
+      const response=await apiRequest(`/api/users/${user.id}/suspension`,{
+        method:"PATCH",body:{suspended,reason:reason.trim()}
+      });
+      setActionMessage(response.message || verb+" completed.");
+      await loadUsers();
+    }catch(error){setActionError(error.message || "Unable to change account suspension.");}
+    finally{setRecoveryUserId(null);}
+  };
   const handleStatusChange =
     async (user) => {
       if (!canManageUsers) {
@@ -840,6 +871,9 @@ function UsersRolesSettings() {
             onStatusChange={
               handleStatusChange
             }
+            onSendRecovery={handleSendRecovery}
+            onSuspension={handleSuspension}
+            recoveryUserId={recoveryUserId}
           />
         )}
 
@@ -929,6 +963,9 @@ function UsersTab({
   essProvisioning,
   onEditUser,
   onStatusChange,
+  onSendRecovery,
+  onSuspension,
+  recoveryUserId,
 }) {
   if (!canView) {
     return (
@@ -1217,11 +1254,7 @@ function UsersTab({
                         </TableCell>
 
                         <TableCell>
-                          <StatusBadge
-                            active={
-                              user.isActive
-                            }
-                          />
+                          {user.accessSuspendedAt ? <span style={{fontWeight:700,color:"#b45309"}}>Suspended</span> : <StatusBadge active={user.isActive} />}
                         </TableCell>
 
                         <TableCell>
@@ -1247,6 +1280,17 @@ function UsersTab({
                                   "wrap",
                               }}
                             >
+                              {!isCurrentUser && <>
+                                <button type="button" disabled={!user.isActive || Boolean(user.accessSuspendedAt) || recoveryUserId === user.id}
+                                  onClick={()=>onSendRecovery(user,"admin")} style={editButtonStyle}>Reset Staff Password</button>
+                                <button type="button" disabled={!user.isActive || Boolean(user.accessSuspendedAt) || !user.employeeId || recoveryUserId === user.id}
+                                  onClick={()=>onSendRecovery(user,"ess")} style={editButtonStyle}>Reset ESS Password</button>
+                                <button type="button" disabled={!user.isActive || recoveryUserId === user.id}
+                                  onClick={()=>onSuspension(user)}
+                                  style={user.accessSuspendedAt ? activateButtonStyle : deactivateButtonStyle}>
+                                  {user.accessSuspendedAt ? "Resume Access" : "Suspend Access"}
+                                </button>
+                              </>}
                               <button
                                 type="button"
 

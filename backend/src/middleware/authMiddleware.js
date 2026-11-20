@@ -29,7 +29,7 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ status: "error", code: "ESS_SESSION_NOT_ALLOWED", message: "This session is restricted to the employee portal." });
     }
     const user = await prisma.user.findFirst({
-      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true },
+      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true, accessSuspendedAt: null },
       include: {
         organization: true,
         userLocations: { include: { location: true } },
@@ -153,7 +153,7 @@ async function requireEssAuth(req, res, next) {
     }
 
     const user = await prisma.user.findFirst({
-      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true, employeeId: { not: null } },
+      where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true, accessSuspendedAt: null, employeeId: { not: null } },
       include: { organization: true, employee: { select: { id: true, status: true } } },
     });
 
