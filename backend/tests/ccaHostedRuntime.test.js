@@ -6,7 +6,7 @@ const {PERMISSIONS}=require("../src/cca/controlPlanePolicy");
 const env={
  CCA_HOSTED_DATABASE_MODE:"isolated-hosted",CCA_HOSTED_DATABASE_SCOPE:"CCA_ONLY",
  CCA_PG_HOST:"db.cca.example.org",CCA_PG_PORT:"5432",
- CCA_PG_DATABASE:"cca_testpilot",CCA_PG_READER:"cca_reader_test",
+ CCA_PG_DATABASE:"cca_testpilot",CCA_PG_READER:"cca_hosted_reader",
  CCA_PG_PASSWORD:"fictional-password-123456789123456789",
  CCA_PG_CA_PEM:"-----BEGIN CERTIFICATE-----\nFICTIONAL\n-----END CERTIFICATE-----"
 };
@@ -21,7 +21,7 @@ test("CCA hosted runtime composes verified DB and operator identity on private l
  class Pool{
   async connect(){
    return {query:async sql=>{
-    if(sql.startsWith("SELECT current_user"))return {rows:[{role:"cca_reader_test",database:"cca_testpilot",rolsuper:false,rolbypassrls:false}]};
+    if(sql.startsWith("SELECT current_user"))return {rows:[{role:"cca_hosted_reader",database:"cca_testpilot",rolsuper:false,rolbypassrls:false}]};
     if(sql.startsWith("SELECT rolsuper"))return {rows:[{rolsuper:false,rolbypassrls:false}]};
     if(sql.startsWith("SELECT id"))return {rows:[{id:"fictional-1",tenant_id:"demo-cedar",service_code:"MANAGED_POSTGRESQL",status:"REQUEST_ONLY"}]};
     return {rows:[]};
