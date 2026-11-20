@@ -979,7 +979,7 @@ function UsersTab({
       employee.firstName, employee.middleName, employee.lastName,
       employee.employeeNumber, employee.email,
     ].filter(Boolean).join(" ").toLocaleLowerCase();
-    return normalizedQuery.split(/\\s+/).every(token => terms.includes(token));
+    return normalizedQuery.split(/\s+/).every(token => terms.includes(token));
   });
   const visibleAccounts = selectedAccountId
     ? users.filter(user => user.id === selectedAccountId)
