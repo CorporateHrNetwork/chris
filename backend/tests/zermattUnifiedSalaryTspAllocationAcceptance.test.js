@@ -29,6 +29,15 @@ test("salary correction uses same audited transaction for main payroll, TSP basi
  assert.ok(src.includes('SALARY_RATE_CORRECTED_BY_HR'));
  assert.ok(src.includes('markDraftRunsRecalculationRequired'));
 });
+test("new hire onboarding provisions full monthly and end-month salary independently", () => {
+ const create=read("backend/src/services/employeeCreationService.js");
+ const benefit=read("backend/src/services/transportBenefitOnboardingService.js");
+ assert.ok(create.includes('salarySplit?.endMonthGross ?? openingSalaryRate.amount'));
+ assert.ok(create.includes('salarySplit?.fullMonthlyGross ?? null'));
+ assert.ok(create.includes('"amount","fullMonthlyGross","currency"'));
+ assert.ok(create.includes("createOpeningBenefitBasis(tx"));
+ assert.ok(benefit.includes("splitSalary({fullMonthlyGross:salary.amount"));
+});
 test("TSP selects latest corrected full-gross basis for equal effective date", () => {
  const src=read("backend/src/services/zermattMidmonthService.js");
  assert.ok(src.includes('ORDER BY "employeeId","effectiveFrom" DESC,"updatedAt" DESC,priority DESC'));
