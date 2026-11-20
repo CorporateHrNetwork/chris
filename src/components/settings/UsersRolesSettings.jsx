@@ -967,6 +967,39 @@ function UsersTab({
   onSuspension,
   recoveryUserId,
 }) {
+  const [employeeQuery, setEmployeeQuery] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [suggestionsVisible, setSuggestionsVisible] = useState(false);
+  const normalizedQuery = employeeQuery.trim().toLocaleLowerCase();
+  const candidateAccounts = users.filter(user => {
+    if (!normalizedQuery) return true;
+    const employee = user.employee || {};
+    const terms = [
+      getUserName(user), user.firstName, user.lastName, user.email,
+      employee.firstName, employee.middleName, employee.lastName,
+      employee.employeeNumber, employee.email,
+    ].filter(Boolean).join(" ").toLocaleLowerCase();
+    return normalizedQuery.split(/\\s+/).every(token => terms.includes(token));
+  });
+  const visibleAccounts = selectedAccountId
+    ? users.filter(user => user.id === selectedAccountId)
+    : candidateAccounts;
+  const employeeSuggestions = normalizedQuery.length >= 2 && !selectedAccountId
+    ? candidateAccounts.slice(0, 12) : [];
+  function chooseAccount(user) {
+    setSelectedAccountId(user.id);
+    setEmployeeQuery(
+      [user.employee?.firstName, user.employee?.middleName, user.employee?.lastName]
+        .filter(Boolean).join(" ") || getUserName(user)
+    );
+    setSuggestionsVisible(false);
+  }
+  function clearAccountSearch() {
+    setEmployeeQuery("");
+    setSelectedAccountId("");
+    setSuggestionsVisible(false);
+  }
+
   if (!canView) {
     return (
       <AccessNotice
@@ -1062,6 +1095,58 @@ function UsersTab({
           )}
       </div>
 
+      <div style={{ marginBottom: 16, maxWidth: 600, position: "relative" }}>
+        <label htmlFor="user-accounts-employee-search" style={{ display: "block", color: "#334155", fontWeight: 700, marginBottom: 6 }}>
+          Type-search employee account
+        </label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            id="user-accounts-employee-search"
+            type="search"
+            autoComplete="off"
+            aria-label="Search employee by name, number or email"
+            aria-controls="user-account-employee-suggestions"
+            aria-expanded={suggestionsVisible && employeeSuggestions.length > 0}
+            value={employeeQuery}
+            onFocus={() => setSuggestionsVisible(true)}
+            onChange={event => {
+              setEmployeeQuery(event.target.value);
+              setSelectedAccountId("");
+              setSuggestionsVisible(true);
+            }}
+            placeholder="Type employee first name, surname or number"
+            style={{ flex: 1, minWidth: 160, border: "1px solid #CBD5E1", borderRadius: 8, padding: "11px 12px", color: "#0F172A", backgroundColor: "#FFF" }}
+          />
+          {(employeeQuery || selectedAccountId) && (
+            <button type="button" onClick={clearAccountSearch} style={editButtonStyle}>
+              Clear
+            </button>
+          )}
+        </div>
+        {suggestionsVisible && employeeSuggestions.length > 0 && (
+          <div id="user-account-employee-suggestions" role="listbox" aria-label="Matching employee accounts"
+            style={{ position: "absolute", zIndex: 10, width: "100%", background: "#FFF", border: "1px solid #CBD5E1", borderRadius: 8, boxShadow: "0 8px 22px rgba(15,23,42,.12)", maxHeight: 260, overflowY: "auto" }}>
+            {employeeSuggestions.map(user => (
+              <button type="button" role="option" aria-selected="false" key={user.id}
+                onClick={() => chooseAccount(user)}
+                style={{ width: "100%", background: "transparent", color: "#0F172A", border: 0, borderBottom: "1px solid #E2E8F0", padding: 10, textAlign: "left", cursor: "pointer", display: "block" }}>
+                <strong>{[user.employee?.firstName, user.employee?.middleName, user.employee?.lastName].filter(Boolean).join(" ") || getUserName(user)}</strong>
+                {" · "}{user.employee?.employeeNumber || "No linked employee"}
+                {" · "}{user.employee?.location?.name || "Unassigned branch"}
+                <span style={{ display: "block", fontSize: 12, color: "#64748B" }}>{user.email}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {selectedAccountId && <p style={{ color: "#475569", fontSize: 12, margin: "6px 0 0" }}>Showing the selected employee account. Clear to return to all user accounts.</p>}
+        {normalizedQuery.length > 0 && !visibleAccounts.length && !loading && (
+          <p role="status" style={{ color: "#64748B", fontSize: 13, marginTop: 8 }}>No matching user account. Check the employee name, number or email.</p>
+        )}
+        <p style={{ color: "#64748B", fontSize: 12, margin: "6px 0 0" }}>
+          {visibleAccounts.length} of {users.length} user accounts shown. Results are limited to your authorized user directory.
+        </p>
+      </div>
+
       {error && (
         <ErrorBox
           message={
@@ -1127,7 +1212,7 @@ function UsersTab({
               </thead>
 
               <tbody>
-                {users.map(
+                {visibleAccounts.map(
                   (user) => {
                     const isCurrentUser =
                       user.id ===
