@@ -1,0 +1,108 @@
+/* Zermatt salary-basis setup. Scoped to prevent legacy/global dark button styles.
+   Aligned with CHRiS green, off-white surfaces and restrained gold accents. */
+.chris-salary-basis {
+  --sb-green:#12663c;
+  --sb-green-deep:#084d30;
+  --sb-gold:#b28a29;
+  --sb-ink:#183026;
+  --sb-muted:#596e62;
+  --sb-line:#d7e1d9;
+  --sb-surface:#ffffff;
+  --sb-soft:#f6f8f4;
+  box-sizing:border-box;
+  width:100%;
+  max-width:1400px;
+  min-width:0;
+  margin:0 auto;
+  padding:clamp(16px,2.8vw,32px);
+  background:#f9faf7;
+  color:var(--sb-ink);
+  font:400 15px/1.55 inherit;
+}
+.chris-salary-basis *,
+.chris-salary-basis *::before,
+.chris-salary-basis *::after { box-sizing:border-box; }
+.chris-salary-basis :is(h1,h2,h3) { color:var(--sb-green-deep); margin:0; line-height:1.24; letter-spacing:-.02em; }
+.chris-salary-basis h1 { font-size:clamp(24px,2.45vw,32px); font-weight:750; }
+.chris-salary-basis h2 { font-size:20px; font-weight:730; margin-bottom:12px; }
+.chris-salary-basis p { margin:8px 0 12px; color:var(--sb-muted); max-width:90ch; }
+.chris-salary-basis strong { color:var(--sb-ink); }
+.chris-salary-basis .sb-hero { background:var(--sb-surface); border:1px solid var(--sb-line); border-top:4px solid var(--sb-green); border-radius:12px; padding:clamp(18px,2.2vw,28px); margin-bottom:18px; }
+.chris-salary-basis .sb-eyebrow { display:block; font-size:11px; font-weight:750; letter-spacing:.12em; text-transform:uppercase; color:var(--sb-green); margin-bottom:8px; }
+.chris-salary-basis .sb-lead {font-size:15px; margin:10px 0 16px;}
+.chris-salary-basis .sb-card {background:var(--sb-surface); border:1px solid var(--sb-line); border-radius:12px; padding:clamp(16px,2.1vw,24px); margin:16px 0; min-width:0;}
+.chris-salary-basis .sb-card-header { margin-bottom:14px; }
+.chris-salary-basis .sb-card-header p { margin:5px 0 0; }
+.chris-salary-basis .sb-note { background:#f1f7f1; border-left:3px solid var(--sb-green); padding:12px 14px; border-radius:0 7px 7px 0; margin:12px 0; color:var(--sb-ink);}
+.chris-salary-basis .sb-note p { margin:3px 0; }
+.chris-salary-basis .sb-steps { display:flex; flex-wrap:wrap; gap:7px; margin:14px 0 0; padding:0; list-style:none; }
+.chris-salary-basis .sb-steps li { background:var(--sb-soft); color:var(--sb-green-deep); border:1px solid var(--sb-line); border-radius:999px; padding:6px 11px; font-size:12px; font-weight:650;}
+.chris-salary-basis :is(button,input,textarea,select) {font:inherit;}
+.chris-salary-basis button,
+.chris-salary-basis input[type=file]::file-selector-button {
+  display:inline-flex; align-items:center; justify-content:center;
+  border:1px solid #b5cdbf; border-radius:8px;
+  min-height:39px; padding:9px 13px;
+  color:var(--sb-green-deep); background:#fff;
+  font-size:13px; line-height:1.25; font-weight:650;
+  cursor:pointer; white-space:normal; text-align:center;
+  box-shadow:none; text-shadow:none; letter-spacing:normal; transition:none;
+}
+.chris-salary-basis button.sb-primary {
+  background:var(--sb-green); color:#fff; border-color:var(--sb-green);
+}
+.chris-salary-basis button.sb-secondary {
+  background:#eef5ee; color:var(--sb-green-deep); border-color:#c7d9cb;
+}
+.chris-salary-basis button.sb-quiet {
+  background:transparent; color:var(--sb-green-deep); border-color:transparent; text-decoration:underline; padding-inline:6px;
+}
+.chris-salary-basis button:disabled,
+.chris-salary-basis input[type=file]:disabled::file-selector-button {
+  background:#e9eeea; border-color:#d4ded6; color:#596e62;
+  opacity:1; cursor:not-allowed; box-shadow:none;
+}
+.chris-salary-basis button:focus-visible,
+.chris-salary-basis :is(input,textarea,select):focus-visible,
+.chris-salary-basis input[type=file]:focus-visible::file-selector-button {
+  outline:3px solid #b28a29; outline-offset:2px;
+}
+.chris-salary-basis .sb-toolbar {display:flex; gap:12px; align-items:end; flex-wrap:wrap; min-width:0;}
+.chris-salary-basis .sb-toolbar > * { min-width:0; }
+.chris-salary-basis .sb-form-grid {display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr)); gap:14px; margin-bottom:16px;}
+.chris-salary-basis label {display:flex; flex-direction:column; gap:6px; min-width:0; color:var(--sb-ink); font-weight:620; font-size:13px;}
+.chris-salary-basis .sb-file { flex:1 1 290px; }
+.chris-salary-basis :is(input:not([type=file]),textarea,select) {
+  max-width:100%; min-height:40px; border:1px solid #becfc2;
+  border-radius:8px; background:#fff; color:var(--sb-ink);
+  padding:9px 11px; box-shadow:none;
+}
+.chris-salary-basis input[type=file] {
+  max-width:100%; width:100%; padding:6px 8px; border:1px dashed #b9cdbb;
+  border-radius:8px; background:#fbfcfa; color:var(--sb-ink); font-size:13px;
+}
+.chris-salary-basis input[type=file]::file-selector-button {margin-right:10px;}
+.chris-salary-basis textarea { min-height:88px; width:100%; resize:vertical; }
+.chris-salary-basis .sb-alert { padding:12px 14px; border-radius:8px; color:#7f2523; background:#fff0ee; border:1px solid #f1cac7; }
+.chris-salary-basis .sb-success { padding:12px 14px; border-radius:8px; color:#155537; background:#eff8ef; border:1px solid #c9e2cd; }
+.chris-salary-basis .sb-status {font-size:13px; color:var(--sb-muted); }
+.chris-salary-basis .sb-table-scroll {max-width:100%; overflow-x:auto; border:1px solid var(--sb-line); border-radius:9px; background:#fff;}
+.chris-salary-basis table {width:100%; border-collapse:collapse; text-align:left; font-size:13px; color:var(--sb-ink);}
+.chris-salary-basis thead {background:#eef4ed;}
+.chris-salary-basis th {color:var(--sb-green-deep); font-weight:740; white-space:nowrap; border-bottom:1px solid var(--sb-line);}
+.chris-salary-basis :is(th,td) {padding:11px 12px; text-align:left; vertical-align:middle; border-bottom:1px solid #e8eee8;}
+.chris-salary-basis tbody tr:last-child td {border-bottom:none;}
+.chris-salary-basis tbody tr:nth-child(even) {background:#fafcf9;}
+.chris-salary-basis .sb-table-scroll button {min-height:32px; padding:6px 9px; font-size:12px;}
+.chris-salary-basis .sb-subtle {font-size:13px;}
+@media(max-width:640px) {
+ .chris-salary-basis {padding:12px;}
+ .chris-salary-basis .sb-card,.chris-salary-basis .sb-hero {padding:16px;}
+ .chris-salary-basis .sb-toolbar > button {width:100%;}
+ .chris-salary-basis .sb-steps {gap:5px;}
+ .chris-salary-basis .sb-file {flex-basis:100%;}
+}
+@media print {
+ .chris-salary-basis {background:#fff;color:#111;padding:0;}
+ .chris-salary-basis .sb-card,.chris-salary-basis .sb-hero {box-shadow:none;break-inside:avoid;}
+}
