@@ -29,7 +29,7 @@ function buildCcaHostedPostgresOptions(env = process.env) {
   }
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535 ||
       typeof name !== "string" || !/^cca_[a-z0-9_]{3,55}$/.test(name) ||
-      typeof user !== "string" || !/^cca_[a-z0-9_]{3,55}$/.test(user) ||
+      user !== "cca_hosted_reader" ||
       typeof password !== "string" || password.length < 24 ||
       typeof ca !== "string" ||
       !ca.includes("-----BEGIN CERTIFICATE-----") ||
