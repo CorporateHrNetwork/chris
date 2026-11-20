@@ -18,6 +18,7 @@ const userSelect = {
   firstName: true,
   lastName: true,
   isActive: true,
+  accessSuspendedAt: true,
   locationScope: true,
   createdAt: true,
   updatedAt: true,
@@ -64,6 +65,7 @@ function formatUser(user) {
     firstName: user.firstName,
     lastName: user.lastName,
     isActive: user.isActive,
+    accessSuspendedAt: user.accessSuspendedAt || null,
     locationScope: user.locationScope,
     assignedLocations: (user.userLocations || []).map((item) => item.location).filter(Boolean),
     createdAt: user.createdAt,
@@ -468,6 +470,82 @@ router.post("/ess/provision-bulk", requirePermission("users.manage"), async (req
   }
 });
 
+// One-time recovery links are delivered only to the registered work email.
+// No plaintext password or reset link is disclosed to an administrator.
+router.post("/:userId/send-password-recovery", requirePermission("users.manage"), async (req,res) => {
+  try {
+    const portal = String(req.body?.portal || "").toLowerCase();
+    if (!["admin","ess"].includes(portal)) return res.status(400).json({status:"error",message:"Select CHRiS Staff Login or ESS."});
+    if (req.params.userId === req.auth.userId) return res.status(400).json({status:"error",message:"Use your own password recovery form."});
+    const target = await prisma.user.findFirst({
+      where:{id:req.params.userId,organizationId:req.auth.organizationId},
+      select:{id:true,email:true,firstName:true,isActive:true,accessSuspendedAt:true,employeeId:true,
+        employee:{select:{status:true,email:true}}}
+    });
+    if (!target) return res.status(404).json({status:"error",message:"CHRiS user not found."});
+    if (!target.isActive || target.accessSuspendedAt) return res.status(409).json({status:"error",message:"Reactivate or resume the account before sending a recovery link."});
+    if (portal==="ess" && (!target.employeeId || !["ACTIVE","PROBATION","LEAVE"].includes(target.employee?.status))) {
+      return res.status(409).json({status:"error",message:"ESS recovery requires a linked eligible employee."});
+    }
+    const recipient=String(target.employee?.email || target.email || "").trim().toLowerCase();
+    if (!recipient || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) return res.status(422).json({status:"error",message:"A valid registered work email is required."});
+    const organization=req.auth.organization;
+    const frontend = String(process.env.FRONTEND_URL || "https://chris.crnetwork.com.ng").replace(/\/$/,"");
+    const token=crypto.randomBytes(32).toString("hex");
+    const hash=crypto.createHash("sha256").update(token).digest("hex");
+    const resetUrl=frontend+"/reset-password?token="+encodeURIComponent(token)+"&organization="+encodeURIComponent(organization.slug)+"&portal="+portal;
+    await prisma.$transaction(async tx=>{
+      await tx.passwordResetToken.deleteMany({where:{userId:target.id,portal,usedAt:null}});
+      await tx.passwordResetToken.create({data:{userId:target.id,portal,tokenHash:hash,expiresAt:new Date(Date.now()+15*60*1000)}});
+    });
+    try {
+      await require("../services/chrisUserRecoveryMailer").sendRecoveryMail({
+        to:recipient, firstName:target.firstName || "colleague",portal,resetUrl
+      });
+    } catch(error) {
+      await prisma.passwordResetToken.deleteMany({where:{tokenHash:hash}});
+      console.error("CHRiS recovery email delivery:",error.message);
+      return res.status(503).json({status:"error",message:"Unable to deliver password recovery email. Check mail service and registered work email."});
+    }
+    await prisma.organizationAudit.create({data:{
+      organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+      entityType:"User",entityId:target.id,action:"USER_PORTAL_RECOVERY_ISSUED",
+      newValue:{portal,recipient,expiresInMinutes:15},
+      reason:String(req.body?.reason || "Authorized account recovery").trim(),
+    }});
+    return res.json({status:"success",message:(portal==="ess"?"ESS":"CHRiS staff login")+" recovery link sent to the registered work email. Expires in 15 minutes."});
+  } catch(error) {
+    console.error("Admin user recovery:",error);
+    return res.status(500).json({status:"error",message:"Unable to issue account recovery link."});
+  }
+});
+
+router.patch("/:userId/suspension", requirePermission("users.manage"), async (req,res)=>{
+  try {
+    const suspend=req.body?.suspended;
+    const reason=String(req.body?.reason || "").trim();
+    if(typeof suspend !== "boolean") return res.status(400).json({status:"error",message:"Suspension status must be true or false."});
+    if(reason.length<8) return res.status(400).json({status:"error",message:"Provide an audit reason of at least eight characters."});
+    if(req.params.userId===req.auth.userId) return res.status(403).json({status:"error",message:"You cannot suspend or resume your own account."});
+    const existing=await prisma.user.findFirst({where:{id:req.params.userId,organizationId:req.auth.organizationId},
+      select:{id:true,isActive:true,accessSuspendedAt:true,employee:{select:{status:true}}}});
+    if(!existing) return res.status(404).json({status:"error",message:"User not found."});
+    if(!existing.isActive) return res.status(409).json({status:"error",message:"Deactivated accounts must be reactivated through the activation action."});
+    if(!suspend && existing.employee && BLOCKED_EMPLOYEE_STATUSES.includes(existing.employee.status)) {
+      return res.status(409).json({status:"error",message:"The linked employee is not eligible for active access."});
+    }
+    const user=await prisma.$transaction(async tx=>{
+      const updated=await tx.user.update({where:{id:existing.id},data:{accessSuspendedAt:suspend?new Date():null},select:userSelect});
+      if(suspend) await tx.passwordResetToken.deleteMany({where:{userId:existing.id,usedAt:null}});
+      await tx.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+        entityType:"User",entityId:existing.id,action:suspend?"CHRIS_USER_ACCESS_SUSPENDED":"CHRIS_USER_ACCESS_RESUMED",
+        previousValue:{accessSuspendedAt:existing.accessSuspendedAt},newValue:{accessSuspendedAt:updated.accessSuspendedAt},reason}});
+      return updated;
+    });
+    return res.json({status:"success",message:suspend?"Staff and ESS access suspended.":"Staff and ESS access resumed.",data:formatUser(user)});
+  }catch(error){console.error("User suspension:",error);return res.status(500).json({status:"error",message:"Unable to change user suspension."});}
+});
+
 router.post("/:userId/reset-password", requirePermission("users.manage"), async (req, res) => {
   try {
     const organizationId = req.auth.organizationId;
@@ -653,6 +731,7 @@ router.patch("/:userId/status", requirePermission("users.manage"), async (req, r
 
     const user = await prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({ where: { id: userId }, data: { isActive }, select: userSelect });
+      if (!isActive) await tx.passwordResetToken.deleteMany({where:{userId,usedAt:null}});
       await tx.organizationAudit.create({
         data: {
           organizationId,
