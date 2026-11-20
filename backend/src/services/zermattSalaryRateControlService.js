@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const crypto = require("crypto");
 const { markDraftRunsRecalculationRequired } = require("./payrollDraftFreshnessService");
 const { splitSalary } = require("./zermattSalarySplit");
 
@@ -274,6 +275,114 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
   });
 }
 
+// Create a distinct future-effective salary allocation while preserving the
+// exact historical rate used by approved payroll. Never modify past amounts.
+async function createEffectiveDatedSalaryRevision({
+  organizationId, actorUserId, rateId, input, prismaClient = prisma,
+}) {
+  return prismaClient.$transaction(async tx => {
+    const existing = await lockRate(tx, organizationId, rateId);
+    if (existing.status !== "ACTIVE") {
+      throw controlError("SALARY_REVISION_SOURCE_NOT_ACTIVE", "Select the employee's current active salary rate.", 409);
+    }
+    const from = dateOnly(input?.effectiveFrom, "New Effective From");
+    const oldFrom = dateOnly(existing.effectiveFrom instanceof Date
+      ? existing.effectiveFrom.toISOString().slice(0, 10) : existing.effectiveFrom, "Existing Effective From");
+    const amount = positiveMoney(input?.amount, "Full Monthly Gross");
+    const reason = text(input?.reason);
+    if (reason.length < 8 || reason.length > 1000) {
+      throw controlError("SALARY_REVISION_REASON_REQUIRED", "Provide a correction reason of 8–1,000 characters.");
+    }
+    if (from <= oldFrom || (existing.effectiveTo && from > dateOnly(existing.effectiveTo instanceof Date
+      ? existing.effectiveTo.toISOString().slice(0, 10) : existing.effectiveTo, "Existing Effective To"))) {
+      throw controlError("SALARY_REVISION_DATE_NOT_WITHIN_CURRENT_RATE", "New effective date must be after the current rate began and within its effective period.", 409);
+    }
+    if (!from.endsWith("-01")) {
+      throw controlError("SALARY_REVISION_FIRST_OF_MONTH_REQUIRED", "A new salary allocation must start on the first day of a future payroll month.");
+    }
+    // Ensure an auditor-approved Main Payroll is never retroactively affected.
+    const mainHistory = await approvedPayrollUse(tx, organizationId, existing.employeeId, oldFrom, existing.effectiveTo
+      ? dateOnly(existing.effectiveTo instanceof Date ? existing.effectiveTo.toISOString().slice(0,10) : existing.effectiveTo,"Existing Effective To") : null);
+    if (mainHistory.latestApprovedPeriodEnd && from <= mainHistory.latestApprovedPeriodEnd) {
+      throw controlError("SALARY_REVISION_APPROVED_MAIN_PAYROLL_LOCKED",
+        "Choose an effective month after the latest approved Main Payroll period.",409,mainHistory);
+    }
+    // The TSP generator uses an organization-wide monthly run. Changes to a
+    // salary basis must begin after the latest submitted/approved/paid TSP run.
+    const tspHistory = await tx.$queryRawUnsafe(
+      `SELECT "periodMonth",status FROM public.zermatt_midmonth_runs
+        WHERE "organizationId"=$1 AND status IN ('SUBMITTED','APPROVED','PAID')
+        ORDER BY "periodMonth" DESC LIMIT 1`, organizationId
+    );
+    if (tspHistory.length) {
+      const protectedMonth = dateOnly(tspHistory[0].periodMonth instanceof Date
+        ? tspHistory[0].periodMonth.toISOString().slice(0,10)
+        : String(tspHistory[0].periodMonth).slice(0,10),"Protected TSP Period");
+      if (from.slice(0,7) <= protectedMonth.slice(0,7)) {
+        throw controlError("SALARY_REVISION_PROTECTED_TSP_PERIOD",
+          "Choose a salary effective month later than the latest submitted, approved or paid TSP run.",409,
+          { periodMonth:protectedMonth,status:tspHistory[0].status });
+      }
+    }
+    const employee = await tx.employee.findFirst({
+      where:{id:existing.employeeId,organizationId},
+      select:{employmentType:true,hireDate:true,employeeNumber:true},
+    });
+    if (!employee?.hireDate || !employee?.employmentType) {
+      throw controlError("SALARY_SPLIT_EMPLOYEE_DATA_REQUIRED","Employment type and hire date are required.",422);
+    }
+    const allocation = splitSalary({
+      fullMonthlyGross:amount,employmentType:employee.employmentType,
+      hireDate:employee.hireDate,periodMonth:from.slice(0,7),
+    });
+    const futureRows = await tx.$queryRawUnsafe(
+      `SELECT id FROM public.payroll_salary_rates
+        WHERE "organizationId"=$1 AND "employeeId"=$2 AND id<>$3
+          AND status='ACTIVE' AND "effectiveFrom"<=DATE '9999-12-31'
+          AND COALESCE("effectiveTo", DATE '9999-12-31') >= $4::date
+        LIMIT 1`,organizationId,existing.employeeId,rateId,from
+    );
+    if (futureRows.length) throw controlError("SALARY_REVISION_OVERLAPPING_RATE",
+      "Another active salary rate already covers the proposed month.",409);
+    const previous = mapRate(existing);
+    const priorEnd = await tx.$queryRawUnsafe(
+      `UPDATE public.payroll_salary_rates SET "effectiveTo"=($3::date - INTERVAL '1 day')::date,
+        "updatedAt"=CURRENT_TIMESTAMP
+       WHERE "organizationId"=$1 AND id=$2
+       RETURNING "effectiveTo"`,organizationId,rateId,from
+    );
+    const newId=crypto.randomUUID();
+    const inserted=await tx.$queryRawUnsafe(
+      `INSERT INTO public.payroll_salary_rates
+        ("id","organizationId","employeeId","amount","fullMonthlyGross","currency","frequency",
+         "effectiveFrom","effectiveTo","status","reason","createdByUserId")
+       VALUES ($1,$2,$3,$4,$5,$6,'MONTHLY',$7::date,$8::date,'ACTIVE',$9,$10)
+       RETURNING *`,
+      newId,organizationId,existing.employeeId,allocation.endMonthGross,allocation.fullMonthlyGross,
+      existing.currency||"NGN",from,existing.effectiveTo||null,reason,actorUserId||null
+    );
+    const created=mapRate({...inserted[0],employeeNumber:existing.employeeNumber,employeeName:existing.employeeName});
+    await audit(tx,{organizationId,actorUserId,rateId,
+      action:"SALARY_RATE_END_DATED_FOR_FUTURE_REVISION",previousValue:previous,
+      newValue:{effectiveTo:priorEnd[0].effectiveTo,newSalaryRateId:newId},reason});
+    await audit(tx,{organizationId,actorUserId,rateId:newId,
+      action:"EFFECTIVE_DATED_SALARY_REVISION_CREATED",previousValue:{sourceRateId:rateId},
+      newValue:{...created,tspNormalBasis:allocation.normalMidMonth,policyVersion:allocation.policyVersion},reason});
+    await tx.organizationAudit.create({data:{
+      organizationId,actorUserId:actorUserId||null,entityType:"TransportBenefitSalaryBasis",
+      entityId:existing.employeeId,action:"TSP_FUTURE_SALARY_BASIS_CREATED",
+      newValue:{sourceSalaryRateId:newId,effectiveFrom:from,fullMonthlyGross:allocation.fullMonthlyGross,
+        endMonthGross:allocation.endMonthGross,normalMidMonth:allocation.normalMidMonth,
+        status:"RECALCULATION_REQUIRED"},
+      reason:"Future effective-dated salary basis; any affected draft TSP must be regenerated. "+reason,
+    }});
+    await markDraftRunsRecalculationRequired({organizationId,actorUserId,
+      reason:"New future-effective salary rate "+newId+" requires draft payroll recalculation.",prismaClient:tx});
+    return {...created,allocation,previousRateId:rateId,previousEffectiveTo:priorEnd[0].effectiveTo,
+      approvedHistoryPreserved:true,tspDraftRegenerationRequired:true};
+  });
+}
+
 async function deleteUnusedSalaryRate({ organizationId, actorUserId, rateId, reason, prismaClient = prisma }) {
   return prismaClient.$transaction(async (tx) => {
     const existing = await lockRate(tx, organizationId, rateId);
@@ -319,6 +428,7 @@ async function deleteUnusedSalaryRate({ organizationId, actorUserId, rateId, rea
 }
 
 module.exports = {
+  createEffectiveDatedSalaryRevision,
   updateSalaryRate,
   deleteUnusedSalaryRate,
 };
