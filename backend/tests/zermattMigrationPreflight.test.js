@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {evaluateMigrationPreflight}=require("../tools/zermatt-migration/migrationPreflight.cjs");
+const {evaluateMigrationPreflight}=require("../../tools/zermatt-migration/migrationPreflight.cjs");
 const tools=()=>({pg_dump:{major:17},pg_restore:{major:17},psql:{major:17}});
 const good={tools:tools(),source:{hostConfigured:true,credentialsConfigured:true,identity:"source.example/postgres"},
  target:{hostConfigured:true,credentialsConfigured:true,identity:"target.example/chris"},
