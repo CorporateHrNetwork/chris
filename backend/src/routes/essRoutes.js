@@ -55,6 +55,7 @@ router.post("/login", async (req, res) => {
         organizationId: organization.id,
         email: { equals: email, mode: "insensitive" },
         isActive: true,
+        accessSuspendedAt: null,
       },
       include: {
         employee: {
