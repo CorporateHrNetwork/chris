@@ -22,7 +22,7 @@ function createCcaHostedSessionResolver({verifyToken, cookieName="cca_hosted_sid
     if (found.length !== 1) return null;
     const token=found[0].slice(cookieName.length+1);
     if (token.length < 32 || token.length > 2048 ||
-        !(/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(token) ||
+        !(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token) ||
           /^[A-Za-z0-9_-]+$/.test(token))) return null;
     let proof;
     try {proof=await verifyToken(token);} catch {return null;}
