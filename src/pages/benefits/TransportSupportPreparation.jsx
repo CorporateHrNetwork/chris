@@ -94,7 +94,7 @@ export default function TransportSupportPreparation() {
     </section>}
     <section className="sb-card" aria-labelledby="sb-saved-title">
     <div className="sb-card-header"><h2 id="sb-saved-title">Saved Transport Benefit Calculation Bases</h2><p>Prepared records can be reviewed and corrected before activation.</p></div>
-    {!records.length?<p>No prepared salary records.</p>:<div style={{overflowX:'auto'}}><table style={{width:'100%',textAlign:'left'}}>
+    {!records.length?<p>No prepared salary records.</p>:<div className="sb-table-scroll"><table>
       <thead><tr>{['Employee No','Employee Name','Branch','Reference Gross','Mid-month','Effective From','Status','Action'].map(h=><th key={h}>{h}</th>)}</tr></thead>
       <tbody>{records.map(r=><tr key={r.id}><td>{r.employeeNumber}</td><td>{r.employeeName}</td><td>{r.branch||'Unassigned'}</td><td>{money(r.fullMonthlyGross)}</td><td>{money(r.allocationPreview?.normalMidMonth)}</td><td>{String(r.effectiveFrom).slice(0,10)}</td><td>{r.activatedAt?'Legacy salary-linked record':'Benefit basis saved'}</td><td>{r.activatedAt?<button onClick={()=>navigate('/benefits/transport-support')}>Open Benefits register</button>:<button disabled={busy} onClick={()=>editIndividual(r)}>Correct benefit basis</button>}</td></tr>)}</tbody>
     </table></div>}
