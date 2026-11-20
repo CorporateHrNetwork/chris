@@ -54,7 +54,8 @@ function mapScopedSalaryRate(row) {
   const { employeeLocationId, ...rest } = row;
   return {
     ...rest,
-    amount: Number(row.amount || 0),
+    amount: Number(row.fullMonthlyGross ?? row.amount ?? 0),
+    endMonthGross: Number(row.amount ?? 0),
     effectiveFrom: dateValue(row.effectiveFrom),
     effectiveTo: dateValue(row.effectiveTo),
   };
@@ -77,7 +78,7 @@ async function listScopedSalaryRates(req) {
     `SELECT sr."id",sr."employeeId",e."employeeNumber",
             CONCAT_WS(' ',e."firstName",e."middleName",e."lastName") AS "employeeName",
             e."locationId" AS "employeeLocationId",
-            sr."amount",sr."currency",sr."frequency",sr."effectiveFrom",sr."effectiveTo",
+            sr."amount",sr."fullMonthlyGross",sr."currency",sr."frequency",sr."effectiveFrom",sr."effectiveTo",
             sr."status",sr."reason",sr."createdAt",sr."updatedAt"
        FROM "payroll_salary_rates" sr
        JOIN "employees" e ON e."id"=sr."employeeId" AND e."organizationId"=sr."organizationId"
@@ -107,6 +108,28 @@ async function listScopedSalaryAdvances(req) {
 router.get("/payroll/hr-input-capabilities", zermattOnly, (req, res) => {
   return res.json({ status: "success", data: capabilitySnapshot(req) });
 });
+
+// Zermatt's onboarding entry provides HR correction of an already-created
+// employee's opening salary. Reuse the same scoped payroll salary authority
+// rather than maintaining a second editable onboarding salary copy.
+router.get(
+  "/onboarding/salary-corrections",
+  zermattOnly,
+  requireEmployeeFinancialInputEditor,
+  async (req, res) => {
+    try {
+      const name = String(req.query.name || "").trim().toLowerCase();
+      if (name.length > 100) return res.status(400).json({ status: "error", message: "Search must be at most 100 characters." });
+      const rows = await listScopedSalaryRates(req);
+      const active = rows.filter(row => row.status === "ACTIVE" && (!name ||
+        String(row.employeeName || "").toLowerCase().includes(name) ||
+        String(row.employeeNumber || "").toLowerCase().includes(name)));
+      return res.json({ status: "success", data: active.slice(0, 100) });
+    } catch (error) {
+      return sendError(res, error, "Unable to load onboarding salary correction records.");
+    }
+  }
+);
 
 // Branch HR reads the same authoritative salary-rate records, restricted to the
 // active/assigned branch. Head HR sees all branches in the consolidated HEAD OFFICE

@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { markDraftRunsRecalculationRequired } = require("./payrollDraftFreshnessService");
+const { splitSalary } = require("./zermattSalarySplit");
 
 function controlError(code, message, statusCode = 400, details) {
   const error = new Error(message);
@@ -155,24 +156,36 @@ async function updateSalaryRate({ organizationId, actorUserId, rateId, input, pr
       throw controlError("SALARY_RATE_OVERLAP", "The edited effective period overlaps another active salary rate for this employee.", 409);
     }
 
-    // An unchanged full salary must not be sent back as a changed stored
-    // end-month amount when correcting only descriptive fields.
-    const writeAmount = amount === Number(existing.fullMonthlyGross ?? existing.amount)
-      ? Number(existing.amount)
-      : amount;
+    // A correction changes the authoritative FULL monthly gross, not just
+    // the end-month payroll component. Retain both columns consistently.
+    // This is in the same audited transaction and cannot alter approved payroll.
+    const employee = await tx.employee.findFirst({
+      where: { organizationId, id: existing.employeeId },
+      select: { employmentType: true, hireDate: true },
+    });
+    if (!employee?.hireDate || !employee?.employmentType) {
+      throw controlError("SALARY_SPLIT_EMPLOYEE_DATA_REQUIRED", "Employee hire date and employment type are required to recalculate salary components.", 422);
+    }
+    const changedGross = amount !== Number(existing.fullMonthlyGross ?? existing.amount);
+    const split = changedGross
+      ? splitSalary({
+          fullMonthlyGross: amount,
+          employmentType: employee.employmentType,
+          hireDate: employee.hireDate,
+          periodMonth: effectiveFrom.slice(0, 7),
+        })
+      : null;
+    const writeAmount = changedGross ? split.endMonthGross : Number(existing.amount);
+    const writeFullGross = changedGross ? split.fullMonthlyGross : existing.fullMonthlyGross;
     const rows = await tx.$queryRawUnsafe(
       `UPDATE "payroll_salary_rates"
-          SET "amount"=$3,"currency"=$4,"effectiveFrom"=$5::date,"effectiveTo"=$6::date,
-              "reason"=$7,"updatedAt"=CURRENT_TIMESTAMP
+          SET "amount"=$3, "fullMonthlyGross"=$4, "currency"=$5,
+              "effectiveFrom"=$6::date, "effectiveTo"=$7::date,
+              "reason"=$8, "updatedAt"=CURRENT_TIMESTAMP
         WHERE "organizationId"=$1 AND "id"=$2
         RETURNING *`,
-      organizationId,
-      rateId,
-      writeAmount,
-      currency,
-      effectiveFrom,
-      effectiveTo,
-      reason || null
+      organizationId, rateId, writeAmount, writeFullGross,
+      currency, effectiveFrom, effectiveTo, reason || null
     );
     const updated = mapRate({ ...rows[0], employeeNumber: existing.employeeNumber, employeeName: existing.employeeName });
     await audit(tx, {

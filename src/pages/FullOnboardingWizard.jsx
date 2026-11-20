@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import OnboardingSectionDataForm from "../components/employees/OnboardingSectionDataForm";
+import OnboardingSalaryCorrection from "../components/employees/OnboardingSalaryCorrection";
 import SearchableRegistrySelect from "../components/common/SearchableRegistrySelect";
 import { COUNTRY_CATALOG } from "../data/countryCatalog";
 import { apiRequest, getActiveLocationId, getStoredOrganization } from "../services/api";
@@ -441,6 +442,7 @@ export default function FullOnboardingWizard() {
       </aside>
 
       <main className="fo-onboarding-main">
+        {zermattTenant && <OnboardingSalaryCorrection />}
         {error && <div className="qa-error fo-global-error" role="alert">{error}</div>}
         {createdEmployee && !complete && <div className="fo-note" role="status"><strong>Employee created successfully — {createdEmployee.employeeNumber} {createdEmployee.name || fullName}</strong><span>CHRiS is continuing the same onboarding transaction. The employee record will not be created again.</span></div>}
 
