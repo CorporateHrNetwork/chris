@@ -343,8 +343,25 @@ function ExecuteWorkspace() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
+  const [coverageEmployeeNumber, setCoverageEmployeeNumber] = useState("ZLL000342");
+  const [coverage, setCoverage] = useState(null);
+  const [coverageError, setCoverageError] = useState("");
+  const [coverageBusy, setCoverageBusy] = useState(false);
 
   const selectablePeriods = periods.filter((period) => period.status !== "CLOSED");
+  const checkCoverage = async () => {
+    setCoverage(null);setCoverageError("");
+    if(!periodId || !/^ZLL[0-9]{6}$/i.test(coverageEmployeeNumber.trim())) {
+      setCoverageError("Select a payroll period and enter a valid Zermatt employee number.");return;
+    }
+    setCoverageBusy(true);
+    try{
+      const result=await apiRequest(`/api/payroll/coverage/employee?employeeNumber=${encodeURIComponent(coverageEmployeeNumber.trim())}&periodId=${encodeURIComponent(periodId)}`);
+      setCoverage(result.data);
+    }catch(err){setCoverageError(err.message || "Unable to check employee payroll coverage.");}
+    finally{setCoverageBusy(false);}
+  };
+
   const calculate = async () => {
     try {
       setBusy("calculate"); setError("");
@@ -371,6 +388,26 @@ function ExecuteWorkspace() {
           <button type="button" style={primaryButton} disabled={!periodId || busy} onClick={calculate}>{busy === "calculate" ? "Calculating…" : "Calculate Draft Payroll"}</button>
         </div>
         <p style={controlNote}>Control: this produces a payroll draft and net-pay preview only. It does not transmit bank instructions. PAYE/pension automation is not yet enabled.</p>
+      </Panel>
+      <Panel title="Employee Payroll Coverage & Missing-Record Diagnosis">
+        <p style={controlNote}>Compare an employee's authoritative directory and salary records with the actual payroll run for the selected period. Checking is read-only.</p>
+        <div style={bulkGrid}>
+          <Input label="Employee Number" value={coverageEmployeeNumber} onChange={value=>{setCoverageEmployeeNumber(value);setCoverage(null);}} placeholder="ZLL000342" />
+          <button type="button" style={smallButton} disabled={!periodId || coverageBusy} onClick={checkCoverage}>
+            {coverageBusy ? "Checking…" : "Check Employee in Payroll"}
+          </button>
+        </div>
+        {coverageError && <p role="alert" style={{color:"#b91c1c"}}>{coverageError}</p>}
+        {coverage && <div style={{padding:12,border:"1px solid #ccd8ce",borderRadius:8,marginTop:12}}>
+          <p><strong>{coverage.employeeName}</strong> · {coverage.employeeNumber} · {coverage.branch}</p>
+          <p><strong>Period:</strong> {coverage.periodCode} · <strong>Status:</strong> {coverage.status}</p>
+          <p><strong>Employee status:</strong> {coverage.employmentStatus} · <strong>Salary rate:</strong> {coverage.salaryRate ? money(coverage.salaryRate.endMonthGross) : "Not effective for period"}</p>
+          <p><strong>Payroll run:</strong> {coverage.run ? `${coverage.run.status} — ${coverage.run.included ? "Employee included" : "Employee missing"}` : "Not generated"}</p>
+          {coverage.blockers?.length>0 && <p role="alert">Eligibility/authority checks: {coverage.blockers.join(", ")}</p>}
+          {coverage.action==="RECALCULATE_DRAFT" && <p>A draft exists but omits this eligible employee. Use <strong>Calculate Draft Payroll</strong> above for this period to regenerate it, then check coverage again. It does not approve or pay salaries.</p>}
+          {coverage.action==="REOPEN_THROUGH_APPROVAL_WORKFLOW" && <p role="alert">This run is already submitted or approved. Do not overwrite it: reopen it through the authorized payroll correction workflow before recalculating.</p>}
+          {coverage.action==="CORRECT_EMPLOYEE_AUTHORITY" && <p>Correct the indicated employee employment, effective salary or cost-centre fields before recalculating a draft. No salary values have been modified.</p>}
+        </div>}
       </Panel>
       <Feedback error={periodsError || error} />
       <Panel title="Payroll Runs">
