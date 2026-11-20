@@ -52,16 +52,14 @@ function createPrintDocument({ values, sections, brandingLogo, signatureDataUrl 
   frame.style.cssText = "position:fixed;left:-12000px;top:0;width:794px;height:1123px;border:0;";
   document.body.append(frame);
   const doc = frame.contentDocument;
-  doc.title = "Zermatt Offer of Employment — HR Draft";
+  doc.title = "Offer of Employment";
   const css = doc.createElement("style");
-  css.textContent = `@page{size:A4;margin:16mm 17mm} body{font:11pt/1.48 Arial,sans-serif;color:#17271e;background:white} h1{text-align:center;font-size:16pt;letter-spacing:.04em;margin:8px 0 15px} h2{font-size:11pt;margin:14px 0 4px;break-after:avoid} p{margin:5px 0 9px;white-space:pre-wrap} .meta{border-top:1px solid #c3d0c7;border-bottom:1px solid #c3d0c7;padding:8px 0;margin:12px 0} .meta p{margin:2px 0} .logo{width:72px;height:55px;object-fit:contain;display:block;margin:0 auto} .company{text-align:center;font-weight:700;font-size:15pt}.section{break-inside:avoid-page}.sign{margin-top:22px;white-space:pre-wrap} footer{font-size:9pt;text-align:center;border-top:1px solid #b7c3ba;margin-top:26px;padding-top:7px} .draft{position:fixed;right:0;top:0;color:#ad3e27;font-size:9pt} `;
+  css.textContent = `@page{size:A4;margin:0} html{margin:0;padding:0} body{box-sizing:border-box;width:210mm;min-height:297mm;margin:0;padding:16mm 17mm;font:11pt/1.48 Arial,sans-serif;color:#17271e;background:white} h1{text-align:center;font-size:16pt;letter-spacing:.04em;margin:8px 0 15px} h2{font-size:11pt;margin:14px 0 4px;break-after:avoid} p{margin:5px 0 9px;white-space:pre-wrap} .meta{border-top:1px solid #c3d0c7;border-bottom:1px solid #c3d0c7;padding:8px 0;margin:12px 0} .meta p{margin:2px 0} .logo{width:72px;height:55px;object-fit:contain;display:block;margin:0 auto} .section{break-inside:avoid-page}.sign{margin-top:22px;white-space:pre-wrap} footer{font-size:9pt;text-align:center;border-top:1px solid #b7c3ba;margin-top:26px;padding-top:7px} `;
   doc.head.append(css);
   function el(tag, text, parent = doc.body, className = "") {
     const e = doc.createElement(tag); if (className) e.className = className; e.textContent = text; parent.append(e); return e;
   }
   const img = doc.createElement("img"); img.className = "logo"; img.src = brandingLogo; img.alt = "Zermatt Liquor Limited logo"; doc.body.append(img);
-  el("div", "ZERMATT LIQUOR LIMITED", doc.body, "company");
-  el("div", "DRAFT — REVIEW AND AUTHORIZE BEFORE ISSUE", doc.body, "draft");
   el("h1", "OFFER OF EMPLOYMENT");
   const meta = el("div", "", doc.body, "meta");
   el("p", `TO: ${values.employee_title} ${values.employee_full_name}`, meta);
@@ -75,7 +73,7 @@ function createPrintDocument({ values, sections, brandingLogo, signatureDataUrl 
   if (signatureDataUrl) {
     const signature = doc.createElement("img");
     signature.src = signatureDataUrl;
-    signature.alt = "Authorized signatory signature attached to this HR draft";
+    signature.alt = "Authorized signatory signature";
     signature.style.cssText = "display:block;width:190px;max-height:70px;object-fit:contain;object-position:left center;margin:5px 0";
     doc.body.append(signature);
   }
@@ -172,14 +170,19 @@ export default function ZermattOfferLetterComposer() {
     setError("");
     const logo = new URL("/zrt-logo.jpeg", window.location.href).href;
     const { frame, img } = createPrintDocument({ values, sections, brandingLogo: logo, signatureDataUrl: signatureAuthorized ? signatureDataUrl : "" });
-    try { await Promise.race([img.decode(), new Promise(resolve => setTimeout(resolve, 1200))]); } catch { /* Company name remains visible if logo unavailable. */ }
+    try { await Promise.race([img.decode(), new Promise(resolve => setTimeout(resolve, 1200))]); } catch { /* Leave logo image in print layout; report unavailable asset. */ }
+    if (!img.complete || img.naturalWidth === 0) {
+      setError("The official Zermatt logo could not be loaded. Printing was stopped to prevent an unbranded letter.");
+      frame.remove();
+      return;
+    }
     frame.contentWindow.focus();
     frame.contentWindow.print();
     window.setTimeout(() => frame.remove(), 12000);
   }
   return <section style={{ border: "1px solid #a3b5ab", borderRadius: 10, padding: 18, marginBottom: 18 }}>
     <h2>Zermatt Offer Letter Composer · Draft v1.0</h2>
-    <p>Load an employee's authoritative CHRiS terms, complete editable HR fields, review clauses, then print or save as PDF. Printing does not approve, sign, issue or archive the letter.</p>
+    <p>Load an employee's authoritative CHRiS terms, complete editable HR fields, review clauses, then print or save as PDF. The printed letter has no draft watermark. Printing does not approve, sign, issue or archive the letter.</p>
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 15 }}>
       <div style={{ minWidth: 280, flex: "1 1 360px", position: "relative" }}>
         <label htmlFor="zermatt-offer-employee-name">Search employee by name</label>
@@ -262,6 +265,7 @@ export default function ZermattOfferLetterComposer() {
         </label>)}
         <button type="button" onClick={() => setOverrides({})}>Restore standard clauses</button>
       </div>}
+      <p style={{ marginTop: 12 }}>For PDF output, select <strong>Save as PDF</strong> and turn off <strong>Headers and footers</strong> in the browser print dialog if the option appears. This removes browser-generated date/time, page title and URL.</p>
       <p style={{ marginTop: 12 }}><strong>Review:</strong> {missing.length ? `Complete ${missing.length} required field(s): ${missing.join(", ")}` : "All required fields entered. Final HR/legal review and signatory approval still required."}</p>
       <button type="button" disabled={Boolean(missing.length)} onClick={print}>Print / Save Draft PDF</button>
     </>}
