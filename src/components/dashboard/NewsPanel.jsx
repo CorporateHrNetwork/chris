@@ -28,9 +28,13 @@ function useAttachment(row,mode) {
 }
 function NewsDetail({row,mode,onClose}) {
   const {url,error}=useAttachment(row,mode);
+  const [previewOpen,setPreviewOpen]=useState(false);
   useEffect(()=>{const key=e=>{if(e.key==="Escape")onClose();};window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key);},[onClose]);
   if(!row)return null;
-  const isImage=String(row.attachmentMimeType||"").startsWith("image/");
+  const mime=String(row.attachmentMimeType||"").toLowerCase();
+  const isImage=mime.startsWith("image/");
+  const isPdf=mime==="application/pdf" || /.pdf$/i.test(String(row.attachmentFileName||""));
+  const previewSupported=isImage||isPdf;
   return <div role="presentation" style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(0,0,0,.68)",display:"grid",placeItems:"center",padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
     <section role="dialog" aria-modal="true" aria-label={row.title} style={{background:"#fff",color:"#173729",borderRadius:16,padding:24,width:"min(780px,100%)",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
       <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"start"}}>
@@ -39,8 +43,18 @@ function NewsDetail({row,mode,onClose}) {
       </div>
       {row.summary&&<p style={{fontWeight:700}}>{row.summary}</p>}
       {row.body&&<div style={{whiteSpace:"pre-wrap",lineHeight:1.7,overflowWrap:"anywhere"}}>{row.body}</div>}
-      {isImage&&url&&<img src={url} alt={row.attachmentFileName||row.title} style={{width:"100%",maxHeight:560,objectFit:"contain",marginTop:16}}/>}
-      {row.attachmentFileName&&<p style={{marginTop:18}}>{error||(!url?"Loading attachment…":<a href={url} download={row.attachmentFileName} target="_blank" rel="noreferrer">View / download attachment: {row.attachmentFileName}</a>)}</p>}
+      {row.attachmentFileName&&<div style={{marginTop:20,padding:14,border:"1px solid #d6e2da",borderRadius:10,background:"#f7faf8"}}>
+        <strong style={{display:"block",marginBottom:10}}>Attached document: {row.attachmentFileName}</strong>
+        {error?<p role="alert" style={{color:"#9a3412"}}>{error}</p>:!url?<p>Loading attachment...</p>:<div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          {previewSupported&&<button type="button" aria-expanded={previewOpen} onClick={()=>setPreviewOpen(open=>!open)} style={{padding:"9px 14px",borderRadius:8,border:"1px solid #087a43",background:"#087a43",color:"#fff",cursor:"pointer",fontWeight:700}}>{previewOpen?"Close preview":"Open attachment on screen"}</button>}
+          <a href={url} download={row.attachmentFileName} style={{color:"#087a43",fontWeight:700}}>Download attachment</a>
+          {!previewSupported&&<a href={url} target="_blank" rel="noreferrer" style={{color:"#087a43",fontWeight:700}}>Open file in new tab</a>}
+        </div>}
+        {url&&previewSupported&&previewOpen&&<div role="region" aria-label="Announcement attachment preview" style={{marginTop:14,maxWidth:"100%",overflow:"hidden"}}>
+          {isImage?<img src={url} alt={row.attachmentFileName||row.title} style={{display:"block",width:"100%",height:"auto",maxHeight:"65vh",objectFit:"contain"}}/>:
+          <iframe src={url} title={"Attachment preview: "+row.attachmentFileName} style={{display:"block",width:"100%",height:"min(65vh,720px)",border:"1px solid #d6e2da",borderRadius:6}}/>}
+        </div>}
+      </div>}
     </section>
   </div>;
 }
