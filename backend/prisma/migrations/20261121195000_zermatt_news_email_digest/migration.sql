@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS "internal_news_email_digest_ledger" (
   "organizationId" TEXT NOT NULL,
   "employeeId" TEXT NOT NULL,
   "digestDate" DATE NOT NULL,
+  "quotaSlot" INTEGER,
   "status" TEXT NOT NULL DEFAULT 'PROCESSING',
   "email" TEXT NOT NULL,
   "messageCount" INTEGER NOT NULL DEFAULT 0,
@@ -23,6 +24,8 @@ CREATE TABLE IF NOT EXISTS "internal_news_email_digest_ledger" (
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "news_email_digest_unique" UNIQUE ("organizationId","employeeId","digestDate"),
+  CONSTRAINT "news_email_digest_quota_unique" UNIQUE ("digestDate","quotaSlot"),
+  CONSTRAINT "news_email_digest_slot_range" CHECK ("quotaSlot" BETWEEN 1 AND 90),
   CONSTRAINT "news_email_digest_status_ck" CHECK ("status" IN ('PROCESSING','SENT','PENDING_CONFIGURATION','RECONCILE_REQUIRED','FAILED')),
   CONSTRAINT "news_digest_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE CASCADE,
   CONSTRAINT "news_digest_employee_fk" FOREIGN KEY ("employeeId") REFERENCES "employees"("id") ON DELETE CASCADE
