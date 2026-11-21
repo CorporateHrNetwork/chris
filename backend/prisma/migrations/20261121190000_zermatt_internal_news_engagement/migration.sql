@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS "internal_news_engagement_settings" (
   "notifyByEmail" BOOLEAN NOT NULL DEFAULT FALSE,
   "updatedByUserId" TEXT,
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "news_engagement_settings_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_engagement_settings_post_fk" FOREIGN KEY ("postId") REFERENCES "internal_news_posts"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_engagement_settings_recipient_fk" FOREIGN KEY ("recognizedEmployeeId") REFERENCES "employees"("id") ON DELETE SET NULL,
   CONSTRAINT "internal_news_engagement_settings_pkey" PRIMARY KEY ("organizationId", "postId")
 );
 CREATE TABLE IF NOT EXISTS "internal_news_reactions" (
@@ -18,6 +21,9 @@ CREATE TABLE IF NOT EXISTS "internal_news_reactions" (
   "reaction" TEXT NOT NULL,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "news_reactions_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_reactions_post_fk" FOREIGN KEY ("postId") REFERENCES "internal_news_posts"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_reactions_employee_fk" FOREIGN KEY ("employeeId") REFERENCES "employees"("id") ON DELETE CASCADE,
   CONSTRAINT "internal_news_reactions_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "internal_news_reactions_unique_employee" UNIQUE ("organizationId", "postId", "employeeId"),
   CONSTRAINT "internal_news_reactions_allowed" CHECK ("reaction" IN ('LIKE','CELEBRATE','SUPPORT','APPRECIATE'))
@@ -33,6 +39,10 @@ CREATE TABLE IF NOT EXISTS "internal_news_comments" (
   "isHidden" BOOLEAN NOT NULL DEFAULT FALSE,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "news_comments_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_comments_post_fk" FOREIGN KEY ("postId") REFERENCES "internal_news_posts"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_comments_employee_fk" FOREIGN KEY ("employeeId") REFERENCES "employees"("id") ON DELETE CASCADE,
+  CONSTRAINT "news_comment_parent_fk" FOREIGN KEY ("parentId") REFERENCES "internal_news_comments"("id") ON DELETE SET NULL,
   CONSTRAINT "internal_news_comments_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "internal_news_comments_length" CHECK (char_length("body") BETWEEN 1 AND 1000)
 );
