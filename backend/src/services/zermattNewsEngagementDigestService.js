@@ -77,9 +77,15 @@ async function runEngagementDigest({prisma=prismaDefault(),env=process.env,fetch
   for(const [employeeId,item] of grouped){
     if(!remaining){skipped++;continue;}
     const claimed=await prisma.$queryRawUnsafe(
-      `INSERT INTO "internal_news_email_digest_ledger" ("id","organizationId","employeeId","digestDate","email","messageCount")
-       VALUES ($1::uuid,$2,$3,$4::date,$5,$6)
-       ON CONFLICT ("organizationId","employeeId","digestDate") DO NOTHING RETURNING "id"`,
+      `INSERT INTO "internal_news_email_digest_ledger" ("id","organizationId","employeeId","digestDate","email","messageCount","quotaSlot")
+       SELECT $1::uuid,$2,$3,$4::date,$5,$6,slot
+       FROM generate_series(1,90) AS slot
+       WHERE NOT EXISTS (
+         SELECT 1 FROM "internal_news_email_digest_ledger" existing
+         WHERE existing."digestDate"=$4::date AND existing."quotaSlot"=slot
+       )
+       ORDER BY slot LIMIT 1
+       ON CONFLICT DO NOTHING RETURNING "id"`,
       crypto.randomUUID(),orgId,employeeId,day,item.email,item.entries.reduce((n,x)=>n+Number(x.reactionCount||0)+Number(x.commentCount||0),0));
     if(!claimed.length){skipped++;continue;}
     remaining--;
