@@ -115,7 +115,7 @@ adminRouter.get("/recipient-search",requireAuth,requirePermission("employees.vie
     const term=String(req.query?.q||"").trim();
     if(term.length<2)return res.json({status:"success",data:[]});
     if(term.length>100)return problem(res,"SEARCH_TOO_LONG","Search term is too long.");
-    const escaped=term.replace(/[%_\\]/g,"\\adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.update"),async(req,res)=>{");
+    const escaped=term.replace(/[%_\\]/g, "\\$&");
     const matches=await prisma.$queryRawUnsafe(
       `SELECT "id","employeeNumber","firstName","lastName" FROM "employees"
        WHERE "organizationId"::text=$1 AND "status" IN (\'ACTIVE\',\'PROBATION\',\'LEAVE\')
