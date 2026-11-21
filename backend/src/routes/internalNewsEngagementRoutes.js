@@ -131,9 +131,33 @@ adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.upd
        "enabled"=EXCLUDED."enabled","recognizedEmployeeId"=EXCLUDED."recognizedEmployeeId",
        "updatedByUserId"=EXCLUDED."updatedByUserId","updatedAt"=CURRENT_TIMESTAMP`,
        org,post,enabled,recipient,String(req.auth.userId));
+    await prisma.organizationAudit.create({
+      data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+        entityType:"InternalNewsPost",entityId:post,action:enabled?"NEWS_ENGAGEMENT_ENABLED":"NEWS_ENGAGEMENT_DISABLED",
+        newValue:{enabled,recognizedEmployeeId:recipient,notifyByEmail:false},reason:"Internal communications engagement configuration"}
+    });
     return res.json({status:"success",data:{enabled,recognizedEmployeeId:recipient,notifyByEmail:false}});
   }catch(error){console.error("Engagement settings failed",error);return problem(res,"ENGAGEMENT_SETTINGS_FAILED","Unable to update engagement settings.",500);}
 });
+adminRouter.get("/:postId/moderation",requireAuth,requirePermission("employees.view"),async(req,res)=>{
+  try{
+    const org=String(req.auth.organizationId),post=String(req.params.postId);
+    const target=await configuredPost(org,post);
+    if(!target)return problem(res,"NEWS_NOT_FOUND","Announcement not found.",404);
+    const [settings,comments]=await Promise.all([
+      prisma.$queryRawUnsafe(
+        'SELECT "enabled","recognizedEmployeeId","notifyByEmail" FROM "internal_news_engagement_settings" WHERE "organizationId"=$1 AND "postId"=$2 LIMIT 1',org,post),
+      prisma.$queryRawUnsafe(
+        `SELECT c."id",c."parentId",c."body",c."isHidden",c."createdAt",c."employeeId",
+           e."firstName",e."lastName" FROM "internal_news_comments" c
+           JOIN "employees" e ON e."id"::text=c."employeeId" AND e."organizationId"::text=c."organizationId"
+           WHERE c."organizationId"=$1 AND c."postId"=$2
+           ORDER BY c."createdAt" DESC LIMIT 250`,org,post)
+    ]);
+    return res.json({status:"success",data:{settings:settings[0]||{enabled:false,notifyByEmail:false},comments}});
+  }catch(error){console.error("Engagement moderation feed failed",error);return problem(res,"MODERATION_FEED_FAILED","Unable to load engagement moderation.",500);}
+});
+
 adminRouter.patch("/:postId/comments/:id/hide",requireAuth,requirePermission("employees.update"),async(req,res)=>{
   try{
     const org=String(req.auth.organizationId),post=String(req.params.postId),id=String(req.params.id);
@@ -141,6 +165,11 @@ adminRouter.patch("/:postId/comments/:id/hide",requireAuth,requirePermission("em
       'UPDATE "internal_news_comments" SET "isHidden"=$4,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"::text=$1 AND "organizationId"=$2 AND "postId"=$3',
       id,org,post,req.body?.hidden!==false);
     if(!result)return problem(res,"COMMENT_NOT_FOUND","Comment not found.",404);
+    await prisma.organizationAudit.create({
+      data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
+        entityType:"InternalNewsComment",entityId:id,action:req.body?.hidden!==false?"NEWS_COMMENT_HIDDEN":"NEWS_COMMENT_RESTORED",
+        newValue:{postId:post,isHidden:req.body?.hidden!==false},reason:"Internal communications engagement moderation"}
+    });
     return res.json({status:"success"});
   }catch(error){console.error("Engagement moderation failed",error);return problem(res,"MODERATION_FAILED","Unable to moderate comment.",500);}
 });
