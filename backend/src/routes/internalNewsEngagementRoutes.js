@@ -157,6 +157,26 @@ adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.upd
     return res.json({status:"success",data:{enabled,recognizedEmployeeId:recipient,notifyByEmail:false}});
   }catch(error){console.error("Engagement settings failed",error);return problem(res,"ENGAGEMENT_SETTINGS_FAILED","Unable to update engagement settings.",500);}
 });
+// Non-sending preview. This endpoint never contacts an email provider.
+adminRouter.get("/:postId/digest-preview",requireAuth,requirePermission("employees.view"),async(req,res)=>{
+  try{
+    const org=String(req.auth.organizationId),post=String(req.params.postId);
+    const target=await publishedPost(org,post);
+    if(!target)return problem(res,"NEWS_NOT_FOUND","Published announcement not found.",404);
+    const employeeId=target.recognizedEmployeeId;
+    if(!employeeId)return problem(res,"ENGAGEMENT_RECIPIENT_REQUIRED","Select the employee being celebrated.",400);
+    const employees=await prisma.$queryRawUnsafe(
+      'SELECT "id","firstName","lastName","email" FROM "employees" WHERE "organizationId"::text=$1 AND "id"::text=$2 LIMIT 1',org,String(employeeId));
+    if(!employees.length)return problem(res,"ENGAGEMENT_RECIPIENT_MISSING","Employee record unavailable.",404);
+    const [reactions,counts]=await Promise.all([
+      prisma.$queryRawUnsafe('SELECT COUNT(*)::int AS "count" FROM "internal_news_reactions" WHERE "organizationId"=$1 AND "postId"=$2',org,post),
+      prisma.$queryRawUnsafe('SELECT COUNT(*)::int AS "count" FROM "internal_news_comments" WHERE "organizationId"=$1 AND "postId"=$2 AND "isHidden"=FALSE',org,post)
+    ]);
+    return res.json({status:"success",data:{recipientName:[employees[0].firstName,employees[0].lastName].filter(Boolean).join(" "),
+      hasEmail:Boolean(employees[0].email),title:target.title,reactionCount:reactions[0]?.count||0,commentCount:counts[0]?.count||0,
+      deliveryStatus:"PREVIEW_ONLY",emailEnabled:false,subject:"Colleagues are celebrating you: "+target.title}});
+  }catch(error){console.error("Engagement digest preview failed",error);return problem(res,"DIGEST_PREVIEW_FAILED","Unable to prepare engagement digest preview.",500);}
+});
 adminRouter.get("/:postId/moderation",requireAuth,requirePermission("employees.view"),async(req,res)=>{
   try{
     const org=String(req.auth.organizationId),post=String(req.params.postId);
