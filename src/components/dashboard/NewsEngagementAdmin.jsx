@@ -54,6 +54,15 @@ export default function NewsEngagementAdmin({row}) {
     }catch(e){setError(e.message||"Unable to moderate message.");}
     finally{setBusy(false);}
   }
+  async function setEmailDigest(enabled){
+    setBusy(true);setError("");
+    try{
+      await apiRequest("/api/news-engagement/"+encodeURIComponent(row.id)+"/settings",
+        {method:"PUT",body:{enabled:!!data?.settings?.enabled,notifyByEmail:enabled}});
+      await refresh();
+    }catch(e){setError(e.message||"Unable to update the email digest setting.");}
+    finally{setBusy(false);}
+  }
   async function previewDigest(){
     setBusy(true);setError("");setDigestPreview(null);
     try{
@@ -92,6 +101,11 @@ export default function NewsEngagementAdmin({row}) {
           {data.settings?.recognizedEmployeeId&&<button style={{...styles.button,marginTop:8}} type="button" disabled={busy} onClick={()=>setRecipient(null)}>Clear selected employee</button>}
         </div>
         <div style={{marginTop:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <input type="checkbox" disabled={busy||!data.settings?.recognizedEmployeeId||!data.settings?.enabled}
+              checked={!!data.settings?.notifyByEmail} onChange={e=>setEmailDigest(e.target.checked)}/>
+            Allow daily email digests for this announcement (employee opt-in also required)
+          </label>
           <button type="button" style={styles.button} disabled={busy||!data.settings?.recognizedEmployeeId} onClick={previewDigest}>Preview recipient email digest</button>
           {digestPreview&&<div role="status" style={{padding:12,marginTop:8,border:"1px solid rgba(212,175,55,.35)",borderRadius:8}}>
             <strong>{digestPreview.subject}</strong>
