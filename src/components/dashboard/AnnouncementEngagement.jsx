@@ -11,15 +11,28 @@ export default function AnnouncementEngagement({postId}) {
   const [replyTo,setReplyTo]=useState(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
+  const [emailPreference,setEmailPreference]=useState(null);
   useEffect(()=>{
     if(!postId)return;
     let live=true;
     setFeed(null);setError("");
+    essRequest("/api/ess/news-engagement/notifications/email-preference")
+      .then(r=>{if(live)setEmailPreference(r.data?.optIn===true);})
+      .catch(()=>{if(live)setEmailPreference(null);});
     essRequest("/api/ess/news-engagement/"+encodeURIComponent(postId))
       .then(r=>{if(live)setFeed(r.data||{enabled:false});})
       .catch(e=>{if(live)setError(e.message||"Unable to load reactions.");});
     return()=>{live=false};
   },[postId]);
+  async function setDigestPreference(optIn){
+    setBusy(true);setError("");
+    try{
+      const result=await essRequest("/api/ess/news-engagement/notifications/email-preference",
+        {method:"PUT",body:{optIn}});
+      setEmailPreference(result.data?.optIn===true);
+    }catch(e){setError(e.message||"Unable to update your email notification preferences.");}
+    finally{setBusy(false);}
+  }
   async function react(choice){
     setBusy(true);setError("");
     try{
@@ -51,6 +64,11 @@ export default function AnnouncementEngagement({postId}) {
   return <section aria-label="Colleague reactions and comments" style={{marginTop:24,borderTop:"1px solid #d5e1d9",paddingTop:20}}>
     <h3 style={{margin:"0 0 12px",color:"#075f36"}}>Celebrate with colleagues</h3>
     <p style={{fontSize:13,color:"#587464"}}>Reactions and comments are visible to authorised Zermatt employees.</p>
+    {emailPreference!==null&&<label style={{display:"flex",alignItems:"center",gap:8,margin:"10px 0",fontSize:13}}>
+      <input type="checkbox" checked={emailPreference} disabled={busy} onChange={e=>setDigestPreference(e.target.checked)}/>
+      Email me a daily digest when colleagues engage with announcements recognising me
+    </label>}
+
     {error&&<p role="alert" style={{color:"#9a3412"}}>{error}</p>}
     <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
       {choices.map(([key,label])=><button key={key} type="button" disabled={busy||!feed} onClick={()=>react(key)} aria-pressed={feed?.myReaction===key} style={{...action,background:feed?.myReaction===key?"#d3efe0":"#fff"}}>{label} {feed?.reactions?.find(x=>x.reaction===key)?.count||0}</button>)}
