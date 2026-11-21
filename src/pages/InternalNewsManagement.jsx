@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import useTransientNotice from "../hooks/useTransientNotice";
+import NewsEngagementAdmin from "../components/dashboard/NewsEngagementAdmin";
 import { apiDownload, apiRequest, saveDownloadedBlob } from "../services/api";
 
 const blank={category:"ANNOUNCEMENT",title:"",summary:"",body:"",status:"DRAFT",isPinned:false,expireAt:""};
@@ -108,10 +109,8 @@ export default function InternalNewsManagement(){
               {row.status!=="PUBLISHED"?<button type="button" style={small} disabled={busy===row.id+"PUBLISHED"} onClick={()=>changeStatus(row.id,"PUBLISHED")}>Publish</button>:null}
               {row.status!=="DRAFT"?<button type="button" style={small} disabled={busy===row.id+"DRAFT"} onClick={()=>changeStatus(row.id,"DRAFT")}>Return to Draft</button>:null}
               {row.status!=="ARCHIVED"?<button type="button" style={small} disabled={busy===row.id+"ARCHIVED"} onClick={()=>changeStatus(row.id,"ARCHIVED")}>Archive</button>:null}
-              {row.status==="PUBLISHED"&&["PROMOTION","ANNOUNCEMENT","EVENT"].includes(row.category)&&<>
-                <button type="button" style={small} disabled={!!busy} onClick={()=>setEngagement(row,true)}>Enable reactions & comments</button>
-                <button type="button" style={small} disabled={!!busy} onClick={()=>setEngagement(row,false)}>Disable engagement</button>
-              </>}
+              {row.status==="PUBLISHED"&&["PROMOTION","ANNOUNCEMENT","EVENT"].includes(row.category)&&<NewsEngagementAdmin row={row}/>}
+
             </div></td>
           </tr>):<tr><td colSpan="6">No internal news items yet.</td></tr>}</tbody>
         </table>
