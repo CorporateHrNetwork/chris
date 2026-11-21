@@ -110,6 +110,21 @@ essRouter.delete("/:postId/comments/:id",requireEssAuth,async(req,res)=>{
   }catch(error){console.error("Delete engagement comment failed",error);return problem(res,"COMMENT_DELETE_FAILED","Unable to remove comment.",500);}
 });
 
+adminRouter.get("/recipient-search",requireAuth,requirePermission("employees.view"),async(req,res)=>{
+  try{
+    const term=String(req.query?.q||"").trim();
+    if(term.length<2)return res.json({status:"success",data:[]});
+    if(term.length>100)return problem(res,"SEARCH_TOO_LONG","Search term is too long.");
+    const escaped=term.replace(/[%_\\]/g,"\\adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.update"),async(req,res)=>{");
+    const matches=await prisma.$queryRawUnsafe(
+      `SELECT "id","employeeNumber","firstName","lastName" FROM "employees"
+       WHERE "organizationId"::text=$1 AND "status" IN (\'ACTIVE\',\'PROBATION\',\'LEAVE\')
+         AND ("employeeNumber" ILIKE $2 OR "firstName" ILIKE $2 OR "lastName" ILIKE $2 OR CONCAT_WS(\' \',"firstName","lastName") ILIKE $2)
+       ORDER BY "firstName","lastName" LIMIT 15`,
+      String(req.auth.organizationId),"%"+escaped+"%");
+    return res.json({status:"success",data:matches});
+  }catch(error){console.error("Recipient search failed",error);return problem(res,"RECIPIENT_SEARCH_FAILED","Unable to search employees.",500);}
+});
 adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.update"),async(req,res)=>{
   try{
     const org=String(req.auth.organizationId),post=String(req.params.postId);
@@ -117,7 +132,10 @@ adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.upd
     if(!target)return problem(res,"NEWS_NOT_FOUND","Announcement not found.",404);
     const enabled=req.body?.enabled===true;
     if(enabled&&!ALLOWED_CATEGORIES.has(target.category))return problem(res,"ENGAGEMENT_NOT_ALLOWED","Engagement is restricted to nonconfidential announcement categories.",403);
-    const recipient=String(req.body?.recognizedEmployeeId||"").trim()||null;
+    const current=await prisma.$queryRawUnsafe(
+      'SELECT "recognizedEmployeeId" FROM "internal_news_engagement_settings" WHERE "organizationId"=$1 AND "postId"=$2 LIMIT 1',org,post);
+    const provided=Object.prototype.hasOwnProperty.call(req.body||{},"recognizedEmployeeId");
+    const recipient=provided?(String(req.body.recognizedEmployeeId||"").trim()||null):(current[0]?.recognizedEmployeeId||null);
     if(recipient){
       const employees=await prisma.$queryRawUnsafe(
         'SELECT "id" FROM "employees" WHERE "id"::text=$1 AND "organizationId"::text=$2 LIMIT 1',recipient,org);
