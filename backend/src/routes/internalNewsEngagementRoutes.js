@@ -47,6 +47,27 @@ async function feed(organizationId,postId,employeeId){
   return {reactions,comments:comments.reverse(),myReaction:own[0]?.reaction||null,myEmployeeId:employeeId};
 }
 
+essRouter.get("/notifications/email-preference",requireEssAuth,async(req,res)=>{
+  try{
+    const org=String(req.essAuth.organizationId),employee=String(req.essAuth.employeeId);
+    const rows=await prisma.$queryRawUnsafe(
+      'SELECT "optIn" FROM "internal_news_email_preferences" WHERE "organizationId"=$1 AND "employeeId"=$2 LIMIT 1',org,employee);
+    return res.json({status:"success",data:{optIn:rows[0]?.optIn===true}});
+  }catch(error){console.error("Engagement preference failed",error);return problem(res,"PREFERENCE_FAILED","Unable to read your email preferences.",500);}
+});
+essRouter.put("/notifications/email-preference",requireEssAuth,async(req,res)=>{
+  try{
+    if(typeof req.body?.optIn!=="boolean")return problem(res,"INVALID_PREFERENCE","Select whether to receive recognition email digests.");
+    const org=String(req.essAuth.organizationId),employee=String(req.essAuth.employeeId);
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "internal_news_email_preferences" ("organizationId","employeeId","optIn")
+       VALUES ($1,$2,$3) ON CONFLICT ("organizationId","employeeId") DO UPDATE SET
+       "optIn"=EXCLUDED."optIn","updatedAt"=CURRENT_TIMESTAMP`,
+       org,employee,req.body.optIn);
+    return res.json({status:"success",data:{optIn:req.body.optIn}});
+  }catch(error){console.error("Engagement preference update failed",error);return problem(res,"PREFERENCE_FAILED","Unable to update your email preferences.",500);}
+});
+
 essRouter.get("/:postId",requireEssAuth,async(req,res)=>{
   try{
     const org=String(req.essAuth.organizationId),post=String(req.params.postId);
@@ -131,6 +152,10 @@ adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.upd
     const target=await configuredPost(org,post);
     if(!target)return problem(res,"NEWS_NOT_FOUND","Announcement not found.",404);
     const enabled=req.body?.enabled===true;
+    const currentConfig=await prisma.$queryRawUnsafe(
+      'SELECT "notifyByEmail" FROM "internal_news_engagement_settings" WHERE "organizationId"=$1 AND "postId"=$2 LIMIT 1',org,post);
+    const mailProvided=Object.prototype.hasOwnProperty.call(req.body||{},"notifyByEmail");
+    const notifyByEmail=enabled && (mailProvided ? req.body.notifyByEmail===true : currentConfig[0]?.notifyByEmail===true);
     if(enabled&&!ALLOWED_CATEGORIES.has(target.category))return problem(res,"ENGAGEMENT_NOT_ALLOWED","Engagement is restricted to nonconfidential announcement categories.",403);
     const current=await prisma.$queryRawUnsafe(
       'SELECT "recognizedEmployeeId" FROM "internal_news_engagement_settings" WHERE "organizationId"=$1 AND "postId"=$2 LIMIT 1',org,post);
@@ -144,17 +169,18 @@ adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.upd
     await prisma.$executeRawUnsafe(
       `INSERT INTO "internal_news_engagement_settings"
        ("organizationId","postId","enabled","recognizedEmployeeId","notifyByEmail","updatedByUserId")
-       VALUES ($1,$2,$3,$4,FALSE,$5)
+       VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT ("organizationId","postId") DO UPDATE SET
        "enabled"=EXCLUDED."enabled","recognizedEmployeeId"=EXCLUDED."recognizedEmployeeId",
+       "notifyByEmail"=EXCLUDED."notifyByEmail",
        "updatedByUserId"=EXCLUDED."updatedByUserId","updatedAt"=CURRENT_TIMESTAMP`,
-       org,post,enabled,recipient,String(req.auth.userId));
+       org,post,enabled,recipient,notifyByEmail,String(req.auth.userId));
     await prisma.organizationAudit.create({
       data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,
         entityType:"InternalNewsPost",entityId:post,action:enabled?"NEWS_ENGAGEMENT_ENABLED":"NEWS_ENGAGEMENT_DISABLED",
-        newValue:{enabled,recognizedEmployeeId:recipient,notifyByEmail:false},reason:"Internal communications engagement configuration"}
+        newValue:{enabled,recognizedEmployeeId:recipient,notifyByEmail},reason:"Internal communications engagement configuration"}
     });
-    return res.json({status:"success",data:{enabled,recognizedEmployeeId:recipient,notifyByEmail:false}});
+    return res.json({status:"success",data:{enabled,recognizedEmployeeId:recipient,notifyByEmail}});
   }catch(error){console.error("Engagement settings failed",error);return problem(res,"ENGAGEMENT_SETTINGS_FAILED","Unable to update engagement settings.",500);}
 });
 // Non-sending preview. This endpoint never contacts an email provider.
