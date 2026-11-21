@@ -8,6 +8,7 @@ export default function NewsEngagementAdmin({row}) {
   const [error,setError]=useState("");
   const [search,setSearch]=useState("");
   const [matches,setMatches]=useState([]);
+  const [digestPreview,setDigestPreview]=useState(null);
   async function refresh(){
     const result=await apiRequest("/api/news-engagement/"+encodeURIComponent(row.id)+"/moderation");
     setData(result.data);
@@ -53,6 +54,14 @@ export default function NewsEngagementAdmin({row}) {
     }catch(e){setError(e.message||"Unable to moderate message.");}
     finally{setBusy(false);}
   }
+  async function previewDigest(){
+    setBusy(true);setError("");setDigestPreview(null);
+    try{
+      const result=await apiRequest("/api/news-engagement/"+encodeURIComponent(row.id)+"/digest-preview");
+      setDigestPreview(result.data);
+    }catch(e){setError(e.message||"Unable to preview email digest.");}
+    finally{setBusy(false);}
+  }
   async function copyApprovedAnnouncement(){
     const text=row.title+"\n\nRead the full approved company announcement in CHRiS ESS: https://chris-zermatt-web.onrender.com/ess\n\n(Staff sign-in required.)";
     try{await navigator.clipboard.writeText(text);setError("");}
@@ -81,6 +90,15 @@ export default function NewsEngagementAdmin({row}) {
             {matches.map(emp=><button type="button" style={styles.button} disabled={busy} key={emp.id} onClick={()=>setRecipient(emp.id)}>{emp.firstName} {emp.lastName} ({emp.employeeNumber})</button>)}
           </div>}
           {data.settings?.recognizedEmployeeId&&<button style={{...styles.button,marginTop:8}} type="button" disabled={busy} onClick={()=>setRecipient(null)}>Clear selected employee</button>}
+        </div>
+        <div style={{marginTop:12}}>
+          <button type="button" style={styles.button} disabled={busy||!data.settings?.recognizedEmployeeId} onClick={previewDigest}>Preview recipient email digest</button>
+          {digestPreview&&<div role="status" style={{padding:12,marginTop:8,border:"1px solid rgba(212,175,55,.35)",borderRadius:8}}>
+            <strong>{digestPreview.subject}</strong>
+            <p>To: {digestPreview.recipientName} ({digestPreview.hasEmail?"Email on employee record":"No employee email available"})</p>
+            <p>{digestPreview.reactionCount} reactions, {digestPreview.commentCount} visible messages.</p>
+            <small>Preview only — no email has been sent.</small>
+          </div>}
         </div>
         <h4>Employee messages ({data.comments?.length||0})</h4>
         <div style={{maxHeight:340,overflowY:"auto",display:"grid",gap:8}}>
