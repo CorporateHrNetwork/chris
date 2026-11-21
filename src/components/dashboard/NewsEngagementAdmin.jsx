@@ -6,6 +6,8 @@ export default function NewsEngagementAdmin({row}) {
   const [data,setData]=useState(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
+  const [search,setSearch]=useState("");
+  const [matches,setMatches]=useState([]);
   async function refresh(){
     const result=await apiRequest("/api/news-engagement/"+encodeURIComponent(row.id)+"/moderation");
     setData(result.data);
@@ -18,6 +20,23 @@ export default function NewsEngagementAdmin({row}) {
       .catch(e=>{if(active)setError(e.message||"Unable to load engagement moderation.");});
     return()=>{active=false;};
   },[open,row.id]);
+  async function findEmployee(term){
+    setSearch(term);
+    if(term.trim().length<2){setMatches([]);return;}
+    try{
+      const result=await apiRequest("/api/news-engagement/recipient-search?q="+encodeURIComponent(term.trim()));
+      setMatches(result.data||[]);
+    }catch(e){setError(e.message||"Unable to search employees.");}
+  }
+  async function setRecipient(employeeId){
+    setBusy(true);setError("");
+    try{
+      await apiRequest("/api/news-engagement/"+encodeURIComponent(row.id)+"/settings",
+        {method:"PUT",body:{enabled:!!data?.settings?.enabled,recognizedEmployeeId:employeeId}});
+      await refresh();setSearch("");setMatches([]);
+    }catch(e){setError(e.message||"Unable to select the celebrated employee.");}
+    finally{setBusy(false);}
+  }
   async function toggle(enabled){
     setBusy(true);setError("");
     try{
@@ -53,6 +72,16 @@ export default function NewsEngagementAdmin({row}) {
           <button type="button" style={styles.button} onClick={copyApprovedAnnouncement}>Copy for WhatsApp Channel</button>
         </div>
         <p style={{fontSize:12,opacity:.8}}>Channel posting is manual. Copying does not send any WhatsApp message. Do not share confidential announcements.</p>
+        <div style={{border:"1px solid rgba(212,175,55,.35)",borderRadius:8,padding:10,marginTop:14}}>
+          <label htmlFor={"news-recipient-"+row.id} style={{display:"block",fontWeight:700}}>Employee being celebrated</label>
+          <p style={{fontSize:12,opacity:.8}}>Link this announcement to an employee. Email sending remains disabled pending verification.</p>
+          <p>Employee record: {data.settings?.recognizedEmployeeId||"Not selected"}</p>
+          <input id={"news-recipient-"+row.id} type="search" value={search} onChange={e=>findEmployee(e.target.value)} placeholder="Type employee name or number" style={{boxSizing:"border-box",width:"100%",padding:9,borderRadius:7}}/>
+          {matches.length>0&&<div role="listbox" aria-label="Matching employees" style={{display:"grid",gap:5,marginTop:8}}>
+            {matches.map(emp=><button type="button" style={styles.button} disabled={busy} key={emp.id} onClick={()=>setRecipient(emp.id)}>{emp.firstName} {emp.lastName} ({emp.employeeNumber})</button>)}
+          </div>}
+          {data.settings?.recognizedEmployeeId&&<button style={{...styles.button,marginTop:8}} type="button" disabled={busy} onClick={()=>setRecipient(null)}>Clear selected employee</button>}
+        </div>
         <h4>Employee messages ({data.comments?.length||0})</h4>
         <div style={{maxHeight:340,overflowY:"auto",display:"grid",gap:8}}>
           {(data.comments||[]).map(comment=><div key={comment.id} style={{border:"1px solid rgba(212,175,55,.25)",borderRadius:8,padding:10}}>
