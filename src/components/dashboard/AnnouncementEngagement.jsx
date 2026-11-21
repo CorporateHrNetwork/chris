@@ -63,7 +63,7 @@ export default function AnnouncementEngagement({postId}) {
           <small style={{marginLeft:8,color:"#64796c"}}>{date(c.createdAt)}</small>
           <p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",margin:"8px 0"}}>{c.body}</p>
           <button type="button" style={{...action,padding:"5px 8px",fontSize:12}} disabled={busy} onClick={()=>setReplyTo(c.id)}>Reply</button>
-          <button type="button" style={{...action,padding:"5px 8px",fontSize:12,marginLeft:6}} disabled={busy} onClick={()=>remove(c.id)}>Remove my comment</button>
+          {feed?.myEmployeeId===c.employeeId&&<button type="button" style={{...action,padding:"5px 8px",fontSize:12,marginLeft:6}} disabled={busy} onClick={()=>remove(c.id)}>Remove my comment</button>}
         </article>)}
       </div>
       <form onSubmit={comment}>
