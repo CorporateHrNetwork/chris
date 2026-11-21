@@ -44,7 +44,7 @@ async function feed(organizationId,postId,employeeId){
   const own=await prisma.$queryRawUnsafe(
     'SELECT "reaction" FROM "internal_news_reactions" WHERE "organizationId"=$1 AND "postId"=$2 AND "employeeId"=$3 LIMIT 1',
     organizationId,postId,employeeId);
-  return {reactions,comments:comments.reverse(),myReaction:own[0]?.reaction||null};
+  return {reactions,comments:comments.reverse(),myReaction:own[0]?.reaction||null,myEmployeeId:employeeId};
 }
 
 essRouter.get("/:postId",requireEssAuth,async(req,res)=>{
