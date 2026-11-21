@@ -363,6 +363,27 @@ router.get("/dashboard", requireEssAuth, async (req,res) => {
   }catch(error){console.error("ESS dashboard error:",error);return res.status(500).json({status:"error",message:"Unable to load your employee portal dashboard."});}
 });
 
+// Employee announcements must authenticate through the ESS session, not HRIS RBAC.
+router.get("/news/:id/attachment",requireEssAuth,async(req,res)=>{
+  try{
+    const rows=await prisma.$queryRawUnsafe(
+      'SELECT "attachmentFileName","attachmentMimeType","attachmentData" FROM "internal_news_posts" WHERE "organizationId"=$1 AND "id"=$2 AND "status"=\'PUBLISHED\' AND ("publishAt" IS NULL OR "publishAt"<=CURRENT_TIMESTAMP) AND ("expireAt" IS NULL OR "expireAt">CURRENT_TIMESTAMP) LIMIT 1',
+      req.essAuth.organizationId,req.params.id
+    );
+    const row=rows[0];
+    if(!row||!row.attachmentData)return res.status(404).json({status:"error",code:"NEWS_ATTACHMENT_NOT_FOUND",message:"The published announcement attachment is not available."});
+    const safeName=String(row.attachmentFileName||"announcement-attachment").replace(/[\\/\r\n"]/g,"_");
+    res.setHeader("Content-Type",row.attachmentMimeType||"application/octet-stream");
+    res.setHeader("Content-Length",String(row.attachmentData.length));
+    res.setHeader("Content-Disposition",'inline; filename="'+safeName+'"');
+    res.setHeader("Cache-Control","private, no-store");
+    return res.send(row.attachmentData);
+  }catch(error){
+    console.error("ESS announcement attachment error:",error);
+    return res.status(500).json({status:"error",code:"NEWS_ATTACHMENT_LOAD_FAILED",message:"Unable to load announcement attachment."});
+  }
+});
+
 router.get("/payslips/:id/download",requireEssAuth,async(req,res)=>{
   try{
     // Authorize the employee and tenant before loading the shared approved PDF payload.
