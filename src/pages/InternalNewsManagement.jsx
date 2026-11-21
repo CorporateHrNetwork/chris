@@ -50,6 +50,15 @@ export default function InternalNewsManagement(){
     finally{setBusy("");}
   };
 
+  const setEngagement=async(row,enabled)=>{
+    try{
+      setBusy(row.id+"ENGAGEMENT");setError("");dismissNotice();
+      await apiRequest("/api/news-engagement/"+encodeURIComponent(row.id)+"/settings",{method:"PUT",body:{enabled}});
+      showNotice(enabled?"Colleague reactions and comments enabled for this announcement.":"Colleague engagement disabled for this announcement.");
+    }catch(err){setError(err.message||"Unable to update engagement settings.");}
+    finally{setBusy("");}
+  };
+
   const changeStatus=async(id,status)=>{
     try{
       setBusy(id+status);setError("");dismissNotice();
@@ -99,6 +108,10 @@ export default function InternalNewsManagement(){
               {row.status!=="PUBLISHED"?<button type="button" style={small} disabled={busy===row.id+"PUBLISHED"} onClick={()=>changeStatus(row.id,"PUBLISHED")}>Publish</button>:null}
               {row.status!=="DRAFT"?<button type="button" style={small} disabled={busy===row.id+"DRAFT"} onClick={()=>changeStatus(row.id,"DRAFT")}>Return to Draft</button>:null}
               {row.status!=="ARCHIVED"?<button type="button" style={small} disabled={busy===row.id+"ARCHIVED"} onClick={()=>changeStatus(row.id,"ARCHIVED")}>Archive</button>:null}
+              {row.status==="PUBLISHED"&&["PROMOTION","ANNOUNCEMENT","EVENT"].includes(row.category)&&<>
+                <button type="button" style={small} disabled={!!busy} onClick={()=>setEngagement(row,true)}>Enable reactions & comments</button>
+                <button type="button" style={small} disabled={!!busy} onClick={()=>setEngagement(row,false)}>Disable engagement</button>
+              </>}
             </div></td>
           </tr>):<tr><td colSpan="6">No internal news items yet.</td></tr>}</tbody>
         </table>
