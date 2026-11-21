@@ -184,6 +184,18 @@ adminRouter.put("/:postId/settings",requireAuth,requirePermission("employees.upd
   }catch(error){console.error("Engagement settings failed",error);return problem(res,"ENGAGEMENT_SETTINGS_FAILED","Unable to update engagement settings.",500);}
 });
 // Non-sending preview. This endpoint never contacts an email provider.
+adminRouter.get("/email-digest-status",requireAuth,requirePermission("employees.view"),async(req,res)=>{
+  try{
+    const org=String(req.auth.organizationId);
+    const rows=await prisma.$queryRawUnsafe(
+      `SELECT "digestDate"::text AS "digestDate","status",COUNT(*)::int AS "count"
+         FROM "internal_news_email_digest_ledger" WHERE "organizationId"=$1
+           AND "digestDate">=CURRENT_DATE-INTERVAL '7 days'
+         GROUP BY "digestDate","status" ORDER BY "digestDate" DESC,"status"`,org);
+    return res.json({status:"success",data:{emailDispatchEnabled:process.env.CHRIS_ENGAGEMENT_EMAIL_ENABLED==="true",counts:rows}});
+  }catch(error){console.error("Engagement digest status error",error);return problem(res,"DIGEST_STATUS_FAILED","Unable to load email digest status.",500);}
+});
+
 adminRouter.get("/:postId/digest-preview",requireAuth,requirePermission("employees.view"),async(req,res)=>{
   try{
     const org=String(req.auth.organizationId),post=String(req.params.postId);
