@@ -72,6 +72,24 @@ router.get("/", requirePermission("employees.view"), async (req, res) => {
   }
 });
 
+router.get("/published", async (req, res) => {
+  try {
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT "id","category","title","summary","body","status","isPinned","publishAt","expireAt","createdAt",
+              "attachmentFileName","attachmentMimeType","attachmentSize"
+         FROM "internal_news_posts"
+        WHERE "organizationId"=$1 AND "status"='PUBLISHED'
+          AND ("publishAt" IS NULL OR "publishAt"<=CURRENT_TIMESTAMP)
+          AND ("expireAt" IS NULL OR "expireAt">CURRENT_TIMESTAMP)
+        ORDER BY "isPinned" DESC, COALESCE("publishAt","createdAt") DESC LIMIT 100`,
+      req.auth.organizationId
+    );
+    return res.json({status:"success",data:rows});
+  } catch(error) {
+    return handle(res,error,"Unable to load published communications.");
+  }
+});
+
 router.post("/", requirePermission("employees.update"), upload.single("attachment"), async (req, res) => {
   try {
     const organization = await prisma.organization.findUnique({
