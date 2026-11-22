@@ -48,3 +48,9 @@ CREATE TABLE IF NOT EXISTS "internal_news_comments" (
 );
 CREATE INDEX IF NOT EXISTS "internal_news_comments_feed_idx" ON "internal_news_comments" ("organizationId","postId","createdAt");
 -- Engagement is deliberately opt-in on a per-post basis. Do not auto-email or charge WhatsApp.
+
+-- Protect these application-managed public-schema tables from direct Data API access.
+-- Server-side Prisma operations must use the verified application database role.
+ALTER TABLE "internal_news_engagement_settings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "internal_news_reactions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "internal_news_comments" ENABLE ROW LEVEL SECURITY;
