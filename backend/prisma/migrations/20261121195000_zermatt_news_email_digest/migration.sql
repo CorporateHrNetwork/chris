@@ -31,3 +31,7 @@ CREATE TABLE IF NOT EXISTS "internal_news_email_digest_ledger" (
   CONSTRAINT "news_digest_employee_fk" FOREIGN KEY ("employeeId") REFERENCES "employees"("id") ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS "news_digest_date_status_idx" ON "internal_news_email_digest_ledger" ("digestDate","status");
+
+-- Employee notification preferences and delivery ledger are server-managed only.
+ALTER TABLE "internal_news_email_preferences" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "internal_news_email_digest_ledger" ENABLE ROW LEVEL SECURITY;
