@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE_URL, getAuthToken } from "../../services/api";
 import { getEssAuthToken } from "../../services/essApi";
+import AnnouncementEngagement from "./AnnouncementEngagement";
 
 const displayDate = value => value ? new Date(value).toLocaleDateString("en-NG", {day:"numeric",month:"short",year:"numeric"}) : "Published";
 const active = row => row.status === "PUBLISHED" && (!row.publishAt || new Date(row.publishAt) <= new Date()) && (!row.expireAt || new Date(row.expireAt) >= new Date());
@@ -51,7 +52,8 @@ function NewsDetail({row,mode,onClose}) {
         </div>
         {row.summary&&<p style={{fontWeight:700}}>{row.summary}</p>}
         {row.body&&<div style={{whiteSpace:"pre-wrap",lineHeight:1.7,overflowWrap:"anywhere"}}>{row.body}</div>}
-        {row.attachmentFileName&&<div style={{marginTop:20,padding:16,border:"1px solid #d6e2da",borderRadius:10,background:"#f7faf8"}}>
+        {mode==="ess"&&<AnnouncementEngagement postId={row.id}/>}
+      {row.attachmentFileName&&<div style={{marginTop:20,padding:16,border:"1px solid #d6e2da",borderRadius:10,background:"#f7faf8"}}>
           <strong style={{display:"block",marginBottom:12}}>Attached document: {row.attachmentFileName}</strong>
           {error?<p role="alert" style={{color:"#9a3412"}}>{error}</p>:!url?<p>Loading attachment...</p>:
           <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>

@@ -63,6 +63,7 @@ const eosbRoutes = require("./routes/eosbRoutes");
 const chrisAutomationRoutes = require("./routes/chrisAutomationRoutes");
 const employeeSelfServiceRoutes = require("./routes/employeeSelfServiceRoutes");
 const employeeNewsRoutes = require("./routes/employeeNewsRoutes");
+const internalNewsEngagementRoutes = require("./routes/internalNewsEngagementRoutes");
 const { corsOptionsDelegate, applySecurityHeaders } = require("./middleware/securityMiddleware");
 
 const performanceEvaluationRoutes = require("./routes/performanceEvaluationRoutes");
@@ -116,8 +117,10 @@ app.use("/api/ess/probation", require("./routes/zermattProbationRoutes").essRout
 app.use("/api/eosb", eosbRoutes);
 app.use("/api/internal/zermatt-celebrations", require("./routes/zermattCelebrationAutomationRoutes").createRouter({ prisma: require("./config/prisma") }));
 app.use("/api/chris-automation", chrisAutomationRoutes);
+app.use("/api/ess/news-engagement", internalNewsEngagementRoutes.essRouter);
 app.use("/api/ess", employeeSelfServiceRoutes);
 app.use("/api/news", employeeNewsRoutes);
+app.use("/api/news-engagement", internalNewsEngagementRoutes.adminRouter);
 
 app.use("/api", zermattHrLoanOptionRoutes);
 app.use("/api", activeBranchScopeRoutes);

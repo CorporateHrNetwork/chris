@@ -18,6 +18,18 @@ router.use(async (req, res, next) => {
   return next();
 });
 router.get('/status', (_req, res) => res.json({ status: 'success', data: scheduler.readiness() }));
+router.post('/engagement-digest', async (req,res)=>{
+  if(Object.keys(req.body||{}).length)return res.status(400).json({status:'error',code:'BODY_NOT_ALLOWED'});
+  try{
+    const {runEngagementDigest}=require('../services/zermattNewsEngagementDigestService');
+    const data=await runEngagementDigest({prisma,dryRun:process.env.CHRIS_ENGAGEMENT_EMAIL_ENABLED!=='true'});
+    return res.status(data.status==='RECONCILIATION_REQUIRED'?503:200).json({status:'success',data});
+  }catch(error){
+    console.error('Engagement digest dispatch failed',error);
+    return res.status(503).json({status:'error',code:'ENGAGEMENT_DIGEST_FAILED'});
+  }
+});
+
 router.post('/dispatch', async (req, res) => {
   // The caller cannot pick a tenant, recipient or date. Only today's Zermatt events.
   if (Object.keys(req.body || {}).length) return res.status(400).json({ status: 'error', code: 'BODY_NOT_ALLOWED' });
