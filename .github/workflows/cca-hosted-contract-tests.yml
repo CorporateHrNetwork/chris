@@ -1,0 +1,36 @@
+name: CCA hosted contract tests
+
+on:
+  pull_request:
+    paths:
+      - "backend/src/cca/**"
+      - "backend/tests/ccaHosted*.test.js"
+      - "backend/tests/ccaOperatorJwtVerifier.test.js"
+      - "backend/tests/ccaPrivateHostedPilot.test.js"
+      - "backend/tests/ccaOperationsAlertsContract.test.js"
+      - "backend/tests/ccaHealthSchedulerContract.test.js"
+      - "backend/tests/ccaScheduledOperationsContract.test.js"
+      - "tools/cca-local-demo/Inspect-CCA-ScheduledOperations.ps1"
+      - "tools/cca-local-demo/Publish-CCA-OperationsAlert.ps1"
+      - "tools/cca-local-demo/Audit-CCA-PersistentStagingHealth.ps1"
+      - ".github/workflows/cca-hosted-contract-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout proposed changes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run CCA hosted application and operator-session contract tests
+        run: node --test backend/tests/ccaHosted*.test.js backend/tests/ccaOperatorJwtVerifier.test.js backend/tests/ccaPrivateHostedPilot.test.js backend/tests/ccaOperationsAlertsContract.test.js backend/tests/ccaHealthSchedulerContract.test.js backend/tests/ccaScheduledOperationsContract.test.js
