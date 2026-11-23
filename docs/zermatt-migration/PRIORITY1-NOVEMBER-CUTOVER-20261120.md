@@ -64,3 +64,10 @@ A missed gate must be reported as MISSED/AT RISK, not silently carried forward a
 - Workstation has `pg_dump` version 16; PostgreSQL 17 client tooling and local migration source/target credential path remain unconfigured. Latest GPG backup can be retrieved, but decryption/restore has not been verified on 23 November.
 - CCA fictional staging managed-backup Task Scheduler result had failures on 23 November. Direct manual encrypted backup succeeded off-site and fresh health audit returned PASS; scheduled-job repair remains outstanding. CCA staging != CHRiS production backup.
 - **GO status: BLOCKED** pending secure 17-compatible restore of a current real production backup and complete tenant, schema, application and rollback reconciliation. Neither production cutover nor source deletion authorized.
+
+## 23 November — unattended CCA staging backup recovery milestone
+- Windows task account password was refreshed locally for existing CCA managed PostgreSQL backup and health-audit tasks; no password transmitted to GitHub or ChatGPT.
+- Backup task now calls a local diagnostic wrapper with limited logging. Verified actual `Start-ScheduledTask` run under its saved-password principal, completed with Windows Task Scheduler `LastTaskResult=0`, created `cca-managed-postgres-20261123-132940-294dcbd3.cms`, uploaded off-site and recorded `TASK_SUCCESS`.
+- Managed staging health-audit Task Scheduler run subsequently returned `LastTaskResult=0` at 14:30:47 local time.
+- This certifies the repaired CCA fictional staging backup/audit execution, **not** a complete CHRiS/Zermatt production restore or production database cutover.
+- Current live Supabase metadata is healthy with PostgreSQL 17, 123 public tables, 15 functions and 15 triggers. The 23 November encrypted production archive is accessible in Google Drive but a full isolated restore remains a HARD GO blocker.
