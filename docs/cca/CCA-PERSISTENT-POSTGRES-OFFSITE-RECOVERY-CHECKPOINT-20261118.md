@@ -37,3 +37,11 @@
 5. Pass security and operations go/no-go before public commercial launch on **4 December 2026**.
 
 **No production deployment, merge, customer provisioning, payments, domain registration, certificate issuance or migration of real customer data was performed.**
+
+## 23 November 2026: live workstation recovery evidence
+- On `DESKTOP-IQEJRMU`, the two existing password-logon managed CCA staging tasks had nonzero scheduled results. Their Windows credential was refreshed **locally**, without transmitting or committing a password.
+- `Backup-CCA-PersistentPostgres-Scheduled.ps1` was introduced to log only categorical staging-backup outcomes. An actual Windows Task Scheduler invocation completed with `LastTaskResult=0`, an encrypted offsite upload and `TASK_SUCCESS` (archive `cca-managed-postgres-20261123-132940-294dcbd3.cms`).
+- A subsequent Windows Task Scheduler invocation of `CRNETWORK-CCA-ManagedPostgres-Health-Audit` completed with `LastTaskResult=0`.
+- The existing `Test-CCA-PersistentPostgres-Restore.ps1` independently retrieved the encrypted CCA backup from Google Drive, verified SHA-256, decrypted it with the escrowed CCA recovery key, restored into a temporary PostgreSQL instance and verified RLS: unscoped=0; Cedar=1; Atlas=1. The test returned exit 0 and cleaned up its temporary cluster and decrypted files.
+- **Scope restriction:** all these results apply to **fictional CCA staging**. They do not certify the separately stored CHRiS Zermatt production database or permit a live cutover.
+- The recovery script and local credential refresh helper are preserved on the draft CCA branch and await separate code review/merge.
