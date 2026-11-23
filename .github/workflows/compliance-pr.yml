@@ -221,11 +221,29 @@ jobs:
           employees=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.employees')
           migrations=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public._prisma_migrations WHERE finished_at IS NOT NULL')
           organizations=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.organizations')
-          test "$tables" -ge 95
+          users=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.users')
+          leaves=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.leave_requests')
+          payroll_runs=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.payroll_runs')
+          payroll_lines=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.payroll_run_lines')
+          documents=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.employee_documents')
+          midmonth_runs=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.zermatt_midmonth_runs')
+          midmonth_lines=$(psql -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.zermatt_midmonth_lines')
+          zermatt_employees=$(psql -X -A -t -v ON_ERROR_STOP=1 -c "SELECT COUNT(e.id) FROM public.employees e JOIN public.organizations o ON o.id=e.\"organizationId\" WHERE o.slug='zermatt-liquor-limited'")
+          crnetwork_employees=$(psql -X -A -t -v ON_ERROR_STOP=1 -c "SELECT COUNT(e.id) FROM public.employees e JOIN public.organizations o ON o.id=e.\"organizationId\" WHERE o.slug='corporatehr-network'")
+          test "$tables" -ge 120
           test "$employees" -ge 300
           test "$migrations" -ge 64
           test "$organizations" -eq 2
-          printf 'Isolated restore passed: tables=%s employees=%s migrations=%s organizations=%s\n' "$tables" "$employees" "$migrations" "$organizations"
+          test "$users" -ge 1
+          test "$leaves" -ge 1
+          test "$payroll_runs" -ge 1
+          test "$payroll_lines" -ge 100
+          test "$documents" -ge 1
+          test "$midmonth_runs" -ge 1
+          test "$midmonth_lines" -ge 1
+          test "$zermatt_employees" -ge 300
+          test "$crnetwork_employees" -ge 1
+          printf 'Isolated restore passed: tables=%s employees=%s migrations=%s organizations=%s users=%s leaves=%s payroll_runs=%s payroll_lines=%s document_records=%s midmonth_runs=%s midmonth_lines=%s zermatt_employees=%s crnetwork_employees=%s\n' "$tables" "$employees" "$migrations" "$organizations" "$users" "$leaves" "$payroll_runs" "$payroll_lines" "$documents" "$midmonth_runs" "$midmonth_lines" "$zermatt_employees" "$crnetwork_employees"
 
   zermatt-render-preflight:
     name: Verify Render cutover access without changes
