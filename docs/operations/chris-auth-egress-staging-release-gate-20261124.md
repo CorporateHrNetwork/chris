@@ -30,3 +30,9 @@ Source issue: #341 (Supabase Shared Pooler Egress).
 - The changes in this PR are application read-query projections and do not modify the Supabase database schema or hosting.
 - No production rollout, PR merge, Render branch switch, subscription purchase, production payroll mutation or database cutover has been authorized by these tests.
 - Supabase's organization warning states projects may be restricted from 11 December 2026 if still over quota. A safe backup cannot guarantee live API continuity. Coordinate an authorized paid bridge if needed before the restriction date, while continuing durable PostgreSQL migration independently.
+
+## Existing Render staging service check (24 November)
+- `chris-compliance-staging-web.onrender.com` returned HTTP 200.
+- `chris-compliance-staging-api.onrender.com/health` initially timed out within 25 seconds, then returned HTTP **200** on a retry. This is compatible with free-service cold start but is not sufficient to prove the cause of the initial timeout.
+- Render service `srv-dam8ht142hec738mtov0` is **not suspended**. Latest live deploy is `317a215e096f2aa587e886b36c480ed0d2e94df5` from 11 October on branch `fix/zermatt-release-gap-closure`, **not** PR #344.
+- These HTTP probes do NOT constitute authenticated HRIS/ESS acceptance for the optimized PR. Do not retarget the shared service automatically.
