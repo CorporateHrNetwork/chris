@@ -35,14 +35,39 @@ async function requireAuth(req, res, next) {
 
     const user = await prisma.user.findFirst({
       where: { id: decoded.userId, organizationId: decoded.organizationId, isActive: true },
-      include: {
+      // Select only fields used to authorize this request. In particular, never
+      // fetch password hashes, profile data, or permission descriptions here.
+      // We intentionally read roles/permissions on every request so revocations
+      // remain effective immediately; there is no authorization cache.
+      select: {
+        id: true,
+        organizationId: true,
+        email: true,
+        locationScope: true,
         organization: true,
-        userLocations: { include: { location: true } },
+        userLocations: {
+          select: {
+            location: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                type: true,
+                city: true,
+                state: true,
+                isActive: true,
+              },
+            },
+          },
+        },
         userRoles: {
-          include: {
+          select: {
             role: {
-              include: {
-                rolePermissions: { include: { permission: true } },
+              select: {
+                name: true,
+                rolePermissions: {
+                  select: { permission: { select: { key: true } } },
+                },
               },
             },
           },
@@ -161,7 +186,10 @@ async function requireEssAuth(req, res, next) {
         isActive: true,
         employeeId: { not: null },
       },
-      include: {
+      select: {
+        id: true,
+        organizationId: true,
+        email: true,
         organization: true,
         employee: {
           select: {
