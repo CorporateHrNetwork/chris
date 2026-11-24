@@ -14,6 +14,8 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
   const [suggestions,setSuggestions]=useState(null);
   const [assessment,setAssessment]=useState(null);
   const [assessmentCategory,setAssessmentCategory]=useState("ALL");
+  const [selectedExitedIds,setSelectedExitedIds]=useState([]);
+  const [bulkExitNote,setBulkExitNote]=useState("");
   const [employeeId,setEmployeeId]=useState("");
   const [exitedHistorical,setExitedHistorical]=useState(false);
   const [locationId,setLocationId]=useState("");
@@ -52,6 +54,20 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
     try{
       const result=await apiRequest(`${base}/historical/batches/${encodeURIComponent(batchId)}/review-assessment`);
       setAssessment(result.data);
+    }catch(e){setError(e.message);}finally{setBusy("");}
+  }
+  async function saveSelectedExits(){
+    if(selectedExitedIds.length===0||bulkExitNote.trim().length<12){
+      setError("Select the confirmed exited source rows and enter a supporting HR confirmation note.");return;
+    }
+    setBusy("bulkExited");setError("");setMessage("");
+    try{
+      const response=await apiRequest(`${base}/historical/batches/${encodeURIComponent(batchId)}/exited-bulk`,{
+        method:"POST",body:{sourceIds:selectedExitedIds,reviewNote:bulkExitNote.trim()}
+      });
+      setMessage(`${response.data.recorded} exited historical source rows recorded without employee numbers or assumed branches.`);
+      setSelectedExitedIds([]);setAssessment(null);setBulkExitNote("");
+      await load();
     }catch(e){setError(e.message);}finally{setBusy("");}
   }
   async function suggestCandidates(){
@@ -123,11 +139,26 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
               .slice(0,100).map(x=><div key={x.sourceId} style={{padding:8,borderBottom:"1px solid #d8e1d9"}}>
                 <strong>{x.employeeNo||"No number"} · {x.employeeName}</strong> — {x.classification.replaceAll("_"," ")}
                 <div><small>{x.sourceSheet} · {x.period} · {x.candidates.length} candidate(s)</small></div>
+                {x.classification==="UNMATCHED" && <label style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                  <input type="checkbox" checked={selectedExitedIds.includes(x.sourceId)}
+                    onChange={e=>setSelectedExitedIds(ids=>e.target.checked?[...ids,x.sourceId]:ids.filter(s=>s!==x.sourceId))} />
+                  HR confirms exited historical record
+                </label>}
                 {x.classification!=="ALREADY_REVIEWED" && <button type="button" onClick={()=>{
                   setFilter(x.employeeName||x.employeeNo);setSourceId(x.sourceId);setSuggestions(null);setEmployeeId("");
                 }}>Review row</button>}
               </div>)}
           </div>
+          {selectedExitedIds.length>0 && <>
+            <p>{selectedExitedIds.length} specifically selected exited historical rows. This is not a bulk auto-match.</p>
+            <label style={{display:"grid",gap:6}}>HR confirmation evidence for selected rows
+              <textarea style={field} rows={3} value={bulkExitNote} onChange={e=>setBulkExitNote(e.target.value)}
+                placeholder="Reference the HR confirmation of exited status, date, and available evidence"/>
+            </label>
+            <button type="button" disabled={!!busy||bulkExitNote.trim().length<12} onClick={saveSelectedExits}>
+              Record {selectedExitedIds.length} selected exited historical rows
+            </button>
+          </>}
         </section>}
       </>}
       {review.status==="PENDING_RECONCILIATION" && review.unresolved.length>0 && <>

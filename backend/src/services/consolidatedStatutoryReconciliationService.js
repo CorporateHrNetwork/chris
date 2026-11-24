@@ -137,6 +137,53 @@ async function recordExitedHistorical({organizationId,batchId,sourceId,locationI
   });
   return {sourceId,status:"EXITED_HISTORICAL",employeeId:null,employeeNo:null,branch};
 }
+async function recordExitedHistoricalBulk({organizationId,batchId,sourceIds,reviewNote,actorUserId,prismaClient}) {
+  const db=prismaClient||prisma();
+  const note=String(reviewNote||"").trim();
+  if(!organizationId||!batchId||!actorUserId||note.length<12)
+    throw error("EXITED_EVIDENCE_REQUIRED","A signed-in HR reviewer and written exit confirmation are required.");
+  if(!Array.isArray(sourceIds)||sourceIds.length===0||sourceIds.length>100||
+     sourceIds.some(x=>typeof x!=="string"||!x)||new Set(sourceIds).size!==sourceIds.length)
+    throw error("INVALID_SOURCE_SELECTION","Select between 1 and 100 unique historical source rows.");
+  const batch=await batchForReview(db,organizationId,batchId);
+  if(batch.status!=="PENDING_RECONCILIATION")throw error("BATCH_NOT_EDITABLE","Historical batch is not pending review.",409);
+  const records=Array.isArray(batch.payload)?batch.payload:JSON.parse(batch.payload||"[]");
+  const validIds=new Set(records.map(x=>x.sourceId));
+  if(sourceIds.some(x=>!validIds.has(x)))
+    throw error("SOURCE_ROW_NOT_FOUND","One or more selected rows do not belong to this source batch.",404);
+  await db.$transaction(async tx=>{
+    const locked=await tx.$queryRawUnsafe(
+      `SELECT "status" FROM "consolidated_statutory_import_batches"
+       WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE`,organizationId,batchId);
+    if(locked[0]?.status!=="PENDING_RECONCILIATION")
+      throw error("BATCH_NOT_EDITABLE","Batch was verified or changed during exited historical review.",409);
+    // Refuse to silently replace established employee identity assignments.
+    const existing=await tx.$queryRawUnsafe(
+      `SELECT "sourceId","identityDisposition" FROM "consolidated_statutory_import_matches"
+       WHERE "organizationId"=$1 AND "batchId"=$2 AND "sourceId"=ANY($3::text[])`,
+       organizationId,batchId,sourceIds);
+    if(existing.some(x=>x.identityDisposition!=="EXITED_HISTORICAL"))
+      throw error("ALREADY_MATCHED_EMPLOYEE","One or more selected rows already have a reviewed CHRiS employee identity. Resolve them individually.",409);
+    for(const sourceId of sourceIds){
+      await tx.$queryRawUnsafe(
+        `INSERT INTO "consolidated_statutory_import_matches"
+          ("id","organizationId","batchId","sourceId","employeeId","locationId","identityDisposition","reviewNote","reviewedByUserId")
+          VALUES ($1,$2,$3,$4,NULL,NULL,'EXITED_HISTORICAL',$5,$6)
+          ON CONFLICT ("organizationId","batchId","sourceId") DO UPDATE SET
+          "reviewNote"=EXCLUDED."reviewNote","reviewedByUserId"=EXCLUDED."reviewedByUserId",
+          "reviewedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP`,
+        crypto.randomUUID(),organizationId,batchId,sourceId,note,actorUserId);
+    }
+    await tx.organizationAudit.create({data:{
+      organizationId,actorUserId,entityType:"ConsolidatedStatutoryImport",entityId:batchId,
+      action:"BULK_EXITED_HISTORICAL_REVIEW",
+      newValue:{sourceIds,recordCount:sourceIds.length,identityDisposition:"EXITED_HISTORICAL",
+        employeeNumbersAssigned:0,branchesAssigned:0,reviewNote:note},
+      reason:"Explicit HR-confirmed exited historical records; no new employee accounts or remittances"}});
+  });
+  return {batchId,recorded:sourceIds.length,status:"EXITED_HISTORICAL",
+    verifiedBatch:false,employeeNumbersAssigned:0,branchesAssigned:0};
+}
 async function verifyHistoricalBatch({organizationId,batchId,actorUserId,prismaClient}) {
   const db=prismaClient||prisma();
   if(!actorUserId) throw error("REVIEWER_REQUIRED","A signed-in reviewer is required.",403);
@@ -194,4 +241,4 @@ async function verifiedHistoricalRecords({organizationId,year,prismaClient}) {
   }
   return records;
 }
-module.exports={reviewSummary,approveSourceMatch,recordExitedHistorical,verifyHistoricalBatch,verifiedHistoricalRecords,branchName};
+module.exports={reviewSummary,approveSourceMatch,recordExitedHistorical,recordExitedHistoricalBulk,verifyHistoricalBatch,verifiedHistoricalRecords,branchName};
