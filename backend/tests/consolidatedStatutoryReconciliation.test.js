@@ -10,6 +10,7 @@ function client(){
   const db={
     $queryRawUnsafe:async(query,...args)=>{
       if(query.includes('FROM "consolidated_statutory_import_batches" WHERE')) return args[0]==="org1" && args[1]==="batch1" ? [batch] : [];
+      if(query.includes('SELECT "status" FROM "consolidated_statutory_import_batches"')) return args[0]==="org1" && args[1]==="batch1" ? [{status:batch.status}] : [];
       if(query.includes('FROM "consolidated_statutory_import_matches" WHERE')) return matches;
       if(query.includes('INSERT INTO "consolidated_statutory_import_matches"')) {
         matches=[{sourceId:args[3],employeeId:args[4],locationId:args[5],reviewNote:args[6]}];return [];

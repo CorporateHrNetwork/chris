@@ -11,6 +11,7 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
   const [filter,setFilter]=useState("");
   const [search,setSearch]=useState("");
   const [options,setOptions]=useState({employees:[],locations:[]});
+  const [suggestions,setSuggestions]=useState(null);
   const [employeeId,setEmployeeId]=useState("");
   const [locationId,setLocationId]=useState("");
   const [note,setNote]=useState("");
@@ -43,6 +44,14 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
   const rows=useMemo(()=> (review?.unresolved||[]).filter(x=>(
     [x.employeeNo,x.employeeName,x.period].join(" ").toLowerCase().includes(filter.toLowerCase())
   )).slice(0,25),[review,filter]);
+  async function suggestCandidates(){
+    if(!sourceId){setError("Select a historical source row first.");return;}
+    setBusy("suggestions");setError("");
+    try {
+      const result=await apiRequest(`${base}/historical/batches/${encodeURIComponent(batchId)}/candidates?sourceId=${encodeURIComponent(sourceId)}`);
+      setSuggestions(result.data);
+    }catch(e){setError(e.message);}finally{setBusy("");}
+  }
   async function submit(){
     if(!sourceId||!employeeId||!locationId||note.trim().length<12){
       setError("Choose a source row, verified employee, historical branch, and review note of at least 12 characters.");return;
@@ -75,13 +84,15 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
           <input style={field} placeholder="Employee name or number" value={filter} onChange={e=>setFilter(e.target.value)} />
         </label>
         <label style={{display:"grid",gap:6,marginBottom:12}}>Select historical source row
-          <select value={sourceId} onChange={e=>setSourceId(e.target.value)} style={field}>
+          <select value={sourceId} onChange={e=>{setSourceId(e.target.value);setSuggestions(null);setEmployeeId("");}} style={field}>
             <option value="">Choose a source row</option>
             {rows.map(x=><option key={x.sourceId} value={x.sourceId}>
               {x.employeeNo||"No employee number"} · {x.employeeName} · {x.period} · {x.sourceSheet}
             </option>)}
           </select>
         </label>
+        <button type="button" disabled={!!busy||!sourceId} onClick={suggestCandidates}>Suggest exact identity matches (review required)</button>
+        {suggestions && <section aria-label="Read-only match suggestions"><p>{suggestions.candidates.length} exact candidate(s) found. {suggestions.ambiguous?"Identity is ambiguous or no exact match exists.":"A unique exact candidate is available for HR review."} No candidate is automatically approved.</p><ul>{suggestions.candidates.map(x=><li key={x.employeeId}>{x.employeeNo} — {x.employeeName} ({x.matchReason.replaceAll("_"," ").toLowerCase()})</li>)}</ul></section>}
         <label style={{display:"grid",gap:6,marginBottom:12}}>Search CHRiS employee
           <input style={field} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Type employee name or ID" />
         </label>

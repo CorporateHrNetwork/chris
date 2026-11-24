@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS "consolidated_statutory_import_matches" (
   "reviewedByUserId" TEXT NOT NULL,
   "reviewedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "statutory_match_batch_fk" FOREIGN KEY ("batchId")
-    REFERENCES "consolidated_statutory_import_batches"("id") ON DELETE CASCADE,
+  CONSTRAINT "statutory_match_batch_fk" FOREIGN KEY ("organizationId","batchId")
+    REFERENCES "consolidated_statutory_import_batches"("organizationId","id") ON DELETE CASCADE,
   CONSTRAINT "statutory_match_employee_fk" FOREIGN KEY ("organizationId","employeeId")
     REFERENCES "employees"("organizationId","id") ON DELETE RESTRICT,
   CONSTRAINT "statutory_match_location_fk" FOREIGN KEY ("organizationId","locationId")

@@ -45,13 +45,14 @@ test("reviewed-match migration enforces tenant-safe foreign keys and one verifie
     await db.exec(`
       INSERT INTO "consolidated_statutory_import_batches"
         ("id","organizationId","reportYear","sourceHash","originalFilename","payload")
-        VALUES ('batch1','org1',2026,'h1','a.xlsx','[]'),('batch2','org1',2026,'h2','b.xlsx','[]');
+        VALUES ('batch1','org1',2026,'h1','a.xlsx','[]'),('batch2','org1',2026,'h2','b.xlsx','[]'),('batchOther','org2',2026,'h3','c.xlsx','[]');
     `);
     const sql=`INSERT INTO "consolidated_statutory_import_matches"
       ("id","organizationId","batchId","sourceId","employeeId","locationId","reviewNote","reviewedByUserId")
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`;
     await db.query(sql,["match1","org1","batch1","hash:row1","e1","l1","Verified against original HR register","hr"]);
     await assert.rejects(()=>db.query(sql,["match2","org1","batch1","hash:row2","e2","l1","Cross tenant","hr"]),/foreign key/i);
+    await assert.rejects(()=>db.query(sql,["matchOther","org1","batchOther","hash:row8","e1","l1","Wrong tenant batch","hr"]),/foreign key/i);
     await assert.rejects(()=>db.query(sql,["match3","org1","batch1","hash:row3","e1","l2","Cross tenant branch","hr"]),/foreign key/i);
     await assert.rejects(()=>db.query(sql,["match4","org1","batch1","hash:row1","e1","l1","Duplicated","hr"]),/unique|duplicate/i);
     await db.exec(`UPDATE "consolidated_statutory_import_batches" SET "status"='VERIFIED' WHERE "id"='batch1';`);

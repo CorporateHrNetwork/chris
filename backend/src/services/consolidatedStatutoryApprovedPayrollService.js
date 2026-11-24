@@ -6,7 +6,7 @@
  */
 
 const TYPES = new Set(["PAYE","PENSION","NHF","NSITF_ECS","ITF"]);
-function finite(value) { const n = Number(value); return Number.isFinite(n) ? n : null; }
+function finite(value) { if(value===null || value===undefined || value==="") return null; const n = Number(value); return Number.isFinite(n) ? n : null; }
 function applyObligation(row, item) {
   const employeeAmount = finite(item.employeeAmount), employerAmount = finite(item.employerAmount);
   switch (item.obligationType) {

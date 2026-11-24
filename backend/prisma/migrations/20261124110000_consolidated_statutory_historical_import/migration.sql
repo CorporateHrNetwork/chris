@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS "consolidated_statutory_import_batches" (
   CONSTRAINT "consolidated_statutory_import_status_check" CHECK ("status" IN ('PENDING_RECONCILIATION','VERIFIED','REJECTED')),
   CONSTRAINT "consolidated_statutory_import_org_fk" FOREIGN KEY ("organizationId") REFERENCES "organizations"("id") ON DELETE CASCADE
 );
+CREATE UNIQUE INDEX IF NOT EXISTS "consolidated_statutory_import_org_id_key"
+  ON "consolidated_statutory_import_batches" ("organizationId","id");
 CREATE UNIQUE INDEX IF NOT EXISTS "consolidated_statutory_import_org_hash_year_key"
   ON "consolidated_statutory_import_batches" ("organizationId", "sourceHash", "reportYear");
 CREATE INDEX IF NOT EXISTS "consolidated_statutory_import_org_year_status_idx"

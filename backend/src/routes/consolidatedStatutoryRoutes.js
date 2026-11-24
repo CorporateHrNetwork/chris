@@ -10,6 +10,7 @@ const { buildConsolidatedReport } = require("../services/consolidatedStatutoryRe
 const { buildStatutoryWorkbook } = require("../services/consolidatedStatutoryWorkbookService");
 const { stageHistoricalImport, listHistoricalImports } = require("../services/consolidatedStatutoryImportBatchService");
 const { reviewSummary, approveSourceMatch, verifyHistoricalBatch, verifiedHistoricalRecords } = require("../services/consolidatedStatutoryReconciliationService");
+const { proposeCandidates } = require("../services/consolidatedStatutoryMatchCandidatesService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -110,6 +111,15 @@ router.get("/historical/match-options", requirePermission("payroll.manage"), asy
   } catch(error) { return fail(res,error); }
 });
 // Explicitly reviewed historical identity and branch mappings, isolated by tenant.
+router.get("/historical/batches/:batchId/candidates", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const data=await proposeCandidates({organizationId:req.auth.organizationId,
+      batchId:req.params.batchId,sourceId:String(req.query.sourceId||"")});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data});
+  } catch(error) { return fail(res,error); }
+});
 router.get("/historical/batches/:batchId/reconciliation", requirePermission("payroll.manage"), async (req,res) => {
   try {
     assertCompanyWideAccess(req);

@@ -68,6 +68,13 @@ async function approveSourceMatch({organizationId,batchId,sourceId,employeeId,lo
     throw error("EMPLOYEE_NUMBER_MISMATCH","Employee number differs from the historical file; explain the legacy/alias mapping in the review note.",409);
   const id=crypto.randomUUID();
   await db.$transaction(async tx=>{
+    // Serialize match edits with verification of this batch. A source cannot
+    // be remapped after the batch has been verified by another reviewer.
+    const locked=await tx.$queryRawUnsafe(
+      `SELECT "status" FROM "consolidated_statutory_import_batches" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE`,
+      organizationId,batchId);
+    if(locked[0]?.status!=="PENDING_RECONCILIATION")
+      throw error("BATCH_NOT_EDITABLE","Historical batch is no longer pending reconciliation.",409);
     await tx.$queryRawUnsafe(
       `INSERT INTO "consolidated_statutory_import_matches"
         ("id","organizationId","batchId","sourceId","employeeId","locationId","reviewNote","reviewedByUserId")
@@ -92,6 +99,14 @@ async function verifyHistoricalBatch({organizationId,batchId,actorUserId,prismaC
   if(summary.status!=="PENDING_RECONCILIATION") throw error("BATCH_NOT_PENDING","Historical batch is not pending reconciliation.",409);
   if(!summary.canVerify) throw error("RECONCILIATION_INCOMPLETE","Resolve all employee mappings and critical source differences before verification.",409);
   await db.$transaction(async tx=>{
+    const locked=await tx.$queryRawUnsafe(
+      `SELECT "status" FROM "consolidated_statutory_import_batches" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE`,
+      organizationId,batchId);
+    if(locked[0]?.status!=="PENDING_RECONCILIATION")
+      throw error("BATCH_CONFLICT","Historical batch status changed before verification.",409);
+    // Recheck completeness while holding the same batch lock used by match edits.
+    const latest=await reviewSummary({organizationId,batchId,prismaClient:tx});
+    if(!latest.canVerify) throw error("RECONCILIATION_INCOMPLETE","Historical matches changed before verification.",409);
     const other=await tx.$queryRawUnsafe(
       `SELECT "id" FROM "consolidated_statutory_import_batches"
          WHERE "organizationId"=$1 AND "reportYear"=$2 AND "status"='VERIFIED' AND "id"<>$3
