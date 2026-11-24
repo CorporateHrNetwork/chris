@@ -154,6 +154,18 @@ test("generated Prisma client preserves tenant, branch and instant permission re
   email:essUser.email,password:temporaryEssPassword,organizationSlug:orgA.slug
  })});
  assert.equal(terminatedLogin.status,401);
+ // A suspended organization must immediately lose access on both HRIS and ESS
+ // protected routes, even when users and employees remain active.
+ await prisma.user.update({where:{id:u.id},data:{isActive:true}});
+ await prisma.employee.update({where:{id:employee.id},data:{status:"ACTIVE"}});
+ await prisma.organization.update({where:{id:orgA.id},data:{status:"SUSPENDED"}});
+ assert.equal((await route("/api/auth/me",hrisLoginData.token)).status,403);
+ assert.equal((await route("/api/ess/me",essLoginToken)).status,403);
+ assert.equal((await route("/fictional/payroll/view",token)).status,403);
+ assert.equal((await route("/fictional/ess/authorized",essToken)).status,403);
+ await prisma.organization.update({where:{id:orgA.id},data:{status:"ACTIVE"}});
+ assert.equal((await route("/api/auth/me",hrisLoginData.token)).status,200);
+ assert.equal((await route("/api/ess/me",essLoginToken)).status,200);
  // Disposable GitHub CI database is destroyed with the job. No live data is read.
 });
 test.after(async()=>{await prisma.$disconnect()});
