@@ -5,7 +5,7 @@ const crypto=require("node:crypto");
 const jwt=require("jsonwebtoken");
 process.env.JWT_SECRET="fictional-prisma-test-key";
 const prisma=require("../src/config/prisma");
-const {requireAuth,requirePermission}=require("../src/middleware/authMiddleware");
+const {requireAuth,requireEssAuth,requirePermission}=require("../src/middleware/authMiddleware");
 
 function response(){
  const r={statusCode:200,body:null};
@@ -51,6 +51,21 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  await prisma.user.update({where:{id:u.id},data:{isActive:false}});
  const revoked=await verify(token);
  assert.equal(revoked.next,false);assert.equal(revoked.res.statusCode,401);
+ const employee=await prisma.employee.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,employeeNumber:"TEST-"+id,firstName:"Fictional",lastName:"Employee"}});
+ const essUser=await prisma.user.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,employeeId:employee.id,email:"fictional-ess-"+id+"@example.invalid",passwordHash:"FICTIONAL_ONLY"}});
+ const essToken=jwt.sign({userId:essUser.id,organizationId:orgA.id,accessType:"ESS"},process.env.JWT_SECRET);
+ const essRequest={headers:{authorization:"Bearer "+essToken}};
+ let essNext=false;const essResponse=response();
+ await requireEssAuth(essRequest,essResponse,()=>essNext=true);
+ assert.equal(essNext,true);
+ assert.equal(essRequest.essAuth.employeeId,employee.id);
+ const essAsHris=await verify(essToken);
+ assert.equal(essAsHris.next,false);assert.equal(essAsHris.res.statusCode,401);
+ await prisma.employee.update({where:{id:employee.id},data:{status:"EXITED"}});
+ let essAfter=false;const inactiveResponse=response();
+ await requireEssAuth(essRequest,inactiveResponse,()=>essAfter=true);
+ assert.equal(essAfter,false);assert.equal(inactiveResponse.statusCode,403);
+ assert.equal(inactiveResponse.body.code,"ESS_ACCESS_REVOKED");
  // Disposable GitHub CI database is destroyed with the job. No live data is read.
 });
 test.after(async()=>{await prisma.$disconnect()});
