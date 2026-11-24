@@ -25,7 +25,7 @@ function parseRows(file) {
 function validateReviews({queue,sourceRecords,employeeRows}) {
   const sources=new Map(sourceRecords.map(x=>[x.sourceSheet+":"+x.sourceRow,x]));
   const users=new Map(employeeRows.map(x=>[uniqueKey(x.employeeNo),x]));
-  const visited=new Set(), errors=[],counts={pending:0,verified:0,rejected:0};
+  const visited=new Set(), errors=[],counts={pending:0,verified:0,rejected:0,exitedHistorical:0};
   for(let i=0;i<queue.length;i++){
     const r=queue[i],row=i+2;
     const sourceSheet=clean(r["Source Sheet"]).toUpperCase();
@@ -41,6 +41,14 @@ function validateReviews({queue,sourceRecords,employeeRows}) {
        clean(r["Historical Period"])!==clean(original.period))problem("SOURCE_DETAILS_CHANGED");
     const decision=uniqueKey(r["HR Decision"]);
     if(decision==="PENDING"){counts.pending++;continue;}
+    if(decision==="EXITED_HISTORICAL"){
+      counts.exitedHistorical++;
+      if(clean(r["HR Verified Employee No"]))problem("EXITED_HISTORICAL_MUST_NOT_INVENT_ID");
+      if(clean(r["Evidence/HR Review Notes"]).length<12)problem("EXITED_CONFIRMATION_NOTE_REQUIRED");
+      const branch=clean(r["HR Verified Historical Branch"]);
+      if(branch && !branchName(branch))problem("INVALID_HISTORICAL_BRANCH");
+      continue;
+    }
     if(decision==="REJECTED"){
       counts.rejected++;
       if(clean(r["Evidence/HR Review Notes"]).length<12)problem("REJECTION_EVIDENCE_REQUIRED");
@@ -60,7 +68,7 @@ function validateReviews({queue,sourceRecords,employeeRows}) {
   }
   for(const key of sources.keys())if(!visited.has(key))errors.push({queueRow:null,code:"SOURCE_ROW_MISSING_FROM_QUEUE"});
   return {sourceCount:sources.size,queueCount:queue.length,counts,errorCount:errors.length,errors,
-    readyForVerification:errors.length===0&&counts.pending===0&&counts.rejected===0&&counts.verified===sources.size};
+    readyForVerification:errors.length===0&&counts.pending===0&&counts.rejected===0&&counts.verified+counts.exitedHistorical===sources.size};
 }
 function validateFiles({reviewCsv,employeeExport,historicalWorkbook}) {
   const preview=previewHistoricalWorkbook({buffer:fs.readFileSync(historicalWorkbook),organizationId:"OFFLINE_REVIEW_ONLY",year:2026});

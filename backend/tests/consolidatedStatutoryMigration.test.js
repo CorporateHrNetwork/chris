@@ -55,6 +55,12 @@ test("reviewed-match migration enforces tenant-safe foreign keys and one verifie
     await assert.rejects(()=>db.query(sql,["matchOther","org1","batchOther","hash:row8","e1","l1","Wrong tenant batch","hr"]),/foreign key/i);
     await assert.rejects(()=>db.query(sql,["match3","org1","batch1","hash:row3","e1","l2","Cross tenant branch","hr"]),/foreign key/i);
     await assert.rejects(()=>db.query(sql,["match4","org1","batch1","hash:row1","e1","l1","Duplicated","hr"]),/unique|duplicate/i);
+    await db.exec(`INSERT INTO "consolidated_statutory_import_matches"
+      ("id","organizationId","batchId","sourceId","employeeId","locationId","identityDisposition","reviewNote","reviewedByUserId")
+      VALUES (\'exit1\',\'org1\',\'batch1\',\'historical:exit\',NULL,NULL,\'EXITED_HISTORICAL\',\'Confirmed exited in historical HR review\',\'hr\');`);
+    await assert.rejects(()=>db.exec(`INSERT INTO "consolidated_statutory_import_matches"
+      ("id","organizationId","batchId","sourceId","employeeId","locationId","identityDisposition","reviewNote","reviewedByUserId")
+      VALUES (\'bad1\',\'org1\',\'batch1\',\'historical:bad\',NULL,NULL,\'MATCHED_EMPLOYEE\',\'not verified\',\'hr\');`),/check constraint|violates check/i);
     await db.exec(`UPDATE "consolidated_statutory_import_batches" SET "status"='VERIFIED' WHERE "id"='batch1';`);
     await assert.rejects(()=>db.exec(`UPDATE "consolidated_statutory_import_batches" SET "status"='VERIFIED' WHERE "id"='batch2';`),/unique|duplicate/i);
   } finally {await db.close();}

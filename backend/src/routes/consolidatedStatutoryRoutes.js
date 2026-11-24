@@ -9,7 +9,7 @@ const { readApprovedPayrollRecords } = require("../services/consolidatedStatutor
 const { buildConsolidatedReport } = require("../services/consolidatedStatutoryReportService");
 const { buildStatutoryWorkbook } = require("../services/consolidatedStatutoryWorkbookService");
 const { stageHistoricalImport, listHistoricalImports } = require("../services/consolidatedStatutoryImportBatchService");
-const { reviewSummary, approveSourceMatch, verifyHistoricalBatch, verifiedHistoricalRecords } = require("../services/consolidatedStatutoryReconciliationService");
+const { reviewSummary, approveSourceMatch, recordExitedHistorical, verifyHistoricalBatch, verifiedHistoricalRecords } = require("../services/consolidatedStatutoryReconciliationService");
 const { proposeCandidates } = require("../services/consolidatedStatutoryMatchCandidatesService");
 const { assessHistoricalBatch } = require("../services/consolidatedStatutoryBulkMatchService");
 
@@ -146,6 +146,19 @@ router.post("/historical/batches/:batchId/matches", requirePermission("payroll.m
       sourceId,employeeId,locationId,reviewNote,actorUserId:req.auth.userId});
     res.setHeader("Cache-Control","no-store");
     return res.json({status:"success",data});
+  } catch(error) { return fail(res,error); }
+});
+router.post("/historical/batches/:batchId/exited-historical", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const {sourceId,locationId,reviewNote}=req.body||{};
+    const data=await recordExitedHistorical({
+      organizationId:req.auth.organizationId,batchId:req.params.batchId,sourceId,
+      locationId:locationId||null,reviewNote,actorUserId:req.auth.userId
+    });
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data,
+      note:"Historical exit disposition recorded. No employee number, employee account, or historical branch was invented."});
   } catch(error) { return fail(res,error); }
 });
 router.post("/historical/batches/:batchId/verify", requirePermission("payroll.manage"), async (req,res) => {

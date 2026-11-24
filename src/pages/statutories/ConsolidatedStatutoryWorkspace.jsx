@@ -82,7 +82,7 @@ export default function ConsolidatedStatutoryWorkspace() {
     <section style={{padding:18,background:"#fff",border:"1px solid #d8e1d9",borderRadius:12,marginBottom:16}}>
       <h2 style={{fontSize:18}}>Available report components</h2>
       <p>{SECTIONS.join(" · ")}. Other configured statutory deductions will be identified separately.</p>
-      <p>Excel sheets: Executive Summary, Abuja, Lagos, Port Harcourt, Combined, Employee Annual Summary, PAYE Register, Pension Register, Other Statutories, Gross & Net Salaries, Monthly Reconciliation, Exceptions & Audit Trail. Annual employee summaries require a verified CHRiS employee identity; historical net salary is marked partial where the source does not provide it.</p>
+      <p>Excel sheets: Executive Summary, Abuja, Lagos, Port Harcourt, Combined, Employee Annual Summary, Exited Historical, PAYE Register, Pension Register, Other Statutories, Gross & Net Salaries, Monthly Reconciliation, Exceptions & Audit Trail. Annual employee summaries require a verified CHRiS employee identity; historical net salary is marked partial where the source does not provide it.</p>
     </section>
     {staged && <p role="status">Historical source staged: {staged.batchId} — {staged.status}. No payroll changes performed.</p>}
     {verified && <section style={{marginBottom:16}}><h2 style={{fontSize:18}}>Verified-sources summary</h2><p>Rows: {verified.rows} · Gross salary: {money(verified.totals?.grossSalary)} · Net salary: {money(verified.totals?.netSalary)} · Reconciliation flags: {verified.exceptions?.length||0}</p><small>Only verified historical imports and approved payroll records are included; do not interpret deemed-remitted as payment evidence.</small></section>}

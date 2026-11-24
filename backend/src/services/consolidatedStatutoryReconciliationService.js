@@ -25,7 +25,7 @@ async function batchForReview(db,organizationId,batchId) {
 }
 async function reviewedMatches(db,organizationId,batchId) {
   return db.$queryRawUnsafe(
-    'SELECT "sourceId","employeeId","locationId","reviewNote","reviewedAt" FROM "consolidated_statutory_import_matches" WHERE "organizationId"=$1 AND "batchId"=$2',
+    'SELECT "sourceId","employeeId","locationId","identityDisposition","reviewNote","reviewedAt" FROM "consolidated_statutory_import_matches" WHERE "organizationId"=$1 AND "batchId"=$2',
     organizationId,batchId);
 }
 async function reviewSummary({organizationId,batchId,prismaClient}) {
@@ -81,6 +81,7 @@ async function approveSourceMatch({organizationId,batchId,sourceId,employeeId,lo
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         ON CONFLICT ("organizationId","batchId","sourceId")
         DO UPDATE SET "employeeId"=EXCLUDED."employeeId","locationId"=EXCLUDED."locationId",
+                      "identityDisposition"='MATCHED_EMPLOYEE',
                       "reviewNote"=EXCLUDED."reviewNote","reviewedByUserId"=EXCLUDED."reviewedByUserId",
                       "reviewedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP`,
       id,organizationId,batchId,sourceId,employee.id,location.id,note,actorUserId);
@@ -91,6 +92,50 @@ async function approveSourceMatch({organizationId,batchId,sourceId,employeeId,lo
       reason:"Manual historical employee identity and branch verification"}});
   });
   return {sourceId,employeeId:employee.id,employeeNumber:employee.employeeNumber,branch,status:"REVIEWED"};
+}
+async function recordExitedHistorical({organizationId,batchId,sourceId,locationId=null,reviewNote,actorUserId,prismaClient}) {
+  const db=prismaClient||prisma();
+  const note=String(reviewNote||"").trim();
+  if(!organizationId||!actorUserId||!batchId||!sourceId||note.length<12)
+    throw error("EXITED_EVIDENCE_REQUIRED","Record an HR evidence note of at least 12 characters for the exited historical employee.");
+  const batch=await batchForReview(db,organizationId,batchId);
+  if(batch.status!=="PENDING_RECONCILIATION") throw error("BATCH_NOT_EDITABLE","Historical batch is no longer editable.",409);
+  const sourceRows=Array.isArray(batch.payload)?batch.payload:JSON.parse(batch.payload||"[]");
+  const source=sourceRows.find(x=>x.sourceId===sourceId);
+  if(!source)throw error("SOURCE_ROW_NOT_FOUND","Source transaction does not belong to this historical batch.",404);
+  let branch=null;
+  if(locationId){
+    const location=await db.organizationLocation.findFirst({where:{organizationId,id:locationId},
+      select:{id:true,name:true,code:true}});
+    if(!location) throw error("INVALID_HISTORICAL_BRANCH","Branch does not belong to this organization.",403);
+    branch=branchName(location.name)||branchName(location.code);
+    if(!branch)throw error("UNSUPPORTED_BRANCH","Only Abuja, Lagos and Port Harcourt are supported.",400);
+  }
+  const id=crypto.randomUUID();
+  await db.$transaction(async tx=>{
+    const locked=await tx.$queryRawUnsafe(
+      `SELECT "status" FROM "consolidated_statutory_import_batches" WHERE "organizationId"=$1 AND "id"=$2 FOR UPDATE`,
+      organizationId,batchId);
+    if(locked[0]?.status!=="PENDING_RECONCILIATION")
+      throw error("BATCH_NOT_EDITABLE","Historical batch was verified while it was being reviewed.",409);
+    await tx.$queryRawUnsafe(
+      `INSERT INTO "consolidated_statutory_import_matches"
+       ("id","organizationId","batchId","sourceId","employeeId","locationId","identityDisposition","reviewNote","reviewedByUserId")
+       VALUES ($1,$2,$3,$4,NULL,$5,'EXITED_HISTORICAL',$6,$7)
+       ON CONFLICT ("organizationId","batchId","sourceId")
+       DO UPDATE SET "employeeId"=NULL,"locationId"=EXCLUDED."locationId",
+         "identityDisposition"='EXITED_HISTORICAL',"reviewNote"=EXCLUDED."reviewNote",
+         "reviewedByUserId"=EXCLUDED."reviewedByUserId",
+         "reviewedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP`,
+      id,organizationId,batchId,sourceId,locationId||null,note,actorUserId);
+    await tx.organizationAudit.create({data:{organizationId,actorUserId,
+      entityType:"ConsolidatedStatutoryImportMatch",entityId:sourceId,
+      action:"EXITED_HISTORICAL_SOURCE_REVIEWED",
+      newValue:{batchId,sourceId,identityDisposition:"EXITED_HISTORICAL",
+        employeeId:null,employeeNo:null,branch,reviewNote:note},
+      reason:"HR-confirmed exited historical employee; no employee number invented"}});
+  });
+  return {sourceId,status:"EXITED_HISTORICAL",employeeId:null,employeeNo:null,branch};
 }
 async function verifyHistoricalBatch({organizationId,batchId,actorUserId,prismaClient}) {
   const db=prismaClient||prisma();
@@ -133,18 +178,20 @@ async function verifiedHistoricalRecords({organizationId,year,prismaClient}) {
   const records=[];
   for(const batch of batches) {
     const matches=await db.$queryRawUnsafe(
-      `SELECT m."sourceId",m."employeeId",l."name" AS "locationName",l."code" AS "locationCode"
+      `SELECT m."sourceId",m."employeeId",m."identityDisposition",l."name" AS "locationName",l."code" AS "locationCode"
          FROM "consolidated_statutory_import_matches" m
-         JOIN "organization_locations" l ON l."id"=m."locationId" AND l."organizationId"=m."organizationId"
+         LEFT JOIN "organization_locations" l ON l."id"=m."locationId" AND l."organizationId"=m."organizationId"
         WHERE m."organizationId"=$1 AND m."batchId"=$2`, organizationId,batch.id);
     const bySource=new Map(matches.map(m=>[m.sourceId,m]));
     const payload=Array.isArray(batch.payload)?batch.payload:JSON.parse(batch.payload||"[]");
     for(const record of payload) {
       const m=bySource.get(record.sourceId);
       if(!m) throw error("VERIFIED_BATCH_INCOMPLETE","Verified historical batch has unresolved source records.",409);
-      records.push({...record,employeeId:m.employeeId,branch:branchName(m.locationName)||branchName(m.locationCode),historicalReviewStatus:"VERIFIED"});
+      records.push({...record,employeeId:m.employeeId||null,branch:branchName(m.locationName)||branchName(m.locationCode)||null,
+        historicalReviewStatus:"VERIFIED",employmentStatus:m.identityDisposition==="EXITED_HISTORICAL"?"EXITED":null,
+        identityDisposition:m.identityDisposition||"MATCHED_EMPLOYEE"});
     }
   }
   return records;
 }
-module.exports={reviewSummary,approveSourceMatch,verifyHistoricalBatch,verifiedHistoricalRecords,branchName};
+module.exports={reviewSummary,approveSourceMatch,recordExitedHistorical,verifyHistoricalBatch,verifiedHistoricalRecords,branchName};

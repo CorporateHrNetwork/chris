@@ -2,7 +2,7 @@
 const XLSX = require("xlsx");
 const { BRANCHES, COMPONENTS } = require("./consolidatedStatutoryReportService");
 
-const SHEETS = ["Executive Summary", "Abuja", "Lagos", "Port Harcourt", "Combined", "Employee Annual Summary", "PAYE Register", "Pension Register", "Other Statutories", "Gross & Net Salaries", "Monthly Reconciliation", "Exceptions & Audit Trail"];
+const SHEETS = ["Executive Summary", "Abuja", "Lagos", "Port Harcourt", "Combined", "Employee Annual Summary", "Exited Historical", "PAYE Register", "Pension Register", "Other Statutories", "Gross & Net Salaries", "Monthly Reconciliation", "Exceptions & Audit Trail"];
 function worksheet(rows) {
   // Keep empty worksheets structurally valid and clear about missing data.
   return XLSX.utils.json_to_sheet(rows.length ? rows : [{ note: "No matching records" }]);
@@ -58,6 +58,14 @@ function buildStatutoryWorkbook(report) {
   for (const branch of BRANCHES) add(branch, report.branches[branch]);
   add("Combined", report.rows);
   add("Employee Annual Summary", annualEmployeeSummary(report));
+  add("Exited Historical", report.rows.filter(r=>r.identityDisposition==="EXITED_HISTORICAL").map(r=>({
+    employeeName:r.employeeName,employeeNo:r.employeeNo||"",employmentStatus:"EXITED",
+    historicalBranch:r.branch||"UNVERIFIED — COMBINED ONLY",period:r.period,
+    grossSalary:r.grossSalary,netSalary:r.netSalary,paye:r.paye,
+    pensionEmployee:r.pensionEmployee,pensionEmployer:r.pensionEmployer,
+    pensionTotal:r.pensionTotal,sourceId:r.sourceId,
+    note:"Historical exited employee; no current CHRiS employee identity required"
+  })));
   add("PAYE Register", report.statutory.map(({ employeeNo,employeeName,branch,period,paye,taxPayerNumber,reportingRemittanceStatus,sourceId }) => ({ employeeNo,employeeName,branch,period,paye,taxPayerNumber,reportingRemittanceStatus,sourceId })));
   add("Pension Register", report.statutory.map(({ employeeNo,employeeName,branch,period,pensionEmployee,pensionEmployer,pensionTotal,pensionNumber,pensionProvider,reportingRemittanceStatus,sourceId }) => ({ employeeNo,employeeName,branch,period,pensionEmployee,pensionEmployer,pensionTotal,pensionNumber,pensionProvider,reportingRemittanceStatus,sourceId })));
   add("Other Statutories", report.statutory.map(({ employeeNo,employeeName,branch,period,nhfEmployee,nsitfEmployer,itfEmployer,otherEmployerContributions,sourceId }) => ({ employeeNo,employeeName,branch,period,nhfEmployee,nsitfEmployer,itfEmployer,otherEmployerContributions,sourceId })));

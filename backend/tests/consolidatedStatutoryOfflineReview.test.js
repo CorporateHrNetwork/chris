@@ -48,3 +48,13 @@ test("missing rows, duplicate rows, source tampering and invalid decisions fail"
  assert.ok(r.errors.some(x=>x.code==="SOURCE_ROW_MISSING_FROM_QUEUE"));
  assert.equal(r.readyForVerification,false);
 });
+test("exited historical record needs no employee ID and may retain unknown branch",()=>{
+ const exited={...second,"HR Verified Employee No":"","HR Verified Historical Branch":"",
+  "HR Decision":"EXITED_HISTORICAL",
+  "Evidence/HR Review Notes":"HR confirms exited employee from historical statutory workbook"};
+ const r=check([first,exited]);
+ assert.equal(r.counts.exitedHistorical,1);
+ assert.equal(r.counts.verified,1);
+ assert.equal(r.errorCount,0);
+ assert.equal(r.readyForVerification,true);
+});

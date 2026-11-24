@@ -29,6 +29,8 @@ function prepare(row, year) {
   const r = {
     organizationId: String(row.organizationId || ""),
     employeeId: row.employeeId || null,
+    identityDisposition: row.identityDisposition || (row.employeeId ? "MATCHED_EMPLOYEE" : "UNRESOLVED"),
+    employmentStatus: row.employmentStatus || null,
     employeeNo: String(row.employeeNo || "").trim(),
     employeeName: String(row.employeeName || "").trim(),
     branch: branchOf(row.branch),
@@ -71,7 +73,8 @@ function buildConsolidatedReport({ organizationId, year, records }) {
   const filtered = (records || []).filter(x => String(x.organizationId) === String(organizationId)).map(x => prepare(x, year)).filter(Boolean);
   const { rows, exceptions } = deduplicate(filtered);
   for (const row of rows) {
-    if (!row.employeeId) exceptions.push({ code: "UNMATCHED_EMPLOYEE", sourceId: row.sourceId, employeeNo: row.employeeNo });
+    if (!row.employeeId && row.identityDisposition !== "EXITED_HISTORICAL") exceptions.push({ code: "UNMATCHED_EMPLOYEE", sourceId: row.sourceId, employeeNo: row.employeeNo });
+    if (row.identityDisposition === "EXITED_HISTORICAL") exceptions.push({ code: "EXITED_HISTORICAL_UNLINKED", sourceId: row.sourceId, employeeNo: row.employeeNo });
     if (!row.branch) exceptions.push({ code: "BRANCH_UNVERIFIED", sourceId: row.sourceId, employeeNo: row.employeeNo });
     if (row.sourceType === "HISTORICAL_IMPORT" && (row.grossSalary === null || row.netSalary === null)) {
       exceptions.push({ code: "HISTORICAL_SALARY_MISSING", sourceId: row.sourceId, employeeNo: row.employeeNo });
@@ -81,6 +84,7 @@ function buildConsolidatedReport({ organizationId, year, records }) {
   const unresolved = rows.filter(x => !x.branch);
   const statutory = rows.map(x => ({
     organizationId: x.organizationId, employeeNo: x.employeeNo, employeeName: x.employeeName,
+    identityDisposition:x.identityDisposition,employmentStatus:x.employmentStatus,
     branch: x.branch, year: x.year, period: x.period, paye: x.paye,
     taxPayerNumber: x.taxPayerNumber, pensionNumber: x.pensionNumber, pensionProvider: x.pensionProvider,
     pensionEmployee: x.pensionEmployee, pensionEmployer: x.pensionEmployer, pensionTotal: x.pensionTotal,

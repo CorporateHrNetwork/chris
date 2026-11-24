@@ -15,6 +15,7 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
   const [assessment,setAssessment]=useState(null);
   const [assessmentCategory,setAssessmentCategory]=useState("ALL");
   const [employeeId,setEmployeeId]=useState("");
+  const [exitedHistorical,setExitedHistorical]=useState(false);
   const [locationId,setLocationId]=useState("");
   const [note,setNote]=useState("");
   const [busy,setBusy]=useState("");
@@ -76,6 +77,21 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
       setAssessment(null);
     }catch(e){setError(e.message);}finally{setBusy("");}
   }
+  async function recordExited(){
+    if(!sourceId||note.trim().length<12){
+      setError("Select a source row and supply an HR exit-status evidence note of at least 12 characters.");return;
+    }
+    setBusy("exit");setError("");setMessage("");
+    try{
+      await apiRequest(`${base}/historical/batches/${encodeURIComponent(batchId)}/exited-historical`,{
+        method:"POST",body:{sourceId,locationId:locationId||null,reviewNote:note}
+      });
+      setMessage("Recorded as an exited historical employee. No employee number was assigned.");
+      setSourceId("");setNote("");setLocationId("");setEmployeeId("");setSearch("");setExitedHistorical(false);
+      setAssessment(null);
+      await load();
+    }catch(e){setError(e.message);}finally{setBusy("");}
+  }
   async function verify(){
     setBusy("verify");setError("");setMessage("");
     try{
@@ -128,18 +144,23 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
         </label>
         <button type="button" disabled={!!busy||!sourceId} onClick={suggestCandidates}>Suggest exact identity matches (review required)</button>
         {suggestions && <section aria-label="Read-only match suggestions"><p>{suggestions.candidates.length} exact candidate(s) found. {suggestions.ambiguous?"Identity is ambiguous or no exact match exists.":"A unique exact candidate is available for HR review."} No candidate is automatically approved.</p><ul>{suggestions.candidates.map(x=><li key={x.employeeId}>{x.employeeNo} — {x.employeeName} ({x.matchReason.replaceAll("_"," ").toLowerCase()})</li>)}</ul></section>}
-        <label style={{display:"grid",gap:6,marginBottom:12}}>Search CHRiS employee
-          <input style={field} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Type employee name or ID" />
+        <label style={{display:"flex",gap:8,marginBottom:12}}>
+          <input type="checkbox" checked={exitedHistorical} onChange={e=>setExitedHistorical(e.target.checked)} />
+          Exited historical employee — no CHRiS employee number available
         </label>
-        <label style={{display:"grid",gap:6,marginBottom:12}}>Verified employee
+        {exitedHistorical && <p>For exited historical staff, the source name is retained. An employee number is not required. Leave the historical branch blank when there is no reliable evidence; the record stays in the combined register and is not assigned to a branch.</p>}
+        {!exitedHistorical && <label style={{display:"grid",gap:6,marginBottom:12}}>Search CHRiS employee
+          <input style={field} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Type employee name or ID" />
+        </label>}
+        {!exitedHistorical && <label style={{display:"grid",gap:6,marginBottom:12}}>Verified employee
           <select style={field} value={employeeId} onChange={e=>setEmployeeId(e.target.value)}>
             <option value="">Select matching employee</option>
             {options.employees.map(x=><option key={x.id} value={x.id}>{x.employeeNumber} · {x.name}</option>)}
           </select>
-        </label>
+        </label>}
         <label style={{display:"grid",gap:6,marginBottom:12}}>Verified historical branch
           <select style={field} value={locationId} onChange={e=>setLocationId(e.target.value)}>
-            <option value="">Select branch for historical period</option>
+            <option value="">{exitedHistorical ? "Historical branch not established (Combined only)" : "Select branch for historical period"}</option>
             {options.locations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
         </label>
@@ -147,7 +168,7 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
           <textarea rows={3} style={field} value={note} onChange={e=>setNote(e.target.value)}
             placeholder="Explain how employee identity and the historical branch were verified; mention legacy employee ID if different" />
         </label>
-        <button type="button" disabled={!!busy} onClick={submit}>Save reviewed match</button>
+        <button type="button" disabled={!!busy} onClick={exitedHistorical?recordExited:submit}>{exitedHistorical?"Record exited historical employee":"Save reviewed match"}</button>
       </>}
       {review.status==="PENDING_RECONCILIATION" && <>
         <p>{review.canVerify ? "All rows are matched and no blocking source discrepancies remain." :

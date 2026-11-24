@@ -36,7 +36,7 @@ test("unverified branch kept in Combined but not falsely assigned", () => {
   assert.equal(r.rows.length, 2);
   assert.ok(r.exceptions.some(x => x.code === "BRANCH_UNVERIFIED"));
 });
-test("XLSX includes all 12 separate sheets without monthly invention", () => {
+test("XLSX includes all 13 separate sheets without monthly invention", () => {
   const r = buildConsolidatedReport({ organizationId:"zll", year:2026, records:[approved,historical] });
   const book = buildStatutoryWorkbook(r);
   assert.deepEqual(book.SheetNames,SHEETS);
@@ -77,4 +77,26 @@ test("employee annual summary combines separate verified pension/PAYE sources by
   assert.match(result[0].netSalaryCoverage,/PARTIAL/);
   assert.match(result[0].periods,/9 Months/);
   assert.match(result[0].periods,/2026-10/);
+});
+test("exited historical employee without CHRiS ID stays in company totals and unassigned branch",()=>{
+  const source={organizationId:"zll",year:2026,sourceType:"HISTORICAL_IMPORT",
+    sourceId:"historical:STAFF PENSION:77",employeeId:null,employeeNo:"",
+    employeeName:"Historical Exited Employee",period:"9 Months",
+    identityDisposition:"EXITED_HISTORICAL",employmentStatus:"EXITED",branch:null,
+    pensionEmployee:8000,pensionEmployer:10000,historicalReviewStatus:"VERIFIED"};
+  const report=buildConsolidatedReport({organizationId:"zll",year:2026,records:[source]});
+  assert.equal(report.rows.length,1);
+  assert.equal(report.rows[0].employeeId,null);
+  assert.equal(report.rows[0].employeeNo,"");
+  assert.equal(report.rows[0].employmentStatus,"EXITED");
+  assert.equal(report.totals.pensionTotal,18000);
+  assert.equal(report.unresolved.length,1);
+  assert.equal(report.branches.Abuja.length,0);
+  const wb=buildStatutoryWorkbook(report);
+  assert.ok(wb.SheetNames.includes("Exited Historical"));
+  const exits=XLSX.utils.sheet_to_json(wb.Sheets["Exited Historical"]);
+  assert.equal(exits.length,1);
+  assert.equal(exits[0].historicalBranch,"UNVERIFIED — COMBINED ONLY");
+  assert.ok(report.exceptions.some(e=>e.code==="EXITED_HISTORICAL_UNLINKED"));
+  assert.ok(!report.exceptions.some(e=>e.code==="UNMATCHED_EMPLOYEE"));
 });
