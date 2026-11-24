@@ -103,3 +103,16 @@ test("ESS token cannot authenticate into HRIS",async()=>{
  assert.equal(result.response.statusCode,401);
  assert.equal(api.calls.length,0);
 });
+
+test("organization-wide access loads only the location fields exposed in request context",async()=>{
+ const api=middleware({user:user({locationScope:"ALL_LOCATIONS",userLocations:[]}),locations:[loc]});
+ const req={headers:{authorization:"Bearer sample"}};const response=res();let accepted=false;
+ await api.requireAuth(req,response,()=>{accepted=true});
+ assert.equal(accepted,true);
+ assert.equal(req.auth.consolidatedOrganization,true);
+ assert.deepEqual(Array.from(req.auth.availableLocations.map(x=>x.id)),["l1"]);
+ const locationsCall=api.calls.find(x=>x.model==="locations");
+ assert.ok(locationsCall);
+ assert.deepEqual(Object.keys(locationsCall.query.select).sort(),["city","code","id","isActive","name","state","type"].sort());
+ assert.equal(locationsCall.query.where.organizationId,"org1");
+});
