@@ -54,10 +54,12 @@ function createHarness() {
 
   const fake = {
     user: {
-      findFirst: async ({ where, include }) => {
+      findFirst: async ({ where, include, select }) => {
         const user = users[where.id];
         if (!user || user.organizationId !== where.organizationId || !user.isActive) return null;
-        return include ? user : { id: user.id };
+        // Authentication now uses a narrow Prisma select projection. Preserve
+        // the mocked related records when the selected fields request them.
+        return (include || select?.organization) ? user : { id: user.id };
       },
     },
     organizationLocation: { findMany: async () => [] },
