@@ -95,6 +95,16 @@ async function requireAuth(req, res, next) {
     if (user.locationScope === "ALL_LOCATIONS") {
       availableLocations = await prisma.organizationLocation.findMany({
         where: { organizationId: user.organizationId, isActive: true },
+        // The request context only needs these location properties.
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          type: true,
+          city: true,
+          state: true,
+          isActive: true,
+        },
         orderBy: [{ type: "asc" }, { name: "asc" }],
       });
     }
