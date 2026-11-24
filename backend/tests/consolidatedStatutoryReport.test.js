@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const XLSX = require("xlsx");
 const { buildConsolidatedReport } = require("../src/services/consolidatedStatutoryReportService");
-const { buildStatutoryWorkbook, SHEETS } = require("../src/services/consolidatedStatutoryWorkbookService");
+const { buildStatutoryWorkbook, annualEmployeeSummary, SHEETS } = require("../src/services/consolidatedStatutoryWorkbookService");
 
 const approved = { organizationId:"zll", employeeId:"e1", employeeNo:"ZLL000001", employeeName:"Employee One", branch:"Abuja", year:2026,
   period:"2026-10", sourceType:"APPROVED_PAYROLL", sourceId:"run-1:line-1", payrollStatus:"APPROVED",
@@ -36,7 +36,7 @@ test("unverified branch kept in Combined but not falsely assigned", () => {
   assert.equal(r.rows.length, 2);
   assert.ok(r.exceptions.some(x => x.code === "BRANCH_UNVERIFIED"));
 });
-test("XLSX includes all 11 separate sheets without monthly invention", () => {
+test("XLSX includes all 12 separate sheets without monthly invention", () => {
   const r = buildConsolidatedReport({ organizationId:"zll", year:2026, records:[approved,historical] });
   const book = buildStatutoryWorkbook(r);
   assert.deepEqual(book.SheetNames,SHEETS);
@@ -55,4 +55,26 @@ test("historical sub-cent values retain source precision until annual totals are
   ]});
   assert.equal(r.totals.paye,0.01);
   assert.equal(r.totals.pensionEmployee,200.01);
+});
+test("employee annual summary combines separate verified pension/PAYE sources by employee ID only", () => {
+  const historic={organizationId:"zll",year:2026,sourceType:"HISTORICAL_IMPORT",
+    employeeId:"e1",employeeName:"Employee One",employeeNo:"ZLL000001",branch:"Abuja",period:"9 Months"};
+  const records=[
+    {...historic,sourceId:"payefile:8",grossSalary:900000,paye:45000},
+    {...historic,sourceId:"pensionfile:8",pensionEmployee:72000,pensionEmployer:90000},
+    {...approved,sourceId:"oct:line1",grossSalary:100000,netSalary:82000,paye:6500,pensionEmployee:8000,pensionEmployer:10000},
+    {...historic,sourceId:"another:8",employeeId:null,employeeNo:"LEGACYUNKNOWN",employeeName:"Duplicate Name",grossSalary:999999},
+  ];
+  const report=buildConsolidatedReport({organizationId:"zll",year:2026,records});
+  const result=annualEmployeeSummary(report);
+  assert.equal(result.length,1);
+  assert.equal(result[0].employeeId,"e1");
+  assert.equal(result[0].grossSalary,1000000);
+  assert.equal(result[0].paye,51500);
+  assert.equal(result[0].pensionEmployee,80000);
+  assert.equal(result[0].pensionEmployer,100000);
+  assert.equal(result[0].netSalary,82000);
+  assert.match(result[0].netSalaryCoverage,/PARTIAL/);
+  assert.match(result[0].periods,/9 Months/);
+  assert.match(result[0].periods,/2026-10/);
 });
