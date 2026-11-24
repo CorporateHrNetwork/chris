@@ -4,6 +4,9 @@ const assert=require("node:assert/strict");
 const crypto=require("node:crypto");
 const jwt=require("jsonwebtoken");
 const express=require("express");
+const bcrypt=require("bcryptjs");
+const authRoutes=require("../src/routes/authRoutes");
+const essRoutes=require("../src/routes/essRoutes");
 process.env.JWT_SECRET="fictional-prisma-test-key";
 const prisma=require("../src/config/prisma");
 const {requireAuth,requireEssAuth,requirePermission}=require("../src/middleware/authMiddleware");
@@ -37,6 +40,9 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  // Exercise a real Express protected route using the same Prisma authorization
  // middleware as CHRiS. No production endpoint or employee data is involved.
  const app=express();
+ app.use(express.json());
+ app.use("/api/auth",authRoutes);
+ app.use("/api/ess",essRoutes);
  app.get("/fictional/hr/authorized",requireAuth,requirePermission(permission.key),(req,res)=>
   res.status(200).json({scope:req.auth.organizationId,location:req.auth.activeLocationId}));
  app.get("/fictional/ess/authorized",requireEssAuth,(req,res)=>
@@ -62,6 +68,24 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  const postProtected=async path=>fetch(root+path,{method:"POST",headers:{authorization:"Bearer "+token}});
  assert.equal((await postProtected("/fictional/payroll/manage")).status,403);
  assert.equal((await postProtected("/fictional/tsp/manage")).status,403);
+ // Use the real CHRiS login and /me endpoints against fictional database users.
+ const temporaryHrisPassword="Fictional-HRIS-Login-Only-928!";
+ await prisma.user.update({where:{id:u.id},data:{passwordHash:await bcrypt.hash(temporaryHrisPassword,10)}});
+ const hrisLogin=await fetch(root+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+  email:u.email,password:temporaryHrisPassword,organizationSlug:orgA.slug
+ })});
+ assert.equal(hrisLogin.status,200);
+ const hrisLoginData=(await hrisLogin.json()).data;
+ assert.ok(hrisLoginData.token);
+ const hrisMe=await route("/api/auth/me",hrisLoginData.token);
+ assert.equal(hrisMe.status,200);
+ const hrisMeData=(await hrisMe.json()).data;
+ assert.equal(hrisMeData.userId,u.id);
+ assert.equal(hrisMeData.organization.slug,orgA.slug);
+ const incorrectTenantLogin=await fetch(root+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+  email:u.email,password:temporaryHrisPassword,organizationSlug:orgB.slug
+ })});
+ assert.equal(incorrectTenantLogin.status,401);
  const httpWrongTenant=await route("/fictional/hr/authorized",
   jwt.sign({userId:u.id,organizationId:orgB.id},process.env.JWT_SECRET));
  assert.equal(httpWrongTenant.status,401);
@@ -90,6 +114,19 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  assert.equal(revoked.next,false);assert.equal(revoked.res.statusCode,401);
  const employee=await prisma.employee.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,employeeNumber:"TEST-"+id,firstName:"Fictional",lastName:"Employee"}});
  const essUser=await prisma.user.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,employeeId:employee.id,email:"fictional-ess-"+id+"@example.invalid",passwordHash:"FICTIONAL_ONLY"}});
+ const temporaryEssPassword="Fictional-ESS-Login-Only-929!";
+ await prisma.user.update({where:{id:essUser.id},data:{passwordHash:await bcrypt.hash(temporaryEssPassword,10)}});
+ const essLogin=await fetch(root+"/api/ess/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+  email:essUser.email,password:temporaryEssPassword,organizationSlug:orgA.slug
+ })});
+ assert.equal(essLogin.status,200);
+ const essLoginToken=(await essLogin.json()).data.token;
+ const essProfile=await route("/api/ess/me",essLoginToken);
+ assert.equal(essProfile.status,200);
+ const essProfileData=(await essProfile.json()).data;
+ assert.equal(essProfileData.employee.id,employee.id);
+ assert.equal(essProfileData.organization.slug,orgA.slug);
+ assert.equal((await route("/api/auth/me",essLoginToken)).status,401);
  const essToken=jwt.sign({userId:essUser.id,organizationId:orgA.id,accessType:"ESS"},process.env.JWT_SECRET);
  const essRequest={headers:{authorization:"Bearer "+essToken}};
  let essNext=false;const essResponse=response();
@@ -112,6 +149,11 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  assert.equal(inactiveResponse.body.code,"ESS_ACCESS_REVOKED");
  const terminatedHttp=await route("/fictional/ess/authorized",essToken);
  assert.equal(terminatedHttp.status,403);
+ assert.equal((await route("/api/ess/me",essLoginToken)).status,403);
+ const terminatedLogin=await fetch(root+"/api/ess/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({
+  email:essUser.email,password:temporaryEssPassword,organizationSlug:orgA.slug
+ })});
+ assert.equal(terminatedLogin.status,401);
  // Disposable GitHub CI database is destroyed with the job. No live data is read.
 });
 test.after(async()=>{await prisma.$disconnect()});
