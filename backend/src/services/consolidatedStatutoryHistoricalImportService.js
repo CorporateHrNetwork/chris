@@ -38,13 +38,21 @@ function previewHistoricalWorkbook({ buffer, organizationId, year = 2026, employ
     const offset = findHeader(rows, HEADERS[kind]);
     if (offset < 0) { exceptions.push({ code: "MISSING_HEADERS", sheet }); continue; }
     let accepted = 0;
+    let employeeGrossSum = 0, employeePayeSum = 0;
+    const sourceTotals = [];
+    let summaryStarted = false;
     for (let i=offset+1; i<rows.length; i++) {
       const row = rows[i];
       if (!row.some(c => c !== null && c !== "")) continue;
       const rowNumber = i+1;
       const name = String(value(row,0) || "").trim();
       // PAYE exports contain a trailing 'Totals' summary row. This is NOT an employee.
-      if (/^totals?\s*:?$/i.test(name)) continue;
+      if (/^totals?\s*:?$/i.test(name)) summaryStarted = true;
+      if (summaryStarted && kind === "paye") {
+        const label = String(value(row,8) || "").trim();
+        if (label) sourceTotals.push({ period:label, basicSalary:amount(value(row,2)), housingAllowance:amount(value(row,3)), transportAllowance:amount(value(row,4)), grossSalary:amount(value(row,5)), paye:amount(value(row,6)) });
+        continue;
+      }
       const period = String(value(row,kind==="paye" ? 8 : 6) || "").trim();
       if (!name || !period) { exceptions.push({ code:"INCOMPLETE_SOURCE_ROW", sheet, rowNumber }); continue; }
       const sourceId = workbookHash+":"+sheet+":"+rowNumber;
@@ -76,9 +84,22 @@ function previewHistoricalWorkbook({ buffer, organizationId, year = 2026, employ
           exceptions.push({ code:"PENSION_TOTAL_MISMATCH", sheet, rowNumber, statedTotal, componentTotal:components });
         }
       }
+      if (kind === "paye") {
+        employeeGrossSum += record.grossSalary || 0;
+        employeePayeSum += record.paye || 0;
+      }
       records.push(record); accepted++;
     }
-    diagnostics.push({ sheet, accepted, headerRow: offset+1 });
+    if (kind === "paye" && sourceTotals.length) {
+      const sourceGrossSum = sourceTotals.reduce((s,r)=>s+(r.grossSalary||0),0);
+      const sourcePayeSum = sourceTotals.reduce((s,r)=>s+(r.paye||0),0);
+      const grossDelta = Math.round((employeeGrossSum-sourceGrossSum)*100)/100;
+      const payeDelta = Math.round((employeePayeSum-sourcePayeSum)*100)/100;
+      if (Math.abs(grossDelta)>0.02 || Math.abs(payeDelta)>0.02)
+        exceptions.push({code:"PAYE_SOURCE_TOTAL_MISMATCH",sheet,grossDelta,payeDelta});
+      diagnostics.push({sheet,accepted,headerRow:offset+1,sourceTotals,
+        sourceReconciliation:{employeeGrossSum,sourceGrossSum,employeePayeSum,sourcePayeSum,grossDelta,payeDelta}});
+    } else diagnostics.push({ sheet, accepted, headerRow: offset+1, sourceTotals });
   }
   return { workbookHash, organizationId: String(organizationId), year, records, exceptions, diagnostics, isPreview:true };
 }

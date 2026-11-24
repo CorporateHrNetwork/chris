@@ -9,19 +9,27 @@ export default function ConsolidatedStatutoryWorkspace() {
   const [workbook,setWorkbook] = useState(null);
   const [summary,setSummary] = useState(null);
   const [historical,setHistorical] = useState(null);
+  const [staged,setStaged] = useState(null);
+  const [batches,setBatches] = useState([]);
   const [error,setError] = useState("");
   const [busy,setBusy] = useState("");
   const base = "/api/reports/consolidated-statutory";
   async function action(kind) {
     setError(""); setBusy(kind);
     try {
-      if (kind==="payroll") {
+      if (kind==="batches") {
+        const result=await apiRequest(`${base}/historical/batches?year=${year}`);
+        setBatches(result.data||[]);
+      } else if (kind==="payroll") {
         const result=await apiRequest(`${base}/approved-preview?year=${year}`);
         setSummary(result.data);
       } else {
         if (!workbook) throw new Error("Choose the January–September historical workbook first.");
         const form = new FormData(); form.append("workbook",workbook);
-        if(kind==="historical") {
+        if(kind==="stage") {
+          const result=await apiRequest(`${base}/historical/stage?year=${year}`,{method:"POST",body:form});
+          setStaged(result.data);
+        } else if(kind==="historical") {
           const result=await apiRequest(`${base}/historical/preview?year=${year}`,{method:"POST",body:form});
           setHistorical(result.data);
         } else {
@@ -46,6 +54,8 @@ export default function ConsolidatedStatutoryWorkspace() {
       <label style={{display:"grid",gap:6}}>Historical Excel file <input type="file" accept=".xlsx" onChange={e=>setWorkbook(e.target.files?.[0]||null)} /></label>
       <button type="button" disabled={!!busy} onClick={()=>action("payroll")}>Review approved payroll</button>
       <button type="button" disabled={!!busy || !workbook} onClick={()=>action("historical")}>Preview historical import</button>
+      <button type="button" disabled={!!busy || !workbook || !historical} onClick={()=>action("stage")}>Stage historical source for reconciliation</button>
+      <button type="button" disabled={!!busy} onClick={()=>action("batches")}>View staged source batches</button>
       <button type="button" disabled={!!busy || !workbook} onClick={()=>action("export")}>Export unreconciled Excel preview</button>
     </section>
     {error && <p role="alert" style={{color:"#9b2e2e"}}>{error}</p>}
@@ -63,10 +73,12 @@ export default function ConsolidatedStatutoryWorkspace() {
       <p>{SECTIONS.join(" · ")}. Other configured statutory deductions will be identified separately.</p>
       <p>Excel sheets: Executive Summary, Abuja, Lagos, Port Harcourt, Combined, PAYE Register, Pension Register, Other Statutories, Gross & Net Salaries, Monthly Reconciliation, Exceptions & Audit Trail.</p>
     </section>
+    {staged && <p role="status">Historical source staged: {staged.batchId} — {staged.status}. No payroll changes performed.</p>}
+    {batches.length>0 && <section><h2 style={{fontSize:18}}>Staged historical sources</h2><table><thead><tr><th>File</th><th>Year</th><th>Rows</th><th>Status</th></tr></thead><tbody>{batches.map(x=><tr key={x.id}><td>{x.originalFilename}</td><td>{x.reportYear}</td><td>{x.rowCount}</td><td>{x.status}</td></tr>)}</tbody></table></section>}
     {historical && <section style={{padding:18,border:"1px solid #d8e1d9",borderRadius:12}}>
       <h2 style={{fontSize:18}}>Historical file validation</h2>
       <p>Imported rows in preview: <strong>{historical.importedRows}</strong> · Exceptions: <strong>{historical.exceptions.length}</strong></p>
-      <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th align="left">Sheet</th><th align="left">Rows accepted</th></tr></thead><tbody>{historical.diagnostics.map(x=><tr key={x.sheet}><td>{x.sheet}</td><td>{x.accepted}</td></tr>)}</tbody></table>
+      <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th align="left">Sheet</th><th align="left">Rows accepted</th><th align="left">Source PAYE reconciliation</th></tr></thead><tbody>{historical.diagnostics.map(x=><tr key={x.sheet}><td>{x.sheet}</td><td>{x.accepted}</td><td>{x.sourceReconciliation ? `Gross difference: ${money(x.sourceReconciliation.grossDelta)}; PAYE difference: ${money(x.sourceReconciliation.payeDelta)}` : "—"}</td></tr>)}</tbody></table>
       <details><summary>Validation exceptions ({historical.exceptions.length})</summary><div style={{maxHeight:320,overflow:"auto"}}>{historical.exceptions.slice(0,150).map((x,i)=><p key={i}>{x.code} — {x.employeeNo || x.employeeName || x.sourceId || x.sheet || "Source record"} {x.rowNumber ? `(row ${x.rowNumber})` : ""}</p>)}</div></details>
     </section>}
   </main>;

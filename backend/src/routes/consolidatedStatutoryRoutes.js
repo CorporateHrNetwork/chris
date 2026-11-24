@@ -1,5 +1,5 @@
 "use strict";
-// Preview endpoints only. Historical uploads are processed in memory and never persisted.
+// Protected read-only previews and explicit draft import staging; no payroll mutation.
 const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
@@ -8,6 +8,7 @@ const { previewHistoricalWorkbook } = require("../services/consolidatedStatutory
 const { readApprovedPayrollRecords } = require("../services/consolidatedStatutoryApprovedPayrollService");
 const { buildConsolidatedReport } = require("../services/consolidatedStatutoryReportService");
 const { buildStatutoryWorkbook } = require("../services/consolidatedStatutoryWorkbookService");
+const { stageHistoricalImport, listHistoricalImports } = require("../services/consolidatedStatutoryImportBatchService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -59,6 +60,26 @@ router.post("/historical/preview", upload.single("workbook"), async (req,res) =>
       data:{ year, diagnostics:imported.diagnostics, sourceHash:imported.workbookHash,
         importedRows:imported.records.length, exceptions:[...imported.exceptions,...report.exceptions],
         totals:report.totals, branchTotals:report.branchTotals } });
+  } catch (error) { return fail(res,error); }
+});
+// Explicit historical import staging. This never posts amounts to official payroll.
+router.post("/historical/stage", requirePermission("payroll.manage"), upload.single("workbook"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    if (!req.file?.buffer) return res.status(400).json({status:"error",code:"WORKBOOK_REQUIRED",message:"Attach the historical Excel workbook."});
+    const year = yearFrom(req);
+    const staged = await stageHistoricalImport({ organizationId:req.auth.organizationId,
+      actorUserId:req.auth.userId, year, buffer:req.file.buffer, originalFilename:req.file.originalname });
+    res.setHeader("Cache-Control","no-store");
+    return res.status(201).json({ status:"success", data:staged,
+      warning:"Draft source stored for review only. No employee matching, statutory remittance or payroll changes performed." });
+  } catch (error) { return fail(res,error); }
+});
+router.get("/historical/batches", requirePermission("payroll.manage"), async (req,res) => {
+  try { assertCompanyWideAccess(req); const year=yearFrom(req);
+    const batches = await listHistoricalImports({ organizationId:req.auth.organizationId, year });
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data:batches});
   } catch (error) { return fail(res,error); }
 });
 // Convenient read-only Excel preview with both sources, still without any
