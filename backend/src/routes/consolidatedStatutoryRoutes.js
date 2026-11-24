@@ -9,6 +9,7 @@ const { readApprovedPayrollRecords } = require("../services/consolidatedStatutor
 const { buildConsolidatedReport } = require("../services/consolidatedStatutoryReportService");
 const { buildStatutoryWorkbook } = require("../services/consolidatedStatutoryWorkbookService");
 const { stageHistoricalImport, listHistoricalImports } = require("../services/consolidatedStatutoryImportBatchService");
+const { reviewSummary, approveSourceMatch, verifyHistoricalBatch, verifiedHistoricalRecords } = require("../services/consolidatedStatutoryReconciliationService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -81,6 +82,98 @@ router.get("/historical/batches", requirePermission("payroll.manage"), async (re
     res.setHeader("Cache-Control","no-store");
     return res.json({status:"success",data:batches});
   } catch (error) { return fail(res,error); }
+});
+// Approved reviewers can search authoritative employee identities and branch locations.
+router.get("/historical/match-options", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const prisma=require("../config/prisma");
+    const search=String(req.query.search||"").trim().slice(0,70);
+    if(search.length<2) return res.status(400).json({status:"error",code:"MATCH_SEARCH_TOO_SHORT",message:"Enter at least two characters to search employees."});
+    const [employees,locations]=await Promise.all([
+      prisma.employee.findMany({where:{organizationId:req.auth.organizationId,
+        OR:[{employeeNumber:{contains:search,mode:"insensitive"}},{firstName:{contains:search,mode:"insensitive"}},
+          {lastName:{contains:search,mode:"insensitive"}},{middleName:{contains:search,mode:"insensitive"}}]},
+        select:{id:true,employeeNumber:true,firstName:true,middleName:true,lastName:true,locationId:true},
+        take:25,orderBy:{employeeNumber:"asc"}}),
+      prisma.organizationLocation.findMany({where:{organizationId:req.auth.organizationId},
+        select:{id:true,name:true,code:true},orderBy:{name:"asc"}})
+    ]);
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data:{
+      employees:employees.map(x=>({id:x.id,employeeNumber:x.employeeNumber,
+        name:[x.firstName,x.middleName,x.lastName].filter(Boolean).join(" "),currentLocationId:x.locationId})),
+      locations:locations.filter(x=>[x.name,x.code].some(v=>/^(abuja|abj|lagos|lgs|portharcourt|phc)(branch|office)?$/.test(
+        String(v||"").toLowerCase().replace(/[^a-z]/g,"")))),
+      note:"Current location is informational only; verify the historical branch for the source period."
+    }});
+  } catch(error) { return fail(res,error); }
+});
+// Explicitly reviewed historical identity and branch mappings, isolated by tenant.
+router.get("/historical/batches/:batchId/reconciliation", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const data=await reviewSummary({organizationId:req.auth.organizationId,batchId:req.params.batchId});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data});
+  } catch(error) { return fail(res,error); }
+});
+router.post("/historical/batches/:batchId/matches", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const {sourceId,employeeId,locationId,reviewNote}=req.body||{};
+    const data=await approveSourceMatch({organizationId:req.auth.organizationId,batchId:req.params.batchId,
+      sourceId,employeeId,locationId,reviewNote,actorUserId:req.auth.userId});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data});
+  } catch(error) { return fail(res,error); }
+});
+router.post("/historical/batches/:batchId/verify", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const data=await verifyHistoricalBatch({organizationId:req.auth.organizationId,batchId:req.params.batchId,
+      actorUserId:req.auth.userId});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data});
+  } catch(error) { return fail(res,error); }
+});
+async function readReviewedReport(req) {
+  const year=yearFrom(req);
+  const organizationId=req.auth.organizationId;
+  const historical=await verifiedHistoricalRecords({organizationId,year});
+  const approved=await readApprovedPayrollRecords({organizationId,year});
+  // Zermatt's legacy source covers Jan-Sep 2026. Prevent historical/approved
+  // sources in that window from being counted twice in the verified report.
+  const cutover=(req.auth.organization?.slug==="zermatt-liquor-limited" && year===2026) ? "2026-10" : null;
+  const nonOverlapping=cutover ? approved.filter(x=>x.period>=cutover) : approved;
+  const report=buildConsolidatedReport({organizationId,year,records:[...historical,...nonOverlapping]});
+  report.sourceCoverage={verifiedHistoricalRows:historical.length,approvedPayrollRows:nonOverlapping.length};
+  if(cutover && historical.length===0) report.exceptions.push({code:"HISTORICAL_SOURCE_NOT_VERIFIED",message:"January–September 2026 historical records are not verified; annual totals are incomplete."});
+  if(nonOverlapping.length===0) report.exceptions.push({code:"NO_APPROVED_PAYROLL_RECORDS",message:"No approved payroll records found in the selected reporting period."});
+  return report;
+}
+router.get("/verified-preview", async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const report=await readReviewedReport(req);
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data:{year:report.year,totals:report.totals,
+      branchTotals:report.branchTotals,exceptions:report.exceptions,
+      rows:report.rows.length,sourceCoverage:report.sourceCoverage,unresolvedBranchRows:report.unresolved.length,
+      note:"Only verified historical imports plus approved payroll snapshots are included."}});
+  } catch(error) { return fail(res,error); }
+});
+router.get("/verified-export.xlsx", async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const report=await readReviewedReport(req);
+    const workbook=buildStatutoryWorkbook(report);
+    const buffer=XLSX.write(workbook,{type:"buffer",bookType:"xlsx"});
+    res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition",`attachment; filename="CHRiS_Statutory_${report.year}_VERIFIED_SOURCES.xlsx"`);
+    res.setHeader("Cache-Control","no-store");
+    return res.status(200).send(buffer);
+  } catch(error) { return fail(res,error); }
 });
 // Convenient read-only Excel preview with both sources, still without any
 // historical persistence or unverified branch assignment.

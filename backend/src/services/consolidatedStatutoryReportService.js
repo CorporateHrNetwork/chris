@@ -15,7 +15,10 @@ function money(value) {
 }
 function branchOf(input) {
   const key = String(input || "").trim().toLowerCase().replace(/[^a-z]/g, "");
-  return ({ abuja: "Abuja", lagos: "Lagos", portharcourt: "Port Harcourt", phc: "Port Harcourt" })[key] || null;
+  if (/^(abuja|abj)(branch|office)?$/.test(key)) return "Abuja";
+  if (/^(lagos|lgs)(branch|office)?$/.test(key)) return "Lagos";
+  if (/^(portharcourt|phc)(branch|office)?$/.test(key)) return "Port Harcourt";
+  return null;
 }
 function prepare(row, year) {
   const historical = row.sourceType === "HISTORICAL_IMPORT";
@@ -35,7 +38,7 @@ function prepare(row, year) {
     period: String(row.period || "").trim(),
     sourceType: row.sourceType,
     sourceId: String(row.sourceId || "").trim(),
-    payrollStatus: approved ? "APPROVED" : "HISTORICAL_UNVERIFIED",
+    payrollStatus: approved ? "APPROVED" : (row.historicalReviewStatus === "VERIFIED" ? "HISTORICAL_VERIFIED" : "HISTORICAL_UNVERIFIED"),
     reportingRemittanceStatus: approved ? "DEEMED_REMITTED_BY_APPROVAL_POLICY" : "NOT_DETERMINED_FROM_IMPORT",
   };
   if (r.year !== Number(year) || !r.organizationId || !r.sourceId || !r.period) return null;
