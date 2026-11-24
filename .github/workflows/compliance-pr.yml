@@ -63,6 +63,9 @@ jobs:
       - name: Rehearse full migration chain
         run: npm run test:migration:compliance
 
+      - name: Run authorization query projection and revocation regressions
+        run: node --test tests/authQueryProjection.test.js
+
       - name: Run compliance safeguards
         run: npm run test:compliance
 
