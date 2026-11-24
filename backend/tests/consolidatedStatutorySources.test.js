@@ -13,7 +13,8 @@ function fakeWorkbook() {
   XLSX.utils.book_append_sheet(w, XLSX.utils.aoa_to_sheet([
     ["Tax Report"],["Company: ABUJA"],["Period Start Date: 2026-01-01"],[],
     ["Employee Name","Employee Number","Basic Salary","Housing Allowance","Transport Allowance","Gross Salary","PAYE","Tax Payer Number","Period"],
-    ["Example PAYE","LEG001",80000,10000,10000,100000,6500,"TIN1","JANUARY 2026"]
+    ["Example PAYE","LEG001",80000,10000,10000,100000,6500,"TIN1","JANUARY 2026"],
+    ["Totals",null,80000,10000,10000,100000,6500,null,"JANUARY 2026"]
   ]),"STAFF PAYE");
   return XLSX.write(w,{type:"buffer",bookType:"xlsx"});
 }
@@ -22,6 +23,8 @@ test("historical importer preserves original periods, independent source rows, m
   assert.equal(p.records.length,2);
   assert.equal(p.records[0].period,"9 Months");
   assert.equal(p.records[0].pensionEmployer,2000);
+  assert.equal(p.records[0].pensionNumber,"PEN123");
+  assert.equal(p.records[1].taxPayerNumber,"TIN1");
   assert.equal(p.records[1].grossSalary,100000);
   assert.equal(p.records[1].netSalary,undefined);
   assert.ok(p.exceptions.some(e => e.code==="IDENTITY_MATCH_REQUIRED"));

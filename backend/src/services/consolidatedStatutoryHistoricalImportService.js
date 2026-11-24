@@ -43,6 +43,8 @@ function previewHistoricalWorkbook({ buffer, organizationId, year = 2026, employ
       if (!row.some(c => c !== null && c !== "")) continue;
       const rowNumber = i+1;
       const name = String(value(row,0) || "").trim();
+      // PAYE exports contain a trailing 'Totals' summary row. This is NOT an employee.
+      if (/^totals?\s*:?$/i.test(name)) continue;
       const period = String(value(row,kind==="paye" ? 8 : 6) || "").trim();
       if (!name || !period) { exceptions.push({ code:"INCOMPLETE_SOURCE_ROW", sheet, rowNumber }); continue; }
       const sourceId = workbookHash+":"+sheet+":"+rowNumber;

@@ -28,6 +28,9 @@ function prepare(row, year) {
     employeeName: String(row.employeeName || "").trim(),
     branch: branchOf(row.branch),
     department: row.department || "",
+    pensionProvider: row.pensionProvider || null,
+    pensionNumber: row.pensionNumber || null,
+    taxPayerNumber: row.taxPayerNumber || null,
     year: Number(row.year),
     period: String(row.period || "").trim(),
     sourceType: row.sourceType,
@@ -74,6 +77,7 @@ function buildConsolidatedReport({ organizationId, year, records }) {
   const statutory = rows.map(x => ({
     organizationId: x.organizationId, employeeNo: x.employeeNo, employeeName: x.employeeName,
     branch: x.branch, year: x.year, period: x.period, paye: x.paye,
+    taxPayerNumber: x.taxPayerNumber, pensionNumber: x.pensionNumber, pensionProvider: x.pensionProvider,
     pensionEmployee: x.pensionEmployee, pensionEmployer: x.pensionEmployer, pensionTotal: x.pensionTotal,
     nhfEmployee: x.nhfEmployee, nsitfEmployer: x.nsitfEmployer, itfEmployer: x.itfEmployer,
     otherEmployerContributions: x.otherEmployerContributions,

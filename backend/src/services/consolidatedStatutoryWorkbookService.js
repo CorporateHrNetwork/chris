@@ -21,8 +21,8 @@ function buildStatutoryWorkbook(report) {
   ]);
   for (const branch of BRANCHES) add(branch, report.branches[branch]);
   add("Combined", report.rows);
-  add("PAYE Register", report.statutory.map(({ employeeNo,employeeName,branch,period,paye,reportingRemittanceStatus,sourceId }) => ({ employeeNo,employeeName,branch,period,paye,reportingRemittanceStatus,sourceId })));
-  add("Pension Register", report.statutory.map(({ employeeNo,employeeName,branch,period,pensionEmployee,pensionEmployer,pensionTotal,reportingRemittanceStatus,sourceId }) => ({ employeeNo,employeeName,branch,period,pensionEmployee,pensionEmployer,pensionTotal,reportingRemittanceStatus,sourceId })));
+  add("PAYE Register", report.statutory.map(({ employeeNo,employeeName,branch,period,paye,taxPayerNumber,reportingRemittanceStatus,sourceId }) => ({ employeeNo,employeeName,branch,period,paye,taxPayerNumber,reportingRemittanceStatus,sourceId })));
+  add("Pension Register", report.statutory.map(({ employeeNo,employeeName,branch,period,pensionEmployee,pensionEmployer,pensionTotal,pensionNumber,pensionProvider,reportingRemittanceStatus,sourceId }) => ({ employeeNo,employeeName,branch,period,pensionEmployee,pensionEmployer,pensionTotal,pensionNumber,pensionProvider,reportingRemittanceStatus,sourceId })));
   add("Other Statutories", report.statutory.map(({ employeeNo,employeeName,branch,period,nhfEmployee,nsitfEmployer,itfEmployer,otherEmployerContributions,sourceId }) => ({ employeeNo,employeeName,branch,period,nhfEmployee,nsitfEmployer,itfEmployer,otherEmployerContributions,sourceId })));
   add("Gross & Net Salaries", report.rows.map(({ employeeNo,employeeName,branch,period,grossSalary,netSalary,basicSalary,housingAllowance,transportAllowance,otherEarnings,sourceId }) => ({ employeeNo,employeeName,branch,period,grossSalary,netSalary,basicSalary,housingAllowance,transportAllowance,otherEarnings,sourceId })));
   // Historical aggregate periods stay as originally provided; never assign them to a fictitious month.
