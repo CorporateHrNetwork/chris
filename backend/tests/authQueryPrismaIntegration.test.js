@@ -61,7 +61,7 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  assert.equal(essRequest.essAuth.employeeId,employee.id);
  const essAsHris=await verify(essToken);
  assert.equal(essAsHris.next,false);assert.equal(essAsHris.res.statusCode,401);
- await prisma.employee.update({where:{id:employee.id},data:{status:"EXITED"}});
+ await prisma.employee.update({where:{id:employee.id},data:{status:"TERMINATED"}});
  let essAfter=false;const inactiveResponse=response();
  await requireEssAuth(essRequest,inactiveResponse,()=>essAfter=true);
  assert.equal(essAfter,false);assert.equal(inactiveResponse.statusCode,403);
