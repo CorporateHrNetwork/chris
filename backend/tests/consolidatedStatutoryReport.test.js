@@ -46,3 +46,13 @@ test("XLSX includes all 11 separate sheets without monthly invention", () => {
   const reconciliation = XLSX.utils.sheet_to_json(parsed.Sheets["Monthly Reconciliation"]);
   assert.deepEqual(reconciliation.map(x=>x.period).sort(),["2026-10","9 Months"]);
 });
+test("historical sub-cent values retain source precision until annual totals are summed", () => {
+  const template={organizationId:"zll",employeeNo:"ZLL01",employeeName:"Test",
+    branch:"Abuja",year:2026,period:"9 Months",sourceType:"HISTORICAL_IMPORT",grossSalary:100};
+  const r=buildConsolidatedReport({organizationId:"zll",year:2026,records:[
+    {...template,sourceId:"paye1",paye:0.005,pensionEmployee:100.004},
+    {...template,sourceId:"paye2",paye:0.005,pensionEmployee:100.004},
+  ]});
+  assert.equal(r.totals.paye,0.01);
+  assert.equal(r.totals.pensionEmployee,200.01);
+});

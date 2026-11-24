@@ -11,7 +11,9 @@ const COMPONENTS = ["grossSalary", "netSalary", "basicSalary", "housingAllowance
 function money(value) {
   if (value === null || value === undefined || value === "") return null;
   const n = typeof value === "string" ? Number(value.replace(/,/g, "")) : Number(value);
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  // Preserve historical sub-kobo source precision until totals are accumulated;
+  // round only the final report totals to avoid systematic per-row drift.
+  return Number.isFinite(n) ? n : null;
 }
 function branchOf(input) {
   const key = String(input || "").trim().toLowerCase().replace(/[^a-z]/g, "");
