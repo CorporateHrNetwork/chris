@@ -27,6 +27,8 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  const locA=await prisma.organizationLocation.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,name:"Fictional branch A"}});
  const role=await prisma.role.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,name:"Test HR "+id}});
  const permission=await prisma.permission.create({data:{id:crypto.randomUUID(),key:"fictional.perm."+id,name:"Fictional permission"}});
+ const payrollView=await prisma.permission.create({data:{id:crypto.randomUUID(),key:"payroll.view",name:"Payroll view fictional test"}});
+ await prisma.rolePermission.create({data:{roleId:role.id,permissionId:payrollView.id}});
  const u=await prisma.user.create({data:{id:crypto.randomUUID(),organizationId:orgA.id,email:"fictional-"+id+"@example.invalid",passwordHash:"NEVER_REAL_SECRET",locationScope:"ASSIGNED_LOCATIONS"}});
  await prisma.userRole.create({data:{userId:u.id,roleId:role.id}});
  await prisma.rolePermission.create({data:{roleId:role.id,permissionId:permission.id}});
@@ -39,6 +41,12 @@ test("generated Prisma client preserves tenant, branch and instant permission re
   res.status(200).json({scope:req.auth.organizationId,location:req.auth.activeLocationId}));
  app.get("/fictional/ess/authorized",requireEssAuth,(req,res)=>
   res.status(200).json({employeeId:req.essAuth.employeeId}));
+ app.get("/fictional/payroll/view",requireAuth,requirePermission("payroll.view"),(req,res)=>
+  res.status(200).json({allowed:true}));
+ app.post("/fictional/payroll/manage",requireAuth,requirePermission("payroll.manage"),(req,res)=>
+  res.status(200).json({allowed:true}));
+ app.post("/fictional/tsp/manage",requireAuth,requirePermission("benefits.manage"),(req,res)=>
+  res.status(200).json({allowed:true}));
  const server=app.listen(0,"127.0.0.1");
  await new Promise(resolve=>server.once("listening",resolve));
  t.after(()=>server.close());
@@ -49,6 +57,11 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  const httpAllowed=await route("/fictional/hr/authorized",token);
  assert.equal(httpAllowed.status,200);
  assert.equal((await httpAllowed.json()).scope,orgA.id);
+ assert.equal((await route("/fictional/payroll/view",token)).status,200);
+ assert.equal((await route("/fictional/payroll/manage",token)).status,404); // GET must not mutate
+ const postProtected=async path=>fetch(root+path,{method:"POST",headers:{authorization:"Bearer "+token}});
+ assert.equal((await postProtected("/fictional/payroll/manage")).status,403);
+ assert.equal((await postProtected("/fictional/tsp/manage")).status,403);
  const httpWrongTenant=await route("/fictional/hr/authorized",
   jwt.sign({userId:u.id,organizationId:orgB.id},process.env.JWT_SECRET));
  assert.equal(httpWrongTenant.status,401);
@@ -68,6 +81,7 @@ test("generated Prisma client preserves tenant, branch and instant permission re
  const after=await verify(token);
  assert.equal(after.next,true);
  assert.ok(!after.req.auth.permissions.includes(permission.key));
+ assert.equal((await route("/fictional/payroll/view",token)).status,200);
  const forbidden=response();let approved=false;
  requirePermission(permission.key)(after.req,forbidden,()=>approved=true);
  assert.equal(approved,false);assert.equal(forbidden.statusCode,403);
