@@ -27,6 +27,8 @@ export default function TransportSupportPayroll() {
   requestAnimationFrame(()=>document.getElementById(id)?.scrollIntoView({block:'nearest'}));
  }
  const [workedFile,setWorkedFile]=useState(null);
+ const [moreOpen,setMoreOpen]=useState(false);
+ const [adjustmentReason,setAdjustmentReason]=useState('');
  const [workedPreview,setWorkedPreview]=useState(null);
  const [workedReason,setWorkedReason]=useState('');
  const [exportColumns,setExportColumns]=useState([]);
@@ -82,6 +84,7 @@ export default function TransportSupportPayroll() {
  }
  function editLine(lineId){
   const line=detail.lines.find(l=>l.id===lineId);const input=line?.snapshot.benefitInputs||{};
+  setAdjustmentReason('');
   setEditor({lineId,inputs:{lastPayableDate:input.lastPayableDate??'',extraDays:input.extraDays||0,phDays:input.phDays||0,bonus:input.bonus||0,calculateFromDays:true,previousShortPayment:input.previousShortPayment??'',previousMonthOutstanding:input.previousMonthOutstanding??0,previousOverpayment:input.previousOverpayment??''}});
  }
  const employeeOptions=useMemo(()=>(detail?.lines||[]).map(l=>({employeeNumber:l.snapshot.employeeNumber,employeeName:l.snapshot.employeeName,department:l.snapshot.department,designation:l.snapshot.position,location:l.snapshot.location})),[detail]);
@@ -146,12 +149,20 @@ export default function TransportSupportPayroll() {
    .tsp-kpis strong {display:block;font-size:1.25rem;}
    .tsp-register-scroll {max-height:65vh;overflow:auto;}
    .tsp-register-scroll th {position:sticky;top:0;background:var(--chris-input-bg);z-index:1;}
+   .tsp-more {position:relative;}
+   .tsp-more-menu {position:absolute;right:0;top:100%;z-index:10;min-width:220px;max-width:90vw;display:grid;gap:6px;padding:10px;border:1px solid var(--chris-border-gold);border-radius:9px;background:var(--chris-input-bg);box-shadow:0 6px 20px #0004;}
+   .tsp-editor {position:fixed;inset:0 0 0 auto;z-index:1000;width:min(560px,100%);box-sizing:border-box;overflow:auto;padding:20px;background:var(--chris-input-bg);color:var(--chris-text-main);border:1px solid var(--chris-border-gold);box-shadow:-12px 0 40px #0006;}
+   .tsp-editor label {display:block!important;margin:10px 0!important;}
+   .tsp-editor input,.tsp-editor textarea {max-width:100%;box-sizing:border-box;}
   `}</style>
   <h1>Transport Support Pay</h1>
   {detail&&<div className="tsp-kpis"><div>Payroll period<strong>{String(detail.run.periodMonth).slice(0,7)}</strong></div><div>Status<strong>{detail.run.status.replaceAll('_',' ')}</strong></div><div>Register employees<strong>{registerRows.length}</strong></div><div>Net payable<strong>{money(detail.run.netTotal??detail.lines.reduce((sum,line)=>sum+Number(line.netPay||0),0))}</strong></div></div>}
   {state?.runs?.length>0&&<label>Payroll run <select value={detail?.run.id||''} disabled={busy||!!editor} onChange={e=>act(()=>open(e.target.value))}><option value="" disabled>Select run</option>{state.runs.map(r=><option key={r.id} value={r.id}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')}</option>)}</select></label>}
   <nav aria-label="Transport Support workspace sections" style={{display:'flex',flexWrap:'wrap',gap:16,marginBlock:12}}>
-   {workspaces.map(([id,label])=><button key={id} type="button" onClick={()=>showWorkspace(id)} aria-pressed={workspace===id}>{label}</button>)}
+   <button type="button" onClick={()=>showWorkspace('transport-register')} aria-pressed={workspace==='transport-register'}>TSP Register</button>
+   {head&&<button type="button" disabled={!!editor} onClick={()=>showWorkspace('transport-export')} aria-pressed={workspace==='transport-export'}>Export Excel</button>}
+   {detail&&head&&editable&&<button type="button" className="transport-primary" disabled={busy||!!editor||!ready} onClick={()=>showWorkspace('transport-run')}>Review &amp; Approve</button>}
+   <div className="tsp-more"><button type="button" aria-expanded={moreOpen} onClick={()=>setMoreOpen(v=>!v)}>⋯ More Actions</button>{moreOpen&&<div className="tsp-more-menu"><button type="button" onClick={()=>{setMoreOpen(false);showWorkspace('transport-run');}}>Manage run / history</button>{head&&<button type="button" disabled={!!editor||busy} onClick={()=>navigate('/benefits/transport-support/preparation')}>Salary basis setup</button>}<button type="button" disabled={busy||!!editor} onClick={()=>{setMoreOpen(false);act(async()=>{await load();if(detail)await open(detail.run.id);await loadReadiness();});}}>Refresh register</button></div>}</div>
   </nav>
   {state&&!head&&<p role="note">Preparation, adjustments and export require the active Head HR payroll assignment for this account.</p>}
   <details><summary>Workflow guidance</summary><p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
@@ -161,7 +172,7 @@ export default function TransportSupportPayroll() {
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
   {canPay&&<button type="button" className="transport-primary" onClick={()=>{showWorkspace('transport-run');document.getElementById('transport-payment-confirmation')?.scrollIntoView({behavior:'smooth',block:'start'});}}>Mark TSP as Paid · Record Actual Payments</button>}
   <section id="transport-run" aria-label="Monthly Run" hidden={workspace!=='transport-run'}>
-  <details open={!detail}><summary>Prepare a monthly run</summary>
+  <details><summary>Prepare a monthly run</summary>
   <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
    {head&&<button onClick={()=>navigate('/benefits/transport-support/preparation')}>Salary Basis Setup / Bulk Upload</button>}
    <button disabled={busy} onClick={()=>act(async()=>{await load();await loadReadiness();})}>Refresh</button>
@@ -184,21 +195,12 @@ export default function TransportSupportPayroll() {
   </section>}
   </details>
   {detail&&<>
-   <h2>{String(detail.run.periodMonth).slice(0,7)} · {detail.run.status.replaceAll('_',' ')}</h2>
+   <h2>Manage selected run</h2>
    {head&&<section aria-label="Employee adjustments" style={workflowPanel}><h3>1. Employee Adjustments</h3>
    {!editable&&<p>Adjustments are available while this run is in draft preparation.</p>}
 
    {head&&editable&&<>
-    {!editor?<button disabled={busy||!ready||!detail.lines.length} onClick={()=>editLine('')}>Enter Employee Adjustments</button>:<fieldset>
-     <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
-     <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
-     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousMonthOutstanding','Previous Month Outstanding (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
-     <p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Previous Month Short Payment and Overpayment default to the transport ledger; enter a corrected total, including zero, with a reason, or leave blank to use the ledger. Previous Month Outstanding is a separate manually entered addition to Net (default zero). Do not enter an amount already included in Short Payment or the ledger; corrections are audited. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p>
-     <label>TSP last payable day (inclusive) <input type="date" value={editor.inputs.lastPayableDate} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,lastPayableDate:e.target.value}}))}/></label>
-     <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
-     <button className="transport-primary" disabled={busy||!ready||!notes.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
-     <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
-    </fieldset>}
+    <button disabled={busy||!!editor||!ready||!detail.lines.length} onClick={()=>editLine('')}>Enter Employee Adjustments</button>
    </>}
    {editable&&!editor&&<details key={detail.run.id} style={workflowPanel}>
     <summary>Bulk upload overtime &amp; public holiday days</summary>
@@ -218,7 +220,7 @@ export default function TransportSupportPayroll() {
    </details>}
    {editor&&<p role="status">Save or cancel input changes before approving or exporting.</p>}
    </section>}
-   {(head||canPay)&&<section aria-label="Approval or payment notes" style={workflowPanel}><h3>2. {canPay?'Payment Confirmation':'Head HR Approval'}</h3>
+   {(canPay||(actions[detail.run.status]||[]).some(a=>roles.includes(a[2])))&&<section aria-label="Approval or payment notes" style={workflowPanel}><h3>2. {canPay?'Payment Confirmation':'Head HR Approval'}</h3>
    <label>{canPay?'Payment batch reference':'Approval / return reason (required)'} <textarea style={{display:'block',width:'100%'}} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
    {(actions[detail.run.status]||[]).filter(a=>roles.includes(a[2])).map(a=><button className="transport-primary" key={a[0]} disabled={busy||!!editor||!ready||!notes.trim()} onClick={()=>act(()=>action(a[0]))}>{a[1]}</button>)}
    </section>}
@@ -250,7 +252,7 @@ export default function TransportSupportPayroll() {
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
    <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} className="tsp-register-scroll" style={{maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
     <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}{head&&editable&&<th>Action</th>}</tr></thead>
-    <tbody>{filteredRows.map(row=><tr key={row[2]}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}{head&&editable&&<td><button type="button" disabled={busy||!ready||!!editor||!detail.lines.some(l=>l.snapshot.employeeNumber===row[2])} onClick={()=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===row[2]);if(line){editLine(line.id);showWorkspace('transport-run');}}}>Edit</button></td>}</tr>)}</tbody>
+    <tbody>{filteredRows.map(row=><tr key={row[2]}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}{head&&editable&&<td><button type="button" disabled={busy||!ready||!!editor||!detail.lines.some(l=>l.snapshot.employeeNumber===row[2])} onClick={()=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===row[2]);if(line){editLine(line.id);}}}>Edit</button></td>}</tr>)}</tbody>
    </table></div>
    </section>
   <section aria-label="Payment confirmation and audit history" hidden={workspace!=='transport-run'}>
@@ -269,6 +271,16 @@ export default function TransportSupportPayroll() {
    <details><summary>Audit history</summary>{detail.events.map((e,i)=><p key={i}>{e.action.replaceAll('_',' ')} · {e.notes} · {new Date(e.createdAt).toLocaleString('en-NG',{timeZone:'Africa/Lagos'})}</p>)}</details>
   </>}
   </section>
+  {head&&editable&&editor&&<fieldset className="tsp-editor" aria-label="Employee adjustments">
+     <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
+     <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
+     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousMonthOutstanding','Previous Month Outstanding (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
+     <details><summary>Calculation guidance</summary><p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Previous Month Short Payment and Overpayment default to the transport ledger; enter a corrected total, including zero, with a reason, or leave blank to use the ledger. Previous Month Outstanding is a separate manually entered addition to Net (default zero). Do not enter an amount already included in Short Payment or the ledger; corrections are audited. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p></details>
+     <label>TSP last payable day (inclusive) <input type="date" value={editor.inputs.lastPayableDate} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,lastPayableDate:e.target.value}}))}/></label>
+     <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={adjustmentReason} onChange={e=>setAdjustmentReason(e.target.value)}/></label>
+     <button className="transport-primary" disabled={busy||!ready||!adjustmentReason.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes:adjustmentReason}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
+     <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
+    </fieldset>}
  </section>;
 }
 
