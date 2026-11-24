@@ -70,6 +70,7 @@ const MySupportRequests = lazy(() => import("./pages/MySupportRequests"));
 const SupportDesk = lazy(() => import("./pages/SupportDesk"));
 const CommercialOperations = lazy(() => import("./pages/CommercialOperations"));
 const RemittanceWorkspace = lazy(() => import("./pages/statutories/RemittanceWorkspace"));
+const ConsolidatedStatutoryWorkspace = lazy(() => import("./pages/statutories/ConsolidatedStatutoryWorkspace"));
 
 function ProtectedLayout({ children }) {
   return (
@@ -220,7 +221,7 @@ function App() {
         <Route path="/statutories/nsitf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/itf" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/statutories/remittances" element={<ProtectedLayout><ConsolidatedComplianceRoute><RemittanceWorkspace /></ConsolidatedComplianceRoute></ProtectedLayout>} />
-        <Route path="/statutories/reports" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
+        <Route path="/statutories/reports" element={<PermissionLayout permission="reports.export"><ConsolidatedStatutoryWorkspace /></PermissionLayout>} />
         <Route path="/performance/goals-kpis" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/performance/cycles" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
         <Route path="/performance/reviews" element={<ProtectedLayout><PlannedWorkspace /></ProtectedLayout>} />
