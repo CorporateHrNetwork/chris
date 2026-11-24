@@ -11,6 +11,7 @@ const { buildStatutoryWorkbook } = require("../services/consolidatedStatutoryWor
 const { stageHistoricalImport, listHistoricalImports } = require("../services/consolidatedStatutoryImportBatchService");
 const { reviewSummary, approveSourceMatch, verifyHistoricalBatch, verifiedHistoricalRecords } = require("../services/consolidatedStatutoryReconciliationService");
 const { proposeCandidates } = require("../services/consolidatedStatutoryMatchCandidatesService");
+const { assessHistoricalBatch } = require("../services/consolidatedStatutoryBulkMatchService");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -83,6 +84,15 @@ router.get("/historical/batches", requirePermission("payroll.manage"), async (re
     res.setHeader("Cache-Control","no-store");
     return res.json({status:"success",data:batches});
   } catch (error) { return fail(res,error); }
+});
+// One read-only assessment categorizes all historic records for HR review.
+router.get("/historical/batches/:batchId/review-assessment", requirePermission("payroll.manage"), async (req,res) => {
+  try {
+    assertCompanyWideAccess(req);
+    const assessment=await assessHistoricalBatch({organizationId:req.auth.organizationId,batchId:req.params.batchId});
+    res.setHeader("Cache-Control","no-store");
+    return res.json({status:"success",data:assessment});
+  } catch(error) { return fail(res,error); }
 });
 // Approved reviewers can search authoritative employee identities and branch locations.
 router.get("/historical/match-options", requirePermission("payroll.manage"), async (req,res) => {

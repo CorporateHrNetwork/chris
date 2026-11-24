@@ -12,6 +12,8 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
   const [search,setSearch]=useState("");
   const [options,setOptions]=useState({employees:[],locations:[]});
   const [suggestions,setSuggestions]=useState(null);
+  const [assessment,setAssessment]=useState(null);
+  const [assessmentCategory,setAssessmentCategory]=useState("ALL");
   const [employeeId,setEmployeeId]=useState("");
   const [locationId,setLocationId]=useState("");
   const [note,setNote]=useState("");
@@ -44,6 +46,13 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
   const rows=useMemo(()=> (review?.unresolved||[]).filter(x=>(
     [x.employeeNo,x.employeeName,x.period].join(" ").toLowerCase().includes(filter.toLowerCase())
   )).slice(0,25),[review,filter]);
+  async function assessAll(){
+    setBusy("assessment");setError("");
+    try{
+      const result=await apiRequest(`${base}/historical/batches/${encodeURIComponent(batchId)}/review-assessment`);
+      setAssessment(result.data);
+    }catch(e){setError(e.message);}finally{setBusy("");}
+  }
   async function suggestCandidates(){
     if(!sourceId){setError("Select a historical source row first.");return;}
     setBusy("suggestions");setError("");
@@ -64,6 +73,7 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
       setMessage("Historical employee and branch match saved to the audit trail.");
       setEmployeeId("");setLocationId("");setNote("");setSearch("");setSourceId("");
       await load();
+      setAssessment(null);
     }catch(e){setError(e.message);}finally{setBusy("");}
   }
   async function verify(){
@@ -79,6 +89,31 @@ export default function HistoricalReconciliationPanel({batchId,onVerified}) {
     {!review ? <p>Loading reconciliation…</p> : <>
       <p><strong>{review.reviewed} of {review.total}</strong> source rows reviewed · {review.unresolved.length} pending · Status: {review.status}</p>
       <p style={{color:"#617367"}}>Historical branch must be confirmed from the period of the source record. The employee's current branch is only a suggestion, not evidence.</p>
+      {review.status==="PENDING_RECONCILIATION" && <>
+        <button type="button" disabled={!!busy} onClick={assessAll}>Assess all historical rows</button>
+        {assessment && <section style={{...panel,background:"#fafcf9"}} aria-label="Historical identity assessment">
+          <h4>Identity review queue — {assessment.summary.total} rows</h4>
+          <p>Already reviewed: {assessment.summary.reviewed} · Exact number and name: {assessment.summary.exactNumberAndName} · Number only: {assessment.summary.numberOnly} · Name only: {assessment.summary.nameOnly} · Conflicts: {assessment.summary.conflict} · Ambiguous: {assessment.summary.ambiguous} · Unmatched: {assessment.summary.unmatched}</p>
+          <p>Suggestions never approve identity or historical branch.</p>
+          <label style={{display:"grid",gap:6}}>Filter identity findings
+            <select value={assessmentCategory} onChange={e=>setAssessmentCategory(e.target.value)} style={field}>
+              <option value="ALL">All</option>
+              {["EXACT_NUMBER_AND_NAME","NUMBER_ONLY_REVIEW","NAME_ONLY_REVIEW","CONFLICT_REVIEW","AMBIGUOUS_REVIEW","UNMATCHED","ALREADY_REVIEWED"].map(v=>
+                <option key={v} value={v}>{v.replaceAll("_"," ")}</option>)}
+            </select>
+          </label>
+          <div style={{maxHeight:320,overflow:"auto"}}>
+            {assessment.assessments.filter(x=>assessmentCategory==="ALL" || x.classification===assessmentCategory)
+              .slice(0,100).map(x=><div key={x.sourceId} style={{padding:8,borderBottom:"1px solid #d8e1d9"}}>
+                <strong>{x.employeeNo||"No number"} · {x.employeeName}</strong> — {x.classification.replaceAll("_"," ")}
+                <div><small>{x.sourceSheet} · {x.period} · {x.candidates.length} candidate(s)</small></div>
+                {x.classification!=="ALREADY_REVIEWED" && <button type="button" onClick={()=>{
+                  setFilter(x.employeeName||x.employeeNo);setSourceId(x.sourceId);setSuggestions(null);setEmployeeId("");
+                }}>Review row</button>}
+              </div>)}
+          </div>
+        </section>}
+      </>}
       {review.status==="PENDING_RECONCILIATION" && review.unresolved.length>0 && <>
         <label style={{display:"grid",gap:6,marginBottom:12}}>Filter unmatched source rows
           <input style={field} placeholder="Employee name or number" value={filter} onChange={e=>setFilter(e.target.value)} />
