@@ -13,15 +13,15 @@ const actions={
  GM_APPROVAL:[['RETURN_TO_DRAFT','Return to Head HR Preparation','HEAD_HR']],
 };
 const workspaces=[
- ['transport-run','Monthly Run'],
- ['transport-register','Full Register'],
- ['transport-export','Excel Export Portal'],
+ ['transport-register','TSP Register'],
+ ['transport-run','Manage Run'],
+ ['transport-export','Export Excel'],
 ];
 const moneyColumns=new Set(['Gross Salary','End of the Month','Mid-Month','Bonus','Overtime Pay','Public Holiday Pay','Previous Month Short Payment','Previous Month Outstanding','Previous Month Overpayment','Net']);
 export default function TransportSupportPayroll() {
  const navigate=useNavigate();
  const {hash}=useLocation();
- const [workspace,setWorkspace]=useState(()=>workspaces.find(([id])=>hash===`#${id}`)?.[0]||'transport-run');
+ const [workspace,setWorkspace]=useState(()=>workspaces.find(([id])=>hash===`#${id}`)?.[0]||'transport-register');
  function showWorkspace(id){
   setWorkspace(id);
   requestAnimationFrame(()=>document.getElementById(id)?.scrollIntoView({block:'nearest'}));
@@ -140,20 +140,28 @@ export default function TransportSupportPayroll() {
     min-width:0;
    }
    .chris-transport-upload-controls input {max-width:100%;}
+   .chris-transport-payroll summary {cursor:pointer;font-weight:700;padding:8px 0;}
+   .tsp-kpis {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0;}
+   .tsp-kpis > div {border:1px solid var(--chris-border-gold);border-radius:9px;padding:12px;}
+   .tsp-kpis strong {display:block;font-size:1.25rem;}
+   .tsp-register-scroll {max-height:65vh;overflow:auto;}
+   .tsp-register-scroll th {position:sticky;top:0;background:var(--chris-input-bg);z-index:1;}
   `}</style>
-  <h1>Transport Support Pay · Payroll Execution Workspace</h1>
+  <h1>Transport Support Pay</h1>
+  {detail&&<div className="tsp-kpis"><div>Payroll period<strong>{String(detail.run.periodMonth).slice(0,7)}</strong></div><div>Status<strong>{detail.run.status.replaceAll('_',' ')}</strong></div><div>Register employees<strong>{registerRows.length}</strong></div><div>Net payable<strong>{money(detail.run.netTotal??detail.lines.reduce((sum,line)=>sum+Number(line.netPay||0),0))}</strong></div></div>}
+  {state?.runs?.length>0&&<label>Payroll run <select value={detail?.run.id||''} disabled={busy||!!editor} onChange={e=>act(()=>open(e.target.value))}><option value="" disabled>Select run</option>{state.runs.map(r=><option key={r.id} value={r.id}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')}</option>)}</select></label>}
   <nav aria-label="Transport Support workspace sections" style={{display:'flex',flexWrap:'wrap',gap:16,marginBlock:12}}>
    {workspaces.map(([id,label])=><button key={id} type="button" onClick={()=>showWorkspace(id)} aria-pressed={workspace===id}>{label}</button>)}
   </nav>
   {state&&!head&&<p role="note">Preparation, adjustments and export require the active Head HR payroll assignment for this account.</p>}
-  <p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
+  <details><summary>Workflow guidance</summary><p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
   <p>Actual payment confirmation remains separate. An export does not confirm external approval or payment.</p>
-  <p role="note">Benefit inputs and payments do not update regular salary rates, payroll runs, payslips, statutory deductions or loan recoveries.</p>
+  <p role="note">Benefit inputs and payments do not update regular salary rates, payroll runs, payslips, statutory deductions or loan recoveries.</p></details>
   {error&&<p role="alert" style={{color:'#fca5a5'}}>{error}</p>}{message&&<p role="status">{message}</p>}
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
   {canPay&&<button type="button" className="transport-primary" onClick={()=>{showWorkspace('transport-run');document.getElementById('transport-payment-confirmation')?.scrollIntoView({behavior:'smooth',block:'start'});}}>Mark TSP as Paid · Record Actual Payments</button>}
   <section id="transport-run" aria-label="Monthly Run" hidden={workspace!=='transport-run'}>
-  <h2>Monthly Run · Prepare or Open</h2>
+  <details open={!detail}><summary>Prepare a monthly run</summary>
   <div style={{display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
    {head&&<button onClick={()=>navigate('/benefits/transport-support/preparation')}>Salary Basis Setup / Bulk Upload</button>}
    <button disabled={busy} onClick={()=>act(async()=>{await load();await loadReadiness();})}>Refresh</button>
@@ -174,8 +182,7 @@ export default function TransportSupportPayroll() {
     <button type="button" disabled={busy} onClick={()=>navigate('/benefits/transport-support/preparation')}>Open Preparation Register</button>
    </>}
   </section>}
-  <p>Select an existing run to edit adjustments, approve the draft, or export its register.</p>
-  {!state?.runs?.length?<p>No transport benefit runs yet.</p>:<div style={{display:'flex',gap:10,flexWrap:'wrap'}}>{state.runs.map(r=><button key={r.id} aria-pressed={detail?.run.id===r.id} disabled={busy||!!editor} onClick={()=>act(()=>open(r.id))}>{String(r.periodMonth).slice(0,7)} · {r.status.replaceAll('_',' ')} · {money(r.netTotal)}</button>)}</div>}
+  </details>
   {detail&&<>
    <h2>{String(detail.run.periodMonth).slice(0,7)} · {detail.run.status.replaceAll('_',' ')}</h2>
    {head&&<section aria-label="Employee adjustments" style={workflowPanel}><h3>1. Employee Adjustments</h3>
@@ -193,8 +200,8 @@ export default function TransportSupportPayroll() {
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
     </fieldset>}
    </>}
-   {editable&&!editor&&<fieldset key={detail.run.id} style={workflowPanel}>
-    <legend>Bulk Upload Overtime &amp; Public Holiday Days</legend>
+   {editable&&!editor&&<details key={detail.run.id} style={workflowPanel}>
+    <summary>Bulk upload overtime &amp; public holiday days</summary>
     <p>Use the template for this Transport Support draft. Enter each employee's total days worked. Blank cells keep existing day counts. Enter zero to clear a count. Preview recalculates both worked-day amounts and shows the new Net before import.</p>
     <div className="chris-transport-upload-controls">
     <button type="button" disabled={busy} onClick={downloadWorkedTemplate}>Download Worked-Day Template (CSV)</button>
@@ -208,7 +215,7 @@ export default function TransportSupportPayroll() {
      <label>Import reason <textarea value={workedReason} maxLength={1000} disabled={busy} onChange={e=>setWorkedReason(e.target.value)}/></label>
      <button className="transport-primary" type="button" disabled={busy||!ready||!workedReason.trim()} onClick={()=>act(()=>uploadWorkedDays(true))}>Confirm Worked-Day Import</button>
     </>}
-   </fieldset>}
+   </details>}
    {editor&&<p role="status">Save or cancel input changes before approving or exporting.</p>}
    </section>}
    {(head||canPay)&&<section aria-label="Approval or payment notes" style={workflowPanel}><h3>2. {canPay?'Payment Confirmation':'Head HR Approval'}</h3>
@@ -218,11 +225,11 @@ export default function TransportSupportPayroll() {
   </>}
   </section>
    <section hidden={workspace!=='transport-export'} id="transport-export" aria-label="Excel Export Portal" style={workflowPanel}><h2>Excel Export Portal</h2>
-   {!state?<p>{error?'The workspace could not load. Use Refresh in Monthly Run to retry.':'Loading export permissions…'}</p>:!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to select columns and download Excel.</p>:<><fieldset><legend>Choose export columns</legend>
+   {!state?<p>{error?'The workspace could not load. Use Refresh in Monthly Run to retry.':'Loading export permissions…'}</p>:!head?<p>The assigned Head HR can export the register.</p>:!detail?<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to select columns and download Excel.</p>:<><details><summary>Choose export columns</summary>
     <button type="button" onClick={()=>setExportColumns(detail.register.headers.map((_,i)=>i))}>Select all</button> <button type="button" onClick={()=>setExportColumns([])}>Clear selection</button>
     <div style={{display:'flex',gap:14,flexWrap:'wrap',margin:12}}>{detail.register.headers.map((label,index)=><label key={label}><input type="checkbox" checked={exportColumns.includes(index)} onChange={e=>setExportColumns(c=>e.target.checked?[...c,index]:c.filter(i=>i!==index))}/>{label}</label>)}</div>
     <p>The master roll is ordered Abuja, Lagos, Port Harcourt. Each branch also has its own sheet. Only checked columns are included in register sheets.</p>
-   </fieldset>
+   </details>
    <button disabled={busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Review Register (Excel)</button>
     <button className="transport-primary" disabled={!externalReady||busy||!!editor||!exportColumns.length} onClick={()=>act(async()=>saveDownloadedBlob(await apiDownload(`${api}/runs/${detail.run.id}/export?stage=external&columns=${encodeURIComponent(JSON.stringify(exportColumns))}`)))}>Export Approved Register (Excel)</button>
    {!externalReady&&<p>Approve this run to enable the external register export.</p>}</>}
@@ -230,20 +237,20 @@ export default function TransportSupportPayroll() {
    <section id="transport-register" aria-label="Full Register" hidden={workspace!=='transport-register'}>
    <h2>Full Monthly Register{registerHeaders.length>0&&` · ${registerHeaders.length} columns`}</h2>
    {!detail&&<p>Prepare or open a run in <button type="button" onClick={()=>showWorkspace("transport-run")}>Monthly Run</button> to populate employee rows.</p>}
-   {registerHeaders.length>0&&<details open><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
+   {registerHeaders.length>0&&<details><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
    {detail&&<div style={{display:'flex',gap:12,flexWrap:'wrap',marginBlock:12}}>
     <label>Employee <input type="search" placeholder="Name or employee number" value={employeeQuery} onChange={event=>setEmployeeQuery(event.target.value)}/></label>
-    {filterColumns.map(([index,label])=><label key={index}>{label} <select value={registerFilters[index]||''} onChange={event=>setRegisterFilters(current=>({...current,[index]:event.target.value}))}>
+    <details><summary>Filters</summary>{filterColumns.map(([index,label])=><label key={index}>{label} <select value={registerFilters[index]||''} onChange={event=>setRegisterFilters(current=>({...current,[index]:event.target.value}))}>
      <option value="">All</option>
      {[...new Set(registerRows.map(row=>row[index]).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}
-    </select></label>)}
+    </select></label>)}</details>
     <span role="status">{filteredRows.length} of {registerRows.length} employees</span>
    </div>}
    {detail&&!filteredRows.length&&<p>No employees match the current filters.</p>}
    <p>Scroll horizontally to see all columns. Export selections apply only to the Excel file.</p>
-   <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} style={{overflowX:'auto',maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
-    <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}</tr></thead>
-    <tbody>{filteredRows.map(row=><tr key={row[2]}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}</tr>)}</tbody>
+   <div role="region" aria-label="Full monthly Transport Support register" tabIndex={0} className="tsp-register-scroll" style={{maxWidth:'100%'}}><table style={{width:'100%',minWidth:2200,textAlign:'left'}}>
+    <thead><tr>{registerHeaders.map(h=><th key={h} style={{padding:8}}>{h}</th>)}{head&&editable&&<th>Action</th>}</tr></thead>
+    <tbody>{filteredRows.map(row=><tr key={row[2]}>{row.map((value,col)=><td key={col} style={{padding:8,borderBottom:'1px solid #385548',whiteSpace:registerHeaders[col]==='AccountNO'?'nowrap':undefined}}>{moneyColumns.has(registerHeaders[col])&&value!==''?money(value):value}</td>)}{head&&editable&&<td><button type="button" disabled={busy||!ready||!!editor||!detail.lines.some(l=>l.snapshot.employeeNumber===row[2])} onClick={()=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===row[2]);if(line){editLine(line.id);showWorkspace('transport-run');}}}>Edit</button></td>}</tr>)}</tbody>
    </table></div>
    </section>
   <section aria-label="Payment confirmation and audit history" hidden={workspace!=='transport-run'}>
@@ -259,7 +266,7 @@ export default function TransportSupportPayroll() {
     <button disabled={busy||!notes.trim()} onClick={()=>setReceipts(Object.fromEntries(detail.lines.map(l=>[l.id,{actualPaid:'0',reference:notes.trim()}])))}>Enter zero for all payments</button>
     <button disabled={busy||!ready||!notes.trim()} onClick={()=>act(()=>action('CONFIRM_PAYMENT'))}>Confirm actual payments &amp; carry balances forward</button>
    </>}
-   <h3>Audit history</h3>{detail.events.map((e,i)=><p key={i}>{e.action.replaceAll('_',' ')} · {e.notes} · {new Date(e.createdAt).toLocaleString('en-NG',{timeZone:'Africa/Lagos'})}</p>)}
+   <details><summary>Audit history</summary>{detail.events.map((e,i)=><p key={i}>{e.action.replaceAll('_',' ')} · {e.notes} · {new Date(e.createdAt).toLocaleString('en-NG',{timeZone:'Africa/Lagos'})}</p>)}</details>
   </>}
   </section>
  </section>;
