@@ -13,34 +13,15 @@ function Logo() {
     >
       <img
         src={chrisLogo}
-        alt="CHRIS Logo"
+        alt="CHRiS"
         style={{
-          width: "70px",
+          width: "min(180px, 90%)",
+          height: "auto",
+          objectFit: "contain",
           marginBottom: "10px",
         }}
       />
 
-      <h2
-        style={{
-          margin: 0,
-          color: "#FFFFFF",
-          fontSize: "20px",
-          fontWeight: "700",
-        }}
-      >
-        CHRIS
-      </h2>
-
-      <span
-        style={{
-          color: "#B8C7C2",
-          fontSize: "11px",
-          marginTop: "4px",
-          textAlign: "center",
-        }}
-      >
-        CorporateHr Information System
-      </span>
     </div>
   );
 }
