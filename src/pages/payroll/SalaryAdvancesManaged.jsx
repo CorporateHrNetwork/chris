@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { apiRequest } from "../../services/api";
@@ -61,6 +62,7 @@ function repaymentPlan(balanceValue, installmentValue, startMonth) {
 export default function SalaryAdvancesManaged() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
+  const [expandedAdvanceActions,setExpandedAdvanceActions]=useState(null);
   const [capabilities, setCapabilities] = useState({ canEdit: false, canCancelDelete: false, isBranchHr: false, isHeadHr: false });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -294,10 +296,10 @@ export default function SalaryAdvancesManaged() {
                 const editable = capabilities.canEdit && !["COMPLETED", "CANCELLED"].includes(row.status);
                 const cancellable = capabilities.canCancelDelete && ["ACTIVE", "PAUSED"].includes(row.status);
                 const deletable = capabilities.canCancelDelete && recovered <= 0 && row.status !== "COMPLETED";
-                return <tr key={row.id}>
+                return <Fragment key={row.id}><tr>
                   <Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{money(row.amount)}</Td><Td>{money(recovered)}</Td><Td>{money(row.outstandingAmount)}</Td><Td>{money(row.installmentAmount)}</Td><Td>{row.recoveryStartDate}</Td><Td><Badge>{row.status}</Badge></Td>
-                  <Td><div style={actionRow}>{editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}{cancellable && <button type="button" style={warningButton} disabled={Boolean(busy)} onClick={() => cancelAdvance(row)}>{busy === `cancel-${row.id}` ? "Cancelling…" : "Cancel"}</button>}{deletable && <button type="button" style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteAdvance(row)}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}</div></Td>
-                </tr>;
+                  <Td>{editable||cancellable||deletable?<button type="button" style={{...smallButton,whiteSpace:"nowrap"}} aria-expanded={expandedAdvanceActions===row.id} aria-controls={`advance-actions-${row.id}`} onClick={()=>setExpandedAdvanceActions(current=>current===row.id?null:row.id)}>{expandedAdvanceActions===row.id?"Actions ▴":"Actions ▾"}</button>:<span style={mutedStyle}>Historical</span>}</Td></tr>
+                  {expandedAdvanceActions===row.id&&(editable||cancellable||deletable)&&<tr id={`advance-actions-${row.id}`}><td colSpan={9} style={{...tdStyle,whiteSpace:"normal",padding:"10px 16px"}}><div style={actionRow}><strong>{row.employeeNumber} · Available actions</strong>{editable ? <button type="button" style={smallButton} onClick={() => startEdit(row)}>Edit</button> : <span style={mutedStyle}>Historical</span>}{cancellable && <button type="button" style={warningButton} disabled={Boolean(busy)} onClick={() => cancelAdvance(row)}>{busy === `cancel-${row.id}` ? "Cancelling…" : "Cancel"}</button>}{deletable && <button type="button" style={dangerButton} disabled={Boolean(busy)} onClick={() => deleteAdvance(row)}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}</div></td></tr>}</Fragment>;
               })}
             </tbody>
           </table>
