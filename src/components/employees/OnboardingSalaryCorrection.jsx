@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiRequest, getActiveLocationId } from "../../services/api";
 
 const money = amount => new Intl.NumberFormat("en-NG", { style:"currency",currency:"NGN" }).format(Number(amount || 0));
-export default function OnboardingSalaryCorrection() {
-  const [open,setOpen] = useState(false);
-  const [name,setName] = useState("");
+export default function OnboardingSalaryCorrection({initialEmployee='',initialMonth='',startOpen=false}={}) {
+  const [open,setOpen] = useState(startOpen);
+  const [name,setName] = useState(initialEmployee);
   const [rows,setRows] = useState([]);
   const [selected,setSelected] = useState(null);
   const [amount,setAmount] = useState("");
@@ -17,6 +18,8 @@ export default function OnboardingSalaryCorrection() {
   const [saving,setSaving] = useState(false);
   const [message,setMessage] = useState("");
   const [error,setError] = useState("");
+  const [toast,setToast]=useState("");
+  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(""),6000);return()=>clearTimeout(timer);},[toast]);
   const [scope,setScope] = useState(() => getActiveLocationId());
 
   useEffect(() => {
@@ -71,7 +74,8 @@ export default function OnboardingSalaryCorrection() {
               effectiveTo:selected.effectiveTo || null,reason:reason.trim(),
             },
           });
-      setMessage(`Salary allocation saved for ${selected.employeeName}. Full gross: ${money(response.data.amount)}; main payroll end-month: ${money(response.data.endMonthGross)}; TSP basis updated in Benefits. Regenerate affected draft Main Payroll and TSP before approval.`);
+      const savedMessage=`Salary allocation saved for ${selected.employeeName} (${selected.employeeNumber}). Full gross: ${money(response.data.amount)}; main payroll end-month: ${money(response.data.endMonthGross)}; TSP basis updated in Benefits. Regenerate affected draft Main Payroll and TSP before approval.`;
+      setMessage(savedMessage);setToast(savedMessage);
       setSelected(null);setReason("");setAmount("");setPreview(null);setRevisionMode(false);setNewEffectiveFrom("");
       const updated = await apiRequest(`/api/onboarding/salary-corrections?name=${encodeURIComponent(name.trim())}`);
       setRows(updated.data || []);
@@ -79,6 +83,7 @@ export default function OnboardingSalaryCorrection() {
     finally { setSaving(false); }
   }
   return <section style={{border:"1px solid #52745d",borderRadius:10,padding:16,margin:"16px 0",background:"var(--chris-panel, transparent)"}}>
+    {toast&&createPortal(<aside role="status" style={{position:"fixed",top:96,right:16,zIndex:2147483000,width:"min(420px, calc(100vw - 32px))",padding:18,boxSizing:"border-box",border:"1px solid #c5a43b",borderRadius:12,background:"var(--chris-input-bg, #09251b)",color:"var(--chris-text-main, #fff)",boxShadow:"0 8px 32px #0007"}}><button type="button" aria-label="Dismiss notification" onClick={()=>setToast("")} style={{float:"right"}}>×</button><strong>Salary successfully saved</strong><p>{toast}</p></aside>,document.body)}
     <button type="button" className="qa-secondary" onClick={() => { setOpen(v=>!v);setMessage("");setError(""); }}>
       {open ? "Close existing employee salary corrections" : "Correct an existing employee's onboarding salary"}
     </button>
@@ -94,7 +99,7 @@ export default function OnboardingSalaryCorrection() {
       {message && <p role="status">{message}</p>}
       <div style={{maxHeight:200,overflowY:"auto",margin:"8px 0"}}>
         {rows.map(rate=><button type="button" key={rate.id} style={{display:"block",padding:8,marginBottom:4,width:"100%",textAlign:"left"}}
-          onClick={()=>{setSelected(rate);setAmount(String(rate.amount));setReason("");setPreview(null);setRevisionMode(false);setNewEffectiveFrom("");setMessage("");setError("");}}>
+          onClick={()=>{setSelected(rate);setAmount(String(rate.amount));setReason("");setPreview(null);setRevisionMode(Boolean(initialMonth&&initialMonth>String(rate.effectiveFrom).slice(0,7)));setNewEffectiveFrom(initialMonth?`${initialMonth}-01`:"");setMessage("");setError("");}}>
           {rate.employeeName} · {rate.employeeNumber} · {money(rate.amount)} · Effective {rate.effectiveFrom}
         </button>)}
       </div>
