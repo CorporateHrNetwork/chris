@@ -102,6 +102,7 @@ function Sidebar() {
   const notesAccess = hasPayrollNotesAccess(profile);
   const isPlatformTenant = profile?.organization?.slug === PLATFORM_ORGANIZATION_SLUG;
   const isZermatt = profile?.organization?.slug === "zermatt-liquor-limited";
+  const isHeadHr = (profile?.roles || []).some(role => ["head hr/admin","head of hr/admin","head hr & admin","head of hr & admin","head hr and admin","head of hr and admin"].includes(String(role || "").trim().toLowerCase().replace(/\s+/g, " ")));
   const visibleGroups = useMemo(() => {
     if (authorizationLoading) return [];
     return MENU_GROUPS.filter((group) => {
@@ -111,11 +112,11 @@ function Sidebar() {
       if (group.authenticated) return true;
       if (group.id === "documents") return canViewSettings || (isZermatt && (hasPermission("employees.view") || hasPermission("recruitment.view")));
       if (group.adminOnly) return canViewSettings;
-      if (group.id === "benefits") return canViewSettings || hasPermission("benefits.view");
+      if (group.id === "benefits") return canViewSettings || isHeadHr || hasPermission("benefits.view");
       if (group.permission) return hasPermission(group.permission);
       return false;
-    }).map((group) => ({ ...group, children: group.children?.filter((child) => (!child.zermattOnly || isZermatt) && (group.id !== "documents" || canViewSettings || (child.resourceOnly && (hasPermission("employees.view") || hasPermission("recruitment.view")))) && (child.notesOnly ? notesAccess : (group.id === "benefits" && !canViewSettings ? (child.permission ? hasPermission(child.permission) : child.path === "/benefits") : (group.id === "payroll" && !hasPermission("payroll.view") ? false : !child.permission || hasPermission(child.permission))))) }));
-  }, [authorizationLoading, canViewSettings, hasPermission, isPlatformTenant, isZermatt, notesAccess]);
+    }).map((group) => ({ ...group, children: group.children?.filter((child) => (!child.zermattOnly || isZermatt) && (group.id !== "documents" || canViewSettings || (child.resourceOnly && (hasPermission("employees.view") || hasPermission("recruitment.view")))) && (group.id === "benefits" && child.path === "/benefits/gratuity" && isHeadHr ? true : child.notesOnly ? notesAccess : (group.id === "benefits" && !canViewSettings ? (child.permission ? hasPermission(child.permission) : child.path === "/benefits") : (group.id === "payroll" && !hasPermission("payroll.view") ? false : !child.permission || hasPermission(child.permission))))) }));
+  }, [authorizationLoading, canViewSettings, hasPermission, isPlatformTenant, isZermatt, notesAccess, isHeadHr]);
 
   const pathMatches = (childPath, includeQuery = false) => {
     if (!childPath) return false;
