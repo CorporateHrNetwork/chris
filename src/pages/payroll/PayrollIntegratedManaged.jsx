@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PayrollColumnExport from '../../components/payroll/PayrollColumnExport';
 import { useNavigate } from "react-router-dom";
 import {
@@ -101,6 +101,7 @@ function ExecuteIntegrated() {
   const { data: profile } = useLoad("/api/auth/me", {});
   const { data: manualPayments, load: reloadManualPayments } = useLoad("/api/payroll/runs/manual-payment-status", {});
   const [paymentEditor, setPaymentEditor] = useState(null);
+  const [expandedRunActions,setExpandedRunActions]=useState(null);
   const [periodId, setPeriodId] = useState("");
   const [lines, setLines] = useState([]);
   const [busy, setBusy] = useState("");
@@ -297,19 +298,20 @@ function ExecuteIntegrated() {
       <Panel title="Payroll Runs">
         <DataTable loading={loading} columns={["Period", "Status", "Statutory", "Employees", "Gross", "Deductions", "Net", "Action"]}>
           {(runs || []).map((run) => (
-            <tr key={run.id}>
-              <Td strong>{run.periodCode}</Td><Td><Badge>{run.status}</Badge>{manualPayments?.records?.[run.id]?.paymentStatus === "PAID" && <div role="status" style={{fontWeight:700,color:"#267d48"}}>PAID · Externally confirmed</div>}</Td><Td><Badge>{run.statutoryStatus}</Badge></Td><Td>{run.employeeCount}</Td>
+            <Fragment key={run.id}><tr>
+              <Td strong><span style={{whiteSpace:"nowrap"}}>{run.periodCode}</span></Td><Td><Badge>{run.status}</Badge>{manualPayments?.records?.[run.id]?.paymentStatus === "PAID" && <div role="status" style={{fontWeight:700,color:"#267d48"}}>PAID · Externally confirmed</div>}</Td><Td><Badge>{run.statutoryStatus}</Badge></Td><Td>{run.employeeCount}</Td>
               <Td>{money(run.grossTotal)}</Td><Td>{money(run.deductionTotal)}</Td><Td>{money(run.netPreviewTotal)}</Td>
-              <Td><div style={buttonRow}>
+              <Td><button type="button" style={{...smallButton,whiteSpace:"nowrap"}} aria-expanded={expandedRunActions===run.id} aria-controls={`run-actions-${run.id}`} onClick={()=>setExpandedRunActions(current=>current===run.id?null:run.id)}>{expandedRunActions===run.id?"Actions ▴":"Actions ▾"}</button></Td>
+            </tr>
+            {expandedRunActions===run.id&&<tr id={`run-actions-${run.id}`}><td colSpan={8} style={{...tdStyle,padding:"12px 16px"}}><div style={{...buttonRow,alignItems:"center"}}><strong style={{whiteSpace:"nowrap"}}>{run.periodCode} · Available actions</strong>
                 <button type="button" style={smallButton} disabled={busy === run.id} onClick={() => viewLines(run.id)}>View</button>
-                <PayrollColumnExport runId={run.id} />
                 {["DRAFT", "REJECTED", "SUBMITTED"].includes(run.status) && <button type="button" style={smallButton} disabled={busy === `draft-export-${run.id}`} onClick={() => exportDraftReview(run)}>{busy === `draft-export-${run.id}` ? "Exporting…" : "Export Draft Review"}</button>}
                 {(run.status === "DRAFT" || run.status === "REJECTED") && <button type="button" style={smallButton} disabled={busy === `submit-${run.id}`} onClick={() => submit(run.id)}>Submit</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `approved-export-${run.id}`} onClick={() => exportApprovedPayout(run)}>{busy === `approved-export-${run.id}` ? "Exporting…" : "Export Approved Payout"}</button>}
                 {run.status === "APPROVED" && <button type="button" style={smallButton} disabled={busy === `reopen-${run.id}` || !!manualPayments?.records?.[run.id]} onClick={() => reopen(run)}>{busy === `reopen-${run.id}` ? "Reopening…" : "Reopen for Correction"}</button>}
                 {run.status === "APPROVED" && manualPayments?.canConfirm && !manualPayments?.records?.[run.id] && <button type="button" style={smallButton} disabled={!!busy} onClick={() => setPaymentEditor({runId:run.id,periodCode:run.periodCode,expectedAmount:Number(run.netPreviewTotal),paidAmount:String(run.netPreviewTotal),paymentDate:new Date().toISOString().slice(0,10),reference:"",confirmed:false})}>Mark as Paid Manually</button>}
-              </div></Td>
-            </tr>
+              </div><PayrollColumnExport runId={run.id} /></td></tr>}
+            </Fragment>
           ))}
         </DataTable>
       </Panel>
