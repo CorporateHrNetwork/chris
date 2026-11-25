@@ -72,10 +72,10 @@ export default function TransportSupportPayroll() {
   if(!confirm){setWorkedPreview(r.data);return;}
   await load();await open(detail.run.id);setMessage(`Worked days imported and Net recalculated for ${r.data.updated} employee(s).`);
  }
- async function open(id){
+ async function open(id,{preserveFilters=false}={}){
   setWorkedFile(null);setWorkedPreview(null);setWorkedReason('');
-  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setRecoveryRequired(false);setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
-  setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));
+  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setRecoveryRequired(false);if(!preserveFilters)setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
+  setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));return r.data;
  }
  async function act(fn){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError(e.message||'Unable to complete benefit operation.');if(/source records changed|salary, employee or carry-forward records changed/i.test(e.message||''))setRecoveryRequired(true);}finally{setBusy(false);}}
  async function action(actionName){
@@ -104,9 +104,10 @@ export default function TransportSupportPayroll() {
  const editable=detail&&['DRAFT','REJECTED'].includes(detail.run.status);
  async function regenerateDraft(){
   if(!head||!editable||!ready||busy)return;
-  if(!window.confirm('Regenerate this draft from current source records? Previously saved adjustments are reused by the server. Unsaved edits will be discarded. Review the recalculated register before approval.'))return;
+  if(!window.confirm('Regenerate this draft from current source records? Previously saved adjustments are reused by the server. Unsaved employee edits will be retained for review, not automatically saved. Review the recalculated register before approval.'))return;
   const month=String(detail.run.periodMonth).slice(0,7);
-  await act(async()=>{const r=await apiRequest(`${api}/runs`,{method:'POST',body:{periodMonth:month}});await load();await open(r.data.runId);setMessage('Draft regenerated. Review recalculated amounts before approval.');showWorkspace('transport-register');});
+  const pending=editor?{employeeNumber:detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber,inputs:{...editor.inputs},reason:adjustmentReason}:null;
+  await act(async()=>{const r=await apiRequest(`${api}/runs`,{method:'POST',body:{periodMonth:month}});await load();const refreshed=await open(r.data.runId,{preserveFilters:true});const matching=pending?.employeeNumber?refreshed.lines.find(l=>l.snapshot.employeeNumber===pending.employeeNumber):null;if(matching){setEditor({lineId:matching.id,inputs:pending.inputs});setAdjustmentReason(pending.reason);setMessage('Draft regenerated. Unsaved employee adjustments retained. Review and save them explicitly.');}else if(pending){setEditor({lineId:'',inputs:pending.inputs});setAdjustmentReason(pending.reason);setMessage('Draft regenerated, but the previous employee could not be matched. Unsaved inputs retained for review; do not save against another employee.');}else setMessage('Draft regenerated. Review recalculated amounts before approval.');showWorkspace('transport-register');});
  }
  function openSalaryCorrection(){
   const line=detail?.lines.find(l=>l.id===editor?.lineId);
@@ -175,6 +176,7 @@ export default function TransportSupportPayroll() {
    <button type="button" onClick={()=>showWorkspace('transport-register')} aria-pressed={workspace==='transport-register'}>TSP Register</button>
    {head&&<button type="button" disabled={!!editor} onClick={()=>showWorkspace('transport-export')} aria-pressed={workspace==='transport-export'}>Export Excel</button>}
    {detail&&head&&editable&&<button type="button" className="transport-primary" disabled={busy||!!editor||!ready} onClick={()=>showWorkspace('transport-run')}>Review &amp; Approve</button>}
+   {head&&editable&&<button type="button" disabled={busy||!ready} onClick={regenerateDraft}>Regenerate Draft</button>}
    <div className="tsp-more"><button type="button" aria-expanded={moreOpen} onClick={()=>setMoreOpen(v=>!v)}>⋯ More Actions</button>{moreOpen&&<div className="tsp-more-menu"><button type="button" onClick={()=>{setMoreOpen(false);showWorkspace('transport-run');}}>Manage run / history</button>{head&&<button type="button" disabled={!!editor||busy} onClick={()=>navigate('/benefits/transport-support/preparation')}>Salary basis setup</button>}<button type="button" disabled={busy||!!editor} onClick={()=>{setMoreOpen(false);act(async()=>{await load();if(detail)await open(detail.run.id);await loadReadiness();});}}>Refresh register</button></div>}</div>
   </nav>
   {state&&!head&&<p role="note">Preparation, adjustments and export require the active Head HR payroll assignment for this account.</p>}

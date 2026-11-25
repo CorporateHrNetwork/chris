@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import OnboardingSalaryCorrection from '../../components/employees/OnboardingSalaryCorrection';
 import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
 import { apiDownload, apiRequest, saveDownloadedBlob } from '../../services/api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -12,10 +14,12 @@ export default function TransportSupportPreparation() {
   const requestedMonth=params.get('month')||'';
   const [file,setFile]=useState(null),[preview,setPreview]=useState(null),[records,setRecords]=useState([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+  const [toast,setToast]=useState(null);
+  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(null),6000);return()=>clearTimeout(timer);},[toast]);
   const [enabled,setEnabled]=useState(false),[preparationStatus,setPreparationStatus]=useState('AWAITING_RELEASE');
   const [staff,setStaff]=useState([]),[individual,setIndividual]=useState(null),[individualPreview,setIndividualPreview]=useState(null);
   const emptyIndividual={employeeNumber:requestedEmployee,amount:'',effectiveFrom:/^\d{4}-\d{2}$/.test(requestedMonth)?`${requestedMonth}-01`:'',reason:'',preparationId:null};
-  useEffect(()=>{if(requestedEmployee)setIndividual({...emptyIndividual});},[requestedEmployee,requestedMonth]);
+  // The linked correction uses the unified payroll salary authority, not the benefit-only form.
   async function load() {
     const response=await apiRequest(endpoint);
     setRecords(response.data||[]); setEnabled(response.preparationEnabled===true);setPreparationStatus(response.preparationStatus||'READY');
@@ -28,7 +32,7 @@ export default function TransportSupportPreparation() {
   function updateIndividual(key,value){setIndividual(s=>({...s,[key]:value}));setIndividualPreview(null);}
   async function act(fn) {
     setBusy(true);setError('');setMessage('');
-    try {await fn();} catch(e){setError(e.message||'Unable to complete this operation.');} finally{setBusy(false);}
+    try {await fn();} catch(e){setError(e.message||'Unable to complete this operation.');setToast({kind:'error',title:'Operation could not be completed',body:e.message||'Please retry.'});} finally{setBusy(false);}
   }
   async function send(path) {
     if(!file) throw new Error('Select your completed full-salary template.');
@@ -37,12 +41,15 @@ export default function TransportSupportPreparation() {
     return apiRequest(`${endpoint}/${path}`,{method:'POST',body});
   }
   return <section className="chris-salary-basis" aria-label="Transport Support Pay salary basis setup">
+    {toast&&createPortal(<aside role={toast.kind==='error'?'alert':'status'} style={{position:'fixed',top:96,right:16,zIndex:2147483000,width:'min(420px, calc(100vw - 32px))',boxSizing:'border-box',padding:18,borderRadius:12,background:'var(--chris-input-bg, #09251b)',color:'var(--chris-text-main, #fff)',border:`1px solid ${toast.kind==='error'?'#ef9a9a':'#c5a43b'}`,boxShadow:'0 8px 32px #0007'}}><button type="button" aria-label="Dismiss notification" onClick={()=>setToast(null)} style={{float:'right',background:'transparent',color:'inherit',border:0,fontSize:22,cursor:'pointer'}}>×</button><strong style={{display:'block',color:toast.kind==='error'?'#ef9a9a':'#70d89d'}}>{toast.title}</strong><p style={{margin:'8px 0 0'}}>{toast.body}</p></aside>,document.body)}
     <header className="sb-hero">
       <span className="sb-eyebrow">CHRiS · Benefits Management</span>
       <h1>Transport Support Pay</h1>
       <p className="sb-lead">Salary Basis Setup · Manage the full monthly salary references used to prepare Transport Support Pay allocations.</p>
       <button className="sb-primary" type="button" onClick={()=>navigate('/benefits/transport-support')}>Open Monthly Register &amp; Excel Export</button>
     </header>
+    <OnboardingSalaryCorrection initialEmployee={requestedEmployee} initialMonth={requestedMonth} startOpen={Boolean(requestedEmployee)}/>
+    <details><summary>Advanced: benefit-only salary preparation (does not update Main Payroll)</summary>
     <section className="sb-card" aria-labelledby="sb-import-title">
       <div className="sb-card-header">
         <h2 id="sb-import-title">Bulk Salary Basis Preparation</h2>
@@ -80,7 +87,7 @@ export default function TransportSupportPreparation() {
       <label>Correction / preparation reason <textarea aria-label="Individual salary correction reason" disabled={busy} maxLength={1000} value={individual.reason} onChange={e=>updateIndividual('reason',e.target.value)}/></label>
       </div><div className="sb-toolbar">
       <button className="sb-secondary" type="button" disabled={busy||!individual.employeeNumber||!individual.amount||!individual.effectiveFrom||!individual.reason.trim()} onClick={()=>act(async()=>{setIndividualPreview(null);const r=await apiRequest(`${endpoint}/individual/preview`,{method:'POST',body:individual});setIndividualPreview(r.data);})}>Preview individual allocation</button>
-      <button className="sb-primary" type="button" disabled={busy||!enabled||!individualPreview} onClick={()=>act(async()=>{const r=await apiRequest(`${endpoint}/individual`,{method:'POST',body:{...individual,previewToken:individualPreview.previewToken}});setMessage(r.message);setIndividual(null);setIndividualPreview(null);setPreview(null);await load();})}>Save individual salary for review</button>
+      <button className="sb-primary" type="button" disabled={busy||!enabled||!individualPreview} onClick={()=>act(async()=>{const r=await apiRequest(`${endpoint}/individual`,{method:'POST',body:{...individual,previewToken:individualPreview.previewToken}});setMessage(r.message||'Salary basis saved.');setToast({kind:'success',title:'Salary successfully saved',body:`${individual.employeeNumber} — ${staff.find(e=>e.employeeNumber===individual.employeeNumber)?.employeeName||'Employee'} · ${money(individual.amount)}. Regenerate the affected TSP draft to reflect this correction.`});setIndividual(null);setIndividualPreview(null);setPreview(null);await load();})}>Save individual salary for review</button>
       <button className="sb-quiet" type="button" disabled={busy} onClick={()=>{setIndividual(null);setIndividualPreview(null);}}>Cancel correction</button>
       </div>
       {individualPreview&&<p role="status">{individualPreview.row.employeeNumber} · {individualPreview.row.employeeName} · {individualPreview.row.branch} — Reference gross {money(individualPreview.row.amount)}; normal mid-month {money(individualPreview.row.allocation.normalMidMonth)}; eligible mid-month {money(individualPreview.row.allocation.midMonthPayable)}. Saving prepares this record only.</p>}
@@ -104,6 +111,7 @@ export default function TransportSupportPreparation() {
     </table></div>}
     <p className="sb-subtle">Previous unpaid amounts will be added on the following month’s 15th; previous overpaid amounts will be deducted in a separate column. They are reconciliations, not changes to the agreed full salary.</p>
     </section>
+    </details>
   </section>;
 }
 
