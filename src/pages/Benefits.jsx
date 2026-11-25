@@ -27,12 +27,13 @@ function Benefits() {
   const navigate = useNavigate();
   const { profile, hasPermission, loading: authorizationLoading } = useAuthorization();
   const isZermatt = profile?.organization?.slug === "zermatt-liquor-limited";
+  const isHeadHr = (profile?.roles || []).some(role => ["head hr/admin","head of hr/admin","head hr & admin","head of hr & admin","head hr and admin","head of hr and admin"].includes(String(role || "").trim().toLowerCase().replace(/\s+/g, " ")));
   const [searchParams] = useSearchParams();
   const workspace = searchParams.get("workspace") || "";
 
   if (authorizationLoading) return <div role="status">Checking Benefits access…</div>;
   const isBenefitsAdmin = hasPermission("settings.view");
-  if (!isBenefitsAdmin && !hasPermission("benefits.view")) {
+  if (!isBenefitsAdmin && !isHeadHr && !hasPermission("benefits.view")) {
     return <div role="alert" style={{ padding: 24 }}>You do not have permission to access Benefits.</div>;
   }
   if (!isBenefitsAdmin) {
@@ -44,11 +45,11 @@ function Benefits() {
         <p>Only your assigned Benefits workspaces are available. Access is limited by your branch assignment.</p>
         {hasPermission("benefits.leave_allowance.view") &&
           <button type="button" onClick={() => navigate("/benefits?workspace=leave-allowance")}>Open Leave Allowance Register</button>}
-        {hasPermission("benefits.gratuity.view") &&
+        {(isHeadHr || hasPermission("benefits.gratuity.view")) &&
           <button type="button" style={{ marginLeft: 12 }} onClick={() => navigate("/benefits/gratuity")}>Open Gratuity Accounts</button>}
         {isZermatt && hasPermission("benefits.year_end_bonus.view") &&
           <button type="button" style={{ marginLeft: 12 }} onClick={() => navigate("/benefits/year-end-bonus")}>Open Year-End Bonus</button>}
-        {!hasPermission("benefits.leave_allowance.view") && !hasPermission("benefits.gratuity.view") && !hasPermission("benefits.year_end_bonus.view") &&
+        {!hasPermission("benefits.leave_allowance.view") && !isHeadHr && !hasPermission("benefits.gratuity.view") && !hasPermission("benefits.year_end_bonus.view") &&
           <p>Your Benefits overview access is active. No additional Benefits workspaces have been assigned.</p>}
       </section>
     );
@@ -196,6 +197,7 @@ function Benefits() {
         </AnalyticsPanel>
       }
       quickActions={[
+        ...((isHeadHr || hasPermission("benefits.gratuity.view")) ? [<QuickActionCard key="gratuity" title="Gratuity Accounts" subtitle="End-of-service benefit accounts and employee statements" icon={<FaGift />} onClick={() => navigate("/benefits/gratuity")} />] : []),
         ...(isZermatt ? [<QuickActionCard key="outstation-allowance" title="Outstation Allowance Voucher" subtitle="Employee allowances, trip costs and external approval voucher" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits?workspace=outstation-allowance")} />] : []),
         ...(isZermatt ? [<QuickActionCard key="year-end-bonus" title="Year-End Bonus" subtitle="Basic + 50% of End-of-Month Gross, annual proration, CSV export" icon={<FaGift />} onClick={() => navigate("/benefits/year-end-bonus")} />] : []),
         <QuickActionCard key="transport-support" title="Transport Support Pay" subtitle="Separate benefit register, approvals, payments and carry-forward balances" icon={<FaMoneyBillWave />} onClick={() => navigate("/benefits/transport-support")} />,
