@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
 import { apiDownload, apiRequest, saveDownloadedBlob } from '../../services/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import './TransportSupportPreparation.css';
 const endpoint='/api/benefits/transport-support/preparation';
 const money=v=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN'}).format(Number(v||0));
 export default function TransportSupportPreparation() {
   const navigate=useNavigate();
+  const [params]=useSearchParams();
+  const requestedEmployee=params.get('employee')||'';
+  const requestedMonth=params.get('month')||'';
   const [file,setFile]=useState(null),[preview,setPreview]=useState(null),[records,setRecords]=useState([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [enabled,setEnabled]=useState(false),[preparationStatus,setPreparationStatus]=useState('AWAITING_RELEASE');
   const [staff,setStaff]=useState([]),[individual,setIndividual]=useState(null),[individualPreview,setIndividualPreview]=useState(null);
-  const emptyIndividual={employeeNumber:'',amount:'',effectiveFrom:'',reason:'',preparationId:null};
+  const emptyIndividual={employeeNumber:requestedEmployee,amount:'',effectiveFrom:/^\d{4}-\d{2}$/.test(requestedMonth)?`${requestedMonth}-01`:'',reason:'',preparationId:null};
+  useEffect(()=>{if(requestedEmployee)setIndividual({...emptyIndividual});},[requestedEmployee,requestedMonth]);
   async function load() {
     const response=await apiRequest(endpoint);
     setRecords(response.data||[]); setEnabled(response.preparationEnabled===true);setPreparationStatus(response.preparationStatus||'READY');

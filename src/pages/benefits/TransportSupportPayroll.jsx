@@ -29,6 +29,7 @@ export default function TransportSupportPayroll() {
  const [workedFile,setWorkedFile]=useState(null);
  const [moreOpen,setMoreOpen]=useState(false);
  const [adjustmentReason,setAdjustmentReason]=useState('');
+ const [recoveryRequired,setRecoveryRequired]=useState(false);
  const [workedPreview,setWorkedPreview]=useState(null);
  const [workedReason,setWorkedReason]=useState('');
  const [exportColumns,setExportColumns]=useState([]);
@@ -73,10 +74,10 @@ export default function TransportSupportPayroll() {
  }
  async function open(id){
   setWorkedFile(null);setWorkedPreview(null);setWorkedReason('');
-  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
+  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setRecoveryRequired(false);setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
   setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));
  }
- async function act(fn){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError(e.message||'Unable to complete benefit operation.');}finally{setBusy(false);}}
+ async function act(fn){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError(e.message||'Unable to complete benefit operation.');if(/source records changed|salary, employee or carry-forward records changed/i.test(e.message||''))setRecoveryRequired(true);}finally{setBusy(false);}}
  async function action(actionName){
   if(actionName==='REOPEN_FOR_CORRECTION'&&!window.confirm('Reopen only if external payment has not started. Withdraw any previously shared approved register and issue a new one after approval.'))return;
   await apiRequest(`${api}/runs/${detail.run.id}/action`,{method:'POST',body:{action:actionName,notes,payments:actionName==='CONFIRM_PAYMENT'?detail.lines.map(l=>({lineId:l.id,...receipts[l.id]})):undefined}});
@@ -101,6 +102,18 @@ export default function TransportSupportPayroll() {
  const canPay=detail?.run.status==='APPROVED'&&roles.includes('CHIEF_ACCOUNTANT');
  const externalReady=detail&&['APPROVED','PAID'].includes(detail.run.status);
  const editable=detail&&['DRAFT','REJECTED'].includes(detail.run.status);
+ async function regenerateDraft(){
+  if(!head||!editable||!ready||busy)return;
+  if(!window.confirm('Regenerate this draft from current source records? Previously saved adjustments are reused by the server. Unsaved edits will be discarded. Review the recalculated register before approval.'))return;
+  const month=String(detail.run.periodMonth).slice(0,7);
+  await act(async()=>{const r=await apiRequest(`${api}/runs`,{method:'POST',body:{periodMonth:month}});await load();await open(r.data.runId);setMessage('Draft regenerated. Review recalculated amounts before approval.');showWorkspace('transport-register');});
+ }
+ function openSalaryCorrection(){
+  const line=detail?.lines.find(l=>l.id===editor?.lineId);
+  if(editor&&!window.confirm('Leave this adjustment without saving to correct the salary basis?'))return;
+  const params=new URLSearchParams({employee:line?.snapshot.employeeNumber||'',month:String(detail?.run.periodMonth||periodMonth).slice(0,7)});
+  navigate(`/benefits/transport-support/preparation?${params}`);
+ }
  return <section className="chris-transport-payroll" style={{padding:24,maxWidth:1700,minWidth:0,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
   <style>{`
    .chris-transport-payroll button,
@@ -168,7 +181,7 @@ export default function TransportSupportPayroll() {
   <details><summary>Workflow guidance</summary><p><strong>Head HR prepares → approves → exports.</strong> Auditor → General Manager → Chief Accountant review, approval and payment processing take place externally using the exported register.</p>
   <p>Actual payment confirmation remains separate. An export does not confirm external approval or payment.</p>
   <p role="note">Benefit inputs and payments do not update regular salary rates, payroll runs, payslips, statutory deductions or loan recoveries.</p></details>
-  {error&&<p role="alert" style={{color:'#fca5a5'}}>{error}</p>}{message&&<p role="status">{message}</p>}
+  {error&&<p role="alert" style={{color:'#fca5a5'}}>{error}</p>}{recoveryRequired&&head&&editable&&<div role="note"><button type="button" className="transport-primary" disabled={busy||!ready} onClick={regenerateDraft}>Regenerate Draft</button><p>Previously saved adjustments are reused. Review the new totals before approval.</p></div>}{message&&<p role="status">{message}</p>}
   {!ready&&<p>Benefit processing is locked pending verified deployment. Existing records remain available for review.</p>}
   {canPay&&<button type="button" className="transport-primary" onClick={()=>{showWorkspace('transport-run');document.getElementById('transport-payment-confirmation')?.scrollIntoView({behavior:'smooth',block:'start'});}}>Mark TSP as Paid · Record Actual Payments</button>}
   <section id="transport-run" aria-label="Monthly Run" hidden={workspace!=='transport-run'}>
@@ -242,10 +255,10 @@ export default function TransportSupportPayroll() {
    {registerHeaders.length>0&&<details><summary>All register columns</summary><ul style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,180px),1fr))',gap:8}}>{registerHeaders.map(label=><li key={label}>{label}</li>)}</ul></details>}
    {detail&&<div style={{display:'flex',gap:12,flexWrap:'wrap',marginBlock:12}}>
     <label>Employee <input type="search" placeholder="Name or employee number" value={employeeQuery} onChange={event=>setEmployeeQuery(event.target.value)}/></label>
-    <details><summary>Filters</summary>{filterColumns.map(([index,label])=><label key={index}>{label} <select value={registerFilters[index]||''} onChange={event=>setRegisterFilters(current=>({...current,[index]:event.target.value}))}>
+    <details><summary>Filters</summary><div style={{display:'flex',flexWrap:'wrap',gap:12,alignItems:'end'}}>{filterColumns.map(([index,label])=><label key={index}>{label} <select value={registerFilters[index]||''} onChange={event=>setRegisterFilters(current=>({...current,[index]:event.target.value}))}>
      <option value="">All</option>
      {[...new Set(registerRows.map(row=>row[index]).filter(Boolean))].sort().map(value=><option key={value}>{value}</option>)}
-    </select></label>)}</details>
+    </select></label>)}</div></details>
     <span role="status">{filteredRows.length} of {registerRows.length} employees</span>
    </div>}
    {detail&&!filteredRows.length&&<p>No employees match the current filters.</p>}
@@ -273,12 +286,14 @@ export default function TransportSupportPayroll() {
   </section>
   {head&&editable&&editor&&<fieldset className="tsp-editor" aria-label="Employee adjustments">
      <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
+     <button type="button" disabled={busy} onClick={openSalaryCorrection}>Correct Full Salary Basis</button>
+     {recoveryRequired&&<button type="button" disabled={busy||!ready} onClick={regenerateDraft}>Regenerate Draft</button>}
      <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
      {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousMonthOutstanding','Previous Month Outstanding (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
      <details><summary>Calculation guidance</summary><p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Previous Month Short Payment and Overpayment default to the transport ledger; enter a corrected total, including zero, with a reason, or leave blank to use the ledger. Previous Month Outstanding is a separate manually entered addition to Net (default zero). Do not enter an amount already included in Short Payment or the ledger; corrections are audited. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p></details>
      <label>TSP last payable day (inclusive) <input type="date" value={editor.inputs.lastPayableDate} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,lastPayableDate:e.target.value}}))}/></label>
      <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={adjustmentReason} onChange={e=>setAdjustmentReason(e.target.value)}/></label>
-     <button className="transport-primary" disabled={busy||!ready||!adjustmentReason.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes:adjustmentReason}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
+     <button className="transport-primary" disabled={busy||!ready||recoveryRequired||!adjustmentReason.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes:adjustmentReason}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
      <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
     </fieldset>}
  </section>;
