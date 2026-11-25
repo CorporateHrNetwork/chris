@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import OnboardingSalaryCorrection from '../../components/employees/OnboardingSalaryCorrection';
 import EmployeeSearchSelect from '../../components/EmployeeSearchSelect';
 import { apiDownload, apiRequest, saveDownloadedBlob } from '../../services/api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -18,7 +19,7 @@ export default function TransportSupportPreparation() {
   const [enabled,setEnabled]=useState(false),[preparationStatus,setPreparationStatus]=useState('AWAITING_RELEASE');
   const [staff,setStaff]=useState([]),[individual,setIndividual]=useState(null),[individualPreview,setIndividualPreview]=useState(null);
   const emptyIndividual={employeeNumber:requestedEmployee,amount:'',effectiveFrom:/^\d{4}-\d{2}$/.test(requestedMonth)?`${requestedMonth}-01`:'',reason:'',preparationId:null};
-  useEffect(()=>{if(requestedEmployee)setIndividual({...emptyIndividual});},[requestedEmployee,requestedMonth]);
+  // The linked correction uses the unified payroll salary authority, not the benefit-only form.
   async function load() {
     const response=await apiRequest(endpoint);
     setRecords(response.data||[]); setEnabled(response.preparationEnabled===true);setPreparationStatus(response.preparationStatus||'READY');
@@ -47,6 +48,8 @@ export default function TransportSupportPreparation() {
       <p className="sb-lead">Salary Basis Setup · Manage the full monthly salary references used to prepare Transport Support Pay allocations.</p>
       <button className="sb-primary" type="button" onClick={()=>navigate('/benefits/transport-support')}>Open Monthly Register &amp; Excel Export</button>
     </header>
+    <OnboardingSalaryCorrection initialEmployee={requestedEmployee} initialMonth={requestedMonth} startOpen={Boolean(requestedEmployee)}/>
+    <details><summary>Advanced: benefit-only salary preparation (does not update Main Payroll)</summary>
     <section className="sb-card" aria-labelledby="sb-import-title">
       <div className="sb-card-header">
         <h2 id="sb-import-title">Bulk Salary Basis Preparation</h2>
@@ -108,6 +111,7 @@ export default function TransportSupportPreparation() {
     </table></div>}
     <p className="sb-subtle">Previous unpaid amounts will be added on the following month’s 15th; previous overpaid amounts will be deducted in a separate column. They are reconciliations, not changes to the agreed full salary.</p>
     </section>
+    </details>
   </section>;
 }
 
