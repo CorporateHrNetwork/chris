@@ -165,9 +165,18 @@ export default function TransportSupportPayroll() {
    .tsp-register-scroll th {position:sticky;top:0;background:var(--chris-input-bg);z-index:1;}
    .tsp-more {position:relative;}
    .tsp-more-menu {position:absolute;right:0;top:100%;z-index:10;min-width:220px;max-width:90vw;display:grid;gap:6px;padding:10px;border:1px solid var(--chris-border-gold);border-radius:9px;background:var(--chris-input-bg);box-shadow:0 6px 20px #0004;}
-   .tsp-editor {position:fixed;inset:0 0 0 auto;z-index:1000;width:min(560px,100%);box-sizing:border-box;overflow:auto;padding:20px;background:var(--chris-input-bg);color:var(--chris-text-main);border:1px solid var(--chris-border-gold);box-shadow:-12px 0 40px #0006;}
-   .tsp-editor label {display:block!important;margin:10px 0!important;}
-   .tsp-editor input,.tsp-editor textarea {max-width:100%;box-sizing:border-box;}
+   .tsp-editor {position:fixed;inset:0 0 0 auto;z-index:2147482000;width:min(640px,100vw);height:100dvh;min-width:0;box-sizing:border-box;margin:0;display:flex;flex-direction:column;overflow:hidden;background:var(--chris-input-bg);color:var(--chris-text-main);border-left:1px solid var(--chris-border-gold);box-shadow:-12px 0 40px #0006;}
+   .tsp-editor-header,.tsp-editor-footer {flex:none;padding:16px 20px;background:var(--chris-input-bg);}
+   .tsp-editor-header {border-bottom:1px solid var(--chris-border-gold);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+   .tsp-editor-header h2 {margin:0;font-size:18px;line-height:1.35;}
+   .tsp-editor-body {flex:1;min-height:0;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px;}
+   .tsp-editor-footer {border-top:1px solid var(--chris-border-gold);display:flex;flex-wrap:wrap;gap:10px;}
+   .tsp-editor-actions {display:flex;flex-wrap:wrap;gap:10px;}
+   .tsp-editor-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;}
+   .tsp-editor .tsp-field {display:flex!important;flex-direction:column;align-items:stretch;gap:6px;margin:0!important;min-width:0;font-size:13px;line-height:1.4;}
+   .tsp-editor .tsp-field input,.tsp-editor .tsp-field textarea {width:100%!important;max-width:100%;min-width:0;box-sizing:border-box;margin:0;}
+   .tsp-editor .tsp-field textarea {min-height:76px;resize:vertical;}
+   @media(max-width:480px){.tsp-editor-fields{grid-template-columns:minmax(0,1fr);}.tsp-editor-header,.tsp-editor-body,.tsp-editor-footer{padding:12px;}.tsp-editor-footer button{flex:1 1 100%;}}
   `}</style>
   <h1>Transport Support Pay</h1>
   {detail&&<div className="tsp-kpis"><div>Payroll period<strong>{String(detail.run.periodMonth).slice(0,7)}</strong></div><div>Status<strong>{detail.run.status.replaceAll('_',' ')}</strong></div><div>Register employees<strong>{registerRows.length}</strong></div><div>Net payable<strong>{money(detail.run.netTotal??detail.lines.reduce((sum,line)=>sum+Number(line.netPay||0),0))}</strong></div></div>}
@@ -286,18 +295,20 @@ export default function TransportSupportPayroll() {
    <details><summary>Audit history</summary>{detail.events.map((e,i)=><p key={i}>{e.action.replaceAll('_',' ')} · {e.notes} · {new Date(e.createdAt).toLocaleString('en-NG',{timeZone:'Africa/Lagos'})}</p>)}</details>
   </>}
   </section>
-  {head&&editable&&editor&&<fieldset className="tsp-editor" aria-label="Employee adjustments">
-     <legend>Edit Transport Support · Days, Pay and Prior-month Corrections</legend>
-     <button type="button" disabled={busy} onClick={openSalaryCorrection}>Correct Full Salary Basis</button>
-     {recoveryRequired&&<button type="button" disabled={busy||!ready} onClick={regenerateDraft}>Regenerate Draft</button>}
+  {head&&editable&&editor&&<section className="tsp-editor" role="dialog" aria-label="Employee adjustments">
+     <header className="tsp-editor-header"><h2>Employee Transport Support Corrections</h2><button type="button" aria-label="Close employee corrections" disabled={busy} onClick={()=>setEditor(null)}>×</button></header>
+     <div className="tsp-editor-body">
+     <div className="tsp-editor-actions"><button type="button" disabled={busy} onClick={openSalaryCorrection}>Correct Full Salary Basis</button>
+     {recoveryRequired&&<button type="button" disabled={busy||!ready} onClick={regenerateDraft}>Regenerate Draft</button>}</div>
+     {recoveryRequired&&<p role="alert">Source records changed. Regenerate the draft before saving. Unsaved inputs will be retained for review.</p>}
      <EmployeeSearchSelect label="Transport benefit employee" options={employeeOptions} value={detail.lines.find(l=>l.id===editor.lineId)?.snapshot.employeeNumber||''} disabled={busy} onChange={number=>{const line=detail.lines.find(l=>l.snapshot.employeeNumber===number);if(line)editLine(line.id);else setEditor(current=>({...current,lineId:''}));}} placeholder="Search employee name or number" />
-     {[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousMonthOutstanding','Previous Month Outstanding (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label key={key} style={{display:'inline-block',margin:8}}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
-     <details><summary>Calculation guidance</summary><p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Previous Month Short Payment and Overpayment default to the transport ledger; enter a corrected total, including zero, with a reason, or leave blank to use the ledger. Previous Month Outstanding is a separate manually entered addition to Net (default zero). Do not enter an amount already included in Short Payment or the ledger; corrections are audited. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p></details>
-     <label>TSP last payable day (inclusive) <input type="date" value={editor.inputs.lastPayableDate} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,lastPayableDate:e.target.value}}))}/></label>
-     <label>Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={adjustmentReason} onChange={e=>setAdjustmentReason(e.target.value)}/></label>
-     <button className="transport-primary" disabled={busy||!ready||recoveryRequired||!adjustmentReason.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes:adjustmentReason}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
-     <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button>
-    </fieldset>}
+     <div className="tsp-editor-fields">{[['extraDays','No Of Extra Day(S)'],['phDays','No Of Ph Day(S)'],['bonus','Bonus'],['previousShortPayment','Previous Month Short Payment (+)'],['previousMonthOutstanding','Previous Month Outstanding (+)'],['previousOverpayment','Previous Month Overpayment (−)']].map(([key,label])=><label className="tsp-field" key={key}>{label}<input type="number" min="0" step={key.endsWith('Days')?'0.0001':'0.01'} value={editor.inputs[key]} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,[key]:e.target.value}}))}/></label>)}
+     </div><details><summary>Calculation guidance</summary><p>Extra-day overtime and public holiday pay are calculated from End of the Month gross ÷ 26 × days worked, at 1.5× and 2× respectively. Saving replaces any previously entered combined amount. Previous Month Short Payment and Overpayment default to the transport ledger; enter a corrected total, including zero, with a reason, or leave blank to use the ledger. Previous Month Outstanding is a separate manually entered addition to Net (default zero). Do not enter an amount already included in Short Payment or the ledger; corrections are audited. Saving recalculates Net immediately. Corrections are audited and remaining overpayment carries forward once after actual payment confirmation.</p></details>
+     <label className="tsp-field">TSP last payable day (inclusive) <input type="date" value={editor.inputs.lastPayableDate} disabled={busy} onChange={e=>setEditor(current=>({...current,inputs:{...current.inputs,lastPayableDate:e.target.value}}))}/></label>
+     <label className="tsp-field">Adjustment reason (required) <textarea style={{display:'block',width:'100%'}} value={adjustmentReason} onChange={e=>setAdjustmentReason(e.target.value)}/></label>
+     </div><footer className="tsp-editor-footer"><button className="transport-primary" disabled={busy||!ready||recoveryRequired||!adjustmentReason.trim()||!editor.lineId} onClick={()=>act(async()=>{await apiRequest(`${api}/runs/${detail.run.id}/lines/${editor.lineId}/benefit-inputs`,{method:'PATCH',body:{inputs:editor.inputs,notes:adjustmentReason}});await load();await open(detail.run.id);setMessage('Benefit inputs saved and Net updated.');})}>Save Adjustments &amp; Recalculate Net</button>
+     <button disabled={busy} onClick={()=>setEditor(null)}>Cancel Input Changes</button></footer>
+    </section>}
  </section>;
 }
 
