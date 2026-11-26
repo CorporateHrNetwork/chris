@@ -320,7 +320,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   const hire = new Date(hireDate);
   const anniversaryYear = hire.getUTCFullYear()+1;
   const anniversary = Number.isFinite(hire.getTime()) ? dateText(new Date(Date.UTC(anniversaryYear,hire.getUTCMonth(),
-    Math.min(hire.getUTCDate(),new Date(Date.UTC(anniversaryYear,hire.getUTCMonth()+1,0)).getUTCDate()))):null;
+    Math.min(hire.getUTCDate(),new Date(Date.UTC(anniversaryYear,hire.getUTCMonth()+1,0)).getUTCDate())))):null;
   const gratuityEligible = organization?.slug !== ZERMATT_SLUG || Boolean(hireDate && anniversary && exitDate && exitDate>=anniversary);
   const gratuity = gratuityEligible ? money(eosb?.eosb?.accruedValue || 0) : 0;
   const capturedAllowances = approvedLine?.details?.customAllowances || approvedLine?.details?.allowanceItems || [];
