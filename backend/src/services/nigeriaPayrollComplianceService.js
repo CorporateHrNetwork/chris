@@ -710,7 +710,17 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   if (String(policy.jurisdiction || "").toUpperCase() !== "NG") throw payrollError("PAYROLL_JURISDICTION_UNSUPPORTED", "The active payroll policy is not a Nigeria policy.", 409);
 
   const employees = await prismaClient.employee.findMany({
-    where: { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES }, ...(organization.slug === "zermatt-liquor-limited" ? { lifecycleEvents: { none: { eventType: "DEACTIVATED", effectiveDate: { gte: new Date(`${period.periodStart.slice(0, 7)}-01T00:00:00.000Z`), lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } } }, OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }] } : {}) },
+    where: organization.slug === "zermatt-liquor-limited" ? {
+      organizationId,
+      AND: [
+        { OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }] },
+        { OR: [
+          { status: { in: CURRENT_EMPLOYEE_STATUSES }, OR: [{ exitDate: null }, { exitDate: { gte: new Date(`${period.periodStart}T00:00:00.000Z`) } }], exitProcesses: { none: { status: { in: ["IN_PROGRESS","READY_TO_COMPLETE","COMPLETED"] }, lastWorkingDay: { lt: new Date(`${period.periodStart}T00:00:00.000Z`) } } } },
+          { exitDate: { gte: new Date(`${period.periodStart}T00:00:00.000Z`), lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } },
+          { exitProcesses: { some: { status: { in: ["IN_PROGRESS","READY_TO_COMPLETE","COMPLETED"] }, lastWorkingDay: { gte: new Date(`${period.periodStart}T00:00:00.000Z`), lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } } } }
+        ] }
+      ]
+    } : { organizationId, status: { in: CURRENT_EMPLOYEE_STATUSES } },
     select: {
       id: true,
       employeeNumber: true,
@@ -719,6 +729,8 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
       lastName: true,
       employmentType: true,
       hireDate: true,
+      exitDate: true,
+      exitProcesses: { where: { status: { in: ["IN_PROGRESS","READY_TO_COMPLETE","COMPLETED"] } }, orderBy: { lastWorkingDay: "desc" }, take: 1, select: { lastWorkingDay: true } },
       costCentreId: true,
     },
     orderBy: { employeeNumber: "asc" },
@@ -863,7 +875,7 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
     for (const employee of employees) {
       const rate = rateByEmployee.get(employee.id);
       const basis = rate.fullMonthlyGross ? 26 : Number(policy.standardDays[employee.employmentType]);
-      const result = resolvePayableDays({ hireDate: employee.hireDate, periodStart: period.periodStart, periodEnd: period.periodEnd, standardDays: basis, employmentType: employee.employmentType, attendanceInput: attendanceByEmployee.get(employee.id) });
+      const result = resolvePayableDays({ hireDate: employee.hireDate, exitDate: employee.exitProcesses?.[0]?.lastWorkingDay || employee.exitDate, periodStart: period.periodStart, periodEnd: period.periodEnd, standardDays: basis, employmentType: employee.employmentType, attendanceInput: attendanceByEmployee.get(employee.id) });
       employmentDaysByEmployee.set(employee.id, result);
       if (result.requiresVerifiedDays || result.invalidDays) issues.push({ employeeNumber: employee.employeeNumber, hireDate: result.hireDate, maximumCalendarDays: result.maximumCalendarDays, issue: result.requiresVerifiedDays ? "HR-confirmed payable days required" : "Worked days exceed employment window or are invalid" });
     }
