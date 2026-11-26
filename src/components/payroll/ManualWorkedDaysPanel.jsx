@@ -18,6 +18,12 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved, initialPe
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastSaved, setLastSaved] = useState(null);
 
+  useEffect(() => {
+    if (!lastSaved) return undefined;
+    const timer = window.setTimeout(() => { setLastSaved(null); setMessage(""); }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [lastSaved]);
+
   const selectedPeriod = useMemo(
     () => (periods || []).find((period) => period.id === periodId) || null,
     [periods, periodId]
@@ -123,8 +129,10 @@ export default function ManualWorkedDaysPanel({ periods = [], onSaved, initialPe
         periodName: selectedPeriod.code || selectedPeriod.name,
       });
       setMessage(result?.message || "Worked days saved. Any affected draft payroll is marked for recalculation.");
-      // Keep entered values visible so HR sees what was saved and can correct
-      // an exception without retyping. The period change still clears them.
+      setEmployeeNumber("");
+      setWorkedDays("");
+      setWorkedHours("");
+      setNotes("");
       try {
         await refreshSavedEntries(result?.data || null);
       } catch (refreshError) {

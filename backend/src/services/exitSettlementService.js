@@ -285,8 +285,9 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
     exitPeriodVariableInputs(client, organizationId, exit.employeeId, period?.id),
   ]);
 
-  const salaryDaysEntitled = approvedLine ? 0 : countPayrollDaysThroughDate(lastWorkingDay);
-  const outstandingSalary = approvedLine ? 0 : money(dayRate * salaryDaysEntitled);
+  const payrollOwnsSalary = organization?.slug === ZERMATT_SLUG && Boolean(period);
+  const salaryDaysEntitled = approvedLine || payrollOwnsSalary ? 0 : countPayrollDaysThroughDate(lastWorkingDay);
+  const outstandingSalary = approvedLine || payrollOwnsSalary ? 0 : money(dayRate * salaryDaysEntitled);
 
   let fullLeaveAllowance = 0;
   let leaveAllowanceCalculation = null;
@@ -314,10 +315,20 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   const extraDay = unitsByCode.get(SYSTEM_VARIABLE_CODES.extraDayOvertime.code) || { quantity: 0, references: [] };
   const extraHours = unitsByCode.get(SYSTEM_VARIABLE_CODES.extraHoursOvertime.code) || { quantity: 0, references: [] };
 
-  const gratuity = money(eosb?.eosb?.accruedValue || 0);
-  const publicHolidayAmount = approvedLine ? 0 : variableValue("GROSS_DIV_26_X2", monthlyGross, publicHoliday.quantity);
-  const extraDayAmount = approvedLine ? 0 : variableValue("GROSS_DIV_26_X1_5", monthlyGross, extraDay.quantity);
-  const extraHoursAmount = approvedLine ? 0 : variableValue("GROSS_DIV_208_X1_25", monthlyGross, extraHours.quantity);
+  const hireDate = dateText(exit.employee.hireDate);
+  const exitDate = dateText(lastWorkingDay);
+  const hire = new Date(hireDate);
+  const anniversaryYear = hire.getUTCFullYear()+1;
+  const anniversary = Number.isFinite(hire.getTime()) ? dateText(new Date(Date.UTC(anniversaryYear,hire.getUTCMonth(),
+    Math.min(hire.getUTCDate(),new Date(Date.UTC(anniversaryYear,hire.getUTCMonth()+1,0)).getUTCDate())))):null;
+  const gratuityEligible = organization?.slug !== ZERMATT_SLUG || Boolean(hireDate && anniversary && exitDate && exitDate>=anniversary);
+  const gratuity = gratuityEligible ? money(eosb?.eosb?.accruedValue || 0) : 0;
+  const capturedAllowances = approvedLine?.details?.customAllowances || approvedLine?.details?.allowanceItems || [];
+  const capturedByCode = (code) => money(capturedAllowances.filter(item => item.code === code).reduce((sum,item)=>sum+Number(item.value||0),0));
+  const residual = (code,calculation,units) => money(Math.max(0,variableValue(calculation,monthlyGross,units)-capturedByCode(code)));
+  const publicHolidayAmount = residual(SYSTEM_VARIABLE_CODES.publicHolidayDays.code,"GROSS_DIV_26_X2",publicHoliday.quantity);
+  const extraDayAmount = residual(SYSTEM_VARIABLE_CODES.extraDayOvertime.code,"GROSS_DIV_26_X1_5",extraDay.quantity);
+  const extraHoursAmount = residual(SYSTEM_VARIABLE_CODES.extraHoursOvertime.code,"GROSS_DIV_208_X1_25",extraHours.quantity);
 
   return {
     salary: {
@@ -339,14 +350,16 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
           periodStart: dateText(period.periodStart),
           periodEnd: dateText(period.periodEnd),
           approvedPayrollAlreadyExists: Boolean(approvedLine),
+          payrollOwnsSalary,
           approvedPayrollRunId: approvedLine?.runId || null,
         }
       : null,
     credits: {
       gratuityEosb: {
         amount: gratuity,
+        eligible: gratuityEligible,
         source: "EOSB_ACCOUNT",
-        formula: eosb?.eosb?.formula || "Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%",
+        formula: gratuityEligible ? (eosb?.eosb?.formula || "Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%") : "Ineligible — first employment anniversary not completed",
       },
       annualLeaveAllowance: {
         amount: annualLeaveAllowance,
@@ -365,10 +378,11 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
       outstandingSalary: {
         amount: outstandingSalary,
         daysEntitled: salaryDaysEntitled,
-        source: approvedLine ? "APPROVED_PAYROLL_ALREADY_PAID" : "EXIT_MONTH_PAYROLL_PRORATION",
-        formula: approvedLine ? "0 — approved payroll already exists for exit period" : "Gross Monthly Salary ÷ 26 × entitled payroll days to exit date",
+        source: payrollOwnsSalary ? "EXIT_MONTH_PAYROLL" : approvedLine ? "APPROVED_PAYROLL_ALREADY_PAID" : "EXIT_MONTH_PAYROLL_PRORATION",
+        formula: payrollOwnsSalary ? "0 — exit-month salary scheduled through main payroll; verify approved payroll before settlement approval" : approvedLine ? "0 — approved payroll already exists for exit period" : "Gross Monthly Salary ÷ 26 × entitled payroll days to exit date",
       },
       publicHolidayDays: {
+        capturedInApprovedPayroll: capturedByCode(SYSTEM_VARIABLE_CODES.publicHolidayDays.code),
         amount: publicHolidayAmount,
         quantity: quantity(publicHoliday.quantity, "Public Holiday Days"),
         source: "RECORDED_PAYROLL_VARIABLE_INPUT",
@@ -376,6 +390,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         references: publicHoliday.references,
       },
       extraDayOvertime: {
+        capturedInApprovedPayroll: capturedByCode(SYSTEM_VARIABLE_CODES.extraDayOvertime.code),
         amount: extraDayAmount,
         quantity: quantity(extraDay.quantity, "Extra Day Overtime"),
         source: "RECORDED_PAYROLL_VARIABLE_INPUT",
@@ -383,6 +398,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         references: extraDay.references,
       },
       extraHoursOvertime: {
+        capturedInApprovedPayroll: capturedByCode(SYSTEM_VARIABLE_CODES.extraHoursOvertime.code),
         amount: extraHoursAmount,
         quantity: quantity(extraHours.quantity, "Extra Hours Overtime"),
         source: "RECORDED_PAYROLL_VARIABLE_INPUT",
@@ -466,6 +482,8 @@ function calculateAccount(system, input) {
     extraDayOvertime: money(system.credits.extraDayOvertime.amount),
     extraHoursOvertime: money(system.credits.extraHoursOvertime.amount),
     bonusGift: money(input.bonusGift),
+    outstandingTsp: money(input.outstandingTsp),
+    otherAllowances: money(input.otherAllowances),
     noticePay: money(system.salary.dayRate * noticePayDays),
     previousSalaryShortPaid: money(input.previousSalaryShortPaid),
   };
@@ -475,6 +493,11 @@ function calculateAccount(system, input) {
     salaryAdvance: money(system.debits.salaryAdvance.amount),
     noticeDeduction: money(system.salary.dayRate * noticePosition.noticeDeficiencyDays),
     unreturnedUniform: money(input.unreturnedUniform),
+    nhfAdjustment: money(input.nhfAdjustment),
+    pensionAdjustment: money(input.pensionAdjustment),
+    taxAdjustment: money(input.taxAdjustment),
+    assetRecovery: money(input.assetRecovery),
+    otherDeductions: money(input.otherDeductions),
     previousSalaryOverpaid: money(input.previousSalaryOverpaid),
   };
 
@@ -708,19 +731,19 @@ async function calculateSettlement({
         preview.credits.extraDayOvertime +
         preview.credits.extraHoursOvertime +
         preview.credits.bonusGift +
-        preview.credits.previousSalaryShortPaid
+        preview.credits.previousSalaryShortPaid + preview.credits.otherAllowances + preview.credits.outstandingTsp
       ),
       leavePayable: preview.credits.annualLeaveAllowance,
       noticePay: preview.credits.noticePay,
       gratuitySeverance: preview.credits.gratuityEosb,
-      taxAdjustment: 0,
-      pensionAdjustment: 0,
+      taxAdjustment: preview.debits.taxAdjustment,
+      pensionAdjustment: preview.debits.pensionAdjustment,
       loanRecovery: preview.debits.loanBalance,
       salaryAdvanceRecovery: preview.debits.salaryAdvance,
       otherRecovery: money(
         preview.debits.noticeDeduction +
         preview.debits.unreturnedUniform +
-        preview.debits.previousSalaryOverpaid
+        preview.debits.previousSalaryOverpaid + preview.debits.otherDeductions + preview.debits.assetRecovery + preview.debits.nhfAdjustment
       ),
       grossPayable: preview.totals.totalCredits,
       totalRecovery: preview.totals.totalDebits,
@@ -770,6 +793,8 @@ async function calculateSettlement({
           ...preview.systemItems.credits.extraHoursOvertime,
           entryMode: "SYSTEM",
         },
+        otherAllowances: { label: "Other Allowances", amount: preview.credits.otherAllowances, entryMode: "HR" },
+        outstandingTsp: { label: "Outstanding TSP", amount: preview.credits.outstandingTsp, entryMode: "HR" },
         bonusGift: {
           label: "Bonus / Gift",
           amount: preview.credits.bonusGift,
@@ -814,6 +839,11 @@ async function calculateSettlement({
           formula: "Gross ÷ 26 × system-calculated deficient notice days",
           entryMode: "HR_ENTITLEMENT_SYSTEM_CALCULATION",
         },
+        otherDeductions: { label: "Other Deductions", amount: preview.debits.otherDeductions, entryMode: "HR" },
+        assetRecovery: { label: "Unreturned Company Assets", amount: preview.debits.assetRecovery, entryMode: "HR" },
+        taxAdjustment: { label: "PAYE Adjustment", amount: preview.debits.taxAdjustment, entryMode: "HR" },
+        pensionAdjustment: { label: "Pension Adjustment", amount: preview.debits.pensionAdjustment, entryMode: "HR" },
+        nhfAdjustment: { label: "NHF Adjustment", amount: preview.debits.nhfAdjustment, entryMode: "HR" },
         unreturnedUniform: {
           label: "Unreturned Uniform",
           amount: preview.debits.unreturnedUniform,
@@ -900,7 +930,14 @@ async function assertCurrentSettlementBenefits(tx, organizationId, settlement) {
     input: snapshot.hrInputs,
     prismaClient: tx,
   });
+  if (current.payrollPeriod?.payrollOwnsSalary && !current.payrollPeriod.approvedPayrollAlreadyExists) {
+    throw settlementError("EXIT_PAYROLL_APPROVAL_REQUIRED", "Complete and approve the employee's exit-month payroll before submitting or approving the exit settlement.");
+  }
   if (
+    Math.abs(money(current.totals.totalCredits) - money(settlement.grossPayable)) >= 0.005 ||
+    Math.abs(money(current.totals.totalDebits) - money(settlement.totalRecovery)) >= 0.005 ||
+    Object.entries(current.credits).some(([key,value]) => Math.abs(money(value)-money(snapshot.creditItems?.[key]?.amount))>=0.005) ||
+    Object.entries(current.debits).some(([key,value]) => Math.abs(money(value)-money(snapshot.debitItems?.[key]?.amount))>=0.005) ||
     Math.abs(money(current.credits.gratuityEosb) - money(savedGratuity)) >= 0.005 ||
     Math.abs(money(current.credits.annualLeaveAllowance) - money(savedLeaveAllowance)) >= 0.005
   ) {
