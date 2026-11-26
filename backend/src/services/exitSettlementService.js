@@ -285,8 +285,9 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
     exitPeriodVariableInputs(client, organizationId, exit.employeeId, period?.id),
   ]);
 
-  const salaryDaysEntitled = approvedLine ? 0 : countPayrollDaysThroughDate(lastWorkingDay);
-  const outstandingSalary = approvedLine ? 0 : money(dayRate * salaryDaysEntitled);
+  const payrollOwnsSalary = organization?.slug === ZERMATT_SLUG && Boolean(period);
+  const salaryDaysEntitled = approvedLine || payrollOwnsSalary ? 0 : countPayrollDaysThroughDate(lastWorkingDay);
+  const outstandingSalary = approvedLine || payrollOwnsSalary ? 0 : money(dayRate * salaryDaysEntitled);
 
   let fullLeaveAllowance = 0;
   let leaveAllowanceCalculation = null;
@@ -346,6 +347,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
           periodStart: dateText(period.periodStart),
           periodEnd: dateText(period.periodEnd),
           approvedPayrollAlreadyExists: Boolean(approvedLine),
+          payrollOwnsSalary,
           approvedPayrollRunId: approvedLine?.runId || null,
         }
       : null,
@@ -373,8 +375,8 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
       outstandingSalary: {
         amount: outstandingSalary,
         daysEntitled: salaryDaysEntitled,
-        source: approvedLine ? "APPROVED_PAYROLL_ALREADY_PAID" : "EXIT_MONTH_PAYROLL_PRORATION",
-        formula: approvedLine ? "0 — approved payroll already exists for exit period" : "Gross Monthly Salary ÷ 26 × entitled payroll days to exit date",
+        source: payrollOwnsSalary ? "EXIT_MONTH_PAYROLL" : approvedLine ? "APPROVED_PAYROLL_ALREADY_PAID" : "EXIT_MONTH_PAYROLL_PRORATION",
+        formula: payrollOwnsSalary ? "0 — exit-month salary scheduled through main payroll; verify approved payroll before settlement approval" : approvedLine ? "0 — approved payroll already exists for exit period" : "Gross Monthly Salary ÷ 26 × entitled payroll days to exit date",
       },
       publicHolidayDays: {
         amount: publicHolidayAmount,
@@ -908,7 +910,14 @@ async function assertCurrentSettlementBenefits(tx, organizationId, settlement) {
     input: snapshot.hrInputs,
     prismaClient: tx,
   });
+  if (current.payrollPeriod?.payrollOwnsSalary && !current.payrollPeriod.approvedPayrollAlreadyExists) {
+    throw settlementError("EXIT_PAYROLL_APPROVAL_REQUIRED", "Complete and approve the employee's exit-month payroll before submitting or approving the exit settlement.");
+  }
   if (
+    Math.abs(money(current.totals.totalCredits) - money(settlement.grossPayable)) >= 0.005 ||
+    Math.abs(money(current.totals.totalDebits) - money(settlement.totalRecovery)) >= 0.005 ||
+    Object.entries(current.credits).some(([key,value]) => Math.abs(money(value)-money(snapshot.creditItems?.[key]?.amount))>=0.005) ||
+    Object.entries(current.debits).some(([key,value]) => Math.abs(money(value)-money(snapshot.debitItems?.[key]?.amount))>=0.005) ||
     Math.abs(money(current.credits.gratuityEosb) - money(savedGratuity)) >= 0.005 ||
     Math.abs(money(current.credits.annualLeaveAllowance) - money(savedLeaveAllowance)) >= 0.005
   ) {
