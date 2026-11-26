@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import EmployeeSearchSelect from "../../components/EmployeeSearchSelect";
 import { PAYROLL_CURRENCY_OPTIONS } from "../../constants/payrollCurrencies";
@@ -43,6 +44,11 @@ export default function SalaryRatesManaged() {
   const [form, setForm] = useState(blankForm);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [editingRate, setEditingRate] = useState(null);
+  const [action, setAction] = useState(null);
+  const dialogRef = useRef(null);
+  const actionTrigger = useRef(null);
+  const [actionReason,setActionReason] = useState("");
+  const [actionDate,setActionDate] = useState(today);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [importResult, setImportResult] = useState(null);
@@ -97,6 +103,22 @@ export default function SalaryRatesManaged() {
     setForm(blankForm());
   };
 
+  useEffect(() => {
+    if (!action) return;
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => { if (dialog?.open) dialog.close(); actionTrigger.current?.focus(); };
+  }, [action]);
+
+  const closeAction = () => { if (busy) return; setAction(null); reset(); setError(""); };
+  const openAction = (kind, rate, event) => {
+    actionTrigger.current = event.currentTarget;
+    setError(""); setMessage(""); setActionReason(""); setActionDate(today());
+    if (kind === "edit") startEdit(rate);
+    else reset();
+    setAction({kind,rate});
+  };
+
   const startEdit = (rate) => {
     setEditingRate(rate);
     setSelectedEmployee({
@@ -119,7 +141,7 @@ export default function SalaryRatesManaged() {
     });
     setError("");
     setMessage("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
   };
 
   const save = async (event) => {
@@ -151,6 +173,7 @@ export default function SalaryRatesManaged() {
         });
         setMessage("Salary rate saved. The effective-dated salary authority has been refreshed.");
       }
+      setAction(null);
       reset();
       await load();
     } catch (requestError) {
@@ -161,10 +184,9 @@ export default function SalaryRatesManaged() {
   };
 
   const retireRate = async (rate) => {
-    const effectiveTo = window.prompt(`Effective end date for ${rate.employeeNumber} — ${rate.employeeName} (YYYY-MM-DD):`, today());
-    if (!effectiveTo) return;
-    const reason = window.prompt("Reason for ending/retiring this salary rate:", "Salary rate ended by HR");
-    if (!reason) return;
+    const effectiveTo = actionDate;
+    const reason = actionReason.trim();
+    if (!effectiveTo || !reason) { setError("Enter an effective end date and reason."); return; }
     try {
       setBusy(`retire-${rate.id}`);
       setError("");
@@ -172,7 +194,8 @@ export default function SalaryRatesManaged() {
         method: "PATCH",
         body: JSON.stringify({ effectiveTo, reason }),
       });
-      if (editingRate?.id === rate.id) reset();
+      setAction(null);
+      reset();
       setMessage("Salary rate ended/retired. The historical authority remains preserved for audit and payroll history.");
       await load();
     } catch (requestError) {
@@ -183,9 +206,8 @@ export default function SalaryRatesManaged() {
   };
 
   const deleteRate = async (rate) => {
-    const reason = window.prompt(`Reason for deleting unused salary rate for ${rate.employeeNumber} — ${rate.employeeName}:`);
-    if (!reason) return;
-    if (!window.confirm("Delete this unused salary rate? CHRiS will refuse the deletion if the rate has supported approved payroll, and the deletion itself remains in the audit trail.")) return;
+    const reason = actionReason.trim();
+    if (!reason) { setError("Enter a reason for deletion."); return; }
     try {
       setBusy(`delete-${rate.id}`);
       setError("");
@@ -193,7 +215,8 @@ export default function SalaryRatesManaged() {
         method: "DELETE",
         body: JSON.stringify({ reason }),
       });
-      if (editingRate?.id === rate.id) reset();
+      setAction(null);
+      reset();
       setMessage("Unused salary rate deleted. The deletion remains available in the audit trail.");
       await load();
     } catch (requestError) {
@@ -263,7 +286,7 @@ export default function SalaryRatesManaged() {
       <p style={leadStyle}>Maintain effective-dated authoritative monthly gross salary rates. Branch HR & Admin Officers can enter and edit employees in their assigned branch; Head HR can manage the organization-wide register. {scopeText}</p>
 
       <Panel title={editingRate ? `Edit Salary Rate · ${editingRate.employeeNumber}` : "Individual Salary Rate"}>
-        <form style={formGrid} onSubmit={save}>
+        {!action && <form style={formGrid} onSubmit={save}>
           <EmployeeSearchSelect
             label="Employee"
             value={form.employeeNumber}
@@ -281,9 +304,10 @@ export default function SalaryRatesManaged() {
             <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : editingRate ? "Save Salary Rate Changes" : "Save Salary Rate"}</button>
             {editingRate && <button type="button" style={secondaryButton} onClick={reset} disabled={Boolean(busy)}>Cancel Edit</button>}
           </div>
-        </form>
+        </form>}
 
-        {selectedEmployee && (
+
+        {selectedEmployee && !action && (
           <div style={authorityNote}>
             {editingRate ? (
               <><strong>Controlled correction:</strong> changes are audited. If this salary rate has already supported approved payroll, CHRiS will preserve the historical rate and require a new effective-dated salary rate instead of rewriting payroll history.</>
@@ -322,14 +346,50 @@ export default function SalaryRatesManaged() {
               <Td strong>{rate.employeeNumber}</Td><Td>{rate.employeeName}</Td><Td>{money(rate.amount, rate.currency)}</Td>
               <Td>{rate.effectiveFrom}</Td><Td>{rate.effectiveTo || "Open-ended"}</Td><Td><Badge>{rate.status}</Badge></Td>
               <Td><div style={actionRow}>
-                {capabilities.canManageEmployeeFinancialInputs && rate.status !== "RETIRED" && <button type="button" style={smallButton} onClick={() => startEdit(rate)}>Edit</button>}
-                {capabilities.canManageEmployeeFinancialInputs && rate.status === "ACTIVE" && <button type="button" style={smallButton} onClick={() => retireRate(rate)} disabled={Boolean(busy)}>End / Retire</button>}
-                {capabilities.canDeleteEmployeeFinancialInputs && <button type="button" style={dangerButton} onClick={() => deleteRate(rate)} disabled={Boolean(busy)}>Delete</button>}
+                {capabilities.canManageEmployeeFinancialInputs && rate.status !== "RETIRED" && <button type="button" style={smallButton} disabled={Boolean(busy)} onClick={(event) => openAction("edit",rate,event)}>Edit</button>}
+                {capabilities.canManageEmployeeFinancialInputs && rate.status === "ACTIVE" && <button type="button" style={smallButton} onClick={(event) => openAction("retire",rate,event)} disabled={Boolean(busy)}>End / Retire</button>}
+                {capabilities.canDeleteEmployeeFinancialInputs && <button type="button" style={dangerButton} onClick={(event) => openAction("delete",rate,event)} disabled={Boolean(busy)}>Delete</button>}
               </div></Td>
             </tr>
           ))}
         </DataTable>
       </Panel>
+      {action && createPortal(
+        <dialog ref={dialogRef} aria-labelledby="salary-action-title" onCancel={(event)=>{event.preventDefault();closeAction();}}
+          style={{...panelStyle,position:"fixed",margin:"auto",width:"min(760px, calc(100% - 32px))",maxHeight:"calc(100dvh - 32px)",overflowY:"auto",boxSizing:"border-box",color:"#F7FAF8",background:"var(--chris-ui-panel-background, #09271b)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:12}}>
+            <h2 id="salary-action-title" style={{...panelTitle,margin:0}}>{action.kind==="edit"?"Edit Salary Rate":action.kind==="retire"?"End / Retire Salary Rate":"Delete Unused Salary Rate"}</h2>
+            <button type="button" aria-label="Close salary action" style={secondaryButton} disabled={Boolean(busy)} onClick={closeAction}>×</button>
+          </div>
+          <p style={authorityNote}>{action.rate.employeeNumber} · {action.rate.employeeName} · {money(action.rate.amount,action.rate.currency)} · {action.rate.effectiveFrom}</p>
+          {error && <Feedback>{error}</Feedback>}
+          {action.kind==="edit" ? <>
+        <form style={{...formGrid,gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))"}} onSubmit={save}>
+          <EmployeeSearchSelect
+            label="Employee"
+            value={form.employeeNumber}
+            onChange={selectEmployee}
+            disabled={Boolean(editingRate)}
+            required
+            placeholder="Search employee number or name"
+          />
+          <Input type="number" label="Monthly Gross Salary" value={form.amount} onChange={setField("amount")} min="0.01" step="0.01" required />
+          <Select label="Currency" value={form.currency} onChange={setField("currency")} options={PAYROLL_CURRENCY_OPTIONS} />
+          <Input type="date" label="Effective From" value={form.effectiveFrom} onChange={setField("effectiveFrom")} required />
+          <Input type="date" label="Effective To (optional)" value={form.effectiveTo} onChange={setField("effectiveTo")} />
+          <Input label="Reason" value={form.reason} onChange={setField("reason")} placeholder="Salary review, promotion, correction or opening authority" />
+          <div style={buttonCell}>
+            <button style={primaryButton} disabled={Boolean(busy) || !form.employeeNumber}>{busy === "save" ? "Saving…" : editingRate ? "Save Salary Rate Changes" : "Save Salary Rate"}</button>
+            {editingRate && <button type="button" style={secondaryButton} onClick={closeAction} disabled={Boolean(busy)}>Cancel Edit</button>}
+          </div>
+        </form>
+            <p style={authorityNote}>Approved payroll history remains protected. A qualifying effective-dated salary increase preserves paid TSP and carries eligible shortfalls forward.</p>
+          </> : <form style={{display:"grid",gap:14}} onSubmit={event=>{event.preventDefault();if(action.kind==="retire") retireRate(action.rate);else deleteRate(action.rate);}}>
+            {action.kind==="retire" ? <Input type="date" label="Effective end date" value={actionDate} onChange={setActionDate} required/> : <p>Only unused salary rates may be deleted. Financial history protections and audit records remain in place.</p>}
+            <Input label="Reason" value={actionReason} onChange={setActionReason} required/>
+            <div style={buttonCell}><button type="submit" style={action.kind==="delete"?dangerButton:primaryButton} disabled={Boolean(busy)}>{busy?"Saving…":action.kind==="retire"?"Confirm End / Retire":"Confirm Delete"}</button><button type="button" style={secondaryButton} disabled={Boolean(busy)} onClick={closeAction}>Cancel</button></div>
+          </form>}
+        </dialog>,document.body)}
     </section>
   );
 }
