@@ -38,5 +38,20 @@ test("Onboarding offers an explicit future-month revision with preview and clear
  assert.ok(ui.includes('apiRequest("/api/onboarding/salary-revision"'));
  assert.ok(ui.includes("revisionMode ? newEffectiveFrom : selected.effectiveFrom"));
  assert.ok(ui.includes("Historical approved payroll and TSP runs remain unchanged"));
- assert.ok(ui.includes("Create future salary allocation"));
+ assert.ok(ui.includes("Create effective-dated salary allocation"));
+});
+
+test("Approved November increase preserves paid midmonth and carries shortfall into December",()=>{
+ const {splitSalary}=require("../src/services/zermattSalarySplit");
+ const inputs={employmentType:"Full-Time",hireDate:"2025-01-01",periodMonth:"2026-11"};
+ const old=splitSalary({...inputs,fullMonthlyGross:150000});
+ const revised=splitSalary({...inputs,fullMonthlyGross:200000});
+ assert.equal(old.midMonthPayable,37500);
+ assert.equal(revised.endMonthGross,150000);
+ assert.equal(revised.midMonthPayable-old.midMonthPayable,12500);
+ assert.equal(revised.midMonthPayable+12500,62500);
+ const service=read("backend/src/services/zermattSalaryRateControlService.js");
+ assert.ok(service.includes("SALARY_REVISION_EXISTING_SHORTFALL"));
+ assert.ok(service.includes("SALARY_REVISION_NEXT_TSP_EXISTS"));
+ assert.ok(service.includes("INSERT INTO public.zermatt_midmonth_balances"));
 });
