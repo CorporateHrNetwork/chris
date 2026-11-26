@@ -482,6 +482,8 @@ function calculateAccount(system, input) {
     extraDayOvertime: money(system.credits.extraDayOvertime.amount),
     extraHoursOvertime: money(system.credits.extraHoursOvertime.amount),
     bonusGift: money(input.bonusGift),
+    outstandingTsp: money(input.outstandingTsp),
+    otherAllowances: money(input.otherAllowances),
     noticePay: money(system.salary.dayRate * noticePayDays),
     previousSalaryShortPaid: money(input.previousSalaryShortPaid),
   };
@@ -491,6 +493,11 @@ function calculateAccount(system, input) {
     salaryAdvance: money(system.debits.salaryAdvance.amount),
     noticeDeduction: money(system.salary.dayRate * noticePosition.noticeDeficiencyDays),
     unreturnedUniform: money(input.unreturnedUniform),
+    nhfAdjustment: money(input.nhfAdjustment),
+    pensionAdjustment: money(input.pensionAdjustment),
+    taxAdjustment: money(input.taxAdjustment),
+    assetRecovery: money(input.assetRecovery),
+    otherDeductions: money(input.otherDeductions),
     previousSalaryOverpaid: money(input.previousSalaryOverpaid),
   };
 
@@ -724,19 +731,19 @@ async function calculateSettlement({
         preview.credits.extraDayOvertime +
         preview.credits.extraHoursOvertime +
         preview.credits.bonusGift +
-        preview.credits.previousSalaryShortPaid
+        preview.credits.previousSalaryShortPaid + preview.credits.otherAllowances + preview.credits.outstandingTsp
       ),
       leavePayable: preview.credits.annualLeaveAllowance,
       noticePay: preview.credits.noticePay,
       gratuitySeverance: preview.credits.gratuityEosb,
-      taxAdjustment: 0,
-      pensionAdjustment: 0,
+      taxAdjustment: preview.debits.taxAdjustment,
+      pensionAdjustment: preview.debits.pensionAdjustment,
       loanRecovery: preview.debits.loanBalance,
       salaryAdvanceRecovery: preview.debits.salaryAdvance,
       otherRecovery: money(
         preview.debits.noticeDeduction +
         preview.debits.unreturnedUniform +
-        preview.debits.previousSalaryOverpaid
+        preview.debits.previousSalaryOverpaid + preview.debits.otherDeductions + preview.debits.assetRecovery + preview.debits.nhfAdjustment
       ),
       grossPayable: preview.totals.totalCredits,
       totalRecovery: preview.totals.totalDebits,
@@ -786,6 +793,8 @@ async function calculateSettlement({
           ...preview.systemItems.credits.extraHoursOvertime,
           entryMode: "SYSTEM",
         },
+        otherAllowances: { label: "Other Allowances", amount: preview.credits.otherAllowances, entryMode: "HR" },
+        outstandingTsp: { label: "Outstanding TSP", amount: preview.credits.outstandingTsp, entryMode: "HR" },
         bonusGift: {
           label: "Bonus / Gift",
           amount: preview.credits.bonusGift,
@@ -830,6 +839,11 @@ async function calculateSettlement({
           formula: "Gross ÷ 26 × system-calculated deficient notice days",
           entryMode: "HR_ENTITLEMENT_SYSTEM_CALCULATION",
         },
+        otherDeductions: { label: "Other Deductions", amount: preview.debits.otherDeductions, entryMode: "HR" },
+        assetRecovery: { label: "Unreturned Company Assets", amount: preview.debits.assetRecovery, entryMode: "HR" },
+        taxAdjustment: { label: "PAYE Adjustment", amount: preview.debits.taxAdjustment, entryMode: "HR" },
+        pensionAdjustment: { label: "Pension Adjustment", amount: preview.debits.pensionAdjustment, entryMode: "HR" },
+        nhfAdjustment: { label: "NHF Adjustment", amount: preview.debits.nhfAdjustment, entryMode: "HR" },
         unreturnedUniform: {
           label: "Unreturned Uniform",
           amount: preview.debits.unreturnedUniform,
