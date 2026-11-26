@@ -44,6 +44,7 @@ export default function SalaryRatesManaged() {
   const [form, setForm] = useState(blankForm);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [editingRate, setEditingRate] = useState(null);
+  const [revisionMode,setRevisionMode] = useState(false);
   const [action, setAction] = useState(null);
   const dialogRef = useRef(null);
   const actionTrigger = useRef(null);
@@ -100,6 +101,7 @@ export default function SalaryRatesManaged() {
   const reset = () => {
     setSelectedEmployee(null);
     setEditingRate(null);
+    setRevisionMode(false);
     setForm(blankForm());
   };
 
@@ -121,6 +123,7 @@ export default function SalaryRatesManaged() {
 
   const startEdit = (rate) => {
     setEditingRate(rate);
+    setRevisionMode(false);
     setSelectedEmployee({
       employeeNumber: rate.employeeNumber,
       employeeName: rate.employeeName,
@@ -150,7 +153,9 @@ export default function SalaryRatesManaged() {
       setBusy("save");
       setError("");
       setMessage("");
-      if (editingRate && form.effectiveFrom > editingRate.effectiveFrom && form.effectiveFrom.endsWith("-01") && Number(form.amount)>Number(editingRate.amount) && form.currency===editingRate.currency && (form.effectiveTo||"")===(editingRate.effectiveTo||"")) {
+      if (editingRate && revisionMode) {
+        if (!form.effectiveFrom.endsWith("-01") || form.effectiveFrom <= editingRate.effectiveFrom) throw new Error("Choose the first day of the approved salary month, after the original rate began. Select the historical rate covering that month.");
+        if (form.currency!==editingRate.currency || (form.effectiveTo||"")!==(editingRate.effectiveTo||"")) throw new Error("A salary revision preserves the source currency and end date.");
         if (!window.confirm("Create a new effective-dated salary allocation? Paid TSP history remains unchanged; eligible shortfalls carry forward.")) return;
         const response=await apiRequest("/api/onboarding/salary-revision",{method:"POST",body:JSON.stringify({rateId:editingRate.id,amount:form.amount,effectiveFrom:form.effectiveFrom,reason:form.reason})});
         setMessage("Salary revision saved. Regenerate affected drafts."+ (Number(response.data?.carryForward)>0 ? " Next-month short payment: "+money(response.data.carryForward,form.currency):""));
@@ -177,7 +182,7 @@ export default function SalaryRatesManaged() {
       reset();
       await load();
     } catch (requestError) {
-      setError(requestError?.message || "Unable to save salary rate.");
+      if (editingRate && !revisionMode && /submitted, approved or paid TSP run/.test(requestError?.message || "")) { setRevisionMode(true); setError("This rate has protected TSP history. Revision mode is now selected. Confirm the approved effective month (first day), amount and reason, then save again. If the selected rate starts later than the approved month, select the rate covering that month instead."); } else setError(requestError?.message || "Unable to save salary rate.");
     } finally {
       setBusy("");
     }
@@ -364,6 +369,8 @@ export default function SalaryRatesManaged() {
           <p style={authorityNote}>{action.rate.employeeNumber} · {action.rate.employeeName} · {money(action.rate.amount,action.rate.currency)} · {action.rate.effectiveFrom}</p>
           {error && <Feedback>{error}</Feedback>}
           {action.kind==="edit" ? <>
+            <label style={authorityNote}><input type="checkbox" checked={revisionMode} onChange={event=>{setRevisionMode(event.target.checked);setError("");}}/> Create effective-dated salary revision (including eligible paid mid-month TSP)</label>
+            {revisionMode && <p style={authorityNote}>Select the first day of the approved salary month. Use the rate covering that month as the source. Paid TSP is preserved and eligible shortfalls carry forward. Approved main payroll cannot be rewritten.</p>}
         <form style={{...formGrid,gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))"}} onSubmit={save}>
           <EmployeeSearchSelect
             label="Employee"
