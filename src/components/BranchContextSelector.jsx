@@ -86,7 +86,7 @@ export default function BranchContextSelector({ compact = false }) {
     const next = event.target.value;
     setValue(next);
     setActiveLocationId(next || null);
-    window.location.reload();
+    // MainLayout remounts scoped content on the location event; no document navigation.
   };
 
   const wrapStyle = compact ? compactWrapStyle : pageWrapStyle;
