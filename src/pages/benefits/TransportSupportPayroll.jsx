@@ -74,7 +74,15 @@ export default function TransportSupportPayroll() {
  }
  async function open(id,{preserveFilters=false}={}){
   setWorkedFile(null);setWorkedPreview(null);setWorkedReason('');
-  const r=await apiRequest(`${api}/runs/${id}`);setDetail(r.data);setRecoveryRequired(false);if(!preserveFilters)setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
+  let r=await apiRequest(`${api}/runs/${id}`);
+  let needsRegeneration=false;
+  if(r.data.responsibilities?.includes('HEAD_HR')&&['DRAFT','REJECTED'].includes(r.data.run.status)){
+   const refresh=await apiRequest(`${api}/runs/${id}/refresh-draft`,{method:'POST'});
+   needsRegeneration=Boolean(refresh.data.regenerationRequired);
+   if(refresh.data.updated>0){r=await apiRequest(`${api}/runs/${id}`);await load();setMessage(`Register synchronized: ${refresh.data.updated} employee line(s) refreshed. Review before approval.`);}
+   if(needsRegeneration)setMessage('Employee coverage changed. Regenerate the draft to update the register.');
+  }
+  setDetail(r.data);setRecoveryRequired(needsRegeneration);if(!preserveFilters)setRegisterFilters({});setMonth(String(r.data.run.periodMonth).slice(0,7));
   setReceipts(Object.fromEntries(r.data.lines.map(l=>[l.id,{actualPaid:l.actualPaid??'',reference:l.paymentReference||''}])));setNotes('');setEditor(null);setExportColumns(r.data.register.headers.map((_,i)=>i));return r.data;
  }
  async function act(fn){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError(e.message||'Unable to complete benefit operation.');if(/source records changed|salary, employee or carry-forward records changed/i.test(e.message||''))setRecoveryRequired(true);}finally{setBusy(false);}}
