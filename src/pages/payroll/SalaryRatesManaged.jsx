@@ -128,7 +128,11 @@ export default function SalaryRatesManaged() {
       setBusy("save");
       setError("");
       setMessage("");
-      if (editingRate) {
+      if (editingRate && form.effectiveFrom > editingRate.effectiveFrom && form.effectiveFrom.endsWith("-01") && Number(form.amount)>Number(editingRate.amount) && form.currency===editingRate.currency && (form.effectiveTo||"")===(editingRate.effectiveTo||"")) {
+        if (!window.confirm("Create a new effective-dated salary allocation? Paid TSP history remains unchanged; eligible shortfalls carry forward.")) return;
+        const response=await apiRequest("/api/onboarding/salary-revision",{method:"POST",body:JSON.stringify({rateId:editingRate.id,amount:form.amount,effectiveFrom:form.effectiveFrom,reason:form.reason})});
+        setMessage("Salary revision saved. Regenerate affected drafts."+ (Number(response.data?.carryForward)>0 ? " Next-month short payment: "+money(response.data.carryForward,form.currency):""));
+      } else if (editingRate) {
         await apiRequest(`/api/payroll/salary-rates/${editingRate.id}`, {
           method: "PATCH",
           body: JSON.stringify({
