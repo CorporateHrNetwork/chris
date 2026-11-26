@@ -81,6 +81,13 @@ const EMPTY_SETTLEMENT = {
   noticePayDays: "",
   previousSalaryShortPaid: "",
   unreturnedUniform: "",
+  otherAllowances: "",
+  outstandingTsp: "",
+  otherDeductions: "",
+  assetRecovery: "",
+  taxAdjustment: "",
+  pensionAdjustment: "",
+  nhfAdjustment: "",
   previousSalaryOverpaid: "",
   currency: "NGN",
   notes: "",
@@ -94,6 +101,13 @@ function settlementFormFromRecord(record) {
     noticePayDays: String(hrInputs.noticePayDays || ""),
     previousSalaryShortPaid: String(hrInputs.previousSalaryShortPaid || ""),
     unreturnedUniform: String(hrInputs.unreturnedUniform || ""),
+    otherAllowances: String(hrInputs.otherAllowances || ""),
+    outstandingTsp: String(hrInputs.outstandingTsp || ""),
+    otherDeductions: String(hrInputs.otherDeductions || ""),
+    assetRecovery: String(hrInputs.assetRecovery || ""),
+    taxAdjustment: String(hrInputs.taxAdjustment || ""),
+    pensionAdjustment: String(hrInputs.pensionAdjustment || ""),
+    nhfAdjustment: String(hrInputs.nhfAdjustment || ""),
     previousSalaryOverpaid: String(hrInputs.previousSalaryOverpaid || ""),
     currency: record.currency || "NGN",
     notes: record.calculationSnapshot?.hrSupplementaryNote || "",
@@ -319,6 +333,13 @@ export default function EmployeeExits() {
         noticePayDays: String(settlementForm.noticePayDays || 0),
         previousSalaryShortPaid: String(settlementForm.previousSalaryShortPaid || 0),
         unreturnedUniform: String(settlementForm.unreturnedUniform || 0),
+        otherAllowances: String(settlementForm.otherAllowances || 0),
+        outstandingTsp: String(settlementForm.outstandingTsp || 0),
+        otherDeductions: String(settlementForm.otherDeductions || 0),
+        assetRecovery: String(settlementForm.assetRecovery || 0),
+        taxAdjustment: String(settlementForm.taxAdjustment || 0),
+        pensionAdjustment: String(settlementForm.pensionAdjustment || 0),
+        nhfAdjustment: String(settlementForm.nhfAdjustment || 0),
         previousSalaryOverpaid: String(settlementForm.previousSalaryOverpaid || 0),
       });
       apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview?${params.toString()}`)
@@ -345,6 +366,13 @@ export default function EmployeeExits() {
     settlementForm.noticePayDays,
     settlementForm.previousSalaryShortPaid,
     settlementForm.unreturnedUniform,
+    settlementForm.otherAllowances,
+    settlementForm.outstandingTsp,
+    settlementForm.otherDeductions,
+    settlementForm.assetRecovery,
+    settlementForm.taxAdjustment,
+    settlementForm.pensionAdjustment,
+    settlementForm.nhfAdjustment,
     settlementForm.previousSalaryOverpaid,
   ]);
   useEffect(() => {
@@ -885,7 +913,7 @@ export default function EmployeeExits() {
       setNoticePeriodReason("");
       setFeedback("Notice period saved. Recalculate the Exit Settlement Account and approve it again before payout.");
       const params = new URLSearchParams();
-      for (const key of ["bonusGift", "noticePayDays", "previousSalaryShortPaid", "unreturnedUniform", "previousSalaryOverpaid"]) {
+      for (const key of ["bonusGift", "noticePayDays", "previousSalaryShortPaid", "unreturnedUniform", "otherAllowances", "previousSalaryOverpaid"]) {
         params.set(key, String(settlementForm[key] || 0));
       }
       const preview = await apiRequest(`/api/exits/${encodeURIComponent(settlementExitId)}/settlement/preview?${params.toString()}`);
@@ -906,6 +934,13 @@ export default function EmployeeExits() {
       "noticePayDays",
       "previousSalaryShortPaid",
       "unreturnedUniform",
+      "otherAllowances",
+      "outstandingTsp",
+      "otherDeductions",
+      "assetRecovery",
+      "taxAdjustment",
+      "pensionAdjustment",
+      "nhfAdjustment",
       "previousSalaryOverpaid",
     ];
     const body = { ...settlementForm };
@@ -1122,6 +1157,8 @@ export default function EmployeeExits() {
                       <SettlementLine label="Extra Hours Work Overtime" value={accountCredits?.extraHoursOvertime} currency={accountSalary?.currency} source="System · Recorded payroll rule" />
                       <SettlementInputLine label="Bonus / Gift" value={settlementForm.bonusGift} onChange={(value) => setSettlementField("bonusGift", value)} amount={accountCredits?.bonusGift} currency={accountSalary?.currency} />
                       <SettlementInputLine label="In Lieu of Notice Pay" inputLabel="Days" value={settlementForm.noticePayDays} onChange={(value) => setSettlementField("noticePayDays", value)} amount={accountCredits?.noticePay} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Other Allowances" value={settlementForm.otherAllowances} onChange={(value) => setSettlementField("otherAllowances", value)} amount={accountCredits?.otherAllowances} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Outstanding TSP" value={settlementForm.outstandingTsp} onChange={(value) => setSettlementField("outstandingTsp", value)} amount={accountCredits?.outstandingTsp} currency={accountSalary?.currency} />
                       <SettlementInputLine label="Previous Salary Short Paid" value={settlementForm.previousSalaryShortPaid} onChange={(value) => setSettlementField("previousSalaryShortPaid", value)} amount={accountCredits?.previousSalaryShortPaid} currency={accountSalary?.currency} />
                     </SettlementAccountSection>
                     </div>
@@ -1142,6 +1179,11 @@ export default function EmployeeExits() {
                         currency={accountSalary?.currency}
                       />
                       <SettlementInputLine label="Unreturned Uniform" value={settlementForm.unreturnedUniform} onChange={(value) => setSettlementField("unreturnedUniform", value)} amount={accountDebits?.unreturnedUniform} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Other Deductions" value={settlementForm.otherDeductions} onChange={(value) => setSettlementField("otherDeductions", value)} amount={accountDebits?.otherDeductions} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Unreturned Company Assets" value={settlementForm.assetRecovery} onChange={(value) => setSettlementField("assetRecovery", value)} amount={accountDebits?.assetRecovery} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="PAYE Adjustment" value={settlementForm.taxAdjustment} onChange={(value) => setSettlementField("taxAdjustment", value)} amount={accountDebits?.taxAdjustment} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="Pension Adjustment" value={settlementForm.pensionAdjustment} onChange={(value) => setSettlementField("pensionAdjustment", value)} amount={accountDebits?.pensionAdjustment} currency={accountSalary?.currency} />
+                      <SettlementInputLine label="NHF Adjustment" value={settlementForm.nhfAdjustment} onChange={(value) => setSettlementField("nhfAdjustment", value)} amount={accountDebits?.nhfAdjustment} currency={accountSalary?.currency} />
                       <SettlementInputLine label="Previous Salary Overpaid" value={settlementForm.previousSalaryOverpaid} onChange={(value) => setSettlementField("previousSalaryOverpaid", value)} amount={accountDebits?.previousSalaryOverpaid} currency={accountSalary?.currency} />
                     </SettlementAccountSection>
                     </div>
@@ -1207,6 +1249,8 @@ export default function EmployeeExits() {
                         ["Extra Hours Work Overtime", accountCredits?.extraHoursOvertime],
                         ["Bonus / Gift", accountCredits?.bonusGift],
                         ["In Lieu of Notice Pay", accountCredits?.noticePay],
+                        ["Other Allowances", accountCredits?.otherAllowances],
+                        ["Outstanding TSP", accountCredits?.outstandingTsp],
                         ["Previous Salary Short Paid", accountCredits?.previousSalaryShortPaid],
                       ]}
                       currency={accountSalary?.currency}
@@ -1218,6 +1262,11 @@ export default function EmployeeExits() {
                         ["Salary Advance", accountDebits?.salaryAdvance],
                         ["In Lieu of Notice Deduction", accountDebits?.noticeDeduction],
                         ["Unreturned Uniform", accountDebits?.unreturnedUniform],
+                        ["Other Deductions", accountDebits?.otherDeductions],
+                        ["Unreturned Company Assets", accountDebits?.assetRecovery],
+                        ["PAYE Adjustment", accountDebits?.taxAdjustment],
+                        ["Pension Adjustment", accountDebits?.pensionAdjustment],
+                        ["NHF Adjustment", accountDebits?.nhfAdjustment],
                         ["Previous Salary Overpaid", accountDebits?.previousSalaryOverpaid],
                       ]}
                       currency={accountSalary?.currency}
@@ -1332,7 +1381,9 @@ export default function EmployeeExits() {
                             ["Extra Hours Work Overtime", accountCredits?.extraHoursOvertime],
                             ["Bonus / Gift", accountCredits?.bonusGift],
                             ["In Lieu of Notice Pay", accountCredits?.noticePay],
-                            ["Previous Salary Short Paid", accountCredits?.previousSalaryShortPaid],
+                            ["Other Allowances", accountCredits?.otherAllowances],
+                        ["Outstanding TSP", accountCredits?.outstandingTsp],
+                        ["Previous Salary Short Paid", accountCredits?.previousSalaryShortPaid],
                           ]}
                           currency={accountSalary?.currency || settlement.currency}
                         />
@@ -1343,7 +1394,12 @@ export default function EmployeeExits() {
                             ["Salary Advance", accountDebits?.salaryAdvance],
                             ["In Lieu of Notice Deduction", accountDebits?.noticeDeduction],
                             ["Unreturned Uniform", accountDebits?.unreturnedUniform],
-                            ["Previous Salary Overpaid", accountDebits?.previousSalaryOverpaid],
+                            ["Other Deductions", accountDebits?.otherDeductions],
+                        ["Unreturned Company Assets", accountDebits?.assetRecovery],
+                        ["PAYE Adjustment", accountDebits?.taxAdjustment],
+                        ["Pension Adjustment", accountDebits?.pensionAdjustment],
+                        ["NHF Adjustment", accountDebits?.nhfAdjustment],
+                        ["Previous Salary Overpaid", accountDebits?.previousSalaryOverpaid],
                           ]}
                           currency={accountSalary?.currency || settlement.currency}
                         />
