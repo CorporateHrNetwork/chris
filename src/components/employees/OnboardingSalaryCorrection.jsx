@@ -52,10 +52,10 @@ export default function OnboardingSalaryCorrection({initialEmployee='',initialMo
     if (reason.trim().length < 8) { setError("Enter an explanation of at least eight characters for the correction audit."); return; }
     if (!preview || Number(preview.fullMonthlyGross) !== corrected) { setError("Preview the allocation from the full salary before saving."); return; }
     if (revisionMode && (!newEffectiveFrom || !newEffectiveFrom.endsWith("-01"))) {
-      setError("Select the first day of a future effective salary month.");return;
+      setError("Select the first day of the approved effective salary month.");return;
     }
     const confirmation = revisionMode
-      ? `Create a NEW salary rate for ${selected.employeeName} effective ${newEffectiveFrom}? Full gross ${money(corrected)}, Main Payroll ${money(preview.endMonthGross)}, TSP ${money(preview.normalMidMonth)}. The previous rate is preserved through the preceding month.`
+      ? `Create a NEW salary rate for ${selected.employeeName} effective ${newEffectiveFrom}? Full gross ${money(corrected)}, Main Payroll ${money(preview.endMonthGross)}, TSP ${money(preview.normalMidMonth)}. Paid mid-month history is preserved; an eligible shortfall is carried to next month.`
       : `Apply ${money(corrected)} to ${selected.employeeName}? Main end-month ${money(preview.endMonthGross)} and independent TSP ${money(preview.normalMidMonth)}. Draft payroll/TSP must be regenerated; approved periods are protected.`;
     if (!window.confirm(confirmation)) return;
     setSaving(true);
@@ -75,7 +75,8 @@ export default function OnboardingSalaryCorrection({initialEmployee='',initialMo
             },
           });
       const savedMessage=`Salary allocation saved for ${selected.employeeName} (${selected.employeeNumber}). Full gross: ${money(response.data.amount)}; main payroll end-month: ${money(response.data.endMonthGross)}; TSP basis updated in Benefits. Regenerate affected draft Main Payroll and TSP before approval.`;
-      setMessage(savedMessage);setToast(savedMessage);
+      const resultMessage=savedMessage+(Number(response.data.carryForward)>0 ? ` Next-month Previous Month Short Payment: ${money(response.data.carryForward)}.` : "");
+      setMessage(resultMessage);setToast(resultMessage);
       setSelected(null);setReason("");setAmount("");setPreview(null);setRevisionMode(false);setNewEffectiveFrom("");
       const updated = await apiRequest(`/api/onboarding/salary-corrections?name=${encodeURIComponent(name.trim())}`);
       setRows(updated.data || []);
@@ -124,7 +125,7 @@ export default function OnboardingSalaryCorrection({initialEmployee='',initialMo
               onChange={e=>{setNewEffectiveFrom(e.target.value ? e.target.value+"-01":"");setPreview(null);}} />
           </label>}
           <p style={{fontSize:13,marginTop:8}}>
-            Historical approved payroll and TSP runs remain unchanged. The new rate starts after the last protected period; the old rate ends the preceding day.
+            Historical approved payroll and TSP runs remain unchanged. A paid mid-month TSP may qualify for a same-month increase and automatic next-month shortfall. Approved Main Payroll remains protected.
           </p>
         </div>
         <label>Correct monthly gross salary (₦) *
@@ -136,7 +137,7 @@ export default function OnboardingSalaryCorrection({initialEmployee='',initialMo
         <button type="button" className="qa-secondary" disabled={previewBusy} onClick={async()=>{
           setError("");setPreview(null);
           if(!Number.isFinite(Number(amount)) || Number(amount)<=0) {setError("Enter a positive full gross amount.");return;}
-          if(revisionMode && !newEffectiveFrom) {setError("Select the future effective salary month before calculating.");return;}
+          if(revisionMode && !newEffectiveFrom) {setError("Select the approved effective salary month before calculating.");return;}
           setPreviewBusy(true);
           try {
             const r=await apiRequest("/api/onboarding/salary-allocation-preview",{
@@ -157,7 +158,7 @@ export default function OnboardingSalaryCorrection({initialEmployee='',initialMo
           <p>Main Payroll and TSP remain separate. No payment is triggered by saving this allocation. Existing TSP overtime, PH, short payments and overpayments are preserved.</p>
         </div>}
         <p>Existing rate starts {selected.effectiveFrom}. Use the new effective-dated allocation option where approved Main Payroll or TSP history prevents editing.</p>
-        <button type="button" className="qa-primary" onClick={save} disabled={saving || !preview}>{saving?"Saving allocations…":revisionMode?"Create future salary allocation":"Save and map salary allocations"}</button>
+        <button type="button" className="qa-primary" onClick={save} disabled={saving || !preview}>{saving?"Saving allocations…":revisionMode?"Create effective-dated salary allocation":"Save and map salary allocations"}</button>
       </div>}
     </>}
   </section>;

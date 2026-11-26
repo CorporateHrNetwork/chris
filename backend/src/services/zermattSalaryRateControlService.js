@@ -281,6 +281,7 @@ async function createEffectiveDatedSalaryRevision({
   organizationId, actorUserId, rateId, input, prismaClient = prisma,
 }) {
   return prismaClient.$transaction(async tx => {
+    await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",organizationId);
     const existing = await lockRate(tx, organizationId, rateId);
     if (existing.status !== "ACTIVE") {
       throw controlError("SALARY_REVISION_SOURCE_NOT_ACTIVE", "Select the employee's current active salary rate.", 409);
@@ -307,22 +308,37 @@ async function createEffectiveDatedSalaryRevision({
       throw controlError("SALARY_REVISION_APPROVED_MAIN_PAYROLL_LOCKED",
         "Choose an effective month after the latest approved Main Payroll period.",409,mainHistory);
     }
-    // The TSP generator uses an organization-wide monthly run. Changes to a
-    // salary basis must begin after the latest submitted/approved/paid TSP run.
+    // Permit a same-month increase only against a fully paid employee snapshot.
+    // Later runs and unsettled approvals still block the transition.
     const tspHistory = await tx.$queryRawUnsafe(
-      `SELECT "periodMonth",status FROM public.zermatt_midmonth_runs
-        WHERE "organizationId"=$1 AND status IN ('SUBMITTED','APPROVED','PAID')
-        ORDER BY "periodMonth" DESC LIMIT 1`, organizationId
+      `SELECT r.id,r."periodMonth",r.status,l.id AS "lineId",l.snapshot,l."actualPaid"
+        FROM public.zermatt_midmonth_runs r
+        LEFT JOIN public.zermatt_midmonth_lines l ON l."organizationId"=r."organizationId"
+          AND l."runId"=r.id AND l."employeeId"=$2
+        WHERE r."organizationId"=$1 AND r."periodMonth">=$3::date
+          AND r.status NOT IN ('DRAFT','REJECTED')
+        ORDER BY r."periodMonth" DESC FOR UPDATE OF r`, organizationId,existing.employeeId,from
     );
-    if (tspHistory.length) {
-      const protectedMonth = dateOnly(tspHistory[0].periodMonth instanceof Date
-        ? tspHistory[0].periodMonth.toISOString().slice(0,10)
-        : String(tspHistory[0].periodMonth).slice(0,10),"Protected TSP Period");
-      if (from.slice(0,7) <= protectedMonth.slice(0,7)) {
+    let paidTransition=null;
+    if(tspHistory.length){
+      const paid=tspHistory[0];
+      const protectedMonth=new Date(paid.periodMonth).toISOString().slice(0,10);
+      if(tspHistory.length!==1 || protectedMonth!==from || paid.status!=="PAID" ||
+         !paid.lineId || paid.actualPaid==null || !paid.snapshot ||
+         Number(paid.snapshot.fullMonthlyGross)!==Number(existing.fullMonthlyGross) ||
+         Number(paid.actualPaid)!==Number(paid.snapshot.netPay) ||
+         amount<=Number(existing.fullMonthlyGross) ||
+         paid.snapshot.benefitInputs?.lastPayableDate ||
+         paid.snapshot.benefitInputs?.previousShortPayment!=null) {
         throw controlError("SALARY_REVISION_PROTECTED_TSP_PERIOD",
-          "Choose a salary effective month later than the latest submitted, approved or paid TSP run.",409,
-          { periodMonth:protectedMonth,status:tspHistory[0].status });
+          "Protected TSP history requires a future month or a separately reviewed reconciliation.",409);
       }
+      const nextRuns=await tx.$queryRawUnsafe(
+        `SELECT id FROM public.zermatt_midmonth_runs WHERE "organizationId"=$1
+           AND "periodMonth">$2::date LIMIT 1`,organizationId,from);
+      if(nextRuns.length)throw controlError("SALARY_REVISION_NEXT_TSP_EXISTS",
+        "The next TSP run already exists. Review its reconciliation before changing salary.",409);
+      paidTransition=paid;
     }
     const employee = await tx.employee.findFirst({
       where:{id:existing.employeeId,organizationId},
@@ -344,6 +360,29 @@ async function createEffectiveDatedSalaryRevision({
     );
     if (futureRows.length) throw controlError("SALARY_REVISION_OVERLAPPING_RATE",
       "Another active salary rate already covers the proposed month.",409);
+    let carryForward=0;
+    if(paidTransition){
+      const old=paidTransition.snapshot;
+      const oldEntitlement=Number(old.currentEntitlement);
+      const original=splitSalary({fullMonthlyGross:Number(existing.fullMonthlyGross),
+        employmentType:employee.employmentType,hireDate:employee.hireDate,periodMonth:from.slice(0,7)});
+      if(!Number.isFinite(oldEntitlement) || original.eligibleDays!==15 ||
+        oldEntitlement!==original.normalMidMonth || Number(old.allocation?.midMonthPercentage)!==original.midMonthPercentage ||
+        allocation.midMonthPercentage!==original.midMonthPercentage){
+        throw controlError("SALARY_REVISION_COMPLEX_TSP_RECONCILIATION",
+          "Prorated or exceptional TSP allocation requires separate review.",409);
+      }
+      carryForward=(Math.round(allocation.midMonthPayable*100)-Math.round(oldEntitlement*100))/100;
+      if(carryForward<=0)throw controlError("SALARY_REVISION_INVALID_SHORTFALL","Expected a positive shortfall.",409);
+      const balances=await tx.$queryRawUnsafe(
+        `SELECT id FROM public.zermatt_midmonth_balances WHERE "organizationId"=$1 AND "sourceLineId"=$2 AND kind='UNPAID'`,
+        organizationId,paidTransition.lineId);
+      if(balances.length)throw controlError("SALARY_REVISION_EXISTING_SHORTFALL","An existing balance requires separate reconciliation.",409);
+      await tx.$executeRawUnsafe(
+        `INSERT INTO public.zermatt_midmonth_balances(id,"organizationId","employeeId",kind,"dueMonth",amount,"sourceLineId")
+          VALUES($1,$2,$3,'UNPAID',($4::date+INTERVAL '1 month')::date,$5,$6)`,
+        crypto.randomUUID(),organizationId,existing.employeeId,from,carryForward,paidTransition.lineId);
+    }
     const previous = mapRate(existing);
     const priorEnd = await tx.$queryRawUnsafe(
       `UPDATE public.payroll_salary_rates SET "effectiveTo"=($3::date - INTERVAL '1 day')::date,
@@ -367,7 +406,7 @@ async function createEffectiveDatedSalaryRevision({
       newValue:{effectiveTo:priorEnd[0].effectiveTo,newSalaryRateId:newId},reason});
     await audit(tx,{organizationId,actorUserId,rateId:newId,
       action:"EFFECTIVE_DATED_SALARY_REVISION_CREATED",previousValue:{sourceRateId:rateId},
-      newValue:{...created,tspNormalBasis:allocation.normalMidMonth,policyVersion:allocation.policyVersion},reason});
+      newValue:{...created,tspNormalBasis:allocation.normalMidMonth,policyVersion:allocation.policyVersion,carryForward,paidSourceLineId:paidTransition?.lineId||null},reason});
     await tx.organizationAudit.create({data:{
       organizationId,actorUserId:actorUserId||null,entityType:"TransportBenefitSalaryBasis",
       entityId:existing.employeeId,action:"TSP_FUTURE_SALARY_BASIS_CREATED",
@@ -379,7 +418,7 @@ async function createEffectiveDatedSalaryRevision({
     await markDraftRunsRecalculationRequired({organizationId,actorUserId,
       reason:"New future-effective salary rate "+newId+" requires draft payroll recalculation.",prismaClient:tx});
     return {...created,allocation,previousRateId:rateId,previousEffectiveTo:priorEnd[0].effectiveTo,
-      approvedHistoryPreserved:true,tspDraftRegenerationRequired:true};
+      approvedHistoryPreserved:true,tspDraftRegenerationRequired:true,carryForward};
   });
 }
 

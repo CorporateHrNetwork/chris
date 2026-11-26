@@ -539,7 +539,7 @@ export default function PayrollComponentsManaged({ kind }) {
             <Td>{money(row.totalAmount)}</Td><Td>{money(row.outstandingAmount)}</Td>
             <Td>{row.installmentCount} × {money(row.nominalInstallmentAmount)}</Td>
             <Td>{row.startPeriod}</Td><Td>{row.endPeriod}</Td><Td><Badge>{row.status}</Badge></Td>
-            <Td><div style={buttonRow}><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button><button type="button" style={dangerButton} onClick={() => deleteDeductionPlan(row)} disabled={row.status === "CANCELLED" || busy === `delete-plan-${row.id}`}>{busy === `delete-plan-${row.id}` ? "Deleting…" : "Delete"}</button></div></Td>
+            <Td><CompactActions><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button><button type="button" style={dangerButton} onClick={() => deleteDeductionPlan(row)} disabled={row.status === "CANCELLED" || busy === `delete-plan-${row.id}`}>{busy === `delete-plan-${row.id}` ? "Deleting…" : "Delete"}</button></CompactActions></Td>
           </tr>)}
         </DataTable> : <InputRegister rows={inputs} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} />}
       </Panel>
@@ -560,6 +560,10 @@ export default function PayrollComponentsManaged({ kind }) {
   );
 }
 
+function CompactActions({children}) {
+  return <details style={{minWidth:90}}><summary style={{...smallButton,cursor:"pointer",whiteSpace:"nowrap"}}>Actions</summary><div style={{...buttonRow,flexDirection:"column",alignItems:"stretch",marginTop:6}}>{children}</div></details>;
+}
+
 function InputRegister({ rows, onEdit = null, onDelete = null, busy = "" }) {
   const hasActions = Boolean(onEdit || onDelete);
   return <DataTable columns={["Period", "Employee", "Component", "Input", "Reference Period", "Source", "Status", ...(hasActions ? ["Action"] : [])]}>
@@ -571,10 +575,10 @@ function InputRegister({ rows, onEdit = null, onDelete = null, busy = "" }) {
       <Td>{row.referencePayrollPeriodCode || "—"}</Td>
       <Td>{String(row.source || "").replaceAll("_", " ")}</Td>
       <Td><Badge>{row.status}</Badge></Td>
-      {hasActions && <Td><div style={buttonRow}>
+      {hasActions && <Td><CompactActions>
         {onEdit && <button type="button" style={smallButton} onClick={() => onEdit(row)} disabled={row.status !== "ACTIVE"}>Edit</button>}
         {onDelete && <button type="button" style={dangerButton} onClick={() => onDelete(row)} disabled={row.status !== "ACTIVE" || busy === `delete-${row.id}`}>{busy === `delete-${row.id}` ? "Deleting…" : "Delete"}</button>}
-      </div></Td>}
+      </CompactActions></Td>}
     </tr>)}
   </DataTable>;
 }
