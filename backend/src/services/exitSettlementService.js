@@ -323,9 +323,12 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
     Math.min(hire.getUTCDate(),new Date(Date.UTC(anniversaryYear,hire.getUTCMonth()+1,0)).getUTCDate()))):null;
   const gratuityEligible = organization?.slug !== ZERMATT_SLUG || Boolean(hireDate && anniversary && exitDate && exitDate>=anniversary);
   const gratuity = gratuityEligible ? money(eosb?.eosb?.accruedValue || 0) : 0;
-  const publicHolidayAmount = approvedLine ? 0 : variableValue("GROSS_DIV_26_X2", monthlyGross, publicHoliday.quantity);
-  const extraDayAmount = approvedLine ? 0 : variableValue("GROSS_DIV_26_X1_5", monthlyGross, extraDay.quantity);
-  const extraHoursAmount = approvedLine ? 0 : variableValue("GROSS_DIV_208_X1_25", monthlyGross, extraHours.quantity);
+  const capturedAllowances = approvedLine?.details?.customAllowances || approvedLine?.details?.allowanceItems || [];
+  const capturedByCode = (code) => money(capturedAllowances.filter(item => item.code === code).reduce((sum,item)=>sum+Number(item.value||0),0));
+  const residual = (code,calculation,units) => money(Math.max(0,variableValue(calculation,monthlyGross,units)-capturedByCode(code)));
+  const publicHolidayAmount = residual(SYSTEM_VARIABLE_CODES.publicHolidayDays.code,"GROSS_DIV_26_X2",publicHoliday.quantity);
+  const extraDayAmount = residual(SYSTEM_VARIABLE_CODES.extraDayOvertime.code,"GROSS_DIV_26_X1_5",extraDay.quantity);
+  const extraHoursAmount = residual(SYSTEM_VARIABLE_CODES.extraHoursOvertime.code,"GROSS_DIV_208_X1_25",extraHours.quantity);
 
   return {
     salary: {
@@ -379,6 +382,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         formula: payrollOwnsSalary ? "0 — exit-month salary scheduled through main payroll; verify approved payroll before settlement approval" : approvedLine ? "0 — approved payroll already exists for exit period" : "Gross Monthly Salary ÷ 26 × entitled payroll days to exit date",
       },
       publicHolidayDays: {
+        capturedInApprovedPayroll: capturedByCode(SYSTEM_VARIABLE_CODES.publicHolidayDays.code),
         amount: publicHolidayAmount,
         quantity: quantity(publicHoliday.quantity, "Public Holiday Days"),
         source: "RECORDED_PAYROLL_VARIABLE_INPUT",
@@ -386,6 +390,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         references: publicHoliday.references,
       },
       extraDayOvertime: {
+        capturedInApprovedPayroll: capturedByCode(SYSTEM_VARIABLE_CODES.extraDayOvertime.code),
         amount: extraDayAmount,
         quantity: quantity(extraDay.quantity, "Extra Day Overtime"),
         source: "RECORDED_PAYROLL_VARIABLE_INPUT",
@@ -393,6 +398,7 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
         references: extraDay.references,
       },
       extraHoursOvertime: {
+        capturedInApprovedPayroll: capturedByCode(SYSTEM_VARIABLE_CODES.extraHoursOvertime.code),
         amount: extraHoursAmount,
         quantity: quantity(extraHours.quantity, "Extra Hours Overtime"),
         source: "RECORDED_PAYROLL_VARIABLE_INPUT",
