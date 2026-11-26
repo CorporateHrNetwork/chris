@@ -712,8 +712,8 @@ async function executeNigeriaDraftPayroll({ organizationId, actorUserId, periodI
   const employees = await prismaClient.employee.findMany({
     where: organization.slug === "zermatt-liquor-limited" ? {
       organizationId,
+      OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }],
       AND: [
-        { OR: [{ hireDate: null }, { hireDate: { lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } }] },
         { OR: [
           { status: { in: CURRENT_EMPLOYEE_STATUSES }, OR: [{ exitDate: null }, { exitDate: { gte: new Date(`${period.periodStart}T00:00:00.000Z`) } }], exitProcesses: { none: { status: { in: ["IN_PROGRESS","READY_TO_COMPLETE","COMPLETED"] }, lastWorkingDay: { lt: new Date(`${period.periodStart}T00:00:00.000Z`) } } } },
           { exitDate: { gte: new Date(`${period.periodStart}T00:00:00.000Z`), lte: new Date(`${period.periodEnd}T23:59:59.999Z`) } },
