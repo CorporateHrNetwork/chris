@@ -314,7 +314,14 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
   const extraDay = unitsByCode.get(SYSTEM_VARIABLE_CODES.extraDayOvertime.code) || { quantity: 0, references: [] };
   const extraHours = unitsByCode.get(SYSTEM_VARIABLE_CODES.extraHoursOvertime.code) || { quantity: 0, references: [] };
 
-  const gratuity = money(eosb?.eosb?.accruedValue || 0);
+  const hireDate = dateText(exit.employee.hireDate);
+  const exitDate = dateText(lastWorkingDay);
+  const hire = new Date(hireDate);
+  const anniversaryYear = hire.getUTCFullYear()+1;
+  const anniversary = Number.isFinite(hire.getTime()) ? dateText(new Date(Date.UTC(anniversaryYear,hire.getUTCMonth(),
+    Math.min(hire.getUTCDate(),new Date(Date.UTC(anniversaryYear,hire.getUTCMonth()+1,0)).getUTCDate()))):null;
+  const gratuityEligible = organization?.slug !== ZERMATT_SLUG || Boolean(hireDate && anniversary && exitDate && exitDate>=anniversary);
+  const gratuity = gratuityEligible ? money(eosb?.eosb?.accruedValue || 0) : 0;
   const publicHolidayAmount = approvedLine ? 0 : variableValue("GROSS_DIV_26_X2", monthlyGross, publicHoliday.quantity);
   const extraDayAmount = approvedLine ? 0 : variableValue("GROSS_DIV_26_X1_5", monthlyGross, extraDay.quantity);
   const extraHoursAmount = approvedLine ? 0 : variableValue("GROSS_DIV_208_X1_25", monthlyGross, extraHours.quantity);
@@ -345,8 +352,9 @@ async function deriveSystemItems({ client, organizationId, exit, input }) {
     credits: {
       gratuityEosb: {
         amount: gratuity,
+        eligible: gratuityEligible,
         source: "EOSB_ACCOUNT",
-        formula: eosb?.eosb?.formula || "Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%",
+        formula: gratuityEligible ? (eosb?.eosb?.formula || "Gross Monthly Salary × (Actual Days in Service ÷ 30) × 7.5%") : "Ineligible — first employment anniversary not completed",
       },
       annualLeaveAllowance: {
         amount: annualLeaveAllowance,
