@@ -955,6 +955,7 @@ export default function EmployeeExits() {
     const accountDebits = snapshotReady && (!settlementCanRecalculate || !previewReady) ? Object.fromEntries(
       Object.entries(snapshot.debitItems).map(([key, item]) => [key, Number(item?.amount || 0)])
     ) : settlementPreview?.debits || {};
+    const showGratuity = (snapshotReady && !settlementCanRecalculate ? snapshot.creditItems?.gratuityEosb?.eligible : settlementPreview?.systemItems?.credits?.gratuityEosb?.eligible ?? snapshot.creditItems?.gratuityEosb?.eligible) !== false;
     const accountTotals = snapshotReady && (!settlementCanRecalculate || !previewReady) ? snapshot.totals : settlementPreview?.totals || {
       totalCredits: Number(settlement?.grossPayable || 0),
       totalDebits: Number(settlement?.totalRecovery || 0),
@@ -1113,7 +1114,7 @@ export default function EmployeeExits() {
                   <div className="exit-settlement-account-columns">
                     <div className="exit-settlement-credit-column">
                     <SettlementAccountSection title="Benefits" tone="credit">
-                      <SettlementLine label="Gratuity / EoSB" value={accountCredits?.gratuityEosb} currency={accountSalary?.currency} source="System · EoSB Account" />
+                      {showGratuity && <SettlementLine label="Gratuity / EoSB" value={accountCredits?.gratuityEosb} currency={accountSalary?.currency} source="System · EoSB Account" />}
                       <SettlementLine label="Full / Prorated Annual Leave Allowance" value={accountCredits?.annualLeaveAllowance} currency={accountSalary?.currency} source="System · Leave Allowance formula" />
                       <SettlementLine label="Full / Prorated Outstanding Salary" value={accountCredits?.outstandingSalary} currency={accountSalary?.currency} source="System · Payroll to exit date" />
                       <SettlementLine label="Public Holiday Days" value={accountCredits?.publicHolidayDays} currency={accountSalary?.currency} source="System · Recorded payroll rule" />
@@ -1198,7 +1199,7 @@ export default function EmployeeExits() {
                     <PrintableSettlementTable
                       title="Benefits"
                       items={[
-                        ["Gratuity / EoSB", accountCredits?.gratuityEosb],
+                        ...(showGratuity ? [["Gratuity / EoSB", accountCredits?.gratuityEosb]] : []),
                         ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
                         ["Full / Prorated Outstanding Salary", accountCredits?.outstandingSalary],
                         ["Public Holiday Days", accountCredits?.publicHolidayDays],
@@ -1323,7 +1324,7 @@ export default function EmployeeExits() {
                         <PrintableSettlementTable
                           title="Benefits"
                           items={[
-                            ["Gratuity / EoSB", accountCredits?.gratuityEosb],
+                            ...(showGratuity ? [["Gratuity / EoSB", accountCredits?.gratuityEosb]] : []),
                             ["Full / Prorated Annual Leave Allowance", accountCredits?.annualLeaveAllowance],
                             ["Full / Prorated Outstanding Salary", accountCredits?.outstandingSalary],
                             ["Public Holiday Days", accountCredits?.publicHolidayDays],
