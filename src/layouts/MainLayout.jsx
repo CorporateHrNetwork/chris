@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getActiveLocationId } from "../services/api";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/layout/Sidebar/Sidebar";
@@ -86,6 +87,13 @@ function StandaloneBackButton() {
 
 function MainLayout({ children }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [branchScope,setBranchScope] = useState(() => getActiveLocationId() || "head-office");
+  useEffect(() => {
+    const refreshScope = () => setBranchScope(getActiveLocationId() || "head-office");
+    window.addEventListener("chris:location-context-changed",refreshScope);
+    refreshScope();
+    return () => window.removeEventListener("chris:location-context-changed",refreshScope);
+  }, []);
 
   useEffect(() => {
     const toggleMobileNav = () => setMobileNavOpen((current) => !current);
@@ -284,8 +292,8 @@ function MainLayout({ children }) {
         }}
       >
         <Topbar />
-        <ZermattProbationNotice />
-        <ZermattLeaveReturnNotice />
+        <ZermattProbationNotice key={`probation-${branchScope}`} />
+        <ZermattLeaveReturnNotice key={`leave-${branchScope}`} />
 
         <main
           className="chris-main-content"
@@ -365,7 +373,7 @@ function MainLayout({ children }) {
             }}
           >
             <StandaloneBackButton />
-            {children}
+            <div key={branchScope}>{children}</div>
             <div className="chris-support-escalation" aria-label="CHRiS Support Escalation">
               <span>Need support?</span>
               <a href="https://wa.me/2349112993759" target="_blank" rel="noreferrer">WhatsApp: +234 911 299 3759</a>
