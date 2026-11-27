@@ -2077,7 +2077,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
       append("Employment Evidence",["Metric","Value","Qualification"],[
         ["Opening episode headcount",e.opening,"Recorded episodes only; completeness not established"],
         ["Closing episode headcount",e.closing,"Recorded episodes only; completeness not established"],
-        ["Recorded exits",e.departures,"EXITED episode endings only"],
+        ["Recorded exits",e.departures,"Terminated, resigned or retired episode endings only"],
         ["Recorded hires",e.starters,"First employment episodes"],
         ["Recorded rehires",e.rehires,"Subsequent employment episodes"],
         ["Episode turnover proxy (%)",e.opening+e.closing>0?200*e.departures/(e.opening+e.closing):"Unavailable","Requires episode coverage verification before use as actual turnover"]
@@ -2179,7 +2179,7 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
       });
       workforceComparison = require("../services/payrollWorkforceIntelligence").comparePayrollWorkforce(previous,lines);
       const inPeriod = d => d && d >= start && d < end;
-      const departures = episodes.filter(x=>inPeriod(x.endDate) && x.endStatus==="EXITED");
+      const departures = episodes.filter(x=>inPeriod(x.endDate) && ["TERMINATED","RESIGNED","RETIRED"].includes(x.endStatus));
       const starters = episodes.filter(x=>inPeriod(x.startDate));
       const opening = new Set(episodes.filter(x=>x.startDate<start && (!x.endDate || x.endDate>=start)).map(x=>x.employeeId)).size;
       const closing = new Set(episodes.filter(x=>x.startDate<end && (!x.endDate || x.endDate>=end)).map(x=>x.employeeId)).size;
