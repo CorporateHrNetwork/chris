@@ -99,6 +99,7 @@ export default function PayrollComponentsManaged({ kind }) {
 
   const [components, setComponents] = useState([]);
   const [inputs, setInputs] = useState([]);
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [plans, setPlans] = useState([]);
   const [legacyRows, setLegacyRows] = useState([]);
   const [periods, setPeriods] = useState([]);
@@ -419,6 +420,14 @@ export default function PayrollComponentsManaged({ kind }) {
   };
 
   const openPeriods = periods.filter((period) => period.status !== "CLOSED");
+  const searchTerms = employeeSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matchesEmployee = (row) => {
+    const searchable = `${row.employeeNumber || ""} ${row.employeeName || ""}`.toLowerCase();
+    return searchTerms.every(term => searchable.includes(term));
+  };
+  const matchingInputs = inputs.filter(matchesEmployee);
+  const matchingPlans = plans.filter(matchesEmployee);
+  const matchingLegacy = legacyRows.filter(matchesEmployee);
 
   return (
     <section style={pageStyle}>
@@ -531,9 +540,17 @@ export default function PayrollComponentsManaged({ kind }) {
       {error && <Feedback>{error}</Feedback>}
       {message && <div style={successStyle}>{message}</div>}
 
+      <Panel title="Search Employee Registers">
+        <div style={{display:"flex",gap:12,alignItems:"end",flexWrap:"wrap"}}>
+          <label style={{...fieldLabel,flex:"1 1 260px"}}><span>Employee name or number</span><input type="search" value={employeeSearch} onChange={event => setEmployeeSearch(event.target.value)} placeholder="Type employee name or number" style={inputStyle} /></label>
+          <button type="button" style={smallButton} onClick={() => setEmployeeSearch("")} disabled={!employeeSearch}>Clear search</button>
+        </div>
+        <p role="status" style={controlNote}>{searchTerms.length ? `${matchingInputs.length + matchingPlans.length + matchingLegacy.length} matching register records` : "Showing all records within your selected branch."}</p>
+      </Panel>
+
       <Panel title={isDeduction ? "Recurring Deduction Plans" : "Payroll Input Register"}>
         {isDeduction ? <DataTable loading={loading} columns={["Employee", "Component", "Total", "Outstanding", "Installments", "Start", "Finish", "Status", "Action"]}>
-          {plans.map((row) => <tr key={row.id}>
+          {matchingPlans.map((row) => <tr key={row.id}>
             <Td strong>{row.employeeNumber} — {row.employeeName}</Td>
             <Td>{row.componentCode} — {row.componentName}</Td>
             <Td>{money(row.totalAmount)}</Td><Td>{money(row.outstandingAmount)}</Td>
@@ -541,17 +558,17 @@ export default function PayrollComponentsManaged({ kind }) {
             <Td>{row.startPeriod}</Td><Td>{row.endPeriod}</Td><Td><Badge>{row.status}</Badge></Td>
             <Td><CompactActions><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button><button type="button" style={dangerButton} onClick={() => deleteDeductionPlan(row)} disabled={row.status === "CANCELLED" || busy === `delete-plan-${row.id}`}>{busy === `delete-plan-${row.id}` ? "Deleting…" : "Delete"}</button></CompactActions></Td>
           </tr>)}
-        </DataTable> : <InputRegister rows={inputs.filter(row => row.status === "ACTIVE")} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} />}
+        </DataTable> : <InputRegister rows={matchingInputs.filter(row => row.status === "ACTIVE")} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} />}
       </Panel>
 
-      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs.filter(row => row.status === "ACTIVE")} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} /></Panel>}
+      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={matchingInputs.filter(row => row.status === "ACTIVE")} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} /></Panel>}
 
-      <Panel title={isDeduction ? "One-Time Deduction History" : "One-Time Allowance History"}><InputRegister rows={inputs.filter(row => row.status !== "ACTIVE")} /></Panel>
+      <Panel title={isDeduction ? "One-Time Deduction History" : "One-Time Allowance History"}><InputRegister rows={matchingInputs.filter(row => row.status !== "ACTIVE")} /></Panel>
 
       {legacyRows.length > 0 && <Panel title="Existing Effective-Dated Components">
         <p style={controlNote}>These are earlier fixed/percentage payroll components retained for history and audit. For ZERMATT, indefinite legacy Other Allowances/Deductions do not carry into a new payroll period. Only an item explicitly tied to the selected period can participate; new recurring deductions must use the finite installment schedule above.</p>
         <DataTable columns={["Scope", "Code", "Name", "Value", "Effective", "Status"]}>
-          {legacyRows.map((row) => <tr key={row.id}>
+          {matchingLegacy.map((row) => <tr key={row.id}>
             <Td strong>{row.employeeNumber || "ALL"}</Td><Td>{row.code}</Td><Td>{row.name}</Td>
             <Td>{row.calculationType === "FIXED" ? money(row.amount) : `${row.percentage}% Gross`}</Td>
             <Td>{row.effectiveFrom}{row.effectiveTo ? ` → ${row.effectiveTo}` : " → open"}</Td><Td><Badge>{row.status}</Badge></Td>
