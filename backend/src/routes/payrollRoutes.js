@@ -1483,7 +1483,7 @@ function payrollAppendRegisterSheet(workbook, sheetName, headers, rows) {
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
 }
 
-function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage }) {
+function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage, workforceComparison }) {
   const workbook = XLSX.utils.book_new();
   workbook.Workbook = workbook.Workbook || {};
   workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
@@ -2062,6 +2062,44 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     XLSX.utils.book_append_sheet(workbook, handoff, "External Handoff");
   }
 
+  if (workforceComparison) {
+    const append = (name, headers, rows) => payrollAppendRegisterSheet(workbook, name, headers, rows.map(cells => ({cells})));
+    const m = workforceComparison.movements;
+    const headers = ["Employee No","Name","Previous Branch","Current Branch","Previous Department","Current Department","Classification","Previous Gross","Current Gross","Gross Variance","Employment Evidence"];
+    const cells = x => [x.employeeNumber,x.employeeName,x.oldBranch,x.newBranch,x.oldDepartment,x.newDepartment,x.classification,x.previousGross,x.currentGross,x.grossVariance,x.verification];
+    append("Employee Exits",headers,m.filter(x=>x.classification==="Exit/deactivated candidate").map(cells));
+    append("New Hires",headers,m.filter(x=>x.classification==="Hire candidate").map(cells));
+    append("Employee Movements",headers,m.map(cells));
+    const pct = x => x == null ? "Unavailable" : x*100;
+    append("Workforce KPIs",["Scope","Previous paid headcount","Current paid headcount","Additions","Removals","Average paid headcount","Payroll removal proxy (%)","Payroll retention proxy (%)","Headcount growth (%)","Previous gross","Current gross","Gross variance","Payroll growth (%)","Average current gross","Actual turnover (%)","Absenteeism (%)"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.additions,x.removals,x.averagePaidHeadcount,pct(x.payrollRemovalRate),pct(x.payrollRetentionRate),pct(x.headcountGrowthRate),x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),x.averageCurrentGross,pct(x.labourTurnoverRate),pct(x.absenteeismRate)]));
+    const a = workforceComparison.attendanceShortfalls;
+    if (a) {
+      append("Worked Day Analysis",["Employee No","Employee Name","Branch","Expected Days","Payable Days","Shortfall Days","Source","Notes"],a.records.map(x=>[x.employeeNumber,x.employeeName,x.branch,x.expected,x.payable,x.shortfall,x.source,x.notes]));
+      append("Attendance KPI Coverage",["Metric","Value","Interpretation"],[
+        ["Covered payroll lines",a.covered,"Expected and payable days both recorded"],
+        ["Total payroll lines",a.total,"Missing inputs excluded from shortfall rate"],
+        ["Expected days (covered)",a.expected,"Payroll standard days, not independently verified roster days"],
+        ["Shortfall days (covered)",a.shortfall,"May include approved leave, proration and other adjustments"],
+        ["Worked-day shortfall (%)",pct(a.rate),"Not an unauthorized absenteeism rate"],
+        ["Coverage (%)",a.total?100*a.covered/a.total:"Unavailable","Review missing evidence before drawing conclusions"]
+      ]);
+    }
+    if (workforceComparison.evidence) {
+      const e = workforceComparison.evidence;
+      append("Employment Evidence",["Metric","Value","Qualification"],[
+        ["Opening episode headcount",e.opening,"Recorded episodes only; completeness not established"],
+        ["Closing episode headcount",e.closing,"Recorded episodes only; completeness not established"],
+        ["Recorded exits",e.departures,"Terminated, resigned or retired episode endings only"],
+        ["Recorded hires",e.starters,"First employment episodes"],
+        ["Recorded rehires",e.rehires,"Subsequent employment episodes"],
+        ["Episode turnover proxy (%)",e.opening+e.closing>0?200*e.departures/(e.opening+e.closing):"Unavailable","Requires episode coverage verification before use as actual turnover"]
+      ]);
+      append("Absenteeism Evidence",["Recorded attendance status","Record count"],[...e.attendance,["Actual absenteeism rate","Unavailable: scheduled workday denominator not verified"]]);
+    }
+    append("Management Insights",["Scope","Implication"],workforceComparison.summaries.flatMap(x=>x.implications.map(y=>[x.label,y])));
+  } else {
+    payrollAppendRegisterSheet(workbook,"Workforce KPIs",["Status"],[{cells:["Prior approved payroll unavailable or ambiguous; comparison not calculated."]}]);
+  }
   const workbookBuffer = XLSX.write(workbook, {
     type: "buffer",
     bookType: "xlsx",
@@ -2133,7 +2171,40 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
     select: { name: true, legalName: true },
   });
 
-  return { run, lines, employeeMeta, organization: organization || {} };
+  let workforceComparison = null;
+  const periodMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(run.periodCode || ""));
+  if (periodMatch) {
+    const year = Number(periodMatch[1]), month = Number(periodMatch[2]);
+    const prior = new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,7);
+    const candidates = runs.filter(x=>x.periodCode===prior && x.status==="APPROVED");
+    if (candidates.length===1) {
+      const previous = await payroll.listRunLines({ organizationId, runId:candidates[0].id });
+      const start = new Date(Date.UTC(year,month-1,1));
+      const end = new Date(Date.UTC(year,month,1));
+      const episodes = await prisma.employeeEmploymentEpisode.findMany({
+        where:{organizationId,startDate:{lt:end},OR:[{endDate:null},{endDate:{gte:start}}]},
+        select:{employeeId:true,sequenceNumber:true,startDate:true,endDate:true,endStatus:true}
+      });
+      const attendance = await prisma.attendanceRecord.groupBy({
+        by:["status"],where:{organizationId,attendanceDate:{gte:start,lt:end},employeeId:{in:lines.map(x=>x.employeeId)}},
+        _count:{_all:true}
+      });
+      workforceComparison = require("../services/payrollWorkforceIntelligence").comparePayrollWorkforce(previous,lines);
+      const inPeriod = d => d && d >= start && d < end;
+      const departures = episodes.filter(x=>inPeriod(x.endDate) && ["TERMINATED","RESIGNED","RETIRED"].includes(x.endStatus));
+      const starters = episodes.filter(x=>inPeriod(x.startDate));
+      const opening = new Set(episodes.filter(x=>x.startDate<start && (!x.endDate || x.endDate>=start)).map(x=>x.employeeId)).size;
+      const closing = new Set(episodes.filter(x=>x.startDate<end && (!x.endDate || x.endDate>=end)).map(x=>x.employeeId)).size;
+      workforceComparison.evidence = {opening,closing,departures:departures.length,starters:starters.filter(x=>x.sequenceNumber===1).length,
+        rehires:starters.filter(x=>x.sequenceNumber>1).length,attendance:attendance.map(x=>[x.status,x._count._all])};
+      for (const m of workforceComparison.movements) {
+        const exit = departures.find(x=>x.employeeId===m.employeeId);
+        const hire = starters.find(x=>x.employeeId===m.employeeId);
+        m.verification = exit ? "Recorded employment exit" : hire ? (hire.sequenceNumber===1?"Recorded new employment":"Recorded rehire") : "Reconcile with HR records";
+      }
+    }
+  }
+  return { run, lines, employeeMeta, organization: organization || {}, workforceComparison };
 }
 
 async function auditPayrollExport({ organizationId, actorUserId, run, action, stage }) {
