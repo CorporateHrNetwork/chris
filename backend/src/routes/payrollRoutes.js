@@ -1088,13 +1088,29 @@ router.post("/variable-components", requirePermission("payroll.manage"), async (
   }
 });
 
+// Branch context is resolved by authenticated middleware, never by query parameters.
+async function filterPayrollEmployeeRows(req, rows) {
+  const auth = req.auth;
+  if (!auth.activeLocationId && auth.locationScope === "ALL_LOCATIONS") return rows;
+  const allowed = (auth.availableLocations || []).map(location => location.id);
+  const locationIds = auth.activeLocationId
+    ? allowed.includes(auth.activeLocationId) ? [auth.activeLocationId] : []
+    : allowed;
+  const employees = await prisma.employee.findMany({
+    where: { organizationId: auth.organizationId, locationId: { in: locationIds } },
+    select: { employeeNumber: true },
+  });
+  const numbers = new Set(employees.map(employee => employee.employeeNumber));
+  return rows.filter(row => numbers.has(row.employeeNumber));
+}
+
 router.get("/variable-inputs", requirePermission("payroll.view"), async (req, res) => {
   try {
     const data = await variablePayroll.listVariableInputs({
       organizationId: req.auth.organizationId,
       kind: req.query?.kind || null,
     });
-    return res.json({ status: "success", data });
+    return res.json({ status: "success", data: await filterPayrollEmployeeRows(req, data) });
   } catch (error) {
     return sendError(res, error, "Unable to load variable payroll inputs.");
   }
@@ -1174,7 +1190,7 @@ router.delete("/variable-inputs/:id", requirePermission("payroll.manage"), async
 router.get("/deduction-plans", requirePermission("payroll.view"), async (req, res) => {
   try {
     const data = await variablePayroll.listDeductionPlans({ organizationId: req.auth.organizationId });
-    return res.json({ status: "success", data });
+    return res.json({ status: "success", data: await filterPayrollEmployeeRows(req, data) });
   } catch (error) {
     return sendError(res, error, "Unable to load recurring deduction schedules.");
   }
