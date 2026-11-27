@@ -541,10 +541,12 @@ export default function PayrollComponentsManaged({ kind }) {
             <Td>{row.startPeriod}</Td><Td>{row.endPeriod}</Td><Td><Badge>{row.status}</Badge></Td>
             <Td><CompactActions><button type="button" style={smallButton} onClick={() => editDeductionPlan(row)} disabled={row.status === "CANCELLED"}>Edit</button><button type="button" style={dangerButton} onClick={() => deleteDeductionPlan(row)} disabled={row.status === "CANCELLED" || busy === `delete-plan-${row.id}`}>{busy === `delete-plan-${row.id}` ? "Deleting…" : "Delete"}</button></CompactActions></Td>
           </tr>)}
-        </DataTable> : <InputRegister rows={inputs} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} />}
+        </DataTable> : <InputRegister rows={inputs.filter(row => row.status === "ACTIVE")} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} />}
       </Panel>
 
-      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} /></Panel>}
+      {isDeduction && <Panel title="One-Time Deduction Inputs"><InputRegister rows={inputs.filter(row => row.status === "ACTIVE")} onEdit={editVariableInput} onDelete={deleteVariableInput} busy={busy} /></Panel>}
+
+      <Panel title={isDeduction ? "One-Time Deduction History" : "One-Time Allowance History"}><InputRegister rows={inputs.filter(row => row.status !== "ACTIVE")} /></Panel>
 
       {legacyRows.length > 0 && <Panel title="Existing Effective-Dated Components">
         <p style={controlNote}>These are earlier fixed/percentage payroll components retained for history and audit. For ZERMATT, indefinite legacy Other Allowances/Deductions do not carry into a new payroll period. Only an item explicitly tied to the selected period can participate; new recurring deductions must use the finite installment schedule above.</p>
