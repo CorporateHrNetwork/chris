@@ -121,6 +121,7 @@ async function transition({organizationId,runId,actorUserId,action,notes,prismaC
   if(action==="GM_APPROVE") {
    const org=await tx.organization.findUnique({where:{id:organizationId},select:{slug:true}});
    if(org?.slug==="zermatt-liquor-limited"){
+    await require("./payrollOneTimeInputLifecycleService").transitionOneTimeInputs(tx,{organizationId,runId,actorUserId});
     const lines=await tx.$queryRawUnsafe('SELECT "employeeId","details" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2',organizationId,runId);
     const seen=new Set();
     for(const line of lines)for(const recovery of line.details?.salaryAdvanceRecoveries||[]){

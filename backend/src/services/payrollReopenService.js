@@ -113,6 +113,7 @@ async function reopenApprovedPayroll({ organizationId, actorUserId, runId, reaso
       }
     }
 
+    await require("./payrollOneTimeInputLifecycleService").transitionOneTimeInputs(tx,{organizationId,runId,actorUserId,reopen:true});
     const deductionInstallmentReversal = await reverseDeductionInstallments(tx, {
       organizationId,
       payrollRunId: runId,
