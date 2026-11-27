@@ -285,17 +285,19 @@ export default function SalaryAdvancesManaged() {
       {error && <Feedback>{error}</Feedback>}
       {message && <div style={successStyle}>{message}</div>}
 
-      <Panel title="Salary Advance Register">
+      {[{title:"Current Salary Advance Register",history:false},{title:"Historical Salary Advance Register",history:true}].map(({title,history})=>{
+        const registerRows=rows.filter(row=>["COMPLETED","CANCELLED"].includes(row.status)===history);
+        return <Panel key={title} title={title}>
         <div style={tableWrap}>
           <table style={tableStyle}>
             <thead><tr>{["Employee", "Name", "Approved/Paid Advance", "Recovered", "Outstanding", "Installment", "Recovery Start", "Status", "Action"].map((head) => <th key={head} style={thStyle}>{head}</th>)}</tr></thead>
             <tbody>
-              {!loading && rows.length === 0 && <tr><td colSpan="9" style={tdStyle}>No salary advances have been recorded.</td></tr>}
-              {rows.map((row) => {
+              {!loading && registerRows.length === 0 && <tr><td colSpan="9" style={tdStyle}>No salary advances in this register.</td></tr>}
+              {registerRows.map((row) => {
                 const recovered = Math.max(0, Number(row.amount || 0) - Number(row.outstandingAmount || 0));
                 const editable = capabilities.canEdit && !["COMPLETED", "CANCELLED"].includes(row.status);
                 const cancellable = capabilities.canCancelDelete && ["ACTIVE", "PAUSED"].includes(row.status);
-                const deletable = capabilities.canCancelDelete && recovered <= 0 && row.status !== "COMPLETED";
+                const deletable = !history && capabilities.canCancelDelete && recovered <= 0 && row.status !== "COMPLETED";
                 return <Fragment key={row.id}><tr>
                   <Td strong>{row.employeeNumber}</Td><Td>{row.employeeName}</Td><Td>{money(row.amount)}</Td><Td>{money(recovered)}</Td><Td>{money(row.outstandingAmount)}</Td><Td>{money(row.installmentAmount)}</Td><Td>{row.recoveryStartDate}</Td><Td><Badge>{row.status}</Badge></Td>
                   <Td>{editable||cancellable||deletable?<button type="button" style={{...smallButton,whiteSpace:"nowrap"}} aria-expanded={expandedAdvanceActions===row.id} aria-controls={`advance-actions-${row.id}`} onClick={()=>setExpandedAdvanceActions(current=>current===row.id?null:row.id)}>{expandedAdvanceActions===row.id?"Actions ▴":"Actions ▾"}</button>:<span style={mutedStyle}>Historical</span>}</Td></tr>
@@ -304,7 +306,8 @@ export default function SalaryAdvancesManaged() {
             </tbody>
           </table>
         </div>
-      </Panel>
+      </Panel>;
+      })}
     </section>
   );
 }
