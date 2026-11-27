@@ -662,6 +662,16 @@ export default function EmployeeExits() {
     }
   }
 
+  async function restoreCompletedExit(employee) {
+    const reason=window.prompt("Reason for cancelling this completed exit and restoring the original employee record:");
+    if(!reason?.trim()) return;
+    if(!window.confirm("Restore original employment? ESS access, reporting assignments and payroll require review.")) return;
+    setBusy(true);setFeedback("");
+    try {const result=await apiRequest(`/api/exits/${encodeURIComponent(employee.exitProcess.id)}/restore`,{method:"POST",body:{reason:reason.trim()}});await loadData();setFeedback(result.message);}
+    catch(error){setFeedback(error?.message||"Unable to restore employee.");}
+    finally{setBusy(false);}
+  }
+
   async function cancelExit() {
     if (!activeExit) return;
 
@@ -1899,6 +1909,7 @@ export default function EmployeeExits() {
                     <td style={td}>
                       <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
                         {employee.exitProcess?.id ? <button type="button" onClick={() => navigate(`/employees/exits?settlement=${encodeURIComponent(employee.exitProcess.id)}`)} style={rehireButton}>Settlement</button> : null}
+                        {canUpdate && canManagePayroll && employee.exitProcess?.status==="COMPLETED" && ["RESIGNED","TERMINATED","RETIRED","INACTIVE"].includes(employee.status) && <button type="button" style={rehireButton} disabled={busy} onClick={()=>restoreCompletedExit(employee)}>Cancel Exit &amp; Restore</button>}
                         <button type="button" onClick={() => navigate(`/employees/exits?rehire=${encodeURIComponent(employee.employeeNumber)}`)} style={rehireButton} disabled={!canUpdate}><FaRedo /> Rehire</button>
                       </div>
                     </td>
