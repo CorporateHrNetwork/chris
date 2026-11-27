@@ -118,6 +118,22 @@ async function transition({organizationId,runId,actorUserId,action,notes,prismaC
   if(action==="GM_APPROVE"||action==="GM_DISAPPROVE"){add('"gmDecision"=?',action==="GM_APPROVE"?"APPROVED":"DISAPPROVED");add('"gmActorUserId"=?',actorUserId);add('"gmDecidedAt"=?',new Date());}
   if(action==="PAYOUT_EXPORTED"){add('"payoutActorUserId"=?',actorUserId);add('"payoutExportedAt"=?',new Date());add('"lockedAt"=?',new Date());}
   await tx.$executeRawUnsafe('UPDATE "payroll_approval_workflows" SET '+sets.join(",")+' WHERE "organizationId"=$1 AND "runId"=$2 AND "id"=$3',...values);
+  if(action==="GM_APPROVE") {
+   const org=await tx.organization.findUnique({where:{id:organizationId},select:{slug:true}});
+   if(org?.slug==="zermatt-liquor-limited"){
+    const lines=await tx.$queryRawUnsafe('SELECT "employeeId","details" FROM "payroll_run_lines" WHERE "organizationId"=$1 AND "runId"=$2',organizationId,runId);
+    const seen=new Set();
+    for(const line of lines)for(const recovery of line.details?.salaryAdvanceRecoveries||[]){
+     if(seen.has(recovery.id))fail("DUPLICATE_ADVANCE_RECOVERY","Duplicate salary advance in payroll.");
+     seen.add(recovery.id);
+     const rows=await tx.$queryRawUnsafe('SELECT * FROM "payroll_salary_advances" WHERE "organizationId"=$1 AND "id"=$2 AND "employeeId"=$3 FOR UPDATE',organizationId,recovery.id,line.employeeId);
+     const a=rows[0];
+     if(!a||a.status!=="ACTIVE"||Number(a.amount)!==Number(recovery.value)||Number(a.outstandingAmount)!==Number(recovery.value))fail("ADVANCE_RECOVERY_STALE","Salary advance balance changed or is not a full single deduction. Recalculate payroll before approval.");
+     await tx.$executeRawUnsafe('UPDATE "payroll_salary_advances" SET "outstandingAmount"=0,"status"=\'COMPLETED\',"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "id"=$2',organizationId,a.id);
+     await tx.organizationAudit.create({data:{organizationId,actorUserId,entityType:"PayrollSalaryAdvance",entityId:a.id,action:"PAYROLL_ADVANCE_COMPLETED",previousValue:{status:a.status,outstandingAmount:Number(a.outstandingAmount)},newValue:{status:"COMPLETED",outstandingAmount:0,runId,recoveredAmount:Number(recovery.value)},reason:"Full single deduction on final payroll approval"}});
+    }
+   }
+  }
   if(action==="GM_APPROVE") await tx.$executeRawUnsafe('UPDATE "payroll_runs" SET "status"=\'APPROVED\',"approvedAt"=CURRENT_TIMESTAMP,"approvedByUserId"=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "organizationId"=$1 AND "id"=$2',organizationId,runId,actorUserId);
   return workflow(tx,organizationId,runId);
  });
