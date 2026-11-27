@@ -87,7 +87,7 @@ function chartTitleXml(title) {
   return (
     "<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r>" +
     '<a:rPr lang="en-US" sz="1400" b="1"><a:solidFill><a:srgbClr val="F2CF57"/></a:solidFill></a:rPr>' +
-    "<a:t>" + xmlEscape(title) + "</a:t></a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>"
+    "<a:t>" + xmlEscape(title) + '</a:t></a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>'
   );
 }
 
