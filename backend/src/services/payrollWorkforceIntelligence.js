@@ -43,12 +43,25 @@ function comparePayrollWorkforce(previous, current) {
       currentGross>previousGross ? "Gross payroll increased; review headcount, salary and allowance changes." : "Gross payroll did not increase.",
       "Actual turnover and absenteeism require verified employment events and scheduled attendance evidence."]};
   }
+  function attendanceShortfalls(lines) {
+    const records=lines.map(line=>{
+      const a=line.details?.attendance || {};
+      const valid=v=>v!==null && v!==undefined && v!=="" && Number.isFinite(Number(v)) && Number(v)>=0;
+      const expected=valid(a.standardDays)?Number(a.standardDays):null;
+      const payable=valid(a.payableDays)?Number(a.payableDays):null;
+      const shortfall=expected!==null && payable!==null?Math.max(0,expected-payable):null;
+      return {employeeNumber:line.employeeNumber,employeeName:line.employeeName,branch:dimension(line,"locationName"),expected,payable,shortfall,source:a.source || "",notes:a.notes || ""};
+    });
+    const covered=records.filter(x=>x.expected!==null && x.payable!==null);
+    const expected=covered.reduce((s,x)=>s+x.expected,0),shortfall=covered.reduce((s,x)=>s+x.shortfall,0);
+    return {records,covered:covered.length,total:records.length,expected,shortfall,rate:rate(shortfall,expected)};
+  }
   const summaries=[summarize("Consolidated",previous,current)];
   for (const key of ["locationName","departmentName"]) {
     for (const name of new Set([...previous,...current].map(x=>dimension(x,key)))) {
       summaries.push(summarize(key+": "+name,previous.filter(x=>dimension(x,key)===name),current.filter(x=>dimension(x,key)===name)));
     }
   }
-  return {movements,summaries};
+  return {movements,summaries,attendanceShortfalls:attendanceShortfalls(current)};
 }
 module.exports={comparePayrollWorkforce};
