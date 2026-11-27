@@ -2524,7 +2524,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     {
       type: "bar",
       title: "Selected View Payroll Metrics",
-      position: { from: { col: 10, row: 1 }, to: { col: 18, row: 15 } },
+      compactMillions: true,
+      position: { from: { col: 12, row: 1 }, to: { col: 23, row: 21 } },
       series: [{
         name: "Amount",
         categoriesRange: chartRange("A", selectedChartFirst, selectedChartLast),
@@ -2538,7 +2539,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ...(branchStats.length ? [{
       type: "column",
       title: "Payroll by Branch",
-      position: { from: { col: 10, row: 16 }, to: { col: 18, row: 31 } },
+      compactMillions: true,
+      position: { from: { col: 12, row: 23 }, to: { col: 23, row: 45 } },
       series: [
         {
           name: "Gross Payroll",
@@ -2561,7 +2563,8 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ...(departmentChartRows.length ? [{
       type: "bar",
       title: "Gross Payroll by Department",
-      position: { from: { col: 19, row: 1 }, to: { col: 27, row: 18 } },
+      compactMillions: true,
+      position: { from: { col: 24, row: 1 }, to: { col: 38, row: 31 } },
       series: [{
         name: "Gross Payroll",
         categoriesRange: chartRange("A", departmentChartRows[0].rowIndex, departmentChartRows[departmentChartRows.length - 1].rowIndex),
@@ -2575,7 +2578,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ...(costCentreChartRows.length ? [{
       type: "pie",
       title: "Gross Payroll by Cost Centre",
-      position: { from: { col: 19, row: 19 }, to: { col: 27, row: 35 } },
+      position: { from: { col: 24, row: 33 }, to: { col: 38, row: 60 } },
       series: [{
         name: "Gross Payroll",
         categoriesRange: chartRange("B", costCentreChartRows[0].rowIndex, costCentreChartRows[costCentreChartRows.length - 1].rowIndex),
