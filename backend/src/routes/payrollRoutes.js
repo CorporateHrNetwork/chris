@@ -2072,6 +2072,18 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     append("Employee Movements",headers,m.map(cells));
     const pct = x => x == null ? "Unavailable" : x*100;
     append("Workforce KPIs",["Scope","Previous paid headcount","Current paid headcount","Additions","Removals","Average paid headcount","Payroll removal proxy (%)","Payroll retention proxy (%)","Headcount growth (%)","Previous gross","Current gross","Gross variance","Payroll growth (%)","Average current gross","Actual turnover (%)","Absenteeism (%)"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.additions,x.removals,x.averagePaidHeadcount,pct(x.payrollRemovalRate),pct(x.payrollRetentionRate),pct(x.headcountGrowthRate),x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),x.averageCurrentGross,pct(x.labourTurnoverRate),pct(x.absenteeismRate)]));
+    const a = workforceComparison.attendanceShortfalls;
+    if (a) {
+      append("Worked Day Analysis",["Employee No","Employee Name","Branch","Expected Days","Payable Days","Shortfall Days","Source","Notes"],a.records.map(x=>[x.employeeNumber,x.employeeName,x.branch,x.expected,x.payable,x.shortfall,x.source,x.notes]));
+      append("Attendance KPI Coverage",["Metric","Value","Interpretation"],[
+        ["Covered payroll lines",a.covered,"Expected and payable days both recorded"],
+        ["Total payroll lines",a.total,"Missing inputs excluded from shortfall rate"],
+        ["Expected days (covered)",a.expected,"Payroll standard days, not independently verified roster days"],
+        ["Shortfall days (covered)",a.shortfall,"May include approved leave, proration and other adjustments"],
+        ["Worked-day shortfall (%)",pct(a.rate),"Not an unauthorized absenteeism rate"],
+        ["Coverage (%)",a.total?100*a.covered/a.total:"Unavailable","Review missing evidence before drawing conclusions"]
+      ]);
+    }
     if (workforceComparison.evidence) {
       const e = workforceComparison.evidence;
       append("Employment Evidence",["Metric","Value","Qualification"],[
