@@ -87,7 +87,7 @@ function chartTitleXml(title) {
   return (
     "<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r>" +
     '<a:rPr lang="en-US" sz="1400" b="1"><a:solidFill><a:srgbClr val="F2CF57"/></a:solidFill></a:rPr>' +
-    "<a:t>" + xmlEscape(title) + "</a:t></a:r></a:p></c:rich></c:tx><c:layout/></c:title>"
+    "<a:t>" + xmlEscape(title) + "</a:t></a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>"
   );
 }
 
@@ -117,15 +117,16 @@ function seriesXml(series, index, { varyColors = false } = {}) {
   );
 }
 
-function axisXml(catAxId, valAxId, horizontal = false) {
+function axisXml(catAxId, valAxId, horizontal = false, compactMillions = false) {
+  const tickFont = '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>';
   return (
     '<c:catAx><c:axId val="' + catAxId + '"/><c:scaling><c:orientation val="minMax"/></c:scaling>' +
     '<c:delete val="0"/><c:axPos val="' + (horizontal ? "l" : "b") + '"/>' +
-    '<c:tickLblPos val="nextTo"/><c:crossAx val="' + valAxId + '"/><c:crosses val="autoZero"/>' +
+    '<c:tickLblPos val="nextTo"/>' + tickFont + '<c:crossAx val="' + valAxId + '"/><c:crosses val="autoZero"/>' +
     '<c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx>' +
     '<c:valAx><c:axId val="' + valAxId + '"/><c:scaling><c:orientation val="minMax"/></c:scaling>' +
     '<c:delete val="0"/><c:axPos val="' + (horizontal ? "b" : "l") + '"/>' +
-    '<c:majorGridlines/><c:numFmt formatCode="#,##0" sourceLinked="0"/><c:tickLblPos val="nextTo"/>' +
+    '<c:majorGridlines/><c:numFmt formatCode="' + (compactMillions ? '0.0,,&quot;m&quot;' : '#,##0') + '" sourceLinked="0"/><c:tickLblPos val="nextTo"/>' + tickFont +
     '<c:crossAx val="' + catAxId + '"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>'
   );
 }
@@ -152,9 +153,9 @@ function cartesianChartXml(chart, chartIndex) {
     '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/></c:dLbls>' +
     marker +
     '<c:axId val="' + catAxId + '"/><c:axId val="' + valAxId + '"/></c:' + tag + ">" +
-    axisXml(catAxId, valAxId, horizontal) +
+    axisXml(catAxId, valAxId, horizontal, chart.compactMillions === true) +
     "</c:plotArea>" +
-    '<c:legend><c:legendPos val="b"/><c:layout/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>' +
+    ((chart.series || []).length > 1 ? '<c:legend><c:legendPos val="b"/><c:layout/><c:overlay val="0"/></c:legend>' : '') + '<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>' +
     "</c:chart>" +
     '<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings>' +
     "</c:chartSpace>"
@@ -181,7 +182,7 @@ function pieChartXml(chart, chartIndex) {
     "</c:ser>" +
     '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="1"/><c:showLeaderLines val="1"/></c:dLbls>' +
     "</c:pieChart></c:plotArea>" +
-    '<c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/>' +
+    '<c:legend><c:legendPos val="r"/><c:layout/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/>' +
     "</c:chart>" +
     '<c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings>' +
     "</c:chartSpace>"
