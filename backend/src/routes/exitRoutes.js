@@ -685,6 +685,38 @@ router.post(
     }
   }
 );
+router.post("/:id/restore", requirePermission("employees.update"), requirePermission("payroll.manage"), async (req,res) => {
+  const {organizationId,userId,roles,organization,locationScope,availableLocations,activeLocationId}=req.auth;
+  const headHr=(roles||[]).some(role=>["head hr","head of hr","head hr/admin","head of hr/admin","head hr & admin","head of hr & admin","head hr and admin","head of hr and admin","head of human resources","head of human resources & administration"].includes(String(role).trim().toLowerCase().replace(/\s+/g," ")));
+  if(organization?.slug!=="zermatt-liquor-limited" || !headHr || !userId) return res.status(403).json({status:"error",message:"Only Zermatt Head HR may restore a completed exit."});
+  const reason=String(req.body?.reason||"").trim();
+  if(!reason || reason.length>2000) return res.status(400).json({status:"error",message:"A restoration reason of up to 2000 characters is required."});
+  const reject=(message)=>{const error=new Error(message);error.statusCode=409;throw error;};
+  try{
+    const restored=await prisma.$transaction(async tx=>{
+      const exit=await tx.employeeExitProcess.findFirst({where:{id:req.params.id,organizationId},include:{employee:true,settlement:true}});
+      if(!exit || exit.status!=="COMPLETED") reject("A completed exit is required.");
+      const employee=exit.employee;
+      if((activeLocationId && employee.locationId!==activeLocationId) || (locationScope!=="ALL_LOCATIONS" && !(availableLocations||[]).some(x=>x.id===employee.locationId))) reject("Employee is outside your authorized branch.");
+      if(employee.status!==exit.targetStatus || !employee.exitDate || +new Date(employee.exitDate)!==+new Date(exit.lastWorkingDay)) reject("Employee status or exit date has changed. Review employment history.");
+      if(exit.settlement || !["NOT_STARTED","PENDING"].includes(exit.financialStatus) || exit.finalClosureAt) reject("Financial settlement reconciliation is required before restoration.");
+      if(await tx.employeeExitProcess.count({where:{organizationId,employeeId:employee.id,id:{not:exit.id},status:{not:"CANCELLED"},createdAt:{gte:exit.createdAt}}})) reject("A newer exit exists.");
+      const event=await tx.employeeLifecycleEvent.findFirst({where:{organizationId,employeeId:employee.id},orderBy:[{createdAt:"desc"},{id:"desc"}]});
+      if(!event || event.eventType!=="EXITED" || +new Date(event.effectiveDate)!==+new Date(exit.lastWorkingDay) || !["ACTIVE","PROBATION"].includes(event.previousStatus)) reject("The original employment status cannot safely be restored automatically.");
+      const episode=await tx.employeeEmploymentEpisode.findFirst({where:{organizationId,employeeId:employee.id},orderBy:{sequenceNumber:"desc"}});
+      if(!episode?.endDate || +new Date(episode.endDate)!==+new Date(exit.lastWorkingDay) || episode.endStatus!==exit.targetStatus) reject("The original employment episode requires review.");
+      const changed=await tx.employeeExitProcess.updateMany({where:{id:exit.id,organizationId,status:"COMPLETED"},data:{status:"CANCELLED",cancellationReason:reason,cancelledAt:new Date(),cancelledByUserId:userId,financialStatus:"NOT_STARTED"}});
+      if(changed.count!==1) reject("Exit changed concurrently.");
+      await tx.employee.update({where:{id:employee.id},data:{status:event.previousStatus,exitDate:null}});
+      await tx.employeeEmploymentEpisode.update({where:{id:episode.id},data:{endDate:null,endStatus:null,endReason:null,endDepartmentId:null,endDesignationId:null,endLocationId:null}});
+      await tx.employeeLifecycleEvent.create({data:{organizationId,employeeId:employee.id,eventType:"REINSTATED",effectiveDate:new Date(),previousStatus:employee.status,newStatus:event.previousStatus,reason,notes:"Cancelled completed exit "+exit.id,performedByUserId:userId}});
+      await tx.organizationAudit.create({data:{organizationId,actorUserId:userId,entityType:"EmployeeExitProcess",entityId:exit.id,action:"COMPLETED_EXIT_RESTORED",previousValue:{status:exit.status,employeeStatus:employee.status,exitDate:employee.exitDate.toISOString(),episodeId:episode.id,endReason:episode.endReason},newValue:{status:"CANCELLED",employeeStatus:event.previousStatus,employeeId:employee.id,episodeId:episode.id,accessAndReportingReviewRequired:true},reason}});
+      return {employeeNumber:employee.employeeNumber,status:event.previousStatus};
+    },{isolationLevel:"Serializable"});
+    return res.json({status:"success",message:"Employee restored. Review ESS access, reporting assignments and draft payroll before approval.",data:restored});
+  }catch(error){if(error.statusCode===409 || error.code==="P2034")return res.status(409).json({status:"error",message:error.statusCode===409?error.message:"Concurrent update; retry after reviewing the record."});console.error("Restore exit failed",error);return res.status(500).json({status:"error",message:"Unable to restore employee."});}
+});
+
 router.post(
   "/:id/complete",
   requirePermission("employees.update"),
