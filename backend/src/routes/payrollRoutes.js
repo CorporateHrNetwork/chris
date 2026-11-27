@@ -1483,7 +1483,7 @@ function payrollAppendRegisterSheet(workbook, sheetName, headers, rows) {
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
 }
 
-function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage }) {
+function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage, workforceComparison }) {
   const workbook = XLSX.utils.book_new();
   workbook.Workbook = workbook.Workbook || {};
   workbook.Workbook.CalcPr = { calcMode: "auto", fullCalcOnLoad: true, forceFullCalc: true };
@@ -2062,6 +2062,20 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     XLSX.utils.book_append_sheet(workbook, handoff, "External Handoff");
   }
 
+  if (workforceComparison) {
+    const append = (name, headers, rows) => payrollAppendRegisterSheet(workbook, name, headers, rows.map(cells => ({cells})));
+    const m = workforceComparison.movements;
+    const headers = ["Employee No","Name","Previous Branch","Current Branch","Previous Department","Current Department","Classification","Previous Gross","Current Gross","Gross Variance"];
+    const cells = x => [x.employeeNumber,x.employeeName,x.oldBranch,x.newBranch,x.oldDepartment,x.newDepartment,x.classification,x.previousGross,x.currentGross,x.grossVariance];
+    append("Employee Exits",headers,m.filter(x=>x.classification==="Exit/deactivated candidate").map(cells));
+    append("New Hires",headers,m.filter(x=>x.classification==="Hire candidate").map(cells));
+    append("Employee Movements",headers,m.map(cells));
+    const pct = x => x == null ? "Unavailable" : x*100;
+    append("Workforce KPIs",["Scope","Previous paid headcount","Current paid headcount","Additions","Removals","Average paid headcount","Payroll removal proxy (%)","Payroll retention proxy (%)","Headcount growth (%)","Previous gross","Current gross","Gross variance","Payroll growth (%)","Average current gross","Actual turnover (%)","Absenteeism (%)"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.additions,x.removals,x.averagePaidHeadcount,pct(x.payrollRemovalRate),pct(x.payrollRetentionRate),pct(x.headcountGrowthRate),x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),x.averageCurrentGross,pct(x.labourTurnoverRate),pct(x.absenteeismRate)]));
+    append("Management Insights",["Scope","Implication"],workforceComparison.summaries.flatMap(x=>x.implications.map(y=>[x.label,y])));
+  } else {
+    payrollAppendRegisterSheet(workbook,"Workforce KPIs",["Status"],[{cells:["Prior approved payroll unavailable or ambiguous; comparison not calculated."]}]);
+  }
   const workbookBuffer = XLSX.write(workbook, {
     type: "buffer",
     bookType: "xlsx",
@@ -2133,7 +2147,18 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
     select: { name: true, legalName: true },
   });
 
-  return { run, lines, employeeMeta, organization: organization || {} };
+  let workforceComparison = null;
+  const periodMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(run.periodCode || ""));
+  if (periodMatch) {
+    const year = Number(periodMatch[1]), month = Number(periodMatch[2]);
+    const prior = new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,7);
+    const candidates = runs.filter(x=>x.periodCode===prior && x.status==="APPROVED");
+    if (candidates.length===1) {
+      const previous = await payroll.listRunLines({ organizationId, runId:candidates[0].id });
+      workforceComparison = require("../services/payrollWorkforceIntelligence").comparePayrollWorkforce(previous,lines);
+    }
+  }
+  return { run, lines, employeeMeta, organization: organization || {}, workforceComparison };
 }
 
 async function auditPayrollExport({ organizationId, actorUserId, run, action, stage }) {
