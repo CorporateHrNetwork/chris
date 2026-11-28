@@ -2136,16 +2136,20 @@ function appendWorkforceSheets(workbook, workforceComparison, workforceScopeRest
     append("Workforce KPIs",["Scope","Previous paid headcount","Current paid headcount","New hires / additions","Exits / removals","Retained payroll employees","Average paid headcount","Payroll-based turnover (%)","Payroll retention (%)","Headcount growth (%)","Previous gross","Current gross","Gross variance","Payroll growth (%)","Average current gross","Verified employment turnover (%)","Verified absenteeism (%)"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.additions,x.removals,x.opening-x.removals,x.averagePaidHeadcount,pct(x.payrollRemovalRate),pct(x.payrollRetentionRate),pct(x.headcountGrowthRate),x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),x.averageCurrentGross,pct(x.labourTurnoverRate),pct(x.absenteeismRate)]));
     const a = workforceComparison.attendanceShortfalls;
     if (a) {
-      append("Worked Day Analysis",["Employee No","Employee Name","Branch","Expected Days","Payable Days","Shortfall Days","Source","Notes"],a.records.map(x=>[x.employeeNumber,x.employeeName,x.branch,x.expected,x.payable,x.shortfall,x.source,x.notes]));
+      append("Worked Day Analysis",["Employee No","Employee Name","Branch","Expected Days","Payable Days","Shortfall Days","Recorded absence deficit","Unclassified days","Excluded adjustment days","Estimated gross shortfall cost","Source","Notes"],a.records.map(x=>[x.employeeNumber,x.employeeName,x.branch,x.expected,x.payable,x.shortfall,x.confirmed,x.unclassified,x.excluded,x.shortfallCost,x.source,x.notes]));
       append("Attendance KPI Coverage",["Metric","Value","Interpretation"],[
         ["Covered payroll lines",a.covered,"Expected and payable days both recorded"],
         ["Total payroll lines",a.total,"Missing inputs excluded from shortfall rate"],
         ["Expected days (covered)",a.expected,"Payroll standard days, not independently verified roster days"],
         ["Shortfall days (covered)",a.shortfall,"May include approved leave, proration and other adjustments"],
-        ["Payroll-based absenteeism proxy (%)",pct(a.rate),"Worked-day shortfall only; not confirmed unauthorized absence"],
+        ["Worked-day shortfall (%)",pct(a.rate),"Includes adjustments"],
+        ["Payroll-based recorded absence proxy (%)",pct(a.absenceProxy),"Only explicit non-provisional leave-return deficits; unclassified and authorized adjustments excluded from numerator"],
         ["Coverage (%)",a.total?100*a.covered/a.total:"Unavailable","Review missing evidence before drawing conclusions"]
       ]);
     }
+    append("Absenteeism Analysis",["Scope","Expected payroll days","Raw shortfall","Excluded adjustment days","Unclassified shortfall","Recorded absence deficit","Recorded absence proxy (%)","Worked-day shortfall (%)","Covered employees"],workforceComparison.summaries.map(x=>[x.label,x.attendance.expected,x.attendance.shortfall,x.attendance.excluded,x.attendance.unclassified,x.attendance.confirmed,pct(x.attendance.absenceProxy),pct(x.attendance.rate),x.attendance.covered]));
+    append("Payroll Variance",["Scope","Previous gross","Current gross","Gross variance","Growth (%)","Management action"],workforceComparison.summaries.map(x=>[x.label,x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),"Review changes against hiring, exits, salary adjustments and approved payroll inputs."]));
+    append("KPI Definitions",["Metric","Method"],[["Payroll turnover","Payroll removals / average payroll headcount; branch transfers may count as branch movements"],["Retention","Employees retained in scope / previous payroll headcount"],["Absence proxy","Explicit non-provisional leave-return deficits / covered expected payroll days; not verified unauthorized absence"],["Unknown shortfalls","Reported separately; not counted as confirmed absence"],["Authorized adjustments","Identifiable proration or authorization notes excluded from absence numerator; mixed reasons need review"],["Scope","Payroll snapshots, not independent attendance or employment records"]]);
     append("Management Insights",["Scope","Implication"],workforceComparison.summaries.flatMap(x=>x.implications.map(y=>[x.label,y])));
   } else if (!workforceScopeRestricted) {
     payrollAppendRegisterSheet(workbook,"Workforce KPIs",["Status"],[{cells:["Prior approved payroll unavailable or ambiguous; comparison not calculated."]}]);
