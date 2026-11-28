@@ -60,7 +60,7 @@ function harness(status='DRAFT'){
   if(id==='../services/payrollOperationsService')return {listRuns:async({organizationId})=>organizationId==='tenant'?[run]:[],listRunLines:async()=>lines,operationalError:(code,message,statusCode)=>Object.assign(new Error(message),{code,statusCode})};
   if(id==='../services/payrollReportIncidentService')return require('../src/services/payrollReportIncidentService');
   if(id==='../services/payrollSupplementaryReportService')return require('../src/services/payrollSupplementaryReportService');
-  if(id==='../services/excelNativeChartService')return {addNativeExcelCharts:b=>b};
+  if(id==='../services/excelNativeChartService')return {...require('../src/services/excelNativeChartService'),addNativeExcelCharts:b=>b};
   return {};
  }};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/routes/payrollRoutes.js'),'utf8'),sandbox);
