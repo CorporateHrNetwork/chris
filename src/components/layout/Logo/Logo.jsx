@@ -1,4 +1,4 @@
-import { CHRIS_DEMO_LOGO as chrisLogo } from "../../../demo/chrisDemoLogo.js";
+import chrisLogo from "../../../assets/images/chris-logo.png";
 
 function Logo() {
   return (
