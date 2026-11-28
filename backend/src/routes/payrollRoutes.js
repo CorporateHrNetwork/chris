@@ -2980,10 +2980,10 @@ router.get('/runs/:id/register-export.xlsx', ...registerExportPermission, async(
   if(context.organization?.slug==='zermatt-liquor-limited')appendAccountExceptions(workbook,model,indexes);
   // Selected-column exports must not reveal unselected employee or salary fields.
   const requiredAnalyticsColumns = ["Employee No","Employee Name","Branch","Department","Gross Pay"];
-  if (requiredAnalyticsColumns.every(label=>indexes.includes(model.headers.indexOf(label)))) {
+  if (indexes.length === model.headers.length && requiredAnalyticsColumns.every(label=>indexes.includes(model.headers.indexOf(label)))) {
     appendWorkforceSheets(workbook,context.workforceComparison,context.workforceScopeRestricted);
   } else {
-    XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([["Workforce report not included"],["Select Employee No, Employee Name, Branch, Department and Gross Pay to include workforce analytics, or download the full authorized review pack."]]),"Workforce Report Status");
+    XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([["Workforce report not included"],["Select all columns to include the full workforce analytics (including historical gross and attendance notes), or download the full authorized review pack."]]),"Workforce Report Status");
   }
   await prisma.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,entityType:'PayrollRun',entityId:req.params.id,action:'PAYROLL_SELECTED_COLUMNS_EXPORTED',newValue:{columns:indexes.map(i=>model.headers[i]),status:context.run.status},reason:'Read-only selected-column master and branch registers; approval and payout state unchanged.'}});
   res.setHeader('Content-Disposition','attachment; filename="CHRiS_Payroll_Selected_Columns.xlsx"');
