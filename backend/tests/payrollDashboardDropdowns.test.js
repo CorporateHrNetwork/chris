@@ -1,0 +1,27 @@
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const XLSX=require("xlsx");
+const CFB=require("cfb");
+const {addDashboardListValidation,addNativeExcelCharts}=require("../src/services/excelNativeChartService");
+test("native payroll selectors use named lists and retain worksheet comments and charts",()=>{
+ const w=XLSX.utils.book_new();
+ const d=XLSX.utils.aoa_to_sheet(Array.from({length:12},()=>["","ALL"]));
+ d.B9.c=[{a:"CHRiS",t:"Select a branch"}];
+ XLSX.utils.book_append_sheet(w,d,"Payroll Dashboard");
+ XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet([["ALL","ALL","ALL"],["Abuja","HR","Operations"]]),"Dashboard Lists");
+ w.Workbook={Names:[{Name:"CHRiS_Branches",Ref:"'Dashboard Lists'!$A$1:$A$2"},{Name:"CHRiS_Departments",Ref:"'Dashboard Lists'!$B$1:$B$2"},{Name:"CHRiS_CostCentres",Ref:"'Dashboard Lists'!$C$1:$C$2"}],Sheets:[{name:"Payroll Dashboard",Hidden:0},{name:"Dashboard Lists",Hidden:1}]};
+ const selectors=[{cell:"B9",name:"CHRiS_Branches"},{cell:"B10",name:"CHRiS_Departments"},{cell:"B11",name:"CHRiS_CostCentres"}];
+ const buffer=addDashboardListValidation(XLSX.write(w,{type:"buffer",bookType:"xlsx"}),selectors);
+ const charted=addNativeExcelCharts(buffer,[{title:"Example",type:"bar",series:[{name:"Count",categoriesRange:"'Dashboard Lists'!$A$1:$A$2",valuesRange:"'Payroll Dashboard'!$B$1:$B$2",categories:["ALL","Abuja"],values:[1,2]}]}]);
+ const cfb=CFB.read(charted,{type:"buffer"});
+ const entry=CFB.find(cfb,"xl/worksheets/sheet1.xml")||CFB.find(cfb,"/xl/worksheets/sheet1.xml");
+ const xml=Buffer.from(entry.content).toString("utf8");
+ assert.match(xml,/<dataValidations count="3">/);
+ for(const {cell,name} of selectors) assert.ok(xml.includes('sqref="'+cell+'"><formula1>'+name+'</formula1>'));
+ assert.ok(xml.indexOf("<dataValidations")<xml.indexOf("<drawing "));
+ assert.ok(xml.indexOf("<drawing ")<xml.indexOf("<legacyDrawing"));
+ const read=XLSX.read(charted,{type:"buffer"});
+ assert.equal(read.Sheets["Payroll Dashboard"].B9.v,"ALL");
+ assert.equal(read.Workbook.Names.length,3);
+ assert.equal(read.Workbook.Sheets[1].Hidden,1);
+});
