@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FiEye, FiEyeOff, FiLock, FiMail } from "react-icons/fi";
 import loginBackground from "../assets/images/login-bg.png";
-import chrisLogo from "../assets/images/chris-logo.png";
+import { CHRIS_DEMO_LOGO as chrisLogo } from "../demo/chrisDemoLogo.js";
 import { API_BASE_URL, clearEssAuthSession, essRequest, getEssAuthToken } from "../services/essApi";
 
 import EssLeaveApplications from "../components/ess/EssLeaveApplications";
