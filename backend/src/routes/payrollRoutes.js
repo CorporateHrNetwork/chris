@@ -2123,6 +2123,40 @@ function appendAccountExceptions(workbook, model, selectedIndexes = null) {
   payrollAppendRegisterSheet(workbook, "Account Exceptions", [...indexes.map(index => model.headers[index]), "Issue"], rows);
 }
 
+function appendWorkforceSheets(workbook, workforceComparison, workforceScopeRestricted = false) {
+  if (workforceComparison) {
+    const append = (name, headers, rows) => payrollAppendRegisterSheet(workbook, name, headers, rows.map(cells => ({cells})));
+    const m = workforceComparison.movements;
+    const headers = ["Employee No","Name","Previous Branch","Current Branch","Previous Department","Current Department","Classification","Previous Gross","Current Gross","Gross Variance","Employment Evidence"];
+    const cells = x => [x.employeeNumber,x.employeeName,x.oldBranch,x.newBranch,x.oldDepartment,x.newDepartment,x.classification,x.previousGross,x.currentGross,x.grossVariance,x.verification];
+    append("Employee Exits",headers,m.filter(x=>x.classification==="Exit/deactivated candidate").map(cells));
+    append("New Hires",headers,m.filter(x=>x.classification==="Hire candidate").map(cells));
+    append("Employee Movements",headers,m.map(cells));
+    const pct = x => x == null ? "Unavailable" : x*100;
+    append("Workforce KPIs",["Scope","Previous paid headcount","Current paid headcount","New hires / additions","Exits / removals","Retained payroll employees","Average paid headcount","Payroll-based labour turnover (%)","Payroll retention (%)","Headcount growth (%)","Previous gross","Current gross","Gross variance","Payroll growth (%)","Average current gross","Verified employment turnover (%)","Verified absenteeism (%)"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.additions,x.removals,x.opening-x.removals,x.averagePaidHeadcount,pct(x.payrollTurnoverRate),pct(x.payrollRetentionRate),pct(x.headcountGrowthRate),x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),x.averageCurrentGross,pct(x.labourTurnoverRate),pct(x.absenteeismRate)]));
+    const a = workforceComparison.attendanceShortfalls;
+    if (a) {
+      append("Worked Day Analysis",["Employee No","Employee Name","Branch","Expected Days","Payable Days","Shortfall Days","Recorded absence deficit","Unclassified days","Excluded adjustment days","Estimated gross shortfall cost","Source","Notes"],a.records.map(x=>[x.employeeNumber,x.employeeName,x.branch,x.expected,x.payable,x.shortfall,x.confirmed,x.unclassified,x.excluded,x.shortfallCost,x.source,x.notes]));
+      append("Attendance KPI Coverage",["Metric","Value","Interpretation"],[
+        ["Covered payroll lines",a.covered,"Expected and payable days both recorded"],
+        ["Total payroll lines",a.total,"Missing inputs excluded from shortfall rate"],
+        ["Expected days (covered)",a.expected,"Payroll standard days, not independently verified roster days"],
+        ["Shortfall days (covered)",a.shortfall,"May include approved leave, proration and other adjustments"],
+        ["Worked-day shortfall (%)",pct(a.rate),"Includes adjustments"],
+        ["Payroll-based recorded absence proxy (%)",pct(a.absenceProxy),"Only explicit non-provisional leave-return deficits; unclassified and authorized adjustments excluded from numerator"],
+        ["Coverage (%)",a.total?100*a.covered/a.total:"Unavailable","Review missing evidence before drawing conclusions"]
+      ]);
+    }
+    append("Absenteeism Analysis",["Scope","Expected payroll days","Raw shortfall","Excluded adjustment days","Unclassified shortfall","Recorded absence deficit","Recorded absence proxy (%)","Worked-day shortfall (%)","Covered employees"],workforceComparison.summaries.map(x=>[x.label,x.attendance.expected,x.attendance.shortfall,x.attendance.excluded,x.attendance.unclassified,x.attendance.confirmed,pct(x.attendance.absenceProxy),pct(x.attendance.rate),x.attendance.covered]));
+    append("Labour Turnover",["Scope","Opening payroll headcount","Closing payroll headcount","Average payroll headcount","New hire candidates","Exit/deactivation candidates","Transfers in","Transfers out","Payroll labour turnover (%)","Management implication","Recommended action"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.averagePaidHeadcount,x.hires,x.exits,x.transfersIn,x.transfersOut,pct(x.payrollTurnoverRate),x.exits>0?"Payroll departures may create staffing gaps and replacement costs.":"No payroll departures identified in this scope.",x.exits>0?"Reconcile departures with HR records and assess replacement requirements.":"Continue monitoring retention and payroll coverage."]));
+    append("Payroll Variance",["Scope","Previous gross","Current gross","Gross variance","Growth (%)","Management action"],workforceComparison.summaries.map(x=>[x.label,x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),"Review changes against hiring, exits, salary adjustments and approved payroll inputs."]));
+    append("KPI Definitions",["Metric","Method"],[["Payroll turnover","Employees missing from the organization-wide current payroll / average scope payroll headcount; internal transfers excluded"],["Retention","Employees retained in scope / previous payroll headcount"],["Absence proxy","Explicit non-provisional leave-return deficits / covered expected payroll days; not verified unauthorized absence"],["Unknown shortfalls","Reported separately; not counted as confirmed absence"],["Authorized adjustments","Identifiable proration or authorization notes excluded from absence numerator; mixed reasons need review"],["Scope","Payroll snapshots, not independent attendance or employment records"]]);
+    append("Management Insights",["Scope","Implication"],workforceComparison.summaries.flatMap(x=>x.implications.map(y=>[x.label,y])));
+  } else if (!workforceScopeRestricted) {
+    payrollAppendRegisterSheet(workbook,"Workforce KPIs",["Status"],[{cells:["Prior approved payroll unavailable or ambiguous; comparison not calculated."]}]);
+  }
+}
+
 function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage, incidentSources = {}, workforceComparison, workforceScopeRestricted = false }) {
   const workbook = XLSX.utils.book_new();
   workbook.Workbook = workbook.Workbook || {};
@@ -2729,32 +2763,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
 
   if (organization.slug === "zermatt-liquor-limited") appendAccountExceptions(workbook, model);
 
-  if (workforceComparison) {
-    const append = (name, headers, rows) => payrollAppendRegisterSheet(workbook, name, headers, rows.map(cells => ({cells})));
-    const m = workforceComparison.movements;
-    const headers = ["Employee No","Name","Previous Branch","Current Branch","Previous Department","Current Department","Classification","Previous Gross","Current Gross","Gross Variance","Employment Evidence"];
-    const cells = x => [x.employeeNumber,x.employeeName,x.oldBranch,x.newBranch,x.oldDepartment,x.newDepartment,x.classification,x.previousGross,x.currentGross,x.grossVariance,x.verification];
-    append("Employee Exits",headers,m.filter(x=>x.classification==="Exit/deactivated candidate").map(cells));
-    append("New Hires",headers,m.filter(x=>x.classification==="Hire candidate").map(cells));
-    append("Employee Movements",headers,m.map(cells));
-    const pct = x => x == null ? "Unavailable" : x*100;
-    append("Workforce KPIs",["Scope","Previous paid headcount","Current paid headcount","Additions","Removals","Average paid headcount","Payroll-based turnover (%)","Payroll retention (%)","Headcount growth (%)","Previous gross","Current gross","Gross variance","Payroll growth (%)","Average current gross","Verified employment turnover (%)","Verified absenteeism (%)"],workforceComparison.summaries.map(x=>[x.label,x.opening,x.closing,x.additions,x.removals,x.averagePaidHeadcount,pct(x.payrollRemovalRate),pct(x.payrollRetentionRate),pct(x.headcountGrowthRate),x.previousGross,x.currentGross,x.grossVariance,pct(x.payrollGrowthRate),x.averageCurrentGross,pct(x.labourTurnoverRate),pct(x.absenteeismRate)]));
-    const a = workforceComparison.attendanceShortfalls;
-    if (a) {
-      append("Worked Day Analysis",["Employee No","Employee Name","Branch","Expected Days","Payable Days","Shortfall Days","Source","Notes"],a.records.map(x=>[x.employeeNumber,x.employeeName,x.branch,x.expected,x.payable,x.shortfall,x.source,x.notes]));
-      append("Attendance KPI Coverage",["Metric","Value","Interpretation"],[
-        ["Covered payroll lines",a.covered,"Expected and payable days both recorded"],
-        ["Total payroll lines",a.total,"Missing inputs excluded from shortfall rate"],
-        ["Expected days (covered)",a.expected,"Payroll standard days, not independently verified roster days"],
-        ["Shortfall days (covered)",a.shortfall,"May include approved leave, proration and other adjustments"],
-        ["Payroll-based absenteeism proxy (%)",pct(a.rate),"Worked-day shortfall only; not confirmed unauthorized absence"],
-        ["Coverage (%)",a.total?100*a.covered/a.total:"Unavailable","Review missing evidence before drawing conclusions"]
-      ]);
-    }
-    append("Management Insights",["Scope","Implication"],workforceComparison.summaries.flatMap(x=>x.implications.map(y=>[x.label,y])));
-  } else if (!workforceScopeRestricted) {
-    payrollAppendRegisterSheet(workbook,"Workforce KPIs",["Status"],[{cells:["Prior approved payroll unavailable or ambiguous; comparison not calculated."]}]);
-  }
+  appendWorkforceSheets(workbook, workforceComparison, workforceScopeRestricted);
   const workbookBuffer = XLSX.write(workbook, {
     type: "buffer",
     bookType: "xlsx",
@@ -2860,11 +2869,11 @@ async function payrollExportContext(organizationId, runId, { includePaymentDetai
   if (organization?.slug === "zermatt-liquor-limited") incidentSources.loans = await supplementaryReports.loadLoans(prisma, organizationId, [...employeeMeta.values()].map(m => m.locationId).filter(Boolean));
   if (!locationIds && organization?.slug === "zermatt-liquor-limited") incidentSources.decisions = await supplementaryReports.loadDecisions(prisma, organizationId, run.id);
   let workforceComparison = null;
-  const periodMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(run.periodCode || ""));
+  const periodMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(run.periodStart || run.periodCode || "").slice(0,7));
   if (!locationIds && periodMatch) {
     const year = Number(periodMatch[1]), month = Number(periodMatch[2]);
     const prior = new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,7);
-    const candidates = runs.filter(x=>x.periodCode===prior && x.status==="APPROVED");
+    const candidates = runs.filter(x=>String(x.periodStart || x.periodCode || "").slice(0,7)===prior && x.status==="APPROVED");
     if (candidates.length===1) {
       const previous = await payroll.listRunLines({ organizationId, runId:candidates[0].id });
       workforceComparison = require("../services/payrollWorkforceIntelligence").comparePayrollWorkforce(previous,lines);
@@ -2974,6 +2983,13 @@ router.get('/runs/:id/register-export.xlsx', ...registerExportPermission, async(
    ['Selected columns',indexes.map(i=>model.headers[i]).join(', ')],
   ]),'Workflow Control');
   if(context.organization?.slug==='zermatt-liquor-limited')appendAccountExceptions(workbook,model,indexes);
+  // Selected-column exports must not reveal unselected employee or salary fields.
+  const requiredAnalyticsColumns = ["Employee No","Employee Name","Branch","Department","Gross Pay"];
+  if (indexes.length === model.headers.length && requiredAnalyticsColumns.every(label=>indexes.includes(model.headers.indexOf(label)))) {
+    appendWorkforceSheets(workbook,context.workforceComparison,context.workforceScopeRestricted);
+  } else {
+    XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([["Workforce report not included"],["Select all columns to include the full workforce analytics (including historical gross and attendance notes), or download the full authorized review pack."]]),"Workforce Report Status");
+  }
   await prisma.organizationAudit.create({data:{organizationId:req.auth.organizationId,actorUserId:req.auth.userId,entityType:'PayrollRun',entityId:req.params.id,action:'PAYROLL_SELECTED_COLUMNS_EXPORTED',newValue:{columns:indexes.map(i=>model.headers[i]),status:context.run.status},reason:'Read-only selected-column master and branch registers; approval and payout state unchanged.'}});
   res.setHeader('Content-Disposition','attachment; filename="CHRiS_Payroll_Selected_Columns.xlsx"');
   return res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet').send(XLSX.write(workbook,{type:'buffer',bookType:'xlsx'}));
