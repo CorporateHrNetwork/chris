@@ -33,7 +33,11 @@ function comparePayrollWorkforce(previous, current) {
     const removals = oldRows.filter(x=>!newIds.has(x.employeeId)).length;
     const opening = oldRows.length, closing = newRows.length;
     const previousGross = oldRows.reduce((s,x)=>s+gross(x),0), currentGross = newRows.reduce((s,x)=>s+gross(x),0);
-    return {label,opening,closing,additions,removals,averagePaidHeadcount:(opening+closing)/2,
+    const hires=newRows.filter(x=>!before.has(x.employeeId)).length;
+    const exits=oldRows.filter(x=>!after.has(x.employeeId)).length;
+    const transfersIn=additions-hires,transfersOut=removals-exits;
+    return {label,opening,closing,additions,removals,hires,exits,transfersIn,transfersOut,
+      payrollTurnoverRate:rate(exits,(opening+closing)/2),averagePaidHeadcount:(opening+closing)/2,
       payrollRemovalRate:rate(removals,(opening+closing)/2),payrollRetentionRate:rate(opening-removals,opening),
       payrollGrowthRate:rate(currentGross-previousGross,previousGross),headcountGrowthRate:rate(closing-opening,opening),
       previousGross,currentGross,grossVariance:currentGross-previousGross,averageCurrentGross:rate(currentGross,closing),
