@@ -286,6 +286,23 @@ function addNativeExcelCharts(buffer, charts = [], { sheetPath = "xl/worksheets/
   });
 }
 
+// Add native Excel list validation before later worksheet elements per SpreadsheetML.
+function addDashboardListValidation(buffer, lists, {sheetPath="xl/worksheets/sheet1.xml"}={}) {
+  const cfb=CFB.read(buffer,{type:"buffer"});
+  let xml=readXml(cfb,sheetPath);
+  if(!xml || !xml.includes("</worksheet>")) throw new Error("Dashboard worksheet missing");
+  if(/<dataValidations\b/.test(xml)) throw new Error("Existing dashboard data validation requires reconciliation");
+  const fragment='<dataValidations count="'+lists.length+'">'+lists.map(({cell,name})=>{
+    if(!/^B(?:9|10|11)$/.test(cell)||!/^CHRiS_[A-Za-z]+$/.test(name)) throw new Error("Invalid selector binding");
+    return '<dataValidation type="list" errorStyle="stop" allowBlank="0" showDropDown="0" showErrorMessage="1" errorTitle="Select a listed value" error="Choose ALL or a value from the dropdown." sqref="'+cell+'"><formula1>'+xmlEscape(name)+'</formula1></dataValidation>';
+  }).join("")+'</dataValidations>';
+  const later=/<(?:hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing(?:HF)?|drawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b/.exec(xml);
+  xml=later?xml.slice(0,later.index)+fragment+xml.slice(later.index):appendBeforeClosing(xml,"</worksheet>",fragment);
+  writeXml(cfb,sheetPath,xml);
+  return CFB.write(cfb,{type:"buffer",fileType:"zip",compression:true});
+}
+
 module.exports = {
   addNativeExcelCharts,
+  addDashboardListValidation,
 };
