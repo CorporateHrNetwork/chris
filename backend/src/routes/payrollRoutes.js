@@ -5,7 +5,7 @@ const express = require("express");
 const multer = require("multer");
 const XLSX = require("xlsx");
 const { employeeTemplateScope, employeeName: templateEmployeeName, normalizeName, hasPayrollEntry, variableInputTemplateBuffer } = require("../services/payrollVariableInputTemplateService");
-const { addNativeExcelCharts } = require("../services/excelNativeChartService");
+const { addNativeExcelCharts, addDashboardListValidation } = require("../services/excelNativeChartService");
 
 const prisma = require("../config/prisma");
 const {
@@ -2353,9 +2353,9 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     ["Generated At", new Date().toISOString()],
     [],
     ["INTERACTIVE DASHBOARD CONTROLS"],
-    ["Branch Focus", "ALL", "Enter ALL or an exact branch name."],
-    ["Department Focus", "ALL", "Enter ALL or an exact department name."],
-    ["Cost Centre Focus", "ALL", "Enter ALL or an exact Cost Centre / Operating Unit name."],
+    ["Branch Focus", "ALL", "Click the dropdown and select ALL or a branch."],
+    ["Department Focus", "ALL", "Click the dropdown and select ALL or a department."],
+    ["Cost Centre Focus", "ALL", "Click the dropdown and select ALL or a cost centre."],
     ["Active View", formulaCell('"Viewing: "&B9&" | "&B10&" | "&B11', "Viewing: ALL | ALL | ALL", "s"), "KPIs and charts recalculate when Excel opens or a selector value changes."],
     [],
     ["SELECTED VIEW KPI"],
@@ -2455,7 +2455,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   dashboardRows.push(
     [],
     ["HOW TO USE THIS DASHBOARD"],
-    ["1", "Set Branch, Department and Cost Centre Focus to ALL or an exact value. The selected-view KPIs and native Excel chart update when Excel recalculates."],
+    ["1", "Choose Branch, Department and Cost Centre Focus from the dropdown lists. The selected-view KPIs and native Excel chart update when Excel recalculates."],
     ["2", "Use the real Excel charts on the right side of this dashboard for interactive chart selection, legends, tooltips and chart controls."],
     ["3", "Use filter arrows in Payroll Register and branch registers to drill into employees, departments, cost centres, components and statutory values."],
     ["4", "Click Open Payroll Register or Open Branch Sheet links to move directly to supporting detail."],
@@ -2488,7 +2488,7 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
     dashboard[cell].c = [{
       a: "CHRiS",
       t: values.length
-        ? `Enter ALL or one exact ${label}: ${values.join(", ")}`
+        ? `Choose ALL or a listed ${label}: ${values.join(", ")}`
         : `Enter ALL. No ${label} values are available in this export.`,
     }];
   }
@@ -2764,11 +2764,24 @@ function payrollExternalWorkbook({ organization, run, lines, employeeMeta, stage
   if (organization.slug === "zermatt-liquor-limited") appendAccountExceptions(workbook, model);
 
   appendWorkforceSheets(workbook, workforceComparison, workforceScopeRestricted);
-  const workbookBuffer = XLSX.write(workbook, {
+  const selectorLists = [
+    {cell:"B9",name:"CHRiS_Branches",values:branches},
+    {cell:"B10",name:"CHRiS_Departments",values:departments},
+    {cell:"B11",name:"CHRiS_CostCentres",values:costCentres}
+  ];
+  const selectorSheet = "Dashboard Lists";
+  const selectorValues = selectorLists.map(x=>["ALL",...new Set(x.values.filter(v=>v && v!=="ALL"))]);
+  const selectorRows = Array.from({length:Math.max(...selectorValues.map(x=>x.length))},(_,i)=>selectorValues.map(x=>x[i] ?? null));
+  XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(selectorRows),selectorSheet);
+  workbook.Workbook.Names = [...(workbook.Workbook.Names || []),...selectorLists.map((x,i)=>({
+    Name:x.name,Ref:"'Dashboard Lists'!$"+XLSX.utils.encode_col(i)+"$1:$"+XLSX.utils.encode_col(i)+"$"+selectorValues[i].length
+  }))];
+  workbook.Workbook.Sheets = workbook.SheetNames.map((name,i)=>({...workbook.Workbook.Sheets?.[i],name,Hidden:name===selectorSheet?1:(workbook.Workbook.Sheets?.[i]?.Hidden || 0)}));
+  const workbookBuffer = addDashboardListValidation(XLSX.write(workbook, {
     type: "buffer",
     bookType: "xlsx",
     cellFormula: true,
-  });
+  }),selectorLists);
 
   // Validate the base workbook before chart injection so a missing dashboard fails closed.
   const baseWorkbook = XLSX.read(workbookBuffer, { type: "buffer" });
